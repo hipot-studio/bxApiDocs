@@ -3,6 +3,7 @@
 namespace Bitrix\Sender\Service;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Sender\GroupTable;
 use Bitrix\Sender\Internals\Model\GroupQueueTable;
@@ -124,6 +125,45 @@ class GroupQueueService implements GroupQueueServiceInterface
 		return !$remainingRecords;
 	}
 	
+	/**
+	 * Check that the group is still held by a queue record.
+	 * Read only: nothing is deleted and the group status is not changed.
+	 *
+	 * @param int $groupId
+	 * @param int|null $exceptPostingId Posting whose own record does not count as a hold: it is
+	 *                                  the one asking, and it registers itself before it reads.
+	 * @return bool
+	 * @throws ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function isGroupHeld(int $groupId, ?int $exceptPostingId = null): bool
+	{
+		$expiredBefore = DateTime::createFromTimestamp(
+			(new DateTime())->disableUserTime()->getTimestamp() - self::LIFETIME
+		);
+
+		$query = GroupQueueTable::query()
+			->setSelect(['ID'])
+			->where('GROUP_ID', $groupId)
+			->whereNotNull('DATE_INSERT')
+			->where('DATE_INSERT', '>=', $expiredBefore)
+			->setLimit(1)
+		;
+
+		if ($exceptPostingId !== null)
+		{
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->whereNot('TYPE', GroupQueueTable::TYPE['POSTING'])
+					->whereNot('ENTITY_ID', $exceptPostingId)
+			);
+		}
+
+		return (bool)$query->exec()->fetch();
+	}
+
 	private function getCurrentRow(int $type, int $entityId, int $groupId): array
 	{
 		return GroupQueueTable::query()

@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
 use Bitrix\BIConnector\Internal\Model\SupersetDashboardInfoTable;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\ListDashboardsOperation;
@@ -47,24 +48,16 @@ final class ListDashboardsTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'query' => [
-					'type' => 'string',
-					'description' => 'Optional search query to filter dashboards by title or description. '
-						. 'If omitted, returns all available dashboards.',
-				],
-				'offset' => [
-					'type' => 'integer',
-					'description' => 'Number of dashboards to skip before returning, for paging. '
-						. 'Default 0. Advance by ' . self::PAGE_SIZE . ' on each call while `has_more` '
-						. 'is true.',
-					'minimum' => 0,
-				],
+		return BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			[
+				'query' => 'Optional search query to filter dashboards by title or description. '
+					. 'If omitted, returns all available dashboards.',
+				'offset' => 'Number of dashboards to skip before returning, for paging. Default 0. Advance by '
+					. self::PAGE_SIZE . ' on each call while `has_more` is true.',
 			],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array

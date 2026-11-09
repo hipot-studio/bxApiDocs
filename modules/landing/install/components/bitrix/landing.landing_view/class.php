@@ -9,11 +9,13 @@ use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeEligibilityService;
 use Bitrix\Landing\Folder;
 use Bitrix\Landing\Integration\AiAssistant\Contract\AiSiteChatBindingContract;
+use Bitrix\Landing\Integration\AiAssistant\Service\AiPromptHandoffService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatAvailabilityService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatContextService;
 use Bitrix\Landing\Integration\AiAssistant\WidgetDataProvider;
 use Bitrix\Landing\Manager;
+use Bitrix\Landing\Markup\MarkupPage;
 use Bitrix\Landing\Site;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Site\Type;
@@ -60,6 +62,12 @@ class LandingViewComponent extends LandingBaseComponent
 	 * @var int
 	 */
 	protected $pagesCount;
+
+	/**
+	 * Custom page flags by landing id, computed once per hit.
+	 * @var array<int, bool>
+	 */
+	private array $markupPageFlags = [];
 
 	/**
 	 * Returns Landing preview url for device.
@@ -722,8 +730,14 @@ class LandingViewComponent extends LandingBaseComponent
 				$options['version'] = Manager::getVersion();
 				$options['default_section'] = $this->getCurrentBlockSection($type);
 				$options['blockControlsEnabled'] = !Copilot\Manager::isAiSitesEnabled() || !$isAiSiteCreated;
+				$options['markupPage'] = $this->isMarkupPageLanding((int)$landing->getId());
+				// the selected element change is a legacy tool: a legacy page of the selected legacy generation only
 				$options['aiSiteSelectedElementEditEnabled'] =
-					Copilot\Manager::isAiSiteSelectedElementEditEnabled() && $isAiSiteCreated;
+					Copilot\Manager::isAiSiteSelectedElementEditEnabled()
+					&& $isAiSiteCreated
+					&& !$options['markupPage']
+					&& Copilot\Manager::isAiSitesLegacyEnabled()
+				;
 				$options['tailwindRuntimeEnabled'] = (new TailwindRuntimeEligibilityService())->isLandingSupported((int)$landing->getId());
 				$options['specialType'] = $this->arResult['SPECIAL_TYPE'];
 				$options['autoPublicationEnabled'] =
@@ -1216,6 +1230,7 @@ class LandingViewComponent extends LandingBaseComponent
 	): void
 	{
 		$this->arResult['AI_SITE_BINDING_ID'] = 0;
+		$this->arResult['AI_SITE_TRIGGER_ENTITY_ID'] = '';
 		$this->arResult['AI_SITE_TRIGGER_CODE'] = AiSiteChatBindingContract::TRIGGER_CODE;
 		$this->arResult['AI_SITE_TRIGGER_CONTEXT'] = [];
 		$this->arResult['AI_SITE_TRIGGER_ENABLED'] = false;
@@ -1233,6 +1248,17 @@ class LandingViewComponent extends LandingBaseComponent
 			return;
 		}
 
+		// An AI page of the generation that is not selected keeps its editor, but gets no site AI:
+		// the format is checked before the binding, so a mismatch leaves no binding row behind.
+		$isMarkupPage = $this->isMarkupPageLanding($pageId);
+		$pageModeAvailability = $this->getAiSiteChatAvailabilityService()
+			->checkPageFormatModeAvailability($isMarkupPage)
+		;
+		if (!$pageModeAvailability->isAvailable())
+		{
+			return;
+		}
+
 		$userId = $this->getCurrentUserId();
 		if ($userId <= 0)
 		{
@@ -1241,12 +1267,18 @@ class LandingViewComponent extends LandingBaseComponent
 
 		$bindingId = $this->getAiSiteBindingService()->getOrCreateForSite($userId, $siteId);
 		$this->arResult['AI_SITE_BINDING_ID'] = $bindingId;
+		// The chat follows the work accepted on the binding, not the page and not the selected
+		// generation; a binding of a site without such a work keeps the bare key.
+		$this->arResult['AI_SITE_TRIGGER_ENTITY_ID'] = $this->getAiSiteBindingService()
+			->getAcceptedWorkChatEntityId($bindingId, $userId)
+		;
 		$this->arResult['AI_SITE_TRIGGER_CONTEXT'] = $this->getAiSiteChatContextService()->getEditorContext(
 			$bindingId,
 			$siteId,
 			$pageId,
 			$siteTitle,
 			$pageTitle,
+			isMarkupPage: $isMarkupPage,
 		);
 		$this->arResult['AI_SITE_TRIGGER_ENABLED'] =
 			$bindingId > 0
@@ -1284,6 +1316,11 @@ class LandingViewComponent extends LandingBaseComponent
 		return Manager::getUserId();
 	}
 
+	protected function isMarkupPageLanding(int $landingId): bool
+	{
+		return $this->markupPageFlags[$landingId] ??= MarkupPage::isMarkupLanding($landingId);
+	}
+
 	protected function getAiSiteBindingService(): AiSiteBindingService
 	{
 		return new AiSiteBindingService();
@@ -1302,6 +1339,49 @@ class LandingViewComponent extends LandingBaseComponent
 	protected function getAiSiteTriggerIntegrationAvailableOverride(): ?bool
 	{
 		return null;
+	}
+
+	/**
+	 * A link of the chat carries a request to the editor by a one-time token in the ai_handoff parameter.
+	 * The token is redeemed for the opened site only while the chat panel of the site is enabled; otherwise it
+	 * stays unused and the refusal is logged. The panel strips the parameter from the address in any case.
+	 */
+	private function prepareAiSiteEditorHandoff(int $siteId): void
+	{
+		$this->arResult['AI_SITE_INITIAL_PROMPT'] = '';
+		$this->arResult['AI_SITE_HANDOFF_URL_PARAM'] = '';
+
+		$token = $this->request(AiPromptHandoffService::URL_PARAM);
+		$token = is_string($token) ? trim($token) : '';
+		if ($token === '')
+		{
+			return;
+		}
+
+		$this->arResult['AI_SITE_HANDOFF_URL_PARAM'] = AiPromptHandoffService::URL_PARAM;
+		$userId = $this->getCurrentUserId();
+		$handoffService = $this->getAiPromptHandoffService();
+		if (($this->arResult['AI_SITE_TRIGGER_ENABLED'] ?? false) !== true)
+		{
+			$handoffService->logRefusal($userId, AiPromptHandoffService::TARGET_EDITOR, 'no_access', $siteId);
+
+			return;
+		}
+
+		$handoff = $handoffService->redeem($token, $userId, AiPromptHandoffService::TARGET_EDITOR, $siteId);
+		if ($handoff !== null)
+		{
+			$this->arResult['AI_SITE_INITIAL_PROMPT'] = mb_substr(
+				trim($handoff['prompt']),
+				0,
+				AiPromptHandoffService::MAX_PROMPT_LENGTH,
+			);
+		}
+	}
+
+	protected function getAiPromptHandoffService(): AiPromptHandoffService
+	{
+		return new AiPromptHandoffService();
 	}
 
 	/**
@@ -1515,6 +1595,7 @@ class LandingViewComponent extends LandingBaseComponent
 					(bool)$this->arResult['CAN_EDIT_SITE'],
 					$this->isAiSiteEditorShellContext(),
 				);
+				$this->prepareAiSiteEditorHandoff((int)$landing->getSiteId());
 				$this->arResult['TOP_PANEL_CONFIG'] = $this->getTopPanelConfig(
 					$landing,
 					$this->arResult['SITE'],

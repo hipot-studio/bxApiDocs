@@ -62,9 +62,7 @@ class ConfigureFillAndStart implements Operation
 		$document = $this->documentRepository->getByUid($this->uid);
 		if ($document === null)
 		{
-			return (new Main\Result())
-				->addError(new Main\Error("Document with id `$this->uid` doesnt exist"))
-			;
+			return $this->documentDoesNotExistError();
 		}
 		$this->document = $document;
 
@@ -153,7 +151,17 @@ class ConfigureFillAndStart implements Operation
 
 	private function configureUnderLock(): Main\Result|ConfigureResult
 	{
-		$result = (new ConfigureDocument($this->document->uid))->launch();
+		// The status the run came in with is older than the lock: while the placeholder blocks were
+		// being assembled, a neighbour pass could have configured the document or even started it.
+		$fresh = $this->documentRepository->getByUid($this->uid);
+
+		$answer = $this->answerByFreshStatus($fresh);
+		if ($answer !== null)
+		{
+			return $answer;
+		}
+
+		$result = (new ConfigureDocument($this->uid))->launch();
 		if (!$result->isSuccess())
 		{
 			if ($this->isDocumentNotReady($result))
@@ -165,6 +173,44 @@ class ConfigureFillAndStart implements Operation
 		}
 
 		return new ConfigureResult(false);
+	}
+
+	/**
+	 * The answer to the status a neighbour pass has already moved the document to; `null` means the
+	 * document is still the work of this run and it goes on unchanged. Each of the two answers keeps
+	 * the source it has elsewhere in the operation: `signing` is answered the way the operation answers
+	 * a document that is in `signing` on the way in, and `ready` the way a configure of this very run
+	 * ends, with the fields and the start left to the next pass. The list is an allowlist on purpose: the
+	 * callback handler writes the status in the word of the signing service, so a status outside the
+	 * dictionary of the portal is never a ground to wait for it.
+	 */
+	private function answerByFreshStatus(?Document $fresh): Main\Result|ConfigureResult|null
+	{
+		if ($fresh === null)
+		{
+			return $this->documentDoesNotExistError();
+		}
+
+		if ($fresh->status === DocumentStatus::SIGNING)
+		{
+			return new ConfigureResult(true);
+		}
+
+		if ($fresh->status === DocumentStatus::READY)
+		{
+			// Configuring is done, and filling the fields with the start of the signing belongs to the
+			// next pass: that is what a configure of its own run answers here too.
+			return new ConfigureResult(false);
+		}
+
+		return null;
+	}
+
+	private function documentDoesNotExistError(): Main\Result
+	{
+		return (new Main\Result())
+			->addError(new Main\Error("Document with id `$this->uid` doesnt exist"))
+		;
 	}
 
 	private function isDocumentNotReady(Main\Result $result): bool

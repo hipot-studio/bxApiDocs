@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dataset;
 
+use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Table\TableAccessChecker;
 use Bitrix\BIConnector\ExternalSource\Type;
@@ -16,6 +17,7 @@ use Bitrix\Main\Grid\Row\Action\DataProvider;
 class ExternalDatasetActionDataProvider extends DataProvider
 {
 	private ?TableAccessChecker $tableAccessChecker = null;
+	private ?bool $canLoginToSuperset = null;
 
 	public function prepareActions(): array
 	{
@@ -28,7 +30,14 @@ class ExternalDatasetActionDataProvider extends DataProvider
 
 		if (SupersetInitializer::isSupersetReady())
 		{
-			$actions[] = new CreateExternalDatasetAction();
+			$this->canLoginToSuperset ??= AccessController::getCurrent()->check(
+				ActionDictionary::ACTION_BIC_DASHBOARD_EDIT,
+			);
+			if ($this->canLoginToSuperset)
+			{
+				$actions[] = new CreateExternalDatasetAction();
+			}
+
 			$actions[] = new DeleteDatasetAction();
 		}
 

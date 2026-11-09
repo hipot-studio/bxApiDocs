@@ -10,8 +10,10 @@ use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\CreateChartOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ChartDatasetGuard;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -63,144 +65,64 @@ final class CreateChartTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'name' => [
-					'type' => 'string',
-					'minLength' => 1,
-					'description' => 'Chart display name. Must be non-empty.',
-				],
-				'datasetId' => [
-					'type' => 'integer',
-					'description' => 'Source dataset id (from list_datasets).',
-					'minimum' => 1,
-				],
-				'vizType' => [
-					'type' => 'string',
-					'description' => 'Visualization type alias.',
-					'enum' => ChartParamsBuilder::VIZ_TYPES,
-				],
-				'temporalColumn' => [
-					'type' => 'string',
-					'description' => 'Date/datetime column from the dataset that the '
-						. 'chart binds to. MANDATORY — every chart must react to the '
-						. 'dashboard date filter, and Superset only rewrites the '
-						. 'comparator of filters with operator=TEMPORAL_RANGE. The '
-						. 'server injects exactly such a filter on this column. Pass '
-						. 'the real column name from get_bi_table_schema (e.g. '
-						. '`CREATED_DATE`, `CLOSED_DATE`); never guess. If the chart '
-						. 'is over a virtual dataset (non-empty `sql`), pick the '
-						. 'date alias exposed by its SELECT clause.',
-				],
-				'metrics' => [
-					'type' => 'array',
-					'description' => 'Metric definitions (column + aggregate). '
-						. 'Required for bar/line/scatter/pie/big_number. Optional for '
-						. 'table (omit for raw-row mode). pie/big_number use only the '
-						. 'first metric; bar/line/scatter/table accept multiple.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'column' => [
-								'type' => 'string',
-								'description' => 'Column name from the dataset.',
-							],
-							'aggregate' => [
-								'type' => 'string',
-								'description' => 'Aggregation function applied to the column.',
-								'enum' => ['SUM', 'AVG', 'COUNT', 'COUNT_DISTINCT', 'MIN', 'MAX'],
-							],
-							'label' => [
-								'type' => 'string',
-								'description' => 'Optional display label. Defaults to '
-									. '"AGGREGATE(column)".',
-							],
-						],
-						'required' => ['column', 'aggregate'],
-						'additionalProperties' => false,
-					],
-				],
-				'dimensions' => [
-					'type' => 'array',
-					'description' => 'Dimension column names (group-by). '
-						. 'For bar/line/scatter: dimensions other than xAxis become '
-						. 'series breakdown. For pie: slice categories. For table '
-						. 'aggregate mode: group-by columns. For table raw mode: '
-						. 'projected columns. Not used by big_number.',
-					'items' => ['type' => 'string'],
-				],
-				'xAxis' => [
-					'type' => 'string',
-					'description' => 'X-axis column for bar/line/scatter charts. MUST be a '
-						. 'date/datetime column — bar/line/scatter internally map to '
-						. 'echarts_timeseries_* viz_types and require a temporal '
-						. 'axis. A categorical x-axis will break the chart and '
-						. 'surface a warning in the UI. Usually the same as '
-						. '`temporalColumn`. If omitted, the first dimension is used.',
-				],
-				'filters' => [
-					'type' => 'array',
-					'description' => 'Filter expressions applied to the dataset. '
-						. 'IMPORTANT — date/datetime columns: use ONLY operator '
-						. '`between` for filtering by time. Operators `<`/`>`/`=`/`!=` '
-						. 'compare as strings and break on Trino/Presto datasources '
-						. '(type mismatch: timestamp vs varchar). For text/number '
-						. 'columns the full operator list is fine.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'column' => [
-								'type' => 'string',
-								'description' => 'Column to filter on.',
-							],
-							'operator' => [
-								'type' => 'string',
-								'description' => 'Comparison operator. Use `between` '
-									. 'for date/datetime columns — value is either a '
-									. 'Superset time expression string ("Last 6 months", '
-									. '"2024-01-01 : 2024-03-31", "No filter") or a '
-									. '`[from, to]` array of two ISO strings.',
-								'enum' => [
-									'=', '!=', '<', '>', '<=', '>=',
-									'in', 'not_in', 'like', 'is_null', 'is_not_null',
-									'between',
-								],
-							],
-							'value' => [
-								'description' => 'Comparison value. Use array for '
-									. '`in`/`not_in`. Omit for `is_null`/`is_not_null`. '
-									. 'For `between`: a Superset time expression string '
-									. 'or a [from, to] pair.',
-								'oneOf' => [
-									['type' => 'string'],
-									['type' => 'number'],
-									['type' => 'boolean'],
-									['type' => 'array'],
-									['type' => 'null'],
-								],
-							],
-						],
-						'required' => ['column', 'operator'],
-						'additionalProperties' => false,
-					],
-				],
-				'description' => [
-					'type' => 'string',
-					'description' => 'Optional chart description shown in the UI.',
-				],
-				'rowLimit' => [
-					'type' => 'integer',
-					'description' => 'Row limit for the underlying query. Defaults '
-						. 'depend on vizType (pie=100, table=1000, otherwise 10000). '
-						. 'Hard maximum 50000.',
-					'minimum' => 1,
-					'maximum' => 50000,
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.chart.add',
+			'mcp',
+			[
+				'name' => 'Chart display name. Must be non-empty.',
+				'datasetId' => 'Source dataset id (from list_datasets).',
+				'vizType' => 'Visualization type alias.',
+				'temporalColumn' => 'Date/datetime column from the dataset that the '
+					. 'chart binds to. MANDATORY — every chart must react to the '
+					. 'dashboard date filter, and Superset only rewrites the '
+					. 'comparator of filters with operator=TEMPORAL_RANGE. The '
+					. 'server injects exactly such a filter on this column. Pass '
+					. 'the real column name from get_bi_table_schema (e.g. '
+					. '`CREATED_DATE`, `CLOSED_DATE`); never guess. If the chart '
+					. 'is over a virtual dataset (non-empty `sql`), pick the '
+					. 'date alias exposed by its SELECT clause.',
+				'metrics' => 'Metric definitions (column + aggregate). '
+					. 'Required for bar/line/scatter/pie/big_number. Optional for '
+					. 'table (omit for raw-row mode). pie/big_number use only the '
+					. 'first metric; bar/line/scatter/table accept multiple.',
+				'metrics[].column' => 'Column name from the dataset.',
+				'metrics[].aggregate' => 'Aggregation function applied to the column.',
+				'metrics[].label' => 'Optional display label. Defaults to '
+					. '"AGGREGATE(column)".',
+				'dimensions' => 'Dimension column names (group-by). '
+					. 'For bar/line/scatter: dimensions other than xAxis become '
+					. 'series breakdown. For pie: slice categories. For table '
+					. 'aggregate mode: group-by columns. For table raw mode: '
+					. 'projected columns. Not used by big_number.',
+				'xAxis' => 'X-axis column for bar/line/scatter charts. MUST be a '
+					. 'date/datetime column — bar/line/scatter internally map to '
+					. 'echarts_timeseries_* viz_types and require a temporal '
+					. 'axis. A categorical x-axis will break the chart and '
+					. 'surface a warning in the UI. Usually the same as '
+					. '`temporalColumn`. If omitted, the first dimension is used.',
+				'filters' => 'Filter expressions applied to the dataset. '
+					. 'IMPORTANT — date/datetime columns: use ONLY operator '
+					. '`between` for filtering by time. Operators `<`/`>`/`=`/`!=` '
+					. 'compare as strings and break on Trino/Presto datasources '
+					. '(type mismatch: timestamp vs varchar). For text/number '
+					. 'columns the full operator list is fine.',
+				'filters[].column' => 'Column to filter on.',
+				'filters[].operator' => 'Comparison operator. Use `between` '
+					. 'for date/datetime columns — value is either a '
+					. 'Superset time expression string ("Last 6 months", '
+					. '"2024-01-01 : 2024-03-31", "No filter") or a '
+					. '`[from, to]` array of two ISO strings.'
+					. ' Optional; defaults to =. Aliases == and <> are also accepted.',
+				'filters[].value' => 'Comparison value. Use array for '
+					. '`in`/`not_in`. Omit for `is_null`/`is_not_null`. '
+					. 'For `between`: a Superset time expression string '
+					. 'or a [from, to] pair.'
+					. ' Other operators accept recursive JSON, including dictionaries and null.',
+				'description' => 'Optional chart description shown in the UI.',
+				'rowLimit' => 'Row limit for the underlying query. Defaults depend on vizType '
+					. '(pie=100, table=1000, otherwise 10000). Integer inputs are clamped to 1..50000.',
 			],
-			'required' => ['name', 'datasetId', 'vizType', 'temporalColumn'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -251,6 +173,12 @@ final class CreateChartTool extends BaseBiTool
 		}
 
 		$payload = ChartParamsBuilder::build($args);
+
+		$dataset = (new ChartDatasetGuard())->validate($args, self::findActAsUser($userId), true);
+		if (!$dataset->isSuccess())
+		{
+			throw self::toMcpException(OperationRefusal::forTool($dataset));
+		}
 
 		$response = IntegratorFactory::getInstance()->createChart($payload);
 		if ($response->hasErrors())

@@ -112,6 +112,7 @@ trait DatasetWriteActions
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::DestructiveBudget,
 		FailureCode::RateLimit,
 	)]

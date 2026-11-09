@@ -7,7 +7,9 @@ namespace Bitrix\Landing\Integration\AiAssistant;
 use Bitrix\Landing\AI\SiteBuilder\Dto\ModerationVerdictDto;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Request;
+use Bitrix\Landing\Copilot\Generation\Scenario\BaseScenario;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSiteState;
+use Bitrix\Landing\Copilot\Generation\Scenario\IScenario;
 use Bitrix\Landing\Copilot\Generation\Step\RequestModerateAiSiteTopic;
 use Bitrix\Landing\Copilot\Generation\Type\Errors;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
@@ -26,7 +28,12 @@ final class AiSiteGenerationHelper
 	public const ERROR_TYPE_MODERATION = 'moderation';
 	public const ERROR_TYPE_TECHNICAL = 'technical';
 
-	private const MODERATION_STEP_ID = 15;
+	/**
+	 * Static wording of a refused topic, kept apart from the per-step table below: it belongs to the
+	 * moderation step of whichever scenario is running, and the markup scenarios moderate on a step
+	 * id the legacy table gives another meaning to.
+	 */
+	private const MODERATION_REFUSAL_MESSAGE = 'The requested topic is not allowed for AI site generation.';
 
 	private function __construct()
 	{
@@ -184,14 +191,17 @@ final class AiSiteGenerationHelper
 
 		$generationId = (int)($generation->getId() ?? 0);
 		$stepId = $failedContext?->erroredStepId ?? self::resolveErroredStepId($generationId);
-		if ($stepId === self::MODERATION_STEP_ID && self::isModerationRefusal($generation, $failedContext?->moderationVerdict))
+		if (
+			self::isModerationBlockStepId($generation, $stepId)
+			&& self::isModerationRefusal($generation, $failedContext?->moderationVerdict)
+		)
 		{
 			if ($failedContext !== null)
 			{
 				return self::buildModerationFailureForVerdict($failedContext->moderationVerdict);
 			}
 
-			return self::buildModerationFailure($generationId, self::MODERATION_STEP_ID);
+			return self::buildModerationFailure($generationId, $stepId);
 		}
 
 		return self::buildFailure(self::ERROR_TYPE_TECHNICAL, null, Metrika\Statuses::Error->value);
@@ -426,14 +436,15 @@ final class AiSiteGenerationHelper
 	public static function isModerationBlockError(Generation $generation): bool
 	{
 		$generationId = (int)($generation->getId() ?? 0);
-		if (self::resolveErroredStepId($generationId) !== self::MODERATION_STEP_ID)
+		$stepId = self::resolveErroredStepId($generationId);
+		if (!self::isModerationBlockStepId($generation, $stepId))
 		{
 			return false;
 		}
 
 		return self::isModerationRefusal(
 			$generation,
-			self::resolveBlockingModerationVerdict($generationId, self::MODERATION_STEP_ID),
+			self::resolveBlockingModerationVerdict($generationId, $stepId),
 		);
 	}
 
@@ -447,23 +458,41 @@ final class AiSiteGenerationHelper
 	 */
 	public static function resolveModerationBlockReason(int $generationId): ?string
 	{
-		if (self::resolveErroredStepId($generationId) !== self::MODERATION_STEP_ID)
+		$stepId = self::resolveErroredStepId($generationId);
+		$moderationStepId = self::resolveModerationStepId(self::resolveScenarioById($generationId));
+		if ($moderationStepId <= 0 || $stepId !== $moderationStepId)
 		{
 			return null;
 		}
 
-		return self::resolveModerationBlockMessage($generationId, self::MODERATION_STEP_ID);
+		return self::resolveModerationBlockMessage($generationId, $stepId);
+	}
+
+	/**
+	 * Moderation step of the scenario, or 0 when it has none (DTO-03).
+	 *
+	 * The step id is a property of the scenario and not of this helper: the legacy create flow
+	 * moderates on 15, the legacy change flow on 25 and both markup scenarios on 40, so a constant
+	 * here would read the verdict of one scenario off the step of another.
+	 */
+	public static function resolveModerationStepId(?IScenario $scenario): int
+	{
+		$stepId = $scenario instanceof BaseScenario ? (int)$scenario->getModerationStepId() : 0;
+
+		return max(0, $stepId);
 	}
 
 	/**
 	 * Same predicate as isModerationBlockError(), decided from an errored step id the caller has
-	 * already resolved: true only for the create-flow moderation step (DTO-03), false for every
-	 * other step and for the "no errored step" id 0. Reads nothing, so the failed branch classifies
-	 * without repeating the persisted step query.
+	 * already resolved: true only for the moderation step of the scenario the generation runs, false
+	 * for every other step, for the "no errored step" id 0 and for a scenario that moderates nothing.
+	 * Reads nothing, so the failed branch classifies without repeating the persisted step query.
 	 */
-	public static function isModerationBlockStepId(int $erroredStepId): bool
+	public static function isModerationBlockStepId(Generation $generation, int $erroredStepId): bool
 	{
-		return $erroredStepId === self::MODERATION_STEP_ID;
+		$moderationStepId = self::resolveModerationStepId($generation->getScenario());
+
+		return $moderationStepId > 0 && $erroredStepId === $moderationStepId;
 	}
 
 	/**
@@ -478,8 +507,31 @@ final class AiSiteGenerationHelper
 		?ModerationVerdictDto $moderationVerdict,
 	): bool
 	{
-		return self::isModerationBlockStepId($erroredStepId)
+		return self::isModerationBlockStepId($generation, $erroredStepId)
 			&& self::isModerationRefusal($generation, $moderationVerdict);
+	}
+
+	/**
+	 * Scenario of a generation known by its identifier alone, or null when it cannot be restored.
+	 * The callers that hold only the id of a failed job still have to ask the scenario about its
+	 * moderation step.
+	 */
+	private static function resolveScenarioById(int $generationId): ?IScenario
+	{
+		try
+		{
+			$descriptor = Generation::findDescriptorById($generationId);
+			if ($descriptor === null || !is_a($descriptor->scenarioClass, BaseScenario::class, allow_string: true))
+			{
+				return null;
+			}
+
+			return new ($descriptor->scenarioClass)();
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
 	}
 
 	/**
@@ -543,7 +595,7 @@ final class AiSiteGenerationHelper
 			return '';
 		}
 
-		if ($stepId === self::MODERATION_STEP_ID)
+		if (self::isModerationBlockStepId($generation, $stepId))
 		{
 			// Prefer the localized verdict message (hard: static refusal, soft: reword hint)
 			// saved by the moderation step over the static fallback below.
@@ -553,19 +605,19 @@ final class AiSiteGenerationHelper
 				return $moderationMessage;
 			}
 
-			// The step is also the one that fails when the check could not be made at all. Its static
-			// wording below speaks of a topic that is not allowed, which would be a false statement
-			// about the request the user actually sent.
-			if (!self::isModerationRefusal($generation, $moderationVerdict))
-			{
-				return 'Failed to check the requested topic.';
-			}
+			// The step is also the one that fails when the check could not be made at all. The static
+			// wording of a refusal speaks of a topic that is not allowed, which would be a false
+			// statement about the request the user actually sent.
+			return self::isModerationRefusal($generation, $moderationVerdict)
+				? self::MODERATION_REFUSAL_MESSAGE
+				: 'Failed to check the requested topic.'
+			;
 		}
 
 		return match ($stepId)
 		{
 			10 => 'Failed to initialize site generation context.',
-			15 => 'The requested topic is not allowed for AI site generation.',
+			15 => self::MODERATION_REFUSAL_MESSAGE,
 			20 => 'Failed to enhance user input for site generation.',
 			30 => 'Failed to prepare site data for generation.',
 			40 => 'Failed to generate preview image.',
@@ -629,7 +681,8 @@ final class AiSiteGenerationHelper
 		int $erroredStepId,
 	): ?ModerationVerdictDto
 	{
-		if ($erroredStepId !== self::MODERATION_STEP_ID)
+		$moderationStepId = self::resolveModerationStepId(self::resolveScenarioById($generationId));
+		if ($moderationStepId <= 0 || $erroredStepId !== $moderationStepId)
 		{
 			return null;
 		}

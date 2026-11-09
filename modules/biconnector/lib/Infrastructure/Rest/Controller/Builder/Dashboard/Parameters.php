@@ -33,6 +33,7 @@ final class Parameters extends AbstractBuilderController
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::RateLimit,
 	)]
 	public function searchAction(SearchDashboardParametersRequest $request): ArrayResponse

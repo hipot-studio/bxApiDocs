@@ -21,20 +21,30 @@ use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 
 /**
- * Creates one document per uploaded file and attaches every document to a documents group.
+ * Creates documents from uploaded files and attaches them to a documents group.
  *
  * Sending the blanks to the signing service is not part of this operation: one background agent per
  * group does it, so a batch never holds a php-fpm worker while the service works.
  *
- * Order of the incoming file list is the order of documents in the group.
+ * Automatic mode combines images at the position of the first image in the batch, so the file count
+ * of a batch is not its document count. The documents are counted before the first one is created:
+ * a batch asking for more of them than a group holds at all is refused whole, while a batch that
+ * only outgrows the free capacity of its group has the files over it rejected one by one.
+ *
  * A failure of a single file neither stops the batch nor rolls back already created documents;
  * the group limit is the only failure that stops processing of the remaining files.
  */
 final class AddGroupDocumentsFromFiles implements Contract\Operation
 {
 	/**
+	 * @var array<string, \Bitrix\UI\FileUploader\FileInfo>|false|null Null until read,
+	 * false once reading the tokens of the batch has failed.
+	 */
+	private array|bool|null $uploadedFilesInfo = null;
+
+	/**
 	 * @param array<int, string> $fileIds Uploaded file ids in the order chosen by the user.
-	 * @param bool $hasPlaceholders Whole batch trait: every blank of the batch is created with it.
+	 * @param bool $hasPlaceholders Explicit mode used when automatic detection is disabled.
 	 */
 	public function __construct(
 		private readonly array $fileIds,
@@ -51,6 +61,7 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 		private ?Storage $storage = null,
 		private ?DocumentRepository $documentRepository = null,
 		private ?DocumentAgentService $documentAgentService = null,
+		private readonly bool $autoDetectType = false,
 	)
 	{
 		$container = Container::instance();
@@ -110,6 +121,23 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 			return $this->rejectWholeBatch(AddGroupDocumentsResult::ERROR_TARIFF_RESTRICTED);
 		}
 
+		$documentFiles = $this->getDocumentFiles();
+		if ($documentFiles === null)
+		{
+			return (new AddGroupDocumentsResult())
+				->addError(new Main\Error('File list is invalid', 'INVALID_FILE_LIST'))
+			;
+		}
+
+		// The documents of the batch are counted before anything is created: a batch that asks for
+		// more documents than a group can hold at all would not succeed even in an empty group, so
+		// it is refused as a whole instead of filling the group and rejecting the remaining files.
+		// A batch that only outgrows the free capacity of its group keeps the per-file outcome.
+		if (count($documentFiles) > GroupService::MAX_DOCUMENT_COUNT)
+		{
+			return $this->rejectWholeBatch(AddGroupDocumentsResult::ERROR_LIMIT_EXCEEDED);
+		}
+
 		$groupResult = $this->resolveGroup();
 		if (!$groupResult->isSuccess())
 		{
@@ -120,27 +148,53 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 
 		$groupId = (int)$groupResult->getData()['groupId'];
 		$capacityLeft = (int)$groupResult->getData()['capacityLeft'];
-		$result = (new AddGroupDocumentsResult())->setGroupId($groupId);
-
-		foreach ($this->fileIds as $fileId)
+		if ($capacityLeft < 1)
 		{
-			$fileId = (string)$fileId;
-			// Files over the remaining capacity are rejected before anything is created for them.
+			return $this->rejectWholeBatch(AddGroupDocumentsResult::ERROR_LIMIT_EXCEEDED)->setGroupId($groupId);
+		}
+
+		$result = (new AddGroupDocumentsResult())->setGroupId($groupId);
+		$items = [];
+
+		foreach ($documentFiles as $files)
+		{
+			$documentResult = new AddGroupDocumentsResult();
+			$fileId = reset($files);
 			if ($capacityLeft < 1)
 			{
-				$result->addFailedItem($fileId, AddGroupDocumentsResult::ERROR_LIMIT_EXCEEDED);
-
-				continue;
+				$documentResult->addFailedItem($fileId, AddGroupDocumentsResult::ERROR_LIMIT_EXCEEDED);
+			}
+			else
+			{
+				$errorCode = $this->addDocument(array_values($files), $groupId, $documentResult);
+				if ($errorCode === null)
+				{
+					$capacityLeft--;
+				}
+				elseif ($errorCode === AddGroupDocumentsResult::ERROR_LIMIT_EXCEEDED)
+				{
+					$capacityLeft = 0;
+				}
 			}
 
-			$errorCode = $this->addDocument($fileId, $groupId, $result);
-			if ($errorCode === null)
+			foreach ($files as $index => $fileId)
 			{
-				$capacityLeft--;
+				$items[$index] = $documentResult->getItems()[0];
 			}
-			elseif ($errorCode === AddGroupDocumentsResult::ERROR_LIMIT_EXCEEDED)
+		}
+
+		foreach ($this->fileIds as $index => $fileId)
+		{
+			$item = $items[$index];
+			if ($item['success'])
 			{
-				$capacityLeft = 0;
+				$result->addSuccessItem(
+					$fileId, $item['uid'], $item['documentId'], $item['blankId'], $item['hasPlaceholders'],
+				);
+			}
+			else
+			{
+				$result->addFailedItem($fileId, $item['errorCode']);
 			}
 		}
 
@@ -154,6 +208,53 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @return array<int, array<int, string>>|null Null means the tokens of the batch cannot be read.
+	 */
+	private function getDocumentFiles(): ?array
+	{
+		$imageTokens = [];
+		if ($this->autoDetectType)
+		{
+			$uploadedFiles = $this->getUploadedFilesInfo();
+			if ($uploadedFiles === null)
+			{
+				return null;
+			}
+
+			foreach ($uploadedFiles as $token => $uploadedFile)
+			{
+				if ($uploadedFile->getFileId() < 1)
+				{
+					continue;
+				}
+
+				$extension = mb_strtolower(pathinfo($uploadedFile->getName(), PATHINFO_EXTENSION));
+				if (in_array($extension, ['jpg', 'jpeg', 'png'], true))
+				{
+					$imageTokens[$token] = true;
+				}
+			}
+		}
+
+		$documents = [];
+		$imageIndex = null;
+		foreach ($this->fileIds as $index => $fileId)
+		{
+			if (isset($imageTokens[$fileId]))
+			{
+				$imageIndex ??= $index;
+				$documents[$imageIndex][$index] = $fileId;
+			}
+			else
+			{
+				$documents[$index] = [$index => $fileId];
+			}
+		}
+
+		return $documents;
 	}
 
 	/**
@@ -178,7 +279,40 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 			return false;
 		}
 
-		return $this->blankService->getUploadedFilesTotalSize($this->fileIds) > $maxTotalSize;
+		$totalSize = 0;
+		// An unreadable list weighs nothing here and is refused by the file list check of the batch.
+		foreach ($this->getUploadedFilesInfo() ?? [] as $uploadedFile)
+		{
+			$totalSize += $uploadedFile->getSize();
+		}
+
+		return $totalSize > $maxTotalSize;
+	}
+
+	/**
+	 * Uploader metadata of the batch tokens, read once per request: the size gate and the type
+	 * detection both need nothing but the name and the byte size the uploader already holds, so
+	 * neither of them reads a file or, on a portal with cloud storage, downloads one from the bucket.
+	 *
+	 * @return array<string, \Bitrix\UI\FileUploader\FileInfo>|null Null means the tokens cannot be read.
+	 */
+	private function getUploadedFilesInfo(): ?array
+	{
+		if ($this->uploadedFilesInfo === null)
+		{
+			try
+			{
+				$this->uploadedFilesInfo = $this->blankService->getUploadedFilesInfo($this->fileIds);
+			}
+			catch (Main\Security\Sign\BadSignatureException)
+			{
+				// a damaged or forged token is a bad file list, not a failure of the portal: the
+				// batch is refused the same way an unreadable list is, instead of a fatal error
+				$this->uploadedFilesInfo = false;
+			}
+		}
+
+		return $this->uploadedFilesInfo === false ? null : $this->uploadedFilesInfo;
 	}
 
 	/**
@@ -220,15 +354,17 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 	}
 
 	/**
-	 * Creates a document for a single file and returns an error code when the file was rejected.
+	 * Creates one document and reports its outcome using the first source token.
 	 */
-	private function addDocument(string $fileId, int $groupId, AddGroupDocumentsResult $result): ?string
+	private function addDocument(array $fileIds, int $groupId, AddGroupDocumentsResult $result): ?string
 	{
+		$fileId = $fileIds[0];
 		$blankResult = $this->blankService->createFromFileIds(
-			[$fileId],
+			$fileIds,
 			$this->scenario,
 			false,
 			$this->hasPlaceholders,
+			$this->autoDetectType,
 		);
 		$blankId = (int)$blankResult->getId();
 		if (!$blankResult->isSuccess() || $blankId < 1)
@@ -268,7 +404,13 @@ final class AddGroupDocumentsFromFiles implements Contract\Operation
 			return $errorCode;
 		}
 
-		$result->addSuccessItem($fileId, $document->uid, (int)$document->id, $blankId, $this->hasPlaceholders);
+		$result->addSuccessItem(
+			$fileId,
+			$document->uid,
+			(int)$document->id,
+			$blankId,
+			$blankResult->getData()['blank']->hasPlaceholders,
+		);
 
 		return null;
 	}

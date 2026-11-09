@@ -3,9 +3,12 @@
 namespace Bitrix\BIConnector\Internal\Operation\Builder\Chart;
 
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\DestructiveBudget;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
+use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
+use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Result;
 
@@ -18,14 +21,20 @@ final class DeleteChartOperation
 	private const OBJECT_TYPE = 'chart';
 
 	private readonly ChartWriteGuard $guard;
+	private readonly SupersetIdentity $identity;
 
 	/**
 	 * @param DestructiveBudget|null $budget Without it, the budget over the limiter the service locator holds
 	 *     at the moment of the deletion, so a limiter replaced after the operation was built is charged.
 	 */
-	public function __construct(?ChartWriteGuard $guard = null, private readonly ?DestructiveBudget $budget = null)
+	public function __construct(
+		?ChartWriteGuard $guard = null,
+		private readonly ?DestructiveBudget $budget = null,
+		?SupersetIdentity $identity = null,
+	)
 	{
 		$this->guard = $guard ?? new ChartWriteGuard();
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -60,18 +69,15 @@ final class DeleteChartOperation
 		}
 
 		$response = IntegratorFactory::getInstance()->deleteChart($chartId);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $chartId);
+		if (!$classified->isSuccess())
 		{
-			// Deleted between the preview and the deletion: a retried deletion is not a failure.
-			if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			if ($classified->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return self::deleted($chartId, $name, true);
 			}
 
-			return ChartWriteGuard::unavailableBi(
-				$response->getErrors(),
-				['stage' => 'delete_chart', 'user_id' => $actor->userId, 'chart_id' => $chartId],
-			);
+			return $classified;
 		}
 
 		return self::deleted($chartId, $name, false);
@@ -85,10 +91,16 @@ final class DeleteChartOperation
 			return $allowed;
 		}
 
-		$chartResponse = IntegratorFactory::getInstance()->getChartById($chartId);
-		if ($chartResponse->hasErrors())
+		$identityResult = $this->identity->forRead($actor->userId);
+		if (!$identityResult->isSuccess())
 		{
-			if ($chartResponse->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			return $identityResult;
+		}
+
+		$lookup = (new EntityLookup())->chart($chartId, $identityResult->getData()['user']);
+		if (!$lookup->isSuccess())
+		{
+			if ($lookup->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return (new Result())->setData([
 					'id' => $chartId,
@@ -98,19 +110,16 @@ final class DeleteChartOperation
 				]);
 			}
 
-			return ChartWriteGuard::unavailableBi(
-				$chartResponse->getErrors(),
-				['stage' => 'delete_chart.load', 'user_id' => $actor->userId, 'chart_id' => $chartId],
-			);
+			return $lookup;
 		}
 
-		$chartData = $chartResponse->getData();
-		if (!is_array($chartData))
+		$chartData = $lookup->getData()['entity'];
+		$dashboards = $chartData['dashboards'] ?? [];
+		if (!is_array($dashboards))
 		{
-			$chartData = [];
+			return Refusal::unavailableBi([], ['stage' => 'delete_chart.load', 'chart_id' => $chartId]);
 		}
 
-		$dashboards = is_array($chartData['dashboards'] ?? null) ? $chartData['dashboards'] : [];
 		$editable = $this->guard->checkEditable($dashboards, $actor);
 		if (!$editable->isSuccess())
 		{

@@ -178,7 +178,17 @@ abstract class ExternalSql extends Sql
 		/* @var ExternalSource\Source\ExternalSql $source */
 		$source = Source\Factory::getSource($this->getType(), $sourceId);
 
-		return $source->getConnection(null, $this->sqlTimeLimitSeconds);
+		return $source->getConnection(null, $this->getConnectionTimeLimitSeconds());
+	}
+
+	/**
+	 * Time budget handed over to the external connection.
+	 *
+	 * @return int|null
+	 */
+	protected function getConnectionTimeLimitSeconds(): ?int
+	{
+		return $this->sqlTimeLimitSeconds;
 	}
 
 	/**

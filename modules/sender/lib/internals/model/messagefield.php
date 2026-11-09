@@ -9,6 +9,7 @@ namespace Bitrix\Sender\Internals\Model;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddMergeTrait;
 
 Loc::loadMessages(__FILE__);
 
@@ -31,6 +32,8 @@ Loc::loadMessages(__FILE__);
  */
 class MessageFieldTable extends Entity\DataManager
 {
+	use AddMergeTrait;
+
 	/**
 	 * Get table name.
 	 *

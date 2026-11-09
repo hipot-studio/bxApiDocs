@@ -144,6 +144,10 @@ class Letter extends Base
 			'USER_NAME' => 'CREATED_BY_USER.NAME',
 			'USER_LAST_NAME' => 'CREATED_BY_USER.LAST_NAME',
 			'USER_ID' => 'CREATED_BY',
+
+			// the sending window is read in the zone of the author: taken from the join that the name
+			// already needs, so a list page does not query b_user once per author
+			'USER_TIME_ZONE' => 'CREATED_BY_USER.TIME_ZONE',
 		);
 	}
 	/**
@@ -546,7 +550,6 @@ class Letter extends Base
 		$letter = LetterTable::getById($id)->fetch();
 		LetterSegmentTable::deleteList(array('LETTER_ID' => $id));
 
-		$isChanged = false;
 		$dataToInsert = [];
 		foreach ($segmentsList as $segments)
 		{
@@ -579,18 +582,10 @@ class Letter extends Base
 			{
 				Segment::updateUseCounters($newest, $segments['include']);
 			}
-
-			$isChanged = true;
 		}
 		if (!empty($dataToInsert))
 		{
 			SqlBatch::insert(LetterSegmentTable::getTableName(), $dataToInsert);
-		}
-
-		if ($isChanged && $this->getId() && $this->get('POSTING_ID'))
-		{
-			Posting\Builder::create()
-				->run($this->get('POSTING_ID'), false);
 		}
 	}
 
@@ -756,6 +751,7 @@ class Letter extends Base
 		if ($this->messagesCache && isset($this->messagesCache[$messageCode]))
 		{
 			$this->message = $this->messagesCache[$messageCode];
+			$this->publishAuthor($this->message);
 			if ($messageFields)
 			{
 				$this->message->setConfigurationData($messageFields);
@@ -764,8 +760,7 @@ class Letter extends Base
 		}
 
 		$this->message = MainMessage\Adapter::create($messageCode);
-		$createdById = $this->get('CREATED_BY') ?: Security\User::current()->getId();
-		$this->message->getConfiguration()->set('LETTER_CREATED_BY_ID', $createdById);
+		$this->publishAuthor($this->message);
 		$this->message->setSiteId($this->get('SITE_ID'));
 		if ($messageFields)
 		{
@@ -776,6 +771,37 @@ class Letter extends Base
 		$this->messagesCache[$messageCode] = $this->message;
 
 		return $this->message;
+	}
+
+	/**
+	 * Publishes the author of the letter currently loaded into this instance.
+	 *
+	 * One instance serves several letters: the list component fills it through loadByArray() row by
+	 * row, while the message is cached by code and survives that. The author is therefore published on
+	 * the cache hit too, otherwise every consumer of LETTER_CREATED_BY_ID — the sending window zone,
+	 * the mail sender quota, the daily limit in the sending time form — reads the author of the letter
+	 * that happened to be loaded first.
+	 *
+	 * LETTER_CREATED_BY_ID falls back to the current user, who is arbitrary on a hit running the background
+	 * sending. The sending window takes LETTER_OWNER_ID instead: the saved author only, zero without one.
+	 *
+	 * The time zone travels along when the row carries it, so the limiter does not look the author up
+	 * again. An absent key means the row was built without it (background sending) and the limiter
+	 * falls back to its own query; an empty value is an answer in itself — the author has no zone.
+	 *
+	 * @param MainMessage\Adapter $message Message.
+	 * @return void
+	 */
+	private function publishAuthor(MainMessage\Adapter $message)
+	{
+		$configuration = $message->getConfiguration();
+		$configuration->set('LETTER_CREATED_BY_ID', $this->get('CREATED_BY') ?: Security\User::current()->getId());
+		$configuration->set('LETTER_OWNER_ID', (int)$this->get('CREATED_BY'));
+
+		if (array_key_exists('USER_TIME_ZONE', $this->data))
+		{
+			$configuration->set('LETTER_CREATED_BY_TIME_ZONE', (string)$this->data['USER_TIME_ZONE']);
+		}
 	}
 
 	/**

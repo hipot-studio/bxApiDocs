@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Internal\Grid\UsageStat\Row\Assembler\Field;
 
+use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\ScreenReaderText;
 use Bitrix\Main\Localization\Loc;
 
 final class ChartFieldAssembler extends EntityLinkFieldAssembler
@@ -41,12 +42,15 @@ final class ChartFieldAssembler extends EntityLinkFieldAssembler
 		if ($iconName !== null)
 		{
 			$title = htmlspecialcharsbx($hint);
+			$typeText = ScreenReaderText::render($title);
 			$icon = <<<HTML
 				<span
 					class="ui-icon-set --{$iconName} biconnector-usage-stat-link__icon"
 					data-hint="{$title}"
 					data-hint-no-icon
+					aria-hidden="true"
 				></span>
+				{$typeText}
 			HTML;
 		}
 

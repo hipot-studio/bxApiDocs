@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dataset\WriteDatasetOperations;
 use Bitrix\Main\DI\ServiceLocator;
@@ -40,38 +41,21 @@ final class CreateVirtualDatasetTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'datasetName' => [
-					'type' => 'string',
-					'minLength' => 1,
-					'description' => 'Display name for the new virtual dataset. Must be unique on the portal.',
-				],
-				'sourceTable' => [
-					'type' => 'string',
-					'minLength' => 1,
-					'description' => 'Physical table name (from list_bi_tables) used as the data source.',
-				],
-				'columns' => [
-					'type' => 'array',
-					'description' => 'Column names to project. Use names exactly as returned by '
-						. 'get_bi_table_schema. Each column must match `^[A-Za-z_][A-Za-z0-9_]*$`.',
-					'items' => [
-						'type' => 'string',
-						'minLength' => 1,
-						'pattern' => '^[A-Za-z_][A-Za-z0-9_]*$',
-					],
-					'minItems' => 1,
-				],
-				'sourceSchema' => [
-					'type' => 'string',
-					'description' => 'Optional source table schema. If omitted, the default BI schema is used.',
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.dataset.addfromtable',
+			'mcp',
+			[
+				'datasetName' => 'Display name for the new virtual dataset. Trimmed and must be nonblank '
+					. 'and unique on the portal.',
+				'sourceTable' => 'Physical table name (from list_bi_tables) used as the data source. '
+					. 'Trimmed and must be nonblank.',
+				'columns' => 'Column names to project. Use names exactly as returned by '
+					. 'get_bi_table_schema. Trim each name and drop blank names; at least one must remain. '
+					. 'Order and duplicate names are preserved.',
+				'columns[]' => 'Column name from get_bi_table_schema. Blank names are dropped after trimming.',
+				'sourceSchema' => 'Optional source table schema. If omitted or empty, the default BI schema is used.',
 			],
-			'required' => ['datasetName', 'sourceTable', 'columns'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -180,6 +164,7 @@ final class CreateVirtualDatasetTool extends BaseBiTool
 		}
 
 		$response = $integrator->createVirtualDataset(
+			self::requireSupersetUser($userId),
 			$datasetName,
 			$sourceTable,
 			$columns,

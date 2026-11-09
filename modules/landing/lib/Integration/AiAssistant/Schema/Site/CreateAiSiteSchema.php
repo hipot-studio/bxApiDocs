@@ -21,7 +21,7 @@ class CreateAiSiteSchema extends BaseSchema
 			],
 			AiSiteChatBindingContract::TOOL_BINDING_ID_FIELD => [
 				'type' => ['string', 'integer'],
-				'description' => 'Landing AI-site binding identifier. It must match entityId passed to BX.AiAssistant.Trigger.execute().',
+				'description' => 'Numeric landing AI-site binding identifier: bindingId of the page context, not the trigger entityId.',
 			],
 		];
 	}

@@ -2813,7 +2813,8 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 		}
 		else
 		{
-			$hasAccess = Rights::hasAdditionalRight(
+			// with the rights checking off (binding to a group) the caller has already decided on access
+			$hasAccess = !Rights::isOn() || Rights::hasAdditionalRight(
 				Rights::ADDITIONAL_RIGHTS['create']
 			);
 		}

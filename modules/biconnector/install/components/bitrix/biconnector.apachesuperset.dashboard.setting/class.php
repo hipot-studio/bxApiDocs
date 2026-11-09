@@ -12,6 +12,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsMode;
 use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsModeResolver;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\RequiredParamListProvider;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
@@ -250,9 +251,18 @@ class ApacheSupersetDashboardSettingComponent
 			->addField(new Field\DashboardGroupsField(
 				id: 'DASHBOARD_GROUPS',
 				dashboard: $this->dashboard,
+				requiredParamList: $this->getRequiredParamList(),
 			))
 			->setIconClass('--folder-empty')
 		;
+	}
+
+	/**
+	 * @return array|null Null when the filters of the dashboard could not be read: nothing is imposed then.
+	 */
+	private function getRequiredParamList(): ?array
+	{
+		return (new RequiredParamListProvider())->getForDashboard($this->dashboard);
 	}
 
 	/**
@@ -331,7 +341,7 @@ class ApacheSupersetDashboardSettingComponent
 		{
 			$dashboardObject->unsetGroups();
 			$groupIds = array_flip($data['DASHBOARD_PARAMETERS']['GROUPS'] ?? []);
-			if (empty($groupIds) && !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
+			if (empty($groupIds) && !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS))
 			{
 				$error = new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_EMPTY_DASHBOARD_GROUP'));
 				$this->errorCollection->setError($error);
@@ -382,6 +392,10 @@ class ApacheSupersetDashboardSettingComponent
 			}
 
 			$params = $data['DASHBOARD_PARAMETERS']['PARAMS'] ?? [];
+			// The form locks a required parameter, so only a crafted request reaches here without it.
+			// Filters that could not be read impose nothing: Superset may be not installed or down.
+			$requiredParamList = $this->getRequiredParamList() ?? [];
+			$params = array_values(array_unique(array_merge($params, array_keys($requiredParamList))));
 			$paramService = new UrlParameter\Service($dashboardObject);
 			$saveParamsResult = $paramService->saveDashboardParams($params, $scopes);
 			if (!$saveParamsResult->isSuccess())

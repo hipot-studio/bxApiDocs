@@ -26,6 +26,11 @@ class PreparePageAdditionalFields extends Blank
 			$additionalFields['B24BUTTON_COLOR'],
 			$additionalFields['B24BUTTON_COLOR_VALUE'],
 		);
+		// raw html/js from an archive must not reach the page head
+		unset(
+			$additionalFields['HEADBLOCK_USE'],
+			$additionalFields['HEADBLOCK_CODE'],
+		);
 
 		$isIndexPage = $this->isIndexPage();
 		if ($isIndexPage)

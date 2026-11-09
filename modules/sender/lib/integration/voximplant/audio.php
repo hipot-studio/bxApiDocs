@@ -285,7 +285,7 @@ class Audio
 	/**
 	 * Get mp3 file duration
 	 * @param int $fileId File id.
-	 * @return int
+	 * @return float|false
 	 */
 	protected function getMp3fileDuration($fileId)
 	{
@@ -293,6 +293,7 @@ class Audio
 			return false;
 
 		$fileName = \CFile::GetPath($fileId);
+		$tmpFileName = null;
 
 		if ($this->isRemoteFile($fileName))
 		{
@@ -301,7 +302,13 @@ class Audio
 				"socketTimeout" => 5,
 				"streamTimeout" => 5
 			]);
-			$request->download($fileName, $tmpFileName);
+			if (!$request->download($fileName, $tmpFileName))
+			{
+				$this->deleteTempFile($tmpFileName);
+
+				return false;
+			}
+
 			$fileName = $tmpFileName;
 		}
 		else
@@ -309,7 +316,20 @@ class Audio
 			$fileName = Application::getDocumentRoot() . $fileName;
 		}
 
+		if (!is_file($fileName) || !is_readable($fileName))
+		{
+			$this->deleteTempFile($tmpFileName);
+
+			return false;
+		}
+
 		$file = fopen($fileName, "rb");
+		if (!$file)
+		{
+			$this->deleteTempFile($tmpFileName);
+
+			return false;
+		}
 
 		$duration = 0;
 		$header = fread($file, 100);
@@ -324,12 +344,13 @@ class Audio
 			}
 			else
 			{
-				if ("\xff" == $frame[0] && (ord($frame[1]) & 0xe0))  // if 1111 1111 111x xxxx bits (header sequence) was found
+				// if 1111 1111 111x xxxx bits (header sequence) was found
+				if ("\xff" === $frame[0] && (ord($frame[1]) & 0xe0) === 0xe0)
 				{
 					list($frameLength, $frameDuration) = $this->getFrameInfo(substr($frame, 0, 4));
 					if (!$frameLength)
 					{
-						return $duration;
+						break;
 					}
 					$offset = $frameLength - 10;
 					$duration += $frameDuration;
@@ -341,7 +362,23 @@ class Audio
 				fseek($file, $offset, SEEK_CUR);
 			}
 		}
+		fclose($file);
+		$this->deleteTempFile($tmpFileName);
+
 		return round($duration);
+	}
+
+	/**
+	 * Delete temporary file created for duration parsing
+	 * @param string|null $fileName Temporary file name.
+	 * @return void
+	 */
+	private function deleteTempFile(?string $fileName): void
+	{
+		if ($fileName !== null && file_exists($fileName))
+		{
+			unlink($fileName);
+		}
 	}
 
 	/**
@@ -351,7 +388,7 @@ class Audio
 	 */
 	private function getId3v2TagLength($header)
 	{
-		if ("ID3" == substr($header, 0, 3))
+		if (strlen($header) >= 10 && "ID3" == substr($header, 0, 3))
 		{
 			$hasExtendedHeader = (ord($header[5]) & 0x10) ? 1 : 0;
 			$lengthByte1 = ord($header[6]);
@@ -404,25 +441,37 @@ class Audio
 			2 => [1 => 384, 2 => 1152, 3 => 576]
 		];
 
-		$layerData = ord($frame[1]);
-		$rateData = ord($frame[2]);
+		$layerData = ord($frame[1] ?? "\x00");
+		$rateData = ord($frame[2] ?? "\x00");
 
-		$version = $versions[($layerData & 0x18) >> 3];
-		$bitrateVersion = ($version == '2.5' ? 2 : $version);
+		$version = $versions[($layerData & 0x18) >> 3] ?? null;
+		$layer = $layers[($layerData & 0x06) >> 1] ?? null;
+		if ($version === null || $layer === null)
+		{
+			return [0, 0];
+		}
 
-		$layer = $layers[($layerData & 0x06) >> 1];
+		$bitrateVersion = ($version === '2.5' ? 2 : $version);
 
 		$bitrateIndex = ($rateData & 0xf0) >> 4;
-		$bitrate = $bitrates[$bitrateVersion][$layer][$bitrateIndex] ?: 0;
+		$bitrate = $bitrates[$bitrateVersion][$layer][$bitrateIndex] ?? null;
 
 		$sampleRateIndex = ($rateData & 0x0c) >> 2;//0xc => b1100
-		$sampleRate = $sampleRates[$version][$sampleRateIndex] ?: 0;
+		$sampleRate = $sampleRates[$version][$sampleRateIndex] ?? null;
 		$padding = ($rateData & 0x02) >> 1;
 
-		if ($sampleRate <> 0)
+		if ($bitrate === null || $sampleRate === null)
 		{
-			$duration = $samples[$bitrateVersion][$layer] / $sampleRate;
+			return [0, 0];
 		}
+
+		// Free format declares no bitrate, so the frame length cannot be taken from the header.
+		if ($bitrate === 0)
+		{
+			return [0, 0];
+		}
+
+		$duration = $samples[$bitrateVersion][$layer] / $sampleRate;
 
 		if ($layer == 1)
 		{
@@ -430,10 +479,12 @@ class Audio
 		}
 		else
 		{
-			$frameLength = intval(((144 * $bitrate * 1000) / $sampleRate) + $padding);
+			// The length follows the samples per frame: a Layer III frame of MPEG-2 and MPEG-2.5 holds half
+			// the samples of an MPEG-1 one, so the MPEG-1 factor 144 (1152 / 8) would skip every other frame.
+			$frameLength = intval(($samples[$bitrateVersion][$layer] / 8 * $bitrate * 1000 / $sampleRate) + $padding);
 		}
 
-		return [$frameLength, $duration ?? 0];
+		return [$frameLength, $duration];
 	}
 
 	/**

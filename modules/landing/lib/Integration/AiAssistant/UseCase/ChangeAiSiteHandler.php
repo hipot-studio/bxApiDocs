@@ -16,7 +16,10 @@ use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
 use Bitrix\Landing\Integration\AiAssistant\Dto\AiSiteChatAvailabilityResult;
 use Bitrix\Landing\Integration\AiAssistant\Dto\ChangeAiSiteDto;
 use Bitrix\Landing\Integration\AiAssistant\Dto\FailedGenerationContextDto;
+use Bitrix\Landing\Integration\AiAssistant\Exception\AiSiteModeDisabledException;
+use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteModeGuard;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteRuntimeAvailabilityGuard;
+use Bitrix\Landing\Markup\MarkupPage;
 use Bitrix\Landing\Metrika;
 use Bitrix\Main\Loader;
 
@@ -26,6 +29,9 @@ class ChangeAiSiteHandler
 	private const MESSAGE_EMPTY_BRIEF = 'Brief lines are required to start page change generation.';
 	private const ERROR_AI_SITE_REQUIRED = 'AI_SITE_REQUIRED';
 	private const MESSAGE_AI_SITE_REQUIRED = 'AI site changes are available only for AI-created landing sites.';
+	private const ERROR_MARKUP_PAGE_NOT_SUPPORTED = 'MARKUP_PAGE_NOT_SUPPORTED';
+	private const MESSAGE_MARKUP_PAGE_NOT_SUPPORTED =
+		'This page is a custom markup page, the legacy AI page change is not available for it.';
 	private const MESSAGE_AI_MODULE_UNAVAILABLE = 'AI module is unavailable.';
 	private const MESSAGE_START_FAILED = 'Failed to start page change generation.';
 	private const MESSAGE_FINISHED_WITHOUT_PAGE = 'Page change generation finished without final page identifier.';
@@ -36,6 +42,8 @@ class ChangeAiSiteHandler
 
 	public function handle(ChangeAiSiteDto $dto, int $userId): array
 	{
+		$this->assertLegacyModeSelected();
+
 		$this->validateInput($dto);
 
 		if (!$this->isAiSitesEnabled())
@@ -47,12 +55,18 @@ class ChangeAiSiteHandler
 
 		$this->assertAiCreatedLanding($dto->pageId);
 
+		$this->assertNotMarkupLanding($dto->pageId);
+
 		if (!$this->includeAiModule())
 		{
 			throw new \RuntimeException(self::MESSAGE_AI_MODULE_UNAVAILABLE);
 		}
 
 		$generation = $this->createGeneration($dto, $userId);
+
+		// The start is the first saved effect: the selection is asked again right before it.
+		$this->assertLegacyModeSelected();
+
 		$started = $generation->execute();
 		$jobId = (string)($generation->getId() ?? '');
 		if ($jobId === '')
@@ -124,6 +138,35 @@ class ChangeAiSiteHandler
 	protected function isAiCreatedLanding(int $landingId): bool
 	{
 		return (new CreateAiSiteChecker())->isLandingCreated($landingId);
+	}
+
+	/**
+	 * A markup package page is refused here, before the generation exists: the scenario refuses it
+	 * as well, but only by a step of a generation that is already saved.
+	 */
+	private function assertNotMarkupLanding(int $landingId): void
+	{
+		if (!$this->isMarkupLanding($landingId))
+		{
+			return;
+		}
+
+		throw new \RuntimeException(
+			self::ERROR_MARKUP_PAGE_NOT_SUPPORTED . ': ' . self::MESSAGE_MARKUP_PAGE_NOT_SUPPORTED,
+		);
+	}
+
+	protected function isMarkupLanding(int $landingId): bool
+	{
+		return MarkupPage::isMarkupLanding($landingId);
+	}
+
+	/**
+	 * @throws AiSiteModeDisabledException
+	 */
+	private function assertLegacyModeSelected(): void
+	{
+		(new AiSiteModeGuard())->assertModeSelected(CopilotManager::AI_SITES_MODE_LEGACY);
 	}
 
 	protected function resolveSiteIdByPageId(int $pageId): int

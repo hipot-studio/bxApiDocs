@@ -76,7 +76,7 @@ class SupersetGroupProvider extends BaseProvider
 				);
 			}
 		}
-		elseif ($this->options['checkAccessRights'])
+		elseif ($this->isAccessCheckRequired())
 		{
 			$groupFilter = AccessController::getCurrent()->getEntityFilter(
 				ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
@@ -103,6 +103,18 @@ class SupersetGroupProvider extends BaseProvider
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The option comes from the request, so it is honored only for a person who may export
+	 * dashboards: the export master is the place that lists every group.
+	 */
+	private function isAccessCheckRequired(): bool
+	{
+		return
+			$this->options['checkAccessRights']
+			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT)
+		;
 	}
 
 	private function makeItem(SupersetDashboardGroup $group, bool $isEditable = true): Item

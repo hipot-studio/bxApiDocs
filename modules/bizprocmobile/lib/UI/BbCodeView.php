@@ -2,7 +2,9 @@
 
 namespace Bitrix\BizprocMobile\UI;
 
+use Bitrix\Bizproc\Public\Service\File\ShowFileAccessService;
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Mobile\UI\File;
 use Bitrix\BizprocMobile\Fields;
@@ -52,6 +54,12 @@ class BbCodeView implements \JsonSerializable
 		return function ($matches) use (&$files)
 		{
 			parse_str(htmlspecialcharsback($matches[1]), $query);
+
+			if (class_exists(ShowFileAccessService::class))
+			{
+				return $this->replaceAccessibleFileLink($query, $files);
+			}
+
 			$fileId = $query['i'] ?? null;
 			if (isset($fileId))
 			{
@@ -68,6 +76,28 @@ class BbCodeView implements \JsonSerializable
 
 			return '[url=/dev/null]'; // File not found
 		};
+	}
+
+	private function replaceAccessibleFileLink(array $query, array& $files): string
+	{
+		$isAuthorized = (int)(CurrentUser::get()?->getId() ?? 0) > 0;
+		$verdict = (new ShowFileAccessService())->resolve($query, $isAuthorized);
+		if (!$verdict->isAllowed())
+		{
+			return '[url=/dev/null]';
+		}
+
+		$fileId = (int)(is_array($verdict->file) ? ($verdict->file['ID'] ?? 0) : $verdict->file);
+		$file = $fileId > 0 ? File::load($fileId) : null;
+		if (!isset($file))
+		{
+			return '[url=/dev/null]'; // File not found
+		}
+
+		$uri = 'fid://' . $file->getId();
+		$files[$uri] = $file;
+
+		return '[url=' . $uri . ']';
 	}
 
 	private function getDiskFileLinksReplacer(array& $files): callable

@@ -15,6 +15,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
 use Bitrix\BIConnector\Superset\ActionFilter\ExternalDashboardConfigAccess;
+use Bitrix\BIConnector\Superset\ActionFilter\SupersetLoginAccess;
 use Bitrix\BIConnector\Superset\Error\IntegrationErrorPresenter;
 use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\BIConnector\Superset\Logger\Logger;
@@ -104,6 +105,22 @@ class Dataset extends Controller
 		return [
 			...parent::getDefaultPreFilters(),
 			...$additionalFilters,
+		];
+	}
+
+	public function configureActions(): array
+	{
+		return [
+			'getCreateUrl' => [
+				'+prefilters' => [
+					new SupersetLoginAccess(),
+				],
+			],
+			'getCreateUrlByName' => [
+				'+prefilters' => [
+					new SupersetLoginAccess(),
+				],
+			],
 		];
 	}
 
@@ -310,19 +327,17 @@ class Dataset extends Controller
 	 * @param string $type
 	 * @param array $fields
 	 * @param int|null $sourceId
-	 * @param array $tableGroupIds Groups the new table is bound to; at least one is required while the table axis is on.
+	 * @param array $tableGroupIds Groups the new table is bound to; at least one is required.
 	 * @return array|null
 	 */
 	public function addAction(string $type, array $fields, ?int $sourceId = null, array $tableGroupIds = []): ?array
 	{
-		$groupIds = null;
-		if ($this->getTableAccessChecker()->isRestricted())
+		// A new table names its groups with the axis off as well: no table is left without a group. The
+		// axis only narrows down the groups the user may pick.
+		$groupIds = self::normalizeTableGroupIds($tableGroupIds);
+		if (!$this->checkTableGroupsForAdd($groupIds))
 		{
-			$groupIds = self::normalizeTableGroupIds($tableGroupIds);
-			if (!$this->checkTableGroupsForAdd($groupIds))
-			{
-				return null;
-			}
+			return null;
 		}
 
 		if (!$sourceId)
@@ -342,7 +357,10 @@ class Dataset extends Controller
 		$datasetFields = $checkBeforeAddData['fields'];
 		$datasetSettings = $checkBeforeAddData['settings'];
 
-		if ($groupIds !== null && !$this->getTableAccessChecker()->canTakeTableCode((string)$dataset['NAME']))
+		if (
+			$this->getTableAccessChecker()->isRestricted()
+			&& !$this->getTableAccessChecker()->canTakeTableCode((string)$dataset['NAME'])
+		)
 		{
 			$this->addTableAccessDeniedError();
 
@@ -460,7 +478,22 @@ class Dataset extends Controller
 			return false;
 		}
 
-		if (!$this->getTableAccessChecker()->canUseEveryGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $groupIds))
+		$checker = $this->getTableAccessChecker();
+		// Under the axis a group that does not exist is refused as one without the right, so its existence
+		// is not told to the user who sees it not.
+		if (!$checker->isRestricted() && !$checker->doGroupsExist($groupIds))
+		{
+			$this->addError(
+				new UserFacingError(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_TABLE_GROUPS_NOT_FOUND_ERROR') ?? '',
+					'TABLE_GROUP_NOT_FOUND',
+				)
+			);
+
+			return false;
+		}
+
+		if (!$checker->canUseEveryGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $groupIds))
 		{
 			$this->addError(
 				new UserFacingError(

@@ -203,6 +203,30 @@ class Domain extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * Returns the domain name with its punycode labels decoded, for building a url shown to a user.
+	 * The name is stored in punycode and stays so for comparison and signing; a name that can not be
+	 * decoded is returned as is.
+	 * @param string $domainName Domain name.
+	 * @return string
+	 */
+	public static function toUnicode(string $domainName): string
+	{
+		if (!str_contains($domainName, 'xn--'))
+		{
+			return $domainName;
+		}
+
+		$errors = [];
+		$unicode = \CBXPunycode::ToUnicode($domainName, $errors);
+		if (!empty($errors) || !is_string($unicode) || $unicode === '')
+		{
+			return $domainName;
+		}
+
+		return $unicode;
+	}
+
+	/**
 	 * Returns top level domain by domain name.
 	 * @param string $domainName Domain name.
 	 * @return string

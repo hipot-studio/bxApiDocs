@@ -33,7 +33,9 @@ class File implements Contract\Item
 		$this->dir = $dir;
 		$this->name = $name;
 		$this->content = $content ?: new FileContent();
-		$this->size = $this->content->data ? mb_strlen($this->content->data) : 0;
+		// Byte length, not character length: the size feeds upload limits stated in bytes, and on
+		// binary content mb_strlen reports about a fifth less than the file really weighs.
+		$this->size = $this->content->data ? strlen($this->content->data) : 0;
 		$this->isImage = $isImage;
 	}
 

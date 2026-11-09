@@ -271,8 +271,15 @@ class Stage extends Base
 				{
 					$data['fields'][$visibility] = $fields;
 				}
+				$settingsUrl = Driver::getInstance()->getUrlManager()->getStageDetailUrl(
+					$stage->getId(),
+					$stage->getTypeId()
+				);
+				if($settingsUrl)
+				{
+					$data['settingsUrl'] = (string)$settingsUrl;
+				}
 			}
-			//$data['settingsUrl'] = Driver::getInstance()->getUrlManager()->getStageDetailUrl($stage->getId());
 			$data['possibleNextStages'] = array_values($stage->getPossibleNextStageIds());
 			$canModifyItemsInStage = $userPermissions->canModifyItemsInStage($stage->getType(), $stage->getId());
 			$canMoveFromStage = $userPermissions->canMoveFromStage($stage->getType(), $stage->getId());

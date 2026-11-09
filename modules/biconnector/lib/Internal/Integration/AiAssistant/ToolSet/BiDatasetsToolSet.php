@@ -5,16 +5,20 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\ToolSet;
 use Bitrix\AiAssistant\Definition\Dto\DefinitionMetadataDto;
 use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\AiAssistant\Definition\ToolSet\BaseToolSet;
+use Bitrix\AiAssistant\Definition\ToolSet\Contract\ToolProviderDefinitionInterface;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\AgentOperationsDescription;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\CreateDatasetFromSqlTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\CreateVirtualDatasetTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\DeleteDatasetTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiGuideTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetDatasetTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ListDatasetsTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UpdateDatasetTool;
 
-final class BiDatasetsToolSet extends BaseToolSet
+final class BiDatasetsToolSet extends BaseToolSet implements ToolProviderDefinitionInterface
 {
+	use BuilderPairToolProvider;
+
 	public function getCode(): string
 	{
 		return 'bi_datasets';
@@ -42,6 +46,7 @@ final class BiDatasetsToolSet extends BaseToolSet
 			CreateDatasetFromSqlTool::class,
 			UpdateDatasetTool::class,
 			DeleteDatasetTool::class,
+			GetBiGuideTool::class,
 		]);
 	}
 

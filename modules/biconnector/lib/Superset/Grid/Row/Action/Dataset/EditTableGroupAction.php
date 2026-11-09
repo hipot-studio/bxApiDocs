@@ -38,7 +38,7 @@ final class EditTableGroupAction extends FormatMenuAction
 			return null;
 		}
 
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_TABLE_RIGHTS))
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_TABLE_GROUP_MANAGE))
 		{
 			return null;
 		}

@@ -38,8 +38,8 @@ final class WireTracer
 
 	private const MASK = '***';
 
-	/** Keys of the request body that carry an access key. */
-	private const SECRET_KEYS = ['key', 'superset_key'];
+	/** Keys of the request body that carry a secret: an access key or a replayable login signature. */
+	private const SECRET_KEYS = ['key', 'superset_key', 'login_sign'];
 
 	private static ?self $instance = null;
 

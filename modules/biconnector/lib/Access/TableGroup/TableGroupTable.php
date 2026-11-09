@@ -34,7 +34,7 @@ final class TableGroupTable extends DataManager
 	public const GROUP_TYPE_CUSTOM = 'CUSTOM';
 
 	/**
-	 * Position of a group that did not ask for one. The system groups are placed by tens ahead of
+	 * Position of a group that did not ask for one. The system groups are placed by fives ahead of
 	 * it, so a custom group lands after all of them and custom groups are ordered among themselves
 	 * by id, that is in the order they were created.
 	 */

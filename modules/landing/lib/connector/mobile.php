@@ -35,7 +35,10 @@ class Mobile
 			return $menu;
 		}
 
-		if (\Bitrix\Landing\Site\Type::isEnabled('knowledge'))
+		if (
+			\Bitrix\Landing\Site\Type::isEnabled('knowledge')
+			&& \Bitrix\Landing\Mobile\LegacyKnowledgeAccess::isMenuAllowed()
+		)
 		{
 			$menu[0]['items'][] = self::getKnowledgeMenu();
 		}

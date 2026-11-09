@@ -74,7 +74,10 @@ class Comment extends Base
 		}
 
 		$userPermissions = Driver::getInstance()->getUserPermissions();
-		if(!$userPermissions->canAddComment($item))
+		if (
+			!$userPermissions->canAddComment($item)
+			|| (!empty($fields['files']) && !$userPermissions->canModifyItem($item))
+		)
 		{
 			$this->addError(new Error(Loc::getMessage('RPA_ADD_COMMENT_ACCESS_DENIED')));
 			return null;
@@ -146,10 +149,35 @@ class Comment extends Base
 		}
 
 		$userPermissions = Driver::getInstance()->getUserPermissions();
-		if(!$userPermissions->canUpdateComment($timeline))
+		if (!$userPermissions->canUpdateComment($timeline))
 		{
 			$this->addError(new Error(Loc::getMessage('RPA_MODIFY_COMMENT_ACCESS_DENIED')));
 			return null;
+		}
+
+		$files = null;
+		if (
+			!empty($fields['files'])
+			&& (!$timeline->getItem() || !$userPermissions->canModifyItem($timeline->getItem()))
+		)
+		{
+			$currentFiles = static::getUiComment()->getFileUserFields($id)[static::USER_FIELD_FILES]['VALUE'] ?? [];
+			$currentFiles = array_map('strval', (array)$currentFiles);
+			$files = is_array($fields['files']) ? $fields['files'] : [$fields['files']];
+			foreach ($files as $file)
+			{
+				if (
+					!is_array($fields['files'])
+					|| (!is_int($file) && !is_string($file))
+					|| preg_match('/^[0-9]+$/D', (string)$file) !== 1
+					|| !in_array((string)$file, $currentFiles, true)
+				)
+				{
+					$this->addError(new Error(Loc::getMessage('RPA_MODIFY_COMMENT_ACCESS_DENIED')));
+
+					return null;
+				}
+			}
 		}
 
 		$emptyFields = $this->getEmptyRequiredParameterNames($fields, ['description']);
@@ -163,7 +191,7 @@ class Comment extends Base
 		$previouslyMentionedUserIds = static::getCommentParser()->getMentionedUserIds($timeline->getDescription());
 
 		$timeline->setDescription($fields['description']);
-		$files = $this->processFiles($fields);
+		$files = $files ?? $this->processFiles($fields);
 		$result = $timeline->save();
 		if($result->isSuccess())
 		{

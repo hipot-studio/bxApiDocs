@@ -144,6 +144,12 @@ class SenderTemplateEditComponent extends Bitrix\Sender\Internals\CommonSenderCo
 		$this->arResult['SHOW_TEMPLATE_SELECTOR'] = empty($this->arResult['ROW']['CONTENT']);
 
 		$this->arResult['IS_SAVED'] = $this->request->get('IS_SAVED') == 'Y';
+		$this->arResult['SAVED_TEMPLATE'] = $this->arResult['IS_SAVED'] && (int)($this->arResult['ROW']['ID'] ?? 0) > 0
+			? [
+				'id' => (int)$this->arResult['ROW']['ID'],
+				'title' => (string)$this->arResult['ROW']['NAME'],
+			]
+			: null;
 
 		return true;
 	}

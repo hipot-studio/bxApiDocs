@@ -102,6 +102,14 @@ class Adapter implements iBase, iLimitation
 		return $this->transport->getCode();
 	}
 
+	public function getLastError(): ?\Bitrix\Main\Error
+	{
+		return method_exists($this->transport, 'getLastError')
+			? $this->transport->getLastError()
+			: null
+		;
+	}
+
 	/**
 	 * Get supported recipient types.
 	 *
@@ -327,7 +335,13 @@ class Adapter implements iBase, iLimitation
 			}
 			else
 			{
-				$this->limiters = $this->transport->getLimiters($message);
+				$limiters = $this->transport->getLimiters($message);
+				if ($message === null)
+				{
+					return $limiters;
+				}
+
+				$this->limiters = $limiters;
 			}
 		}
 

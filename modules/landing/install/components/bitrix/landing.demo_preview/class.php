@@ -85,7 +85,7 @@ class LandingSiteDemoPreviewComponent extends LandingSiteDemoComponent
 				}
 				else
 				{
-					$this->arResult['RIGHTS_CREATE'] = Rights::hasAdditionalRight(
+					$this->arResult['RIGHTS_CREATE'] = !Rights::isOn() || Rights::hasAdditionalRight(
 						Rights::ADDITIONAL_RIGHTS['create']
 					);
 				}

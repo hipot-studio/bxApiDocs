@@ -6,6 +6,8 @@ namespace Bitrix\Landing\Integration\AiAssistant\Tool\Site;
 
 use Bitrix\Crm\WebForm\Manager as WebFormManager;
 use Bitrix\Landing\Integration\AiAssistant\Tool\BaseTool;
+use Bitrix\Landing\Integration\AiAssistant\UseCase\AbstractCrmFormFieldsHandler;
+use Bitrix\Landing\Integration\AiAssistant\UseCase\AbstractCrmFormHandler;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Subtype\Form;
 use Bitrix\Main\Loader;
@@ -65,6 +67,30 @@ abstract class AbstractCrmFormTool extends BaseTool
 		}
 
 		throw new InvalidArgumentException('CRM form block not found on the specified page.');
+	}
+
+	/**
+	 * Form ids bound to the markup block of the page, null for a block that is not a markup carrier of the page.
+	 * @return list<int>|null
+	 */
+	protected function findMarkupBlockFormIds(int $pageId, int $blockId): ?array
+	{
+		$manifest = AbstractCrmFormHandler::fetchMarkupBlockManifests($pageId)[$blockId] ?? null;
+		if ($manifest === null)
+		{
+			return null;
+		}
+
+		return array_values(array_unique(array_column($manifest->getForms(), 'formId')));
+	}
+
+	/**
+	 * The form of a markup block: the given one must be bound to the block, a single binding is taken by itself.
+	 * @param list<int> $boundFormIds
+	 */
+	protected function resolveMarkupBlockFormId(array $boundFormIds, ?int $formId): int
+	{
+		return AbstractCrmFormFieldsHandler::resolveMarkupFormId($boundFormIds, $formId);
 	}
 
 	protected function assertReadableActiveFormExists(int $formId): void

@@ -35,6 +35,9 @@ class Helper
 	public static $runtimeByEntity = [];
 	private const PERSONALIZE_NAMESPACE = "\\Bitrix\\Sender\\Integration\\Crm\\Connectors\\Personalize\\";
 
+	/** The IMOL field of CRM holds any open line address, including channels not allowed for mailings. */
+	public const ALLOWED_IM_FIELD = 'SENDER_ALLOWED_IMOL';
+
 	/**
 	 * Create ORM expression field for selecting multi field.
 	 *
@@ -45,18 +48,21 @@ class Helper
 	public static function createExpressionMultiField($entityName, $multiFieldTypeId)
 	{
 		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$entityLiteral = self::forExpressionField($entityName);
+		$typeLiteral = self::forExpressionField($multiFieldTypeId);
+
 		return new ORM\Fields\ExpressionField(
 			$multiFieldTypeId,
 			'(' . $sqlHelper->getTopSql(
 				"
-						SELECT FM.VALUE							
-						FROM b_crm_field_multi FM 
-						WHERE FM.ENTITY_ID = '$entityName' 
-							AND FM.ELEMENT_ID = %s 
-							AND FM.TYPE_ID = '$multiFieldTypeId' 
+						SELECT FM.VALUE
+						FROM b_crm_field_multi FM
+						WHERE FM.ENTITY_ID = {$entityLiteral}
+							AND FM.ELEMENT_ID = %s
+							AND FM.TYPE_ID = {$typeLiteral}
 						ORDER BY
-							CASE FM.VALUE_TYPE 
-								WHEN 'MAILING' THEN 0 
+							CASE FM.VALUE_TYPE
+								WHEN 'MAILING' THEN 0
 								WHEN 'HOME' THEN 1
 								WHEN 'MOBILE' THEN 1
 								ELSE 2
@@ -67,6 +73,54 @@ class Helper
 			) . ')',
 			'ID'
 		);
+	}
+
+	/**
+	 * Create ORM expression field selecting the first open line address of a channel
+	 * allowed for mailings.
+	 *
+	 * @param string $entityName Entity name.
+	 * @param string $fieldName Field name.
+	 * @return ORM\Fields\ExpressionField
+	 */
+	public static function createExpressionImField(string $entityName, string $fieldName): ORM\Fields\ExpressionField
+	{
+		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$entityLiteral = self::forExpressionField($entityName);
+		$regexpLiteral = self::forExpressionField(self::getExcludedImRegexp());
+
+		// HAS_IMOL keeps the subquery off the entities with no open line address at all
+		return new ORM\Fields\ExpressionField(
+			$fieldName,
+			"CASE WHEN %s = 'Y' THEN (" . $sqlHelper->getTopSql(
+				"
+						SELECT FM.VALUE
+						FROM b_crm_field_multi FM
+						WHERE FM.ENTITY_ID = {$entityLiteral}
+							AND FM.ELEMENT_ID = %s
+							AND FM.TYPE_ID = 'IM'
+							AND FM.VALUE LIKE 'imol|%%'
+							AND NOT " . $sqlHelper->getRegexpOperator('FM.VALUE', $regexpLiteral) . "
+						ORDER BY FM.ID
+					",
+				1
+			) . ') END',
+			['HAS_IMOL', 'ID']
+		);
+	}
+
+	/**
+	 * String literal for the body of an ExpressionField.
+	 *
+	 * ORM runs the body through sprintf to put the columns in place of %s, so a percent sign
+	 * that came from a value has to be doubled to survive that substitution.
+	 *
+	 * @param string $value Value to bind.
+	 * @return string
+	 */
+	private static function forExpressionField($value)
+	{
+		return str_replace('%', '%%', (new SqlExpression('?s', $value))->compile());
 	}
 
 	/**
@@ -88,6 +142,11 @@ class Helper
 		$documentClass = self::PERSONALIZE_NAMESPACE.ucfirst($entityType);
 
 		if(!is_subclass_of($documentClass, BasePersonalize::class))
+		{
+			return [];
+		}
+
+		if (!Loader::includeModule('crm'))
 		{
 			return [];
 		}
@@ -149,8 +208,19 @@ class Helper
 			return [];
 		}
 
+		if (!Loader::includeModule('crm'))
+		{
+			return [];
+		}
+
 		$fields = self::filterOnlyAllowedFields((string)$entityType, (array)$fields);
 		if (empty($fields))
+		{
+			return [];
+		}
+
+		$entityIds = BasePersonalize::normalizeEntityIds((array)$entityIds);
+		if (empty($entityIds))
 		{
 			return [];
 		}
@@ -241,6 +311,11 @@ class Helper
 
 		foreach ($list as $index => $field)
 		{
+			$list[$index]['name'] = self::getFilterUserFieldName(
+				(string)($field['name'] ?? ''),
+				$originalList[$field['id']],
+			);
+
 			if ($field['type'] === 'date')
 			{
 				$list[$index]['include'] = [
@@ -262,6 +337,35 @@ class Helper
 		}
 
 		return $list;
+	}
+
+	/**
+	 * CRM names a filter field by its filter label only, so a field without one comes empty.
+	 *
+	 * @param string $name Name given by CRM.
+	 * @param array $userField User field description.
+	 *
+	 * @return string
+	 */
+	public static function getFilterUserFieldName(string $name, array $userField): string
+	{
+		$candidates = [
+			$name,
+			$userField['LIST_FILTER_LABEL'] ?? null,
+			$userField['LIST_COLUMN_LABEL'] ?? null,
+			$userField['EDIT_FORM_LABEL'] ?? null,
+			$userField['FIELD_NAME'] ?? null,
+		];
+
+		foreach ($candidates as $candidate)
+		{
+			if (is_string($candidate) && trim($candidate) !== '')
+			{
+				return $candidate;
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -367,33 +471,59 @@ class Helper
 		return $query;
 	}
 
+	/**
+	 * Codes of the open line channels that are not allowed for mailings.
+	 *
+	 * @return array
+	 */
+	protected static function getImChannelCodes(): array
+	{
+		return Integration\Im\Service::getExcludedChannelCodes();
+	}
+
 	protected static function getImSqlExpression(
 		Entity\Query $query,
 		$entityDbName = null,
 		$entityName = null
 	)
 	{
-		$codes = Integration\Im\Service::getExcludedChannelCodes();
-		if (empty($codes))
-		{
-			$codes = array('livechat', 'network');
-		}
-
 		$column = $entityDbName ? 'CRM_ENTITY_ID' : 'ID';
 
 		$entityTypeName = $entityName ?? mb_strtoupper($query->getEntity()->getName());
 
 		$sqlHelper = Application::getConnection()->getSqlHelper();
-		$regexp = "'^imol\\\\|(" . implode('|', $codes) . ")'";
+
+		// SqlExpression::compile() checks the expression text (not the argument values) for
+		// backslashes and, if found, runs it through explode('\\\\')/str_replace('\?', '?'),
+		// which corrupts the substitution. So the regexp itself must live in an argument, and
+		// the expression text below has to stay free of backslashes.
+		$regexp = self::getExcludedImRegexp();
 
 		$filterImolSql = "SELECT FM.VALUE " .
 			"FROM b_crm_field_multi FM " .
-			"WHERE FM.ENTITY_ID = '$entityTypeName' AND FM.ELEMENT_ID = ?#.{$column} " .
+			"WHERE FM.ENTITY_ID = ?s AND FM.ELEMENT_ID = ?#.{$column} " .
 			"AND FM.TYPE_ID = 'IM' " .
-			"AND NOT {$sqlHelper->getRegexpOperator('FM.VALUE', $regexp)} " .
+			"AND NOT " . $sqlHelper->getRegexpOperator('FM.VALUE', '?s') . " " .
 			"ORDER BY FM.ID LIMIT 1";
 
-		return new SqlExpression($filterImolSql, $query->getInitAlias());
+		return new SqlExpression($filterImolSql, $entityTypeName, $query->getInitAlias(), $regexp);
+	}
+
+	/**
+	 * Regexp matching open line addresses of the channels not allowed for mailings.
+	 */
+	private static function getExcludedImRegexp(): string
+	{
+		$codes = array_values(array_filter(
+			array_map('strval', static::getImChannelCodes()),
+			static fn($code) => $code !== ''
+		));
+		if (empty($codes))
+		{
+			$codes = array('livechat', 'network');
+		}
+
+		return '^imol\|(' . implode('|', array_map('preg_quote', $codes)) . ')\|';
 	}
 
 	/**

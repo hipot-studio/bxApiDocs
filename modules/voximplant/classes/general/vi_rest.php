@@ -903,7 +903,7 @@ class CVoxImplantRestService extends IRestService
 		}
 
 		$user = new CVoxImplantUser();
-		$user->SetPhoneActive($userId, true);
+		$user->SetPhoneActive($userId, false);
 
 		return 1;
 	}
@@ -1870,6 +1870,10 @@ class CVoxImplantRestService extends IRestService
 		}
 		foreach ($params['MESSAGES'] as $k => $messageFields)
 		{
+			if (!is_array($messageFields))
+			{
+				throw new \Bitrix\Rest\RestException('MESSAGES[' . $k . '] should be an array');
+			}
 			if ($messageFields['SIDE'] !== \Bitrix\Voximplant\Transcript::SIDE_CLIENT && $messageFields['SIDE'] !== \Bitrix\Voximplant\Transcript::SIDE_USER)
 			{
 				throw new \Bitrix\Rest\RestException('MESSAGES[' . $k . '][SIDE] should be either Client or User');

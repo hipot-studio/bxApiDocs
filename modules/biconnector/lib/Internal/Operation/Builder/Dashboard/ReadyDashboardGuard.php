@@ -22,6 +22,11 @@ use Bitrix\Main\Result;
  */
 final class ReadyDashboardGuard
 {
+	/**
+	 * Seconds a client waits before it repeats a call refused while the dashboard is preparing or BI is starting.
+	 */
+	public const RETRY_AFTER_SECONDS = 15;
+
 	private const PREPARING_MESSAGE = 'Dashboard is preparing, first open takes a moment. Try again shortly.';
 
 	private readonly DashboardGuard $dashboardGuard;
@@ -57,12 +62,16 @@ final class ReadyDashboardGuard
 				MarketDashboardManager::getInstance()->reinstallDashboard($dashboardId);
 			});
 
-			return Refusal::error(FailureCode::Unavailable, self::PREPARING_MESSAGE);
+			return Refusal::error(FailureCode::Unavailable, self::PREPARING_MESSAGE)
+				->setData(['retryAfter' => self::RETRY_AFTER_SECONDS])
+			;
 		}
 
 		if ($status === SupersetDashboardTable::DASHBOARD_STATUS_LOAD)
 		{
-			return Refusal::error(FailureCode::Unavailable, self::PREPARING_MESSAGE);
+			return Refusal::error(FailureCode::Unavailable, self::PREPARING_MESSAGE)
+				->setData(['retryAfter' => self::RETRY_AFTER_SECONDS])
+			;
 		}
 
 		$readyStatuses = [
@@ -120,7 +129,9 @@ final class ReadyDashboardGuard
 			return Refusal::error(
 				FailureCode::Unavailable,
 				'BI is preparing, this can take a moment on first use. Try again shortly.',
-			);
+			)
+				->setData(['retryAfter' => self::RETRY_AFTER_SECONDS])
+			;
 		}
 
 		if ($instanceStatus === SupersetInitializer::SUPERSET_STATUS_LIMIT_EXCEEDED)

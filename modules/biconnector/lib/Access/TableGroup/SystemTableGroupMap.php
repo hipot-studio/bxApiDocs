@@ -32,6 +32,7 @@ final class SystemTableGroupMap
 	public const GROUP_EMPLOYEES = 'employees';
 	public const GROUP_TELEPHONY = 'telephony';
 	public const GROUP_CALENDAR = 'calendar';
+	public const GROUP_BOOKING = 'booking';
 
 	/**
 	 * The group of the tables no other group declares - external datasets among them. The product
@@ -40,7 +41,8 @@ final class SystemTableGroupMap
 	 */
 	public const GROUP_USER_TABLES = 'user_tables';
 
-	private const SORT_STEP = 10;
+	// The step of five keeps up to 19 system groups ahead of TableGroupTable::DEFAULT_SORT.
+	private const SORT_STEP = 5;
 
 	/**
 	 * Group code => exact codes of the tables the group consists of.
@@ -128,6 +130,15 @@ final class SystemTableGroupMap
 		],
 		self::GROUP_CALENDAR => [
 			'calendar_event',
+		],
+		self::GROUP_BOOKING => [
+			'booking',
+			'booking_resource_relation',
+			'booking_resource',
+			'booking_client_relation',
+			'booking_sku_relation',
+			'booking_wait_list',
+			'booking_wait_list_client_relation',
 		],
 	];
 

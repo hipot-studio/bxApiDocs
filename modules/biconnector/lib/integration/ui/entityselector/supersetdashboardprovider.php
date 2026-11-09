@@ -74,7 +74,7 @@ class SupersetDashboardProvider extends BaseProvider
 		];
 		$superset = new SupersetController();
 
-		if ($this->options['checkAccessRights'])
+		if ($this->isAccessCheckRequired())
 		{
 			$accessFilter = AccessController::getCurrent()->getEntityFilter(
 				ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
@@ -96,6 +96,18 @@ class SupersetDashboardProvider extends BaseProvider
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The option comes from the request, so it is honored only for a person who may edit
+	 * the rights of the dashboard groups: the rights slider is the place that lists every dashboard.
+	 */
+	private function isAccessCheckRequired(): bool
+	{
+		return
+			$this->options['checkAccessRights']
+			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS)
+		;
 	}
 
 	private function makeItem(Dashboard $dashboard): Item

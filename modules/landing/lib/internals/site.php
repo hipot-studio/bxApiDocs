@@ -11,6 +11,7 @@ use \Bitrix\Landing\Domain;
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Role;
 use \Bitrix\Landing\Restriction;
+use \Bitrix\Landing\Integration\AiAssistant\Service\AiSiteDeletionNotifier;
 
 Loc::loadMessages(__FILE__);
 
@@ -1601,6 +1602,9 @@ class SiteTable extends Entity\DataManager
 					);
 				}
 			}
+
+			// the deletion is not refused: the chats of the site are told after it
+			AiSiteDeletionNotifier::getInstance()->collect((int)$primary['ID']);
 		}
 
 		return $result;
@@ -1659,6 +1663,8 @@ class SiteTable extends Entity\DataManager
 			}
 
 			Rights::setOn();
+
+			AiSiteDeletionNotifier::getInstance()->publish((int)$primary['ID']);
 		}
 
 		return $result;

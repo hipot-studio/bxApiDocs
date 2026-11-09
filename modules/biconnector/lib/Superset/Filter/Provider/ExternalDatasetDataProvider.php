@@ -2,7 +2,6 @@
 
 namespace Bitrix\BIConnector\Superset\Filter\Provider;
 
-use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\ExternalSource;
 use Bitrix\BIConnector\Integration\UI\EntitySelector\TableGroupProvider;
 use Bitrix\Main\Filter\EntityDataProvider;
@@ -86,17 +85,15 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 			]),
 		];
 
-		if (Feature::isTablePermissionsEnabled())
-		{
-			// The reports section names its own groups the very same way: one table belongs to
-			// several groups, and several picked groups give the union of their tables.
-			$result['GROUPS'] = $this->createField('GROUPS.ID', [
-				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_GROUPS'),
-				'default' => true,
-				'partial' => true,
-				'type' => 'entity_selector',
-			]);
-		}
+		// The reports section names its own groups the very same way: one table belongs to several
+		// groups, and several picked groups give the union of their tables. The groups are shown with
+		// the axis off as well; the axis only narrows down which of them the person may pick.
+		$result['GROUPS'] = $this->createField('GROUPS.ID', [
+			'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_GROUPS'),
+			'default' => true,
+			'partial' => true,
+			'type' => 'entity_selector',
+		]);
 
 		if (ExternalSource\SourceManager::isExternalConnectionsAvailable())
 		{

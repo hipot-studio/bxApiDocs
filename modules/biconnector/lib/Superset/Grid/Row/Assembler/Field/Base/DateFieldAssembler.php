@@ -87,11 +87,12 @@ class DateFieldAssembler extends FieldAssembler
 			$readableTime = $userDate->format($timeFormat ?? 'H:i');
 
 			$timeHtml = <<<HTML
-				<span class="biconnector-grid-date-time__time">{$readableTime}</span>
+				<span class="biconnector-grid-date-time__time" aria-hidden="true">{$readableTime}</span>
 			HTML;
 		}
 
 		$fullDate = formatDate('FULL', $timestamp, $now);
+		$fullDateText = ScreenReaderText::render(htmlspecialcharsbx($fullDate));
 
 		return <<<HTML
 			<span
@@ -101,8 +102,9 @@ class DateFieldAssembler extends FieldAssembler
 				data-hint-interactivity
 				data-hint-center
 			>
-				<span class="biconnector-grid-date-time__date">{$readableDate}</span>
+				<span class="biconnector-grid-date-time__date" aria-hidden="true">{$readableDate}</span>
 			{$timeHtml}
+				{$fullDateText}
 			</span>
 		HTML;
 	}

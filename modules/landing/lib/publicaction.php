@@ -667,7 +667,8 @@ class PublicAction
 			$classes = array(
 				self::REST_SCOPE_DEFAULT => array(
 					'block', 'site', 'landing', 'repo', 'template',
-					'demos', 'role', 'syspage', 'chat', 'repowidget'
+					'demos', 'role', 'syspage', 'chat', 'repowidget',
+					'markup'
 				),
 				self::REST_SCOPE_CLOUD => array(
 					'cloud'

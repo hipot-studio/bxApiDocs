@@ -3,18 +3,23 @@
 namespace Bitrix\BizprocMobile\Controller;
 
 use Bitrix\BizprocMobile\EntityEditor\RequiredParametersProvider;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\UI\EntityEditor\FormWrapper;
 
 class RequiredParameters extends \Bitrix\Main\Engine\Controller
 {
+	use AddPublicErrorsTrait;
+
 	public function loadAction(string $signedDocument): ?array
 	{
 		$unsignedDocument = $this->getUnsignedDocument($signedDocument);
 		if (!$unsignedDocument)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_REQUIRED_PARAMETERS_INCORRECT_SIGNED_DOCUMENT')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_REQUIRED_PARAMETERS_INCORRECT_SIGNED_DOCUMENT')),
+			]);
 
 			return null;
 		}
@@ -23,7 +28,9 @@ class RequiredParameters extends \Bitrix\Main\Engine\Controller
 
 		if (!$this->canUserOperateDocumentType($complexDocumentType))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_REQUIRED_PARAMETERS_ACCESS_DENIED')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_REQUIRED_PARAMETERS_ACCESS_DENIED')),
+			]);
 
 			return null;
 		}

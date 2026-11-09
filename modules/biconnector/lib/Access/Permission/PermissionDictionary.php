@@ -28,6 +28,8 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const BIC_SETTINGS_EDIT_TABLE_RIGHTS = 10;
 	public const BIC_SHARE_CONTROL = 11;
 
+	public const BIC_SECTION_EDIT_DASHBOARD_RIGHTS = 12;
+
 	public const BIC_DASHBOARD = 100;
 	public const BIC_DASHBOARD_VIEW = 101;
 	public const BIC_DASHBOARD_EDIT = 102;
@@ -80,7 +82,7 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 
 		if ($permissionId === self::BIC_SETTINGS_EDIT_RIGHTS)
 		{
-			$permission['title'] = Loc::getMessage('BIC_SETTINGS_EDIT_RIGHTS_MSGVER_2');
+			$permission['title'] = Loc::getMessage('BIC_SETTINGS_EDIT_RIGHTS_MSGVER_3');
 		}
 
 		if ($permission['type'] === Permission\PermissionDictionary::TYPE_TOGGLER)

@@ -99,23 +99,25 @@ class Dataset extends Base
 
 	public static function add(array $params, $n, \CRestServer $server): array
 	{
-		return parent::add(self::neutralizeIgnoredTableGroupIds($params), $n, $server);
+		return parent::add(self::readBlankTableGroupIdsAsEmpty($params), $n, $server);
 	}
 
 	public static function update(array $params, $n, \CRestServer $server): array|bool
 	{
-		return parent::update(self::neutralizeIgnoredTableGroupIds($params), $n, $server);
+		return parent::update(self::readBlankTableGroupIdsAsEmpty($params), $n, $server);
 	}
 
 	/**
-	 * While the table axis is off the groups are accepted and ignored, so their value is not checked at all.
-	 * The field itself is kept: an update carrying nothing else must still pass as before.
+	 * Without the axis the field was released as ignored, so a blank value - an empty string of a form-encoded
+	 * empty list, or null - reads as an empty list, which is the field not passed. The field itself is kept:
+	 * an update carrying nothing else must still pass as before.
 	 */
-	private static function neutralizeIgnoredTableGroupIds(array $params): array
+	private static function readBlankTableGroupIdsAsEmpty(array $params): array
 	{
 		if (
 			is_array($params['fields'] ?? null)
 			&& array_key_exists('tableGroupIds', $params['fields'])
+			&& in_array($params['fields']['tableGroupIds'], ['', null], true)
 			&& !(new TableAccessChecker())->isRestricted()
 		)
 		{
@@ -298,7 +300,15 @@ class Dataset extends Base
 		$checker = new TableAccessChecker();
 		if (!$checker->isRestricted())
 		{
-			$tableGroupIds = null;
+			// Without the axis the named groups are checked for existence alone, and an empty list is the
+			// field not passed. A table that names none is put into the group of user tables by
+			// DynamicTableBindingHandler, on the add event itself.
+			$tableGroupIds = self::dropEmptyTableGroupIds($tableGroupIds);
+			$checkResult = self::checkTableGroupsExist($checker, $tableGroupIds);
+			if (!$checkResult->isSuccess())
+			{
+				return $checkResult;
+			}
 		}
 		elseif ($tableGroupIds === [])
 		{
@@ -326,7 +336,7 @@ class Dataset extends Base
 			$tableGroupIds = [$userTablesGroupId];
 		}
 
-		if ($tableGroupIds !== null && !$checker->canTakeTableCode((string)$dataset['NAME']))
+		if ($checker->isRestricted() && !$checker->canTakeTableCode((string)$dataset['NAME']))
 		{
 			return self::getAccessDeniedResult();
 		}
@@ -395,7 +405,13 @@ class Dataset extends Base
 		$checker = new TableAccessChecker();
 		if (!$checker->isRestricted())
 		{
-			$tableGroupIds = null;
+			// An empty list is the field not passed: the groups of the table stay as they are.
+			$tableGroupIds = self::dropEmptyTableGroupIds($tableGroupIds);
+			$checkResult = self::checkTableGroupsExist($checker, $tableGroupIds);
+			if (!$checkResult->isSuccess())
+			{
+				return $checkResult;
+			}
 		}
 		else
 		{
@@ -652,6 +668,46 @@ class Dataset extends Base
 		}
 
 		return $result->setData(['tableGroupIds' => array_values($tableGroupIds)]);
+	}
+
+	/**
+	 * Reads an empty list of groups as the field not passed.
+	 *
+	 * Without the axis the field was released as ignored, so a client that sends an empty list keeps
+	 * being answered the way it was: the add puts the table into the group of user tables, the update
+	 * leaves its groups alone.
+	 *
+	 * @param int[]|null $tableGroupIds
+	 *
+	 * @return int[]|null
+	 */
+	private static function dropEmptyTableGroupIds(?array $tableGroupIds): ?array
+	{
+		return $tableGroupIds === [] ? null : $tableGroupIds;
+	}
+
+	/**
+	 * The groups named for a table while the axis is off: every one of them existing.
+	 * Rights are not asked - without the axis there are none on tables.
+	 *
+	 * @param int[]|null $tableGroupIds Null when the field is not passed: there is nothing to check then.
+	 */
+	private static function checkTableGroupsExist(TableAccessChecker $checker, ?array $tableGroupIds): Result
+	{
+		if (empty($tableGroupIds))
+		{
+			return new Result();
+		}
+
+		if (!$checker->doGroupsExist($tableGroupIds))
+		{
+			return (new Result())->addError(new Error(
+				'Table group was not found.',
+				'VALIDATION_TABLE_GROUP_NOT_FOUND'
+			));
+		}
+
+		return new Result();
 	}
 
 	private static function getTableGroupRequiredResult(): Result

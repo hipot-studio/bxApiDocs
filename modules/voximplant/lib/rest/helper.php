@@ -1063,7 +1063,7 @@ class Helper
 				'DEFAULT_MENU_NAME' => 'REST_APP.LANG_DEFAULT.MENU_NAME'
 			],
 			'filter' => [
-				'=EVENT_NAME' => $eventName
+				'=EVENT_NAME' => mb_strtoupper($eventName)
 			]
 		]);
 

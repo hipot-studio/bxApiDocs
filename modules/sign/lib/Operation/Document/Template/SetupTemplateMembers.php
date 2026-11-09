@@ -51,8 +51,6 @@ class SetupTemplateMembers implements Operation
 			return (new Main\Result())->addError(new Error('Signer member not found'));
 		}
 
-		$parties = [];
-
 		if ($this->hasSetupSigners)
 		{
 			foreach ($members as $member)
@@ -62,8 +60,6 @@ class SetupTemplateMembers implements Operation
 					continue;
 				}
 
-				$parties[] = $member->party;
-
 				$prepareDataResult = $this->prepareMemberData($member, $document, $signerMember);
 				if (!$prepareDataResult->isSuccess())
 				{
@@ -72,10 +68,26 @@ class SetupTemplateMembers implements Operation
 			}
 		}
 
+		$legacyPartyCount = $this->hasSetupSigners ? $this->countParties($members) : 0;
+
 		if ($this->representativeUserId !== null)
 		{
 			$document->representativeId = $this->representativeUserId;
 		}
+
+		$partyPlanResult = Container::instance()
+			->getCompanyInitiatedPartyPlanService()
+			->plan($document, $members)
+		;
+		if (!$partyPlanResult->isSuccess())
+		{
+			return $partyPlanResult;
+		}
+
+		// the plan names a decision only on the branch that rebuilt the composition, so the party count
+		// follows the composition that was actually written instead of asking the feature a second time
+		$isCompositionPlanned = $partyPlanResult->manualFillingDecision !== null;
+		$members = $partyPlanResult->members;
 
 		$result = $this->memberService->setupB2eMembers(
 			documentUid: $document->uid,
@@ -89,9 +101,25 @@ class SetupTemplateMembers implements Operation
 			return $result;
 		}
 
-		$document->parties = count(array_unique($parties));
+		$document->parties = $isCompositionPlanned ? $this->countParties($members) : $legacyPartyCount;
 
 		return $this->documentRepository->update($document);
+	}
+
+	private function countParties(MemberCollection $members): int
+	{
+		$parties = [];
+		foreach ($members as $member)
+		{
+			if ($member === null)
+			{
+				continue;
+			}
+
+			$parties[] = $member->party;
+		}
+
+		return count(array_unique($parties));
 	}
 
 	private function getMemberList(Document $document): MemberCollection

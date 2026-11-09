@@ -74,7 +74,7 @@ use Bitrix\Superset\Public\Providers\UserProvider;
  *
  * Infrastructure methods (register, freeze, etc.) are no-op since the client manages the instance.
  */
-class SelfHostedIntegrator implements IntegratorInterface
+class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReaderInterface
 {
 	/**
 	 * Timeouts of the delivery of a license term, short on purpose: a term is one date written by a background pass,
@@ -112,6 +112,22 @@ class SelfHostedIntegrator implements IntegratorInterface
 	 * kept value expires or SelfHostedConnectionService::getSupersetVersion(true) drops it.
 	 */
 	private const PERMISSION_CACHE_RESET_REQUIRED_VERSION = '6.0.0_bx1000';
+	/**
+	 * First Superset build that runs a read as the person named by the portal (X-Bx-Act-As). An older box
+	 * would refuse it with no reason the agent can act on, so the read is refused up front with a reason
+	 * telling the administrator to update. The version of the instance is kept for a day, as for
+	 * PERMISSION_CACHE_RESET_REQUIRED_VERSION.
+	 */
+	private const ACT_AS_REQUIRED_VERSION = '6.0.0_bx1100';
+
+	/**
+	 * A chart or dashboard hidden from the person by the table permissions answers 404, a query Trino refused
+	 * answers 422: a refusal of the request, not a failure of the service.
+	 */
+	private const REFUSAL_STATUSES = [
+		IntegratorResponse::STATUS_NOT_FOUND,
+		IntegratorResponse::STATUS_UNPROCESSABLE_ENTITY,
+	];
 
 	static private ?self $instance = null;
 
@@ -164,8 +180,34 @@ class SelfHostedIntegrator implements IntegratorInterface
 			->addBefore(new Middleware\TariffRestriction())
 			->addBefore(new Middleware\UserAccess())
 			->addBefore(new Middleware\RequiredDatasetSync())
-			->addAfter(new Middleware\Logger($this->logger))
+			->addAfter(new Middleware\Logger($this->logger, self::REFUSAL_STATUSES))
 		;
+	}
+
+	/**
+	 * Whether a read of the AI tools runs in Superset as the person it is made for. Only the table permission
+	 * axis needs it; without the axis the read goes under the service account, as before act-as, and the
+	 * version of the box is not asked. Decided on every call, nothing is kept.
+	 */
+	protected function isActAsEnabled(): bool
+	{
+		return Feature::isTablePermissionsEnabled();
+	}
+
+	/**
+	 * A read on behalf of a person: refused on a box older than {@see self::ACT_AS_REQUIRED_VERSION}.
+	 * Without act-as, or without a server to ask the version of, the request is the default one.
+	 */
+	private function createActAsRequest(string $action, bool $actAs): IntegratorRequest
+	{
+		$request = $this->createDefaultRequest($action);
+		$server = $actAs ? $this->getServer() : null;
+		if ($server !== null)
+		{
+			$request->addBefore(new Middleware\SupersetVersionCheck($server, self::ACT_AS_REQUIRED_VERSION));
+		}
+
+		return $request;
 	}
 
 	// region Infrastructure no-ops
@@ -460,7 +502,81 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDashboardEmbeddedCredentials(int $dashboardId, array $rlsRules = [], int $expSeconds = 0): IntegratorResponse
+	public function getDashboardSourceById(int $dashboardId): IntegratorResponse
+	{
+		$handler = function () use ($dashboardId): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$provider = new DashboardProvider($server);
+			$result = $provider->getById($dashboardId);
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			$dashboardData = $result->getData()['dashboard'] ?? null;
+			if (!$dashboardData)
+			{
+				return $this->buildDataResponse(null);
+			}
+
+			if (!method_exists($provider, 'getChartIds'))
+			{
+				return $this->buildErrorResponse(
+					(new Result())->addError(new Error('Installed superset module cannot read dashboard chart membership')),
+				);
+			}
+
+			try
+			{
+				$membershipResult = $provider->getChartIds($dashboardId);
+			}
+			catch (\Throwable)
+			{
+				return $this->buildErrorResponse(
+					(new Result())->addError(new Error('Dashboard chart membership is unavailable')),
+				);
+			}
+
+			if (!$membershipResult->isSuccess())
+			{
+				return $this->buildErrorResponse($membershipResult);
+			}
+
+			$membershipData = $membershipResult->getData();
+			if (
+				!array_key_exists('chartIds', $membershipData)
+				|| !Dto\DashboardSource::isValidChartIds($membershipData['chartIds'])
+			)
+			{
+				return $this->buildErrorResponse(
+					(new Result())->addError(new Error('Invalid dashboard chart membership')),
+				);
+			}
+
+			return $this->buildDataResponse($this->mapDashboardSourceDto($dashboardData, $membershipData['chartIds']));
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/dashboard/get')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getDashboardEmbeddedCredentials(
+		int $dashboardId,
+		array $rlsRules = [],
+		int $expSeconds = 0,
+		?Dto\User $user = null,
+	): IntegratorResponse
 	{
 		$handler = function (IntegratorRequest $request) use ($dashboardId, $rlsRules, $expSeconds): IntegratorResponse {
 			$server = $this->getServer();
@@ -509,6 +625,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 		return $this
 			->createDefaultRequest('selfhosted/dashboard/embedded/get')
 			->setHandler($handler)
+			->setUser($user)
 			->perform()
 		;
 	}
@@ -516,11 +633,13 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDemoEmbeddedCredentials(string $reportCode, string $lang): IntegratorResponse
+	public function getDemoEmbeddedCredentials(string $dashboardCode, string $lang): IntegratorResponse
 	{
-		return $this->buildErrorResponse(
-			(new Result())->addError(new Error('Demo reports are not supported in self-hosted mode'))
-		);
+		$result = (new Result())->addError(new Error('Demo dashboards are not supported in self-hosted mode'));
+		// Answered without a request, so the Logger middleware does not journal it.
+		$this->logger->logErrors($result->getErrors());
+
+		return $this->buildErrorResponse($result);
 	}
 
 	/**
@@ -872,6 +991,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function getDashboardOverview(
+		?User $user,
 		int $dashboardId,
 		array $appliedFilters = [],
 		array $urlParams = [],
@@ -881,7 +1001,6 @@ class SelfHostedIntegrator implements IntegratorInterface
 		?int $limit = null,
 		int $offset = 0,
 		bool $arbitrateServiceFailure = true,
-		?User $user = null,
 	): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
@@ -889,11 +1008,32 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($dashboardId, $appliedFilters, $urlParams, $streamTimeout, $chartIds, $sort, $limit, $offset): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use (
+			$dashboardId,
+			$appliedFilters,
+			$urlParams,
+			$streamTimeout,
+			$chartIds,
+			$sort,
+			$limit,
+			$offset,
+			$actAs,
+		): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
 			}
 
 			$result = (new DashboardProvider($server))->getOverview(
@@ -905,6 +1045,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 				$sort,
 				$limit,
 				$offset,
+				$supersetUser,
 			);
 			if (!$result->isSuccess())
 			{
@@ -914,22 +1055,19 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return $this->buildDataResponse($result->getData());
 		};
 
-		$request = $this
-			->createDefaultRequest('selfhosted/dashboard/getOverview')
+		return $this
+			->createActAsRequest('selfhosted/dashboard/getOverview', $actAs)
+			->setUser($user)
 			->setHandler($handler)
+			->perform()
 		;
-		if ($user !== null)
-		{
-			$request->setUser($user);
-		}
-
-		return $request->perform();
 	}
 
 	/**
 	 * @inheritDoc
 	 */
 	public function getFilterValues(
+		?User $user,
 		int $dashboardId,
 		string $filterColumn,
 		array $appliedFilters = [],
@@ -945,19 +1083,31 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use (
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use (
 			$dashboardId,
 			$filterColumn,
 			$appliedFilters,
 			$urlParams,
 			$search,
 			$limit,
-			$streamTimeout
+			$streamTimeout,
+			$actAs,
 		): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
 			}
 
 			$result = (new DashboardProvider($server))->getFilterValues(
@@ -968,6 +1118,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 				$search,
 				$limit,
 				$streamTimeout,
+				$supersetUser,
 			);
 			if (!$result->isSuccess())
 			{
@@ -978,7 +1129,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/dashboard/getFilterValues')
+			->createActAsRequest('selfhosted/dashboard/getFilterValues', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1322,7 +1474,9 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function (IntegratorRequest $request) use ($sql, $limit): IntegratorResponse {
+		// The person is required in either mode: they key the limiter and the audit.
+		$actAs = $context !== null && $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use ($sql, $limit, $actAs): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
@@ -1341,7 +1495,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 				);
 			}
 
-			$result = $this->runSupersetCommand(new ExecuteSqlCommand($server, $sql, $limit, $supersetUser));
+			$result = $this->runSupersetCommand(new ExecuteSqlCommand($server, $sql, $limit, $supersetUser, $actAs));
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1350,7 +1504,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return $this->buildDataResponse($result->getData());
 		};
 
-		$request = $this->createDefaultRequest('selfhosted/sqllab/execute');
+		$request = $this->createActAsRequest('selfhosted/sqllab/execute', $actAs);
 		if ($context !== null)
 		{
 			$request->setUser($context->user);
@@ -1369,21 +1523,32 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function listTables(?string $schema = null): IntegratorResponse
+	public function listTables(?User $user, ?string $schema = null): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($schema): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use ($schema, $actAs): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new TableProvider($server))->list($schema);
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
+			}
+
+			$result = (new TableProvider($server))->list($schema, $supersetUser);
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1393,7 +1558,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/table/list')
+			->createActAsRequest('selfhosted/table/list', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1402,21 +1568,32 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getTableMetadata(string $tableName, ?string $schema = null): IntegratorResponse
+	public function getTableMetadata(?User $user, string $tableName, ?string $schema = null): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($tableName, $schema): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use ($tableName, $schema, $actAs): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new TableProvider($server))->getMetadata($tableName, $schema);
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
+			}
+
+			$result = (new TableProvider($server))->getMetadata($tableName, $schema, $supersetUser);
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1426,7 +1603,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/table/getMetadata')
+			->createActAsRequest('selfhosted/table/getMetadata', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1506,16 +1684,27 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDatasetById(int $id): IntegratorResponse
+	public function getDatasetById(int $id, ?User $user = null): IntegratorResponse
 	{
-		$handler = function () use ($id): IntegratorResponse {
+		$actAs = $user !== null && $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use ($id, $actAs): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new DatasetProvider($server))->getById($id);
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
+			}
+
+			$result = (new DatasetProvider($server))->getById($id, $supersetUser);
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1530,7 +1719,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/dataset/get')
+			->createActAsRequest('selfhosted/dataset/get', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1568,6 +1758,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function listDatasets(
+		?User $user,
 		array $ids = [],
 		array $neqIds = [],
 		?int $page = null,
@@ -1579,14 +1770,31 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($ids, $neqIds, $page, $pageSize): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use (
+			$ids,
+			$neqIds,
+			$page,
+			$pageSize,
+			$actAs,
+		): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new DatasetProvider($server))->list($ids, $neqIds, $page, $pageSize);
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
+			}
+
+			$result = (new DatasetProvider($server))->list($ids, $neqIds, $page, $pageSize, $supersetUser);
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1605,7 +1813,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/dataset/list')
+			->createActAsRequest('selfhosted/dataset/list', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1651,6 +1860,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function createVirtualDataset(
+		User $user,
 		string $datasetName,
 		string $sourceTable,
 		array $columns,
@@ -1662,20 +1872,27 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($datasetName, $sourceTable, $columns, $sourceSchema): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use (
+			$datasetName,
+			$sourceTable,
+			$columns,
+			$sourceSchema,
+			$actAs,
+		): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$ownerId = $this->getCurrentUserExternalId($server);
-			if ($ownerId === null)
+			// The dataset is owned by the employee; it is created as them only while the axis is on.
+			$supersetUser = $this->getRequestSupersetUser($server, $request);
+			if ($supersetUser === null || $supersetUser->getExternalId() <= 0)
 			{
-				return $this->buildErrorResponse(
-					(new Result())->addError(new Error('Current superset user not found'))
-				);
+				return $this->buildSupersetUserNotFoundResponse();
 			}
+			$ownerId = $supersetUser->getExternalId();
 
 			$result = (new CreateVirtualDatasetCommand(
 				$server,
@@ -1684,6 +1901,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 				$columns,
 				$ownerId,
 				$sourceSchema,
+				$actAs ? $supersetUser : null,
 			))->run();
 			if (!$result->isSuccess())
 			{
@@ -1694,7 +1912,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/dataset/createVirtual')
+			->createActAsRequest('selfhosted/dataset/createVirtual', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1703,29 +1922,36 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function createDatasetFromSql(string $datasetName, string $sql): IntegratorResponse
+	public function createDatasetFromSql(User $user, string $datasetName, string $sql): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($datasetName, $sql): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use ($datasetName, $sql, $actAs): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$ownerId = $this->getCurrentUserExternalId($server);
-			if ($ownerId === null)
+			// The dataset is owned by the employee; it is created as them only while the axis is on.
+			$supersetUser = $this->getRequestSupersetUser($server, $request);
+			if ($supersetUser === null || $supersetUser->getExternalId() <= 0)
 			{
-				return $this->buildErrorResponse(
-					(new Result())->addError(new Error('Current superset user not found'))
-				);
+				return $this->buildSupersetUserNotFoundResponse();
 			}
+			$ownerId = $supersetUser->getExternalId();
 
-			$result = (new CreateDatasetFromSqlCommand($server, $datasetName, $sql, $ownerId))->run();
+			$result = (new CreateDatasetFromSqlCommand(
+				$server,
+				$datasetName,
+				$sql,
+				$ownerId,
+				$actAs ? $supersetUser : null,
+			))->run();
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1735,7 +1961,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/dataset/createFromSql')
+			->createActAsRequest('selfhosted/dataset/createFromSql', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1926,6 +2153,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function listCharts(
+		?User $user,
 		array $ids = [],
 		?string $nameFilter = null,
 		?int $page = null,
@@ -1937,14 +2165,31 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($ids, $nameFilter, $page, $pageSize): IntegratorResponse {
+		$actAs = $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use (
+			$ids,
+			$nameFilter,
+			$page,
+			$pageSize,
+			$actAs,
+		): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new ChartProvider($server))->list($ids, $nameFilter, $page, $pageSize);
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
+			}
+
+			$result = (new ChartProvider($server))->list($ids, $nameFilter, $page, $pageSize, $supersetUser);
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1954,7 +2199,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/chart/list')
+			->createActAsRequest('selfhosted/chart/list', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -1963,21 +2209,32 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getChartById(int $id): IntegratorResponse
+	public function getChartById(int $id, ?User $user = null): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
 		}
 
-		$handler = function () use ($id): IntegratorResponse {
+		$actAs = $user !== null && $this->isActAsEnabled();
+		$handler = function (IntegratorRequest $request) use ($id, $actAs): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new ChartProvider($server))->getById($id);
+			$supersetUser = null;
+			if ($actAs)
+			{
+				$supersetUser = $this->getRequestSupersetUser($server, $request);
+				if ($supersetUser === null)
+				{
+					return $this->buildSupersetUserNotFoundResponse();
+				}
+			}
+
+			$result = (new ChartProvider($server))->getById($id, $supersetUser);
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -1989,7 +2246,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		};
 
 		return $this
-			->createDefaultRequest('selfhosted/chart/get')
+			->createActAsRequest('selfhosted/chart/get', $actAs)
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -2516,7 +2774,6 @@ class SelfHostedIntegrator implements IntegratorInterface
 	{
 		$errorCode = IntegratorResponse::STATUS_SERVER_ERROR;
 		$errors = $result->getErrors();
-		$this->logger->logErrors($errors);
 		$declaredStatus = $result->getData()['httpStatus'] ?? null;
 		if (is_int($declaredStatus) && $declaredStatus >= 100 && $declaredStatus <= 599)
 		{
@@ -2581,6 +2838,26 @@ class SelfHostedIntegrator implements IntegratorInterface
 		return ($externalId !== null && $externalId > 0) ? $externalId : null;
 	}
 
+	private function getRequestSupersetUser(
+		ServerReferenceDto $server,
+		IntegratorRequest $request,
+	): ?SupersetUserReferenceDto
+	{
+		$user = $request->getUser();
+
+		return $user === null ? null : $this->getSupersetUser($server, $user->id);
+	}
+
+	private function buildSupersetUserNotFoundResponse(): IntegratorResponse
+	{
+		return $this->buildErrorResponse(
+			(new Result())->addError(new Error(
+				'Current superset user not found',
+				IntegratorResponse::STATUS_NO_ACCESS,
+			)),
+		);
+	}
+
 	protected function getSupersetUser(ServerReferenceDto $server, int $bitrixUserId): ?SupersetUserReferenceDto
 	{
 		$biUser = SupersetUserTable::getList([
@@ -2612,6 +2889,18 @@ class SelfHostedIntegrator implements IntegratorInterface
 			externalId: $supersetUser->getExternalId(),
 			login: $supersetUser->getLogin(),
 			clientId: $supersetUser->getClientId(),
+		);
+	}
+
+	private function mapDashboardSourceDto(array $data, array $chartIds): Dto\DashboardSource
+	{
+		$metadata = $data['json_metadata'] ?? null;
+
+		return new Dto\DashboardSource(
+			positionJson: $data['position_json'] ?? null,
+			jsonMetadataSource: is_array($metadata) ? Json::encode($metadata) : $metadata,
+			published: $data['published'] ?? true,
+			chartIds: $chartIds,
 		);
 	}
 
@@ -2651,6 +2940,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 			nativeFilterConfig: $jsonMetadata['native_filter_configuration'] ?? [],
 			dateModify: $dateModify,
 			jsonMetadata: $jsonMetadata,
+			positionJson: $data['position_json'] ?? null,
+			jsonMetadataSource: is_array($rawMetadata) ? Json::encode($rawMetadata) : ($data['json_metadata'] ?? null),
 		);
 	}
 

@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Access\Rule;
 
+use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
@@ -129,7 +130,18 @@ class VariableRule extends AbstractVariableRule
 		if ($item instanceof DashboardAccessItem && count($checkDashboardIds) === 1)
 		{
 			$allowedGroupIds = $this->getPermissionAllowedGroupIds($params);
-			$allowedDashboardIds = $this->loadGroupDashboards($allowedGroupIds, ['=ID' => $item->getId()]);
+			$batch = $this->controller instanceof AccessController
+				? $this->controller->getDashboardBatch($item)
+				: null
+			;
+			$allowedDashboardIds = $batch?->getAllowedIds(
+				static::class,
+				(string)static::getPermissionCode($params),
+				$allowedGroupIds,
+				$item->getId(),
+				fn(array $ids): array => $this->loadGroupDashboards($allowedGroupIds, ['@ID' => $ids]),
+			);
+			$allowedDashboardIds ??= $this->loadGroupDashboards($allowedGroupIds, ['=ID' => $item->getId()]);
 
 			return empty(array_diff($checkDashboardIds, $allowedDashboardIds));
 		}

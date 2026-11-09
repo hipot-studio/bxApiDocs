@@ -122,6 +122,38 @@ abstract class ItemDetail extends Base implements Controllerable
 	{
 		if($this->item->getId() > 0)
 		{
+			$result = new Result();
+			$userPermissions = Driver::getInstance()->getUserPermissions();
+			if(!$userPermissions->canViewItem($this->item))
+			{
+				$result->addError(new Error(
+					Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+					Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+				));
+
+				return $result;
+			}
+			if((int)($this->arParams['stageId'] ?? null) <= 0)
+			{
+				// the card of an existing item is available for viewing, saving is checked by the update command
+				return $result;
+			}
+			// the form of moving: the move is started from the saved stage
+			if(!$userPermissions->canMoveItemFromStage($this->item))
+			{
+				$actualStage = $this->type->getStage((int)$this->item->remindActualStageId());
+				// the phrase of the update command
+				Loc::loadMessages(dirname(__DIR__) . '/Command.php');
+				$result->addError(new Error(
+					Loc::getMessage('RPA_COMMAND_ITEM_MOVE_PERMISSION', [
+						'#STAGE#' => $actualStage ? $actualStage->getName() : '',
+					]),
+					Command::ERROR_CODE_ITEM_MOVE_PERMISSION,
+				));
+
+				return $result;
+			}
+
 			$command = Driver::getInstance()->getFactory()->getUpdateCommand($this->item);
 		}
 		else
@@ -153,7 +185,7 @@ abstract class ItemDetail extends Base implements Controllerable
 		$params['ENABLE_SETTINGS_FOR_ALL'] = false;
 		$params['ENABLE_AJAX_FORM'] = true;
 		$params['ENABLE_FIELD_DRAG_DROP'] = !$this->isEmbedded();
-		$params['READ_ONLY'] = false;
+		$params['READ_ONLY'] = $this->isReadOnly();
 		$params['ENABLE_MODE_TOGGLE'] = !$this->isEmbedded();
 		$params['ENABLE_TOOL_PANEL'] = !$this->isEmbedded();
 		$params['ENABLE_BOTTOM_PANEL'] = false;
@@ -172,6 +204,14 @@ abstract class ItemDetail extends Base implements Controllerable
 		$params['IS_EMBEDDED'] = $this->isEmbedded();
 
 		return $params;
+	}
+
+	protected function isReadOnly(): bool
+	{
+		return (
+			$this->item->getId() > 0
+			&& !Driver::getInstance()->getUserPermissions()->canModifyItem($this->item)
+		);
 	}
 
 	protected function isEmbedded(): bool

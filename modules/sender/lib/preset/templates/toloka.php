@@ -200,7 +200,7 @@ class Toloka
 				'MESSAGE_CODE' => $messageCodes,
 				'VERSION' => 2,
 				'HOT' => $item['HOT'] ?? '',
-				'ICON' => BX_ROOT . self::IMAGE_DIR . "$originalCode.png",
+				'ICON' => BX_ROOT . self::IMAGE_DIR . "$originalCode.webp",
 				'NAME' => $item['NAME'] ?? '',
 				'DESC' => $item['DESC'] ?? '',
 				'HINT' => $item['HINT'] ?? '',

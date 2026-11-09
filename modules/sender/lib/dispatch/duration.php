@@ -7,6 +7,7 @@
  */
 namespace Bitrix\Sender\Dispatch;
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 
 use Bitrix\Main\Type\DateTime;
@@ -147,24 +148,10 @@ class Duration
 	 */
 	public function getFormattedInterval()
 	{
-		if ($this->getInterval() < self::getMinimalInterval())
-		{
-			return self::getFormattedMinimalInterval();
-		}
-		elseif ($this->getInterval() > self::getMaximalInterval())
-		{
-			return self::getFormattedMaximalInterval();
-		}
-		else
-		{
-			$formatted = \FormatDate('Hdiff', $this->getDate());
-			if (mb_substr($formatted, 0, 1) === '-')
-			{
-				$formatted = mb_substr($formatted, 1);
-			}
-
-			return $formatted;
-		}
+		return ServiceLocator::getInstance()
+			->get(DurationFormatter::class)
+			->formatInterval((int)$this->getInterval())
+		;
 	}
 
 	/**

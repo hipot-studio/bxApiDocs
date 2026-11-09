@@ -11,6 +11,7 @@ namespace Bitrix\Sender\Internals;
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Security\Random;
 use Bitrix\Sender\Internals\Model\FileInfoTable;
 
 /**
@@ -19,6 +20,9 @@ use Bitrix\Sender\Internals\Model\FileInfoTable;
  */
 class PostFiles
 {
+	private const IMAGE_NAME_LENGTH = 24;
+	private const IMAGE_SUBDIR_LENGTH = 3;
+
 	/** @var  HttpRequest $request Request. */
 	protected $request;
 
@@ -84,8 +88,12 @@ class PostFiles
 
 		$result = array_merge($result, $this->getExisted($files));
 
+		// the file input keeps posting a removed file among the values, marking it in "<name>_del" only
+		$deletedFiles = $this->getDeleted();
+		$result = array_values(array_diff($result, $deletedFiles));
+
 		$filesToDelete = array_diff($savedFiles, $result);
-		$filesToDelete = array_merge($this->getDeleted(), $filesToDelete);
+		$filesToDelete = array_merge($deletedFiles, $filesToDelete);
 		$filesToDelete = array_unique($filesToDelete);
 		foreach ($filesToDelete as $fileId)
 		{
@@ -309,6 +317,35 @@ class PostFiles
 			return null;
 		}
 
+		return self::saveToStorage($file, true);
+	}
+
+	/**
+	 * Save image inserted into a letter by the editor.
+	 * Requests a letter-only name and subdirectory instead of md5-based ones to avoid long hex sequences in the URL.
+	 * The core applies them only when the main option save_original_file_name is enabled.
+	 *
+	 * @param array $file File data.
+	 * @return int|null
+	 */
+	public static function saveImage(array $file): ?int
+	{
+		if ((string)($file['name'] ?? '') === '' || (int)($file['size'] ?? 0) <= 0)
+		{
+			return null;
+		}
+
+		$extension = mb_strtolower(GetFileExtension(GetFileName($file['name'])));
+		$file['name'] = Random::getStringByAlphabet(self::IMAGE_NAME_LENGTH, Random::ALPHABET_ALPHALOWER)
+			. (preg_match('/^[a-z0-9]{1,10}$/', $extension) ? '.' . $extension : '')
+		;
+		$subdirectory = Random::getStringByAlphabet(self::IMAGE_SUBDIR_LENGTH, Random::ALPHABET_ALPHALOWER);
+
+		return self::saveToStorage($file, false, $subdirectory);
+	}
+
+	private static function saveToStorage(array $file, bool $forceRandom, string $subdirectory = ''): ?int
+	{
 		$pathHash = md5($file["tmp_name"]);
 		$sessionKey = 'sender_post_files';
 		if (!empty($_SESSION[$sessionKey][$pathHash]))
@@ -318,7 +355,7 @@ class PostFiles
 		}
 
 		$file["MODULE_ID"] = "sender";
-		$fileId = (int) \CFile::saveFile($file, "sender", true);
+		$fileId = (int) \CFile::saveFile($file, "sender", $forceRandom, false, $subdirectory);
 		if ($fileId)
 		{
 			$_SESSION[$sessionKey][$pathHash] = $fileId;

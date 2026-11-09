@@ -37,6 +37,10 @@ Loc::loadMessages(__FILE__);
  */
 class Builder
 {
+	private const SNAPSHOT_WINDOW_SECONDS = 3600;
+
+	private const POSTING_FILL_LOCK_KEY = 'sender_posting_fill';
+
 	/** @var bool $checkDuplicates Check duplicates. */
 	protected $checkDuplicates = true;
 
@@ -130,7 +134,8 @@ class Builder
 				'MESSAGE_TYPE' => 'MAILING_CHAIN.MESSAGE_CODE',
 				'WAITING_RECIPIENT' => 'MAILING_CHAIN.WAITING_RECIPIENT',
 				'MAILING_STATUS' => 'MAILING_CHAIN.STATUS',
-				'MESSAGE_ID' => 'MAILING_CHAIN.MESSAGE_ID'
+				'MESSAGE_ID' => 'MAILING_CHAIN.MESSAGE_ID',
+				'AUTO_SEND_TIME' => 'MAILING_CHAIN.AUTO_SEND_TIME'
 			),
 			'filter' => array('ID' => $postingId),
 			'limit' => 1
@@ -169,6 +174,17 @@ class Builder
 		$this->postingId = $postingId;
 		$this->groupCount = array();
 
+		if (
+			$postingData['MAILING_STATUS'] === Model\LetterTable::STATUS_SEND
+			&& $postingData['STATUS'] !== PostingTable::STATUS_NEW
+		)
+		{
+			// Taken into sending: a pass left over from the filling must neither rebuild nor wait.
+			$this->finishBuilding();
+
+			return true;
+		}
+
 		try
 		{
 			$this->messageConfiguration =
@@ -178,16 +194,12 @@ class Builder
 		}
 		catch (ArgumentException $e)
 		{
-			return true;
-		}
-
-		if(!$checkDuplicates)
-		{
-			if($this->postingData['STATUS'] === PostingTable::STATUS_NEW)
+			if ($postingData['WAITING_RECIPIENT'] === 'Y')
 			{
-				self::clean($postingId);
-				$this->checkDuplicates = false;
+				Model\LetterTable::update($postingData['MAILING_CHAIN_ID'], ['WAITING_RECIPIENT' => 'N']);
 			}
+
+			return true;
 		}
 
 		$messageFields = Model\MessageFieldTable::getList(
@@ -222,52 +234,88 @@ class Builder
 				]);
 			}
 
-			$groups = $this->prepareGroups();
-			$message = Message\Adapter::create($this->postingData['MESSAGE_TYPE']);
-			foreach ($message->getSupportedRecipientTypes() as $typeId)
-			{
-				if (!Recipient\Type::getCode($typeId))
-				{
-					continue;
-				}
-
-				$this->typeId = $typeId;
-				$this->runForRecipientType($personalizeFields, $groups);
-			}
+			$this->fillFromCleanSheet($personalizeFields, $this->prepareGroups());
 		} catch (NotCompletedException $e)
 		{
 			return false;
 		}
 
-		Model\PostingTable::update(
-			$postingId,
-			array(
-				'COUNT_SEND_ALL' => PostingRecipientTable::getCount(array('POSTING_ID' => $postingId))
-			)
-		);
+		return true;
+	}
 
-		$usedGroups = [];
-		foreach ($groups as $group)
+	/**
+	 * @throws NotCompletedException
+	 */
+	private function fillFromCleanSheet(array $personalizeFields, array $groups): void
+	{
+		$postingId = (int)$this->postingId;
+		if (!Locker::lock(self::POSTING_FILL_LOCK_KEY, $postingId))
 		{
-			if ($group['GROUP_ID'] && !isset($usedGroups[$group['GROUP_ID']]))
-			{
-				RecipientBuilderJob::removeAgentFromDB($this->postingId);
+			// The flag belongs to the pass holding the lock.
+			RecipientBuilderJob::removeAgentFromDB($postingId);
+			RecipientBuilderJob::addEventAgent($postingId);
 
-				$this->groupQueueService->releaseGroup(
-					Model\GroupQueueTable::TYPE['POSTING'],
-					$this->postingId,
-					$group['GROUP_ID']
-				);
-				$usedGroups[$group['GROUP_ID']] = $group['GROUP_ID'];
-			}
+			throw new NotCompletedException();
 		}
 
-		$this->postingData['WAITING_RECIPIENT'] = 'N';
-		Model\LetterTable::update($this->postingData['MAILING_CHAIN_ID'], [
-			'WAITING_RECIPIENT' => $this->postingData['WAITING_RECIPIENT']
-		]);
+		try
+		{
+			$posting = PostingTable::getRow(['select' => ['STATUS'], 'filter' => ['=ID' => $postingId]]);
+			$letter = Model\LetterTable::getRow([
+				'select' => ['WAITING_RECIPIENT'],
+				'filter' => ['=ID' => $this->postingData['MAILING_CHAIN_ID']],
+			]);
+			$isFilled =
+				($posting['STATUS'] ?? null) !== PostingTable::STATUS_NEW
+				|| ($letter['WAITING_RECIPIENT'] ?? null) === 'N'
+			;
+			if (!$isFilled)
+			{
+				$snapshotMarks = $this->readSnapshotMarks($groups);
+				self::clean($postingId);
 
-		return true;
+				$message = Message\Adapter::create($this->postingData['MESSAGE_TYPE']);
+				foreach ($message->getSupportedRecipientTypes() as $typeId)
+				{
+					if (!Recipient\Type::getCode($typeId))
+					{
+						continue;
+					}
+
+					$this->typeId = $typeId;
+					$this->runForRecipientType($personalizeFields, $groups);
+				}
+
+				// A rebuild started by another pass during the reading leaves a part of the snapshot.
+				if ($this->readSnapshotMarks($groups) !== $snapshotMarks)
+				{
+					self::clean($postingId);
+					$this->stopRecipientListBuilding();
+				}
+
+				Model\PostingTable::update(
+					$postingId,
+					['COUNT_SEND_ALL' => PostingRecipientTable::getCount(['POSTING_ID' => $postingId])]
+				);
+			}
+
+			$this->finishBuilding();
+		}
+		finally
+		{
+			Locker::unlock(self::POSTING_FILL_LOCK_KEY, $postingId);
+		}
+	}
+
+	/**
+	 * The queue records go before the flag is dropped: a pass that reads the dropped flag must find
+	 * none, or it would take the posting for a new one and fill it again.
+	 */
+	private function finishBuilding(): void
+	{
+		$this->releaseQueueRecords();
+		RecipientBuilderJob::removeAgentFromDB((int)$this->postingId);
+		Model\LetterTable::update($this->postingData['MAILING_CHAIN_ID'], ['WAITING_RECIPIENT' => 'N']);
 	}
 
 	protected function prepareGroups()
@@ -283,22 +331,28 @@ class Builder
 				continue;
 			}
 
-			$rebuild = $this->needsRebuildGroup($group);
-			if ($group['GROUP_ID'])
-			{
-				$this->groupQueueService
-					->addToDB(Model\GroupQueueTable::TYPE['POSTING'], $this->postingId, $group['GROUP_ID']);
-			}
+			// The connectors of the segment are resolved once for the whole pass: nothing below
+			// writes their rows, and resolving them costs an instance of every connector of the
+			// module.
+			$snapshotState = $group['GROUP_ID']
+				? new SegmentSnapshotState((int)$group['GROUP_ID'], $this->groupQueueService)
+				: null;
+
+			$rebuild = $group['GROUP_ID']
+				? $this->holdSegment((int)$group['GROUP_ID'], $group, $snapshotState)
+				: $this->needsRebuildGroup($group, $snapshotState);
 
 			if ($rebuild && $group['GROUP_ID'])
 			{
-				SegmentDataBuilder::actualize($group['GROUP_ID'], true);
+				// The queue record of this very posting was written by holdSegment() and must not
+				// refuse the rebuild it was written for: this pass reads no snapshot at all.
+				SegmentDataBuilder::actualize($group['GROUP_ID'], true, $this->postingId);
 				$this->stopRecipientListBuilding();
 			}
 
 			if ($group['STATUS'] !== GroupTable::STATUS_READY_TO_USE)
 			{
-				SegmentDataBuilder::checkIsSegmentPrepared($group['GROUP_ID']);
+				SegmentDataBuilder::checkIsSegmentPrepared($group['GROUP_ID'], $snapshotState?->getEndpoints());
 				$this->stopRecipientListBuilding();
 			}
 		}
@@ -328,7 +382,94 @@ class Builder
 		return $groups;
 	}
 
-	private function needsRebuildGroup($group)
+	/**
+	 * A rebuild drops the build states and creates new ones, so equal marks mean the snapshots were left whole.
+	 *
+	 * @return string[]
+	 */
+	private function readSnapshotMarks(array $groups): array
+	{
+		$groupIds = array_unique(array_filter(array_map(
+			static fn(array $group): int => (int)($group['GROUP_ID'] ?? 0),
+			$groups
+		)));
+		if (!$groupIds)
+		{
+			return [];
+		}
+
+		$marks = [];
+		$states = Model\GroupStateTable::getList([
+			'select' => ['ID', 'STATE', 'DATE_COMPLETE'],
+			'filter' => ['@GROUP_ID' => array_values($groupIds)],
+			'order' => ['ID' => 'ASC'],
+		]);
+		while ($state = $states->fetch())
+		{
+			$completed = $state['DATE_COMPLETE'] instanceof DateTime ? $state['DATE_COMPLETE']->getTimestamp() : 0;
+			$marks[] = (int)$state['ID'] . ':' . (int)$state['STATE'] . ':' . $completed;
+		}
+
+		return $marks;
+	}
+
+	/**
+	 * Take the segment for this posting and decide whether its snapshot has to be rebuilt, both
+	 * under the lock of the forced rebuild.
+	 *
+	 * The lock is what keeps the snapshot from going away under this posting. A force either
+	 * finds the queue record written here and steps back, or holds the lock through the whole
+	 * removal - and then the record is written only once the snapshot has been created anew, so
+	 * the readiness check below sends the posting to wait instead of reading what is left.
+	 *
+	 * The lock is released here, before the rebuild takes it itself: the force is the only other
+	 * place that takes this key, and it takes it on the same connection.
+	 *
+	 * @return bool Whether this posting has to rebuild the snapshot of the segment.
+	 * @throws NotCompletedException When a forced rebuild of the segment is running right now.
+	 */
+	private function holdSegment(int $groupId, array $group, ?SegmentSnapshotState $snapshotState): bool
+	{
+		if (!Locker::lock(SegmentDataBuilder::SEGMENT_ACTUALIZE_KEY, $groupId))
+		{
+			// The snapshot is being rebuilt right now: an unfinished build is what the posting
+			// waits for anyway, and the next pass finds the segment either ready or building.
+			$this->stopRecipientListBuilding();
+		}
+
+		try
+		{
+			$rebuild = $this->needsRebuildGroup($group, $snapshotState);
+			$this->groupQueueService->addToDB(Model\GroupQueueTable::TYPE['POSTING'], $this->postingId, $groupId);
+
+			return $rebuild;
+		}
+		finally
+		{
+			Locker::unlock(SegmentDataBuilder::SEGMENT_ACTUALIZE_KEY, $groupId);
+		}
+	}
+
+	protected function getLaunchStart(): DateTime
+	{
+		$start = $this->postingData['AUTO_SEND_TIME'] ?? null;
+
+		return $start instanceof DateTime ? $start : new DateTime();
+	}
+
+	/**
+	 * Midnight of the "Today" of the segment filters: the calendar date of the object is the date of the user.
+	 */
+	protected function getToday(): DateTime
+	{
+		$today = new DateTime();
+		$today->toUserTime();
+		$today->setTime(0, 0, 0);
+
+		return $today;
+	}
+
+	private function needsRebuildGroup($group, ?SegmentSnapshotState $snapshotState = null)
 	{
 		$isNewOrDone = in_array($group['STATUS'], [GroupTable::STATUS_NEW, GroupTable::STATUS_DONE]);
 		$isReadyAndReleased =
@@ -336,7 +477,84 @@ class Builder
 			&& $group['STATUS'] === GroupTable::STATUS_READY_TO_USE
 			&& $this->groupQueueService->isReleased($group['GROUP_ID']);
 
-		return $isNewOrDone || $isReadyAndReleased;
+		if (!$isNewOrDone && !$isReadyAndReleased)
+		{
+			return $this->needsRebuildHeldGroup($group, $snapshotState);
+		}
+
+		if ($group['STATUS'] === GroupTable::STATUS_NEW || empty($group['GROUP_ID']))
+		{
+			return true;
+		}
+
+		$snapshotState ??= new SegmentSnapshotState((int)$group['GROUP_ID']);
+
+		return $snapshotState->isObsolete($this->getLaunchStart(), self::SNAPSHOT_WINDOW_SECONDS, $this->getToday());
+	}
+
+	/**
+	 * A held snapshot of a previous day is rebuilt when only this posting holds it; held by another
+	 * launch, it is waited for without holding any segment, so crossed launches do not wait for each other.
+	 *
+	 * @throws NotCompletedException
+	 */
+	private function needsRebuildHeldGroup(array $group, ?SegmentSnapshotState $snapshotState): bool
+	{
+		$groupId = (int)($group['GROUP_ID'] ?? 0);
+		if ($groupId <= 0 || $group['STATUS'] !== GroupTable::STATUS_READY_TO_USE)
+		{
+			return false;
+		}
+
+		$snapshotState ??= new SegmentSnapshotState($groupId);
+		if (!$snapshotState->isCompletedOnAnotherDay($this->getToday()))
+		{
+			return false;
+		}
+
+		if (!$this->groupQueueService->isGroupHeld($groupId, (int)$this->postingId))
+		{
+			return true;
+		}
+
+		// Numbers only: no personal data reach the log.
+		$this->writeLog(sprintf(
+			'sender: launch waits for the segment held by another launch: '
+			. 'letter %d, posting %d, segment %d, %d s after the start',
+			(int)($this->postingData['MAILING_CHAIN_ID'] ?? 0),
+			(int)$this->postingId,
+			$groupId,
+			time() - $this->getLaunchStart()->getTimestamp()
+		));
+		$this->releaseQueueRecords();
+		$this->stopRecipientListBuilding();
+
+		return false;
+	}
+
+	private function releaseQueueRecords(): void
+	{
+		$released = [];
+		foreach ($this->getLetterConnectors($this->postingData['MAILING_CHAIN_ID']) as $group)
+		{
+			$groupId = (int)($group['GROUP_ID'] ?? 0);
+			if ($groupId <= 0 || isset($released[$groupId]))
+			{
+				continue;
+			}
+
+			$released[$groupId] = true;
+			$this->groupQueueService->releaseGroup(
+				Model\GroupQueueTable::TYPE['POSTING'],
+				(int)$this->postingId,
+				$groupId
+			);
+		}
+	}
+
+	protected function writeLog(string $message): void
+	{
+		AddMessage2Log($message, 'sender', 0);
 	}
 
 	protected function runForRecipientType($usedPersonalizeFields = [], $groups = [])
@@ -578,27 +796,22 @@ class Builder
 		$list = array_diff($codes, $existed);
 		$batch = [];
 		$insertDate = new DateTime();
-		$updateFieldsOnDuplicate = ['DATE_UPDATE'];
+		$updateFieldsOnDuplicate = ['DATE_UPDATE', 'NAME'];
 		foreach ($list as $code)
 		{
-			$batchItem = [
+			$name = $dataList[$code]['NAME'] ?? null;
+
+			// NAME is set in every row: SqlBatch takes the column list from the first row only.
+			// A nameless row carries null rather than an empty string on purpose: the update on
+			// conflict keeps the stored value when the incoming one is null, so a row a parallel
+			// process has inserted meanwhile does not lose its name.
+			$batch[] = [
 				'TYPE_ID' => $this->typeId,
 				'CODE' => $code,
+				'NAME' => $name ?: null,
 				'DATE_INSERT' => $insertDate,
 				'DATE_UPDATE' => $insertDate,
 			];
-
-			$key = 'NAME';
-			if (isset($dataList[$key]) && $dataList[$key])
-			{
-				$batchItem[$key] = $dataList[$key];
-				if (!in_array($key, $updateFieldsOnDuplicate))
-				{
-					$updateFieldsOnDuplicate[] = $key;
-				}
-			}
-
-			$batch[] = $batchItem;
 		}
 
 

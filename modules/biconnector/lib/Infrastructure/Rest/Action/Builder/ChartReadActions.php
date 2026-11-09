@@ -31,6 +31,7 @@ trait ChartReadActions
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::RateLimit,
 	)]
 	public function listAction(ListChartsRequest $request): ArrayResponse
@@ -52,6 +53,7 @@ trait ChartReadActions
 	 */
 	#[Quota(BuilderQuotaClass::Read)]
 	#[FailureCodes(
+		FailureCode::NotFound,
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
@@ -64,6 +66,6 @@ trait ChartReadActions
 
 		$result = ServiceLocator::getInstance()->get(GetChartOperation::class)->execute($request->chartId, $actor);
 
-		return new ArrayResponse($this->answer($result));
+		return new ArrayResponse($this->answer($result, $request->chartId));
 	}
 }

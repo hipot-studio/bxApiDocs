@@ -9,7 +9,6 @@ use Bitrix\Sign\Access\Service\AccessService;
 use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Debug;
 use Bitrix\Sign\Factory\Access\AccessibleItemFactory;
-use Bitrix\Sign\Integration;
 use Bitrix\Sign\Repository;
 use Bitrix\Sign\Connector;
 use Bitrix\Sign\Service;
@@ -187,11 +186,6 @@ class Container
 	public function getCrmProcessTypeService(): Service\Integration\Crm\ProcessTypeService
 	{
 		return self::getService('sign.service.integration.crm.processType');
-	}
-
-	public function getCrmProcessActivityHandler(): Integration\CRM\Activity\ProcessActivityHandler
-	{
-		return self::getService('sign.service.integration.crm.processActivity');
 	}
 
 	public function getBizprocProcessCatalogService(): Service\Integration\Bizproc\ProcessCatalogService
@@ -450,6 +444,21 @@ class Container
 	public function getDirectorSigningGuardService(): Service\Sign\Document\DirectorSigningGuardService
 	{
 		return static::getService('sign.service.sign.document.directorSigningGuard');
+	}
+
+	public function getCompanyInitiatedPartyPlanService(): Service\Sign\Document\CompanyInitiatedPartyPlanService
+	{
+		return static::getService('sign.service.sign.document.companyInitiatedPartyPlan');
+	}
+
+	public function getManualFillingDecisionProvider(): Contract\Document\ManualFillingDecisionProvider
+	{
+		$provider = static::getService(Contract\Document\ManualFillingDecisionProvider::class);
+
+		return $provider instanceof Contract\Document\ManualFillingDecisionProvider
+			? $provider
+			: new Service\Sign\Document\UnavailableManualFillingDecisionProvider()
+		;
 	}
 
 	public function getRequiredFieldRepository(): Repository\RequiredFieldRepository

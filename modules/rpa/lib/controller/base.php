@@ -167,6 +167,11 @@ abstract class Base extends Controller
 			return \CRestUtil::convertDateTime($dateTime);
 		}
 
+		if ($this->getScope() === Controller::SCOPE_AJAX)
+		{
+			return $dateTime->toString();
+		}
+
 		return $dateTime->format(DateTime::getFormat());
 	}
 

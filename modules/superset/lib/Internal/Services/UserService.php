@@ -53,7 +53,13 @@ final class UserService extends AbstractSupersetContext
 			email: (string)($fields['email'] ?? ''),
 			password: $password,
 		);
-		$userDto->roles = $this->getRolesByName($roles);
+		$rolesResult = $this->getRolesByName($roles);
+		if (!$rolesResult->isSuccess())
+		{
+			return $rolesResult;
+		}
+
+		$userDto->roles = $rolesResult->getData()['roleIds'];
 
 		$requestResult = $this->getUsersApi()->createUser([
 			'active' => $userDto->active,
@@ -156,17 +162,23 @@ final class UserService extends AbstractSupersetContext
 
 	public function activate(User $user): Main\Result
 	{
-		return $this->changeActivity($user, true);
+		return $this->changeActivity($user->getExternalId(), true);
 	}
 
 	public function deactivate(User $user): Main\Result
 	{
-		return $this->changeActivity($user, false);
+		return $this->changeActivity($user->getExternalId(), false);
 	}
 
 	public function setEmptyRole(User $user): Main\Result
 	{
-		$requestResult = $this->updateRoles($user, [self::SS_PUBLIC_ROLE_NAME]);
+		$rolesResult = $this->getRolesByName([self::SS_PUBLIC_ROLE_NAME]);
+		if (!$rolesResult->isSuccess())
+		{
+			return $rolesResult;
+		}
+
+		$requestResult = $this->updateRoles($user, $rolesResult->getData()['roleIds']);
 		if (
 			!$requestResult->isSuccess()
 			|| $requestResult->getHttpStatus() !== HttpStatus::OK
@@ -213,7 +225,13 @@ final class UserService extends AbstractSupersetContext
 			return $this->createErrorResult('role not found', null, HttpStatus::BAD_REQUEST);
 		}
 
-		$updateRolesResult = $this->updateRoles($user, $roles);
+		$rolesResult = $this->getRolesByName($roles);
+		if (!$rolesResult->isSuccess())
+		{
+			return $rolesResult;
+		}
+
+		$updateRolesResult = $this->updateRoles($user, $rolesResult->getData()['roleIds']);
 		if (
 			!$updateRolesResult->isSuccess()
 			|| $updateRolesResult->getHttpStatus() !== HttpStatus::OK
@@ -448,6 +466,16 @@ final class UserService extends AbstractSupersetContext
 		{
 			/** @var User $entityUser */
 			$entityUser = $data['user'];
+			// The local link may be stale, so the account found by login is the one activated.
+			if ($this->isSupersetUserInactive($data['superset_user']))
+			{
+				$activityResult = $this->changeActivity((int)$data['superset_user']['id'], true);
+				if (!$activityResult->isSuccess())
+				{
+					return $activityResult;
+				}
+			}
+
 			if (empty($entityUser->getClientId()))
 			{
 				$entityUser->setClientId(
@@ -475,10 +503,13 @@ final class UserService extends AbstractSupersetContext
 		$existingSupersetUser = $data['superset_user'];
 		$userDto->id = (int)$existingSupersetUser['id'];
 
-		$requestResult = $this->getUsersApi()->updateUser(
-			$userDto->id,
-			['password' => $userDto->password]
-		);
+		$updateFields = ['password' => $userDto->password];
+		if ($this->isSupersetUserInactive($existingSupersetUser))
+		{
+			$updateFields['active'] = true;
+		}
+
+		$requestResult = $this->getUsersApi()->updateUser($userDto->id, $updateFields);
 		if (
 			!$requestResult->isSuccess()
 			|| $requestResult->getHttpStatus() !== HttpStatus::OK
@@ -514,10 +545,15 @@ final class UserService extends AbstractSupersetContext
 		return $preparedResult;
 	}
 
-	private function changeActivity(User $user, bool $active): Main\Result
+	private function isSupersetUserInactive(array $supersetUser): bool
+	{
+		return ($supersetUser['active'] ?? null) === false;
+	}
+
+	private function changeActivity(int $externalId, bool $active): Main\Result
 	{
 		$requestResult = $this->getUsersApi()->updateUser(
-			$user->getExternalId(),
+			$externalId,
 			[
 				'active' => $active,
 			]
@@ -538,17 +574,17 @@ final class UserService extends AbstractSupersetContext
 		return $result;
 	}
 
-	private function updateRoles(User $user, array $roles): RequestResult
+	private function updateRoles(User $user, array $roleIds): RequestResult
 	{
 		return $this->getUsersApi()->updateUser(
 			$user->getExternalId(),
 			[
-				'roles' => $this->getRolesByName($roles),
+				'roles' => $roleIds,
 			]
 		);
 	}
 
-	private function getRolesByName(array $rolesName): array
+	private function getRolesByName(array $rolesName): Main\Result
 	{
 		$requestResult = $this->getRolesApi()->getRoles(pageSize: 100);
 		if (
@@ -556,25 +592,45 @@ final class UserService extends AbstractSupersetContext
 			|| $requestResult->getHttpStatus() !== HttpStatus::OK
 		)
 		{
-			return [];
+			return $this->createRequestErrorResult($requestResult, 'Getting superset roles');
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
 		if (!is_array($decoded))
 		{
-			return [];
+			return $this->createErrorResult(
+				"Json decode error. Answer: {$requestResult->getAnswer()}",
+				$requestResult
+			);
 		}
 
 		$roleIds = [];
 		foreach (($decoded['result'] ?? []) as $role)
 		{
-			if (is_array($role) && in_array($role['name'] ?? '', $rolesName, true))
+			$roleName = is_array($role) ? ($role['name'] ?? '') : '';
+			if (in_array($roleName, $rolesName, true))
 			{
-				$roleIds[] = (int)$role['id'];
+				$roleIds[$roleName] = (int)$role['id'];
 			}
 		}
 
-		return $roleIds;
+		// Superset replaces the user's roles with the given list, so a partial list silently drops access.
+		$missingRoles = array_diff($rolesName, array_keys($roleIds));
+		if (!empty($missingRoles))
+		{
+			return $this->createErrorResult(
+				'Superset roles not found: ' . implode(', ', $missingRoles),
+				null,
+				HttpStatus::BAD_REQUEST
+			);
+		}
+
+		$result = new Main\Result();
+		$result->setData([
+			'roleIds' => array_values($roleIds),
+		]);
+
+		return $result;
 	}
 
 	private static function getSupersetRolesByBitrixRole(string $role): array

@@ -53,6 +53,12 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 			LocalRedirect('/bi/dashboard');
 		}
 
+		// An AJAX request of an open grid expects its own markup, the stub is reached on the next page load.
+		if (SupersetInitializer::isSupersetUpdating() && !$this->request->isAjaxRequest())
+		{
+			LocalRedirect('/bi/dashboard/');
+		}
+
 		// The workplace of the analyst is not offered by a finished term at all, so a direct link to it leads to
 		// the grid of dashboards - where the padlocks and the reason for them are.
 		if (SelfHostedLicenseLock::isDashboardLocked())

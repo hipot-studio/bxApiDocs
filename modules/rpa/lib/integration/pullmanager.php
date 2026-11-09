@@ -4,6 +4,8 @@ namespace Bitrix\Rpa\Integration;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UserTable;
 use Bitrix\Pull\Event;
 use Bitrix\Pull\Model\WatchTable;
 use Bitrix\Rpa\Driver;
@@ -30,6 +32,7 @@ class PullManager
 	protected const EVENT_TASK_COUNTERS = 'TASKCOUNTERS';
 
 	protected $eventIds = [];
+	protected $itemViewerIds = [];
 	protected $isEnabled;
 
 	public function __construct()
@@ -86,7 +89,7 @@ class PullManager
 			$eventName = static::getEventName(static::EVENT_TIMELINE, $typeId, $itemId);
 			$eventParams = $this->prepareTimelineEventParams($timeline, 'add', $eventId);
 
-			return $this->sendEvent($eventName, $eventParams);
+			return $this->sendItemTimelineEvent($timeline->getItem(), $eventName, $eventParams);
 		}
 
 		return false;
@@ -101,7 +104,7 @@ class PullManager
 			$eventName = static::getEventName(static::EVENT_TIMELINE, $typeId, $itemId);
 			$eventParams = $this->prepareTimelineEventParams($timeline, 'update', $eventId);
 
-			return $this->sendEvent($eventName, $eventParams);
+			return $this->sendItemTimelineEvent($timeline->getItem(), $eventName, $eventParams);
 		}
 
 		return false;
@@ -116,7 +119,7 @@ class PullManager
 			$eventName = static::getEventName(static::EVENT_TIMELINE, $typeId, $itemId);
 			$eventParams = $this->prepareTimelineEventParams($timeline, 'pin', $eventId);
 
-			return $this->sendEvent($eventName, $eventParams);
+			return $this->sendItemTimelineEvent($timeline->getItem(), $eventName, $eventParams);
 		}
 
 		return false;
@@ -127,8 +130,9 @@ class PullManager
 		if($typeId > 0 && $itemId > 0)
 		{
 			$eventName = static::getEventName(static::EVENT_TIMELINE, $typeId, $itemId);
+			$type = Driver::getInstance()->getType($typeId);
 
-			return $this->sendEvent($eventName, [
+			return $this->sendItemTimelineEvent($type ? $type->getItem($itemId) : null, $eventName, [
 				'command' => 'delete',
 				'timeline' => [
 					'id' => $timelineId,
@@ -146,7 +150,12 @@ class PullManager
 		$eventParams = $this->prepareItemEventParams($item, $eventId);
 		$this->sendKanbanEvent($item, $eventName, $eventParams);
 
-		return $this->sendEvent($eventName, $eventParams);
+		return $this->sendItemEvent(
+			$item,
+			$eventName,
+			$eventParams,
+			$this->getSubscribedUserIdsWithItemPermissions($item, $eventName),
+		);
 	}
 
 	public function sendItemUpdatedEvent(Item $item, string $eventId = '', Item $historyItem = null): bool
@@ -157,9 +166,33 @@ class PullManager
 			$eventId = $this->getItemUpdateEventId($item->getType()->getId(), $item->getId());
 		}
 		$eventParams = $this->prepareItemEventParams($item, $eventId, $historyItem);
-		$this->sendKanbanEvent($item, $eventName, $eventParams);
+		$kanbanUserIds = $this->getSubscribedUserIdsWithItemPermissions(
+			$item,
+			$this->getKanbanTag($item->getType()->getId()),
+		);
+		$this->sendKanbanEvent($item, $eventName, $eventParams, $kanbanUserIds);
+		$this->sendKanbanItemRemovedEvent($item, $eventId, $kanbanUserIds);
 
-		return $this->sendEvent($eventName, $eventParams);
+		return $this->sendItemEvent(
+			$item,
+			$eventName,
+			$eventParams,
+			$this->getSubscribedUserIdsWithItemPermissions($item, $eventName),
+		);
+	}
+
+	public function sendItemSortedEvent(Item $item, int $userId, int $previousItemId, string $eventId = ''): bool
+	{
+		$tag = $this->getKanbanTag($item->getType()->getId());
+		if(!in_array($userId, $this->getSubscribedUserIdsWithItemPermissions($item, $tag), true))
+		{
+			return false;
+		}
+		$params = $this->prepareItemEventParams($item, $eventId);
+		$params['eventName'] = static::getEventName(static::EVENT_ITEM_UPDATED, $item->getType()->getId(), $item->getId());
+		$params['previousItemId'] = $previousItemId;
+
+		return $this->sendEvent($tag, $params, [$userId]);
 	}
 
 	public function sendItemDeletedEvent(Item $item, string $eventId = ''): bool
@@ -168,7 +201,11 @@ class PullManager
 		$eventParams = $this->prepareItemEventParams($item, $eventId);
 		$this->sendKanbanEvent($item, $eventName, $eventParams);
 
-		return $this->sendEvent($eventName, $eventParams);
+		return $this->sendEvent(
+			$eventName,
+			$eventParams,
+			$this->getSubscribedUserIdsWithItemPermissions($item, $eventName),
+		);
 	}
 
 	public function sendRobotAddedEvent(int $typeId, int $stageId, array $data = []): bool
@@ -274,7 +311,7 @@ class PullManager
 		return true;
 	}
 
-	protected function sendKanbanEvent($object, string $eventName, array $params = []): bool
+	protected function sendKanbanEvent($object, string $eventName, array $params = [], ?array $itemUserIds = null): bool
 	{
 		$typeId = $this->getTypeIdByModel($object);
 		if($typeId !== null)
@@ -283,18 +320,71 @@ class PullManager
 			$userIds = null;
 			if($object instanceof Item)
 			{
-				$userIds = $this->getSubscribedUserIdsWithItemPermissions($object, $this->getKanbanTag($typeId));
+				$userIds = $itemUserIds
+					?? $this->getSubscribedUserIdsWithItemPermissions($object, $this->getKanbanTag($typeId))
+				;
+
+				return $this->sendItemEvent($object, $this->getKanbanTag($typeId), $params, $userIds);
 			}
+
 			return $this->sendEvent($this->getKanbanTag($typeId), $params, $userIds);
 		}
 
 		return false;
+	}
+	/**
+	 * Remembers kanban subscribers who can view the item in its saved state; call it before the item is saved.
+	 */
+	public function rememberItemViewers(Item $item): void
+	{
+		$itemId = (int)$item->getId();
+		if(!$this->isEnabled() || $itemId <= 0)
+		{
+			return;
+		}
+		$typeId = $item->getType()->getId();
+		$this->itemViewerIds[$typeId][$itemId] = $this->getSubscribedUserIdsWithItemPermissions(
+			$item,
+			$this->getKanbanTag($typeId),
+		);
+	}
+
+	/**
+	 * Kanban subscribers who saw the item before the change and do not see it now get only the removal of the card,
+	 * without any data of the item.
+	 */
+	protected function sendKanbanItemRemovedEvent(Item $item, string $eventId, array $viewerIds): bool
+	{
+		$typeId = $item->getType()->getId();
+		$itemId = (int)$item->getId();
+		$previousViewerIds = $this->itemViewerIds[$typeId][$itemId] ?? [];
+		unset($this->itemViewerIds[$typeId][$itemId]);
+
+		$lostViewerIds = array_values(array_diff(
+			array_map('intval', $previousViewerIds),
+			array_map('intval', $viewerIds),
+		));
+		if(empty($lostViewerIds))
+		{
+			return false;
+		}
+
+		return $this->sendEvent($this->getKanbanTag($typeId), [
+			'eventName' => static::getEventName(static::EVENT_ITEM_DELETED, $typeId, $itemId),
+			'eventId' => $eventId,
+			'item' => [
+				'id' => $itemId,
+				'typeId' => $typeId,
+			],
+		], $lostViewerIds);
 	}
 	//endregion
 
 	protected function prepareItemEventParams(Item $item, string $eventId = '', Item $historyItem = null): array
 	{
 		$controller = new \Bitrix\Rpa\Controller\Item();
+		// Keep dates neutral until they are formatted for each recipient.
+		$controller->setScope($controller::SCOPE_CLI);
 		$data = $controller->prepareItemData($item, [
 			'withDisplay' => true,
 			'withTasks' => true,
@@ -308,6 +398,117 @@ class PullManager
 		];
 	}
 
+	protected function sendItemEvent(Item $item, string $eventName, array $params, ?array $userIds = null): bool
+	{
+		$userIds ??= $this->getSubscribedUserIds($eventName);
+		if (empty($userIds))
+		{
+			return false;
+		}
+
+		$settings = \CTimeZone::Enabled() ? $this->getUserTimeZoneSettings($userIds) : [];
+		$dates = [
+			'createdTime' => $item->getCreatedTime(),
+			'updatedTime' => $item->getUpdatedTime(),
+			'movedTime' => $item->getMovedTime(),
+		];
+		$dateGroups = [];
+		foreach ($userIds as $userId)
+		{
+			$dateValues = [];
+			foreach ($dates as $field => $date)
+			{
+				$dateValues[$field] = $this->prepareUserDateTimeValue($date, (int)$userId, $settings[$userId] ?? []);
+			}
+			$key = serialize($dateValues);
+			$dateGroups[$key] ??= [
+				'dates' => $dateValues,
+				'userIds' => [],
+			];
+			$dateGroups[$key]['userIds'][] = $userId;
+		}
+
+		$sent = false;
+		foreach ($dateGroups as $group)
+		{
+			$userParams = $params;
+			$userParams['item'] = array_replace($params['item'], $group['dates']);
+			$sent = $this->sendEvent($eventName, $userParams, $group['userIds']) || $sent;
+		}
+
+		return $sent;
+	}
+
+	/**
+	 * Sends the event of the item feed to subscribers who can view the item; without the item nobody gets it.
+	 */
+	protected function sendItemTimelineEvent(?Item $item, string $eventName, array $params): bool
+	{
+		if (!$item)
+		{
+			return false;
+		}
+
+		return $this->sendEvent(
+			$eventName,
+			$params,
+			$this->getSubscribedUserIdsWithItemPermissions($item, $eventName),
+		);
+	}
+
+	protected function getUserTimeZoneSettings(array $userIds): array
+	{
+		$settings = [];
+		$users = UserTable::query()
+			->setSelect(['ID', 'TIME_ZONE', 'TIME_ZONE_OFFSET'])
+			->whereIn('ID', $userIds)
+			->exec()
+		;
+		while ($user = $users->fetch())
+		{
+			$settings[(int)$user['ID']] = $user;
+		}
+
+		return $settings;
+	}
+
+	protected function prepareUserDateTimeValue(?DateTime $date, int $userId, array $settings): ?string
+	{
+		if ($date === null)
+		{
+			return null;
+		}
+
+		$date = clone $date;
+		if ($date->isUserTimeEnabled() && \CTimeZone::Enabled())
+		{
+			$date->setDefaultTimeZone();
+			if ($userId === Driver::getInstance()->getUserId())
+			{
+				$offset = \CTimeZone::GetOffset($userId, false, $date);
+			}
+			else
+			{
+				if (empty($settings['TIME_ZONE']))
+				{
+					$offset = (int)($settings['TIME_ZONE_OFFSET'] ?? 0);
+				}
+				else
+				{
+					$offset = \CTimeZone::getTimezoneOffset($settings['TIME_ZONE'], $date);
+				}
+			}
+			if ($offset !== 0)
+			{
+				$offset += $date->getOffset();
+				$date->setTimeZone(new \DateTimeZone('UTC'));
+				$date->add(($offset < 0 ? '-' : '') . 'PT' . abs($offset) . 'S');
+			}
+		}
+
+		return $date->format(DateTime::getFormat());
+	}
+
 	protected function prepareTypeEventParams(Type $type, string $eventId): array
 	{
 		$controller = new \Bitrix\Rpa\Controller\Type();
@@ -318,13 +519,28 @@ class PullManager
 		];
 	}
 
+	protected function getSubscribedUserIds(string $eventName): array
+	{
+		if (!$this->isEnabled())
+		{
+			return [];
+		}
+
+		return $this->getWatchingUserIds($eventName);
+	}
+
+	protected function getWatchingUserIds(string $tag): array
+	{
+		return WatchTable::getUserIdsByTag($tag);
+	}
+
 	protected function getSubscribedUserIdsWithItemPermissions(Item $item, string $eventName): array
 	{
 		if(!$this->isEnabled())
 		{
 			return [];
 		}
-		$userIds = WatchTable::getUserIdsByTag($eventName);
+		$userIds = $this->getWatchingUserIds($eventName);
 		return UserPermissions::filterUserIdsWhoCanViewItem($item, $userIds);
 	}
 
@@ -334,7 +550,7 @@ class PullManager
 		{
 			return [];
 		}
-		$userIds = WatchTable::getUserIdsByTag($eventName);
+		$userIds = $this->getWatchingUserIds($eventName);
 		return UserPermissions::filterUserIdsWhoCanViewType($typeId, $userIds);
 	}
 

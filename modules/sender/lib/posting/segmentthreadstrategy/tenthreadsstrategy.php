@@ -27,9 +27,17 @@ class TenThreadsStrategy extends AbstractThreadStrategy
 		$count = GroupThreadTable::getCount(
 			[
 				'=STATUS' => GroupThreadTable::STATUS_IN_PROGRESS,
+				'>=EXPIRE_AT' => new DateTime(),
 			]
 		);
 
-		return $count > $maxParallelExecutions;
+		// The caller asks before it takes a thread of its own, so the cap is reached already
+		// when the busy threads are as many as the option allows. A thread whose capture has
+		// expired is exactly the one lockThread() hands back to work, so it runs nothing and
+		// takes no slot: counted, a handler that died mid window would hold a slot of the portal
+		// for good, and at a cap of one it would stop every build of it. The bound mirrors the
+		// capture, which takes a row back at EXPIRE_AT < now, so every row belongs to one of the
+		// two sets and to none of them twice.
+		return $count >= $maxParallelExecutions;
 	}
 }

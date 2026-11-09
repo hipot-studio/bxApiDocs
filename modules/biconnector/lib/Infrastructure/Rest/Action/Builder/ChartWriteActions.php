@@ -58,6 +58,7 @@ trait ChartWriteActions
 	 */
 	#[Quota(BuilderQuotaClass::Write)]
 	#[FailureCodes(
+		FailureCode::NotFound,
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
@@ -87,7 +88,7 @@ trait ChartWriteActions
 			$this->createFlagGate()->isEnabled(FlagGate::BUILDER_MCP_ALIGNMENT, $actor->userId),
 		);
 
-		return new ArrayResponse($this->answer($result));
+		return new ArrayResponse($this->answer($result, $request->chartId));
 	}
 
 	/**

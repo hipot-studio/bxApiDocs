@@ -33,15 +33,23 @@ final class StatusArbiter extends Base
 	{
 		if ($response->getStatus() === IntegratorResponse::STATUS_FROZEN)
 		{
-			if (SupersetInitializer::isSupersetLoading())
-			{
-				return parent::afterRequest($request, $response);
-			}
+			// Both checks read one status: writing the update mark below resets the module option cache,
+			// and a status re-read after it could see a concurrent change and let LOAD overwrite it.
+			$isLoading = SupersetInitializer::isSupersetLoading();
 
 			// Instance is frozen for deferred deletion — don't overwrite PENDING_DELETE with LOAD,
 			// otherwise the cleanup agent won't fire and initializeOrCheckSupersetStatus() will
 			// keep retrying in an infinite loop (LOAD → request → 555 → LOAD → ...).
-			if (SupersetInitializer::isSupersetPendingDelete())
+			if (!$isLoading && SupersetInitializer::isSupersetPendingDelete())
+			{
+				return parent::afterRequest($request, $response);
+			}
+
+			// The mark is refreshed by every frozen answer, including the ones received while already loading:
+			// an update may start on an instance that is unfreezing, and an answer without the signal ends it.
+			SupersetInitializer::markSupersetUpdating($response->isInstanceUpdating());
+
+			if ($isLoading)
 			{
 				return parent::afterRequest($request, $response);
 			}

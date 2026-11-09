@@ -2,12 +2,62 @@
 
 namespace Bitrix\Landing\Copilot\Services;
 
+use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSite;
+use Bitrix\Landing\Copilot\Generation\Scenario\CreateMarkupSite;
 use Bitrix\Landing\Copilot\Model\GenerationsTable;
 use Bitrix\Landing\Landing;
 
 class CreateAiSiteChecker
 {
+	public const SCENARIO_FAMILY_LEGACY = 'legacy';
+	public const SCENARIO_FAMILY_MARKUP = 'markup';
+
+	/**
+	 * Generation of AI sites a saved scenario class belongs to.
+	 *
+	 * The markup scenarios inherit the legacy create scenario, so `instanceof CreateAiSite` alone
+	 * takes a markup job for a legacy one: the markup lineage is tested first. The answer depends
+	 * on the saved class only, never on the selected generation.
+	 *
+	 * @param string $scenarioClass Class name as saved in the SCENARIO column.
+	 *
+	 * @return string|null One of the SCENARIO_FAMILY_* constants, null for a scenario of neither family.
+	 */
+	public static function getScenarioFamily(string $scenarioClass): ?string
+	{
+		if ($scenarioClass === '')
+		{
+			return null;
+		}
+
+		if (is_a($scenarioClass, CreateMarkupSite::class, true))
+		{
+			return self::SCENARIO_FAMILY_MARKUP;
+		}
+
+		if (
+			is_a($scenarioClass, CreateAiSite::class, true)
+			|| is_a($scenarioClass, ChangeAiSite::class, true)
+		)
+		{
+			return self::SCENARIO_FAMILY_LEGACY;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @return list<class-string> Scenarios whose generation marks a site as AI-created.
+	 */
+	public static function getAiSiteScenarios(): array
+	{
+		return [
+			CreateAiSite::class,
+			CreateMarkupSite::class,
+		];
+	}
+
 	/**
 	 * Per-request memoization of isSiteCreated, keyed by checker class:
 	 * subclasses override the underlying query and must not share results.
@@ -64,7 +114,7 @@ class CreateAiSiteChecker
 		$row = GenerationsTable::query()
 			->setSelect(['ID'])
 			->where('SITE_ID', '=', $siteId)
-			->where('SCENARIO', '=', CreateAiSite::class)
+			->whereIn('SCENARIO', static::getAiSiteScenarios())
 			->setLimit(1)
 			->fetch()
 		;
@@ -76,7 +126,7 @@ class CreateAiSiteChecker
 	{
 		$row = GenerationsTable::query()
 			->setSelect(['ID'])
-			->where('SCENARIO', '=', CreateAiSite::class)
+			->whereIn('SCENARIO', static::getAiSiteScenarios())
 			->where('SITE_ID', '>', 0)
 			->setLimit(1)
 			->fetch()

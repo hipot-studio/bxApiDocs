@@ -3,6 +3,7 @@ namespace Bitrix\Landing\Subtype;
 
 use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Block;
+use \Bitrix\Landing\Site;
 
 class Search
 {
@@ -37,9 +38,43 @@ class Search
 				$tplCode
 			);
 			$landingId = $res->getResult();
+			if ($landingId)
+			{
+				self::publishInActiveSite($siteId, (int)$landingId);
+			}
 		}
 
 		return $landingId;
+	}
+
+	/**
+	 * Publishes the new search result page if its site is already published.
+	 * The page is created inactive, and publishing only the page with the search form
+	 * leaves it so, therefore the form of a published site would lead to a missing page.
+	 * @param int $siteId Site id.
+	 * @param int $landingId Landing id.
+	 * @return void
+	 */
+	private static function publishInActiveSite(int $siteId, int $landingId): void
+	{
+		$site = Site::getList([
+			'select' => [
+				'ACTIVE',
+			],
+			'filter' => [
+				'ID' => $siteId,
+				'CHECK_PERMISSIONS' => 'N',
+			],
+		])->fetch();
+		if (($site['ACTIVE'] ?? 'N') !== 'Y')
+		{
+			return;
+		}
+
+		// a failed publication must not break adding the block, the page stays a draft then
+		Landing::createInstance($landingId, [
+			'skip_blocks' => true,
+		])->publication();
 	}
 
 	/**

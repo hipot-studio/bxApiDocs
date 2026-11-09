@@ -156,7 +156,16 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 
 			if ($row['DOMAIN_ID'])
 			{
-				$paths[$row['ID']] = ($hostInclude ? ($disableCloud ? $hostUrl : $row['DOMAIN_PROTOCOL'] . '://' . $row['DOMAIN_NAME']) : '') . $pubPath;
+				$paths[$row['ID']] = (
+					$hostInclude
+						? (
+							$disableCloud
+								? $hostUrl
+								: $row['DOMAIN_PROTOCOL'] . '://' . Domain::toUnicode($row['DOMAIN_NAME'])
+						)
+						: ''
+					)
+					. $pubPath;
 				if ($full)
 				{
 					if ($disableCloud && $isB24localVar)

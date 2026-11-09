@@ -62,7 +62,9 @@ final class AiSiteRestService
 		{
 			// The draft-independent refusals are asked in the order handle() asks them, so REST and
 			// the chat name the same reason and a refused call leaves no draft row behind. The checks
-			// inside handle() stay the guarantee.
+			// inside handle() stay the guarantee. The selected generation is asked first: a start of the
+			// one that is not selected is refused whatever the other gates would answer.
+			$this->createAiSiteHandler->assertLegacyModeSelected();
 			$this->createAiSiteHandler->assertAiSitesEnabled();
 			$this->createAiSiteHandler->assertUserCanCreateSite($userId);
 			$this->createAiSiteHandler->assertAiModuleAvailable();

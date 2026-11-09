@@ -48,7 +48,11 @@ class SetLandingCrmFormTool extends AbstractCrmFormTool
 			{
 				$this->assertCrmFormReadPermission();
 				$this->assertPageEditPermission($dto->pageId);
-				$this->assertBlockBelongsToPageAndHasCrmForm($dto->pageId, $dto->blockId);
+				// a markup block holds its forms in the package manifest; the handler resolves the token
+				if ($this->findMarkupBlockFormIds($dto->pageId, $dto->blockId) === null)
+				{
+					$this->assertBlockBelongsToPageAndHasCrmForm($dto->pageId, $dto->blockId);
+				}
 				$this->assertReadableActiveFormExists($dto->formId);
 
 				return $this->handler->handle($dto, $effectiveUserId);

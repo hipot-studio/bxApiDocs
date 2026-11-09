@@ -9,6 +9,7 @@ use Bitrix\Main\Entity;
 use Bitrix\Landing\Domain;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Site as SiteCore;
+use Bitrix\Landing\Site\Type;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 
@@ -221,6 +222,16 @@ class Site
 			{
 				return false;
 			}
+		}
+
+		if (
+			$params['action_type'] === 'publication'
+			&& !Type::isPublicScope((string)$params['type'])
+		)
+		{
+			// a non-public site is limited by the number of created ones only: the publication
+			// variable of knowledge bases is a default of bitrix24 that no edition has released
+			return true;
 		}
 
 		$optPrefix = 'landing_site_';

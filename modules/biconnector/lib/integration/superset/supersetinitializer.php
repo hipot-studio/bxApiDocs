@@ -79,6 +79,9 @@ final class SupersetInitializer
 
 	private const SUPERSET_INSTANCE_EXISTS_OPTION = '~superset_instance_exists';
 
+	public const SUPERSET_UPDATING_OPTION = '~superset_updating';
+	public const SUPERSET_UPDATING_TTL_SECONDS = 1800;
+
 	/**
 	 * Guards the critical section that opens a recovery series: exactly one series state and exactly
 	 * one recovery agent row must exist per portal.
@@ -563,6 +566,40 @@ final class SupersetInitializer
 		return Option::get('biconnector', self::SUPERSET_INSTANCE_EXISTS_OPTION, 'N') === 'Y';
 	}
 
+	/**
+	 * Remembers that the proxy froze the instance for a Superset version update.
+	 * The mark lives only while the instance is loading and expires after a TTL,
+	 * so a lost unfreeze notification cannot keep the update stub forever.
+	 */
+	public static function markSupersetUpdating(bool $value): void
+	{
+		if ($value)
+		{
+			Option::set('biconnector', self::SUPERSET_UPDATING_OPTION, (string)time());
+		}
+		elseif (Option::get('biconnector', self::SUPERSET_UPDATING_OPTION, '') !== '')
+		{
+			Option::delete('biconnector', ['name' => self::SUPERSET_UPDATING_OPTION]);
+		}
+	}
+
+	public static function isSupersetUpdating(): bool
+	{
+		// A self-hosted instance is updated by the portal administrator, the proxy signal never applies to it.
+		if (SupersetHostMode::isSelfHosted())
+		{
+			return false;
+		}
+
+		$markedAt = (int)Option::get('biconnector', self::SUPERSET_UPDATING_OPTION, 0);
+		if ($markedAt <= 0 || time() - $markedAt >= self::SUPERSET_UPDATING_TTL_SECONDS)
+		{
+			return false;
+		}
+
+		return self::isSupersetLoading();
+	}
+
 	public static function setSupersetStatus(string $status): void
 	{
 		$oldStatus = self::getSupersetStatus();
@@ -574,6 +611,11 @@ final class SupersetInitializer
 		}
 
 		self::$statusContainer->set($status);
+
+		if ($status !== self::SUPERSET_STATUS_LOAD)
+		{
+			self::markSupersetUpdating(false);
+		}
 
 		if ($oldStatus !== $status)
 		{

@@ -222,7 +222,26 @@ class Service
 		{
 			return false;
 		}
-		return self::isCloudRegionRussian(true) && $isLanguageAcceptable;
+
+		return self::isCloudRegionRussian(true)
+			&& $isLanguageAcceptable
+			&& self::isMasterYandexHostAllowed(defined('BX24_HOST_NAME') ? (string)BX24_HOST_NAME : null);
+	}
+
+	/**
+	 * Return true if master yandex can be embedded on the portal host.
+	 *
+	 * Yandex allows framing direct.yandex.ru only from subdomains of bitrix24.ru.
+	 *
+	 * @param string|null $host Portal host name.
+	 * @return bool
+	 */
+	public static function isMasterYandexHostAllowed(?string $host): bool
+	{
+		$host = strtolower((string)$host);
+		$suffix = '.bitrix24.ru';
+
+		return strlen($host) > strlen($suffix) && str_ends_with($host, $suffix);
 	}
 
 	/**

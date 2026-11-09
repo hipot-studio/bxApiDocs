@@ -279,11 +279,17 @@ class UrlManager
 		]);
 	}
 
-	public function getStageDetailUrl(int $stageId = null): ?Uri
+	public function getStageDetailUrl(int $stageId = null, ?int $typeId = null): ?Uri
 	{
+		$getParameters = [];
+		if($typeId > 0)
+		{
+			$getParameters['typeId'] = $typeId;
+		}
+
 		return $this->getUrlForTemplate('bitrix:rpa.stage.detail', [
 			'id' => $stageId
-		]);
+		], $getParameters);
 	}
 
 	public function getItemDetailUrl(int $typeId, int $itemId = null, int $stageId = null): ?Uri

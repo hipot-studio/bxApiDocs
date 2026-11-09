@@ -29,6 +29,8 @@ Loc::loadMessages(__FILE__);
  */
 class Lead extends ConnectorBaseFilter implements Connector\IncrementallyConnector
 {
+	private ?array $entityLimitInfo = null;
+
 	/**
 	 * Get name.
 	 *
@@ -477,20 +479,27 @@ class Lead extends ConnectorBaseFilter implements Connector\IncrementallyConnect
 	 */
 	public function getEntityLimitInfo(): array
 	{
-		$lastLead = \CCrmLead::GetListEx(
-			['ID' => 'DESC'],
-			['CHECK_PERMISSIONS' => 'N'],
-			false,
-			['nTopCount' => '1'],
-			['ID']
-		)->Fetch();
+		if ($this->entityLimitInfo !== null)
+		{
+			return $this->entityLimitInfo;
+		}
+
+		// the upper bound is taken off the index; the range of the build is not narrowed by rights
+		$lastLead = LeadTable::query()
+			->setSelect(['ID'])
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->fetch()
+		;
 		$lastLeadId = $lastLead['ID'] ?? 0;
 
-		return [
+		$this->entityLimitInfo = [
 			'lastContactId' => 0,
 			'lastCompanyId' => 0,
 			'lastId' => $lastLeadId,
 		];
+
+		return $this->entityLimitInfo;
 	}
 
 	/**

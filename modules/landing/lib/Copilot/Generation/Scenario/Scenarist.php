@@ -9,6 +9,7 @@ use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Step\Base\IStep;
 use Bitrix\Landing\Copilot\Generation\Step\Base\RuntimeRequestQuotaProvider;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
+use Bitrix\Landing\Copilot\Generation\GenerationAbortedException;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
@@ -28,7 +29,7 @@ use Bitrix\Main\Loader;
  */
 class Scenarist
 {
-	private const EVENT_STEP = 'onExecuteStep';
+	private const EVENT_STEP = 'onStepExecute';
 
 	private IScenario $scenario;
 	private Generation $generation;
@@ -221,6 +222,37 @@ class Scenarist
 	}
 
 	/**
+	 * Aborts the scenario: the first not-finished step gets the error status, so the
+	 * generation reads as failed and neither execute() nor the retry agent resumes it.
+	 *
+	 * The status goes through markStepErroredSafely(): a mark that did not reach the database
+	 * leaves the step executable for the next run, so it is no abort.
+	 *
+	 * The abort takes no lock of the generation: a run that holds it at that moment finds the mark
+	 * through isAbortedOutside() before any status write of its own and ends with it.
+	 *
+	 * @return bool False when there is nothing to abort (finished or already stopped) or when
+	 *   the Error status could not be persisted.
+	 */
+	public function abort(): bool
+	{
+		if ($this->isFinished() || $this->isError())
+		{
+			return false;
+		}
+
+		foreach ($this->steps as $step)
+		{
+			if ($step->status !== StepStatuses::Finished)
+			{
+				return $this->markStepErroredSafely($step);
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Checks if at least one scenario step has an error and is not executed.
 	 *
 	 * @return bool True if any step is in error state, false otherwise.
@@ -404,6 +436,16 @@ class Scenarist
 			catch (GenerationTimeSliceException $e)
 			{
 				// cooperative exit by the time budget: the step is still executable, do not mark it as errored
+				if ($this->isAbortedDuringPause())
+				{
+					throw new GenerationAbortedException();
+				}
+
+				throw $e;
+			}
+			catch (GenerationAbortedException $e)
+			{
+				// the abort of another process: its Error mark is already adopted, nothing to mark here
 				throw $e;
 			}
 			catch (\Throwable $e)
@@ -629,12 +671,28 @@ class Scenarist
 
 		$step->step->execute();
 
-		if ($step->step->isStarted())
+		$isStarted = $step->step->isStarted();
+		$isFinished = $step->step->isFinished();
+		if (!$isStarted && !$isFinished)
+		{
+			return;
+		}
+
+		// The statuses below go over whatever the row holds now, and while the step ran another process
+		// may have aborted the generation (Generation::cancel()) by writing the Error status to that very
+		// row. A status of the run written over it would continue a cancelled generation, so the mark is
+		// read back first and adopted instead.
+		if ($this->isAbortedOutside())
+		{
+			throw new GenerationAbortedException();
+		}
+
+		if ($isStarted)
 		{
 			$this->saveStepStatus($step, StepStatuses::Started);
 		}
 
-		if ($step->step->isFinished())
+		if ($isFinished)
 		{
 			$this->saveStepStatus($step, StepStatuses::Finished);
 			if ($step->step->isChanged())
@@ -642,6 +700,84 @@ class Scenarist
 				$this->sendMetrikaStepSuccess($step);
 			}
 		}
+	}
+
+	/**
+	 * Whether another process has aborted the generation while this run holds it: a step row of the
+	 * database carries the Error status that this run never set. The abort (Generation::cancel()) runs
+	 * without the lock of the generation, so the running process is the only one that can notice it,
+	 * and it has to read the row back to do so.
+	 *
+	 * A found mark is adopted: the step reads as errored and persisted from here on, exactly as if
+	 * the run had written the mark itself, so isErrorPersisted() makes the end of the run terminal.
+	 * The row of a step that had none yet - an abort of a step not started - becomes the row of the
+	 * step, or the next status write would add a second row next to the mark. Adopted once: a mark
+	 * that is already the run's own answers false.
+	 *
+	 * @return bool True when a mark of an abort has just been found and adopted.
+	 */
+	public function isAbortedOutside(): bool
+	{
+		$generationId = (int)($this->generation->getId() ?? 0);
+		if ($generationId <= 0)
+		{
+			return false;
+		}
+
+		$isAdopted = false;
+		foreach ($this->readStepRows($generationId) as $row)
+		{
+			$step = $this->steps[(int)($row['STEP_ID'] ?? 0)] ?? null;
+			if (
+				$step === null
+				|| (int)($row['STATUS'] ?? -1) !== StepStatuses::Error->value
+				|| $step->status === StepStatuses::Error
+			)
+			{
+				continue;
+			}
+
+			$step->status = StepStatuses::Error;
+			$step->entityId = (int)$row['ID'];
+			$isAdopted = true;
+		}
+
+		return $isAdopted;
+	}
+
+	/**
+	 * The pause by the time budget sets the agent of the generation, and an abort that landed during the
+	 * run would leave that agent an errored generation that nothing ends: the chat stays busy and the
+	 * cancel is never recorded. So the mark is read back before the pause lets go. A failed read is no
+	 * abort: the pause travels on as it is, it must not turn into a failure of the run.
+	 */
+	private function isAbortedDuringPause(): bool
+	{
+		try
+		{
+			return $this->isAbortedOutside();
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	/**
+	 * Storage seam of the abort read: the rows of the steps of the generation as the database holds
+	 * them now. Kept apart from isAbortedOutside() for the same reason the writes are: the rule about
+	 * which stored mark is adopted is observable without a database.
+	 *
+	 * @return list<array{ID: int, STEP_ID: int, STATUS: int}>
+	 */
+	protected function readStepRows(int $generationId): array
+	{
+		return StepsTable::query()
+			->setSelect(['ID', 'STEP_ID', 'STATUS'])
+			->where('GENERATION_ID', $generationId)
+			->exec()
+			->fetchAll()
+		;
 	}
 
 	private static function isRequestQuotaPreflightEnabled(): bool
@@ -661,9 +797,9 @@ class Scenarist
 	 *
 	 * @param ScenarioStepDto $step The step to mark.
 	 *
-	 * @return void
+	 * @return bool True when the Error status has reached the database.
 	 */
-	private function markStepErroredSafely(ScenarioStepDto $step): void
+	private function markStepErroredSafely(ScenarioStepDto $step): bool
 	{
 		try
 		{
@@ -672,7 +808,11 @@ class Scenarist
 				// A storage that refuses the write without throwing leaves exactly the same state as one
 				// that throws - the mark on the step object only - so it must be read the same way.
 				$this->erroredStepMarkPersisted = false;
+
+				return false;
 			}
+
+			return true;
 		}
 		catch (\Throwable $writeException)
 		{
@@ -682,6 +822,8 @@ class Scenarist
 
 			// the original step exception is the one that must reach the generation exception handler
 			$this->logErroredStepMarkFailure($step, $writeException);
+
+			return false;
 		}
 	}
 

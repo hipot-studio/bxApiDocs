@@ -26,6 +26,13 @@ final class SqlLabService extends AbstractSupersetContext
 		'TABLE_SECURITY_ACCESS_ERROR' => SqlLabErrorCode::ACCESS_DENIED,
 		'QUERY_TIMEOUT_ERROR' => SqlLabErrorCode::TIMEOUT,
 	];
+	// Superset types every Trino failure as GENERIC_DB_ENGINE_ERROR; only the repr of the Trino client exception
+	// at the start of the message tells a fault of the query (USER_ERROR) from a failure of Trino itself.
+	private const TRINO_USER_ERROR_PATTERN = '/^TrinoUserError\(type=USER_ERROR, name=([A-Z_]+),/';
+	private const TRINO_ACCESS_DENIED_NAMES = [
+		'PERMISSION_DENIED',
+		'BX_TABLE_ACCESS_DENIED',
+	];
 	private const ERROR_MESSAGES = [
 		SqlLabErrorCode::INVALID_QUERY => 'SQL query is invalid',
 		SqlLabErrorCode::ACCESS_DENIED => 'Access to SQL query data is denied',
@@ -49,8 +56,13 @@ final class SqlLabService extends AbstractSupersetContext
 	 * @param int|null $limit Row cap applied by Superset (queryLimit). Clamped to 1..MAX_ROW_LIMIT.
 	 * @return Main\Result
 	 */
-	public function execute(string $sql, ?int $limit = null): Main\Result
+	public function execute(string $sql, ?int $limit = null, ?string $actAsLogin = null): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		$sql = trim($sql);
 		if ($sql === '')
 		{
@@ -95,13 +107,30 @@ final class SqlLabService extends AbstractSupersetContext
 			'queryLimit' => $queryLimit,
 		];
 
-		$requestResult = $this->getSqlLabApi()->execute($payload);
+		$requestResult = $this->getSqlLabApi($actAsLogin)->execute($payload);
 		$decoded = $this->decode($requestResult->getAnswer());
 		$status = is_array($decoded) ? (string)($decoded['status'] ?? '') : '';
+
+		if ($requestResult->getHttpStatus() === HttpStatus::OK)
+		{
+			$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+			if ($notApplied !== null)
+			{
+				return $notApplied;
+			}
+		}
 
 		// Superset reports a query-level failure as HTTP 200 with {"status":"failed"}: the transport
 		// is healthy, so the answer stays 4xx. The stable code carries the classification, while a 5xx
 		// would move the whole portal to SUPERSET_STATUS_ERROR.
+		$refusal = $requestResult->getHttpStatus() >= HttpStatus::BAD_REQUEST
+			? $this->createActAsRefusalResult($requestResult)
+			: null;
+		if ($refusal !== null)
+		{
+			return $refusal;
+		}
+
 		if ($status === 'failed')
 		{
 			return $this->createSqlLabErrorResult(
@@ -115,9 +144,16 @@ final class SqlLabService extends AbstractSupersetContext
 		if (!$requestResult->isSuccess() || $requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			$httpStatus = $requestResult->getHttpStatus();
+			$code = $this->resolveErrorCode($decoded);
+			if ($httpStatus >= HttpStatus::INTERNAL_SERVER_ERROR && $code !== SqlLabErrorCode::UNAVAILABLE)
+			{
+				// Superset raises a failed synchronous query as 500; a fault of the query itself is not
+				// a failure of the service and must not move the portal to SUPERSET_STATUS_ERROR.
+				$httpStatus = HttpStatus::UNPROCESSABLE_ENTITY;
+			}
 
 			return $this->createSqlLabErrorResult(
-				$this->resolveErrorCode($decoded),
+				$code,
 				$httpStatus >= HttpStatus::BAD_REQUEST ? $httpStatus : HttpStatus::BAD_GATEWAY,
 				$requestResult,
 				$this->extractSqlLabError($decoded),
@@ -181,9 +217,33 @@ final class SqlLabService extends AbstractSupersetContext
 			{
 				return self::ERROR_TYPE_TO_CODE[$errorType];
 			}
+
+			$trinoUserError = $this->resolveTrinoUserError($error['message'] ?? null);
+			if ($trinoUserError !== null)
+			{
+				return $trinoUserError;
+			}
 		}
 
 		return SqlLabErrorCode::UNAVAILABLE;
+	}
+
+	/**
+	 * A query Trino refused as a fault of its own (a missing table or column, a type mismatch, a table closed by
+	 * the table permissions) is a fault of the query; a table closed by the permissions is answered as a missing
+	 * one by design.
+	 */
+	private function resolveTrinoUserError(mixed $message): ?string
+	{
+		if (!is_string($message) || preg_match(self::TRINO_USER_ERROR_PATTERN, $message, $matches) !== 1)
+		{
+			return null;
+		}
+
+		return in_array($matches[1], self::TRINO_ACCESS_DENIED_NAMES, true)
+			? SqlLabErrorCode::ACCESS_DENIED
+			: SqlLabErrorCode::INVALID_QUERY
+		;
 	}
 
 	private function resolveTruncated(array $query): ?bool
@@ -263,8 +323,8 @@ final class SqlLabService extends AbstractSupersetContext
 		return new DatabaseService($this->server, $this->connector);
 	}
 
-	private function getSqlLabApi(): Api\SqlLab
+	private function getSqlLabApi(?string $actAsLogin = null): Api\SqlLab
 	{
-		return new Api\SqlLab($this->connector);
+		return new Api\SqlLab($this->getConnectorFor($actAsLogin));
 	}
 }

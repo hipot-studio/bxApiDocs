@@ -8,6 +8,7 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Extension;
+use Bitrix\Main\UserTable;
 use Bitrix\Sender\Entity\Letter;
 use Bitrix\Sender\Message;
 
@@ -16,15 +17,32 @@ class TimeLimiter implements iLimiter
 {
 	public const DEFAULT_SENDING_START = '09:00';
 	public const DEFAULT_SENDING_END = '18:00';
+
+	/** Server timestamp of the next opening of the window, present only while the window is closed. */
+	public const PARAMETER_NEXT_OPENING = 'nextOpening';
 	/**
 	 * @var Message\iBase
 	 */
 	private $letter;
-	private $parameters;
+	private array $parameters = [];
+
+	/**
+	 * Hit-scoped memory: the window is checked on every recipient of the letter, while the zone of the
+	 * author, its offset and the window itself stay the same for the whole sending.
+	 *
+	 * @var array<int, string> author id => their own time zone, empty when they have none
+	 */
+	private static array $zoneByAuthor = [];
+	/** @var array<string, int> time zone => offset from the server one */
+	private static array $offsetByZone = [];
+	/** @var array<string, SendingWindow> */
+	private static array $windows = [];
 
 	public function withLetter($letter)
 	{
 		$this->letter = $letter;
+		$this->parameters = [];
+
 		return $this;
 	}
 
@@ -50,37 +68,105 @@ class TimeLimiter implements iLimiter
 	 */
 	public function getCurrent()
 	{
+		unset($this->parameters[self::PARAMETER_NEXT_OPENING]);
+
 		if (!$this->letter)
 		{
 			return 0;
 		}
 
-		$sendingStart = $this->letter->getConfiguration()->get('SENDING_START');
-		$sendingEnd = $this->letter->getConfiguration()->get('SENDING_END');
-		$sendingTimeEnabled = $this->letter->getConfiguration()->get('SENDING_TIME');
+		$configuration = $this->letter->getConfiguration();
+		$sendingStart = $configuration->get('SENDING_START');
+		$sendingEnd = $configuration->get('SENDING_END');
+		$sendingTimeEnabled = $configuration->get('SENDING_TIME');
 
 		if (!$sendingEnd || !$sendingStart || $sendingTimeEnabled !== 'Y')
 		{
 			return 0;
 		}
-		$checkTime =  strtotime($sendingStart);
-		$sendingStart = strtotime($sendingStart);
-		$sendingEnd = strtotime($sendingEnd);
-		$currentTime = strtotime((new DateTime())->format("H:i:s"));
 
-		$sendingStart = $sendingStart > $sendingEnd ? $sendingEnd : $sendingStart;
-		$sendingEnd = $checkTime > $sendingEnd ? $checkTime : $sendingEnd;
+		$window = self::window(
+			(string)$sendingStart,
+			(string)$sendingEnd,
+			$this->resolveOwnerOffset($configuration)
+		);
+		$now = (new DateTime())->getTimestamp();
 
-		$this->setParameter('sendingStart', $sendingStart);
-		$this->setParameter('sendingEnd', $sendingEnd);
-		$this->setParameter('currentTime', $currentTime);
-
-		if ($currentTime > $sendingStart && $currentTime < $sendingEnd)
+		if ($window->isOpenAt($now))
 		{
 			return 0;
 		}
 
+		$this->setParameter(self::PARAMETER_NEXT_OPENING, $window->nextOpeningAt($now));
+
 		return 1;
+	}
+
+	/**
+	 * Offset of the window owner: an empty zone of the author falls back to the portal one inside
+	 * \CTimeZone::getTimezoneOffset(). \CTimeZone::GetOffset() does not fit: without an argument it takes
+	 * the zone of an arbitrary visitor of the hit that runs the sending, and with the author id it returns
+	 * the stale TIME_ZONE_OFFSET instead of that fallback.
+	 */
+	private function resolveOwnerOffset(Message\Configuration $configuration): int
+	{
+		if (!\CTimeZone::OptionEnabled())
+		{
+			return 0;
+		}
+
+		$zone = $this->resolveZoneFrom($configuration);
+
+		return self::$offsetByZone[$zone] ??= \CTimeZone::getTimezoneOffset($zone);
+	}
+
+	/**
+	 * The letter publishes the zone of its author whenever the row it came from carries it — the list of
+	 * mailings selects it through the join it already needs for the author name. Without that key the
+	 * limiter looks the author up itself: background sending works with one letter per hit, so there it
+	 * is a single query and not a per-row one. A letter without a saved author has no owner, and the portal
+	 * zone applies.
+	 */
+	private function resolveZoneFrom(Message\Configuration $configuration): string
+	{
+		$published = $configuration->get('LETTER_CREATED_BY_TIME_ZONE');
+
+		if ($published !== null)
+		{
+			return (string)$published;
+		}
+
+		return $this->resolveOwnerZone((int)$configuration->get('LETTER_OWNER_ID'));
+	}
+
+	/**
+	 * An author without a zone is remembered as well, otherwise the row missing from b_user is looked up
+	 * again on every recipient.
+	 */
+	private function resolveOwnerZone(int $authorId): string
+	{
+		if ($authorId <= 0)
+		{
+			return '';
+		}
+
+		if (!isset(self::$zoneByAuthor[$authorId]))
+		{
+			$author = UserTable::getRow([
+				'select' => ['TIME_ZONE'],
+				'filter' => ['=ID' => $authorId],
+			]);
+			self::$zoneByAuthor[$authorId] = (string)($author['TIME_ZONE'] ?? '');
+		}
+
+		return self::$zoneByAuthor[$authorId];
+	}
+
+	private static function window(string $startText, string $endText, int $offsetSeconds): SendingWindow
+	{
+		$key = $startText . '|' . $endText . '|' . $offsetSeconds;
+
+		return self::$windows[$key] ??= new SendingWindow($startText, $endText, $offsetSeconds);
 	}
 
 	/**

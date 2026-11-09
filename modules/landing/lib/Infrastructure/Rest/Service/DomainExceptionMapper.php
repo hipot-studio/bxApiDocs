@@ -29,6 +29,9 @@ final class DomainExceptionMapper
 			$exception instanceof AiAssistant\Exception\SiteCreateAccessDeniedException
 				=> new AccessDeniedException($exception),
 
+			$exception instanceof AiAssistant\Exception\AiSiteModeDisabledException
+				=> new Rest\Exception\AiSiteModeDisabledException($exception),
+
 			$exception instanceof AiAssistant\Exception\AiSitesDisabledException
 				=> new Rest\Exception\AiSitesDisabledException($exception),
 

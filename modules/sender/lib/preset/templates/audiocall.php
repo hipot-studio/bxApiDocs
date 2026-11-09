@@ -188,6 +188,7 @@ class AudioCall
 				'VERSION' => 2,
 				'HOT' => $item['HOT'],
 				'ICON' => $item['ICON'],
+				'ICON_2X' => $item['ICON_2X'] ?? null,
 
 				'NAME' => $item['NAME'],
 				'DESC' => $item['DESC'],

@@ -4,6 +4,7 @@ namespace Bitrix\BizprocMobile\Controller\Action\Workflow;
 
 use Bitrix\BizprocMobile\EntityEditor\Converter;
 use Bitrix\BizprocMobile\EntityEditor\ParametersProvider;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -11,20 +12,26 @@ use Bitrix\Mobile\UI\EntityEditor\FormWrapper;
 
 class LoadParametersEditorAction extends Action
 {
+	use AddPublicErrorsTrait;
+
 	public function run(string $signedDocument, int $templateId): ?array
 	{
 		if (!\CBPRuntime::isFeatureEnabled())
 		{
-			$this->addError(new Error(
-				Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR_BIZPROC_FEATURE_DISABLED')
-			));
+			$this->addErrorsAsPublic([
+				new Error(
+					Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR_BIZPROC_FEATURE_DISABLED')
+				),
+			]);
 
 			return null;
 		}
 
 		if ($templateId <= 0)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')),
+			]);
 
 			return null;
 		}
@@ -32,7 +39,9 @@ class LoadParametersEditorAction extends Action
 		$unsignedDocument = \CBPDocument::unSignParameters($signedDocument);
 		if (!$this->isCorrectUnsignedDocument($unsignedDocument))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')),
+			]);
 
 			return null;
 		}
@@ -44,7 +53,11 @@ class LoadParametersEditorAction extends Action
 
 		if (!$this->canUserOperateDocument($complexDocumentId, $templateId))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR_ACCESS_DENIED')));
+			$this->addErrorsAsPublic([
+				new Error(
+					Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR_ACCESS_DENIED')
+				),
+			]);
 
 			return null;
 		}
@@ -52,14 +65,18 @@ class LoadParametersEditorAction extends Action
 		$template = $this->loadTemplate($templateId);
 		if (!$template)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')),
+			]);
 
 			return null;
 		}
 
 		if (!$this->isCorrectTemplate($template, $complexDocumentType))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_PARAMETERS_EDITOR_ERROR')),
+			]);
 
 			return null;
 		}

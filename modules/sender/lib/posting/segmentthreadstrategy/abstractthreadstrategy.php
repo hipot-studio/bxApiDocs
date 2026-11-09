@@ -8,6 +8,7 @@ use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\ORM\Query\Result;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Sender\Internals\Model\GroupStateTable;
 use Bitrix\Sender\Internals\Model\GroupThreadTable;
 use Bitrix\Sender\Internals\SqlBatch;
 use Bitrix\Sender\Posting\Locker;
@@ -26,6 +27,7 @@ abstract class AbstractThreadStrategy implements ThreadStrategy
 	protected const GROUP_THREAD_LOCK_KEY = 'group_thread_';
 	public const THREAD_UNAVAILABLE = -1;
 	public const THREAD_LOCKED = -2;
+	public const THREAD_BUILD_COMPLETED = -3;
 	public const THREAD_NEEDED = 1;
 
 
@@ -67,43 +69,49 @@ abstract class AbstractThreadStrategy implements ThreadStrategy
 			return self::THREAD_UNAVAILABLE;
 		}
 
-		\CTimeZone::Disable();
-		$thread = GroupThreadTable::getList(
-			[
-				"select" => [
-					"THREAD_ID",
-					"STEP"
-				],
-				"filter" => [
-					'=GROUP_STATE_ID' => $this->groupStateId,
-					[
-						'LOGIC' => 'OR',
-						[
-							'=STATUS' => GroupThreadTable::STATUS_NEW,
-						],
-						[
-							'=STATUS' => GroupThreadTable::STATUS_IN_PROGRESS,
-							'<EXPIRE_AT' => new DateTime()
-						]
-					]
-				],
-				"limit" => 1
-			]
-		)->fetch();
-		\CTimeZone::Enable();
-
-		if (!isset($thread["THREAD_ID"]))
+		try
 		{
-			return self::THREAD_UNAVAILABLE;
+			\CTimeZone::Disable();
+			$thread = GroupThreadTable::getList(
+				[
+					"select" => [
+						"THREAD_ID",
+						"STEP"
+					],
+					"filter" => [
+						'=GROUP_STATE_ID' => $this->groupStateId,
+						[
+							'LOGIC' => 'OR',
+							[
+								'=STATUS' => GroupThreadTable::STATUS_NEW,
+							],
+							[
+								'=STATUS' => GroupThreadTable::STATUS_IN_PROGRESS,
+								'<EXPIRE_AT' => new DateTime()
+							]
+						]
+					],
+					"limit" => 1
+				]
+			)->fetch();
+
+			if (!isset($thread["THREAD_ID"]))
+			{
+				return self::THREAD_UNAVAILABLE;
+			}
+			$this->threadId = (int)$thread["THREAD_ID"];
+			$this->offset = $this->threadId === 0 && (int)$thread["STEP"] === 0
+				? 0 : $this->threadId * $this->perPage + (static::lastThreadId() + 1) * $this->perPage * $thread["STEP"];
+
+			$this->updateStatus(GroupThreadTable::STATUS_IN_PROGRESS);
+
+			return $this->threadId;
 		}
-		$this->threadId = (int)$thread["THREAD_ID"];
-		$this->offset = $this->threadId === 0 && (int)$thread["STEP"] === 0
-			? 0 : $this->threadId * $this->perPage + (static::lastThreadId() + 1) * $this->perPage * $thread["STEP"];
-
-		$this->updateStatus(GroupThreadTable::STATUS_IN_PROGRESS);
-		Locker::unlock(self::GROUP_THREAD_LOCK_KEY, $this->groupStateId);
-
-		return $this->threadId;
+		finally
+		{
+			\CTimeZone::Enable();
+			Locker::unlock(self::GROUP_THREAD_LOCK_KEY, $this->groupStateId);
+		}
 	}
 
 	/**
@@ -120,26 +128,55 @@ abstract class AbstractThreadStrategy implements ThreadStrategy
 			return self::THREAD_LOCKED;
 		}
 
-		$thread = GroupThreadTable::getList(
+		try
+		{
+			$thread = GroupThreadTable::getList(
+				[
+					"select" => [
+						"THREAD_ID",
+						"STEP"
+					],
+					"filter" => [
+						'=GROUP_STATE_ID' => $this->groupStateId
+					],
+					"limit" => 1
+				]
+			)->fetch();
+
+			if (isset($thread["THREAD_ID"]))
+			{
+				return self::THREAD_UNAVAILABLE;
+			}
+
+			// An empty registry also means the build is over and finalize() has removed the rows:
+			// refilling it would start the windows over from the beginning of the range.
+			if ($this->isBuildFinished())
+			{
+				return self::THREAD_BUILD_COMPLETED;
+			}
+
+			return self::THREAD_NEEDED;
+		}
+		finally
+		{
+			Locker::unlock(self::GROUP_THREAD_LOCK_KEY, $this->groupStateId);
+		}
+	}
+
+	/**
+	 * The build is over when its state row is completed or gone: in both cases the registry
+	 * of threads must not be refilled.
+	 */
+	private function isBuildFinished(): bool
+	{
+		$groupState = GroupStateTable::getList(
 			[
-				"select" => [
-					"THREAD_ID",
-					"STEP"
-				],
-				"filter" => [
-					'=GROUP_STATE_ID' => $this->groupStateId
-				],
-				"limit" => 1
+				'select' => ['STATE'],
+				'filter' => ['=ID' => $this->groupStateId],
 			]
 		)->fetch();
 
-		if (isset($thread["THREAD_ID"]))
-		{
-			return self::THREAD_UNAVAILABLE;
-		}
-		Locker::unlock(self::GROUP_THREAD_LOCK_KEY, $this->groupStateId);
-
-		return self::THREAD_NEEDED;
+		return !$groupState || (int)$groupState['STATE'] === GroupStateTable::STATES['COMPLETED'];
 	}
 
 	/**

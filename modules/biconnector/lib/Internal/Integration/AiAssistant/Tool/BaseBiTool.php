@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\RateLimit\BiToolsRateLim
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\DestructiveBudget;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\Main\DI\ServiceLocator;
 
 abstract class BaseBiTool extends ToolContract implements ImpactAwareTool
@@ -28,10 +29,24 @@ abstract class BaseBiTool extends ToolContract implements ImpactAwareTool
 	 */
 	public function run(int $userId, ...$args): array
 	{
-		$this->callerUserId = $userId;
-		$this->enforceRateLimit($userId);
+		return $this->runWithArguments($userId, $args);
+	}
 
-		return parent::run($userId, ...$args);
+	public function runWithArguments(int $callerUserId, array $args): array
+	{
+		$this->callerUserId = $callerUserId;
+		$this->enforceRateLimit($callerUserId);
+		if (BuilderArgumentContract::methodForTool($this->getName()) !== null)
+		{
+			$result = BuilderToolArguments::prepare($this->getName(), $args);
+			if (!$result->isSuccess())
+			{
+				throw $this->toMcpException($result);
+			}
+			$args = $result->getData()['business'] + $result->getData()['control'];
+		}
+
+		return parent::run($callerUserId, ...$args);
 	}
 
 	/**
@@ -39,7 +54,7 @@ abstract class BaseBiTool extends ToolContract implements ImpactAwareTool
 	 * counts distinct objects rather than calls: retrying the same object is free,
 	 * a sweep across many objects is not.
 	 *
-	 * Stays for good: UnpublishDashboardTool never moves onto a builder operation.
+	 * Kept for the legacy paths of destructive tools.
 	 *
 	 * @param string $objectType `dashboard`, `chart` or `dataset`.
 	 * @throws McpException When the destructive budget is spent.
@@ -73,7 +88,7 @@ abstract class BaseBiTool extends ToolContract implements ImpactAwareTool
 			throw new McpException(
 				'Destructive limit exceeded: at most ' . BiToolsRateLimiter::DESTRUCTIVE_MAX_OBJECTS
 				. ' irreversible operations on distinct objects per minute. Retry in '
-				. $limit['retryAfter'] . ' seconds.'
+				. $limit['retryAfter'] . ' seconds.',
 			);
 		}
 	}

@@ -7,7 +7,6 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\SqlExecutionContext;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
-use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
@@ -113,15 +112,8 @@ final class ExecuteSqlTool extends BaseBiTool
 			$limit = max(1, min(self::MAX_LIMIT, (int)$args['limit']));
 		}
 
-		$userRepository = new SupersetUserRepository();
-		$user = $userId > 0
-			? $userRepository->getById($userId)
-			: $userRepository->getAdmin()
-		;
-		if ($user === null)
-		{
-			throw new McpException('A Superset user is required to run raw SQL.');
-		}
+		// The same person as on the previous path: no service account in place of the caller while the axis is on.
+		$user = self::requireSupersetUser($userId);
 
 		$result = ServiceLocator::getInstance()
 			->get(SqlLabExecutionService::class)
@@ -139,12 +131,24 @@ final class ExecuteSqlTool extends BaseBiTool
 
 	/**
 	 * The shared answer of SQL Lab with the truncation sign the REST method has always carried.
-	 * A refusal shows the model only the Superset diagnostics it fixes its query by, as before.
+	 * A refusal shows the model only the Superset diagnostics it fixes its query by, as before. A query Superset
+	 * could not run as the caller is not a query to fix: its reason is read from the very response SQL Lab received,
+	 * since the shared codes of SQL Lab do not carry it.
 	 */
 	private function presentAligned(Result $result, array $logContext): array
 	{
 		if (!$result->isSuccess())
 		{
+			$response = $result->getData()['integratorResponse'] ?? null;
+			$actAsRefusal = $response instanceof IntegratorResponse
+				? Refusal::actAsFailure($response->getErrors(), $logContext)
+				: null
+			;
+			if ($actAsRefusal !== null)
+			{
+				throw self::toMcpException($actAsRefusal);
+			}
+
 			throw self::sqlLabException(
 				array_map(
 					static fn(Error $error): Error => new Error(
@@ -228,15 +232,7 @@ final class ExecuteSqlTool extends BaseBiTool
 			$limit = max(1, min(self::MAX_LIMIT, (int)$args['limit']));
 		}
 
-		$userRepository = new SupersetUserRepository();
-		$user = $userId > 0
-			? $userRepository->getById($userId)
-			: $userRepository->getAdmin()
-		;
-		if ($user === null)
-		{
-			throw new McpException('A Superset user is required to run raw SQL.');
-		}
+		$user = self::requireSupersetUser($userId);
 
 		$response = IntegratorFactory::getInstance()->executeSql(
 			$sql,

@@ -23,10 +23,21 @@ class ConsentPreview extends JsonController
 
 	public function loadDataAction(JsonPayload $payload)
 	{
+		if (!Security\Access::getInstance()->canViewLetters())
+		{
+			return false;
+		}
+
 		$request = $payload->getData();
 		$request = is_array($request) ? $request : [];
 
-		$agreement = $this->getAgreement((int)$request['id']);
+		$id = $request['id'] ?? null;
+		if (!is_scalar($id) || (int)$id <= 0)
+		{
+			return false;
+		}
+
+		$agreement = $this->getAgreement((int)$id);
 
 		if (!$agreement)
 		{

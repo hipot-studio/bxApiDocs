@@ -16,6 +16,8 @@ final class Dashboard
 		public array $nativeFilterConfig,
 		public ?DateTime $dateModify,
 		public array $jsonMetadata = [],
+		public ?string $positionJson = null,
+		public ?string $jsonMetadataSource = null,
 	)
 	{}
 }

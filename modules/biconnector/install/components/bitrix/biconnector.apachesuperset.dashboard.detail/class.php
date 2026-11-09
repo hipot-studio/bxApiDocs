@@ -169,8 +169,22 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			LocalRedirect('/bi/dashboard/');
 		}
 
+		if (SupersetInitializer::isSupersetUpdating())
+		{
+			$this->leaveForSupersetUpdate();
+
+			return;
+		}
+
 		$superset = new SupersetController();
 		$superset->initializeOrCheckSupersetStatus();
+
+		if (SupersetInitializer::isSupersetUpdating())
+		{
+			$this->leaveForSupersetUpdate();
+
+			return;
+		}
 
 		if (SupersetInitializer::isSupersetLoading())
 		{
@@ -270,6 +284,13 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		$this->prepareResult();
 
+		if (SupersetInitializer::isSupersetUpdating())
+		{
+			$this->leaveForSupersetUpdate();
+
+			return;
+		}
+
 		// Status can become LOAD during initDashboard if instance was freezed. Then fetching embedded token will
 		// be blocked by ReadyGate and this will render "dashboard not found".
 		if (SupersetInitializer::isSupersetLoading())
@@ -297,6 +318,13 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		$this->dashboard->loadCredentials();
+		if (SupersetInitializer::isSupersetUpdating())
+		{
+			$this->leaveForSupersetUpdate();
+
+			return;
+		}
+
 		if (
 			(
 				$this->dashboard->isAvailableDashboard()
@@ -344,6 +372,14 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			CurrentUser::get()->getId()
 		))->run();
 
+		// The requests made above may be the first to receive the update signal.
+		if (SupersetInitializer::isSupersetUpdating())
+		{
+			$this->leaveForSupersetUpdate();
+
+			return;
+		}
+
 		$this->renderTemplate();
 
 		Application::getInstance()
@@ -360,6 +396,23 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		Application::getInstance()
 			->addBackgroundJob(fn() => BIConnector\Internal\Services\Dataset\DatasetLabelBackfill::run())
 		;
+	}
+
+	/**
+	 * The whole section is blocked while the instance is updating, and the stub is shown on the grid page.
+	 * The mobile shell has no such page: it is told the report is not ready yet and keeps polling the state.
+	 */
+	private function leaveForSupersetUpdate(): void
+	{
+		if ($this->isMobile)
+		{
+			$this->arResult['MOBILE_STATE'] = 'preparing';
+			$this->renderTemplate();
+
+			return;
+		}
+
+		LocalRedirect('/bi/dashboard/');
 	}
 
 	private function showStartupTemplate(array $dashboard, bool $firstStartup = false): void
@@ -442,6 +495,18 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			{
 				$this->arResult['URL_PARAMS'][$code] = $value;
 			}
+		}
+
+		// The company structure filter may be added in Superset after the parameters were saved;
+		// a dashboard whose filters were not loaded may hold it as well.
+		$requiredParamList = UrlParameter\RequiredParameters::getList($this->dashboard)
+			?? UrlParameter\ScopeMap::getRequiredParamList()
+		;
+		foreach (array_keys($requiredParamList) as $code)
+		{
+			$this->arResult['URL_PARAMS'][$code] ??= UrlParameter\ScopeMap::loadGlobalValue(
+				UrlParameter\Parameter::from($code),
+			);
 		}
 	}
 

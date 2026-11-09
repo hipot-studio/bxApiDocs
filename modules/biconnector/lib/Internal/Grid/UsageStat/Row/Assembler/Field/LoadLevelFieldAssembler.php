@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Internal\Entity\ValueObject\LoadIndicator\LoadLevel;
 use Bitrix\BIConnector\Internal\Entity\ValueObject\LoadIndicator\TriggeredFactor;
 use Bitrix\BIConnector\Internal\Entity\ValueObject\LoadIndicator\TriggeredFactorInfo;
 use Bitrix\BIConnector\Internal\Services\LoadIndicator\LoadIndicatorCalculator;
+use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\ScreenReaderText;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\UI\Public\System\Chip;
@@ -16,6 +17,9 @@ use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class LoadLevelFieldAssembler extends FieldAssembler
 {
+	/** Numbers the descriptions of the carriers so that their ids are unique on the page. */
+	private static int $carrierCounter = 0;
+
 	protected function prepareRow(array $row): array
 	{
 		if (empty($this->getColumnIds()))
@@ -34,7 +38,8 @@ final class LoadLevelFieldAssembler extends FieldAssembler
 
 		$calculator = new LoadIndicatorCalculator();
 		$result = $calculator->calculate($data);
-		$html = $this->renderPill(LoadIndicator::createFromCheckResult($result));
+		$queryId = (int)($data['ID'] ?? $row['id'] ?? 0);
+		$html = $this->renderPill(LoadIndicator::createFromCheckResult($result), $queryId);
 
 		foreach ($this->getColumnIds() as $columnId)
 		{
@@ -44,7 +49,7 @@ final class LoadLevelFieldAssembler extends FieldAssembler
 		return $row;
 	}
 
-	private function renderPill(LoadIndicator $indicator): string
+	private function renderPill(LoadIndicator $indicator, int $queryId): string
 	{
 		$label = $this->getLevelLabel($indicator->getLevel());
 		$color = $this->getLevelColor($indicator->getLevel());
@@ -73,12 +78,62 @@ final class LoadLevelFieldAssembler extends FieldAssembler
 			'icon' => $icon,
 			'rounded' => true,
 		])->render();
+		// The carrier of the hint is the only stop of the cell: a focusable chip inside it would be a second one,
+		// and moving between the two hides the hint the carrier has just shown.
+		$chip = preg_replace('/\stabindex="0"/', '', $chip, 1);
+
+		$descriptionText = $this->renderDescriptionText($indicator);
+		if ($descriptionText === '')
+		{
+			return sprintf(
+				'<span data-hint="%s" data-hint-html data-hint-no-icon data-hint-interactivity>%s</span>',
+				htmlspecialcharsbx($hintContent),
+				$chip,
+			);
+		}
+
+		$descriptionId = 'bic-load-factors-' . ++self::$carrierCounter;
+		$rowText = '';
+		if ($queryId > 0)
+		{
+			$rowText = ScreenReaderText::render(htmlspecialcharsbx((string)Loc::getMessage(
+				'BIC_USAGE_STAT_GRID_LOAD_LEVEL_ROW_ARIA',
+				['#ID#' => $queryId],
+			)) . ' ');
+		}
 
 		return sprintf(
-			'<span data-hint="%s" data-hint-html data-hint-no-icon data-hint-interactivity>%s</span>',
+			'<span tabindex="0" data-bic-focus-role="load-factors" data-hint="%s" data-hint-html data-hint-no-icon'
+				. ' data-hint-interactivity aria-describedby="%s">%s%s</span>%s',
 			htmlspecialcharsbx($hintContent),
+			$descriptionId,
+			$rowText,
 			$chip,
+			ScreenReaderText::render($descriptionText, $descriptionId),
 		);
+	}
+
+	/**
+	 * The text of the hint for the screen reader, escaped: the factors are joined into sentences.
+	 */
+	private function renderDescriptionText(LoadIndicator $indicator): string
+	{
+		if ($indicator->getLevel() === LoadLevel::Low)
+		{
+			return htmlspecialcharsbx((string)Loc::getMessage('BIC_USAGE_STAT_GRID_LOAD_LOW_TOOLTIP'));
+		}
+
+		$texts = [];
+		foreach ($indicator->getFactors() as $factorInfo)
+		{
+			$text = $this->renderFactorText($factorInfo);
+			if ($text !== '')
+			{
+				$texts[] = htmlspecialcharsbx($text);
+			}
+		}
+
+		return implode('. ', $texts);
 	}
 
 	private function getLevelLabel(LoadLevel $level): string

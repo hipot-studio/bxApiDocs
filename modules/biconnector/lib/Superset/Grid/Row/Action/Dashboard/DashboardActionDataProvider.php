@@ -52,13 +52,13 @@ class DashboardActionDataProvider extends DataProvider
 	{
 		return [
 			new OpenSettingsAction(),
-			$this->createConfigureDigestAction(),
 			new CopyAction(),
 			new ExportAction(),
 			new SetDraftAction(),
 			new PublishAction(),
 			new AddToTopMenuAction(),
 			new DeleteFromTopMenuAction(),
+			$this->createConfigureDigestAction(),
 			new DeleteAction(),
 		];
 	}
@@ -170,10 +170,18 @@ class DashboardActionDataProvider extends DataProvider
 		foreach ($actions as $actionsItem)
 		{
 			$actionConfig = $actionsItem->getControl($rawFields);
-			if (isset($actionConfig))
+			if (!isset($actionConfig))
 			{
-				$result[] = $actionConfig;
+				continue;
 			}
+
+			$isSeparated = $actionsItem instanceof ConfigureDigestAction || $actionsItem instanceof DeleteAction;
+			if ($isSeparated && $result !== [])
+			{
+				$result[] = ['delimiter' => true];
+			}
+
+			$result[] = $actionConfig;
 		}
 
 		return $result;

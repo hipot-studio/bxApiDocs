@@ -6,12 +6,14 @@ use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dataset\WriteDatasetOperations;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
+use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -51,24 +53,22 @@ final class DeleteDatasetTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'datasetId' => [
-					'type' => 'integer',
-					'description' => 'Dataset id to delete (from list_datasets). Positive integer.',
-					'minimum' => 1,
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved '
-						. 'this previewed deletion. Omit or set false to only preview the impact. '
-						. 'Do NOT self-confirm or assume approval from earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			'biconnector.builder.dataset.delete',
+			'mcp',
+			[
+				'datasetId' => 'Dataset id to delete (from list_datasets). Positive integer.',
 			],
-			'required' => ['datasetId'],
-			'additionalProperties' => false,
+		);
+
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved '
+				. 'this previewed deletion. Omit or set false to only preview the impact. '
+				. 'Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -150,13 +150,10 @@ final class DeleteDatasetTool extends BaseBiTool
 		// Point-load the dataset (not a full list walk) to resolve its name and
 		// owners for the object-level scope check and to confirm it exists before
 		// a destructive call.
-		$getResponse = $integrator->getDatasetById($datasetId);
-		if ($getResponse->hasErrors())
+		$lookup = (new EntityLookup())->dataset($datasetId, self::findActAsUser($userId));
+		if (!$lookup->isSuccess())
 		{
-			// Idempotent: the dataset is already gone (retried/second delete).
-			// Report success instead of a confusing "BI unavailable" error —
-			// mirrors delete_chart / delete_dashboard.
-			if ($getResponse->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			if ($lookup->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return [
 					'deleted' => true,
@@ -166,24 +163,10 @@ final class DeleteDatasetTool extends BaseBiTool
 				];
 			}
 
-			// A real service failure (not a genuinely absent dataset).
-			throw self::unavailableBiException(
-				$getResponse->getErrors(),
-				['stage' => 'delete_dataset.load', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$current = $getResponse->getData();
-		if (!is_array($current) || (int)($current['id'] ?? 0) <= 0)
-		{
-			// Genuinely absent (or never existed) — same idempotent no-op.
-			return [
-				'deleted' => true,
-				'id' => $datasetId,
-				'name' => '',
-				'already_deleted' => true,
-			];
-		}
+		$current = $lookup->getData()['entity'];
 
 		$name = (string)($current['table_name'] ?? '');
 
@@ -209,11 +192,10 @@ final class DeleteDatasetTool extends BaseBiTool
 		$this->spendDestructiveBudget($userId, 'dataset', $datasetId);
 
 		$response = $integrator->deleteDataset($datasetId);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $datasetId);
+		if (!$classified->isSuccess())
 		{
-			// Race: deleted between preview and confirm. Treat 404 as success so a
-			// retried confirm does not surface a false error.
-			if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			if ($classified->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return [
 					'deleted' => true,
@@ -223,10 +205,7 @@ final class DeleteDatasetTool extends BaseBiTool
 				];
 			}
 
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				['stage' => 'delete_dataset', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($classified));
 		}
 
 		return [

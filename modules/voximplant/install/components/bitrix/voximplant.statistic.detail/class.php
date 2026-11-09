@@ -1167,14 +1167,34 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 		}
 		else
 		{
+			$componentName = $this->getName();
 			$this->arResult['EXPORT_PARAMS'] = [
-				'componentName' => $this->getName(),
+				'componentName' => $componentName,
 			];
+			$signedParameters = $this->getExportSignedParameters($componentName);
+			if ($signedParameters !== null)
+			{
+				$this->arResult['EXPORT_PARAMS']['signedParameters'] = $signedParameters;
+			}
 
 			$this->includeComponentTemplate();
 		}
 
 		return $this->arResult;
+	}
+
+	/**
+	 * The pass is issued for the very name the client puts into COMPONENT_NAME. On a kernel without
+	 * the method the export goes on without a pass, as it does today.
+	 */
+	private function getExportSignedParameters(string $componentName): ?string
+	{
+		if (!method_exists(\Bitrix\Voximplant\Controller\Export::class, 'signExportParameters'))
+		{
+			return null;
+		}
+
+		return \Bitrix\Voximplant\Controller\Export::signExportParameters($componentName, []);
 	}
 
 	public function configureActions()

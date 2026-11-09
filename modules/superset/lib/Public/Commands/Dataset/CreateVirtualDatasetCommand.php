@@ -6,6 +6,7 @@ use Bitrix\Main\Result;
 use Bitrix\Superset\Internal\Services\VirtualDatasetService;
 use Bitrix\Superset\Public\Commands\Support\AbstractServerCommand;
 use Bitrix\Superset\Public\Dto\ServerReferenceDto;
+use Bitrix\Superset\Public\Dto\SupersetUserReferenceDto;
 
 final class CreateVirtualDatasetCommand extends AbstractServerCommand
 {
@@ -16,6 +17,7 @@ final class CreateVirtualDatasetCommand extends AbstractServerCommand
 	 * @param string[] $columns Column names to project.
 	 * @param int $ownerId Superset owner id.
 	 * @param string|null $sourceSchema Source table schema (defaults to bitrix24).
+	 * @param SupersetUserReferenceDto|null $user When set, Superset creates the dataset as this user (act-as).
 	 */
 	public function __construct(
 		public readonly ServerReferenceDto $server,
@@ -24,6 +26,7 @@ final class CreateVirtualDatasetCommand extends AbstractServerCommand
 		public readonly array $columns,
 		public readonly int $ownerId,
 		public readonly ?string $sourceSchema = null,
+		public readonly ?SupersetUserReferenceDto $user = null,
 	)
 	{
 	}
@@ -36,6 +39,7 @@ final class CreateVirtualDatasetCommand extends AbstractServerCommand
 			$this->columns,
 			$this->ownerId,
 			$this->sourceSchema,
+			$this->user?->getLogin(),
 		);
 	}
 }

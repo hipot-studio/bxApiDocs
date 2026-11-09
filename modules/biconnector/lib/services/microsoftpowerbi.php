@@ -71,7 +71,11 @@ class MicrosoftPowerBI extends Service
 		$data = $connector->getFormattedData($parameters, static::$dateFormats);
 
 		$databaseConnection = $manager->getDatabaseConnection();
-		$databaseConnection->lock('biconnector_data', -1);
+		$isDataLocked = $connector->requiresPortalDataLock();
+		if ($isDataLocked)
+		{
+			$databaseConnection->lock('biconnector_data', -1);
+		}
 
 		$getIdFunction = function ($x)
 		{
@@ -225,7 +229,10 @@ class MicrosoftPowerBI extends Service
 		$limitManager->fixLimit($count);
 		$manager->endQuery($logId, $count, $size, $isOverLimit, $connector->getLastScanStatistics());
 
-		$databaseConnection->unlock('biconnector_data');
+		if ($isDataLocked)
+		{
+			$databaseConnection->unlock('biconnector_data');
+		}
 
 		// Served row count, consumed by QueryResultCache on a cache hit for fixLimit().
 		$resultData = $result->getData();

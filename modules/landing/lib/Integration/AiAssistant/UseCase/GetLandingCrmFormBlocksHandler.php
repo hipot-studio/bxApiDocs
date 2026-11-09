@@ -14,10 +14,18 @@ class GetLandingCrmFormBlocksHandler extends AbstractCrmFormHandler
 		$formsById = $this->getFormsById(activeOnly: false);
 		$blocks = [];
 
-		foreach (Form::getLandingFormBlocks($dto->pageId) as $block)
+		foreach ($this->getClassicFormBlocks($dto->pageId) as $block)
 		{
 			$item = $this->buildBlockItem($dto->pageId, $block, $formsById);
 			if ($item !== null)
+			{
+				$blocks[] = $item + ['position' => count($blocks) + 1];
+			}
+		}
+
+		foreach ($this->findMarkupBlocks($dto->pageId) as $blockId => $manifest)
+		{
+			foreach ($this->buildMarkupBlockItems($dto->pageId, $blockId, $manifest, $formsById) as $item)
 			{
 				$blocks[] = $item + ['position' => count($blocks) + 1];
 			}
@@ -28,5 +36,10 @@ class GetLandingCrmFormBlocksHandler extends AbstractCrmFormHandler
 			'blocks' => $blocks,
 			'total' => count($blocks),
 		];
+	}
+
+	protected function getClassicFormBlocks(int $pageId): array
+	{
+		return Form::getLandingFormBlocks($pageId);
 	}
 }

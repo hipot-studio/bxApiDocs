@@ -2,7 +2,11 @@
 
 namespace Bitrix\BIConnector\Internal\Operation\Builder\Dashboard;
 
+use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
@@ -25,10 +29,18 @@ final class GetFilterValuesOperation
 	public const LIMIT_MAX = 50;
 
 	private readonly ReadyDashboardGuard $guard;
+	/** @var \Closure(int): ?User */
+	private readonly \Closure $findSupersetUser;
 
-	public function __construct(?ReadyDashboardGuard $guard = null)
+	/**
+	 * @param \Closure(int): ?User|null $findSupersetUser Superset account of a portal user; the repository by default.
+	 */
+	public function __construct(?ReadyDashboardGuard $guard = null, ?\Closure $findSupersetUser = null)
 	{
 		$this->guard = $guard ?? new ReadyDashboardGuard();
+		$this->findSupersetUser = $findSupersetUser
+			?? static fn(int $userId): ?User => (new SupersetUserRepository())->getById($userId)
+		;
 	}
 
 	/**
@@ -106,7 +118,20 @@ final class GetFilterValuesOperation
 			return Refusal::invalidArgument($urlParamsResult);
 		}
 
+		// While the table permission axis is on, Superset reads on behalf of the actor, and without a Superset
+		// account there is no read at all. Without the axis the read goes under the service account, as before.
+		$supersetUser = null;
+		if (Feature::isTablePermissionsEnabled())
+		{
+			$supersetUser = ($this->findSupersetUser)($userId);
+			if ($supersetUser === null)
+			{
+				return Refusal::error(FailureCode::AccessDenied, 'A Superset user is required to read BI data.');
+			}
+		}
+
 		$response = IntegratorFactory::getInstance()->getFilterValues(
+			$supersetUser,
 			$externalId,
 			$filterColumn,
 			$supersetFilters,
@@ -118,7 +143,7 @@ final class GetFilterValuesOperation
 		if ($response->hasErrors())
 		{
 			// The column was checked against the config above; a failure here speaks about Superset.
-			return Refusal::integratorFailure(
+			return Refusal::dashboardReadFailure(
 				$response,
 				['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
@@ -131,6 +156,10 @@ final class GetFilterValuesOperation
 				[new Error('Empty response from /filter_values')],
 				['stage' => 'get_filter_values.empty', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
+		}
+		if (ActAsFailure::isFilterAccessDenied($rawData))
+		{
+			return Refusal::error(FailureCode::AccessDenied, ActAsFailure::FILTER_ACCESS_DENIED_MESSAGE);
 		}
 
 		return (new Result())->setData([

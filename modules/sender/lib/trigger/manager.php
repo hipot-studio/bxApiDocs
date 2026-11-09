@@ -633,21 +633,19 @@ class Manager
 	public static function getClassList(array $endpointList = null)
 	{
 		$resultList = array();
-		$moduleIdFilter = null;
 		$moduleConnectorFilter = null;
 
 		if($endpointList)
 		{
-			$moduleIdFilter = array();
 			foreach($endpointList as $endpoint)
 			{
-				$moduleIdFilter[] = $endpoint['MODULE_ID'];
-				$moduleConnectorFilter[$endpoint['MODULE_ID']][] = $endpoint['CODE'];
+				$moduleConnectorFilter[(string)$endpoint['MODULE_ID']][] = $endpoint['CODE'];
 			}
 		}
 
+		// Not filtered by module: the event manager skips handlers added without a module, e.g. from init.php.
 		$data = array();
-		$event = new Event('sender', 'OnTriggerList', array($data), $moduleIdFilter);
+		$event = new Event('sender', 'OnTriggerList', array($data));
 		$event->send();
 
 		foreach ($event->getResults() as $eventResult)
@@ -674,7 +672,8 @@ class Manager
 
 					$connector = new $connectorClassName;
 					$connectorCode = $connector->getCode();
-					if($moduleConnectorFilter && !in_array($connectorCode, $moduleConnectorFilter[$eventResult->getModuleId()]))
+					$moduleConnectorCodes = $moduleConnectorFilter[(string)$eventResult->getModuleId()] ?? [];
+					if($moduleConnectorFilter && !in_array($connectorCode, $moduleConnectorCodes))
 					{
 						continue;
 					}

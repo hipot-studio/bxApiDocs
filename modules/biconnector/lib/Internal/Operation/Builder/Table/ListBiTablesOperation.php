@@ -8,14 +8,15 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Result;
 
 /**
  * A page of the physical tables of the BI database, the answer of list_bi_tables: `tables`, `database_id`,
  * `total`, `limit`, `offset` and `has_more`.
  *
- * The right to edit dashboards is checked globally, as list_bi_tables does it: the axis of the table rights
- * is not applied here, it belongs to S2/S3 of PRD-bi-dataset-permissions-2026-07-30.
+ * The right to edit dashboards is checked globally, as list_bi_tables does it. The table rights are applied
+ * by Superset: while the table permission axis is on it reads as the actor, see SupersetIdentity.
  */
 final class ListBiTablesOperation
 {
@@ -24,15 +25,17 @@ final class ListBiTablesOperation
 
 	/** @var \Closure(int): AccessController */
 	private readonly \Closure $accessControllerFactory;
+	private readonly SupersetIdentity $identity;
 
 	/**
 	 * @param (\Closure(int): AccessController)|null $accessControllerFactory
 	 */
-	public function __construct(?\Closure $accessControllerFactory = null)
+	public function __construct(?\Closure $accessControllerFactory = null, ?SupersetIdentity $identity = null)
 	{
 		$this->accessControllerFactory = $accessControllerFactory
 			?? static fn(int $userId): AccessController => new AccessController($userId)
 		;
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -56,7 +59,13 @@ final class ListBiTablesOperation
 		$limit = max(1, min(self::LIMIT_MAX, $limit));
 		$offset = max(0, $offset);
 
-		$response = IntegratorFactory::getInstance()->listTables($schema);
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
+		{
+			return $identityResult;
+		}
+
+		$response = IntegratorFactory::getInstance()->listTables($identityResult->getData()['user'], $schema);
 		if ($response->hasErrors())
 		{
 			return Refusal::unavailableBi(

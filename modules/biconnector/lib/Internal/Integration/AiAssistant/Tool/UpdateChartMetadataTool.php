@@ -9,8 +9,10 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\UpdateChartOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -45,34 +47,24 @@ final class UpdateChartMetadataTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'chartId' => [
-					'type' => 'integer',
-					'description' => 'Chart id to update (from list_charts). Positive integer.',
-					'minimum' => 1,
-				],
-				'name' => [
-					'type' => 'string',
-					'description' => 'New chart display name. Must be non-empty if provided. '
-						. 'Omit to keep current name.',
-					'minLength' => 1,
-				],
-				'description' => [
-					'type' => 'string',
-					'description' => 'New chart description. Pass an empty string to clear '
-						. 'the existing description. Omit to keep current.',
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved this metadata change. '
-						. 'Omit or set false to only preview. Do NOT self-confirm or assume approval from earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			'biconnector.builder.chart.update',
+			'mcp',
+			[
+				'chartId' => 'Chart id to update (from list_charts). Positive integer.',
+				'name' => 'New chart display name. Must be non-empty if provided. '
+					. 'Omit to keep current name.',
+				'description' => 'New chart description. Pass an empty string to clear '
+					. 'the existing description. Omit to keep current.',
 			],
-			'required' => ['chartId'],
-			'additionalProperties' => false,
+		);
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved this metadata change. '
+				. 'Omit or set false to only preview. Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -183,26 +175,23 @@ final class UpdateChartMetadataTool extends BaseBiTool
 		// Load the chart before branching so the object-level scope is enforced on
 		// both the preview and the confirmed call (the confirm branch does not
 		// reload the chart) and the preview can echo the current values.
-		$chartResponse = $integrator->getChartById($chartId);
-		if ($chartResponse->hasErrors())
+		$lookup = (new EntityLookup())->chart($chartId, self::findActAsUser($userId));
+		if (!$lookup->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$chartResponse->getErrors(),
-				['stage' => 'update_chart_metadata.load', 'user_id' => $userId, 'chart_id' => $chartId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$chartData = $chartResponse->getData();
-		if (!is_array($chartData))
+		$chartData = $lookup->getData()['entity'];
+		if (!is_array($chartData['dashboards'] ?? []))
 		{
-			$chartData = [];
+			throw self::unavailableBiException([], ['stage' => 'chart_lookup.dashboards', 'chart_id' => $chartId]);
 		}
 
 		// Object-level scope: only a user who can edit one of the chart's consumer
 		// dashboards may update it (matches the web UI).
 		$this->assertChartEditableByDashboards(
 			$userId,
-			is_array($chartData['dashboards'] ?? null) ? $chartData['dashboards'] : [],
+			$chartData['dashboards'] ?? [],
 		);
 
 		$confirm = ($args['confirm'] ?? false) === true;
@@ -236,16 +225,10 @@ final class UpdateChartMetadataTool extends BaseBiTool
 		}
 
 		$response = $integrator->updateChart($chartId, $fields);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $chartId);
+		if (!$classified->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				[
-					'stage' => 'update_chart_metadata',
-					'user_id' => $userId,
-					'chart_id' => $chartId,
-				],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($classified));
 		}
 
 		$data = $response->getData();

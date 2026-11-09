@@ -15,6 +15,12 @@ class UpdateCrmFormFieldsHandler extends AbstractCrmFormFieldsHandler
 {
 	public function handle(UpdateCrmFormFieldsDto $dto, ?int $initiatorUserId = null): array
 	{
+		$markupFormIds = $this->findMarkupFormIds($dto->pageId, $dto->blockId);
+		if ($markupFormIds !== null)
+		{
+			self::resolveMarkupFormId($markupFormIds, $dto->formId);
+		}
+
 		$options = $this->loadOptions((int)$dto->formId);
 		$currentFields = $this->getOptionsFields($options);
 		$currentHash = $this->buildFieldsHash($currentFields);
@@ -48,24 +54,10 @@ class UpdateCrmFormFieldsHandler extends AbstractCrmFormFieldsHandler
 		$savedOptions = $this->saveOptions($updatedOptions);
 		$response = $this->buildFieldsResponse((int)$dto->formId, $savedOptions, $this->buildSource($dto));
 
-		if ($dto->pageId !== null && $dto->blockId !== null)
+		// a reloaded markup block loses its frame: the change is seen after the page reload
+		if ($dto->pageId !== null && $dto->blockId !== null && $markupFormIds === null)
 		{
-			Manager::clearCacheForLanding($dto->pageId);
-
-			EventDispatcher::dispatch(
-				Event::blockChanged(
-					entityId: $dto->blockId,
-					action: EventAction::Update,
-					source: EventSource::AiTool,
-					initiatorUserId: $this->resolveInitiatorUserId($initiatorUserId),
-					scope: [
-						'landingId' => $dto->pageId,
-					],
-					meta: [
-						'reason' => 'crm_form_fields_update',
-					],
-				)
-			);
+			$this->notifyBlockChanged($dto, $initiatorUserId);
 		}
 
 		return [
@@ -74,6 +66,26 @@ class UpdateCrmFormFieldsHandler extends AbstractCrmFormFieldsHandler
 			'message' => 'CRM form fields have been updated.',
 			...$response,
 		];
+	}
+
+	protected function notifyBlockChanged(UpdateCrmFormFieldsDto $dto, ?int $initiatorUserId): void
+	{
+		Manager::clearCacheForLanding($dto->pageId);
+
+		EventDispatcher::dispatch(
+			Event::blockChanged(
+				entityId: $dto->blockId,
+				action: EventAction::Update,
+				source: EventSource::AiTool,
+				initiatorUserId: $this->resolveInitiatorUserId($initiatorUserId),
+				scope: [
+					'landingId' => $dto->pageId,
+				],
+				meta: [
+					'reason' => 'crm_form_fields_update',
+				],
+			),
+		);
 	}
 
 	private function resolveInitiatorUserId(?int $initiatorUserId): int

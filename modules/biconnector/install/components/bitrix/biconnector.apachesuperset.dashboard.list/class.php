@@ -50,6 +50,9 @@ use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
 class ApacheSupersetDashboardListComponent extends CBitrixComponent
 {
+	private const AI_AGENTS_PROMO_OPTION = 'ai_agents_promo';
+	private const AI_AGENTS_PROMO_CLOSED_KEY = 'closed';
+
 	/**
 	 * Terms of the license whose warning popup this user has already closed. Kept per term and not as a single
 	 * flag: a renewed term is a new occasion to warn.
@@ -100,6 +103,14 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->grid->processRequest();
 
 		$this->loadRows();
+
+		// Loading the rows may be the request that receives the update signal. The grid page is then reopened,
+		// and the section controller shows the update stub instead of the grid.
+		if (SupersetInitializer::isSupersetUpdating() && !$this->request->isAjaxRequest())
+		{
+			global $APPLICATION;
+			LocalRedirect($APPLICATION->GetCurPageParam());
+		}
 
 		if (SupersetInitializer::isSupersetExist())
 		{
@@ -343,7 +354,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		$this->arResult['IS_AVAILABLE_DASHBOARD_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
-		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS);
+		$this->arResult['IS_AVAILABLE_GROUP_CREATION'] = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS);
 
 		$splitButton = new Buttons\Split\CreateButton([
 			'dataset' => [
@@ -467,7 +478,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 	private function prepareSecondDbConnectWarning(): void
 	{
 		$this->arResult['SHOW_SECOND_DB_KEY_UPDATE'] = false;
-		$this->arResult['SHOW_SECOND_DB_CONNECTION'] = false;
 		$this->arResult['SECOND_DB_LINK_HELP'] = \Bitrix\Main\Application::getInstance()->getLicense()->isCis()
 			? "https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=48&LESSON_ID=2884#additional_connection"
 			: "https://training.bitrix24.com/support/training/course/index.php?COURSE_ID=178&LESSON_ID=25230#additional_connection"
@@ -479,17 +489,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		$manager = Manager::getInstance();
-		$isExistBiConnection = $manager->isExistBiConnection();
-		$isSupersetKeyUseBiConnection = $manager->isSupersetKeyUseBiConnection();
-
-		if (!$isExistBiConnection)
-		{
-			$this->arResult['SHOW_SECOND_DB_CONNECTION'] = true;
-
-			return;
-		}
-
-		if (!$isSupersetKeyUseBiConnection)
+		if ($manager->isExistBiConnection() && !$manager->isSupersetKeyUseBiConnection())
 		{
 			$this->arResult['SHOW_SECOND_DB_KEY_UPDATE'] = true;
 		}
@@ -603,10 +603,27 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function prepareAiAgentsPromo(): void
 	{
-		if (AiAgentsSection::isAvailable())
+		if (!AiAgentsSection::isAvailable() || $this->isAiAgentsPromoClosed())
 		{
-			$this->arResult['AI_AGENTS_PROMO'] = ['url' => AiAgentsSection::getUrl(AiAgentsEntrySource::SOURCE_PROMO)];
+			return;
 		}
+
+		$this->arResult['AI_AGENTS_PROMO'] = [
+			'url' => AiAgentsSection::getUrl(AiAgentsEntrySource::SOURCE_PROMO),
+			'closeOption' => [
+				'category' => 'biconnector',
+				'name' => self::AI_AGENTS_PROMO_OPTION,
+				'key' => self::AI_AGENTS_PROMO_CLOSED_KEY,
+			],
+		];
+	}
+
+	/** The user closed the plate with its cross; the section stays in the BI menu. */
+	private function isAiAgentsPromoClosed(): bool
+	{
+		$option = CUserOptions::GetOption('biconnector', self::AI_AGENTS_PROMO_OPTION, []);
+
+		return is_array($option) && ($option[self::AI_AGENTS_PROMO_CLOSED_KEY] ?? 'N') === 'Y';
 	}
 
 	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver

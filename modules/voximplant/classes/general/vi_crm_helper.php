@@ -1305,6 +1305,13 @@ class CVoxImplantCrmHelper
 		{
 			$activityFields['COMPLETED'] = 'Y';
 		}
+		if (
+			$callFields['INCOMING'] == CVoxImplantMain::CALL_INCOMING_REDIRECT
+			&& $callFields['CALL_FAILED_CODE'] === '304'
+		)
+		{
+			$activityFields['SETTINGS']['MISSED_CALL'] = true;
+		}
 
 		if($callFields['CALL_FAILED_CODE'] == '200')
 		{

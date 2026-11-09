@@ -62,11 +62,15 @@ class RpaAutomationTaskComponent extends Rpa\Components\Base
 		if ($task)
 		{
 			$task = Rpa\Driver::getInstance()->getTaskManager()->getTaskById($task['ID']);
+		}
+		if ($task && $this->canViewTask($task, $item, $userId))
+		{
 			$this->arResult['TASK'] = $task;
 			$this->arResult['IS_MINE'] = $this->isMyTask($task, $userId);
 		}
 		else
 		{
+			unset($this->arResult['TASK']);
 			$this->errorCollection->setError(
 				new Main\Error(Main\Localization\Loc::getMessage('RPA_AUTOMATION_TASK_NOT_FOUND'))
 			);
@@ -75,22 +79,47 @@ class RpaAutomationTaskComponent extends Rpa\Components\Base
 		$this->includeComponentTemplate();
 	}
 
+	protected function canViewTask(array $task, Rpa\Model\Item $item, int $userId): bool
+	{
+		if (in_array($userId, $task['USERS'] ?? [], false))
+		{
+			return true;
+		}
+
+		return Rpa\Driver::getInstance()->getUserPermissions()->canViewItem($item);
+	}
+
 	private function isMyTask($task, $meId)
 	{
 		return in_array($meId, $task['INCOMPLETE_USERS']);
+	}
+
+	protected function isItemDocumentId($documentId): bool
+	{
+		return (
+			is_array($documentId)
+			&& ($documentId[0] ?? null) === Rpa\Driver::MODULE_ID
+			&& ($documentId[1] ?? null) === Rpa\Integration\Bizproc\Document\Item::class
+			&& is_string($documentId[2] ?? null)
+		);
 	}
 
 	private function resolveType()
 	{
 		if ($this->arParams['typeId'] === 'id')
 		{
-			$this->arResult['TASK'] = Rpa\Driver::getInstance()->getTaskManager()->getTaskById($this->arParams['elementId']);
-			if ($this->arResult['TASK'])
+			$task = Rpa\Driver::getInstance()->getTaskManager()->getTaskById($this->arParams['elementId']);
+			$documentId = $task['PARAMETERS']['DOCUMENT_ID'] ?? null;
+			if ($task && $this->isItemDocumentId($documentId))
 			{
-				$documentId = $this->arResult['TASK']['PARAMETERS']['DOCUMENT_ID'];
-
+				$this->arResult['TASK'] = $task;
 				$this->arParams['typeId'] = \Bitrix\Rpa\Integration\Bizproc\Document\Item::getDocumentTypeId($documentId[2]);
 				$this->arParams['elementId'] = \Bitrix\Rpa\Integration\Bizproc\Document\Item::getDocumentItemId($documentId[2]);
+			}
+			else
+			{
+				// a task of another module is not shown
+				$this->arParams['elementId'] = 0;
 			}
 		}
 	}

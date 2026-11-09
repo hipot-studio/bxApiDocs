@@ -204,7 +204,20 @@ final class FillAndSend implements Contract\Operation
 			$members->add($signer);
 		}
 
-		$setupMembersResult = $this->memberService->setupB2eMembers($documentUid, $members, $representativeId);
+		$partyPlanResult = Container::instance()
+			->getCompanyInitiatedPartyPlanService()
+			->plan($document, $members)
+		;
+		if (!$partyPlanResult->isSuccess())
+		{
+			return $partyPlanResult;
+		}
+
+		$setupMembersResult = $this->memberService->setupB2eMembers(
+			$documentUid,
+			$partyPlanResult->members,
+			$representativeId,
+		);
 		if (!$setupMembersResult->isSuccess())
 		{
 			return $setupMembersResult;

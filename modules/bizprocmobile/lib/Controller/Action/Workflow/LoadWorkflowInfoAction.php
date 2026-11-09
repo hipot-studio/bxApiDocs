@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CanViewTimelineRequest;
 use Bitrix\Bizproc\Workflow\Task\TaskTable;
 use Bitrix\Bizproc\Api\Service\WorkflowAccessService;
 use Bitrix\Bizproc\WorkflowStateTable;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\BizprocMobile\UI\WorkflowUserDetailView;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
@@ -13,6 +14,8 @@ use Bitrix\Main\Localization\Loc;
 
 class LoadWorkflowInfoAction extends Action
 {
+	use AddPublicErrorsTrait;
+
 	public function run(?string $workflowId = null, ?int $taskId = null, ?int $userId = null)
 	{
 		if (!$workflowId)
@@ -21,9 +24,9 @@ class LoadWorkflowInfoAction extends Action
 
 			if (!$workflowId)
 			{
-				$this->addError(new Error(
-					Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_WORKFLOW_INFO') ?? ''
-				));
+				$this->addErrorsAsPublic([
+					new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_WORKFLOW_INFO')),
+				]);
 
 				return null;
 			}
@@ -43,9 +46,9 @@ class LoadWorkflowInfoAction extends Action
 		;
 		if (!$workflowState)
 		{
-			$this->addError(new Error(
-				Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_WORKFLOW_INFO') ?? ''
-			));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_WORKFLOW_INFO')),
+			]);
 
 			return null;
 		}
@@ -83,14 +86,14 @@ class LoadWorkflowInfoAction extends Action
 
 		if (!$canViewProcess->isSuccess())
 		{
-			$this->addErrors($canViewProcess->getErrors());
+			$this->addErrorsAsPublic($canViewProcess->getErrors());
 
 			return false;
 		}
 
 		if ($currentUserId !== $userId && !\CBPHelper::checkUserSubordination($currentUserId, $userId))
 		{
-			$this->addError($accessService::getViewAccessDeniedError());
+			$this->addErrorsAsPublic([$accessService::getViewAccessDeniedError()]);
 
 			return false;
 		}

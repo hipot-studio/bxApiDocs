@@ -54,13 +54,21 @@ class UpdateCrmFormFieldsTool extends AbstractCrmFormTool
 				if ($dto->pageId !== null && $dto->blockId !== null)
 				{
 					$this->assertPageEditPermission($dto->pageId);
-					$resolvedFormId = $this->resolveCrmFormIdFromBlockTarget($dto->pageId, $dto->blockId);
-					$this->assertReadableActiveFormExists($resolvedFormId);
-					if ((int)$dto->formId !== $resolvedFormId)
+					$markupFormIds = $this->findMarkupBlockFormIds($dto->pageId, $dto->blockId);
+					if ($markupFormIds !== null)
 					{
-						throw new InvalidArgumentException(
-							'The provided formId does not match the CRM form bound to the selected block.',
-						);
+						$this->resolveMarkupBlockFormId($markupFormIds, (int)$dto->formId);
+					}
+					else
+					{
+						$resolvedFormId = $this->resolveCrmFormIdFromBlockTarget($dto->pageId, $dto->blockId);
+						$this->assertReadableActiveFormExists($resolvedFormId);
+						if ((int)$dto->formId !== $resolvedFormId)
+						{
+							throw new InvalidArgumentException(
+								'The provided formId does not match the CRM form bound to the selected block.',
+							);
+						}
 					}
 				}
 

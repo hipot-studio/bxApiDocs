@@ -73,6 +73,11 @@ class QueryData
 
 	private static function prepare(Entity\Query $query, $dataTypeId = null)
 	{
+		$query->registerRuntimeField(Helper::createExpressionImField(
+			mb_strtoupper($query->getEntity()->getName()),
+			Helper::ALLOWED_IM_FIELD
+		));
+
 		$fields = self::getSelectFields();
 		foreach ($fields as $alias => $field)
 		{
@@ -151,7 +156,7 @@ class QueryData
 		$map = array(
 			Recipient\Type::EMAIL => array('EMAIL'), //array('EMAIL_HOME', 'EMAIL_WORK'),
 			Recipient\Type::PHONE => array('PHONE'), //array('PHONE_WORK', 'PHONE_MOBILE'),
-			Recipient\Type::IM => array('IM' => 'IMOL'),
+			Recipient\Type::IM => array('IM' => Helper::ALLOWED_IM_FIELD),
 			Recipient\Type::CRM_CONTACT_ID => array('CRM_CONTACT_ID'),
 			Recipient\Type::CRM_COMPANY_ID => array('CRM_COMPANY_ID'),
 		);

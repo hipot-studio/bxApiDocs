@@ -46,7 +46,14 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 	const NO = 'N';
 	const DEAL_CATEGORY_ID = "DEAL_CATEGORY_ID";
 
+	/** Filter key that sends the selection through the product branch of the query collection. */
+	private const PRODUCT_FILTER_KEY = '=PRODUCT_ID';
+
 	private $crmEntityFilter = null;
+
+	private ?array $entityLimitInfo = null;
+
+	private ?bool $dealDrivenSelection = null;
 
 	/**
 	 * Get name.
@@ -109,7 +116,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		{
 			if($excludeType !== \CCrmOwnerType::ContactName)
 			{
-				$this->prepareQueryForType($this->getContactQuery(), $offset, $limit,
+				$this->prepareQueryForType($this->getContactQuery($offset, $limit), $offset, $limit,
 					$queries);
 			}
 		}
@@ -117,7 +124,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		{
 			if($excludeType !== \CCrmOwnerType::CompanyName)
 			{
-				$this->prepareQueryForType($this->getCompanyQuery(), $offset, $limit, $queries);
+				$this->prepareQueryForType($this->getCompanyQuery($offset, $limit), $offset, $limit, $queries);
 			}
 		}
 
@@ -126,44 +133,68 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 
 	public function getEntityLimitInfo(): array
 	{
-		$lastContact = \CCrmContact::GetListEx(
-			['ID' => 'DESC'],
-			[
-				'CHECK_PERMISSIONS' => 'N',
-				'@CATEGORY_ID' => 0,
-			],
-			false,
-			['nTopCount' => '1'],
-			['ID'],
-			['limit' => 1]
-		)->Fetch();
+		if ($this->entityLimitInfo !== null)
+		{
+			return $this->entityLimitInfo;
+		}
 
-		$lastCompany = \CCrmCompany::GetListEx(
-			['ID' => 'DESC'],
-			[
-				'CHECK_PERMISSIONS' => 'N',
-				'@CATEGORY_ID' => 0,
-			],
-			false,
-			['nTopCount' => '1'],
-			['ID']
-		)->Fetch();
+		$lastContactId = $this->getLastEntityId(CrmContactTable::class);
+		$lastCompanyId = $this->getLastEntityId(CrmCompanyTable::class);
 
-		$lastContactId = $lastContact['ID'] ?? 0;
-		$lastCompanyId = $lastCompany['ID'] ?? 0;
-
-		return [
+		$this->entityLimitInfo = [
 			'lastContactId' => $lastContactId,
 			'lastCompanyId' => $lastCompanyId,
 			'lastId' => max($lastCompanyId, $lastContactId),
 		];
+
+		return $this->entityLimitInfo;
+	}
+
+	/**
+	 * Upper bound of the identifier range of an entity of the default category, taken off the
+	 * index: the range of the build is not narrowed by access rights.
+	 *
+	 * @param class-string<\Bitrix\Main\ORM\Data\DataManager> $entityClass
+	 */
+	private function getLastEntityId(string $entityClass): int|string
+	{
+		$query = $entityClass::query()
+			->setSelect(['ID'])
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+		;
+
+		// the same guard the queries of the windows carry: both narrow the range the same way
+		if ($query->getEntity()->hasField('CATEGORY_ID'))
+		{
+			$query->where('CATEGORY_ID', 0);
+		}
+
+		$row = $query->fetch();
+
+		return $row['ID'] ?? 0;
 	}
 
 	public function getLimitedData(int $offset, int $limit): ?Result
 	{
 		$entityInfo = $this->getEntityLimitInfo();
-		$excludedClass = $offset > $entityInfo['lastContactId'] ? \CCrmOwnerType::ContactName : null;
-		$excludedClass = $offset > $entityInfo['lastCompanyId'] ? \CCrmOwnerType::CompanyName : $excludedClass;
+		$isContactExhausted = $offset > $entityInfo['lastContactId'];
+		$isCompanyExhausted = $offset > $entityInfo['lastCompanyId'];
+
+		if ($isContactExhausted && $isCompanyExhausted)
+		{
+			return null;
+		}
+
+		$excludedClass = null;
+		if ($isContactExhausted)
+		{
+			$excludedClass = \CCrmOwnerType::ContactName;
+		}
+		elseif ($isCompanyExhausted)
+		{
+			$excludedClass = \CCrmOwnerType::CompanyName;
+		}
 
 		$query = QueryData::getUnionizedQuery($this->getLimitedQueries($offset, $limit, $excludedClass));
 
@@ -177,7 +208,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		$queries = array_merge($queries, $queryCollection);
 	}
 
-	protected function getContactQuery()
+	protected function getContactQuery(?int $from = null, ?int $to = null)
 	{
 		$query = CrmContactTable::query();
 		$query->setFilter($this->getCrmEntityFilter(\CCrmOwnerType::ContactName));
@@ -185,7 +216,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		{
 			$query->where('CATEGORY_ID', 0);
 		}
-		$this->addCrmEntityReferences($query);
+		$this->addCrmEntityReferences($query, $from, $to);
 		$query->registerRuntimeField(new Entity\ExpressionField('CRM_ENTITY_TYPE_ID', \CCrmOwnerType::Contact));
 		$query->registerRuntimeField(new Entity\ExpressionField('CRM_ENTITY_TYPE', '\''.\CCrmOwnerType::ContactName.'\''));
 		$query->registerRuntimeField(new Entity\ExpressionField('CRM_COMPANY_ID', 0));
@@ -209,7 +240,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		return $query;
 	}
 
-	protected function getCompanyQuery()
+	protected function getCompanyQuery(?int $from = null, ?int $to = null)
 	{
 		$query = CrmCompanyTable::query();
 		$query->setFilter($this->getCrmEntityFilter(\CCrmOwnerType::CompanyName));
@@ -217,7 +248,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		{
 			$query->where('CATEGORY_ID', 0);
 		}
-		$this->addCrmEntityReferences($query);
+		$this->addCrmEntityReferences($query, $from, $to);
 		$query->registerRuntimeField(new Entity\ExpressionField('CRM_ENTITY_TYPE_ID', \CCrmOwnerType::Company));
 		$query->registerRuntimeField(new Entity\ExpressionField('CRM_ENTITY_TYPE', '\''.\CCrmOwnerType::CompanyName.'\''));
 		$query->registerRuntimeField(new Entity\ExpressionField('CONTACT_ID', 0));
@@ -241,7 +272,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		return $query;
 	}
 
-	protected function addCrmEntityReferences(Entity\Query $query)
+	protected function addCrmEntityReferences(Entity\Query $query, ?int $from = null, ?int $to = null)
 	{
 		$docTypes = array();
 		$docType = $this->getFieldValue('DOC_TYPE');
@@ -271,56 +302,47 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 				continue;
 			}
 
-			if ($query->getEntity()->getName() === $this->getContactEntityName())
-			{
-				$ref = array('=this.ID' => 'ref.CONTACT_ID');
-			}
-			elseif ($query->getEntity()->getName() === $this->getCompanyEntityName())
-			{
-				$ref = array('=this.ID' => 'ref.COMPANY_ID');
-			}
-			else
+			$clientColumn = $this->getReferencedClientColumn($query);
+			if ($clientColumn === null)
 			{
 				continue;
 			}
 
 			$runtimeFieldName = "SGT_$docType";
-			$filter = $this->getCrmReferencedEntityFilter($docType);
-			$joinType = $filter[$docType]['JOIN_TYPE']??'INNER';
-			unset($filter[$docType]['JOIN_TYPE']);
+			$isSemiJoin = $from !== null && $to !== null && $this->isDealDrivenSelection();
+			$conditions = $this->getReferencedEntityConditions(
+				$docType,
+				$isSemiJoin ? '' : "$runtimeFieldName."
+			);
+
+			if ($isSemiJoin)
+			{
+				$query->whereIn('ID', $this->getReferencedEntitySubQuery(
+					$refClassName,
+					$docType,
+					$clientColumn,
+					$conditions,
+					$from,
+					$to
+				));
+
+				continue;
+			}
 
 			$query->registerRuntimeField(null, new Entity\ReferenceField(
 				$runtimeFieldName,
 				$refClassName,
-				$ref,
-				array('join_type' => $joinType)
+				array('=this.ID' => "ref.$clientColumn"),
+				array('join_type' => $conditions['joinType'])
 			));
 
-			foreach ($filter as $key => $value)
+			foreach ($conditions['filter'] as $key => $value)
 			{
-				$pattern = "/^[\W]{0,2}$docType\./";
-				if (preg_match($pattern, $key))
-				{
-					$key = str_replace("$docType.", "$runtimeFieldName.", $key);
-				}
-
 				$query->addFilter($key, $value);
 			}
 
-			$runtime = Helper::getRuntimeByEntity($docType);
-			foreach ($runtime as $item)
+			foreach ($conditions['runtime'] as $item)
 			{
-				$item = new Entity\ExpressionField(
-					$item['name'],
-					str_replace("$docType.", "$runtimeFieldName.", $item['expression']),
-					array_map(
-						function ($from) use ($docType, $runtimeFieldName)
-						{
-							return str_replace("$docType.", "$runtimeFieldName.", $from);
-						},
-						$item['buildFrom']
-					)
-				);
 				$query->registerRuntimeField($item);
 			}
 		}
@@ -374,6 +396,190 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 			unset($filterFields['DEAL']);
 			$query->setFilter($filterFields);
 		}
+	}
+
+	/**
+	 * Tells whether clients may be selected by a semi-join on deals instead of joining them.
+	 *
+	 * The branch is only correct while every deal condition can be expressed on the deal
+	 * table itself and every matching client owns at least one matching deal.
+	 */
+	private function isDealDrivenSelection(): bool
+	{
+		if ($this->dealDrivenSelection === null)
+		{
+			$this->dealDrivenSelection = $this->calculateDealDrivenSelection();
+		}
+
+		return $this->dealDrivenSelection;
+	}
+
+	private function calculateDealDrivenSelection(): bool
+	{
+		$docType = $this->getFieldValue('DOC_TYPE');
+		if ($docType && $docType !== \CCrmOwnerType::DealName)
+		{
+			return false;
+		}
+
+		$dealFilter = $this->getCrmReferencedEntityFilter(\CCrmOwnerType::DealName);
+		if (count($dealFilter) === 0)
+		{
+			return false;
+		}
+
+		// An empty deal category value asks for clients without deals, which a semi-join cannot express.
+		$joinType = $dealFilter[\CCrmOwnerType::DealName]['JOIN_TYPE'] ?? 'INNER';
+		if ($joinType !== 'INNER')
+		{
+			return false;
+		}
+
+		return !$this->hasProductFilter();
+	}
+
+	/**
+	 * The product branch is built for clients of both types, so a product filter of either of
+	 * them keeps the reference field the branch needs and rules the semi-join out for both.
+	 */
+	private function hasProductFilter(): bool
+	{
+		foreach ([\CCrmOwnerType::ContactName, \CCrmOwnerType::CompanyName] as $entityTypeName)
+		{
+			if (array_key_exists(self::PRODUCT_FILTER_KEY, $this->getCrmEntityFilter($entityTypeName)))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function getReferencedClientColumn(Entity\Query $query): ?string
+	{
+		$entityName = $query->getEntity()->getName();
+		if ($entityName === $this->getContactEntityName())
+		{
+			return 'CONTACT_ID';
+		}
+
+		if ($entityName === $this->getCompanyEntityName())
+		{
+			return 'COMPANY_ID';
+		}
+
+		return null;
+	}
+
+	/**
+	 * Conditions of a referenced document ready to be applied either to the reference field
+	 * alias or, with an empty prefix, to the referenced table taken as the query root.
+	 *
+	 * @param string $docType Referenced document type name.
+	 * @param string $fieldPrefix Prefix to put where the reference field name goes.
+	 * @return array{joinType: string, filter: array, runtime: Entity\ExpressionField[]}
+	 */
+	private function getReferencedEntityConditions(string $docType, string $fieldPrefix): array
+	{
+		$referenceName = "SGT_$docType";
+		$filter = $this->getCrmReferencedEntityFilter($docType);
+		$joinType = $filter[$docType]['JOIN_TYPE'] ?? 'INNER';
+		unset($filter[$docType]['JOIN_TYPE']);
+
+		$conditions = [];
+		foreach ($filter as $key => $value)
+		{
+			if ($key === $docType)
+			{
+				$conditions[$key] = array_map(
+					function ($condition) use ($referenceName, $fieldPrefix)
+					{
+						$condition[0] = str_replace("$referenceName.", $fieldPrefix, $condition[0]);
+
+						return $condition;
+					},
+					$value
+				);
+
+				continue;
+			}
+
+			$pattern = "/^[\W]{0,2}$docType\./";
+			if (preg_match($pattern, $key))
+			{
+				$key = str_replace("$docType.", $fieldPrefix, $key);
+			}
+
+			$conditions[$key] = $value;
+		}
+
+		$runtime = [];
+		foreach (Helper::getRuntimeByEntity($docType) as $item)
+		{
+			$runtime[] = new Entity\ExpressionField(
+				$item['name'],
+				str_replace("$docType.", $fieldPrefix, $item['expression']),
+				array_map(
+					function ($from) use ($docType, $fieldPrefix)
+					{
+						return str_replace("$docType.", $fieldPrefix, $from);
+					},
+					$item['buildFrom']
+				)
+			);
+		}
+
+		return [
+			'joinType' => $joinType,
+			'filter' => $conditions,
+			'runtime' => $runtime,
+		];
+	}
+
+	/**
+	 * Independent query over the referenced document, selecting clients of matching documents
+	 * within the same window as the root query.
+	 */
+	private function getReferencedEntitySubQuery(
+		string $refClassName,
+		string $docType,
+		string $clientColumn,
+		array $conditions,
+		int $from,
+		int $to
+	): Query
+	{
+		$subQuery = $refClassName::query();
+		$subQuery->setSelect([$clientColumn]);
+
+		$filter = $conditions['filter'];
+		$group = $filter[$docType] ?? [];
+		unset($filter[$docType]);
+
+		foreach ($filter as $key => $value)
+		{
+			$subQuery->addFilter($key, $value);
+		}
+
+		foreach ($conditions['runtime'] as $item)
+		{
+			$subQuery->registerRuntimeField($item);
+		}
+
+		// Same logic the join branch gives the group: addCrmEntityReferences() re-applies the
+		// deal conditions it put into the filter as an OR group of its own.
+		if ($group)
+		{
+			$subQuery->where(\Bitrix\Main\Entity\Query::filter()
+				->logic('or')
+				->where($group)
+			);
+		}
+
+		$subQuery->where($clientColumn, '>', 0);
+		$subQuery->whereBetween($clientColumn, $from, $to);
+
+		return $subQuery;
 	}
 
 	/**
@@ -580,7 +786,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		unset($filterFields['PRODUCT_SOURCE']);
 		$query->setFilter($filterFields);
 
-		$productFilterKey = '=PRODUCT_ID';
+		$productFilterKey = self::PRODUCT_FILTER_KEY;
 		if (array_key_exists($productFilterKey, $filterFields))
 		{
 			$productIds = $filterFields[$productFilterKey];
@@ -625,7 +831,6 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 			return [$query];
 		}
 
-		$query->whereIn('SGT_DEAL.PRODUCT_ROW.PRODUCT_ID', $productIds);
 		$semantics = [];
 
 		if (is_array($productSource))
@@ -644,22 +849,23 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 			}
 		}
 
-		switch (count($semantics))
+		// A deal filter of the segment has already joined SGT_DEAL: the query keeps the chain of
+		// the first registration, so a second one would silently drop its join conditions.
+		if (!$query->getEntity()->hasField('SGT_DEAL'))
 		{
-			case 1:
-				$dealRef['ref.STAGE_SEMANTIC_ID'] = new SqlExpression('?', $semantics[0]);
-				break;
-			case 2:
-				$dealRef['@ref.STAGE_SEMANTIC_ID'] = new SqlExpression('?, ?', $semantics[0], $semantics[1]);
-				break;
+			$query->registerRuntimeField(new Entity\ReferenceField(
+				'SGT_DEAL',
+				'\Bitrix\Crm\DealTable',
+				$dealRef,
+				array('join_type' => 'LEFT')
+			));
 		}
 
-		$query->registerRuntimeField(new Entity\ReferenceField(
-			'SGT_DEAL',
-			'\Bitrix\Crm\DealTable',
-			$dealRef,
-			array('join_type' => 'LEFT')
-		));
+		$query->whereIn('SGT_DEAL.PRODUCT_ROW.PRODUCT_ID', $productIds);
+		if (count($semantics) === 1 || count($semantics) === 2)
+		{
+			$query->whereIn('SGT_DEAL.STAGE_SEMANTIC_ID', $semantics);
+		}
 
 		$query->addSelect("SGT_DEAL.ID", "SGT_DEAL_ID");
 		$extraQuery->setFilter($query->getFilter()); // apply actual user filter

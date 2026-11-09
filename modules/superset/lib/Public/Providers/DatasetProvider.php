@@ -4,13 +4,23 @@ namespace Bitrix\Superset\Public\Providers;
 
 use Bitrix\Main\Result;
 use Bitrix\Superset\Internal\Services\DatasetService;
+use Bitrix\Superset\Public\Dto\SupersetUserReferenceDto;
 use Bitrix\Superset\Public\Support\AbstractPublicEntryPoint;
 
 final class DatasetProvider extends AbstractPublicEntryPoint
 {
-	public function list(array $ids = [], array $neqIds = [], ?int $page = null, ?int $pageSize = null): Result
+	/**
+	 * @param SupersetUserReferenceDto|null $user When set, Superset lists datasets as this user (act-as).
+	 */
+	public function list(
+		array $ids = [],
+		array $neqIds = [],
+		?int $page = null,
+		?int $pageSize = null,
+		?SupersetUserReferenceDto $user = null,
+	): Result
 	{
-		return $this->getService()->list($ids, $neqIds, $page, $pageSize);
+		return $this->getService()->list($ids, $neqIds, $page, $pageSize, $user?->getLogin());
 	}
 
 	public function listPhysical(): Result
@@ -23,9 +33,12 @@ final class DatasetProvider extends AbstractPublicEntryPoint
 		return $this->getService()->listByTableName($tableName);
 	}
 
-	public function getById(int $id): Result
+	/**
+	 * @param SupersetUserReferenceDto|null $user When set, Superset reads the dataset as this user (act-as).
+	 */
+	public function getById(int $id, ?SupersetUserReferenceDto $user = null): Result
 	{
-		return $this->getService()->get($id);
+		return $this->getService()->get($id, $user?->getLogin());
 	}
 
 	public function getByName(string $name): Result

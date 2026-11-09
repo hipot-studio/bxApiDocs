@@ -87,7 +87,11 @@ class DashboardRowAssembler extends RowAssembler
 	{
 		foreach ($rowsList as &$row)
 		{
-			$row['attrs'] = ['data-group-id' => $row['data']['ENTITY_TYPE'] ?? null];
+			// Raw values: main.ui.grid escapes row attributes itself.
+			$row['attrs'] = [
+				'data-group-id' => $row['data']['ENTITY_TYPE'] ?? null,
+				'data-bic-title' => (string)($row['data']['TITLE'] ?? ''),
+			];
 		}
 
 		return parent::prepareRows($rowsList);

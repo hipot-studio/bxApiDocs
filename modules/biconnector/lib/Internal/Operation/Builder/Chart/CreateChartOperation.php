@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Result;
 
 /**
@@ -17,10 +18,12 @@ use Bitrix\Main\Result;
 final class CreateChartOperation
 {
 	private readonly ChartWriteGuard $guard;
+	private readonly SupersetIdentity $identity;
 
-	public function __construct(?ChartWriteGuard $guard = null)
+	public function __construct(?ChartWriteGuard $guard = null, ?SupersetIdentity $identity = null)
 	{
 		$this->guard = $guard ?? new ChartWriteGuard();
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -61,6 +64,18 @@ final class CreateChartOperation
 		catch (ChartConfigRefusedException $exception)
 		{
 			return Refusal::error(FailureCode::InvalidArgument, $exception->getMessage());
+		}
+
+		$identityResult = $this->identity->forRead($actor->userId);
+		if (!$identityResult->isSuccess())
+		{
+			return $identityResult;
+		}
+
+		$dataset = (new ChartDatasetGuard())->validate($config, $identityResult->getData()['user'], true);
+		if (!$dataset->isSuccess())
+		{
+			return $dataset;
 		}
 
 		$response = IntegratorFactory::getInstance()->createChart($payload);

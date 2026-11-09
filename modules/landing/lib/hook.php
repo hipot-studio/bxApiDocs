@@ -982,7 +982,11 @@ class Hook
 		self::deleteData($id, self::ENTITY_TYPE_LANDING);
 	}
 
-	private static function clearCache(): void
+	/**
+	 * Clears hooks data cache.
+	 * @return void
+	 */
+	public static function clearCache(): void
 	{
 		(new CPHPCache())->CleanDir(self::CACHE_DIR);
 	}

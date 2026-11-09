@@ -40,6 +40,7 @@ class UserPermissions
 	protected $permissions;
 	protected $accessCodes;
 	protected $availableNextStages = [];
+	protected $incompleteTaskItemIds = [];
 
 	public function __construct(int $userId)
 	{
@@ -101,7 +102,7 @@ class UserPermissions
 			return true;
 		}
 
-		return ($this->canModifyItemsInStage($type, $stageId) || $this->canPerform(self::ENTITY_STAGE, $stageId, self::ACTION_MOVE));
+		return ($this->canModifyType($type->getId()) || $this->hasExplicitStageRow($stageId));
 	}
 
 	public function canModifyItemsInStage(Type $type, int $stageId): bool
@@ -114,16 +115,36 @@ class UserPermissions
 		{
 			return $this->canAddItemsToType($type->getId());
 		}
-		if($this->isSimplePermissionsForTheFirstStage())
-		{
-			$firstStage = $type->getFirstStage();
-			if($firstStage && $firstStage->getId() === $stageId)
-			{
-				return $this->canAddItemsToType($type->getId());
-			}
-		}
 
 		return $this->canPerform(self::ENTITY_STAGE, $stageId, self::ACTION_MODIFY);
+	}
+
+	public function canModifyItem(Item $item): bool
+	{
+		if ($this->isAccessDeniedToEverything())
+		{
+			return false;
+		}
+
+		$type = $item->getType();
+		// an unsaved item has no saved stage, so only the right to create items of the type applies
+		if ($item->getId() === null)
+		{
+			return $this->canAddItemsToType($type->getId());
+		}
+
+		// the saved stage is checked: a stage change in the same request does not change the subject of the check
+		$actualStageId = $item->remindActualStageId();
+		if ($this->canModifyItemsInStage($type, $actualStageId))
+		{
+			return true;
+		}
+
+		return (
+			$this->userId > 0
+			&& (int)$item->remindActualCreatedBy() === $this->userId
+			&& $this->canAddItemsToType($type->getId())
+		);
 	}
 
 	public function canAddItemsToType(int $typeId): bool
@@ -133,28 +154,54 @@ class UserPermissions
 
 	public function canViewItem(Item $item): bool
 	{
+		return $this->canViewItemWithTaskParticipants($item, null);
+	}
+
+	/**
+	 * The same rule as canViewItem() and getFilterForViewableItems().
+	 *
+	 * @param Item $item
+	 * @param int[]|null $incompleteParticipantIds users with not answered tasks of the item, if already known.
+	 * If null, the items with not answered tasks of this user are requested.
+	 * @return bool
+	 */
+	public function canViewItemWithTaskParticipants(Item $item, ?array $incompleteParticipantIds): bool
+	{
 		if ($this->isAccessDeniedToEverything())
 		{
 			return false;
 		}
-		if($item->getCreatedBy() === $this->userId)
+		if (static::canViewOnAnyStage())
 		{
 			return true;
 		}
-		if(
-			$item->getPreviousStageId() > 0 &&
-			($this->canViewItemsInStage($item->getType(), $item->getStageId()) || $this->canViewItemsInStage($item->getType(), $item->getPreviousStageId()))
+		if ($this->hasAdminAccess())
+		{
+			return true;
+		}
+		// the saved state is checked: changes of the same request do not change the subject of the check
+		if (
+			(int)$item->remindActualCreatedBy() === $this->userId
+			|| (int)$item->remindActualMovedBy() === $this->userId
+		)
+		{
+			return true;
+		}
+		$type = $item->getType();
+		if (
+			$this->canModifyType($type->getId())
+			|| $this->hasExplicitStageRow((int)$item->remindActualStageId())
 		)
 		{
 			return true;
 		}
 
-		if($this->canViewItemsInStage($item->getType(), $item->getStageId()))
+		if ($incompleteParticipantIds !== null)
 		{
-			return true;
+			return in_array($this->userId, $incompleteParticipantIds, false);
 		}
 
-		return false;
+		return in_array((int)$item->getId(), $this->getIncompleteTaskItemIds($type), true);
 	}
 
 	public function canMoveFromStage(Type $type, int $stageId): bool
@@ -171,28 +218,21 @@ class UserPermissions
 		return $this->canPerform(self::ENTITY_STAGE, $stageId, self::ACTION_MOVE);
 	}
 
+	/**
+	 * Returns true if the user can start moving the item from the stage (by default - from its saved stage).
+	 *
+	 * @param Item $item
+	 * @param int|null $fromStageId
+	 * @return bool
+	 */
+	public function canMoveItemFromStage(Item $item, ?int $fromStageId = null): bool
+	{
+		return $this->canStartMovingItem($item, $fromStageId ?? (int)$item->remindActualStageId(), true);
+	}
+
 	public function canMoveItem(Item $item, int $fromStageId, int $toStageId): bool
 	{
-		$result = false;
-
-		if ($this->isAccessDeniedToEverything())
-		{
-			return false;
-		}
-		if($this->canAddItemsToType($item->getType()->getId()))
-		{
-			$result = true;
-		}
-		// moving forward
-		if(!$result && $this->isSimplePermissionsForTheFirstStage())
-		{
-			$firstStage = $item->getType()->getFirstStage();
-			$result = ($firstStage && $firstStage->getId() === $fromStageId && $item->getCreatedBy() === $this->userId);
-		}
-		if(!$result && $this->canPerform(self::ENTITY_STAGE, $fromStageId, self::ACTION_MOVE))
-		{
-			$result = true;
-		}
+		$result = $this->canStartMovingItem($item, $fromStageId, false);
 
 		if($result && static::canMoveAnywhere())
 		{
@@ -204,12 +244,51 @@ class UserPermissions
 			$result = $this->isMovingFromStageToStageAvailable($item->getType(), $fromStageId, $toStageId);
 		}
 		// move back
-		if(!$result && $this->isMoverAlwaysCanMoveBack() && $item->getMovedBy() === $this->userId)
+		if(
+			!$result
+			&& !$this->isAccessDeniedToEverything()
+			&& $this->isMoverAlwaysCanMoveBack()
+			&& $item->getMovedBy() === $this->userId
+		)
 		{
 			$result = $this->isMovingBackAvailable($item->getType(), $fromStageId, $toStageId);
 		}
 
 		return $result;
+	}
+
+	protected function canStartMovingItem(Item $item, int $fromStageId, bool $isMoverAllowed): bool
+	{
+		if ($this->isAccessDeniedToEverything())
+		{
+			return false;
+		}
+		if ($this->canPerform(self::ENTITY_STAGE, $fromStageId, self::ACTION_MOVE))
+		{
+			return true;
+		}
+
+		$type = $item->getType();
+		// the launch right moves only own items
+		$isAuthor = ((int)$item->remindActualCreatedBy() === $this->userId);
+		if ($isAuthor && $this->canAddItemsToType($type->getId()))
+		{
+			return true;
+		}
+		if ($isAuthor && $this->isSimplePermissionsForTheFirstStage())
+		{
+			$firstStage = $type->getFirstStage();
+			if ($firstStage && $firstStage->getId() === $fromStageId)
+			{
+				return true;
+			}
+		}
+
+		return (
+			$isMoverAllowed
+			&& $this->isMoverAlwaysCanMoveBack()
+			&& (int)$item->remindActualMovedBy() === $this->userId
+		);
 	}
 
 	public function canDeleteItem(Item $item): bool
@@ -234,14 +313,16 @@ class UserPermissions
 			return false;
 		}
 
-		return (
-			$this->canModifyItemsInStage($item->getType(), $item->getStageId())
-		);
+		return $this->canModifyItem($item);
 	}
 
 	public function canViewComment(?Item $item = null, ?EO_Timeline $timelineRecord = null): bool
 	{
 		if ($this->isAccessDeniedToEverything())
+		{
+			return false;
+		}
+		if ($item && !$this->canViewItem($item))
 		{
 			return false;
 		}
@@ -252,7 +333,7 @@ class UserPermissions
 
 		if ($item)
 		{
-			return $this->canModifyItemsInStage($item->getType(), $item->remindActualStageId());
+			return $this->canModifyItem($item);
 		}
 
 		return $this->hasAdminAccess();
@@ -260,7 +341,7 @@ class UserPermissions
 
 	public function canAddComment(Item $item): bool
 	{
-		return $this->canModifyItemsInStage($item->getType(), $item->remindActualStageId());
+		return $this->canViewType($item->getType()->getId()) && $this->canViewItem($item);
 	}
 
 	public function canUpdateComment(Timeline $timeline): bool
@@ -364,19 +445,56 @@ class UserPermissions
 		return isset($this->availableNextStages[$typeId][$stageTo->getId()]);
 	}
 
+	/**
+	 * Returns the ORM filter of items that canViewItem() allows to see.
+	 *
+	 * @param Type $type
+	 * @return array
+	 */
 	public function getFilterForViewableItems(Type $type): array
 	{
-		return [
+		if ($this->isAccessDeniedToEverything())
+		{
+			return [
+				[
+					'=ID' => 0,
+				],
+			];
+		}
+		if ($this->hasAdminAccess() || $this->canModifyType($type->getId()))
+		{
+			return [];
+		}
+
+		$filter = [
+			'LOGIC' => 'OR',
 			[
-				'LOGIC' => 'OR',
-				[
-					'=CREATED_BY' => $this->userId,
-				],
-				[
-					'@STAGE_ID' => $this->getViewableStageIds($type),
-				],
-			]
+				'=CREATED_BY' => $this->userId,
+			],
+			[
+				'=MOVED_BY' => $this->userId,
+			],
 		];
+		// empty IN is not supported by every query of items
+		$stageIds = $this->getViewableStageIds($type);
+		if (!empty($stageIds))
+		{
+			$filter[] = [
+				'@STAGE_ID' => $stageIds,
+			];
+		}
+		if (!static::canViewOnAnyStage())
+		{
+			$taskItemIds = $this->getIncompleteTaskItemIds($type);
+			if (!empty($taskItemIds))
+			{
+				$filter[] = [
+					'@ID' => $taskItemIds,
+				];
+			}
+		}
+
+		return [$filter];
 	}
 
 	protected function getViewableStageIds(Type $type): array
@@ -386,31 +504,67 @@ class UserPermissions
 			return $type->getStages()->getIdList();
 		}
 
-		$firstStageId = null;
-		$firstStage = $type->getFirstStage();
-		if($firstStage)
-		{
-			$firstStageId = $firstStage->getId();
-		}
 		$viewableStageIds = [];
 		foreach($this->getPermissions() as $entity => $permission)
 		{
 			if(preg_match('/^'.static::ENTITY_STAGE.'(\d+)$/', $entity, $matches))
 			{
-				$matches[1] = (int) $matches[1];
-				if($matches[1] !== $firstStageId)
+				$stageId = (int)$matches[1];
+				if ($this->hasExplicitStageRow($stageId))
 				{
-					$viewableStageIds[] = $matches[1];
+					$viewableStageIds[] = $stageId;
 				}
 			}
 		}
 
-		if(empty($viewableStageIds))
+		return $viewableStageIds;
+	}
+
+	/**
+	 * Returns true if the user has a row of the stage with an action that opens its items, admin rights aside.
+	 *
+	 * @param int $stageId
+	 * @return bool
+	 */
+	protected function hasExplicitStageRow(int $stageId): bool
+	{
+		$stagePermissions = $this->getPermissions()[self::ENTITY_STAGE . $stageId] ?? [];
+		foreach ([self::ACTION_VIEW, self::ACTION_MODIFY, self::ACTION_MOVE] as $action)
 		{
-			$viewableStageIds[] = '!@#$%';
+			if (isset($stagePermissions[$action]) && $stagePermissions[$action] > self::PERMISSION_NONE)
+			{
+				return true;
+			}
 		}
 
-		return $viewableStageIds;
+		return false;
+	}
+
+	/**
+	 * Drops the cached items with not answered tasks of the user, e.g. after the user answered a task.
+	 */
+	public function clearIncompleteTaskCache(): void
+	{
+		$this->incompleteTaskItemIds = [];
+	}
+
+	/**
+	 * @param Type $type
+	 * @return int[]
+	 */
+	protected function getIncompleteTaskItemIds(Type $type): array
+	{
+		$typeId = $type->getId();
+		if (!isset($this->incompleteTaskItemIds[$typeId]))
+		{
+			$taskManager = Driver::getInstance()->getTaskManager();
+			$this->incompleteTaskItemIds[$typeId] = $taskManager
+				? $taskManager->getUserIncompleteTaskItemIds($typeId, $this->userId)
+				: []
+			;
+		}
+
+		return $this->incompleteTaskItemIds[$typeId];
 	}
 
 	public function getFilterForViewableTypes(): array
@@ -484,13 +638,23 @@ class UserPermissions
 	public static function filterUserIdsWhoCanViewItem(Item $item, array $userIds): array
 	{
 		$result = [];
+		// tasks of the item are read once for all users
+		$incompleteParticipantIds = null;
 		foreach($userIds as $userId)
 		{
 			$userId = (int)$userId;
 			if($userId > 0)
 			{
+				if ($incompleteParticipantIds === null)
+				{
+					$taskManager = Driver::getInstance()->getTaskManager();
+					$incompleteParticipantIds = $taskManager
+						? $taskManager->getItemIncompleteParticipantIds($item)
+						: []
+					;
+				}
 				$userPermissions = Driver::getInstance()->getUserPermissions($userId);
-				if($userPermissions->canViewItem($item))
+				if($userPermissions->canViewItemWithTaskParticipants($item, $incompleteParticipantIds))
 				{
 					$result[$userId] = $userId;
 				}
@@ -631,9 +795,23 @@ class UserPermissions
 					$this->isAdmin = $currentUser->isAdmin();
 				}
 			}
+			elseif ($this->userId > 0)
+			{
+				$this->isAdmin = $this->isPortalAdmin($this->userId);
+			}
 		}
 
 		return $this->isAdmin;
+	}
+
+	protected function isPortalAdmin(int $userId): bool
+	{
+		if (ModuleManager::isModuleInstalled('bitrix24') && Loader::includeModule('bitrix24'))
+		{
+			return \CBitrix24::IsPortalAdmin($userId);
+		}
+
+		return in_array(1, \CUser::GetUserGroup($userId), false);
 	}
 
 	protected function canPerform(string $entity, int $entityId, string $action): bool
@@ -702,7 +880,7 @@ class UserPermissions
 
 	public static function canEditItemOnAnyStage(): bool
 	{
-		return true;
+		return false;
 	}
 
 	public static function canViewAnyType(): bool

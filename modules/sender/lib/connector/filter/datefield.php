@@ -73,7 +73,7 @@ class DateField extends AbstractField
 	{
 		$filterKey = $this->getFilterKey();
 		$from = $this->isMoreThanDaysAgo() ? null : $this->getFrom();
-		$to = $this->isAfterDays() ? null : $this->getTo();
+		$to = $this->getTo();
 
 		if ($from)
 		{
@@ -221,11 +221,6 @@ class DateField extends AbstractField
 		return $this->getDateDataByKey('datesel') === AdditionalDateType::MORE_THAN_DAYS_AGO;
 	}
 
-	private function isAfterDays()
-	{
-		return $this->getDateDataByKey('datesel') === AdditionalDateType::AFTER_DAYS;
-	}
-
 	private function getDateDataByKey($key)
 	{
 		$key = $this->getId() . '_' . $key;
@@ -336,6 +331,9 @@ class DateField extends AbstractField
 		);
 		$sqlDate = $sqlHelper->getDatetimeToDateFunction($charDate); // char -> date conversion
 
+		// the bound is a day, while the field may carry the time of day: days are compared
+		$sqlField = $sqlHelper->getDatetimeToDateFunction('%s');
+
 		return (new RuntimeFilter())
 			->setFilter(
 				"=$expressionFieldName",
@@ -343,7 +341,7 @@ class DateField extends AbstractField
 			)
 			->addRuntime([
 				'name' => $expressionFieldName,
-				'expression' => "case when %s $operation $sqlDate then 1 else 0 end",
+				'expression' => "case when $sqlField $operation $sqlDate then 1 else 0 end",
 				'buildFrom' => [
 					$filterKey,
 					$filterKey

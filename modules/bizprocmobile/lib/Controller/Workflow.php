@@ -14,6 +14,7 @@ use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Enum\Face;
 use Bitrix\BizprocMobile\EntityEditor\Converter;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\BizprocMobile\UI\BbCodeView;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\CurrentUser;
@@ -25,6 +26,8 @@ use Bitrix\Mobile\UI\StatefulList\BaseController;
 
 class Workflow extends BaseController
 {
+	use AddPublicErrorsTrait;
+
 	public function configureActions(): array
 	{
 		return [
@@ -70,7 +73,7 @@ class Workflow extends BaseController
 
 		if (!$response->isSuccess())
 		{
-			$this->addErrors($response->getErrors());
+			$this->addErrorsAsPublic($response->getErrors());
 
 			return null;
 		}
@@ -131,16 +134,18 @@ class Workflow extends BaseController
 	{
 		if (!\CBPRuntime::isFeatureEnabled())
 		{
-			$this->addError(new Error(
-				Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR_BIZPROC_FEATURE_DISABLED')
-			));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR_BIZPROC_FEATURE_DISABLED')),
+			]);
 
 			return null;
 		}
 
 		if ($templateId <= 0)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')),
+			]);
 
 			return null;
 		}
@@ -148,7 +153,9 @@ class Workflow extends BaseController
 		$unsignedDocument = $this->unSignDocument($signedDocument);
 		if ($unsignedDocument === null)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')),
+			]);
 
 			return null;
 		}
@@ -160,7 +167,9 @@ class Workflow extends BaseController
 
 		if (!$this->canUserStartWorkflow($complexDocumentId, $templateId))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR_ACCESS_DENIED')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR_ACCESS_DENIED')),
+			]);
 
 			return null;
 		}
@@ -168,14 +177,18 @@ class Workflow extends BaseController
 		$template = $this->loadTemplate($templateId);
 		if (!$template)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')),
+			]);
 
 			return null;
 		}
 
 		if (!$this->isCorrectTemplateToStart($template, $complexDocumentType))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')),
+			]);
 
 			return null;
 		}
@@ -220,7 +233,7 @@ class Workflow extends BaseController
 
 		if (!$result->isSuccess())
 		{
-			$this->addErrors($result->getErrors());
+			$this->addErrorsAsPublic($result->getErrors());
 
 			return null;
 		}
@@ -228,7 +241,9 @@ class Workflow extends BaseController
 		$workflowId = current($result->getWorkflowIds());
 		if (!is_string($workflowId) || $workflowId === '')
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')),
+			]);
 
 			return null;
 		}
@@ -338,7 +353,7 @@ class Workflow extends BaseController
 
 		if (!$preparedParameters->isSuccess())
 		{
-			$this->addErrors($preparedParameters->getErrors());
+			$this->addErrorsAsPublic($preparedParameters->getErrors());
 
 			return null;
 		}

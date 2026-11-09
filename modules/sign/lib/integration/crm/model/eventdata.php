@@ -62,6 +62,7 @@ class EventData
 	public const DATA_KEY_PROVIDER_NAME = 'provider.name';
 	public const DATA_KEY_INITIATOR = 'initiator';
 	public const DATA_KEY_ANNULLED_MEMBERS_COUNT = 'annul.membersCount';
+	public const DATA_KEY_MEMBER_STATUS_CHANGED = 'member.statusChanged';
 
 	public const TYPE_ON_ERROR_SIGNING_EXPIRED = 'ON_ERROR_SIGNING_EXPIRED';
 	public const TYPE_ON_ERROR_REQUEST_ERROR = 'ON_ERROR_REQUEST_ERROR';
@@ -161,6 +162,25 @@ class EventData
 		$initiatorUserId = (int)($this->data[self::DATA_KEY_INITIATOR] ?? 0);
 
 		return $initiatorUserId > 0 ? $initiatorUserId : null;
+	}
+
+	/**
+	 * Whether the event carries a status the member did not hold before it. The signing service
+	 * redelivers callbacks, and a redelivery repeats the event with the status already stored, so an
+	 * action that must happen once per run of the document tells the two apart by this.
+	 */
+	public function setMemberStatusChanged(bool $isChanged): EventData
+	{
+		return $this->addDataValue(self::DATA_KEY_MEMBER_STATUS_CHANGED, $isChanged);
+	}
+
+	/**
+	 * An event whose producer says nothing about it counts as a change: only the member status
+	 * callback knows the status the member held before.
+	 */
+	public function isMemberStatusChanged(): bool
+	{
+		return (bool)($this->data[self::DATA_KEY_MEMBER_STATUS_CHANGED] ?? true);
 	}
 
 	public function getDocumentItem(): \Bitrix\Sign\Item\Document

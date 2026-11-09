@@ -38,6 +38,7 @@ trait DashboardDeleteCopyActions
 		FailureCode::NotCustom,
 		FailureCode::PublishedReport,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::DomainRule,
 		FailureCode::DestructiveBudget,
 		FailureCode::RateLimit,
@@ -70,6 +71,7 @@ trait DashboardDeleteCopyActions
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::RateLimit,
 	)]
 	public function copyAction(CopyDashboardRequest $request): ArrayResponse

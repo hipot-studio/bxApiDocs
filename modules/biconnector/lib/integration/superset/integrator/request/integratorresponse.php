@@ -15,12 +15,16 @@ final class IntegratorResponse
 	public const STATUS_NO_ACCESS = 403;
 	public const STATUS_NOT_FOUND = 404;
 	public const STATUS_LIMIT_EXCEEDED = 409;
+	public const STATUS_UNPROCESSABLE_ENTITY = 422;
 	public const STATUS_TOO_MANY_REQUESTS = 429;
 	public const STATUS_REGISTER_REQUIRED = 470;
 	public const STATUS_SERVER_ERROR = 500;
 	public const STATUS_FROZEN = 555;
 	public const STATUS_UNKNOWN = 520;
 	public const STATUS_INNER_ERROR = 499;
+
+	public const ERROR_SUPERSET_INSTANCE_UPDATING = 'SUPERSET_INSTANCE_UPDATING';
+	public const UNAVAILABLE_REASON_UPDATING = 'updating';
 
 	private int $status;
 
@@ -99,5 +103,29 @@ final class IntegratorResponse
 	public function getErrors(): array
 	{
 		return $this->errors;
+	}
+
+	/**
+	 * Whether the proxy reports the instance as frozen because the Superset version is being updated.
+	 * A proxy that does not know the signal answers with a bare frozen status, and such an answer is not an update.
+	 */
+	public function isInstanceUpdating(): bool
+	{
+		if ($this->getStatus() !== self::STATUS_FROZEN)
+		{
+			return false;
+		}
+
+		foreach ($this->errors as $error)
+		{
+			if ($error->getCode() === self::ERROR_SUPERSET_INSTANCE_UPDATING)
+			{
+				return true;
+			}
+		}
+
+		return is_array($this->data)
+			&& ($this->data['unavailable_reason'] ?? null) === self::UNAVAILABLE_REASON_UPDATING
+		;
 	}
 }

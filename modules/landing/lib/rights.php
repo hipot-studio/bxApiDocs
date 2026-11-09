@@ -2,8 +2,10 @@
 namespace Bitrix\Landing;
 
 use \Bitrix\Landing\Internals\RightsTable;
+use \Bitrix\Landing\Internals\SiteTable;
 use \Bitrix\Main\Config\Option;
 use \Bitrix\Main\Localization\Loc;
+use \Bitrix\Main\ModuleManager;
 use \Bitrix\Main\UserAccessTable;
 use Bitrix\Crm\Service\Container;
 
@@ -90,6 +92,8 @@ class Rights
 		'vibe_create',
 		'vibe_admin',
 	];
+
+	private const PORTAL_ADMIN_GROUP_ID = 1;
 
 	const REVERSE_RIGHTS = [
 		'unexportable',
@@ -542,20 +546,37 @@ class Rights
 			}
 		}
 
-		$operations = [];
-		$operationsDefault = [];
-		$wasChecked = false;
 		$uid = self::getContextUserId();
-		$extendedMode = self::isExtendedMode();
 
 		// full access for admin
-		if (
+		$isChecked = (
 			$uid &&
 			self::isOn() &&
 			!self::isAdmin() &&
 			self::isFeatureOn() &&
 			self::exist()
-		)
+		);
+
+		return self::getOperationsByRights($entityId, $entityType, (int)$uid, $isChecked);
+	}
+
+	/**
+	 * Operations of the entity for the user by the rights records: by the roles of the current scope or by the
+	 * records of the extended mode. Without the check every operation is given.
+	 * @param int|array $entityId Entity id (id or array of id).
+	 * @param string $entityType Entity type.
+	 * @param int $uid User id.
+	 * @param bool $isChecked Whether the records are checked at all.
+	 * @return array
+	 */
+	private static function getOperationsByRights($entityId, $entityType, int $uid, bool $isChecked): array
+	{
+		$operations = [];
+		$operationsDefault = [];
+		$wasChecked = false;
+		$extendedMode = self::isExtendedMode();
+
+		if ($isChecked)
 		{
 			$wasChecked = true;
 			$entityIdFilter = $entityId;
@@ -653,6 +674,141 @@ class Rights
 		{
 			return [];
 		}
+	}
+
+	/**
+	 * Returns all available operations of the site for the given user, not for the current one.
+	 *
+	 * The answer does not depend on the process: setOff() and setGlobalOff() are not read, the admin rights are
+	 * those of the given user, and no cache of the current user is used or filled. LANDING_DISABLE_RIGHTS keeps
+	 * its meaning of the installation without rights: every operation is given. A scope with its own model of
+	 * site operations answers for the current user only, so the given user is denied there.
+	 * @param int $userId User id.
+	 * @param int $siteId Site id.
+	 * @param bool $deleted And from recycle bin.
+	 * @return string[]
+	 */
+	public static function getUserOperationsForSite(int $userId, int $siteId, bool $deleted = false): array
+	{
+		if (
+			$userId <= 0
+			|| $siteId <= 0
+			|| Site\Type::hasOwnOperationsForSite()
+			|| !self::isSiteOfCurrentScope($siteId, $deleted)
+		)
+		{
+			return [];
+		}
+
+		$isChecked = (
+			!(defined('LANDING_DISABLE_RIGHTS') && LANDING_DISABLE_RIGHTS === true)
+			&& !self::isAdminUser($userId)
+			&& self::isFeatureOn()
+			&& self::exist()
+		);
+		if ($isChecked && !self::isSiteVisibleToUser($siteId, $userId))
+		{
+			return [];
+		}
+
+		return self::getOperationsByRights($siteId, self::ENTITY_TYPE_SITE, $userId, $isChecked);
+	}
+
+	/**
+	 * Does the user see the site, as the access filter of the sites (getAccessFilter()) shows it to the current
+	 * one: a record of the site or of all sites (ENTITY_ID 0) that is not a denial and belongs to an access code of
+	 * the user - by the roles of the current scope, or without a role in the extended mode.
+	 * @param int $siteId Site id.
+	 * @param int $userId User id.
+	 * @return bool
+	 */
+	private static function isSiteVisibleToUser(int $siteId, int $userId): bool
+	{
+		$tasks = self::getAccessTasksReferences();
+		$filter = [
+			'ENTITY_ID' => [$siteId, 0],
+			'USER_ACCESS.USER_ID' => $userId,
+			'!TASK_ID' => $tasks[self::ACCESS_TYPES['denied']],
+		];
+		if (self::isExtendedMode())
+		{
+			$filter['ROLE_ID'] = 0;
+		}
+		else
+		{
+			$filter['=ENTITY_TYPE'] = self::ENTITY_TYPE_SITE;
+			$filter['ROLE_ID'] = Role::getExpectedRoleIds();
+		}
+
+		return (bool)RightsTable::getList([
+			'select' => ['ID'],
+			'filter' => $filter,
+			'limit' => 1,
+		])->fetch();
+	}
+
+	/**
+	 * Is the site of the types of the current scope, read past the access filter and the pings of the process.
+	 * @param int $siteId Site id.
+	 * @param bool $deleted And from recycle bin.
+	 * @return bool
+	 */
+	private static function isSiteOfCurrentScope(int $siteId, bool $deleted): bool
+	{
+		$query = SiteTable::query()
+			->setSelect(['ID'])
+			->where('ID', $siteId)
+			->whereIn('TYPE', (array)Site\Type::getFilterType())
+			->setLimit(1)
+		;
+		if (!$deleted)
+		{
+			$query->where('DELETED', 'N');
+		}
+
+		return (bool)$query->fetch();
+	}
+
+	/**
+	 * The given user is admin or not, as isAdmin() answers it for the current one.
+	 * @param int $userId User id.
+	 * @return bool
+	 */
+	private static function isAdminUser(int $userId): bool
+	{
+		$isPortalAdmin = self::isPortalAdminUser($userId);
+
+		return
+			$isPortalAdmin
+			|| self::checkAdditionalRight(self::ADDITIONAL_RIGHTS['admin'], null, true, $userId, $isPortalAdmin)
+		;
+	}
+
+	/**
+	 * The given user is portal admin or not, as Manager::isAdmin() answers it for the current one.
+	 * @param int $userId User id.
+	 * @return bool
+	 */
+	private static function isPortalAdminUser(int $userId): bool
+	{
+		$groups = array_map('intval', \CUser::getUserGroup($userId));
+		if (in_array(self::PORTAL_ADMIN_GROUP_ID, $groups, true))
+		{
+			return true;
+		}
+
+		if (ModuleManager::isModuleInstalled('bitrix24'))
+		{
+			$user = Manager::getUserInstance();
+			if (!($user instanceof \CUser))
+			{
+				$user = new \CUser();
+			}
+
+			return (bool)$user->canDoOperation('bitrix24_config', $userId);
+		}
+
+		return false;
 	}
 
 	/**
@@ -1377,6 +1533,26 @@ class Rights
 			return true;
 		}
 
+		return self::checkAdditionalRight($code, $type, $strict, null);
+	}
+
+	/**
+	 * Has the user additional right or not.
+	 * @param string $code Code from ADDITIONAL_RIGHTS.
+	 * @param string|null $type Scope type.
+	 * @param bool $strict Strict mode.
+	 * @param int|null $userId User id; null is the context user, whose portal admin rights are of the current one.
+	 * @param bool $isPortalAdmin Whether the given user is portal admin; not read for the context user.
+	 * @return bool
+	 */
+	private static function checkAdditionalRight(
+		$code,
+		$type,
+		bool $strict,
+		?int $userId,
+		bool $isPortalAdmin = false,
+	): bool
+	{
 		if (!is_string($code))
 		{
 			return false;
@@ -1399,12 +1575,14 @@ class Rights
 				return true;
 			}
 
-			if (!self::getContextUserId())
+			$isContextUser = $userId === null;
+			$userId ??= self::getContextUserId();
+			if (!$userId)
 			{
 				return false;
 			}
 
-			if (Manager::isAdmin())
+			if ($isContextUser ? Manager::isAdmin() : $isPortalAdmin)
 			{
 				if (in_array($code, self::REVERSE_RIGHTS))
 				{
@@ -1501,7 +1679,7 @@ class Rights
 			if ($accessCodes)
 			{
 				sort($accessCodes);
-				$cacheKey = self::getContextUserId() . ':' . implode('|', $accessCodes);
+				$cacheKey = $userId . ':' . implode('|', $accessCodes);
 
 				if (array_key_exists($cacheKey, self::$additionalAccessCodesCache))
 				{
@@ -1514,7 +1692,7 @@ class Rights
 					],
 					'filter' => [
 						'=ACCESS_CODE' => $accessCodes,
-						'USER_ID' => self::getContextUserId()
+						'USER_ID' => $userId,
 					]
 				]);
 				self::$additionalAccessCodesCache[$cacheKey] = (boolean)$res->fetch();

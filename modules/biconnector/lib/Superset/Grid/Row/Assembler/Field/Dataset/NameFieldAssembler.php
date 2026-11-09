@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Dataset;
 
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
+use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DetailLinkFieldAssembler;
 use Bitrix\BIConnector\Superset\Grid\TableGroupRepository;
 use Bitrix\Main\Localization\Loc;
@@ -23,31 +24,47 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 
 		if (!empty($value['IS_SYSTEM']))
 		{
-			$jsName = htmlspecialcharsbx(\CUtil::JSEscape($name));
+			// The name of the table goes to the slider through the data attribute, never through the code.
+			$onclick = 'BX.BIConnector.DatasetImportV2.Slider'
+				. ".open('system', 0, {tableName: this.dataset.bicTableName})"
+			;
 
 			return <<<HTML
 				<div class="dataset-title-wrapper">
-					<a
-						style="cursor: pointer"
-						onclick="BX.BIConnector.DatasetImportV2.Slider.open('system', 0, {tableName: '{$jsName}'})"
-					>{$title}</a>
+					<button
+						type="button"
+						class="biconnector-grid-name-link-button"
+						data-bic-focus-role="title"
+						data-bic-table-name="{$title}"
+						onclick="{$onclick}"
+					>{$title}</button>
 				</div>
 			HTML;
 		}
 
 		$id = (int)$value['ID'];
-		$type = $value['TYPE'];
+		$type = Type::tryFrom((string)($value['TYPE'] ?? ''));
 
-		$link = "
-				<a
-					style='cursor: pointer'
-					onclick='BX.BIConnector.DatasetImportV2.Slider.open(\"$type\", $id)'
-				>{$title}</a>
-			";
+		// A type the product knows is a constant of the code; any other one is read from the data attribute.
+		$typeAttribute = '';
+		$typeArgument = 'this.dataset.bicType';
+		if ($type !== null)
+		{
+			$typeArgument = "'{$type->value}'";
+		}
+		else
+		{
+			$typeAttribute = ' data-bic-type="' . htmlspecialcharsbx((string)($value['TYPE'] ?? '')) . '"';
+		}
 
 		return <<<HTML
 			<div class="dataset-title-wrapper">
-				{$link}
+				<button
+					type="button"
+					class="biconnector-grid-name-link-button"
+					data-bic-focus-role="title"{$typeAttribute}
+					onclick="BX.BIConnector.DatasetImportV2.Slider.open({$typeArgument}, {$id})"
+				>{$title}</button>
 			</div>
 		HTML;
 	}
@@ -56,7 +73,8 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 	 * A row of a group: the folder of the reports section, told apart by its own set of classes.
 	 *
 	 * The click carries the group the way the reports grid carries it: the level of the section is a
-	 * condition of the filter, and the grid puts that condition on by itself.
+	 * condition of the filter, and the grid puts that condition on by itself. Rows of groups are never
+	 * shown inside a group, so the button is never pressed.
 	 */
 	private function prepareGroupColumn(array $value, string $title): string
 	{
@@ -76,22 +94,27 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				: 'ui-icon-file-air-folder-person'
 		;
 
-		// The quotes of the name are hex-escaped by the encoder, so the value stands in an attribute
-		// quoted with an apostrophe the way the reports grid puts it there.
-		$eventGroup = Json::encode([
+		$payload = htmlspecialcharsbx(Json::encode([
 			'ID' => $groupId,
 			'TITLE' => (string)($value['NAME'] ?? ''),
-		]);
+		]));
+		$onclick = 'BX.BIConnector.ExternalDatasetManager.Instance'
+			. '.handleGroupTitleClick(JSON.parse(this.dataset.bicPayload))'
+		;
 
 		return <<<HTML
 			<div class="bi-table-group-name">
 				<div class="ui-icon {$iconClass} bi-table-group-icon"><i style="margin-left: 0;"></i></div>
 				<div>
-					<a
-						class="bi-table-group-name-link"
+					<button
+						type="button"
+						class="bi-table-group-name-link biconnector-grid-name-link-button"
 						data-testid="biconnector-table-group-row-name"
-						onclick='BX.BIConnector.ExternalDatasetManager.Instance.handleGroupTitleClick({$eventGroup})'
-					>{$title}</a>
+						data-bic-focus-role="group-enter"
+						aria-pressed="false"
+						data-bic-payload="{$payload}"
+						onclick="{$onclick}"
+					>{$title}</button>
 					<div class="bi-table-group-name-subtitle">{$subtitle}</div>
 				</div>
 			</div>

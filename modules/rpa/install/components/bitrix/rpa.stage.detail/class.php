@@ -99,10 +99,12 @@ class RpaStageDetailComponent extends \Bitrix\Rpa\Components\Base
 		];
 
 		$fields = [];
-		$userFields = $this->stage->getUserFieldCollection();
+		// a new stage has no saved settings yet; for it Stage::getFieldSettings() fails on the empty id
+		$fieldSettings = $this->stage->getId() > 0 ? $this->stage->getFieldSettings() : [];
+		$userFields = $this->type->getUserFieldCollection();
 		foreach($visibilities as $visibility => $title)
 		{
-			$fieldsByVisibility = $userFields->getFieldsByVisibility($visibility);
+			$fieldsByVisibility = $fieldSettings[$visibility] ?? [];
 			$fields[$visibility] = [
 				'title' => $title,
 				'id' => $visibility.'-fields-button',

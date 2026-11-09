@@ -119,6 +119,13 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		$superset = new SupersetController();
 		$superset->initializeOrCheckSupersetStatus();
 
+		if ($this->isSupersetUpdateStubRequired())
+		{
+			$this->includeComponentTemplate('superset_updating');
+
+			return;
+		}
+
 		if (SupersetInitializer::isRebindRequired())
 		{
 			$this->arResult['IS_ADMIN'] = AccessController::getCurrent()->getUser()->isAdmin();
@@ -132,6 +139,13 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			(new BIConnector\Access\Superset\Synchronizer(CurrentUser::get()->getId()))->sync();
 		}
 
+		if ($this->isSupersetUpdateStubRequired())
+		{
+			$this->includeComponentTemplate('superset_updating');
+
+			return;
+		}
+
 		if (!DashboardOwner::isFinished())
 		{
 			DashboardOwner::bind(60);
@@ -139,6 +153,15 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		Application::getInstance()->addBackgroundJob(fn() => Superset\Updater\ClientUpdater::update());
 
 		$this->includeComponentTemplate($template);
+	}
+
+	/**
+	 * An AJAX request of the open grid expects the grid markup, and the full-page stub would only empty it.
+	 * Such a request keeps the grid, and the stub is shown on the next page load.
+	 */
+	private function isSupersetUpdateStubRequired(): bool
+	{
+		return SupersetInitializer::isSupersetUpdating() && !$this->request->isAjaxRequest();
 	}
 
 	private static function canSendStartupSupersetMetric(): bool

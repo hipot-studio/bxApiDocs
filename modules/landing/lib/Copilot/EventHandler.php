@@ -124,4 +124,86 @@ class EventHandler
 
 		return new EventResult(EventResult::SUCCESS);
 	}
+
+	/**
+	 * A Marta AiNode answer (the markup repair node): the request uuid plays the
+	 * role of the queue hash. Answers of foreign node consumers find no request
+	 * here and pass through.
+	 */
+	public static function onAiNodeQueueSuccess(Event $event): EventResult
+	{
+		$data = $event->getParameter('data');
+		$request = self::getNodeRequest($data);
+		if (!$request)
+		{
+			return new EventResult(EventResult::SUCCESS);
+		}
+
+		$output = $data['output'] ?? null;
+		if (is_string($output))
+		{
+			try
+			{
+				$output = Json::decode(Converter\Json::expandJsonString($output));
+			}
+			catch (ArgumentException)
+			{
+				$output = null;
+			}
+		}
+
+		if (is_array($output))
+		{
+			$request->saveResult(['output' => $output]);
+		}
+		else
+		{
+			$request->saveError(Error::createError(Errors::requestInvalid));
+		}
+
+		self::resumeGeneration($request);
+
+		return new EventResult(EventResult::SUCCESS);
+	}
+
+	public static function onAiNodeQueueError(Event $event): EventResult
+	{
+		$data = $event->getParameter('data');
+		$request = self::getNodeRequest($data);
+		if (!$request)
+		{
+			return new EventResult(EventResult::SUCCESS);
+		}
+
+		if ($request->getResult() === null)
+		{
+			$error = Error::createError(Errors::requestFail);
+			$message = is_array($data) ? (string)($data['errorMessage'] ?? '') : '';
+			if ($message !== '')
+			{
+				$error->message .= ': ' . $message;
+			}
+			$request->saveError($error);
+		}
+
+		self::resumeGeneration($request);
+
+		return new EventResult(EventResult::SUCCESS);
+	}
+
+	private static function getNodeRequest(mixed $data): ?Request
+	{
+		$uuid = is_array($data) ? (string)($data['uuid'] ?? '') : '';
+
+		return $uuid !== '' ? Request::getByHash($uuid) : null;
+	}
+
+	private static function resumeGeneration(Request $request): void
+	{
+		$generation = new Generation();
+		if ($generation->initById($request->getGenerationId()))
+		{
+			$generation->execute();
+		}
+	}
 }

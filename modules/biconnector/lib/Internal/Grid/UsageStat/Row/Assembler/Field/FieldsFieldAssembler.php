@@ -19,20 +19,22 @@ final class FieldsFieldAssembler extends FieldAssembler
 		$fields = explode(', ', (string)$value);
 		if (count($fields) <= self::MAX_VISIBLE)
 		{
-			return (string)$value;
+			return htmlspecialcharsbx((string)$value);
 		}
 
 		$visible = implode(', ', array_slice($fields, 0, self::MAX_VISIBLE));
+		$rest = implode(', ', array_slice($fields, self::MAX_VISIBLE));
 
 		return Loc::getMessage(
 			'BIC_USAGE_STAT_GRID_ROW_FIELDS_LIST',
 			[
-				'#FIELDS#' => $visible,
-				'[link]' => '<a class="biconnector-usage-stat-action-link" onclick="return showMore(this, \''
-					. \CUtil::JSEscape((string)$value)
-					. '\');">',
+				'#FIELDS#' => htmlspecialcharsbx($visible),
+				'[link]' => '<button type="button" class="biconnector-usage-stat-action-link"'
+					. ' data-bic-focus-role="more-fields"'
+					. ' data-bic-rest="' . htmlspecialcharsbx($rest) . '"'
+					. ' onclick="return showMore(this);">',
 				'#N#' => count($fields) - self::MAX_VISIBLE,
-				'[/link]' => '</a>',
+				'[/link]' => '</button>',
 			]
 		);
 	}

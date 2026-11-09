@@ -35,6 +35,7 @@ use Bitrix\BIConnector\Internal\Repository\Mapper\SupersetDashboardInfoMapper;
 use Bitrix\BIConnector\Internal\Repository\SupersetDashboardInfoGalleryRepository;
 use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsMode;
 use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsModeResolver;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\RequiredParamListProvider;
 use Bitrix\BIConnector\Internal\Repository\SupersetDashboardInfoRepository;
 use Bitrix\BIConnector\Internal\Services\DashboardInfo\FileCleanupService;
 use Bitrix\BIConnector\Public\Command\DashboardInfo\AddSupersetDashboardInfoCommand;
@@ -64,6 +65,8 @@ class ApacheSupersetDashboardEditComponent
 	private const DASHBOARD_TITLE_MAX_LENGTH = 128;
 
 	private ?Dashboard $dashboard = null;
+	private ?array $requiredParamList = null;
+	private bool $isRequiredParamListLoaded = false;
 	private ?DashboardSettingsMode $settingsMode = null;
 	private ?DashboardSettingsModeResolver $modeResolver = null;
 
@@ -204,7 +207,7 @@ class ApacheSupersetDashboardEditComponent
 			'isAllowedClearGroups' => $this->isAllowedClearGroups(),
 			'defaultValues' => $defaultValues,
 			'paramList' => $this->getParamList(),
-			'requiredParamList' => $this->getRequiredParamList(),
+			'requiredParamList' => $this->getRequiredParamList() ?? [],
 			'groupIds' => $defaultValues['groups'],
 			'activeUrlParamsSelector' => SupersetInitializer::isSupersetReady(),
 			'attachAhaMoment' => $this->prepareAttachAhaMoment(),
@@ -270,7 +273,7 @@ class ApacheSupersetDashboardEditComponent
 			'galleryImages' => [],
 			'groups' => $this->getInitialGroupIds(),
 			'scopes' => [],
-			'params' => $this->getRequiredParamCodes(),
+			'params' => [],
 		];
 	}
 
@@ -386,14 +389,28 @@ class ApacheSupersetDashboardEditComponent
 		return UrlParameter\ScopeMap::getParamList();
 	}
 
-	private function getRequiredParamList(): array
+	/**
+	 * A new dashboard has no native filters yet; the one attached on creation is checked in createDashboard().
+	 *
+	 * @return array|null Null when the filters of the dashboard could not be read: nothing is imposed then.
+	 */
+	private function getRequiredParamList(): ?array
 	{
-		return UrlParameter\ScopeMap::getRequiredParamList();
+		if (!$this->isRequiredParamListLoaded)
+		{
+			$this->requiredParamList = ($this->isEditMode() && $this->dashboard !== null)
+				? (new RequiredParamListProvider())->getForDashboard($this->dashboard)
+				: []
+			;
+			$this->isRequiredParamListLoaded = true;
+		}
+
+		return $this->requiredParamList;
 	}
 
 	private function getRequiredParamCodes(): array
 	{
-		return array_keys($this->getRequiredParamList());
+		return array_keys($this->getRequiredParamList() ?? []);
 	}
 
 	private function appendRequiredParams(array $params): array
@@ -434,7 +451,7 @@ class ApacheSupersetDashboardEditComponent
 	{
 		return
 			$this->isEditMode()
-			&& AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS)
+			&& AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS)
 		;
 	}
 
@@ -549,6 +566,11 @@ class ApacheSupersetDashboardEditComponent
 
 				return null;
 			}
+
+			// Read only after the access check: the dashboard may belong to another user.
+			$this->requiredParamList = (new RequiredParamListProvider())->getByExternalId($saveData->externalId);
+			$this->isRequiredParamListLoaded = true;
+			$saveData = $saveData->withParams($this->appendRequiredParams($saveData->params));
 		}
 
 		$dashboard = SupersetDashboardTable::createObject();
@@ -1229,6 +1251,8 @@ class ApacheSupersetDashboardEditComponent
 	private function initDashboard(): void
 	{
 		$this->dashboard = null;
+		$this->requiredParamList = null;
+		$this->isRequiredParamListLoaded = false;
 		$this->settingsMode = null;
 		if (!$this->isEditMode())
 		{

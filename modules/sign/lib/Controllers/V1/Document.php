@@ -232,6 +232,7 @@ class Document extends Controller
 		string $uid,
 		int $blankId,
 		bool $copyBlocksFromPreviousBlank = false,
+		bool $autoDetectType = false,
 	): array
 	{
 		if (!$this->validateBlankAccess($blankId, (int)CurrentUser::get()->getId()))
@@ -243,6 +244,7 @@ class Document extends Controller
 			$uid,
 			$blankId,
 			$copyBlocksFromPreviousBlank,
+			$autoDetectType,
 		);
 		if (!$result->isSuccess())
 		{

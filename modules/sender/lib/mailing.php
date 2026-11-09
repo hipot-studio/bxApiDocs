@@ -7,6 +7,7 @@
  */
 namespace Bitrix\Sender;
 
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
@@ -850,19 +851,7 @@ class MailingSubscriptionTable extends Entity\DataManager
 	 */
 	public static function addSubscription(array $parameters = array())
 	{
-		$primary = array('MAILING_ID' => $parameters['MAILING_ID'], 'CONTACT_ID' => $parameters['CONTACT_ID']);
-		$fields = array('IS_UNSUB' => 'N');
-		$row = static::getRowById($primary);
-		if($row)
-		{
-			$result = static::update($primary, array('IS_UNSUB' => 'N'));
-		}
-		else
-		{
-			$result = static::add($fields + $parameters);
-		}
-
-		return $result->isSuccess();
+		return static::writeSubscriptionFlag($parameters, 'N');
 	}
 
 	/**
@@ -873,19 +862,99 @@ class MailingSubscriptionTable extends Entity\DataManager
 	 */
 	public static function addUnSubscription(array $parameters = array())
 	{
+		return static::writeSubscriptionFlag($parameters, 'Y');
+	}
+
+	/**
+	 * Set IS_UNSUB flag for the mailing/contact pair, inserting the row when it is missing.
+	 *
+	 * @param array $parameters
+	 * @param string $isUnsub
+	 * @return bool
+	 */
+	private static function writeSubscriptionFlag(array $parameters, string $isUnsub): bool
+	{
 		$primary = array('MAILING_ID' => $parameters['MAILING_ID'], 'CONTACT_ID' => $parameters['CONTACT_ID']);
-		$fields = array('IS_UNSUB' => 'Y');
-		$row = static::getRowById($primary);
-		if($row)
+		$fields = array('IS_UNSUB' => $isUnsub);
+
+		if (!static::getRowById($primary))
 		{
-			$result = static::update($primary, $fields);
-		}
-		else
-		{
-			$result = static::add($fields + $parameters);
+			try
+			{
+				return static::add($fields + $parameters)->isSuccess();
+			}
+			catch (DuplicateEntryException)
+			{
+				// a parallel request has inserted the row between the check and the insert
+			}
 		}
 
-		return $result->isSuccess();
+		try
+		{
+			return static::update($primary, $fields)->isSuccess();
+		}
+		catch (DuplicateEntryException)
+		{
+			// IS_UNSUB is part of the table key: the pair already has a row with this flag next to the opposite one
+			return static::repairPair($parameters, $isUnsub);
+		}
+	}
+
+	/**
+	 * Leave the single row with the given flag for the pair. Parallel repairs of the same pair are serialized,
+	 * otherwise each of them could delete the other's row and insert its own.
+	 *
+	 * @param array $parameters
+	 * @param string $isUnsub
+	 * @return bool
+	 */
+	private static function repairPair(array $parameters, string $isUnsub): bool
+	{
+		$connection = static::getEntity()->getConnection();
+		$lockName = static::getPairLockName((int)$parameters['MAILING_ID'], (int)$parameters['CONTACT_ID']);
+		if (!$connection->lock($lockName, static::getPairLockTimeout()))
+		{
+			return false;
+		}
+
+		try
+		{
+			static::deleteList([
+				'=MAILING_ID' => $parameters['MAILING_ID'],
+				'=CONTACT_ID' => $parameters['CONTACT_ID'],
+				'!=IS_UNSUB' => $isUnsub,
+			]);
+			static::cleanCache();
+
+			try
+			{
+				return static::add(['IS_UNSUB' => $isUnsub] + $parameters)->isSuccess();
+			}
+			catch (DuplicateEntryException)
+			{
+				// the row with this flag is already in place
+				return true;
+			}
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+		}
+	}
+
+	protected static function getPairLockName(int $mailingId, int $contactId): string
+	{
+		return 'sender_subscription_' . $mailingId . '_' . $contactId;
+	}
+
+	/**
+	 * Seconds to wait for a parallel repair of the same pair, which is a couple of short queries.
+	 *
+	 * @return int
+	 */
+	protected static function getPairLockTimeout(): int
+	{
+		return 3;
 	}
 
 

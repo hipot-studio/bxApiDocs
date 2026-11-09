@@ -52,9 +52,6 @@ class GenerationsTable extends DataManager
 			(new Fields\IntegerField('SITE_ID'))
 				->configureNullable()
 			,
-			(new Fields\IntegerField('BLOCK_ID'))
-				->configureNullable()
-			,
 			(new Fields\ArrayField('SITE_DATA'))
 				->configureSerializationPhp()
 				->addSaveDataModifier([EmojiDataProcessor::class, 'encode'])

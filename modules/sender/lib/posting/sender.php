@@ -49,6 +49,9 @@ class Sender
 	const RESULT_WAIT     = 4;
 	const RESULT_WAITING_RECIPIENT = 5;
 
+	/** Transport exceptions in a row after which the provider is treated as unavailable and the batch stops. */
+	protected const TRANSPORT_EXCEPTION_SERIES_LIMIT = 10;
+
 	/** @var bool|null is consent supported by this posting*/
 	protected $isConsentSupport;
 
@@ -74,6 +77,15 @@ class Sender
 
 	/** @var  boolean $isPrevented Is prevented. */
 	protected $isPrevented = false;
+
+	/** @var bool Whether sending was paused after a permanent transport error. */
+	protected bool $isPausedOnPermanentTransportError = false;
+
+	/** @var \Exception|null Exception thrown by the transport on the last sending to a recipient. */
+	private ?\Exception $transportException = null;
+
+	/** @var array Recipients failed with a transport exception in a row and not marked yet, with the exceptions. */
+	private array $transportExceptionSeries = [];
 
 	/** @var  boolean $isTrigger Is trigger. */
 	protected $isTrigger = false;
@@ -580,7 +592,7 @@ class Sender
 	 * @return bool
 	 * @throws \Exception
 	 */
-	private function sendToRecipients($recipients)
+	protected function sendToRecipients($recipients)
 	{
 		$sendResult = null;
 		$dataToInsert = [];
@@ -608,16 +620,42 @@ class Sender
 					{
 						break;
 					}
-					$sendResultStatus = ($sendResult ?
-						PostingRecipientTable::SEND_RESULT_SUCCESS :
-						PostingRecipientTable::SEND_RESULT_ERROR
-					);
-					$this->updateRecipientStatus($recipient['ID'],$sendResultStatus);
-					$eventData = $this->executeEvent($recipient, $sendResult);
+					if ($this->isPausedOnPermanentTransportError)
+					{
+						break;
+					}
+					if ($this->transportException !== null)
+					{
+						// the recipient is marked when the series ends
+						$this->transportExceptionSeries[] = [
+							'RECIPIENT' => $recipient,
+							'EXCEPTION' => $this->transportException,
+						];
+						$eventData = null;
+						if (count($this->transportExceptionSeries) >= static::TRANSPORT_EXCEPTION_SERIES_LIMIT)
+						{
+							array_push($dataToInsert, ...$this->stopOnTransportExceptionSeries());
+							break;
+						}
+					}
+					else
+					{
+						array_push($dataToInsert, ...$this->closeTransportExceptionSeries(true));
+						$sendResultStatus = ($sendResult ?
+							PostingRecipientTable::SEND_RESULT_SUCCESS :
+							PostingRecipientTable::SEND_RESULT_ERROR
+						);
+						$this->updateRecipientStatus($recipient['ID'],$sendResultStatus);
+						$eventData = $this->executeEvent($recipient, $sendResult);
+					}
 				}
 				elseif ($this->canSendConsentToRecipient($recipient))
 				{
 					$sendResult = $this->executeConsentToRecipient($recipient);
+					if ($this->isPausedOnPermanentTransportError)
+					{
+						break;
+					}
 					$sendResultStatus = (
 						$sendResult ?
 						PostingRecipientTable::SEND_RESULT_WAIT_ACCEPT :
@@ -626,11 +664,22 @@ class Sender
 					$this->updateRecipientStatus($recipient['ID'],$sendResultStatus);
 				}
 
-				$dataToInsert[] = $eventData;
-
-				if (Bitrix24\Service::isCloud() && $eventData['SEND_RESULT'] && $this->letter->getMessage()->getCode() === Message\iBase::CODE_MAIL)
+				if ($eventData !== null)
 				{
-					Bitrix24\Limitation\DailyLimit::increment();
+					$dataToInsert[] = $eventData;
+
+					if (
+						Bitrix24\Service::isCloud()
+						&& $eventData['SEND_RESULT']
+						&& $this->letter->getMessage()->getCode() === Message\iBase::CODE_MAIL
+					)
+					{
+						Bitrix24\Limitation\DailyLimit::increment();
+					}
+				}
+				if ($this->isPausedOnPermanentTransportError)
+				{
+					break;
 				}
 				// limit executing script by time
 				if ($this->isTimeout() || $this->isLimitExceeded() || $this->isTransportLimitsExceeded())
@@ -645,12 +694,25 @@ class Sender
 
 		try
 		{
+			// a series not closed by a recipient sent without an exception may mean the provider is unavailable
+			if ($this->isPausedOnPermanentTransportError)
+			{
+				$this->closeTransportExceptionSeries(false);
+			}
+			else
+			{
+				array_push($dataToInsert, ...$this->stopOnTransportExceptionSeries());
+			}
+		}
+		catch (\Exception $e)
+		{
+		}
+
+		try
+		{
 			if($dataToInsert)
 			{
-				Integration\EventHandler::onAfterPostingSendRecipientMultiple(
-					$dataToInsert,
-					$this->letter
-				);
+				$this->dispatchRecipientEvents($dataToInsert);
 			}
 		} catch(\Exception $e)
 		{
@@ -658,6 +720,11 @@ class Sender
 		}
 
 		return $sendResult;
+	}
+
+	protected function dispatchRecipientEvents(array $events): void
+	{
+		Integration\EventHandler::onAfterPostingSendRecipientMultiple($events, $this->letter);
 	}
 
 	protected function isPrevented()
@@ -704,11 +771,13 @@ class Sender
 
 	protected function sendToRecipient($recipient)
 	{
+		$this->transportException = null;
 		self::applyRecipientToMessage($this->message, $recipient);
 
 		// event before sending
 		$eventSendParams = [
 			'FIELDS'           => $this->message->getFields(),
+			'ORIGINAL_FIELDS'  => $this->message->getOriginalFields(),
 			'TRACK_READ'       => $this->message->getReadTracker()->getArray(),
 			'TRACK_CLICK'      => $this->message->getClickTracker()->getArray(),
 			'MAILING_CHAIN_ID' => $this->letter->getId()
@@ -734,22 +803,179 @@ class Sender
 		}
 		if (count($event->getResults()) > 0)
 		{
-			$this->message->setFields($eventSendParams['FIELDS']);
+			$this->applyEventFields($eventSendParams);
 			$this->message->getReadTracker()->setArray($eventSendParams['TRACK_READ']);
-			$this->message->getReadTracker()->setArray($eventSendParams['TRACK_CLICK']);
+			$this->message->getClickTracker()->setArray($eventSendParams['TRACK_CLICK']);
 		}
 
 		try
 		{
 			$sendResult = $this->message->send();
+			if (!$sendResult)
+			{
+				$error = $this->message->getTransport()->getLastError();
+				if ($error !== null)
+				{
+					$this->pauseOnPermanentTransportError($error);
+				}
+			}
 		}
 		catch (Main\Mail\StopException $e)
 		{
 			$sendResult = false;
 			$this->prevent();
 		}
+		catch (\Exception $e)
+		{
+			$sendResult = false;
+			$this->transportException = $e;
+		}
 
 		return $sendResult;
+	}
+
+	/**
+	 * Apply the fields of the OnBeforePostingSendRecipient parameters.
+	 *
+	 * The handlers get the fields twice: ORIGINAL_FIELDS as they were set and FIELDS prepared for the html
+	 * body of the mail, the parameter they always got. Editing ORIGINAL_FIELDS is the way to go, its values
+	 * are prepared once; FIELDS is kept for the handlers written before ORIGINAL_FIELDS existed and its
+	 * values, being prepared already, go through the preparation a second time. ORIGINAL_FIELDS wins when
+	 * both are edited, and fields no handler edited are left alone.
+	 *
+	 * @param array $params Event parameters.
+	 * @return void
+	 */
+	protected function applyEventFields(array $params): void
+	{
+		$originalFields = $params['ORIGINAL_FIELDS'] ?? null;
+		$fields = $params['FIELDS'] ?? null;
+
+		if ($originalFields !== null && $originalFields !== $this->message->getOriginalFields())
+		{
+			$this->message->setFields($originalFields);
+		}
+		elseif ($fields !== null && $fields !== $this->message->getFields())
+		{
+			$this->message->setFields($fields);
+		}
+	}
+
+	protected function pauseOnPermanentTransportError(Main\Error $error): void
+	{
+		if ($this->isPausedOnPermanentTransportError || !$this->isPermanentTransportError($error))
+		{
+			return;
+		}
+
+		$this->isPausedOnPermanentTransportError = true;
+		$this->savePermanentTransportError($error);
+		$this->letter->pause();
+	}
+
+	/**
+	 * A long series, or a series the pass ends with, may mean the provider is unavailable: only the first
+	 * recipient of the series is failed, the rest stay unsent for the next pass. So a cluster of bad numbers
+	 * goes in a pass or two, and an unavailable provider costs at most one recipient a pass without pausing
+	 * the letter.
+	 *
+	 * @return array Event data of the failed recipient.
+	 */
+	private function stopOnTransportExceptionSeries(): array
+	{
+		if (!$this->transportExceptionSeries)
+		{
+			return [];
+		}
+
+		$recipient = $this->transportExceptionSeries[0]['RECIPIENT'];
+		$this->closeTransportExceptionSeries(false);
+
+		$this->updateRecipientStatus($recipient['ID'], PostingRecipientTable::SEND_RESULT_ERROR);
+
+		return [$this->executeEvent($recipient, false)];
+	}
+
+	/**
+	 * Ends the series of transport exceptions: writes it to the log once and, if asked, marks its recipients
+	 * failed. Unmarked recipients stay unsent and are sent again when the letter is resumed.
+	 *
+	 * @param bool $markRecipients Whether to mark the recipients of the series failed.
+	 * @return array Event data of the marked recipients.
+	 */
+	private function closeTransportExceptionSeries(bool $markRecipients): array
+	{
+		if (!$this->transportExceptionSeries)
+		{
+			return [];
+		}
+
+		$series = $this->transportExceptionSeries;
+		$this->transportExceptionSeries = [];
+		$this->logTransportExceptionSeries($series);
+
+		if (!$markRecipients)
+		{
+			return [];
+		}
+
+		$events = [];
+		foreach ($series as $item)
+		{
+			$this->updateRecipientStatus($item['RECIPIENT']['ID'], PostingRecipientTable::SEND_RESULT_ERROR);
+			$events[] = $this->executeEvent($item['RECIPIENT'], false);
+		}
+
+		return $events;
+	}
+
+	/**
+	 * The original exception is not logged and not passed as previous: its text may hold recipient data.
+	 */
+	private function logTransportExceptionSeries(array $series): void
+	{
+		$exception = end($series)['EXCEPTION'];
+		$recipientIds = array_map(static fn(array $item) => $item['RECIPIENT']['ID'], $series);
+
+		Main\Application::getInstance()->getExceptionHandler()->writeToLog(
+			new Main\SystemException(sprintf(
+				'Transport exceptions on sending letter %s to %d recipient(s) in a row [%s]: %s (code %s): %s',
+				$this->letter->getId(),
+				count($recipientIds),
+				implode(', ', $recipientIds),
+				get_class($exception),
+				$exception->getCode(),
+				static::maskTransportExceptionMessage($exception->getMessage()),
+			))
+		);
+	}
+
+	/**
+	 * Hides phone numbers (7 digits or more, separators allowed) and e-mail addresses in a transport message.
+	 */
+	protected static function maskTransportExceptionMessage(string $message): string
+	{
+		// byte-wise patterns: the text of a provider may be not in UTF-8
+		$message = preg_replace('/[^\s@<>"\'(),;:]+@[^\s@<>"\'(),;:]+/', '***@***', $message) ?? '';
+
+		return preg_replace('/\+?\d(?:[\s().-]{0,2}\d){6,}/', '***', $message) ?? '';
+	}
+
+	protected function savePermanentTransportError(Main\Error $error): void
+	{
+		Model\LetterTable::update($this->letterId, ['ERROR_MESSAGE' => $error->getMessage()]);
+	}
+
+	protected function isPermanentTransportError(Main\Error $error): bool
+	{
+		return in_array(
+			$error->getCode(),
+			[
+				'MAIL_SENDER_ADDRESS_MISMATCH',
+				'MAIL_SENDER_UNAVAILABLE',
+			],
+			true,
+		);
 	}
 
 	/**
@@ -934,6 +1160,14 @@ class Sender
 		$sendResult = $this->message->getTransport()->sendConsent(
 			$this->letter->getMessage(), $recipient + ['RECIPIENT_ID' => $recipient['ID'], 'SITE_ID' => SITE_ID]
 		);
+		if (!$sendResult)
+		{
+			$error = $this->message->getTransport()->getLastError();
+			if ($error !== null)
+			{
+				$this->pauseOnPermanentTransportError($error);
+			}
+		}
 
 		if($sendResult)
 		{

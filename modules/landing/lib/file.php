@@ -26,6 +26,11 @@ class File
 	public const ENTITY_TYPE_ASSET = 'A';
 
 	/**
+	 * Entity type markup upload buffer (unfinished markup package upload).
+	 */
+	public const ENTITY_TYPE_MARKUP_UPLOAD = 'U';
+
+	/**
 	 * Transliterates the Cyrillic characters in a file name to Latin characters and returns the new file name.
 	 * @param string $fileName File name.
 	 * @return string
@@ -430,6 +435,86 @@ class File
 			self::add($fileId, $assetId, self::ENTITY_TYPE_ASSET);
 			self::markAssetRebuilt($assetId);
 			// todo: res from add and check error
+		}
+	}
+
+	/**
+	 * Add new record for a markup upload buffer. The binding is not TEMP: the buffer
+	 * has its own lifetime, an expired buffer releases its files itself.
+	 * @param int $uploadId Id of the markup upload buffer row.
+	 * @param int $fileId File id.
+	 * @return void
+	 */
+	public static function addToMarkupUpload(int $uploadId, int $fileId): void
+	{
+		if ($fileId > 0 && $uploadId > 0)
+		{
+			self::add($fileId, $uploadId, self::ENTITY_TYPE_MARKUP_UPLOAD);
+		}
+	}
+
+	/**
+	 * Mark markup upload buffer files for deletion.
+	 * Not removed from disk immediately, just marked for the agent.
+	 * @param int $uploadId Id of the markup upload buffer row.
+	 * @param int|int[] $fileId File id (by default delete all files of the buffer).
+	 * @return void
+	 */
+	public static function deleteFromMarkupUpload(int $uploadId, $fileId = []): void
+	{
+		self::delete($fileId, $uploadId, self::ENTITY_TYPE_MARKUP_UPLOAD);
+	}
+
+	/**
+	 * Deletes part files of a markup upload buffer at once, bypassing the deferred deletion queue:
+	 * a part belongs to the buffer only and is useless after gluing, a refusal or the buffer expiry.
+	 * A file bound to anything else stays.
+	 * @param int $uploadId Id of the markup upload buffer row.
+	 * @param int[] $fileIds Part file ids.
+	 * @return void
+	 */
+	public static function deleteMarkupUploadParts(int $uploadId, array $fileIds): void
+	{
+		$fileIds = array_values(array_unique(array_filter(
+			array_map('intval', $fileIds),
+			static fn(int $fileId): bool => $fileId > 0,
+		)));
+		if ($uploadId <= 0 || !$fileIds)
+		{
+			return;
+		}
+
+		$bindings = FileTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'ENTITY_ID' => $uploadId,
+				'=ENTITY_TYPE' => self::ENTITY_TYPE_MARKUP_UPLOAD,
+				'@FILE_ID' => array_merge($fileIds, array_map(static fn(int $fileId): int => -$fileId, $fileIds)),
+			],
+		]);
+		while ($binding = $bindings->fetch())
+		{
+			FileTable::delete($binding['ID']);
+		}
+
+		$deletable = array_fill_keys($fileIds, true);
+		$stillUsed = FileTable::getList([
+			'select' => ['FILE_ID'],
+			'filter' => ['@FILE_ID' => $fileIds],
+		]);
+		while ($row = $stillUsed->fetch())
+		{
+			unset($deletable[(int)$row['FILE_ID']]);
+		}
+		if (!$deletable)
+		{
+			return;
+		}
+
+		$files = \CFile::getList([], ['@ID' => array_keys($deletable), 'MODULE_ID' => 'landing']);
+		while ($file = $files->fetch())
+		{
+			\CFile::delete((int)$file['ID']);
 		}
 	}
 

@@ -59,9 +59,16 @@ class RpaTypeDetailComponent extends \Bitrix\Rpa\Components\Base
 			{
 				if($this->isIframe())
 				{
-					$this->type = $this->createDraftType();
-					$this->getApplication()->setTitle(htmlspecialcharsbx($this->getTitle()));
-					$this->isNew = true;
+					if(check_bitrix_sessid())
+					{
+						$this->type = $this->createDraftType();
+						$this->getApplication()->setTitle(htmlspecialcharsbx($this->getTitle()));
+						$this->isNew = true;
+					}
+					else
+					{
+						$this->errorCollection[] = new \Bitrix\Main\Error(Loc::getMessage('RPA_NOT_FOUND_ERROR'));
+					}
 				}
 				else
 				{

@@ -75,7 +75,7 @@ class Group extends Controller
 		);
 
 		if (
-			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS)
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS)
 			|| !str_starts_with($groupIdCode, 'new_') && !isset($allowedGroups[PermissionDictionary::getDashboardGroupIdFromPermission($groupIdCode)])
 		)
 		{
@@ -145,7 +145,7 @@ class Group extends Controller
 			'user' => [
 				'id' => AccessController::getCurrent()->getUser()->getUserId(),
 				'isAdmin' => AccessController::getCurrent()->getUser()->isAdmin(),
-				'hasAccessToPermission' => AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS),
+				'hasAccessToPermission' => AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS),
 				'accessibleGroupIds' => $accessibleGroupIds,
 			],
 		];
@@ -158,7 +158,7 @@ class Group extends Controller
 		);
 
 		if (
-			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS)
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS)
 			|| !isset($allowedGroups[$group->getId()])
 		)
 		{
@@ -191,7 +191,7 @@ class Group extends Controller
 	{
 		$accessController = AccessController::getCurrent();
 
-		if (!$accessController->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS))
 		{
 			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY');
 			$this->addError(new UserFacingError($errorMessage));

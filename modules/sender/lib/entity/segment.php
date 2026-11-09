@@ -17,6 +17,7 @@ use Bitrix\Sender\GroupConnectorTable;
 use Bitrix\Sender\GroupDealCategoryTable;
 use Bitrix\Sender\GroupTable;
 use Bitrix\Sender\Internals\Model\GroupCounterTable;
+use Bitrix\Sender\Internals\Model\LetterSegmentTable;
 use Bitrix\Sender\Internals\SqlBatch;
 use Bitrix\Sender\ListTable;
 use Bitrix\Sender\Posting\SegmentDataBuilder;
@@ -458,6 +459,54 @@ class Segment extends Base
 		{
 			$data[$row['GROUP_ID']][$row['TYPE_ID']] = $row['CNT'];
 		}
+		return $data;
+	}
+
+	/**
+	 * Get address counters of the included segments summed up for each letter.
+	 *
+	 * The sum is not deduplicated across segments, so it is an estimate of the audience,
+	 * as the segment selector of the letter form shows it.
+	 *
+	 * @param integer[] $letterIds List of letter ID.
+	 * @return array Counters by type ID for each letter ID.
+	 */
+	public static function getIncludeAddressCountersByLetters(array $letterIds)
+	{
+		$letterIds = array_filter(array_map('intval', $letterIds));
+		if (!$letterIds)
+		{
+			return [];
+		}
+
+		$segmentsByLetter = [];
+		$rows = LetterSegmentTable::getList([
+			'select' => ['LETTER_ID', 'SEGMENT_ID'],
+			'filter' => ['=LETTER_ID' => $letterIds, '=INCLUDE' => true],
+		]);
+		foreach ($rows as $row)
+		{
+			$segmentsByLetter[$row['LETTER_ID']][] = (int)$row['SEGMENT_ID'];
+		}
+		if (!$segmentsByLetter)
+		{
+			return [];
+		}
+
+		$counters = self::getAddressCounters(array_unique(array_merge(...array_values($segmentsByLetter))));
+
+		$data = [];
+		foreach ($segmentsByLetter as $letterId => $segmentIds)
+		{
+			foreach ($segmentIds as $segmentId)
+			{
+				foreach ($counters[$segmentId] ?? [] as $typeId => $count)
+				{
+					$data[$letterId][$typeId] = ($data[$letterId][$typeId] ?? 0) + (int)$count;
+				}
+			}
+		}
+
 		return $data;
 	}
 

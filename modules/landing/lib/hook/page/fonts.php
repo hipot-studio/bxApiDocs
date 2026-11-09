@@ -244,6 +244,7 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 					$row['ID'],
 					['VALUE' => $existsContent]
 				);
+				Hook::clearCache();
 			}
 
 			return;
@@ -254,6 +255,7 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 		{
 			$fields['VALUE'] = $normalizedContent;
 			HookDataTable::add($fields);
+			Hook::clearCache();
 		}
 	}
 

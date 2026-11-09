@@ -37,25 +37,34 @@ class Update extends Command
 				}
 				$result->addError($this->getMoveAccessDeniedError($actualStageName));
 			}
-			elseif(!$userPermissions->canModifyItemsInStage($this->item->getType(), $this->item->remindActualStageId()))
+			elseif(!$userPermissions->canModifyItem($this->item) && $this->hasChangedUserFields())
 			{
-				$userFields = $this->item->getType()->getUserFieldCollection();
-				foreach($userFields as $userField)
-				{
-					if($this->item->isChanged($userField->getName()))
-					{
-						$result->addError($this->getModifyAccessDeniedError($this->item->getStage()->getName()));
-						break;
-					}
-				}
+				$result->addError($this->getModifyAccessDeniedError($this->item->getStage()->getName()));
 			}
 		}
-		elseif(!$userPermissions->canModifyItemsInStage($this->item->getType(), $this->item->getStageId()))
+		elseif(!$userPermissions->canModifyItem($this->item) && $this->hasChangedUserFields())
 		{
 			$result->addError($this->getModifyAccessDeniedError($this->item->getStage()->getName()));
 		}
 
 		return $result;
+	}
+
+	protected function hasChangedUserFields(): bool
+	{
+		return !empty($this->getChangedUserFieldNames());
+	}
+
+	/**
+	 * Access check and saving use the same set: a field is changed only when it was set in this request
+	 * and its value differs from the saved one.
+	 */
+	protected function getChangedUserFieldNames(): array
+	{
+		return array_values(array_filter(
+			$this->item->getChangedUserFieldNames(),
+			fn(string $fieldName): bool => $this->item->isChanged($fieldName)
+		));
 	}
 
 	public function checkStage(): Result
@@ -80,6 +89,8 @@ class Update extends Command
 		{
 			return new Result();
 		}
+		// visibility before the change: who loses access gets the removal of the kanban card
+		Driver::getInstance()->getPullManager()->rememberItemViewers($this->item);
 		if($this->userId > 0)
 		{
 			$this->item->setUpdatedBy($this->userId);
@@ -124,7 +135,7 @@ class Update extends Command
 		{
 			$this->isItemChanged = (
 				$this->item->isChanged('STAGE_ID') ||
-				!empty($this->item->getChangedUserFieldNames())
+				$this->hasChangedUserFields()
 			);
 
 			if ($this->isItemChanged)

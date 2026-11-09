@@ -828,6 +828,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			self::STATUS_RELEVANCE,
 			$limit,
 			$offset,
+			$this->shouldOrderMembersByParty($document),
 		);
 
 		$this->arResult['COUNTER_ITEMS'] = $this->getCounterItems($document, $filter);
@@ -864,6 +865,29 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		return $resultCollection;
 	}
 
+	/**
+	 * The queue of a company-initiated document is the order of its own parties, so the grid follows
+	 * them instead of the fixed role order. The document is asked, not the feature: a document already
+	 * running with the reordered stages keeps its queue after the feature is switched off, and a
+	 * document started before it keeps the order it was sent in.
+	 *
+	 * Only the pair the reordered stages swap is asked about. Every other composition numbers its
+	 * parties in the same order as the role relevance the grid falls back to, so telling them apart
+	 * would change nothing.
+	 *
+	 * Documents sent by an employee are left out of the feature, and their party numbers describe the
+	 * signing order rather than this queue, so they keep the role order.
+	 */
+	private function shouldOrderMembersByParty(Item\Document $document): bool
+	{
+		if ($document->initiatedByType !== Type\Document\InitiatedByType::COMPANY)
+		{
+			return false;
+		}
+
+		return $this->memberRepository->isEditorPartyBeforeReviewerParty((int)$document->id);
+	}
+
 	private function getSafeMemberCollection(array $requestFilter): MemberCollection
 	{
 		// NORMATIVE ALG-02: inside a folder the whole level is gated by the folder read
@@ -875,19 +899,28 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 				$this->getCurrentSafeFolderId(),
 			))
 			{
-				return new MemberCollection();
+				$this->prepareSafePage(0);
+
+				return (new MemberCollection())->setQueryTotal(0);
 			}
 		}
 
 		[$orderField, $orderDirection] = $this->getSafeDataOrder();
 
-		return $this->memberRepository->listB2eMembersWithResultFilesForMySafe(
-			$this->getFilterForQuery($requestFilter),
+		$filter = $this->getFilterForQuery($requestFilter);
+		$total = $this->memberRepository->countB2eMembersForMySafe($filter);
+		$this->prepareSafePage($total);
+
+		$members = $this->memberRepository->listB2eMembersWithResultFilesForMySafe(
+			$filter,
 			$this->getLimitForQuery(),
 			$this->getOffsetForQuery(),
 			$orderField,
 			$orderDirection,
+			countTotal: false,
 		);
+
+		return $members->setQueryTotal($total);
 	}
 
 	/**
@@ -1315,6 +1348,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 
 		$memberFilter = $this->getFilterForQuery($requestFilter);
 		$memberTotal = $this->memberRepository->countB2eMembersForMySafe($memberFilter);
+		$this->prepareSafePage($folderCount + $memberTotal);
 
 		$slice = $this->safeListService->calculatePageSlice(
 			$folderCount,
@@ -1630,7 +1664,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		$this->arResult['DOCUMENTS'] = [];
 		$this->arResult['SAFE_FOLDER_ID'] = $folderId;
 		$this->arResult['TOTAL_COUNT'] = 0;
-		$this->getNavigation()->setRecordCount(0);
+		$this->prepareSafePage(0);
 	}
 
 	/**
@@ -2946,6 +2980,15 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		$this->arResult['NAVIGATION_OBJECT'] = $pageNavigation;
 
 		return $pageNavigation;
+	}
+
+	private function prepareSafePage(int $total): void
+	{
+		$navigation = $this->getNavigation();
+		$navigation->setRecordCount($total);
+		$navigation->setCurrentPage(
+			max(1, min($navigation->getCurrentPage(), $navigation->getPageCount())),
+		);
 	}
 
 	/**

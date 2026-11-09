@@ -31,6 +31,11 @@ class LandingSitesComponent extends LandingBaseComponent
 	const COUNT_PER_PAGE = 12;
 
 	/**
+	 * Count items per page in the old tile grid, where the "create" tile takes the first place.
+	 */
+	const COUNT_PER_PAGE_OLD_TILE = 23;
+
+	/**
 	 * Rights array of sites.
 	 * @var array
 	 */
@@ -190,6 +195,20 @@ class LandingSitesComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Returns true if the list is shown by the old tile grid of the template, not by landing.site_tile.
+	 * @return bool
+	 */
+	protected function isOldTile(): bool
+	{
+		return
+			$this->arParams['TYPE'] === 'KNOWLEDGE'
+			|| $this->arParams['TYPE'] === 'GROUP'
+			|| !Manager::isB24()
+			|| ($this->arParams['OLD_TILE'] ?? 'N') === 'Y'
+		;
+	}
+
+	/**
 	 * Base executable method.
 	 * @return mixed
 	 */
@@ -305,24 +324,16 @@ class LandingSitesComponent extends LandingBaseComponent
 				$filter[] = $this->getAdditionalAccessFilter($this->arParams['ACCESS_CODE']);
 			}
 			$this->arResult['EXPORT_DISABLED'] = Restriction\Manager::isAllowed('limit_sites_transfer') ? 'N' : 'Y';
-			$isAllowedExportByTariff = null;
-			if ($this->arResult['EXPORT_DISABLED'] !== 'Y')
+			$this->arResult['EXPORT_DISABLED_BY_RIGHTS'] = 'N';
+			Restriction\Manager::enableFeatureTmp('limit_sites_access_permissions');
+			if (
+				Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['unexportable'], null, false, true)
+				&& !Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['admin'], null, false, true)
+			)
 			{
-				$isAllowedExportByTariff = true;
-				Bitrix\Landing\Restriction\Manager::enableFeatureTmp('limit_sites_access_permissions');
-				if (
-					Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['unexportable'], null, false, true)
-					&& !Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['admin'], null, false, true)
-				)
-				{
-					$this->arResult['EXPORT_DISABLED'] = 'Y';
-				}
-				else
-				{
-					$this->arResult['EXPORT_DISABLED'] = 'N';
-				}
-				Bitrix\Landing\Restriction\Manager::disableFeatureTmp('limit_sites_access_permissions');
+				$this->arResult['EXPORT_DISABLED_BY_RIGHTS'] = 'Y';
 			}
+			Restriction\Manager::disableFeatureTmp('limit_sites_access_permissions');
 			$this->arResult['SMN_SITES'] = $this->getSmnSites();
 			$this->arResult['IS_DELETED'] = LandingFilterComponent::isDeleted();
 			$this->arResult['SITES'] = $this->getSites([
@@ -336,7 +347,7 @@ class LandingSitesComponent extends LandingBaseComponent
 				'order' => [
 						'DATE_MODIFY' => 'desc'
 					],
-				'navigation' => $this::COUNT_PER_PAGE
+				'navigation' => $this->isOldTile() ? $this::COUNT_PER_PAGE_OLD_TILE : $this::COUNT_PER_PAGE
 			]);
 			$this->arResult['NAVIGATION'] = $this->getLastNavigation();
 			$this->arResult['DELETE_LOCKED'] = $this->getDeleteLocked(
@@ -401,7 +412,7 @@ class LandingSitesComponent extends LandingBaseComponent
 
 				//can export
 				$item['ACCESS_EXPORT'] = 'Y';
-				if ($isAllowedExportByTariff && $this->arResult['EXPORT_DISABLED'] === 'Y')
+				if ($this->arResult['EXPORT_DISABLED_BY_RIGHTS'] === 'Y')
 				{
 					$item['ACCESS_EXPORT'] = 'N';
 				}

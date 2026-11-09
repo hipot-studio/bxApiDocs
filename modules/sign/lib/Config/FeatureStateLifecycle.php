@@ -8,6 +8,7 @@ use Bitrix\Main\Config\Feature\FeatureFlagTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Sign\Config\Feature\B2eBizprocChainFlag;
+use Bitrix\Sign\Config\Feature\KedoStageReorderFlag;
 use Bitrix\Sign\Config\Feature\KedoRunProcessFlag;
 
 final class FeatureStateLifecycle
@@ -17,6 +18,7 @@ final class FeatureStateLifecycle
 	private const MODULE_ID = 'sign';
 	private const FLAGS = [
 		B2eBizprocChainFlag::class,
+		KedoStageReorderFlag::class,
 		KedoRunProcessFlag::class,
 	];
 

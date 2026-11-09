@@ -36,6 +36,7 @@ final class Table extends AbstractBuilderController
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::RateLimit,
 	)]
 	public function listAction(ListBiTablesRequest $request): ArrayResponse

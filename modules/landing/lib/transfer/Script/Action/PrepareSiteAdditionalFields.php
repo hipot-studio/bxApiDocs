@@ -20,6 +20,12 @@ class PrepareSiteAdditionalFields extends Blank
 		$additionalFields = $data['ADDITIONAL_FIELDS'] ?? [];
 		$additional = $this->context->getAdditionalOptions();
 
+		// raw html/js from an archive must not reach the page head
+		unset(
+			$additionalFields['HEADBLOCK_USE'],
+			$additionalFields['HEADBLOCK_CODE'],
+		);
+
 		if (
 			!$this->isImportPageScript()
 			&& !$this->isReplaceScript()

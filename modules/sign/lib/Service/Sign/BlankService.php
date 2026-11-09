@@ -5,26 +5,30 @@ namespace Bitrix\Sign\Service\Sign;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Error;
+use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
+use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\SystemException;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item\Blank;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Fs\File;
 use Bitrix\Sign\Item\Fs\FileCollection;
-use Bitrix\Sign\Item\Fs\FileContent;
 use Bitrix\Sign\Repository\Blank\ResourceRepository;
 use Bitrix\Sign\Repository\BlankRepository;
 use Bitrix\Sign\Repository\FileRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Type\BlankFileExtension;
 use Bitrix\Sign\Type\BlankScenario;
 use Bitrix\Sign\Upload\BlankUploadController;
 
 class BlankService
 {
+	public const BLANK_TYPE_CONFIRMATION_REQUIRED = 'BLANK_TYPE_CONFIRMATION_REQUIRED';
+
 	private BlankFileService $blankFileService;
 	private BlankRepository $blankRepository;
 	private FileRepository $fileRepository;
@@ -55,6 +59,7 @@ class BlankService
 		string $scenario = BlankScenario::B2B,
 		bool $forTemplate = false,
 		bool $hasPlaceholders = false,
+		bool $autoDetectType = false,
 	): AddResult
 	{
 		if (!in_array($scenario, BlankScenario::getAll(), true))
@@ -63,6 +68,16 @@ class BlankService
 		}
 
 		$fileCount = $fileCollection->count();
+		if ($autoDetectType)
+		{
+			$validationResult = $this->validateAutoDetectionFiles($fileCollection, $scenario);
+			if (!$validationResult->isSuccess())
+			{
+				return (new AddResult())->addErrors($validationResult->getErrors());
+			}
+
+			$hasPlaceholders = mb_strtolower((string)$fileCollection->first()->type) === 'docx';
+		}
 
 		$firstFile = $fileCollection->shift();
 		if (is_null($firstFile))
@@ -133,6 +148,8 @@ class BlankService
 	 * @param string $scenario
 	 * @param bool $forTemplate
 	 * @param bool $hasPlaceholders
+	 * @param bool $autoDetectType
+	 * @param bool|null $expectedHasPlaceholders
 	 * @return AddResult
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -143,17 +160,50 @@ class BlankService
 		string $scenario = BlankScenario::B2B,
 		bool   $forTemplate = false,
 		bool   $hasPlaceholders = false,
+		bool $autoDetectType = false,
+		?bool $expectedHasPlaceholders = null,
 	): AddResult
 	{
-		if (!in_array($scenario, BlankScenario::getAll(), true))
+		if ($expectedHasPlaceholders !== null && (!$autoDetectType || $scenario !== BlankScenario::B2E))
+		{
+			return (new AddResult())->addError(new Error('Expected blank type requires automatic B2E detection'));
+		}
+
+		if (
+			!in_array($scenario, BlankScenario::getAll(), true)
+			|| ($autoDetectType && $scenario !== BlankScenario::B2E)
+		)
 		{
 			return (new AddResult())->addError(new Error('Wrong blank scenario'));
+		}
+
+		if ($autoDetectType && !Loader::includeModule('ui'))
+		{
+			return (new AddResult())->addError(new Error('File uploader is unavailable'));
 		}
 
 		$fileController = new BlankUploadController([]);
 		$uploader = new \Bitrix\UI\FileUploader\Uploader($fileController);
 
+		// The tokens of the batch are read before the loop, not one by one inside it: a merged
+		// document brings the whole image selection of the user here, and a damaged token must be
+		// answered before any other token of the batch has been committed.
+		try
+		{
+			$pendingFiles = $uploader->getPendingFiles($files);
+		}
+		catch (BadSignatureException $exception)
+		{
+			if (!$autoDetectType)
+			{
+				throw $exception;
+			}
+
+			return (new AddResult())->addError(new Error('Failed to save uploaded file'));
+		}
+
 		$fileCollection = new FileCollection();
+		$storedPaths = [];
 
 		foreach ($files as $fileId)
 		{
@@ -165,11 +215,15 @@ class BlankService
 			$persistentFileId = null;
 			if (is_string($fileId))
 			{
-				$pendingFiles = $uploader->getPendingFiles([$fileId]);
-				$pendingFiles->makePersistent();
-				$file = $pendingFiles->get($fileId);
-				$persistentFileId = $file->getFileId();
+				$pendingFile = $pendingFiles->get($fileId);
+				if (!$autoDetectType)
+				{
+					// Explicit mode commits a token as soon as it is read; automatic mode waits for
+					// the whole batch below, so a refused batch leaves every token of it reusable.
+					$pendingFile?->makePersistent();
+				}
 
+				$persistentFileId = $pendingFile?->getFileId();
 				if ($persistentFileId === null)
 				{
 					return (new AddResult())->addError(new Error('Failed to save uploaded file'));
@@ -177,31 +231,168 @@ class BlankService
 			}
 
 			$signFile = new \Bitrix\Sign\File((int)($persistentFileId ?: $fileId));
-			$fileCollection->addItem(
-				new File(
-					$signFile->getName(),
-					$signFile->getPath(),
-					$signFile->getExtension(),
-					$signFile->getId(),
-					new FileContent($signFile->getContent()),
-					$signFile->isImage()
-				)
+			if ($autoDetectType && !$signFile->isExist())
+			{
+				return (new AddResult())->addError(new Error('Files sent with errors'));
+			}
+
+			$storedPath = (string)$signFile->getPath();
+			$file = new File(
+				$signFile->getName(),
+				$storedPath === '' ? '' : Path::getDirectory($storedPath),
+				$signFile->getExtension(),
+				$signFile->getId(),
+				null,
+				$signFile->isImage(),
 			);
+			// The size comes from the b_file row and not from the content: the limits below are
+			// stated in bytes, and measuring them by reading every file would hold the whole image
+			// part of a batch in memory before a single limit has been checked.
+			$file->size = $signFile->getSize();
+			$fileCollection->addItem($file);
+			$storedPaths[(int)$signFile->getId()] = $storedPath;
 		}
 
-		return $this->createFromFile($fileCollection, $scenario, $forTemplate, $hasPlaceholders);
+		if ($autoDetectType)
+		{
+			$validationResult = $this->validateAutoDetectionFiles($fileCollection, $scenario);
+			if (!$validationResult->isSuccess())
+			{
+				return (new AddResult())->addErrors($validationResult->getErrors());
+			}
+
+			foreach ($fileCollection as $file)
+			{
+				if ($file->isImage && !$this->isReadableImage($storedPaths[(int)$file->id] ?? ''))
+				{
+					return (new AddResult())->addError(new Error('Invalid file list', 'INVALID_FILE_LIST'));
+				}
+			}
+
+			$actualHasPlaceholders = mb_strtolower((string)$fileCollection->first()->type) === 'docx';
+			if ($expectedHasPlaceholders !== null && $expectedHasPlaceholders !== $actualHasPlaceholders)
+			{
+				return (new AddResult())->addError(new Error(
+					'Confirm the detected blank type',
+					self::BLANK_TYPE_CONFIRMATION_REQUIRED,
+					['hasPlaceholders' => $actualHasPlaceholders],
+				));
+			}
+
+			$pendingFiles->makePersistent();
+		}
+
+		return $this->createFromFile($fileCollection, $scenario, $forTemplate, $hasPlaceholders, $autoDetectType);
 	}
 
 	/**
-	 * Total size of files still pending in the uploader, taken from their metadata: content is not read.
+	 * @param string $path Absolute path of the stored file, as the file array of its id gave it.
+	 */
+	private function isReadableImage(string $path): bool
+	{
+		try
+		{
+			$info = (new \Bitrix\Main\File\Image($path))->getInfo();
+
+			return $info !== null
+				&& $info->getWidth() > 0
+				&& $info->getHeight() > 0
+				&& in_array($info->getFormat(), [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)
+			;
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	public function validateAutoDetectionFiles(FileCollection $files, string $scenario): Result
+	{
+		$result = new Result();
+		if ($scenario !== BlankScenario::B2E)
+		{
+			return $result->addError(new Error('Wrong blank scenario'));
+		}
+
+		if ($files->empty())
+		{
+			return $result->addError(new Error('Files sent with errors'));
+		}
+
+		$storage = Storage::instance();
+		$totalImageSize = 0;
+		foreach ($files as $file)
+		{
+			if (!BlankFileExtension::isAllowed((string)$file->type))
+			{
+				Loc::loadMessages(__DIR__ . '/BlankFileService.php');
+
+				return $result->addError(new Error(
+					Loc::getMessage('SIGN_CORE_BLANK_ERROR_NOT_ALLOWED_EXTENSIONS'),
+					'NOT_ALLOWED_EXTENSIONS',
+				));
+			}
+
+			$isImageExtension = in_array(mb_strtolower((string)$file->type), ['jpg', 'jpeg', 'png'], true);
+			if (($files->count() > 1 || $isImageExtension) && !$file->isImage)
+			{
+				return $result->addError(new Error('Invalid file list', 'INVALID_FILE_LIST'));
+			}
+
+			if ($file->isImage)
+			{
+				$totalImageSize += $file->size;
+				if ($file->size > $storage->getUploadImagesMaxSize())
+				{
+					Loc::loadMessages(__DIR__ . '/BlankFileService.php');
+
+					return $result->addError(new Error(
+						Loc::getMessage('SIGN_SERVICE_SIGN_BLANKFILE_IMAGE_FILE_TOO_BIG', [
+							'#SIZE#' => floor($storage->getUploadImagesMaxSize() / 1024 / 1024),
+						]),
+						'FILE_TOO_BIG',
+					));
+				}
+			}
+		}
+
+		if ($files->first()->isImage && $files->count() > $storage->getImagesCountLimitForBlankUpload())
+		{
+			return $result->addError(new Error(
+				Loc::getMessage('SIGN_SERVICE_BLANK_TOO_MANY_IMAGES', [
+					'#COUNT#' => $storage->getImagesCountLimitForBlankUpload(),
+				]),
+				'FILE_TOO_MANY_IMAGES',
+			));
+		}
+
+		if ($totalImageSize > $storage->getUploadTotalMaxSize())
+		{
+			Loc::loadMessages(__DIR__ . '/BlankFileService.php');
+
+			return $result->addError(new Error(
+				Loc::getMessage('SIGN_IMAGES_BLANK_ERROR_FILE_TOO_BIG', [
+					'#SIZE#' => floor($storage->getUploadTotalMaxSize() / 1024 / 1024),
+				]),
+				'FILE_TOO_BIG',
+			));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Metadata of the files still pending in the uploader, keyed by token: the name and the byte
+	 * size come from the temp file row, so a caller weighing or classifying a batch reads no file
+	 * and, on a portal with cloud storage, downloads nothing.
 	 *
-	 * An unknown, foreign or expired token counts as zero: such a file is rejected later,
+	 * An unknown, foreign or expired token is absent from the result: such a file is rejected later,
 	 * when the blank is created from it.
 	 *
 	 * @param array $files Uploader tokens.
-	 * @return int size in bytes
+	 * @return array<string, \Bitrix\UI\FileUploader\FileInfo>
 	 */
-	public function getUploadedFilesTotalSize(array $files): int
+	public function getUploadedFilesInfo(array $files): array
 	{
 		$tokens = array_values(array_filter(
 			$files,
@@ -210,18 +401,22 @@ class BlankService
 
 		if ($tokens === [] || !Loader::includeModule('ui'))
 		{
-			return 0;
+			return [];
 		}
 
 		$uploader = new \Bitrix\UI\FileUploader\Uploader(new BlankUploadController([]));
 
-		$totalSize = 0;
+		$uploadedFiles = [];
 		foreach ($uploader->load($tokens) as $loadResult)
 		{
-			$totalSize += $loadResult->getFile()?->getSize() ?? 0;
+			$file = $loadResult->getFile();
+			if ($file !== null)
+			{
+				$uploadedFiles[(string)$loadResult->getId()] = $file;
+			}
 		}
 
-		return $totalSize;
+		return $uploadedFiles;
 	}
 
 	public function changeBlankTitleByDocument(Document $document, string $title): Result

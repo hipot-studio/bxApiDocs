@@ -25,7 +25,7 @@ use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 
-class ProxyIntegrator implements IntegratorInterface
+class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInterface
 {
 	private const PROXY_ACTION_REGISTER_PORTAL = '/portal/register';
 	private const PROXY_ACTION_VERIFY_PORTAL = '/portal/verify';
@@ -89,6 +89,7 @@ class ProxyIntegrator implements IntegratorInterface
 	private const PROXY_ACTION_LIST_PHYSICAL_DATASET = '/dataset/listPhysical';
 
 	private const PROXY_EXTENDED_STREAM_TIMEOUT = 90;
+	private const ACT_AS_PARAM = 'useActAs';
 	private const PROXY_DEMO_STREAM_TIMEOUT = 8;
 
 	/**
@@ -319,7 +320,7 @@ class ProxyIntegrator implements IntegratorInterface
 		$dashboard = null;
 		if ($dashboardData)
 		{
-			$jsonMetadata = $this->decode($dashboardData['json_metadata']) ?? [];
+			$jsonMetadata = $this->decode($dashboardData['json_metadata'] ?? '') ?? [];
 			$dateModify = null;
 			if (isset($dashboardData['timestamp_modify']))
 			{
@@ -336,10 +337,56 @@ class ProxyIntegrator implements IntegratorInterface
 				nativeFilterConfig: $jsonMetadata['native_filter_configuration'] ?? [],
 				dateModify: $dateModify,
 				jsonMetadata: $jsonMetadata,
+				positionJson: $dashboardData['position_json'] ?? null,
+				jsonMetadataSource: $dashboardData['json_metadata'] ?? null,
 			);
 		}
 
 		return $response->setData($dashboard);
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getDashboardSourceById(int $dashboardId): IntegratorResponse
+	{
+		$response = $this
+			->createDashboardDetailRequest(arbitrateServiceFailure: false)
+			->setParams([
+				'id' => $dashboardId,
+				'includeChartIds' => true,
+			])
+			->perform()
+		;
+		if ($response->hasErrors())
+		{
+			return $response;
+		}
+
+		$dashboardData = $response->getData()['dashboard'] ?? null;
+		$chartIds = null;
+		if (is_array($dashboardData) && array_key_exists('chart_ids', $dashboardData))
+		{
+			if (!Dto\DashboardSource::isValidChartIds($dashboardData['chart_ids']))
+			{
+				return $response
+					->setData(null)
+					->setStatus(IntegratorResponse::STATUS_SERVER_ERROR)
+					->addError(new Error('Invalid dashboard chart membership'))
+				;
+			}
+
+			$chartIds = $dashboardData['chart_ids'];
+		}
+
+		$source = $dashboardData ? new Dto\DashboardSource(
+			positionJson: $dashboardData['position_json'] ?? null,
+			jsonMetadataSource: $dashboardData['json_metadata'] ?? null,
+			published: $dashboardData['published'] ?? true,
+			chartIds: $chartIds,
+		) : null;
+
+		return $response->setData($source);
 	}
 
 	private function createDashboardDetailRequest(bool $arbitrateServiceFailure): IntegratorRequest
@@ -367,7 +414,12 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDashboardEmbeddedCredentials(int $dashboardId, array $rlsRules = [], int $expSeconds = 0): IntegratorResponse
+	public function getDashboardEmbeddedCredentials(
+		int $dashboardId,
+		array $rlsRules = [],
+		int $expSeconds = 0,
+		?Dto\User $user = null,
+	): IntegratorResponse
 	{
 		$requestParams = [
 			'id' => $dashboardId,
@@ -387,6 +439,7 @@ class ProxyIntegrator implements IntegratorInterface
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_GET_EMBEDDED_DASHBOARD_CREDENTIALS)
 				->setParams($requestParams)
+				->setUser($user)
 				->perform()
 		;
 
@@ -411,13 +464,13 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDemoEmbeddedCredentials(string $reportCode, string $lang): IntegratorResponse
+	public function getDemoEmbeddedCredentials(string $dashboardCode, string $lang): IntegratorResponse
 	{
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_GET_DEMO_EMBEDDED_CREDENTIALS)
 				->setParams([
-					'reportCode' => $reportCode,
+					'reportCode' => $dashboardCode,
 					'lang' => $lang,
 				])
 				->setSenderHttpClientParams([
@@ -1102,18 +1155,20 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDatasetById(int $id): IntegratorResponse
+	public function getDatasetById(int $id, ?User $user = null): IntegratorResponse
 	{
 		$requestParams = [
 			'id' => $id,
 		];
 
-		return
-			$this
-				->createDefaultRequest(self::PROXY_ACTION_GET_DATASET)
-				->setParams($requestParams)
-				->perform()
-		;
+		$request = $this->createDefaultRequest(self::PROXY_ACTION_GET_DATASET);
+		if ($user !== null)
+		{
+			$requestParams += $this->getActAsParams();
+			$request->setUser($user);
+		}
+
+		return $request->setParams($requestParams)->perform();
 	}
 
 	/**
@@ -1137,6 +1192,7 @@ class ProxyIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function listDatasets(
+		?User $user,
 		array $ids = [],
 		array $neqIds = [],
 		?int $page = null,
@@ -1146,6 +1202,11 @@ class ProxyIntegrator implements IntegratorInterface
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
+		}
+
+		if ($user === null && $this->isActAsEnabled())
+		{
+			return self::personRequiredResponse();
 		}
 
 		$requestParams = [];
@@ -1166,9 +1227,12 @@ class ProxyIntegrator implements IntegratorInterface
 			$requestParams['pageSize'] = $pageSize;
 		}
 
+		$requestParams += $this->getActAsParams();
+
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_LIST_DATASET)
+				->setUser($user)
 				->setParams($requestParams)
 				->perform()
 		;
@@ -1214,6 +1278,7 @@ class ProxyIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function createVirtualDataset(
+		User $user,
 		string $datasetName,
 		string $sourceTable,
 		array $columns,
@@ -1240,7 +1305,8 @@ class ProxyIntegrator implements IntegratorInterface
 				->createDefaultRequest(self::PROXY_ACTION_CREATE_VIRTUAL_DATASET)
 				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
-				->setParams($parameters)
+				->setUser($user)
+				->setParams($parameters + $this->getActAsParams())
 				->perform()
 			;
 	}
@@ -1248,7 +1314,7 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function createDatasetFromSql(string $datasetName, string $sql): IntegratorResponse
+	public function createDatasetFromSql(User $user, string $datasetName, string $sql): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
@@ -1265,7 +1331,8 @@ class ProxyIntegrator implements IntegratorInterface
 				->createDefaultRequest(self::PROXY_ACTION_CREATE_DATASET_FROM_SQL)
 				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
-				->setParams($parameters)
+				->setUser($user)
+				->setParams($parameters + $this->getActAsParams())
 				->perform()
 			;
 	}
@@ -1290,10 +1357,12 @@ class ProxyIntegrator implements IntegratorInterface
 			$params['limit'] = $limit;
 		}
 
+		// The person is required in either mode: they key the limiter and the audit.
 		$request = $this->createDefaultRequest(self::PROXY_ACTION_SQLLAB_EXECUTE);
 		if ($context !== null)
 		{
 			$request->setUser($context->user);
+			$params += $this->getActAsParams();
 		}
 
 		$response =
@@ -1316,11 +1385,16 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function listTables(?string $schema = null): IntegratorResponse
+	public function listTables(?User $user, ?string $schema = null): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
+		}
+
+		if ($user === null && $this->isActAsEnabled())
+		{
+			return self::personRequiredResponse();
 		}
 
 		$params = [];
@@ -1332,7 +1406,8 @@ class ProxyIntegrator implements IntegratorInterface
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_LIST_TABLES)
-				->setParams($params)
+				->setUser($user)
+				->setParams($params + $this->getActAsParams())
 				->perform()
 		;
 
@@ -1347,11 +1422,16 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getTableMetadata(string $tableName, ?string $schema = null): IntegratorResponse
+	public function getTableMetadata(?User $user, string $tableName, ?string $schema = null): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
+		}
+
+		if ($user === null && $this->isActAsEnabled())
+		{
+			return self::personRequiredResponse();
 		}
 
 		$params = [
@@ -1365,7 +1445,8 @@ class ProxyIntegrator implements IntegratorInterface
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_GET_TABLE_METADATA)
-				->setParams($params)
+				->setUser($user)
+				->setParams($params + $this->getActAsParams())
 				->perform()
 		;
 
@@ -1578,6 +1659,7 @@ class ProxyIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function getDashboardOverview(
+		?User $user,
 		int $dashboardId,
 		array $appliedFilters = [],
 		array $urlParams = [],
@@ -1587,12 +1669,16 @@ class ProxyIntegrator implements IntegratorInterface
 		?int $limit = null,
 		int $offset = 0,
 		bool $arbitrateServiceFailure = true,
-		?User $user = null,
 	): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
+		}
+
+		if ($user === null && $this->isActAsEnabled())
+		{
+			return self::personRequiredResponse();
 		}
 
 		$params = ['id' => $dashboardId];
@@ -1621,22 +1707,19 @@ class ProxyIntegrator implements IntegratorInterface
 			}
 		}
 
-		$request = $this
+		return $this
 			->createArbitratedRequest(self::PROXY_ACTION_GET_DASHBOARD_OVERVIEW, $arbitrateServiceFailure)
-			->setParams($params)
+			->setUser($user)
+			->setParams($params + $this->getActAsParams())
 			->setSenderHttpClientParams([
 				'streamTimeout' => $streamTimeout,
 			])
+			->perform()
 		;
-		if ($user !== null)
-		{
-			$request->setUser($user);
-		}
-
-		return $request->perform();
 	}
 
 	public function getFilterValues(
+		?User $user,
 		int $dashboardId,
 		string $filterColumn,
 		array $appliedFilters = [],
@@ -1650,6 +1733,11 @@ class ProxyIntegrator implements IntegratorInterface
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
+		}
+
+		if ($user === null && $this->isActAsEnabled())
+		{
+			return self::personRequiredResponse();
 		}
 
 		$params = [
@@ -1675,12 +1763,44 @@ class ProxyIntegrator implements IntegratorInterface
 
 		return $this
 			->createArbitratedRequest(self::PROXY_ACTION_GET_FILTER_VALUES, $arbitrateServiceFailure)
-			->setParams($params)
+			->setUser($user)
+			->setParams($params + $this->getActAsParams())
 			->setSenderHttpClientParams([
 				'streamTimeout' => $streamTimeout,
 			])
 			->perform()
 		;
+	}
+
+	/**
+	 * Whether a read of the AI tools runs in Superset as the person it is made for. Only the table permission
+	 * axis needs it; without the axis the proxy reads under the service account, as before act-as.
+	 * Decided on every call, nothing is kept.
+	 */
+	protected function isActAsEnabled(): bool
+	{
+		return Feature::isTablePermissionsEnabled();
+	}
+
+	/**
+	 * The flag asking the proxy to run the read as the person who signs the request; absent without act-as,
+	 * so a proxy that does not know the flag reads as before.
+	 */
+	private function getActAsParams(): array
+	{
+		return $this->isActAsEnabled() ? [self::ACT_AS_PARAM => true] : [];
+	}
+
+	/**
+	 * A read the table permission axis makes as the person, asked for no person: refused here rather than
+	 * signed as the administrator.
+	 */
+	private static function personRequiredResponse(): IntegratorResponse
+	{
+		return new IntegratorResponse(
+			status: IntegratorResponse::STATUS_NO_ACCESS,
+			errors: [new Error('Current superset user not found', IntegratorResponse::STATUS_NO_ACCESS)],
+		);
 	}
 
 	private static function isAiToolsFeatureEnabled(): bool
@@ -1757,6 +1877,7 @@ class ProxyIntegrator implements IntegratorInterface
 	 * @inheritDoc
 	 */
 	public function listCharts(
+		?User $user,
 		array $ids = [],
 		?string $nameFilter = null,
 		?int $page = null,
@@ -1766,6 +1887,11 @@ class ProxyIntegrator implements IntegratorInterface
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
+		}
+
+		if ($user === null && $this->isActAsEnabled())
+		{
+			return self::personRequiredResponse();
 		}
 
 		$requestParams = [];
@@ -1786,9 +1912,12 @@ class ProxyIntegrator implements IntegratorInterface
 			$requestParams['pageSize'] = $pageSize;
 		}
 
+		$requestParams += $this->getActAsParams();
+
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_LIST_CHART)
+				->setUser($user)
 				->setParams($requestParams)
 				->perform()
 		;
@@ -1806,19 +1935,22 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getChartById(int $id): IntegratorResponse
+	public function getChartById(int $id, ?User $user = null): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
 		{
 			return self::aiToolsDisabledResponse();
 		}
 
-		return
-			$this
-				->createDefaultRequest(self::PROXY_ACTION_GET_CHART)
-				->setParams(['id' => $id])
-				->perform()
-			;
+		$requestParams = ['id' => $id];
+		$request = $this->createDefaultRequest(self::PROXY_ACTION_GET_CHART);
+		if ($user !== null)
+		{
+			$requestParams += $this->getActAsParams();
+			$request->setUser($user);
+		}
+
+		return $request->setParams($requestParams)->perform();
 	}
 
 	/**

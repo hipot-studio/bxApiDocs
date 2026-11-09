@@ -24,6 +24,12 @@ class ImportPage extends Blank
 			return;
 		}
 
+		// replace site imports pages without PreparePageAdditionalFields
+		unset(
+			$data['ADDITIONAL_FIELDS']['HEADBLOCK_USE'],
+			$data['ADDITIONAL_FIELDS']['HEADBLOCK_CODE'],
+		);
+
 		$res = Landing::add($data);
 		if (!$res->isSuccess())
 		{

@@ -845,8 +845,10 @@ class LandingTable extends Entity\DataManager
 	 */
 	protected static function appendUniqueSuffixToCode(int $landingId, string $code): void
 	{
+		$suffix = '_' . Manager::getRandomString(4);
 		$reUpdate = [
-			'CODE' => $code . '_' . Manager::getRandomString(4)
+			// CODE column is varchar(255), the suffix must fit into it
+			'CODE' => mb_substr($code, 0, 255 - mb_strlen($suffix)) . $suffix
 		];
 		if (self::$additionalFields)
 		{

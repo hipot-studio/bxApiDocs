@@ -117,17 +117,17 @@ class Limiter
 	 *
 	 * @return Transport\CountLimiter
 	 */
-	public static function getEmailMonthly($email)
+	public static function getEmailMonthly($email, ?Sender\Identity $identity = null)
 	{
 		$counter = new SenderSendCounter();
 		$limiter = Transport\CountLimiter::create()
 			->withName('mail_per_email_per_day')
-			->withLimit(Sender::getEmailLimit($email))
+			->withLimit(Sender::getEmailLimit($email, $identity))
 			->withUnit("1 " . Transport\iLimiter::DAYS)
 			->withCurrent(
-				function () use ($counter, $email)
+				function () use ($counter, $email, $identity)
 				{
-					return Sender::getEmailLimit($email) === null ? -1 : $counter->get($email);
+					return Sender::getEmailLimit($email, $identity) === null ? -1 : $counter->get($email);
 				}
 			)
 			->setHidden(true)

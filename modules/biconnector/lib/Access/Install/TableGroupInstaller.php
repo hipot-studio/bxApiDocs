@@ -22,6 +22,12 @@ use Bitrix\Main\Result;
  * the groups have to exist before anything is bound to them, and a portal whose catalog is silent
  * still gets its groups.
  *
+ * No rights either: the roles get access to a system group from
+ * \Bitrix\BIConnector\Access\Update\PermissionSections\Migrator, which remembers the groups it has
+ * granted and leaves the agent schedule once every group of the map is granted. A release that adds
+ * a system group to the map has to call Migrator::run() after this installer, otherwise the new
+ * group stays closed for every role.
+ *
  * The run is idempotent and is not wrapped into a transaction as a whole: an interrupted run is
  * finished by the next call.
  */

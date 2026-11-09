@@ -20,6 +20,11 @@ Loc::loadMessages(__FILE__);
  */
 class QueryCount
 {
+	/** Snapshot rows are not unique per CRM entity, so counting them would inflate the totals. */
+	private const SNAPSHOT_UNIQUE_COLUMNS = ['CRM_ENTITY_TYPE_ID', 'CRM_ENTITY_ID'];
+
+	private const LIVE_UNIQUE_COLUMNS = ['ID'];
+
 	/**
 	 * Get unionized count.
 	 *
@@ -71,7 +76,7 @@ class QueryCount
 		$dataTypeId = null
 	)
 	{
-		self::prepare($query, $dataTypeId, $entityDbName, $entityName);
+		self::prepare($query, $dataTypeId, $entityDbName, $entityName, self::SNAPSHOT_UNIQUE_COLUMNS);
 		return self::exec($query, $dataTypeId, $entityDbName, $entityName);
 	}
 
@@ -129,9 +134,14 @@ class QueryCount
 	 * @param integer $dataTypeId Data type ID.
 	 * @return Entity\Query
 	 */
-	private static function prepare(Entity\Query $query, $dataTypeId = null, $entityDbName = null, $entityName = null)
+	private static function prepare(
+		Entity\Query $query,
+		$dataTypeId = null,
+		$entityDbName = null,
+		$entityName = null,
+		array $uniqueColumns = self::LIVE_UNIQUE_COLUMNS
+	)
 	{
-		$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
 		$fields = array();
 		foreach (self::getTypes() as $typeId => $field)
 		{
@@ -160,12 +170,23 @@ class QueryCount
 
 			$fieldName = $field['COLUMN_ALIAS'] ?? 'COUNT_' . $field['DATA_COLUMN'];
 			$fields[] = $fieldName;
+			$uniqueValue = self::getUniqueValueExpression($entityDbName, $uniqueColumns);
 
-			if (isset($field['HAS']))
+			if ($typeId === Recipient\Type::IM && $uniqueColumns === self::LIVE_UNIQUE_COLUMNS)
+			{
+				$query->registerRuntimeField(Helper::createExpressionImField($entityName, Helper::ALLOWED_IM_FIELD));
+				$query->registerRuntimeField(new Entity\ExpressionField(
+					$fieldName,
+					// the nested CASE keeps the subquery off the entities with no open line address at all
+					"COUNT(DISTINCT CASE WHEN %s = 'Y' THEN CASE WHEN %s IS NOT NULL THEN {$uniqueValue} END END)",
+					[$field['HAS'], Helper::ALLOWED_IM_FIELD]
+				));
+			}
+			elseif (isset($field['HAS']))
 			{
 				$query->registerRuntimeField(new Entity\ExpressionField(
 					$fieldName,
-					"COUNT(DISTINCT CASE WHEN %s = 'Y' THEN  {$sqlHelper->quote($entityDbName)}.ID END)",
+					"COUNT(DISTINCT CASE WHEN %s = 'Y' THEN  {$uniqueValue} END)",
 					$field['HAS']
 				));
 			}
@@ -186,7 +207,7 @@ class QueryCount
 
 				$query->registerRuntimeField(new Entity\ExpressionField(
 					$fieldName,
-					"COUNT(DISTINCT CASE WHEN %s > 0 THEN {$sqlHelper->quote($entityDbName)}.ID END)",
+					"COUNT(DISTINCT CASE WHEN %s > 0 THEN {$uniqueValue} END)",
 					$field['DATA_COLUMN']
 				));
 			}
@@ -194,6 +215,34 @@ class QueryCount
 		$query->setSelect($fields);
 
 		return $query;
+	}
+
+	/**
+	 * Value that makes a counted row unique: the row primary key for a live count over CRM
+	 * entities, the CRM entity type and id for a count over snapshot rows.
+	 */
+	private static function getUniqueValueExpression(string $entityDbName, array $uniqueColumns): string
+	{
+		$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
+		$table = $sqlHelper->quote($entityDbName);
+
+		$parts = [];
+		foreach ($uniqueColumns as $column)
+		{
+			if ($parts)
+			{
+				$parts[] = "'_'";
+			}
+
+			$parts[] = $table . '.' . $sqlHelper->quote($column);
+		}
+
+		if (count($parts) === 1)
+		{
+			return $parts[0];
+		}
+
+		return $sqlHelper->getConcatFunction(...$parts);
 	}
 
 	private static function getTypes()

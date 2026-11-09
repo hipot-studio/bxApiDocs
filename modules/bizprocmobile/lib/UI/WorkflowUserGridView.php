@@ -47,7 +47,12 @@ class WorkflowUserGridView extends \Bitrix\Bizproc\UI\WorkflowUserGridView
 		return $tasks;
 	}
 
-	private function getTaskHash(array $task): string
+	/**
+	 * Own copy of the similarity formula: bizproc and bizprocmobile are updated independently, so
+	 * this class must not lean on a method of the parent. The parity test in bizproc keeps both
+	 * copies equal.
+	 */
+	protected function getTaskHash(array $task): string
 	{
 		$hashData = ['TEMPLATE_ID' => $this->workflow['WORKFLOW_TEMPLATE_ID'] ?? 0];
 
@@ -77,7 +82,12 @@ class WorkflowUserGridView extends \Bitrix\Bizproc\UI\WorkflowUserGridView
 				{
 					foreach ($parameters['REQUEST'] as $property)
 					{
-						if ($property['Type'] === 'file' || $property['Type'] === 'S:DiskFile')
+						// a template built outside the designer may hold a REQUEST element of any shape
+						$propertyType = (is_array($property) || $property instanceof \ArrayAccess)
+							? ($property['Type'] ?? null)
+							: null
+						;
+						if ($propertyType === 'file' || $propertyType === 'S:DiskFile')
 						{
 							$hashData['TASK_ID'] = $task['ID'];
 

@@ -104,9 +104,9 @@ class PostingManager
 	 */
 	public static function onMailEventMailClick(array $data)
 	{
-		$id  = intval($data['RECIPIENT_ID']);
-		$url = $data['URL'];
-		if ($id > 0 && $url <> '')
+		$id  = intval($data['RECIPIENT_ID'] ?? 0);
+		$url = $data['URL'] ?? null;
+		if ($id > 0 && is_string($url) && $url !== '')
 		{
 			static::click($id, $url);
 		}
@@ -118,13 +118,19 @@ class PostingManager
 	 * Do click actions.
 	 *
 	 * @param integer $recipientId Recipient ID.
-	 * @param string $url Url.
+	 * @param mixed $url Url of any type: a non-string click is dropped.
 	 *
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public static function click($recipientId, $url)
 	{
+		// the url comes straight from the click request, so it can be of any type
+		if (!is_string($url) || $url === '')
+		{
+			return;
+		}
+
 		$postingContactPrimary = ['ID' => $recipientId];
 		$row = PostingRecipientTable::getRowById($postingContactPrimary);
 		if (!$row)
@@ -175,6 +181,7 @@ class PostingManager
 
 				$fixedUrl   = urldecode($fixedUrl);
 
+				$addClickDb = null;
 				if(mb_strpos($fixedUrl, 'pub/mail/unsubscribe.php') === false)
 				{
 					$addClickDb = PostingClickTable::add(
@@ -353,21 +360,15 @@ class PostingManager
 		}
 
 		$limiter = $sender->getExceededLimiter();
-		if ($result === static::SEND_RESULT_CONTINUE && $limiter)
+		// The start of a launch stays until its posting is taken into sending: the snapshots are judged against it.
+		if ($result === static::SEND_RESULT_CONTINUE && $limiter && !PostingTable::isNotStarted((int)$id))
 		{
 			// update planned date only with timed limit;
 
-			if ($limiter->getParameter('sendingStart'))
+			$nextOpening = $limiter->getParameter(Transport\TimeLimiter::PARAMETER_NEXT_OPENING);
+			if ($nextOpening)
 			{
-				$currentTime = $limiter->getParameter('currentTime');
-				$sendingStart = $limiter->getParameter('sendingStart');
-				$sendingStartDate = (new \DateTime())->setTimestamp($sendingStart);
-
-				$sendingStartDate = $currentTime > $sendingStart
-					? $sendingStartDate->add(\DateInterval::createFromDateString('1 day'))
-					: $sendingStartDate;
-
-				$date = Type\DateTime::createFromPhp($sendingStartDate);
+				$date = Type\DateTime::createFromTimestamp($nextOpening);
 			}
 			elseif ($limiter->getUnit())
 			{

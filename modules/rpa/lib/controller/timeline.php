@@ -6,6 +6,7 @@ use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Rpa\Command;
 use Bitrix\Rpa\Driver;
 use Bitrix\Rpa\Model\ItemHistoryTable;
 
@@ -35,7 +36,10 @@ class Timeline extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError(new Error(
+				Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+				Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+			));
 			return null;
 		}
 
@@ -71,7 +75,10 @@ class Timeline extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError(new Error(
+				Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+				Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+			));
 			return null;
 		}
 		if(
@@ -116,7 +123,10 @@ class Timeline extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError(new Error(
+				Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+				Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+			));
 			return;
 		}
 		if(
@@ -141,7 +151,10 @@ class Timeline extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError(new Error(
+				Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+				Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+			));
 			return null;
 		}
 
@@ -184,7 +197,10 @@ class Timeline extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError(new Error(
+				Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+				Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+			));
 			return null;
 		}
 

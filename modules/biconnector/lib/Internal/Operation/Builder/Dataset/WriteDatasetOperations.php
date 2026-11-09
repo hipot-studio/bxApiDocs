@@ -6,12 +6,13 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\DestructiveBudget;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
@@ -36,15 +37,17 @@ final class WriteDatasetOperations
 
 	/** @var \Closure(int): AccessController */
 	private readonly \Closure $accessControllerFactory;
+	private readonly SupersetIdentity $identity;
 
 	/**
 	 * @param (\Closure(int): AccessController)|null $accessControllerFactory
 	 */
-	public function __construct(?\Closure $accessControllerFactory = null)
+	public function __construct(?\Closure $accessControllerFactory = null, ?SupersetIdentity $identity = null)
 	{
 		$this->accessControllerFactory = $accessControllerFactory
 			?? static fn(int $userId): AccessController => new AccessController($userId)
 		;
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -74,13 +77,22 @@ final class WriteDatasetOperations
 			return self::invalidArgument('sql is required: provide the SELECT query that defines the dataset.');
 		}
 
+		// The dataset is owned by the actor in both states of the axis, see SupersetIdentity::forWrite().
+		$identityResult = $this->identity->forWrite($userId);
+		if (!$identityResult->isSuccess())
+		{
+			return $identityResult;
+		}
+
 		$taken = self::checkNameIsFree($datasetName);
 		if ($taken)
 		{
 			return $taken;
 		}
 
-		$response = IntegratorFactory::getInstance()->createDatasetFromSql($datasetName, $sql);
+		$response = IntegratorFactory::getInstance()
+			->createDatasetFromSql($identityResult->getData()['user'], $datasetName, $sql)
+		;
 		if ($response->hasErrors())
 		{
 			return self::unavailableBi(
@@ -156,6 +168,13 @@ final class WriteDatasetOperations
 			return self::invalidArgument('At least one non-empty column must be provided.');
 		}
 
+		// The dataset is owned by the actor in both states of the axis, see SupersetIdentity::forWrite().
+		$identityResult = $this->identity->forWrite($userId);
+		if (!$identityResult->isSuccess())
+		{
+			return $identityResult;
+		}
+
 		$taken = self::checkNameIsFree($datasetName);
 		if ($taken)
 		{
@@ -163,6 +182,7 @@ final class WriteDatasetOperations
 		}
 
 		$response = IntegratorFactory::getInstance()->createVirtualDataset(
+			$identityResult->getData()['user'],
 			$datasetName,
 			$sourceTable,
 			$columns,
@@ -237,12 +257,10 @@ final class WriteDatasetOperations
 		$name = $inspected->getData()['name'];
 
 		$response = IntegratorFactory::getInstance()->updateDataset($datasetId, ['columns' => $columns]);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $datasetId);
+		if (!$classified->isSuccess())
 		{
-			return self::unavailableBi(
-				$response->getErrors(),
-				['stage' => 'update_dataset', 'user_id' => $actor->userId, 'dataset_id' => $datasetId],
-			);
+			return $classified;
 		}
 
 		return (new Result())->setData([
@@ -292,18 +310,15 @@ final class WriteDatasetOperations
 
 		$name = $preview['name'];
 		$response = IntegratorFactory::getInstance()->deleteDataset($datasetId);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $datasetId);
+		if (!$classified->isSuccess())
 		{
-			// Deleted between the preview and the confirmation: a retried confirmation is not an error.
-			if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			if ($classified->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return self::deleted($datasetId, $name, true);
 			}
 
-			return self::unavailableBi(
-				$response->getErrors(),
-				['stage' => 'delete_dataset', 'user_id' => $actor->userId, 'dataset_id' => $datasetId],
-			);
+			return $classified;
 		}
 
 		return self::deleted($datasetId, $name, false);
@@ -413,23 +428,19 @@ final class WriteDatasetOperations
 			return $normalized;
 		}
 
-		$getResponse = IntegratorFactory::getInstance()->getDatasetById($datasetId);
-		if ($getResponse->hasErrors())
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
 		{
-			return self::unavailableBi(
-				$getResponse->getErrors(),
-				['stage' => 'update_dataset.load', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			return $identityResult;
 		}
 
-		$current = $getResponse->getData();
-		if (!is_array($current) || (int)($current['id'] ?? 0) <= 0)
+		$lookup = (new EntityLookup())->dataset($datasetId, $identityResult->getData()['user']);
+		if (!$lookup->isSuccess())
 		{
-			return Refusal::error(
-				FailureCode::NotFound,
-				"Dataset with id={$datasetId} was not found. Call list_datasets to get a valid id.",
-			);
+			return $lookup;
 		}
+
+		$current = $lookup->getData()['entity'];
 
 		$owned = self::checkOwned($userId, is_array($current['owners'] ?? null) ? $current['owners'] : []);
 		if ($owned)
@@ -474,26 +485,24 @@ final class WriteDatasetOperations
 			);
 		}
 
-		$getResponse = IntegratorFactory::getInstance()->getDatasetById($datasetId);
-		if ($getResponse->hasErrors())
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
 		{
-			// Already gone: a retried or a second deletion is a no-op, as delete_chart and delete_dashboard answer.
-			if ($getResponse->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			return $identityResult;
+		}
+
+		$lookup = (new EntityLookup())->dataset($datasetId, $identityResult->getData()['user']);
+		if (!$lookup->isSuccess())
+		{
+			if ($lookup->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return (new Result())->setData(['name' => '', 'alreadyDeleted' => true]);
 			}
 
-			return self::unavailableBi(
-				$getResponse->getErrors(),
-				['stage' => 'delete_dataset.load', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			return $lookup;
 		}
 
-		$current = $getResponse->getData();
-		if (!is_array($current) || (int)($current['id'] ?? 0) <= 0)
-		{
-			return (new Result())->setData(['name' => '', 'alreadyDeleted' => true]);
-		}
+		$current = $lookup->getData()['entity'];
 
 		$owned = self::checkOwned($userId, is_array($current['owners'] ?? null) ? $current['owners'] : []);
 		if ($owned)
@@ -612,11 +621,18 @@ final class WriteDatasetOperations
 
 	/**
 	 * The refusal BiToolBehaviour::unavailableBiException() makes: the real cause is logged, not told.
+	 * A refusal of act-as keeps its own answer, see Refusal::actAsFailure().
 	 *
 	 * @param Error[] $errors
 	 */
 	private static function unavailableBi(array $errors, array $context): Result
 	{
+		$actAsRefusal = Refusal::actAsFailure($errors, $context);
+		if ($actAsRefusal !== null)
+		{
+			return $actAsRefusal;
+		}
+
 		AiToolsLogger::logWarning($errors, $context);
 
 		$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));

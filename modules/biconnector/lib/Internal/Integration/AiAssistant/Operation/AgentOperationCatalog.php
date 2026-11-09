@@ -12,6 +12,7 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\DeleteChartTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\DeleteDashboardTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\DeleteDatasetTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ExecuteSqlTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiGuideTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiTableSchemaTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetChartDataTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetChartTool;
@@ -31,6 +32,10 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UpdateChartMetadata
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UpdateDashboardMetadataTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UpdateDatasetTool;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetDashboardLayoutTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ApplyDashboardLayoutTool;
 
 Loc::loadMessages(__FILE__);
 
@@ -39,11 +44,17 @@ Loc::loadMessages(__FILE__);
  * and to the agent itself.
  *
  * The catalogue declares one record per tool and keeps no impact of its own: the tool declares
- * its impact once, and the record reads it back. Nothing here is parameterised by a report or by
- * a user — the catalogue describes what a set can do, not what a person may do with it.
+ * its impact once, and the record reads it back. Feature-gated operations follow the user of the
+ * current request; the catalogue describes capabilities, not permissions on individual reports.
  */
 final class AgentOperationCatalog
 {
+	/**
+	 * Tools of the sets that are not operations on BI objects and have no record: they act on nothing
+	 * the person granting the connection decides about, so neither the popup nor the set description lists them.
+	 */
+	public const UNLISTED_TOOLS = [GetBiGuideTool::class];
+
 	/**
 	 * Phrase ids of every operation, grouped by the code the tool set class answers with.
 	 * `warning` belongs to an operation that cannot be undone or that overwrites the previous
@@ -107,6 +118,18 @@ final class AgentOperationCatalog
 		],
 	];
 
+	private const FLAGGED_OPERATIONS = [
+		FlagGate::BUILDER_AGENT_SKILL => [
+			'bi_dashboards' => [
+				GetDashboardLayoutTool::class => ['title' => 'BIC_AI_OP_GET_DASHBOARD_LAYOUT'],
+				ApplyDashboardLayoutTool::class => [
+					'title' => 'BIC_AI_OP_APPLY_DASHBOARD_LAYOUT',
+					'warning' => 'BIC_AI_OP_APPLY_DASHBOARD_LAYOUT_WARNING',
+				],
+			],
+		],
+	];
+
 	/**
 	 * @param string $toolSetCode Code the tool set class answers with.
 	 * @param string|null $language Language of the wording; null takes the language of the request.
@@ -116,8 +139,18 @@ final class AgentOperationCatalog
 	 */
 	public function getOperations(string $toolSetCode, ?string $language = null): array
 	{
+		$definitions = self::OPERATIONS[$toolSetCode] ?? [];
+		$userId = (int)CurrentUser::get()->getId();
+		$gate = new FlagGate();
+		foreach (self::FLAGGED_OPERATIONS as $flag => $sets)
+		{
+			if ($gate->isEnabled($flag, $userId))
+			{
+				$definitions += $sets[$toolSetCode] ?? [];
+			}
+		}
 		$operations = [];
-		foreach (self::OPERATIONS[$toolSetCode] ?? [] as $toolClass => $phraseIds)
+		foreach ($definitions as $toolClass => $phraseIds)
 		{
 			$operations[] = $this->createOperation($toolSetCode, $toolClass, $phraseIds, $language);
 		}

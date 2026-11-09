@@ -6,12 +6,14 @@ use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\DeleteChartOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
+use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -45,24 +47,21 @@ final class DeleteChartTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'chartId' => [
-					'type' => 'integer',
-					'description' => 'Chart id to delete (from list_charts). Positive integer.',
-					'minimum' => 1,
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved '
-						. 'this previewed deletion. Omit or set false to only preview the impact. '
-						. 'Do NOT self-confirm or assume approval from earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			'biconnector.builder.chart.delete',
+			'mcp',
+			[
+				'chartId' => 'Chart id to delete (from list_charts). Positive integer.',
 			],
-			'required' => ['chartId'],
-			'additionalProperties' => false,
+		);
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved '
+				. 'this previewed deletion. Omit or set false to only preview the impact. '
+				. 'Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -145,13 +144,10 @@ final class DeleteChartTool extends BaseBiTool
 
 		$integrator = IntegratorFactory::getInstance();
 
-		$chartResponse = $integrator->getChartById($chartId);
-		if ($chartResponse->hasErrors())
+		$lookup = (new EntityLookup())->chart($chartId, self::findActAsUser($userId));
+		if (!$lookup->isSuccess())
 		{
-			// Idempotent re-delete: the chart is already gone (retried call or a
-			// second delete). Report success instead of a confusing "BI
-			// unavailable" error — mirrors delete_dashboard.
-			if ($chartResponse->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			if ($lookup->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return [
 					'deleted' => true,
@@ -161,20 +157,17 @@ final class DeleteChartTool extends BaseBiTool
 				];
 			}
 
-			throw self::unavailableBiException(
-				$chartResponse->getErrors(),
-				['stage' => 'delete_chart.load', 'user_id' => $userId, 'chart_id' => $chartId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$chartData = $chartResponse->getData();
-		if (!is_array($chartData))
-		{
-			$chartData = [];
-		}
+		$chartData = $lookup->getData()['entity'];
 
 		$name = (string)($chartData['slice_name'] ?? $chartData['chart_name'] ?? '');
-		$dashboards = is_array($chartData['dashboards'] ?? null) ? $chartData['dashboards'] : [];
+		$dashboards = $chartData['dashboards'] ?? [];
+		if (!is_array($dashboards))
+		{
+			throw self::unavailableBiException([], ['stage' => 'delete_chart.load', 'chart_id' => $chartId]);
+		}
 
 		// Object-level scope: only a user who can edit one of the chart's consumer
 		// dashboards may delete it (matches the web UI).
@@ -200,11 +193,10 @@ final class DeleteChartTool extends BaseBiTool
 		$this->spendDestructiveBudget($userId, 'chart', $chartId);
 
 		$response = $integrator->deleteChart($chartId);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $chartId);
+		if (!$classified->isSuccess())
 		{
-			// Race: the chart was deleted between preview and confirm. Treat the
-			// 404 as success so a retried confirm does not surface a false error.
-			if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
+			if ($classified->getErrors()[0]->getCode() === FailureCode::NotFound->value)
 			{
 				return [
 					'deleted' => true,
@@ -214,10 +206,7 @@ final class DeleteChartTool extends BaseBiTool
 				];
 			}
 
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				['stage' => 'delete_chart', 'user_id' => $userId, 'chart_id' => $chartId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($classified));
 		}
 
 		return [

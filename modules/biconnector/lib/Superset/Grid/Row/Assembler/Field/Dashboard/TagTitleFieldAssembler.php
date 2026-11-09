@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\FieldAssemblerPencilTrait;
 use Bitrix\Main\Grid\Row\FieldAssembler;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 
 class TagTitleFieldAssembler extends FieldAssembler
@@ -17,7 +18,12 @@ class TagTitleFieldAssembler extends FieldAssembler
 		$id = (int)$value['ID'];
 		$title = htmlspecialcharsbx($value['TITLE']);
 
-		return $this->addPencil('TITLE', $title, $id);
+		return $this->addPencil(
+			'TITLE',
+			$title,
+			$id,
+			(string)Loc::getMessage('BICONNECTOR_SUPERSET_GRID_TAG_TITLE_FIELD_ARIA'),
+		);
 	}
 
 	protected function prepareRow(array $row): array

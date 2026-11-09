@@ -15,35 +15,44 @@ class SourceFieldAssembler extends FieldAssembler
 		}
 
 		$id = (int)$value['ID'];
-		$title = htmlspecialcharsbx($value['TITLE']);
+		$sourceTitle = (string)($value['TITLE'] ?? '');
+		$title = htmlspecialcharsbx($sourceTitle);
 
 		$ormFilter = $this->getSettings()->getOrmFilter();
-		$isFiltered = isset($ormFilter['SOURCE.ID'], $id) && in_array($id, $ormFilter['SOURCE.ID']);
+		$isFiltered = isset($ormFilter['SOURCE.ID']) && in_array($id, $ormFilter['SOURCE.ID']);
 
-		$event = Json::encode([
+		$payload = htmlspecialcharsbx(Json::encode([
 			'ID' => $id,
-			'TITLE' => $title,
+			'TITLE' => $sourceTitle,
 			'IS_FILTERED' => $isFiltered,
-		]);
-
-		$clickHandler = 'BX.BIConnector.ExternalDatasetManager.Instance.handleSourceClick';
+		]));
+		$isPressed = $isFiltered ? 'true' : 'false';
+		$onclick = 'BX.BIConnector.ExternalDatasetManager.Instance'
+			. '.handleSourceClick(JSON.parse(this.dataset.bicPayload))'
+		;
 
 		$selector = 'biconnector-grid-username-cell';
 		$closeIcon = '';
 		if ($isFiltered)
 		{
 			$selector .= ' biconnector-grid-username-cell-active';
-			$closeIcon = '<div class="biconnector-grid-filter-close ui-icon-set --cross-20"></div>';
+			$closeIcon = '<span class="biconnector-grid-filter-close ui-icon-set --cross-20"'
+				. ' aria-hidden="true"></span>'
+			;
 		}
 
 		return <<<HTML
-				<span
+				<button
+					type="button"
 					class="$selector"
-					onclick='{$clickHandler}($event)'
+					data-bic-focus-role="source-filter"
+					aria-pressed="{$isPressed}"
+					data-bic-payload="{$payload}"
+					onclick="{$onclick}"
 				>
 					<span class="biconnector-grid-username">$title</span>
 					$closeIcon
-				</span>
+				</button>
 			HTML;
 	}
 }

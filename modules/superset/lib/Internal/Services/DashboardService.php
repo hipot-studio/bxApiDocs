@@ -22,6 +22,8 @@ final class DashboardService extends AbstractSupersetContext
 {
 	private const SUPERSET_USER_ID = 1;
 	private const EXTENDED_STREAM_TIMEOUT = 90;
+	private const MAX_CHARTS = 1000;
+	private const MAX_CHART_SOURCE_BYTES = 1048576;
 
 	public function get(int $dashboardId): Main\Result
 	{
@@ -41,6 +43,65 @@ final class DashboardService extends AbstractSupersetContext
 		$result->setData([
 			'dashboard' => $this->prepareResultDashboard($decoded['result']),
 		]);
+
+		return $result;
+	}
+
+	public function getChartIds(int $dashboardId): Main\Result
+	{
+		$requestResult = $this->getDashboardApi()->getDashboardCharts($dashboardId);
+		$answer = $requestResult->getAnswer();
+		if (strlen($answer) > self::MAX_CHART_SOURCE_BYTES)
+		{
+			return $this->createErrorResult('Dashboard chart response exceeds the size limit');
+		}
+
+		if (!$requestResult->isSuccess() || $requestResult->getHttpStatus() !== HttpStatus::OK)
+		{
+			return $this->createErrorResult('Getting dashboard charts failed', $requestResult);
+		}
+
+		try
+		{
+			$decoded = json_decode($answer, false, 512, JSON_THROW_ON_ERROR);
+		}
+		catch (\JsonException)
+		{
+			return $this->createErrorResult('Invalid dashboard chart response');
+		}
+
+		if (
+			!($decoded instanceof \stdClass)
+			|| property_exists($decoded, 'errors')
+			|| property_exists($decoded, 'error')
+			|| !is_array($decoded->result ?? null)
+			|| !array_is_list($decoded->result)
+			|| count($decoded->result) > self::MAX_CHARTS
+		)
+		{
+			return $this->createErrorResult('Invalid dashboard chart response');
+		}
+
+		$chartIds = [];
+		$seenIds = [];
+		foreach ($decoded->result as $chart)
+		{
+			if (!($chart instanceof \stdClass) || !is_int($chart->id ?? null) || $chart->id <= 0)
+			{
+				return $this->createErrorResult('Invalid dashboard chart id');
+			}
+
+			if (isset($seenIds[$chart->id]))
+			{
+				return $this->createErrorResult('Duplicate dashboard chart id');
+			}
+
+			$seenIds[$chart->id] = true;
+			$chartIds[] = $chart->id;
+		}
+
+		$result = new Main\Result();
+		$result->setData(['chartIds' => $chartIds]);
 
 		return $result;
 	}
@@ -900,15 +961,26 @@ final class DashboardService extends AbstractSupersetContext
 		array $sort = [],
 		?int $limit = null,
 		int $offset = 0,
+		?string $actAsLogin = null,
 	): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		$requestResult = $this
-			->getDashboardApi($streamTimeout)
+			->getDashboardApi($streamTimeout, $actAsLogin)
 			->getDashboardOverview($dashboardId, $appliedFilters, $urlParams, $chartIds, $sort, $limit, $offset)
 		;
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			return $this->createRequestErrorResult($requestResult, 'Getting dashboard overview for AI');
+		}
+		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+		if ($notApplied !== null)
+		{
+			return $notApplied;
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
@@ -931,15 +1003,26 @@ final class DashboardService extends AbstractSupersetContext
 		?string $search = null,
 		?int $limit = null,
 		int $streamTimeout = 60,
+		?string $actAsLogin = null,
 	): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		$requestResult = $this
-			->getDashboardApi($streamTimeout)
+			->getDashboardApi($streamTimeout, $actAsLogin)
 			->getFilterValues($dashboardId, $filterColumn, $appliedFilters, $urlParams, $search, $limit)
 		;
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			return $this->createRequestErrorResult($requestResult, 'Getting dashboard filter values for AI');
+		}
+		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+		if ($notApplied !== null)
+		{
+			return $notApplied;
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
@@ -1400,7 +1483,7 @@ final class DashboardService extends AbstractSupersetContext
 		;
 	}
 
-	private function getDashboardApi(?int $streamTimeout = null): Dashboard
+	private function getDashboardApi(?int $streamTimeout = null, ?string $actAsLogin = null): Dashboard
 	{
 		if ($streamTimeout !== null)
 		{
@@ -1408,10 +1491,10 @@ final class DashboardService extends AbstractSupersetContext
 				'streamTimeout' => $streamTimeout,
 			]);
 
-			return new Dashboard($connector);
+			return new Dashboard($actAsLogin === null ? $connector : $connector->withActAs($actAsLogin));
 		}
 
-		return new Dashboard($this->connector);
+		return new Dashboard($this->getConnectorFor($actAsLogin));
 	}
 
 	private function getGuestTokenApi(): GuestToken

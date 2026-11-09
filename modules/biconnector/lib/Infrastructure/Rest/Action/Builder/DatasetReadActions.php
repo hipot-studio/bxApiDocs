@@ -31,6 +31,7 @@ trait DatasetReadActions
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::RateLimit,
 	)]
 	public function listAction(ListDatasetsRequest $request): ArrayResponse

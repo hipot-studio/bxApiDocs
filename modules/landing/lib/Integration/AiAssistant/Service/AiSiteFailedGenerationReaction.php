@@ -12,7 +12,12 @@ use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
  * flow: the start handler and the status handler answer the same failure, so they must react to it
  * the same way, and the decision lives here once instead of in a copy per handler.
  *
- * Create-only: the edit flow reserves no binding, so it has nothing to react to.
+ * The markup scenarios reserve the same draft and moderate on a step of their own, so they react
+ * here as well: which step means a refused topic is asked of the scenario of the generation, never
+ * of a constant.
+ *
+ * Create-only: the edit flow of the legacy scenario reserves no binding, so it has nothing to react
+ * to.
  */
 final class AiSiteFailedGenerationReaction
 {

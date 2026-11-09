@@ -112,9 +112,12 @@ class Item implements \IBPWorkflowDocument
 			return true; //Admin is the Lord of the Automation
 		}
 
-		if ($operation === \CBPCanUserOperateOperation::CreateAutomation)
+		if (
+			$operation === \CBPCanUserOperateOperation::CreateAutomation
+			|| $operation === \CBPCanUserOperateOperation::ViewWorkflow
+		)
 		{
-			return Driver::getInstance()->getUserPermissions()->canModifyType($typeId);
+			return Driver::getInstance()->getUserPermissions($userId)->canModifyType($typeId);
 		}
 
 		return false;

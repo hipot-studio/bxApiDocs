@@ -4,6 +4,8 @@ namespace Bitrix\Sign\Config;
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main;
+use Bitrix\Sign\Contract\Document\ManualFillingDecisionProvider;
+use Bitrix\Sign\Service\Container;
 
 final class Feature
 {
@@ -209,6 +211,44 @@ final class Feature
 		;
 	}
 
+	public function isKedoStageReorderEnabled(): bool
+	{
+		try
+		{
+			if (
+				!interface_exists(ManualFillingDecisionProvider::class)
+				|| !class_exists(Container::class)
+				|| !method_exists(Container::class, 'instance')
+				|| !method_exists(Container::class, 'getManualFillingDecisionProvider')
+				|| !class_exists(Main\Config\Feature\Context::class)
+			)
+			{
+				return false;
+			}
+
+			$provider = Container::instance()->getManualFillingDecisionProvider();
+			if (
+				!$provider instanceof ManualFillingDecisionProvider
+				|| !method_exists($provider, 'isReady')
+				|| $provider->isReady() !== true
+			)
+			{
+				return false;
+			}
+
+			return $this->isMainFeatureEnabled(
+				Feature\KedoStageReorderFlag::class,
+				null,
+				null,
+				new Main\Config\Feature\Context(null),
+			);
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
 	private function areKedoBizprocFlagsMigratedToMain(): bool
 	{
 		return Option::getRealValue(
@@ -218,7 +258,12 @@ final class Feature
 		) === 'Y';
 	}
 
-	private function isMainFeatureEnabled(string $flag, ?string $region, ?int $userId = null): bool
+	private function isMainFeatureEnabled(
+		string $flag,
+		?string $region,
+		?int $userId = null,
+		?Main\Config\Feature\Context $context = null,
+	): bool
 	{
 		try
 		{
@@ -226,6 +271,7 @@ final class Feature
 				!class_exists(Main\Config\Feature::class)
 				|| !class_exists(Main\Config\Feature\AbstractFlag::class)
 				|| !class_exists(Main\Config\Feature\Context::class)
+				|| !method_exists(Main\Config\Feature::class, 'isEnabled')
 				|| !class_exists($flag)
 				|| !is_subclass_of($flag, Main\Config\Feature\AbstractFlag::class)
 			)
@@ -233,11 +279,14 @@ final class Feature
 				return false;
 			}
 
-			$currentContext = Main\Config\Feature\Context::getCurrent();
-			$context = new Main\Config\Feature\Context(
-				$userId ?? $currentContext->userId,
-				['region' => $region],
-			);
+			if ($context === null)
+			{
+				$currentContext = Main\Config\Feature\Context::getCurrent();
+				$context = new Main\Config\Feature\Context(
+					$userId ?? $currentContext->userId,
+					['region' => $region],
+				);
+			}
 
 			return Main\Config\Feature::isEnabled($flag, $context);
 		}

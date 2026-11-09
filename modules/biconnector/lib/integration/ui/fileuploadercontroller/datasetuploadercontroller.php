@@ -2,8 +2,10 @@
 
 namespace Bitrix\BIConnector\Integration\UI\FileUploaderController;
 
+use Bitrix\UI\FileUploader\CanUploadResult;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\FileOwnershipCollection;
+use Bitrix\UI\FileUploader\UploadRequest;
 use Bitrix\UI\FileUploader\UploaderController;
 
 class DatasetUploaderController extends UploaderController
@@ -26,7 +28,7 @@ class DatasetUploaderController extends UploaderController
 		return $configuration;
 	}
 
-	public function canUpload()
+	public function canUpload(?UploadRequest $uploadRequest = null): CanUploadResult|bool
 	{
 		return true;
 	}

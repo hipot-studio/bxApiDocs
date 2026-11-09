@@ -151,6 +151,39 @@ abstract class BasePersonalize
 	}
 
 	/**
+	 * Identifiers of the list that address an entity: positive integers, without duplicates.
+	 *
+	 * A value that is not a whole number is dropped instead of being cast: intval() would turn
+	 * arbitrary text into the identifier 1 and mix a foreign entity into the letter.
+	 *
+	 * @param array $entityIds
+	 *
+	 * @return int[]
+	 */
+	public static function normalizeEntityIds(array $entityIds): array
+	{
+		$normalized = [];
+
+		foreach ($entityIds as $entityId)
+		{
+			$isWholeNumber = is_int($entityId)
+				|| (is_string($entityId) && preg_match('/^[0-9]+$/D', $entityId) === 1);
+			if (!$isWholeNumber)
+			{
+				continue;
+			}
+
+			$entityId = (int)$entityId;
+			if ($entityId > 0)
+			{
+				$normalized[$entityId] = $entityId;
+			}
+		}
+
+		return array_values($normalized);
+	}
+
+	/**
 	 * @param string $entityType
 	 * @param array $entityIds
 	 * @param array|string[] $usedFields
@@ -175,6 +208,12 @@ abstract class BasePersonalize
 			return [];
 		}
 
+		$entityIds = static::normalizeEntityIds($entityIds);
+		if (empty($entityIds))
+		{
+			return [];
+		}
+
 		\Bitrix\Main\Localization\Loc::loadMessages(
 			$_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/modules/crm/classes/general/crm_fields.php'
 		);
@@ -184,12 +223,8 @@ abstract class BasePersonalize
 		$dbDocumentList = $className::GetListEx(
 			[],
 			[
-				"__CONDITIONS"      => [
-					[
-						"SQL" => "L.ID IN (".implode(",", $entityIds).")"
-					]
-				],
-				"CHECK_PERMISSIONS" => "N"
+				'@ID' => $entityIds,
+				'CHECK_PERMISSIONS' => 'N',
 			],
 			false,
 			false,

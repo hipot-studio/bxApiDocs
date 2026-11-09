@@ -7,6 +7,7 @@
  */
 namespace Bitrix\Sender\Preset\Templates;
 
+use Bitrix\Fileman\Block\EditorMail;
 use Bitrix\Main\IO\File;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -64,8 +65,15 @@ class Consent
 			),
 			$content
 		);
+		$content = Texts::replaceHtml($content);
 
-		return Texts::replace($content);
+		// the consent mail never executes PHP: strip it regardless of the current user's rights
+		if (Loader::includeModule('fileman'))
+		{
+			return (string)EditorMail::removePhpFromHtml($content);
+		}
+
+		return str_replace(['<?', '?>'], ['&lt;?', '?&gt;'], $content);
 	}
 
 	public static function getApproveBtnText($agreement)

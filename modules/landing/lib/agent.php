@@ -505,6 +505,40 @@ class Agent
 	}
 
 	/**
+	 * Drops markup upload buffers idle longer than their lifetime.
+	 * @return string
+	 */
+	public static function clearMarkupUploads(): string
+	{
+		(new Markup\UploadBuffer())->clearExpired();
+
+		return __CLASS__ . '::' . __FUNCTION__ . '();';
+	}
+
+	/**
+	 * Releases markup chat reservations left by creations nobody has reacted on for 2 hours.
+	 * @return string
+	 */
+	public static function releaseStaleMarkupReservations(): string
+	{
+		(new Integration\AiAssistant\Service\StaleReservationSweeper())->sweep();
+
+		return __CLASS__ . '::' . __FUNCTION__ . '();';
+	}
+
+	/**
+	 * Removes free AI site rows not opened for a day and expired request handoff tokens.
+	 * @return string
+	 */
+	public static function clearAiSiteDrafts(): string
+	{
+		(new Integration\AiAssistant\Service\AiSiteDraftSweeper())->sweep();
+		(new Integration\AiAssistant\Service\AiPromptHandoffService())->clearStale();
+
+		return __CLASS__ . '::' . __FUNCTION__ . '();';
+	}
+
+	/**
 	 * Tmp agent for rebuild form's blocks.
 	 * @param int $lastLid Last item id.
 	 * @return string

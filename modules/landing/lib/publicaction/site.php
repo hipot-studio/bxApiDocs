@@ -212,10 +212,18 @@ class Site
 		{
 			if (isset($row['DATE_CREATE']))
 			{
+				if ($row['DATE_CREATE'] instanceof \Bitrix\Main\Type\Date)
+				{
+					$row['DATE_CREATE_ISO'] = $row['DATE_CREATE']->format(\DATE_ATOM);
+				}
 				$row['DATE_CREATE'] = (string) $row['DATE_CREATE'];
 			}
 			if (isset($row['DATE_MODIFY']))
 			{
+				if ($row['DATE_MODIFY'] instanceof \Bitrix\Main\Type\Date)
+				{
+					$row['DATE_MODIFY_ISO'] = $row['DATE_MODIFY']->format(\DATE_ATOM);
+				}
 				$row['DATE_MODIFY'] = (string) $row['DATE_MODIFY'];
 			}
 			if ($row['LANDING_ID_INDEX'] && $getPreviewPicture)
@@ -536,10 +544,18 @@ class Site
 		{
 			if (isset($row['DATE_CREATE']))
 			{
+				if ($row['DATE_CREATE'] instanceof \Bitrix\Main\Type\Date)
+				{
+					$row['DATE_CREATE_ISO'] = $row['DATE_CREATE']->format(\DATE_ATOM);
+				}
 				$row['DATE_CREATE'] = (string) $row['DATE_CREATE'];
 			}
 			if (isset($row['DATE_MODIFY']))
 			{
+				if ($row['DATE_MODIFY'] instanceof \Bitrix\Main\Type\Date)
+				{
+					$row['DATE_MODIFY_ISO'] = $row['DATE_MODIFY']->format(\DATE_ATOM);
+				}
 				$row['DATE_MODIFY'] = (string) $row['DATE_MODIFY'];
 			}
 		}

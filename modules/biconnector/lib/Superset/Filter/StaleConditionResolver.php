@@ -7,6 +7,7 @@ namespace Bitrix\BIConnector\Superset\Filter;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetTagTable;
@@ -242,9 +243,17 @@ final class StaleConditionResolver
 	 * axis grants by naming its groups, so an answer that names none grants none. Reading it as "no
 	 * restriction" would keep a condition on a group the person may not see, and the next consumer of
 	 * the allowed groups would have one more example of the permissive reading to copy.
+	 *
+	 * Without the axis the groups are shown to everyone, so no group is out of reach and the answer is
+	 * null: only a deleted group is stale then.
 	 */
-	private function allowedTableGroupIds(): array
+	private function allowedTableGroupIds(): ?array
 	{
+		if (!Feature::isTablePermissionsEnabled())
+		{
+			return null;
+		}
+
 		$allowedGroupIds = $this->controller()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_TABLE_VIEW);
 
 		return array_fill_keys(array_map('intval', $allowedGroupIds ?? []), true);

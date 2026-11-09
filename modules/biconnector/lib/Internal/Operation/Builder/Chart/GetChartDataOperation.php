@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Internal\Operation\Builder\Chart;
 
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\DashboardDataTransformer;
@@ -11,13 +12,15 @@ use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\ReadyDashboardGuard;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
 /**
  * Row-level data of up to MAX_CHARTS_PER_CALL charts of a dashboard the actor may view, the answer
  * of get_chart_data: `dashboard`, `charts` with columns, rows, stats and paging, `applied_filters`,
- * and `missing_chart_ids` when some of the requested charts are not on the dashboard.
+ * `missing_chart_ids` when some of the requested charts are not on the dashboard, and `no_access_chart_ids` when
+ * some are closed by the table rights of the actor: those come without data, the open ones answer.
  *
  * Unlike the other chart reads, the right is checked on the dashboard: ACTION_BIC_DASHBOARD_VIEW through
  * ReadyDashboardGuard, the checks of BiToolBehaviour::loadReadyDashboard() over DashboardGuard::forView().
@@ -38,10 +41,12 @@ final class GetChartDataOperation
 	];
 
 	private readonly ReadyDashboardGuard $guard;
+	private readonly SupersetIdentity $identity;
 
-	public function __construct(?ReadyDashboardGuard $guard = null)
+	public function __construct(?ReadyDashboardGuard $guard = null, ?SupersetIdentity $identity = null)
 	{
 		$this->guard = $guard ?? new ReadyDashboardGuard();
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -144,7 +149,14 @@ final class GetChartDataOperation
 			return Refusal::invalidArgument($urlParamsResult);
 		}
 
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
+		{
+			return $identityResult;
+		}
+
 		$response = IntegratorFactory::getInstance()->getDashboardOverview(
+			$identityResult->getData()['user'],
 			$externalId,
 			$supersetFilters,
 			$urlParamsResult->getData()['urlParams'],
@@ -155,7 +167,7 @@ final class GetChartDataOperation
 		);
 		if ($response->hasErrors())
 		{
-			return Refusal::integratorFailure(
+			return Refusal::dashboardReadFailure(
 				$response,
 				['stage' => 'get_chart_data.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
@@ -190,6 +202,7 @@ final class GetChartDataOperation
 		}
 
 		$matchedCharts = [];
+		$noAccess = [];
 		foreach ($requestedChartIds as $chartId)
 		{
 			if (!isset($chartsById[$chartId]))
@@ -202,6 +215,13 @@ final class GetChartDataOperation
 			}
 
 			$chart = $chartsById[$chartId];
+
+			// Closed by the table rights of the actor: answered by the other charts, the closed one only listed.
+			if (ActAsFailure::isChartAccessDenied($chart))
+			{
+				$noAccess[] = $chartId;
+				continue;
+			}
 
 			if (isset($chart['error']) && is_string($chart['error']) && $chart['error'] !== '')
 			{
@@ -218,6 +238,11 @@ final class GetChartDataOperation
 			}
 
 			$matchedCharts[] = $chart;
+		}
+
+		if (empty($matchedCharts) && !empty($noAccess))
+		{
+			return Refusal::error(FailureCode::AccessDenied, ActAsFailure::CHARTS_ACCESS_DENIED_MESSAGE);
 		}
 
 		if (empty($matchedCharts))
@@ -255,6 +280,10 @@ final class GetChartDataOperation
 		if (!empty($missing))
 		{
 			$result['missing_chart_ids'] = $missing;
+		}
+		if (!empty($noAccess))
+		{
+			$result['no_access_chart_ids'] = $noAccess;
 		}
 
 		return (new Result())->setData($result);

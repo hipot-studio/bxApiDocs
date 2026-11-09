@@ -4,6 +4,7 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Mail;
 use Bitrix\Main\Mail\SenderSendCounter;
 use Bitrix\Main\Type;
 use Bitrix\Main\Web\Uri;
@@ -204,11 +205,12 @@ class SenderLetterTimeComponent extends CommonSenderComponent
 			return false;
 		}
 
-		$email = $this->letter->getMessage()->getConfiguration()->get('EMAIL_FROM', false);
+		$message = $this->letter->getMessage();
+		$email = $message->getConfiguration()->get('EMAIL_FROM', false);
 
 		if ($email)
 		{
-			$this->arParams['DAY_LIMIT'] = Bitrix\Main\Mail\Sender::getEmailLimit($email);
+			$this->arParams['DAY_LIMIT'] = $this->getEmailLimit($message, $email);
 		}
 
 		$this->arParams['CAN_EDIT'] = isset($this->arParams['CAN_EDIT'])
@@ -287,6 +289,36 @@ class SenderLetterTimeComponent extends CommonSenderComponent
 		}
 
 		return true;
+	}
+
+	private function getEmailLimit(Bitrix\Sender\Message\Adapter $message, string $email): ?int
+	{
+		if (!$this->isSenderIdentitySupported())
+		{
+			return Mail\Sender::getEmailLimit($email);
+		}
+
+		return Mail\Sender::getEmailLimit($email, $this->resolveSenderIdentity($message));
+	}
+
+	private function isSenderIdentitySupported(): bool
+	{
+		return class_exists(Mail\Sender\Identity::class)
+			&& (new ReflectionMethod(Mail\Sender::class, 'getEmailLimit'))->getNumberOfParameters() >= 2
+		;
+	}
+
+	private function resolveSenderIdentity(Bitrix\Sender\Message\Adapter $message): ?Mail\Sender\Identity
+	{
+		$configuration = $message->getConfiguration();
+		$ownerId = (int)$configuration->get('LETTER_CREATED_BY_ID');
+		$address = new Mail\Address((string)$configuration->get('EMAIL_FROM'));
+		if ($ownerId <= 0 || !$address->validate())
+		{
+			return null;
+		}
+
+		return Integration\Sender\Mail\SenderIdentityResolver::resolve($ownerId, $address->getEmail());
 	}
 
 	protected function printErrors()

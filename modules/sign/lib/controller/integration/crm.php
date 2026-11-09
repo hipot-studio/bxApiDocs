@@ -119,8 +119,8 @@ class Crm extends Controller
 			$stamp->setModule('crm');
 			$stamp->save();
 
-			$result = \Bitrix\Sign\Integration\CRM::saveCompanyStamp($companyId, $stamp);
-			if ($result)
+			$saveResult = \Bitrix\Sign\Integration\CRM::saveCompanyStamp($companyId, $stamp);
+			if ($saveResult->isSuccess())
 			{
 				if ($documentId)
 				{
@@ -137,10 +137,11 @@ class Crm extends Controller
 					'src' => $stamp->getUriPath(),
 				];
 			}
-			else
-			{
-				$stamp->unlink();
-			}
+
+			// The upload is left where it is instead of being deleted: a caller who may not change the
+			// company in CRM is refused here as a matter of course, and the file they sent is still held
+			// by the uploader, which collects it on its own.
+			$this->addStampSaveError($saveResult);
 		}
 
 		return null;
@@ -210,6 +211,35 @@ class Crm extends Controller
 		$this->addError(new Main\Error(
 			Main\Localization\Loc::getMessage('SIGN_CONTROLLER_INTEGRATION_CRM_ERROR_ACCESS_DENIED'),
 			'ACCESS_DENIED',
+		));
+	}
+
+	/**
+	 * Why the stamp did not reach the requisite of the company. The refusal of CRM is answered by its own
+	 * code and not by the one above: that one says the document may not be edited, this one says the
+	 * company may not be changed, and the old editor shows the phrase it is given.
+	 *
+	 * The code is compared as a literal - it is the value of \Bitrix\Crm\Controller\ErrorCode::ACCESS_DENIED,
+	 * and the module is not necessarily loaded on the way here.
+	 */
+	private function addStampSaveError(Main\Result $saveResult): void
+	{
+		foreach ($saveResult->getErrors() as $error)
+		{
+			if ($error->getCode() === 'ACCESS_DENIED')
+			{
+				$this->addError(new Main\Error(
+					Main\Localization\Loc::getMessage('SIGN_CONTROLLER_INTEGRATION_CRM_ERROR_STAMP_ACCESS_DENIED'),
+					'STAMP_ACCESS_DENIED',
+				));
+
+				return;
+			}
+		}
+
+		$this->addError(new Main\Error(
+			Main\Localization\Loc::getMessage('SIGN_CONTROLLER_INTEGRATION_CRM_ERROR_STAMP_NOT_SAVED'),
+			'STAMP_NOT_SAVED',
 		));
 	}
 }

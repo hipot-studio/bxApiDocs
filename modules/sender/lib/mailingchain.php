@@ -337,14 +337,6 @@ class MailingChainTable extends Entity\DataManager
 			}
 		}
 
-		if($postingId && $mailingChain['IS_TRIGGER'] != 'Y')
-		{
-			if(!PostingTable::initGroupRecipients($postingId, true))
-			{
-				Model\LetterTable::update($mailingChainId, ['WAITING_RECIPIENT' => 'Y']);
-			}
-		}
-
 		return $postingId;
 	}
 

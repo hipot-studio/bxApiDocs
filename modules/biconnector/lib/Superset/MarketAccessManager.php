@@ -68,19 +68,28 @@ final class MarketAccessManager
 		return $this->isDashboardAvailableByType($type);
 	}
 
-	public function isDashboardAvailableByType(string $type): bool
+	/** @param (\Closure(?bool, bool): void)|null $observe Internal receipt of the original policy branch. */
+	public function isDashboardAvailableByType(string $type, ?\Closure $observe = null): bool
 	{
 		if ($type !== SupersetDashboardTable::DASHBOARD_TYPE_MARKET)
 		{
+			$observe?->__invoke(null, false);
+
 			return true;
 		}
 
-		if (!$this->isSubscriptionAccessible())
+		$accessible = $this->isSubscriptionAccessible();
+		if (!$accessible)
 		{
+			$observe?->__invoke($accessible, false);
+
 			return true;
 		}
 
-		return $this->isSubscriptionAvailable();
+		$available = $this->isSubscriptionAvailable();
+		$observe?->__invoke($accessible, true);
+
+		return $available;
 	}
 
 	public function isSubscriptionAccessible(): bool

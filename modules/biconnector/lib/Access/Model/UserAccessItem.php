@@ -179,11 +179,14 @@ final class UserAccessItem extends Main\Access\User\UserModel
 	}
 
 	/**
-	 * Fills default group access permissions for roles that have edit rights.
+	 * Grants the rows of a new group of dashboards to the roles that manage the rights of that axis.
 	 *
-	 * @param int $groupId
+	 * The receiver is a role of the creator holding the right of the dashboard section: the screen is
+	 * one and the roles are common to it, so the role that may edit the rows of this axis is the role
+	 * that gets them. A group granted to nobody would show the creator "granted to nobody" over an
+	 * access he has just opened.
 	 *
-	 * @return bool
+	 * @return bool Whether anything was granted.
 	 *
 	 * @throws \Bitrix\Main\Db\SqlQueryException
 	 */
@@ -196,18 +199,7 @@ final class UserAccessItem extends Main\Access\User\UserModel
 			return false;
 		}
 
-		$query = PermissionTable::query();
-
-		$roleEditableRights = $query
-			->addSelect('ROLE_ID')
-			->addSelect('VALUE')
-			->whereIn('ROLE_ID', $roles)
-			->where('PERMISSION_ID', PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS)
-			->where('VALUE', 1)
-			->exec()
-		;
-
-		$accessibleRoles = array_column($roleEditableRights->fetchAll(), 'ROLE_ID');
+		$accessibleRoles = $this->getRolesManagingDashboardRights($roles);
 		if (empty($accessibleRoles))
 		{
 			return false;
@@ -235,6 +227,27 @@ final class UserAccessItem extends Main\Access\User\UserModel
 	}
 
 	/**
+	 * Roles of the person that may edit the rights of the dashboard section.
+	 *
+	 * @param int[] $roles
+	 *
+	 * @return int[]
+	 */
+	private function getRolesManagingDashboardRights(array $roles): array
+	{
+		$rows = PermissionTable::query()
+			->addSelect('ROLE_ID')
+			->whereIn('ROLE_ID', $roles)
+			->where('PERMISSION_ID', PermissionDictionary::BIC_SECTION_EDIT_DASHBOARD_RIGHTS)
+			->where('VALUE', 1)
+			->exec()
+			->fetchAll()
+		;
+
+		return array_unique(array_map('intval', array_column($rows, 'ROLE_ID')));
+	}
+
+	/**
 	 * Fills default table group access permissions for roles that have edit rights.
 	 *
 	 * The operations come from the table axis: the codes of the dashboard axis would mean something
@@ -245,6 +258,11 @@ final class UserAccessItem extends Main\Access\User\UserModel
 	 * @return bool Whether anything was granted.
 	 *
 	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 *
+	 * @deprecated No caller left: a new table group is opened to nobody. The role that holds the
+	 *             rights of the table axis carries no right 4, so the selection below would find no
+	 *             role anyway. Kept as the counterpart of fillDefaultGroupAccess() until the axis
+	 *             decides how a new table group is opened.
 	 */
 	public function fillDefaultTableGroupAccess(int $groupId): bool
 	{

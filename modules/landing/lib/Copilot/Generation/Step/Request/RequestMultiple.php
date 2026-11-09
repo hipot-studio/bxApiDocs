@@ -267,6 +267,15 @@ abstract class RequestMultiple extends AIStep
 		return false;
 	}
 
+	/**
+	 * Whether too many send failures of one pass stop the step. A step that records every send
+	 * failure as the outcome of its entity turns the limit off.
+	 */
+	protected function isSendFailureLimitEnabled(): bool
+	{
+		return true;
+	}
+
 	protected function attachAppliedEntityErrorRequest(
 		RequestEntityDto $entity,
 		RequestEntities $entityType,
@@ -338,7 +347,7 @@ abstract class RequestMultiple extends AIStep
 		$this->markEntitySendFailureHandled($entity);
 		$this->changed = true;
 
-		if ($this->isSendFailureLimitReached())
+		if ($this->isSendFailureLimitEnabled() && $this->isSendFailureLimitReached())
 		{
 			throw new GenerationException(
 				GenerationErrors::errorInRequest,

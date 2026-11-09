@@ -25,6 +25,9 @@ Loc::loadMessages(__FILE__);
  */
 class Message extends Base
 {
+	private const PERSONALIZABLE_FIELD_CODES = ['MESSAGE', 'SUBJECT', 'TITLE'];
+	private const PERSONALIZE_CODE_SUFFIX = '_PERSONALIZE';
+
 	/**
 	 * Load configuration.
 	 *
@@ -304,63 +307,164 @@ class Message extends Base
 			return $id;
 		}
 
-		MessageFieldTable::deleteByMessageId($id);
-		foreach ($fields as $field)
+		$this->replaceRowsByCode(MessageFieldTable::class, $id, $this->buildFieldRows($id, $fields));
+		if ($this->hasErrors())
 		{
-			if (!$field['CODE'])
-			{
-				continue;
-			}
-
-			if (in_array($field['CODE'], ['MESSAGE_PERSONALIZE', 'SUBJECT_PERSONALIZE', 'TITLE_PERSONALIZE']))
-			{
-				continue;
-			}
-
-			if (in_array($field['CODE'], ['MESSAGE', 'SUBJECT', 'TITLE']))
-			{
-				preg_match_all("/#([0-9a-zA-Z_.|]+?)#/", $field['VALUE'], $matchesFindPlaceHolders);
-				$matchesFindPlaceHoldersCount = count($matchesFindPlaceHolders[1]);
-				if ($matchesFindPlaceHoldersCount > 0)
-				{
-					$list = json_encode($matchesFindPlaceHolders);
-					MessageFieldTable::add(
-						[
-							'MESSAGE_ID' => $id,
-							'TYPE' => $field['TYPE'],
-							'CODE' => $field['CODE'] . '_PERSONALIZE',
-							'VALUE' => $list,
-						]
-					);
-				}
-			}
-			MessageFieldTable::add([
-				'MESSAGE_ID' => $id,
-				'TYPE' => $field['TYPE'],
-				'CODE' => $field['CODE'],
-				'VALUE' => $field['VALUE'],
-			]);
+			return $id;
 		}
 
-		MessageUtmTable::deleteByMessageId($id);
-		if ($utmTags)
-		{
-			foreach ($utmTags as $utm)
-			{
-				if (empty($utm['VALUE']) || empty($utm['CODE']))
-				{
-					continue;
-				}
-				MessageUtmTable::add(
-					[
-						'MESSAGE_ID' => $id,
-						'CODE' => $utm['CODE'],
-						'VALUE' => $utm['VALUE'],
-					]
-				);
-			}
-		}
+		$this->replaceRowsByCode(MessageUtmTable::class, $id, $this->buildUtmRows($id, $utmTags));
 
 		return $id;
+	}
+
+	/**
+	 * Brings the child rows of the message to exactly the given set: rows with codes outside the set
+	 * are deleted, the rest are inserted or overwritten. Merge keeps the write idempotent, so a row
+	 * left by a failed delete or by a parallel save does not break the save with a duplicate key.
+	 * A failed row does not stop the rest: every failure goes to the entity errors.
+	 *
+	 * @param class-string<\Bitrix\Main\Entity\DataManager> $tableClass Table class with
+	 * (MESSAGE_ID, CODE) as its primary key, using \Bitrix\Main\ORM\Data\AddStrategy\Trait\AddMergeTrait.
+	 * @param integer $messageId Message ID.
+	 * @param array $rows Rows indexed by code.
+	 * @return void
+	 */
+	private function replaceRowsByCode(string $tableClass, $messageId, array $rows)
+	{
+		$storedRows = $tableClass::getList([
+			'select' => ['MESSAGE_ID', 'CODE'],
+			'filter' => ['=MESSAGE_ID' => $messageId],
+		]);
+
+		foreach ($storedRows as $primary)
+		{
+			if (isset($rows[$primary['CODE']]))
+			{
+				continue;
+			}
+
+			$deleteResult = $tableClass::delete($primary);
+			if (!$deleteResult->isSuccess())
+			{
+				$this->errors->add($deleteResult->getErrors());
+			}
+		}
+
+		foreach ($rows as $row)
+		{
+			$addResult = $tableClass::addMerge($row);
+			if (!$addResult->isSuccess())
+			{
+				$this->errors->add($addResult->getErrors());
+			}
+		}
+	}
+
+	/**
+	 * @param integer $messageId Message ID.
+	 * @param array $fields Fields.
+	 * @return array Rows indexed by code.
+	 */
+	private function buildFieldRows($messageId, array $fields): array
+	{
+		$rows = [];
+		foreach ($fields as $field)
+		{
+			$code = (string)$field['CODE'];
+			if ($code === '' || $this->isGeneratedPersonalizeCode($code))
+			{
+				continue;
+			}
+
+			if (in_array($code, self::PERSONALIZABLE_FIELD_CODES, true))
+			{
+				$personalizeCode = $code . self::PERSONALIZE_CODE_SUFFIX;
+				$personalizeList = $this->extractPersonalizeList($field['VALUE']);
+				if ($personalizeList === null)
+				{
+					unset($rows[$personalizeCode]);
+				}
+				else
+				{
+					$rows[$personalizeCode] = [
+						'MESSAGE_ID' => $messageId,
+						'TYPE' => $field['TYPE'],
+						'CODE' => $personalizeCode,
+						'VALUE' => $personalizeList,
+					];
+				}
+			}
+
+			$rows[$code] = [
+				'MESSAGE_ID' => $messageId,
+				'TYPE' => $field['TYPE'],
+				'CODE' => $code,
+				'VALUE' => $field['VALUE'],
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @param integer $messageId Message ID.
+	 * @param array|null $utmTags Utm tags.
+	 * @return array Rows indexed by code.
+	 */
+	private function buildUtmRows($messageId, $utmTags): array
+	{
+		$rows = [];
+		if (!is_array($utmTags))
+		{
+			return $rows;
+		}
+
+		foreach ($utmTags as $utm)
+		{
+			if (empty($utm['VALUE']) || empty($utm['CODE']))
+			{
+				continue;
+			}
+
+			$rows[$utm['CODE']] = [
+				'MESSAGE_ID' => $messageId,
+				'CODE' => $utm['CODE'],
+				'VALUE' => $utm['VALUE'],
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @param string $code Code.
+	 * @return bool
+	 */
+	private function isGeneratedPersonalizeCode(string $code): bool
+	{
+		if (!str_ends_with($code, self::PERSONALIZE_CODE_SUFFIX))
+		{
+			return false;
+		}
+
+		$sourceCode = substr($code, 0, -strlen(self::PERSONALIZE_CODE_SUFFIX));
+
+		return in_array($sourceCode, self::PERSONALIZABLE_FIELD_CODES, true);
+	}
+
+	/**
+	 * @param string $value Value.
+	 * @return string|null Encoded placeholder list, null when the value has no placeholders.
+	 */
+	private function extractPersonalizeList($value): ?string
+	{
+		preg_match_all('/#([0-9a-zA-Z_.|]+?)#/', $value, $placeholders);
+		if (count($placeholders[1]) === 0)
+		{
+			return null;
+		}
+
+		return json_encode($placeholders);
 	}
 }

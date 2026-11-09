@@ -32,6 +32,7 @@ trait DashboardReadActions
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
+		FailureCode::InvalidArgument,
 		FailureCode::RateLimit,
 	)]
 	public function listAction(ListDashboardsRequest $request): ArrayResponse

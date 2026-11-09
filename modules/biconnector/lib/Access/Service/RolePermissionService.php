@@ -3,11 +3,9 @@
 namespace Bitrix\BIConnector\Access\Service;
 
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Access\Component\PermissionConfig;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionTable;
 use Bitrix\BIConnector\Access\Role\RoleTable;
-use Bitrix\BIConnector\Access\Role\RoleUtil;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\Access\Table\PermissionCacheResetNotifier;
 use Bitrix\BIConnector\Configuration\Feature;
@@ -57,6 +55,9 @@ final class RolePermissionService
 	 * @param array $permissionSettings Roles with their rights.
 	 * @param array $accessRights Cells of the matrix, the groups of both axes among them.
 	 * @param int[] $deletedTableGroupIds Custom table groups the person removed from the matrix.
+	 * @param bool $isRolesKept The roles of the payload are proven to be the stored ones (the person may
+	 *        not manage roles and RoleManagementGuard has passed): their names and members are not
+	 *        written again, only their rights.
 	 *
 	 * @return Result
 	 */
@@ -64,10 +65,9 @@ final class RolePermissionService
 		array $permissionSettings,
 		array $accessRights = [],
 		array $deletedTableGroupIds = [],
+		bool $isRolesKept = false,
 	): Result
 	{
-		$query = [];
-		$roles = [];
 		$result = new Result();
 		$db = Application::getConnection();
 
@@ -136,7 +136,7 @@ final class RolePermissionService
 			$isTableAxisHidden = !Feature::isTablePermissionsEnabled();
 			if ($isTableAxisHidden)
 			{
-				$accessRights = self::dropTableGroupCells($accessRights);
+				$accessRights = self::dropTableAxisCells($accessRights);
 				$deletedTableGroupIds = [];
 			}
 
@@ -186,73 +186,63 @@ final class RolePermissionService
 				}
 			}
 
+			$rolePermissions = new RolePermissionChanges();
 			foreach ($permissionSettings as &$setting)
 			{
 				$roleId = (int)($setting['id'] ?? 0);
 				$roleTitle = (string)($setting['title'] ?? '');
 
-				$saveRoleResult = $this->saveRole($roleTitle, $roleId);
-				if (!$saveRoleResult->isSuccess())
+				if (!$isRolesKept)
 				{
-					$result->addErrors($saveRoleResult->getErrors());
-					$db->rollbackTransaction();
+					$saveRoleResult = $this->saveRole($roleTitle, $roleId);
+					if (!$saveRoleResult->isSuccess())
+					{
+						$result->addErrors($saveRoleResult->getErrors());
+						$db->rollbackTransaction();
 
-					return $result;
+						return $result;
+					}
+					$roleId = $saveRoleResult->getData()['id'];
 				}
-				$roleId = $saveRoleResult->getData()['id'];
 
 				$setting['id'] = $roleId;
-				$roles[] = $roleId;
 
-				if (!isset($setting['accessRights']))
+				if (!isset($setting['accessRights']) || !is_array($setting['accessRights']))
 				{
 					continue;
 				}
 
-				foreach ($setting['accessRights'] as $permission)
+				if ($isTableAxisHidden)
 				{
-					$permissionId = $permission['id'];
-					if ($isTableAxisHidden && self::isTableAxisPermission((string)$permissionId))
-					{
-						continue;
-					}
-
-					$query[] = [
-						'ROLE_ID' => $roleId,
-						'PERMISSION_ID' => $permissionId,
-						'VALUE' => $permission['value'],
-					];
+					$setting['accessRights'] = array_values(array_filter(
+						$setting['accessRights'],
+						static fn($permission): bool => !is_array($permission)
+							|| !self::isTableAxisCell((string)($permission['id'] ?? '')),
+					));
 				}
+
+				$rolePermissions->add($roleId, $setting['accessRights']);
 			}
 			unset($setting);
 
-			$query = [...$query, ...$this->getKeptHiddenPermissions($permissionSettings)];
-
-			if ($query)
+			if (!$rolePermissions->apply())
 			{
-				$deleteFilter = ['=ROLE_ID' => $roles];
-				if ($isTableAxisHidden)
-				{
-					$deleteFilter['!=PERMISSION_ID'] = (string)PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS;
-					// the rights of the table groups are stored as T<group id>
-					$deleteFilter['!%=PERMISSION_ID'] = 'T%';
-				}
+				$errorMessage = Loc::getMessage('BICONNECTOR_APACHESUPERSET_CONFIG_PERMISSIONS_DB_ERROR');
+				$result->addError(new UserFacingError($errorMessage));
+				$db->rollbackTransaction();
 
-				if (!PermissionTable::deleteList($deleteFilter))
-				{
-					$errorMessage = Loc::getMessage('BICONNECTOR_APACHESUPERSET_CONFIG_PERMISSIONS_DB_ERROR');
-					$result->addError(new UserFacingError($errorMessage));
-					$db->rollbackTransaction();
+				return $result;
+			}
 
-					return $result;
-				}
+			if (\Bitrix\Main\Loader::includeModule('intranet'))
+			{
+				\CIntranetUtils::clearMenuCache();
+			}
 
-				RoleUtil::insertPermissions($query);
-				if (\Bitrix\Main\Loader::includeModule('intranet'))
-				{
-					\CIntranetUtils::clearMenuCache();
-				}
-
+			// The composition of a role is not a consequence of a changed right: the popup edits it on
+			// its own, and a section whose rows the payload does not carry still sends its roles.
+			if (!$isRolesKept)
+			{
 				$this->roleRelationService->saveRoleRelation($permissionSettings);
 			}
 
@@ -296,7 +286,7 @@ final class RolePermissionService
 		return $result;
 	}
 
-	private static function isTableAxisPermission(string $permissionId): bool
+	private static function isTableAxisCell(string $permissionId): bool
 	{
 		return
 			$permissionId === (string)PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS
@@ -308,68 +298,17 @@ final class RolePermissionService
 	/**
 	 * @param array $accessRights Cells of the matrix.
 	 *
-	 * @return array The cells without the ones of the table groups, placeholders of new groups included.
+	 * @return array The cells without the ones of the table axis, placeholders of new groups included.
 	 */
-	private static function dropTableGroupCells(array $accessRights): array
+	private static function dropTableAxisCells(array $accessRights): array
 	{
 		return array_values(array_filter(
 			$accessRights,
 			static fn($accessRight): bool => !is_array($accessRight)
-				|| !self::isTableAxisPermission((string)($accessRight['id'] ?? '')),
+				|| !self::isTableAxisCell((string)($accessRight['id'] ?? '')),
 		));
 	}
 
-	/**
-	 * Stored values of the rights hidden from the editor, for the saved roles that did not send them.
-	 *
-	 * @param array $permissionSettings Roles with their rights and already resolved ids.
-	 * @return array[] Rows for {@see RoleUtil::insertPermissions()}.
-	 */
-	private function getKeptHiddenPermissions(array $permissionSettings): array
-	{
-		$hiddenIds = PermissionConfig::getHiddenPermissionIds();
-		$sentIdsByRole = [];
-		foreach ($permissionSettings as $setting)
-		{
-			$roleId = (int)($setting['id'] ?? 0);
-			if ($roleId > 0 && isset($setting['accessRights']))
-			{
-				$sentIdsByRole[$roleId] = array_map(
-					static fn(array $permission) => (string)$permission['id'],
-					$setting['accessRights'],
-				);
-			}
-		}
-
-		if (empty($hiddenIds) || empty($sentIdsByRole))
-		{
-			return [];
-		}
-
-		$rows = PermissionTable::getList([
-			'select' => ['ROLE_ID', 'PERMISSION_ID', 'VALUE'],
-			'filter' => [
-				'@ROLE_ID' => array_keys($sentIdsByRole),
-				'@PERMISSION_ID' => $hiddenIds,
-			],
-		])->fetchAll();
-
-		$kept = [];
-		foreach ($rows as $row)
-		{
-			$roleId = (int)$row['ROLE_ID'];
-			if (!in_array((string)$row['PERMISSION_ID'], $sentIdsByRole[$roleId], true))
-			{
-				$kept[] = [
-					'ROLE_ID' => $roleId,
-					'PERMISSION_ID' => $row['PERMISSION_ID'],
-					'VALUE' => $row['VALUE'],
-				];
-			}
-		}
-
-		return $kept;
-	}
 
 	/**
 	 * Drops the rights granted on a table group that stayed unresolved.
@@ -766,14 +705,10 @@ final class RolePermissionService
 
 		try
 		{
-			if ($roleId)
-			{
-				$role = RoleTable::update($roleId, $nameField);
-			}
-			else
-			{
-				$role = RoleTable::add($nameField);
-			}
+			$role = $roleId
+				? RoleTable::update($roleId, $nameField)
+				: RoleTable::add($nameField)
+			;
 		}
 		catch (\Exception $e)
 		{

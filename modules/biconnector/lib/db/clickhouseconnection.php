@@ -33,6 +33,18 @@ class ClickhouseConnection extends Main\DB\Connection implements BiTimeLimitInte
 	protected const PING_QUERY = 'SELECT 1';
 
 	/**
+	 * Upper bound of a result, in bytes. The answer is spooled into a temporary stream before it is
+	 * read, so without a bound a single wide query could fill the disk or the memory of the portal.
+	 */
+	protected const RESULT_BYTES_MAX = 1073741824;
+
+	/**
+	 * Room on top of the result bound for the response body: the server measures the result in its own
+	 * memory layout, while the body carries the same values as JSON text along with two header lines.
+	 */
+	protected const RESPONSE_BODY_SLACK_BYTES = 67108864;
+
+	/**
 	 * ClickHouse readonly level sent with every request. Level 2 rejects writes and schema changes but
 	 * still allows settings to be passed along with the query, which level 1 forbids.
 	 */
@@ -433,6 +445,8 @@ class ClickhouseConnection extends Main\DB\Connection implements BiTimeLimitInte
 		$body = $httpClient->getResponse()?->getBody();
 		$stream = $body?->detach();
 
+		// A body past the bound stops the client with a network error before a response is kept, so the
+		// rows read by then are neither served nor quoted: the error of the client is the message.
 		if (!is_resource($stream))
 		{
 			$errors = $httpClient->getError();
@@ -520,6 +534,7 @@ class ClickhouseConnection extends Main\DB\Connection implements BiTimeLimitInte
 		$httpClient = new HttpClient([
 			'socketTimeout' => self::CONNECT_TIMEOUT_SECONDS,
 			'streamTimeout' => $this->getStreamTimeoutSeconds(),
+			'bodyLengthMax' => $this->getResponseBodyLengthMax(),
 			'redirect' => false,
 		]);
 
@@ -535,6 +550,11 @@ class ClickhouseConnection extends Main\DB\Connection implements BiTimeLimitInte
 		$httpClient->setHeader('Content-Type', 'text/plain; charset=utf-8');
 
 		return $httpClient;
+	}
+
+	private function getResponseBodyLengthMax(): int
+	{
+		return static::RESULT_BYTES_MAX + static::RESPONSE_BODY_SLACK_BYTES;
 	}
 
 	private function getStreamTimeoutSeconds(): int
@@ -593,6 +613,10 @@ class ClickhouseConnection extends Main\DB\Connection implements BiTimeLimitInte
 			// `null` means the group was empty, NaN means it was not. The quoted tokens are what the
 			// wire contract carries for a non-finite double.
 			'output_format_json_quote_denormals' => 1,
+			// An oversized result fails the query instead of being cut: a cut answer would show
+			// incomplete figures in a report without any sign of it.
+			'max_result_bytes' => static::RESULT_BYTES_MAX,
+			'result_overflow_mode' => 'throw',
 		];
 
 		if ($this->biTimeLimitSeconds > 0)

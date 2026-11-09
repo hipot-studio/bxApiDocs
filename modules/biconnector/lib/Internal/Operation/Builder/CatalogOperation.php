@@ -16,6 +16,8 @@ use Bitrix\Rest\V3\Schema\SchemaManager;
  * to the system controller of the rest module and are left out, as is the catalog itself. Types of the
  * arguments and the shape of the answer stay in the schema and are not repeated here.
  *
+ * A controller the entry point reports closed is left out entirely; the operation does not read flags.
+ *
  * Data: `methods` — a list of `{method, error_codes}` sorted by method name.
  */
 final class CatalogOperation
@@ -34,12 +36,25 @@ final class CatalogOperation
 	/**
 	 * @param \Closure(string $controllerFqcn, string $method): FailureCode[] $failureCodesOf Codes the entry
 	 *     point declares for an action of a controller; the operation does not know how the entry marks them.
+	 * @param (\Closure(string $controllerFqcn): bool)|null $isControllerOpen Whether the methods of a controller
+	 *     may be listed for the caller; null opens every controller.
 	 */
-	public function execute(\Closure $failureCodesOf): Result
+	public function execute(\Closure $failureCodesOf, ?\Closure $isControllerOpen = null): Result
 	{
 		$methods = [];
+		$openness = [];
 		foreach ($this->getPublishedMethods() as $description)
 		{
+			if ($isControllerOpen !== null)
+			{
+				$controllerFqcn = $description->controllerFqcn;
+				$openness[$controllerFqcn] ??= (bool)$isControllerOpen($controllerFqcn);
+				if (!$openness[$controllerFqcn])
+				{
+					continue;
+				}
+			}
+
 			$codes = array_map(
 				static fn(FailureCode $code): string => $code->value,
 				$failureCodesOf($description->controllerFqcn, $description->method),

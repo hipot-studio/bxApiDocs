@@ -5,16 +5,20 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\ToolSet;
 use Bitrix\AiAssistant\Definition\Dto\DefinitionMetadataDto;
 use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\AiAssistant\Definition\ToolSet\BaseToolSet;
+use Bitrix\AiAssistant\Definition\ToolSet\Contract\ToolProviderDefinitionInterface;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\AgentOperationsDescription;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\CreateChartTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\DeleteChartTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiGuideTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetChartTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ListChartsTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ReplaceChartConfigTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UpdateChartMetadataTool;
 
-final class BiChartsToolSet extends BaseToolSet
+final class BiChartsToolSet extends BaseToolSet implements ToolProviderDefinitionInterface
 {
+	use BuilderPairToolProvider;
+
 	public function getCode(): string
 	{
 		return 'bi_charts';
@@ -41,6 +45,7 @@ final class BiChartsToolSet extends BaseToolSet
 			UpdateChartMetadataTool::class,
 			ReplaceChartConfigTool::class,
 			DeleteChartTool::class,
+			GetBiGuideTool::class,
 		]);
 	}
 

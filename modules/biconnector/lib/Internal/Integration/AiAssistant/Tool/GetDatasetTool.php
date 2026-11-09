@@ -5,12 +5,13 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
-use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dataset\GetDatasetOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -38,18 +39,13 @@ final class GetDatasetTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'datasetId' => [
-					'type' => 'integer',
-					'description' => 'Dataset id to read (from list_datasets). Positive integer.',
-					'minimum' => 1,
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.dataset.get',
+			'mcp',
+			[
+				'datasetId' => 'Dataset id to read (from list_datasets). Positive integer.',
 			],
-			'required' => ['datasetId'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -94,22 +90,13 @@ final class GetDatasetTool extends BaseBiTool
 			throw new McpException('datasetId is required and must be a positive integer.');
 		}
 
-		$response = IntegratorFactory::getInstance()->getDatasetById($datasetId);
-		if ($response->hasErrors())
+		$lookup = (new EntityLookup())->dataset($datasetId, self::findActAsUser($userId));
+		if (!$lookup->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				['stage' => 'get_dataset', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$data = $response->getData();
-		if (!is_array($data) || (int)($data['id'] ?? 0) <= 0)
-		{
-			throw new McpException(
-				"Dataset with id={$datasetId} was not found. Call list_datasets to get a valid id."
-			);
-		}
+		$data = $lookup->getData()['entity'];
 
 		$columns = [];
 		foreach (is_array($data['columns'] ?? null) ? $data['columns'] : [] as $column)

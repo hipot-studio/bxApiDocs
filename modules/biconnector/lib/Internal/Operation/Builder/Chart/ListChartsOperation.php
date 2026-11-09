@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Result;
 
 /**
@@ -26,15 +27,17 @@ final class ListChartsOperation
 
 	/** @var \Closure(int): AccessController */
 	private readonly \Closure $accessControllerFactory;
+	private readonly SupersetIdentity $identity;
 
 	/**
 	 * @param (\Closure(int): AccessController)|null $accessControllerFactory
 	 */
-	public function __construct(?\Closure $accessControllerFactory = null)
+	public function __construct(?\Closure $accessControllerFactory = null, ?SupersetIdentity $identity = null)
 	{
 		$this->accessControllerFactory = $accessControllerFactory
 			?? static fn(int $userId): AccessController => new AccessController($userId)
 		;
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -61,7 +64,15 @@ final class ListChartsOperation
 		$page = intdiv($offset, $limit);
 		$effectiveOffset = $page * $limit;
 
-		$response = IntegratorFactory::getInstance()->listCharts([], null, $page, $limit);
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
+		{
+			return $identityResult;
+		}
+
+		$response = IntegratorFactory::getInstance()
+			->listCharts($identityResult->getData()['user'], [], null, $page, $limit)
+		;
 		if ($response->hasErrors())
 		{
 			return Refusal::unavailableBi(

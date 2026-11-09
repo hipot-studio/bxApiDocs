@@ -15,6 +15,7 @@ use Bitrix\Landing\Integration\AiAssistant\Dto\AiSiteChatAvailabilityResult;
 use Bitrix\Landing\Integration\AiAssistant\Dto\CreateAiSiteDto;
 use Bitrix\Landing\Integration\AiAssistant\Dto\FailedGenerationContextDto;
 use Bitrix\Landing\Integration\AiAssistant\Exception\AiModuleUnavailableException;
+use Bitrix\Landing\Integration\AiAssistant\Exception\AiSiteModeDisabledException;
 use Bitrix\Landing\Integration\AiAssistant\Exception\AiSitesDisabledException;
 use Bitrix\Landing\Integration\AiAssistant\Exception\AiSitesUnavailableException;
 use Bitrix\Landing\Integration\AiAssistant\Exception\BindingFinalizationException;
@@ -24,6 +25,7 @@ use Bitrix\Landing\Integration\AiAssistant\Exception\SiteCreateAccessDeniedExcep
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingFinalizer;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteFailedGenerationReaction;
+use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteModeGuard;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteRuntimeAvailabilityGuard;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Rights;
@@ -42,6 +44,8 @@ class CreateAiSiteHandler
 
 	public function handle(CreateAiSiteDto $dto, int $userId): array
 	{
+		$this->assertLegacyModeSelected();
+
 		if ($dto->briefLines === [])
 		{
 			throw new \InvalidArgumentException('Brief lines are required to start site generation.');
@@ -68,6 +72,10 @@ class CreateAiSiteHandler
 		$this->assertModerationBlockLimitNotReached($dto->bindingId, $userId);
 
 		$generation = $this->createGeneration($dto, $userId);
+
+		// The checks above take time: the selection is asked again right before the first saved effect.
+		$this->assertLegacyModeSelected();
+
 		if (!$this->persistGenerationBeforeReservation($generation) || (int)($generation->getId() ?? 0) <= 0)
 		{
 			throw new \RuntimeException('Failed to persist site generation before binding reservation.');
@@ -100,6 +108,19 @@ class CreateAiSiteHandler
 		}
 
 		return $this->buildStartResponse($generation, $jobId, $started);
+	}
+
+	/**
+	 * Refuses the start when the legacy generation is not the one selected on the portal.
+	 *
+	 * Public on purpose, the same way assertAiSitesEnabled() is: a caller with side effects of its own
+	 * asks it first, before any other preflight. The checks inside handle() stay the guarantee.
+	 *
+	 * @throws AiSiteModeDisabledException
+	 */
+	public function assertLegacyModeSelected(): void
+	{
+		(new AiSiteModeGuard())->assertModeSelected(CopilotManager::AI_SITES_MODE_LEGACY);
 	}
 
 	/**
@@ -284,14 +305,10 @@ class CreateAiSiteHandler
 
 	protected function assertModerationBlockLimitNotReached(int $bindingId, int $userId): void
 	{
-		if ($this->getAiSiteBindingService()->isModerationBlockLimitReached($bindingId, $userId))
+		// The gate is shared with the markup submission; the cooldown window is spent by the first
+		// start after it expires, not by the first success.
+		if (!$this->getAiSiteBindingService()->passModerationBlockGate($bindingId, $userId))
 		{
-			// The cooldown window is spent by the first start after it expires, not by the first success.
-			if ($this->getAiSiteBindingService()->resetModerationBlockCountAfterCooldown($bindingId, $userId))
-			{
-				return;
-			}
-
 			throw new ModerationBlockLimitException(
 				self::ERROR_MODERATION_BLOCK_LIMIT . ': ' . self::MODERATION_BLOCK_LIMIT_MESSAGE,
 			);

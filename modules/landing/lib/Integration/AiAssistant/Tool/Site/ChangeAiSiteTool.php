@@ -16,9 +16,23 @@ use Throwable;
 
 class ChangeAiSiteTool extends BaseTool
 {
-	use AiSiteRuntimeAvailabilityToolGate;
+	use AiSiteLegacyModeToolGate;
+	use AiSiteRuntimeAvailabilityToolGate {
+		AiSiteRuntimeAvailabilityToolGate::canList as private availabilityGateCanList;
+		AiSiteRuntimeAvailabilityToolGate::canRun as private availabilityGateCanRun;
+	}
 
 	public const ACTION_NAME = 'change_ai_site';
+
+	public function canList(int $userId): bool
+	{
+		return $this->availabilityGateCanList($userId) && $this->isAiSiteLegacyModeSelected();
+	}
+
+	public function canRun(int $userId): bool
+	{
+		return $this->availabilityGateCanRun($userId) && $this->isAiSiteLegacyModeSelected();
+	}
 
 	public function __construct(
 		private readonly ChangeAiSiteHandler $handler,
@@ -47,6 +61,8 @@ class ChangeAiSiteTool extends BaseTool
 
 	protected function executeStructured(int $userId, ...$args): array
 	{
+		$this->assertAiSiteLegacyModeSelected();
+
 		$dto = ChangeAiSiteDto::fromArray($args);
 		$effectiveUserId = $this->resolveEffectiveUserId($userId);
 		$startedAt = microtime(true);

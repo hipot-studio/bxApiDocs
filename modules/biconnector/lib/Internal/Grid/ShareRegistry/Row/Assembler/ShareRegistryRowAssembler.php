@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Internal\Services\Scope\ScopeValueNameProvider;
 use Bitrix\BIConnector\Internal\Services\Share\ShareStatusResolver;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Parameter;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DateFieldAssembler;
+use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\ScreenReaderText;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Grid\Row\RowAssembler;
 use Bitrix\Main\Localization\Loc;
@@ -227,7 +228,11 @@ final class ShareRegistryRowAssembler extends RowAssembler
 			'#COUNT#' => count($lines) - 1,
 		]) ?? $lines[0]);
 
-		return "<span data-hint=\"{$hint}\" data-hint-html data-hint-no-icon data-hint-interactivity>{$text}</span>";
+		$rest = ScreenReaderText::renderRest(array_map('htmlspecialcharsbx', array_slice($lines, 1)));
+
+		return "<span data-hint=\"{$hint}\" data-hint-html data-hint-no-icon data-hint-interactivity>{$text}</span>"
+			. $rest
+		;
 	}
 
 	/**

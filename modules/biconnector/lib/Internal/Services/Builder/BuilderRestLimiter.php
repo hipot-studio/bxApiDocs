@@ -71,6 +71,7 @@ final class BuilderRestLimiter implements BuilderQuotaGuard
 	];
 
 	private readonly SqlLabLockManager $lockManager;
+	private readonly bool $ownsLockManager;
 	private readonly SqlLabRestRateLimitStorage $storage;
 	private readonly SqlLabClock $clock;
 	private readonly SqlLabRestRefusalCache $refusalCache;
@@ -86,12 +87,21 @@ final class BuilderRestLimiter implements BuilderQuotaGuard
 		?BuilderRestQuotaRefund $refund = null,
 	)
 	{
-		$this->lockManager = $lockManager ?? new SqlLabLockManager();
+		$this->ownsLockManager = $lockManager === null;
+		$this->lockManager = $lockManager ?? new BuilderLockManager();
 		$this->clock = $clock ?? new SqlLabClock();
 		$this->storage = $storage ?? new SqlLabRestRateLimitStorage($this->lockManager, $this->clock);
 		$this->refusalCache = $refusalCache ?? new SqlLabRestRefusalCache();
 		$this->journal = $journal ?? new BuilderRestLimiterJournal();
 		$this->refund = $refund ?? new BuilderRestQuotaRefund();
+	}
+
+	public function __destruct()
+	{
+		if ($this->ownsLockManager && $this->lockManager instanceof BuilderLockManager)
+		{
+			$this->lockManager->close();
+		}
 	}
 
 	/**

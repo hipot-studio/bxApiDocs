@@ -511,7 +511,10 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		}
 
 		$nodeMemberService = \Bitrix\HumanResources\Service\Container::instance()->getNodeMemberService();
-		$result = (new SyncDepartmentsPage($document, $currentParty, $nodeMemberService, $excludeRejected))->launch();
+		// the request numbers the parties before the server builds the composition, so the document
+		// names the party of its own signers and the request is only the fallback
+		$signerParty = $this->memberService->getB2eSignerParty($document) ?? $currentParty;
+		$result = (new SyncDepartmentsPage($document, $signerParty, $nodeMemberService, $excludeRejected))->launch();
 
 		if (!$result->isSuccess())
 		{
@@ -611,9 +614,20 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			);
 		}
 
+		$partyPlanResult = Service\Container::instance()
+			->getCompanyInitiatedPartyPlanService()
+			->plan($document, $memberCollection)
+		;
+		if (!$partyPlanResult->isSuccess())
+		{
+			$this->addErrors($partyPlanResult->getErrors());
+
+			return [];
+		}
+
 		$result = $this->memberService->setupB2eMembers(
 			$documentUid,
-			$memberCollection,
+			$partyPlanResult->members,
 			$representativeId,
 			excludeRejected: $excludeRejected,
 			keepSavedReminderTypes: true,

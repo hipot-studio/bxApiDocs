@@ -112,6 +112,10 @@ class BlockTable extends ORM\Data\DataManager
 				'save_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getSaveModificator'),
 				'fetch_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getFetchModificator'),
 			)),
+			// markup package manifest of the current custom block version (JSON, ASCII-safe)
+			'MARKUP_MANIFEST' => new Entity\StringField('MARKUP_MANIFEST', array(
+				'title' => 'Markup package manifest of custom code block',
+			)),
 			'SEARCH_CONTENT' => new Entity\StringField('SEARCH_CONTENT', array(
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_SEARCH_CONTENT')
 			)),

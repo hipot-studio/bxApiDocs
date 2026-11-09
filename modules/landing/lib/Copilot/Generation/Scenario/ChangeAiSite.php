@@ -144,6 +144,11 @@ class ChangeAiSite extends BaseScenario implements IStepMetaProvider
 		return self::STEP_GENERATE_BLOCK_HTML;
 	}
 
+	public function getModerationStepId(): ?int
+	{
+		return self::STEP_MODERATE_TOPIC;
+	}
+
 	public function getAnalyticCategory(): Metrika\Categories
 	{
 		return Metrika\Categories::SiteGeneration;

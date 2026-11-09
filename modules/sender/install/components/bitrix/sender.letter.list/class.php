@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Grid\Options as GridOptions;
 use Bitrix\Main\Localization\Loc;
@@ -16,6 +17,7 @@ use Bitrix\Sender\Integration;
 use Bitrix\Sender\Internals\PrettyDate;
 use Bitrix\Sender\Message;
 use Bitrix\Sender\Stat\Statistics;
+use Bitrix\Sender\Transport\TimeLimiter;
 use Bitrix\Sender\UI\PageNavigation;
 use Bitrix\Sender\Security;
 
@@ -222,7 +224,12 @@ class SenderLetterListComponent extends Bitrix\Sender\Internals\CommonSenderComp
 			unset($selectParameters['limit']);
 		}
 
-		$list = Entity\Letter::getListWithMessageFields($selectParameters);
+		$list = Entity\Letter::getListWithMessageFields($selectParameters)->fetchAll();
+		// recipients are collected at the start of sending, until then the audience is estimated by segments
+		$estimatedCounters = $isExportMode
+			? []
+			: Entity\Segment::getIncludeAddressCountersByLetters(array_column($list, 'ID'))
+		;
 		$letter = new Entity\Letter();
 		foreach ($list as $item)
 		{
@@ -294,6 +301,10 @@ class SenderLetterListComponent extends Bitrix\Sender\Internals\CommonSenderComp
 
 			}
 			$item['DURATION'] = $letter->getDuration()->getFormattedInterval();
+			if (!$isExportMode)
+			{
+				$this->setEstimatedCount($item, $letter, $estimatedCounters[$letter->getId()] ?? []);
+			}
 			$item['STATE_NAME'] = $item['WAITING_RECIPIENT'] === 'N'
 				? $letter->getState()->getName()
 				: Loc::getMessage('SENDER_DISPATCH_STATE_M')
@@ -310,6 +321,7 @@ class SenderLetterListComponent extends Bitrix\Sender\Internals\CommonSenderComp
 			}
 			else
 			{
+				$timeLimiter = $this->resolveTimeLimiter($letter);
 				$item['STATE'] = array(
 					'dateSend' => $this->formatDate($letter->getState()->getDateSend()),
 					'datePause' => $this->formatDate($letter->getState()->getDatePause()),
@@ -329,12 +341,12 @@ class SenderLetterListComponent extends Bitrix\Sender\Internals\CommonSenderComp
 					'canResume' => $letter->getState()->canResume(),
 					'isSendingLimitExceeded' => $letter->getState()->isSendingLimitExceeded(),
 					'isSendingLimitTemporary' => $letter->getState()->isSendingLimitTemporary(),
-					'isSendingLimitWaiting' => $letter->getState()->isSendingLimitWaiting(),
+					'isSendingLimitWaiting' => $timeLimiter !== null,
 				);
 
-				if ($item['STATE']['isSendingLimitWaiting'])
+				if ($timeLimiter)
 				{
-					$this->prepareTimeLimitationMessage($letter, $item);
+					$this->prepareTimeLimitationMessage($timeLimiter, $item);
 				}
 
 				$item['URLS'] = array(
@@ -369,25 +381,93 @@ class SenderLetterListComponent extends Bitrix\Sender\Internals\CommonSenderComp
 		return true;
 	}
 
-	private function prepareTimeLimitationMessage($letter, &$item)
+	/**
+	 * The row needs the limiter itself, not just the waiting flag, so the exceeded limiter is looked up
+	 * once here instead of walking the limiters again in \Bitrix\Sender\Dispatch\State::isSendingLimitWaiting().
+	 */
+	private function resolveTimeLimiter(Entity\Letter $letter): ?TimeLimiter
 	{
-		$currentTime = strtotime((new DateTime())->format("H:i:s"));
-		$configuration = $letter->getMessage()->getConfiguration();
-		$sendingStart = strtotime($configuration->get('SENDING_START'));
+		if (!$letter->getState()->isSending())
+		{
+			return null;
+		}
 
-		$day = $currentTime > $sendingStart
-			? Loc::getMessage('SENDER_LETTER_LIST_LETTER_SENDING_TOMORROW')
-			: Loc::getMessage('SENDER_LETTER_LIST_LETTER_SENDING_TODAY')
-		;
+		$message = $letter->getMessage();
+		$limiter = $message->getTransport()->getExceededLimiter($message);
 
-		$item['LIMITATION']['DAY'] = $day;
+		return $limiter instanceof TimeLimiter ? $limiter : null;
+	}
 
-		$item['LIMITATION']['TIME'] = (new \DateTime())
-			->setTimestamp($sendingStart)
-			->format(Context::getCurrent()
-				->getCulture()
-				->getShortTimeFormat());
-		;
+	private function prepareTimeLimitationMessage(TimeLimiter $limiter, &$item)
+	{
+		$nextOpening = $limiter->getParameter(TimeLimiter::PARAMETER_NEXT_OPENING);
+
+		if ($nextOpening === null)
+		{
+			// the window may open between the state check and this call: the row keeps the common hint
+			return;
+		}
+
+		$limitation = $this->formatSendingMoment((int)$nextOpening);
+
+		if ($limitation === null)
+		{
+			// the moment is out of the days the row can name: it keeps the common hint
+			return;
+		}
+
+		$item['LIMITATION'] = $limitation;
+	}
+
+	/**
+	 * The limiter publishes a server timestamp, the row shows it in the time zone of the current user.
+	 */
+	private function formatSendingMoment(int $moment): ?array
+	{
+		$opening = DateTime::createFromTimestamp($moment)->toUserTime();
+		$today = (new DateTime())->toUserTime();
+
+		$day = $this->getSendingDayCaption($this->countDaysBetween($today, $opening));
+
+		if ($day === null)
+		{
+			return null;
+		}
+
+		return [
+			'DAY' => $day,
+			'TIME' => $opening->format(
+				Context::getCurrent()
+					->getCulture()
+					->getShortTimeFormat()
+			),
+		];
+	}
+
+	private function getSendingDayCaption(int $daysAhead): ?string
+	{
+		$phrase = match ($daysAhead)
+		{
+			0 => 'SENDER_LETTER_LIST_LETTER_SENDING_TODAY',
+			1 => 'SENDER_LETTER_LIST_LETTER_SENDING_TOMORROW',
+			2 => 'SENDER_LETTER_LIST_LETTER_SENDING_DAY_AFTER_TOMORROW',
+			default => null,
+		};
+
+		return $phrase === null ? null : Loc::getMessage($phrase);
+	}
+
+	/**
+	 * Whole days between the calendar dates of the viewer: the dates are compared in UTC, so a day
+	 * shortened by the daylight saving time of the viewer zone still counts as one day.
+	 */
+	private function countDaysBetween(DateTime $from, DateTime $to): int
+	{
+		$utc = new \DateTimeZone('UTC');
+		$fromDay = new \DateTimeImmutable($from->format('Y-m-d'), $utc);
+		$toDay = new \DateTimeImmutable($to->format('Y-m-d'), $utc);
+
+		return (int)$fromDay->diff($toDay)->format('%r%a');
 	}
 
 	protected function formatDate(\Bitrix\Main\Type\DateTime $dateTime = null)
@@ -398,6 +478,30 @@ class SenderLetterListComponent extends Bitrix\Sender\Internals\CommonSenderComp
 		}
 		$dateTime = clone $dateTime;
 		return PrettyDate::formatDateTime($dateTime);
+	}
+
+	/**
+	 * The sum of segment counters is not deduplicated, so the count is shown as approximate.
+	 */
+	protected function setEstimatedCount(array &$item, Entity\Letter $letter, array $counters): void
+	{
+		if ($letter->getState()->wasStartedSending())
+		{
+			return;
+		}
+
+		$message = $letter->getMessage();
+		$count = 0;
+		foreach ($message->getSupportedRecipientTypes() as $typeId)
+		{
+			$count += (int)($counters[$typeId] ?? 0);
+		}
+
+		$item['COUNT']['all'] = $count;
+		$item['COUNT']['isEstimated'] = true;
+		$item['DURATION'] = ServiceLocator::getInstance()->get(Dispatch\DurationFormatter::class)->formatInterval(
+			(int)Dispatch\DurationCountBased::create($message)->getIntervalDefault($count)
+		);
 	}
 
 	protected function getDataFilter()

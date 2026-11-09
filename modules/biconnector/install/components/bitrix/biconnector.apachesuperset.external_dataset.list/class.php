@@ -119,11 +119,7 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 	{
 		$ormParams = $this->grid->getOrmParams();
 
-		if (
-			!empty($this->arResult['IS_TABLE_PERMISSIONS_ENABLED'])
-			&& !empty($ormParams['filter'])
-			&& is_array($ormParams['filter'])
-		)
+		if (!empty($ormParams['filter']) && is_array($ormParams['filter']))
 		{
 			$ormParams['filter'] = $this->resolveStaleConditions($ormParams['filter']);
 		}
@@ -153,11 +149,6 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 	 */
 	private function dropStaleGroupsFromSavedFilter(): void
 	{
-		if (empty($this->arResult['IS_TABLE_PERMISSIONS_ENABLED']))
-		{
-			return;
-		}
-
 		$options = new FilterOptions(self::GRID_ID, ExternalDatasetGrid::getFilterPresets());
 		$presetId = (string)$options->getCurrentFilterId();
 		$fields = $options->getFilterSettings($presetId)['fields'] ?? null;
@@ -290,10 +281,7 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 			];
 		}
 
-		if (
-			!empty($this->arResult['IS_TABLE_PERMISSIONS_ENABLED'])
-			&& !empty($this->arResult['IS_AVAILABLE_GROUP_MANAGEMENT'])
-		)
+		if (!empty($this->arResult['IS_AVAILABLE_GROUP_MANAGEMENT']))
 		{
 			$items[] = [
 				'id' => self::CREATE_MENU_ITEM_NEW_GROUP,

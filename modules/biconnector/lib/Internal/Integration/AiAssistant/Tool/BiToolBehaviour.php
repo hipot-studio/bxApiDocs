@@ -10,14 +10,17 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
+use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\RateLimit\BiToolsRateLimiter;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\DashboardGuard;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Superset\DomainLinkService;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
@@ -25,6 +28,7 @@ use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
@@ -42,6 +46,9 @@ trait BiToolBehaviour
 	private const UNAVAILABLE_DASHBOARD_MESSAGE = 'Dashboard is temporarily unavailable. Try again in a moment, or pick another report.';
 	// Longest refusal the API composes is a couple of sentences plus a value list.
 	private const MAX_REFUSAL_LENGTH = 500;
+
+	private const SQL_LAB_QUERY_FAULT_CODES = ['SQLLAB_INVALID_QUERY', 'SQLLAB_ACCESS_DENIED'];
+
 	// {@see Integrator\Sender::parseJsonResponse()} wraps a body it could not
 	// decode into an error of its own, carrying that body verbatim.
 	private const UNPARSED_RESPONSE_PREFIX = 'Could not parse server response';
@@ -91,6 +98,47 @@ trait BiToolBehaviour
 	public function getAnnotations(): ?object
 	{
 		return $this->getImpact()->toAnnotations();
+	}
+
+	/**
+	 * The Superset user the tool acts for; reads that need no person without the axis take findActAsUser().
+	 * While the table permission axis is on, the request runs as that person and there is no fallback to
+	 * the service account: a request without a person must not read BI data on behalf of the administrator.
+	 * Without the axis nothing runs as the person: the user keys the limiter and the audit of SQL Lab and owns
+	 * a created dataset, as before act-as, and a request without a person is the administrator.
+	 *
+	 * @throws McpException When the caller is unknown or has no Superset user.
+	 */
+	protected static function requireSupersetUser(int $userId): User
+	{
+		$repository = new SupersetUserRepository();
+		if ($userId <= 0)
+		{
+			$user = Feature::isTablePermissionsEnabled() ? null : $repository->getAdmin();
+		}
+		else
+		{
+			$user = $repository->getById($userId);
+		}
+
+		if ($user === null)
+		{
+			throw new McpException('A Superset user is required to read BI data.');
+		}
+
+		return $user;
+	}
+
+	/**
+	 * The person a read of the tool runs as. While the table permission axis is on it is required, see
+	 * requireSupersetUser(). Without the axis there is none: the read goes under the service account and needs
+	 * no Superset user, as before act-as.
+	 *
+	 * @throws McpException When the axis is on and the caller is unknown or has no Superset user.
+	 */
+	protected static function findActAsUser(int $userId): ?User
+	{
+		return Feature::isTablePermissionsEnabled() ? self::requireSupersetUser($userId) : null;
 	}
 
 	protected static function isBiAvailable(): bool
@@ -379,74 +427,32 @@ trait BiToolBehaviour
 	}
 
 	/**
-	 * Loads a dashboard for write access: feature flag + existence + custom-type +
-	 * status (READY/DRAFT only) + EDIT ACL + sync state. On success,
-	 * `getData()['dashboard']` holds the {@see SupersetDashboard}.
-	 *
-	 * Mirrors {@see self::loadDashboard()} but with two write-specific tweaks:
-	 *   - `ACTION_BIC_DASHBOARD_EDIT` instead of `_VIEW`;
-	 *   - rejects non-custom dashboards (system/marketplace dashboards are
-	 *     read-only for the agent).
-	 *
-	 * The feature gate is enforced here so each write tool doesn't duplicate the
-	 * `Feature::isBuilderEnabled()` check.
+	 * Adapts the shared write guard to the legacy MCP error codes.
 	 */
 	protected function loadDashboardForWrite(int $dashboardId, int $userId): Result
 	{
+		$guardResult = ServiceLocator::getInstance()->get(DashboardGuard::class)
+			->forWriteForUser($dashboardId, $userId)
+		;
+		if ($guardResult->isSuccess())
+		{
+			return $guardResult;
+		}
+
 		$result = new Result();
-
-		if (!Feature::isBuilderEnabled())
+		foreach ($guardResult->getErrors() as $error)
 		{
-			return $result->addError(new Error('BI Builder feature is not enabled on this portal.', 'feature_disabled'));
+			$code = match ($error->getCode()) {
+				FailureCode::FeatureDisabled->value => 'feature_disabled',
+				FailureCode::NotFound->value => 'dashboard_not_found',
+				FailureCode::NotCustom->value => 'not_custom',
+				FailureCode::Unavailable->value => 'dashboard_unavailable',
+				default => $error->getCode(),
+			};
+			$result->addError(new Error($error->getMessage(), $code));
 		}
 
-		$dashboard = SupersetDashboardTable::getById($dashboardId)->fetchObject();
-		if (!$dashboard)
-		{
-			return $result->addError(new Error('Dashboard not found.', 'dashboard_not_found'));
-		}
-
-		if ($dashboard->getType() !== SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
-		{
-			return $result->addError(new Error('Only custom dashboards can be updated.', 'not_custom'));
-		}
-
-		// Status invariant matches loadDashboard(): list_dashboards / get_dashboard_meta
-		// only surface READY/DRAFT dashboards; writes follow the same rule so the
-		// toolset never accepts updates to an ERROR/LIMIT_EXCEEDED/LOAD dashboard
-		// that is hidden everywhere else.
-		$status = $dashboard->getStatus();
-		$allowed = [
-			SupersetDashboardTable::DASHBOARD_STATUS_READY,
-			SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
-		];
-		if (!in_array($status, $allowed, true))
-		{
-			AiToolsLogger::logErrors(
-				[new Error('Dashboard ' . $dashboardId . ' status not editable: ' . $status)],
-				['stage' => 'load_dashboard_for_write.status', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-			);
-
-			return $result->addError(new Error(self::UNAVAILABLE_DASHBOARD_MESSAGE, 'dashboard_unavailable'));
-		}
-
-		$accessItem = DashboardAccessItem::createFromId($dashboardId);
-		if (!$this->getAccessController($userId)->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem))
-		{
-			return $result->addError(new Error('Access denied.', FailureCode::AccessDenied->value));
-		}
-
-		if (!$dashboard->getExternalId())
-		{
-			AiToolsLogger::logErrors(
-				[new Error('Dashboard ' . $dashboardId . ' has no external id (not synced yet)')],
-				['stage' => 'load_dashboard_for_write.no_external_id', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-			);
-
-			return $result->addError(new Error(self::UNAVAILABLE_DASHBOARD_MESSAGE, 'dashboard_unavailable'));
-		}
-
-		return $result->setData(['dashboard' => $dashboard]);
+		return $result;
 	}
 
 	private function handleInstanceNotReady(string $instanceStatus, int $dashboardId, int $userId): Result
@@ -545,6 +551,12 @@ trait BiToolBehaviour
 	): McpException
 	{
 		$errors = $response->getErrors();
+		$actAsMessage = ActAsFailure::findMessage($errors);
+		if ($actAsMessage !== null)
+		{
+			return self::actAsFailedException($actAsMessage, $errors, $context);
+		}
+
 		// A response can fail by carrying no data at all, with no error attached.
 		$message = trim(($errors[0] ?? null)?->getMessage() ?? '');
 		if (
@@ -558,6 +570,29 @@ trait BiToolBehaviour
 		AiToolsLogger::logWarning($errors, $context);
 
 		return new McpException($message);
+	}
+
+	/**
+	 * Translate a failed read of dashboard data (overview, filter values). Read as the person, a `403`/`404`
+	 * means Superset does not let that person to the dashboard: the portal has let them to it already, so
+	 * it is a refusal to report, not a dashboard to wait for. Without act-as the general translation stays.
+	 */
+	protected static function dashboardReadFailureException(
+		IntegratorResponse $response,
+		array $context,
+	): McpException
+	{
+		$errors = $response->getErrors();
+		if (
+			ActAsFailure::findMessage($errors) === null
+			&& ActAsFailure::isDashboardRefused($response)
+			&& Feature::isTablePermissionsEnabled()
+		)
+		{
+			return self::actAsFailedException(ActAsFailure::DASHBOARD_ACCESS_DENIED_MESSAGE, $errors, $context);
+		}
+
+		return self::integratorFailureException($response, $context);
 	}
 
 	/**
@@ -608,6 +643,12 @@ trait BiToolBehaviour
 	 */
 	protected static function unavailableBiException(array $errors, array $context): McpException
 	{
+		$actAsMessage = ActAsFailure::findMessage($errors);
+		if ($actAsMessage !== null)
+		{
+			return self::actAsFailedException($actAsMessage, $errors, $context);
+		}
+
 		return self::unavailableException(self::UNAVAILABLE_BI_MESSAGE, $errors, $context);
 	}
 
@@ -637,7 +678,20 @@ trait BiToolBehaviour
 	 */
 	protected static function sqlLabException(array $errors, array $context): McpException
 	{
-		AiToolsLogger::logErrors($errors, $context);
+		$actAsMessage = ActAsFailure::findMessage($errors);
+		if ($actAsMessage !== null)
+		{
+			return self::actAsFailedException($actAsMessage, $errors, $context);
+		}
+
+		if (self::isQueryFault($errors))
+		{
+			AiToolsLogger::logWarning($errors, $context);
+		}
+		else
+		{
+			AiToolsLogger::logErrors($errors, $context);
+		}
 
 		$message = implode('; ', array_map(static fn(Error $e): string => self::describeSqlLabError($e), $errors));
 		if ($message === '')
@@ -646,6 +700,29 @@ trait BiToolBehaviour
 		}
 
 		return new McpException($message);
+	}
+
+	/**
+	 * A query the agent wrote wrong or over tables closed to the person: the agent fixes it, the service is fine.
+	 *
+	 * @param \Bitrix\Main\Error[] $errors
+	 */
+	private static function isQueryFault(array $errors): bool
+	{
+		if ($errors === [])
+		{
+			return false;
+		}
+
+		foreach ($errors as $error)
+		{
+			if (!in_array($error->getCode(), self::SQL_LAB_QUERY_FAULT_CODES, true))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -662,6 +739,16 @@ trait BiToolBehaviour
 		}
 
 		return $error->getMessage() . ': ' . $detail;
+	}
+
+	/**
+	 * @param \Bitrix\Main\Error[] $errors
+	 */
+	private static function actAsFailedException(string $message, array $errors, array $context): McpException
+	{
+		AiToolsLogger::logErrors($errors, $context);
+
+		return new McpException($message);
 	}
 
 	private static function isDebugLogEnabled(): bool

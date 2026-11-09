@@ -41,6 +41,9 @@ class Adapter implements iBase
 	/** @var array $fields Fields. */
 	protected $fields = array();
 
+	/** @var array $rawFields Fields as they were set, before the preparation for html. */
+	protected $rawFields = [];
+
 	/** @var string|null $siteId Site ID. */
 	protected $siteId = null;
 
@@ -310,23 +313,42 @@ class Adapter implements iBase
 	}
 
 	/**
-	 * Set fields.
+	 * Get the fields as they were set, before the preparation for html. Whoever edits fields and sets them
+	 * back has to take them in this form: a value prepared twice shows the tag added by nl2br() as text.
+	 *
+	 * @return array
+	 */
+	public function getOriginalFields(): array
+	{
+		// a descendant overriding setFields() keeps no originals: it gets the values it got before they existed
+		return array_replace($this->fields, $this->rawFields);
+	}
+
+	/**
+	 * Set fields. The values are kept twice: prepared for html, as the mail transport takes them by
+	 * getFields(), and as they were given, as the plain text channels take them by replaceFields() and
+	 * the editors of fields by getOriginalFields().
 	 *
 	 * @param array $fields Fields.
 	 * @return void
 	 */
 	public function setFields(array $fields)
 	{
+		$rawFields = [];
 		foreach ($fields as $key => $field)
 		{
-			$fields[$key] = nl2br(htmlspecialcharsbx((string) $field, ENT_COMPAT, false));
+			$value = (string)$field;
+			$rawFields[$key] = $value;
+			$fields[$key] = $this->prepareForHtml($value);
 		}
 
+		$this->rawFields = $rawFields;
 		$this->fields = $fields;
 	}
 
 	/**
-	 * Replace fields in content.
+	 * Replace fields in content. Consumers of this method are plain text channels only, so the value set
+	 * for a field is substituted, not the one prepared for html.
 	 *
 	 * @param string $content Content.
 	 * @param string $replaceChar Replace char.
@@ -340,12 +362,22 @@ class Adapter implements iBase
 		{
 			$handledCode = $this->preHandleReplaceCode($code, $crmEntityTypeId);
 			$from[] = "$replaceChar$handledCode$replaceChar";
-			$value = $this->preHandleReaplaceValue($code, $value);
-			$to[] = nl2br(htmlspecialcharsbx((string)$value, ENT_COMPAT, false));
+			// a descendant that overrides setFields() may leave the original values unset
+			$value = $this->preHandleReaplaceValue($code, $this->rawFields[$code] ?? (string)$value);
+			$to[] = (string)$value;
 		}
 
 		return Integration\Sender\Mail\TransportMail::replaceTemplate(str_replace($from, $to, $content));
 	}
+
+	/**
+	 * Prepare the value for the html body of the mail, which is fed by getFields().
+	 */
+	protected function prepareForHtml(string $value): string
+	{
+		return nl2br(htmlspecialcharsbx($value, ENT_COMPAT, false));
+	}
+
 	/**
 	 * Get to.
 	 *

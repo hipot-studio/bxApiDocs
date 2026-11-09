@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Infrastructure\Rest\Exception\Builder\BuilderAccessDenied
 use Bitrix\BIConnector\Infrastructure\Rest\Support\BuilderRestExceptionFactory;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\Main\Result;
 
 /**
@@ -49,9 +50,10 @@ trait BuilderOperationSupport
 
 	/**
 	 * Data of a successful operation. A refusal is rebuilt from the code and the text of its first error
-	 * only: whatever else the operation keeps in the result never reaches the client.
+	 * only: whatever else the operation keeps in the result never reaches the client. The one exception is
+	 * retryAfter of an Unavailable refusal: the client waits that many seconds before it repeats the call.
 	 *
-	 * @param int|null $entityId The record the request addresses; a NotFound refusal names it.
+	 * @param int|null $entityId The record the request addresses; a NotFound lookup may name a related record.
 	 */
 	protected function answer(Result $result, ?int $entityId = null): array
 	{
@@ -61,6 +63,20 @@ trait BuilderOperationSupport
 		}
 
 		$refusal = (new Result())->addError($result->getErrors()[0]);
+		$missingId = $result->getData()['id'] ?? null;
+		if (
+			$result->getErrors()[0]->getCode() === FailureCode::NotFound->value
+			&& is_int($missingId)
+			&& $missingId > 0
+		)
+		{
+			$entityId = $missingId;
+		}
+		$retryAfter = $result->getData()['retryAfter'] ?? null;
+		if ($retryAfter !== null && $result->getErrors()[0]->getCode() === FailureCode::Unavailable->value)
+		{
+			$refusal->setData(['retryAfter' => $retryAfter]);
+		}
 
 		return $this->requireResultData($refusal, $entityId);
 	}

@@ -38,9 +38,9 @@ final class TableGroupService
 	public const ERROR_TABLES_WITHOUT_GROUP = 'BICONNECTOR_TABLES_WITHOUT_GROUP';
 
 	/**
-	 * Names the refusal text carries before it turns to counting.
+	 * Tables the refusal text lists before it turns to counting.
 	 */
-	public const MAX_NAMES_IN_REFUSAL = 10;
+	public const MAX_NAMES_IN_REFUSAL = 3;
 
 	public const TABLE_TYPE_SYSTEM = 'SYSTEM';
 
@@ -1421,12 +1421,6 @@ final class TableGroupService
 			return $result;
 		}
 
-		// The name of a table is free text of whoever declared the dataset, and this refusal reaches
-		// the notification of the rights client, which renders the message as HTML. The names are
-		// escaped after getTablesWithoutGroup() has ordered them: escaped first, a name carrying & or "
-		// would be ordered by the sequence it turned into instead of by itself.
-		$tables = array_map('htmlspecialcharsbx', $tables);
-
 		return $result->addError(self::buildTablesWithoutGroupError($tables));
 	}
 
@@ -1544,13 +1538,15 @@ final class TableGroupService
 	}
 
 	/**
-	 * Names of the tables for the refusal to show, and the count of the ones it leaves out.
+	 * List of the tables for the refusal to show: the name and the code of each, and the count of
+	 * the ones it leaves out as the last item.
 	 *
 	 * The text is read by a person, so the enumeration is bound and the rest is counted; the phrase
 	 * of the refusal is chosen by the whole count of the tables all the same.
 	 *
-	 * The names go into the text as they are given: the client that shows the refusal encodes it,
-	 * and the one path whose client renders it as HTML escapes them itself (check()).
+	 * The text is HTML, and both clients render it so. The name of a table is free text of whoever
+	 * declared the dataset, so the name and the code are escaped here, after the tables have been
+	 * ordered: escaped first, a name carrying & or " would be ordered by the sequence it turned into.
 	 *
 	 * @param array<string, string> $tables Code of the table to its name, ordered by the name.
 	 *
@@ -1558,18 +1554,28 @@ final class TableGroupService
 	 */
 	private static function buildTablesText(array $tables): string
 	{
-		$names = array_values($tables);
-		if (count($names) <= self::MAX_NAMES_IN_REFUSAL)
+		$items = [];
+		foreach (array_slice($tables, 0, self::MAX_NAMES_IN_REFUSAL, true) as $tableCode => $tableName)
 		{
-			return implode(', ', $names);
+			$items[] = (string)Loc::getMessage(
+				'BICONNECTOR_ACCESS_TABLES_WITHOUT_GROUP_ITEM',
+				[
+					'#TABLE_NAME#' => htmlspecialcharsbx((string)$tableName),
+					'#TABLE_CODE#' => htmlspecialcharsbx((string)$tableCode),
+				],
+			);
 		}
 
-		$more = (string)Loc::getMessage(
-			'BICONNECTOR_ACCESS_TABLES_WITHOUT_GROUP_MORE',
-			['#COUNT#' => count($names) - self::MAX_NAMES_IN_REFUSAL],
-		);
+		$countLeftOut = count($tables) - self::MAX_NAMES_IN_REFUSAL;
+		if ($countLeftOut > 0)
+		{
+			$items[] = (string)Loc::getMessage(
+				'BICONNECTOR_ACCESS_TABLES_WITHOUT_GROUP_MORE',
+				['#COUNT#' => $countLeftOut],
+			);
+		}
 
-		return rtrim(implode(', ', array_slice($names, 0, self::MAX_NAMES_IN_REFUSAL)) . ' ' . $more);
+		return '<ul><li>' . implode('</li><li>', $items) . '</li></ul>';
 	}
 
 	/**

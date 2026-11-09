@@ -149,10 +149,16 @@ class EventHandlerService
 		$this->createTimelineEvent($eventData);
 	}
 
+	/**
+	 * @param string|null $previousStatus the status the member held before this callback was applied.
+	 *   A caller that knows it lets the events tell a redelivered callback from a real change; a caller
+	 *   that does not leaves every event counted as a change.
+	 */
 	public function handleCurrentMemberStatus(
 		Sign\Item\Document $document,
 		Sign\Item\Member $member,
 		MemberStatusChanged $message,
+		?string $previousStatus = null,
 	): void
 	{
 		$eventTypes = $this->isByEmployee($document)
@@ -178,6 +184,7 @@ class EventHandlerService
 				->addDataValue(EventData::DATA_KEY_PROVIDER_NAME, $message->getProvider())
 				->addDataValue(EventData::DATA_KEY_SES_SIGN, $message->getSesSign())
 				->addDataValue(EventData::DATA_KEY_SES_USERNAME, $message->getSesUsername())
+				->setMemberStatusChanged($previousStatus === null || $previousStatus !== $member->status)
 			;
 
 			$this->createTimelineEvent($eventData);

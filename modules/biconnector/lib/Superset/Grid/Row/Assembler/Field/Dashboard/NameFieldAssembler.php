@@ -41,7 +41,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		if ($value['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_DASHBOARD)
 		{
 			$isPinned = (bool)$value['IS_PINNED'];
-			$pinButton = $this->getPinButton($id, $isPinned);
+			$pinButton = $this->getPinButton($id, $isPinned, (string)$value['TITLE']);
 		}
 
 		$constructorButton = '';
@@ -61,17 +61,10 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			$sliderCode = DashboardTariffConfigurator::getSliderRestrictionCodeByAppId($value['APP_ID']);
 			if (!empty($sliderCode))
 			{
-				$onclick = "onclick=\"top.BX.UI.InfoHelper.show('{$sliderCode}');\"";
+				$onclick = htmlspecialcharsbx("top.BX.UI.InfoHelper.show('" . \CUtil::JSEscape($sliderCode) . "');");
 			}
 
-			$link = "
-				<a 
-					style='cursor: pointer' 
-					{$onclick}
-				>
-					<span class='tariff-lock'></span> {$title}
-				</a>
-			";
+			$link = $this->getLockedTitleButton($title, $onclick, 'tariff-lock');
 		}
 		elseif ($value['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
 		{
@@ -79,10 +72,11 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			$classTypePrefix = 'group';
 
 			$ormFilter = $this->getSettings()->getOrmFilter();
+			$isFiltered = isset($ormFilter['GROUPS.ID']) && in_array((int)$value['ID'], $ormFilter['GROUPS.ID']);
 			$eventGroup = Json::encode([
 				'ID' => (int)$value['ID'],
 				'TITLE' => $value['TITLE'],
-				'IS_FILTERED' => isset($ormFilter['GROUPS.ID']) && in_array((int)$value['ID'], $ormFilter['GROUPS.ID']),
+				'IS_FILTERED' => $isFiltered,
 			]);
 
 			$iconClass =
@@ -96,18 +90,28 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				'#COUNT#' => $dashboardCount,
 			]);
 
+			$payload = htmlspecialcharsbx($eventGroup);
+			$isPressed = $isFiltered ? 'true' : 'false';
+			$onclick = 'BX.BIConnector.SupersetDashboardGridManager.Instance'
+				. '.handleGroupTitleClick(JSON.parse(this.dataset.bicPayload))'
+			;
+
 			$link = "
 				<div class ='biconnector-grid-group-name'>
 					<div class='ui-icon {$iconClass} biconnector-grid-group-icon'>
 						<i style='margin-left: 0;'></i>
 					</div>
 					<div>
-						<a
-							class ='biconnector-grid-name-link'
-							onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.handleGroupTitleClick($eventGroup)'
+						<button
+							type='button'
+							class='biconnector-grid-name-link biconnector-grid-name-link-button'
+							data-bic-focus-role='group-enter'
+							aria-pressed='{$isPressed}'
+							data-bic-payload='{$payload}'
+							onclick='{$onclick}'
 						>
 							{$title}
-						</a>
+						</button>
 						<div class='biconnector-grid-group-name-subtitle'>{$subtitle}</div>
 					</div>
 				</div>
@@ -117,35 +121,18 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		{
 			$link = $title;
 		}
-		elseif (!Feature::isBuilderEnabled())
+		elseif (!$this->isBuilderEnabled())
 		{
-			$link = <<<HTML
-				<a
-					class="biconnector-grid-name-link"
-					onclick="BX.UI.InfoHelper.show('limit_crm_BI_constructor')"
-				>
-					<span class="ui-icon-set --lock-m"></span>
-					{$title}
-				</a>
-				HTML;
+			$link = $this->getLockedTitleButton($title, "BX.UI.InfoHelper.show('limit_crm_BI_constructor')");
 		}
-		elseif (SelfHostedLicenseLock::isDashboardLocked())
+		elseif ($this->isDashboardLocked())
 		{
-			$openSlider = SelfHostedLicenseLock::getOpenSliderScript();
-			// A button and not a link: the padlock opens the restriction and navigates nowhere. The padlock itself
-			// carries the reason as text, otherwise the report would read as an ordinary one to a screen reader.
-			$lockLabel = htmlspecialcharsbx((string)Loc::getMessage('BI_DASHBOARD_NAME_LOCKED'));
-			$link = <<<HTML
-				<button
-					type="button"
-					class="biconnector-grid-name-link biconnector-grid-name-link-button"
-					data-testid="biconnector-selfhost-license-locked-dashboard"
-					onclick="{$openSlider}"
-				>
-					<span class="ui-icon-set --lock-m" role="img" aria-label="{$lockLabel}"></span>
-					{$title}
-				</button>
-				HTML;
+			$link = $this->getLockedTitleButton(
+				$title,
+				htmlspecialcharsbx(SelfHostedLicenseLock::getOpenSliderScript()),
+				'ui-icon-set --lock-m',
+				'data-testid="biconnector-selfhost-license-locked-dashboard"',
+			);
 		}
 		else
 		{
@@ -154,23 +141,16 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				. 'openFrom=grid'
 			;
 
-			if (!$this->marketAccessManager->isDashboardAvailableByType($value['TYPE'] ?? ''))
+			if (!$this->isDashboardAvailableByType($value['TYPE'] ?? ''))
 			{
-				$link = "
-					<div style='display: flex; align-items: center;'>
-						<span class='ui-icon-set --lock-m'></span>
-						<a
-							class ='biconnector-grid-name-link'
-							onclick='BX.UI.InfoHelper.show(\"limit_benefit_market_active\")'
-						>
-							{$title}
-						</a>
-					</div>
-				";
+				$link = $this->getLockedTitleButton(
+					$title,
+					"BX.UI.InfoHelper.show('limit_benefit_market_active')",
+				);
 			}
 			else
 			{
-				$link = "<a href='{$value['DETAIL_URL']}' target='_blank'>{$title}</a>";
+				$link = "<a href='{$value['DETAIL_URL']}' target='_blank' data-bic-focus-role='title'>{$title}</a>";
 			}
 		}
 
@@ -197,9 +177,9 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		HTML;
 	}
 
-	protected function getPinButton(int $dashboardId, bool $isPinned): string
+	protected function getPinButton(int $dashboardId, bool $isPinned, string $title): string
 	{
-		if (!Feature::isBuilderEnabled() || SelfHostedLicenseLock::isDashboardLocked())
+		if (!$this->isBuilderEnabled() || $this->isDashboardLocked())
 		{
 			return '';
 		}
@@ -210,16 +190,72 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				? 'BX.BIConnector.SupersetDashboardGridManager.Instance.unpin'
 				: 'BX.BIConnector.SupersetDashboardGridManager.Instance.pin'
 		;
+		$label = htmlspecialcharsbx((string)Loc::getMessage(
+			$isPinned ? 'BI_DASHBOARD_UNPIN_ARIA' : 'BI_DASHBOARD_PIN_ARIA',
+			['#TITLE#' => $title],
+		));
 
 		return <<<HTML
-			<a
+			<button
+				type="button"
+				class="dashboard-title-pin-button"
+				data-bic-focus-role="pin"
+				aria-label="{$label}"
 				onclick="event.stopPropagation(); {$method}({$dashboardId})"
 			>
 				<i
 					class="ui-icon-set {$iconClass}"
+					aria-hidden="true"
 				></i>
-			</a>
+			</button>
 		HTML;
+	}
+
+	/**
+	 * The name of a report that opens a restriction instead of the report: a button, since it navigates nowhere.
+	 * The padlock carries the reason as its name, otherwise the report would read as an ordinary one.
+	 * It follows the title in the DOM, so the name of the button starts with the visible text; CSS shows it first.
+	 *
+	 * @param string $escapedTitle Title already passed through htmlspecialcharsbx.
+	 * @param string $escapedOnclick Handler already escaped for an attribute.
+	 */
+	private function getLockedTitleButton(
+		string $escapedTitle,
+		string $escapedOnclick,
+		string $lockClass = 'ui-icon-set --lock-m',
+		string $extraAttributes = '',
+	): string
+	{
+		$lockLabel = htmlspecialcharsbx((string)Loc::getMessage('BI_DASHBOARD_NAME_LOCKED'));
+		$onclick = $escapedOnclick !== '' ? "onclick=\"{$escapedOnclick}\"" : '';
+
+		return <<<HTML
+			<button
+				type="button"
+				class="biconnector-grid-name-link biconnector-grid-name-link-button"
+				data-bic-focus-role="title"
+				{$extraAttributes}
+				{$onclick}
+			>
+				{$escapedTitle}
+				<span class="{$lockClass}" role="img" aria-label="{$lockLabel}"></span>
+			</button>
+			HTML;
+	}
+
+	protected function isBuilderEnabled(): bool
+	{
+		return Feature::isBuilderEnabled();
+	}
+
+	protected function isDashboardLocked(): bool
+	{
+		return SelfHostedLicenseLock::isDashboardLocked();
+	}
+
+	protected function isDashboardAvailableByType(string $type): bool
+	{
+		return $this->marketAccessManager->isDashboardAvailableByType($type);
 	}
 
 	/**
@@ -229,7 +265,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 	 */
 	protected function canEditDashboard(array $dashboardData): bool
 	{
-		if (!Feature::isBuilderEnabled() || SelfHostedLicenseLock::isDashboardLocked())
+		if (!$this->isBuilderEnabled() || $this->isDashboardLocked())
 		{
 			return false;
 		}
@@ -272,7 +308,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			&& !empty($dashboardData['IS_ACCESS_ALLOWED'])
 			&& empty($dashboardData['IS_TARIFF_RESTRICTED'])
 			&& !empty($dashboardData['IS_AVAILABLE_DASHBOARD'])
-			&& $this->marketAccessManager->isDashboardAvailableByType((string)($dashboardData['TYPE'] ?? ''))
+			&& $this->isDashboardAvailableByType((string)($dashboardData['TYPE'] ?? ''))
 		;
 	}
 
@@ -300,6 +336,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		<button
 			type="button"
 			class="dashboard-title-constructor-button"
+			data-bic-focus-role="constructor"
 			title="{$label}"
 			aria-label="{$label}"
 			onclick="{$onclick}"

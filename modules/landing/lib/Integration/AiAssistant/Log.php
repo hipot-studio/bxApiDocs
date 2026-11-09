@@ -11,6 +11,7 @@ class Log
 	public const OPTION_ENABLED = 'landing_ai_sites_log_enabled';
 
 	private const ENTRY_TYPE_TOOL_CALL = 'Tool call';
+	private const ENTRY_TYPE_TOOL_RESULT = 'Tool result';
 
 	private string $filePath;
 
@@ -52,6 +53,35 @@ class Log
 			'Data type: AI Assistant tool call',
 			'Arguments:',
 			$this->formatPayload($arguments),
+			'',
+		]));
+	}
+
+	/**
+	 * The outcome of a tool call: the status and the machine-readable refusal codes.
+	 * Together with addToolCall this file log is the observability of the intake
+	 * (the accepted replacement of a dedicated journal table).
+	 */
+	public function addToolResult(
+		string $toolName,
+		string $toolClass,
+		int $userId,
+		int $effectiveUserId,
+		string $status,
+		array $errorCodes = [],
+	): void
+	{
+		$this->add(implode(PHP_EOL, [
+			'-----',
+			'Date: ' . date('Y-m-d'),
+			'Time: ' . date('H:i:s'),
+			'Tool: ' . $toolName,
+			'Tool class: ' . $toolClass,
+			'User ID: ' . $userId,
+			'Effective user ID: ' . $effectiveUserId,
+			'Entry type: ' . self::ENTRY_TYPE_TOOL_RESULT,
+			'Status: ' . $status,
+			'Error codes: ' . ($errorCodes !== [] ? implode(', ', $errorCodes) : '-'),
 			'',
 		]));
 	}

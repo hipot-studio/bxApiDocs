@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Infrastructure\Rest\Attribute\DescribesApi;
 use Bitrix\BIConnector\Infrastructure\Rest\Attribute\FailureCodes;
 use Bitrix\BIConnector\Infrastructure\Rest\Attribute\Quota;
 use Bitrix\BIConnector\Infrastructure\Rest\Controller\AbstractBuilderController;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Operation\Builder\CatalogOperation;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Services\Builder\BuilderQuotaClass;
@@ -20,17 +21,33 @@ final class Catalog extends AbstractBuilderController
 	/**
 	 * biconnector.builder.catalog.get: published methods of the family, each with the codes its
 	 * #[FailureCodes] declares. Metadata only, so neither BI Builder nor a right of the caller is required.
+	 * A controller declaring FEATURE_FLAG is listed only while that flag is on for the caller.
 	 */
 	#[Quota(BuilderQuotaClass::Read)]
 	#[DescribesApi]
 	#[FailureCodes(FailureCode::RateLimit)]
 	public function getAction(): ArrayResponse
 	{
+		$userId = (int)$this->getCurrentUser()?->getId();
+		$flagGate = $this->createFlagGate();
+
 		$result = ServiceLocator::getInstance()->get(CatalogOperation::class)->execute(
 			static fn(string $controllerFqcn, string $method): array => self::declaredCodes($controllerFqcn, $method),
+			static fn(string $controllerFqcn): bool => self::isControllerOpen($flagGate, $controllerFqcn, $userId),
 		);
 
 		return new ArrayResponse($this->requireResultData($result));
+	}
+
+	private static function isControllerOpen(FlagGate $flagGate, string $controllerFqcn, int $userId): bool
+	{
+		$flagConstant = $controllerFqcn . '::FEATURE_FLAG';
+		if (!defined($flagConstant))
+		{
+			return true;
+		}
+
+		return $flagGate->isEnabled((string)constant($flagConstant), $userId);
 	}
 
 	/**

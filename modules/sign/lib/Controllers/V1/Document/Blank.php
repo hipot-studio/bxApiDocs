@@ -47,6 +47,8 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 	 * @param string|null $scenario
 	 * @param bool $forTemplate
 	 * @param bool $hasPlaceholders
+	 * @param bool $autoDetectType
+	 * @param bool|null $expectedHasPlaceholders
 	 * @return array
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -57,9 +59,18 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 		?string $scenario = null,
 		bool $forTemplate = false,
 		bool $hasPlaceholders = false,
+		bool $autoDetectType = false,
+		?bool $expectedHasPlaceholders = null,
 	): array
 	{
-		/** @var array<int> $fileIds */
+		if ($expectedHasPlaceholders !== null && (!$autoDetectType || $scenario !== Type\BlankScenario::B2E))
+		{
+			$this->addError(new Error('Expected blank type requires automatic B2E detection'));
+
+			return [];
+		}
+
+		/** @var array<int|string> $fileIds */
 		$fileIds = [];
 		foreach ($files as $fileId)
 		{
@@ -68,6 +79,13 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 				$this->addError(new Error("Invalid file id"));
 
 				return [];
+			}
+
+			if ($autoDetectType)
+			{
+				$fileIds[] = $fileId;
+
+				continue;
 			}
 
 			$fileController = new BlankUploadController([]);
@@ -91,6 +109,8 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 			$scenario,
 			$forTemplate,
 			$hasPlaceholders,
+			$autoDetectType,
+			$expectedHasPlaceholders,
 		);
 		if (!$result->isSuccess())
 		{
@@ -103,7 +123,7 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 			'id' => $result->getId(),
 			'userAvatarUrl' => null,
 			'userName' => null,
-			'hasPlaceholders' => $hasPlaceholders,
+			'hasPlaceholders' => $result->getData()['blank']->hasPlaceholders,
 		];
 
 		$userId = CurrentUser::get()->getId();

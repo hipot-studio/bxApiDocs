@@ -13,8 +13,6 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-Loc::getMessage(__FILE__);
-
 class Configuration
 {
 	/** @var integer|string|null $id ID. */

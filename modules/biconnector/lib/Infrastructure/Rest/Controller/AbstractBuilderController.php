@@ -2,10 +2,16 @@
 
 namespace Bitrix\BIConnector\Infrastructure\Rest\Controller;
 
+use Bitrix\BIConnector\Infrastructure\Rest\Access\BuilderFamilyGate;
 use Bitrix\BIConnector\Infrastructure\Rest\Attribute\DescribesApi;
 use Bitrix\BIConnector\Infrastructure\Rest\Attribute\Quota;
 use Bitrix\BIConnector\Infrastructure\Rest\Attribute\RequiresSuperset;
+use Bitrix\BIConnector\Infrastructure\Rest\Exception\Builder\BuilderRefusal;
+use Bitrix\BIConnector\Infrastructure\Rest\Exception\Builder\BuilderRequestValidationException;
 use Bitrix\BIConnector\Infrastructure\Rest\Support\BuilderRestAvailabilityCheck;
+use Bitrix\BIConnector\Infrastructure\Rest\Support\BuilderRestArguments;
+use Bitrix\BIConnector\Infrastructure\Rest\Support\BuilderResolvedHttpRequest;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Infrastructure\Rest\Support\BuilderRestExceptionFactory;
 use Bitrix\BIConnector\Infrastructure\Rest\Support\BuilderSupersetStartup;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -18,13 +24,15 @@ use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Controller\RestController;
+use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Exception\LogicException;
 use Bitrix\Rest\V3\Exception\MethodNotFoundException;
+use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 
 /**
  * Entry point of the builder REST methods.
  *
- * While the BuilderRest flag is off for the caller a method answers not found, the same code a method
+ * While the builder family is disabled for the caller a method answers not found, the same code a method
  * outside the schema gets. Steps the REST server takes before the controller (scope check, usage
  * statistics, load limiter) still see the call. The schema is cached, so the flag is asked on every
  * call here rather than through #[Enabled].
@@ -47,11 +55,64 @@ abstract class AbstractBuilderController extends RestController
 	private ?BuilderQuotaGuard $quotaGuard = null;
 	private ?Result $quota = null;
 	private bool $requiresSuperset = false;
+	private ?Action $argumentAction = null;
+	private ?Request $argumentRequest = null;
+	private array $decodedArguments = [];
+
+	public function getAutoWiredParameters(): array
+	{
+		$parameters = parent::getAutoWiredParameters();
+		$uri = $this->getMethodDescription()?->actionUri ?? '';
+		if (BuilderArgumentContract::forMethod($uri) === [])
+		{
+			return $parameters;
+		}
+		foreach ($parameters as $parameter)
+		{
+			if ($parameter->getClassName() !== Request::class)
+			{
+				continue;
+			}
+			$constructor = $parameter->getConstructor();
+			$parameter->setConstructor(function (string $className) use ($constructor): Request {
+				$this->clearArgumentCapture();
+				$source = $this->getRequest();
+				$batch = $this->getServer()?->getMethod() === 'batch';
+				$decoded = $batch ? $source->getJsonList()->getValues() : [];
+				try
+				{
+					if ($batch)
+					{
+						$this->request = BuilderResolvedHttpRequest::fromDecoded($source, $decoded);
+					}
+					$bound = $constructor($className);
+					$this->argumentAction = $this->getCurrentAction();
+					$this->argumentRequest = $bound;
+					$this->decodedArguments = $batch ? $decoded : $source->getJsonList()->getValues();
+
+					return $bound;
+				}
+				catch (\Throwable $throwable)
+				{
+					$this->clearArgumentCapture();
+
+					throw $throwable;
+				}
+				finally
+				{
+					$this->request = $source;
+				}
+			});
+		}
+
+		return $parameters;
+	}
 
 	protected function processBeforeAction(Action $action): bool
 	{
+		$this->clearArgumentCapture();
 		$userId = (int)$this->getCurrentUser()?->getId();
-		if (!$this->createFlagGate()->isEnabled(FlagGate::BUILDER_REST, $userId))
+		if (!(new BuilderFamilyGate($this->createFlagGate()))->isEnabled($userId))
 		{
 			throw new MethodNotFoundException($this->getMethodDescription()?->actionUri ?? $action->getName());
 		}
@@ -79,12 +140,51 @@ abstract class AbstractBuilderController extends RestController
 	 */
 	protected function getActionResponse(Action $action)
 	{
-		if ($this->requiresSuperset)
+		try
 		{
-			BuilderSupersetStartup::once(fn() => $this->initializeSuperset());
-		}
+			$uri = $this->getMethodDescription()?->actionUri ?? '';
+			if (BuilderArgumentContract::forMethod($uri) !== [])
+			{
+				$arguments = $action->getArguments();
+				$bound = null;
+				foreach ($arguments as $argument)
+				{
+					if ($argument instanceof Request)
+					{
+						$bound = $argument;
 
-		return parent::getActionResponse($action);
+						break;
+					}
+				}
+				if ($bound === null || $this->argumentAction !== $action || $this->argumentRequest !== $bound)
+				{
+					throw new SystemException('Builder request binding capture is missing.');
+				}
+				$result = BuilderRestArguments::prepare($uri, $bound, $this->decodedArguments);
+				if (!$result->isSuccess())
+				{
+					throw BuilderRestExceptionFactory::from($result);
+				}
+				BuilderRestArguments::apply($bound, $result->getData());
+			}
+			if ($this->requiresSuperset)
+			{
+				BuilderSupersetStartup::once(fn() => $this->initializeSuperset());
+			}
+
+			return parent::getActionResponse($action);
+		}
+		finally
+		{
+			$this->clearArgumentCapture();
+		}
+	}
+
+	private function clearArgumentCapture(): void
+	{
+		$this->argumentAction = null;
+		$this->argumentRequest = null;
+		$this->decodedArguments = [];
 	}
 
 	protected function processAfterAction(Action $action, $result)
@@ -96,9 +196,24 @@ abstract class AbstractBuilderController extends RestController
 
 	protected function runProcessingThrowable(\Throwable $throwable): void
 	{
+		$this->clearArgumentCapture();
 		$this->releaseQuota();
 
 		parent::runProcessingThrowable($throwable);
+	}
+
+	/**
+	 * A framework refusal of the request arguments answers with the builder code INVALID_ARGUMENT and keeps
+	 * its validation list; a refusal the builder raised itself is left as it is.
+	 */
+	protected function buildErrorFromException(\Exception $e)
+	{
+		if ($e instanceof RequestValidationException && !$e instanceof BuilderRefusal)
+		{
+			return parent::buildErrorFromException(BuilderRequestValidationException::fromRequestValidation($e));
+		}
+
+		return parent::buildErrorFromException($e);
 	}
 
 	/**
@@ -148,7 +263,7 @@ abstract class AbstractBuilderController extends RestController
 			return $this->createAvailabilityCheck();
 		}
 
-		return new class implements BuilderAvailabilityCheck {
+		return new class() implements BuilderAvailabilityCheck {
 			public function check(int $userId): Result
 			{
 				return new Result();

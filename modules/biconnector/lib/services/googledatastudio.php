@@ -74,7 +74,11 @@ class GoogleDataStudio extends Service
 		$data = $connector->getFormattedData($parameters, static::$dateFormats);
 
 		$databaseConnection = $manager->getDatabaseConnection();
-		$databaseConnection->lock('biconnector_data', -1);
+		$isDataLocked = $connector->requiresPortalDataLock();
+		if ($isDataLocked)
+		{
+			$databaseConnection->lock('biconnector_data', -1);
+		}
 
 		$getIdFunction = function ($x)
 		{
@@ -227,7 +231,10 @@ class GoogleDataStudio extends Service
 		$limitManager->fixLimit($count);
 		$manager->endQuery($logId, $count, $size, $isOverLimit);
 
-		$databaseConnection->unlock('biconnector_data');
+		if ($isDataLocked)
+		{
+			$databaseConnection->unlock('biconnector_data');
+		}
 
 		return $result;
 	}

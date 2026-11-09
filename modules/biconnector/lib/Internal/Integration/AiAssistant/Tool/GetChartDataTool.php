@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
@@ -12,6 +13,7 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\DashboardDat
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\TransformerConfig;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\GetChartDataOperation;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\GetChartDataQuery;
@@ -23,7 +25,6 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 	private const ROW_LIMIT_DEFAULT = 20;
 	private const ROW_LIMIT_MAX = 300;
 	private const MAX_CHARTS_PER_CALL = 5;
-
 	private const CHART_FIELDS = [
 		'id', 'name', 'kind', 'viz_label', 'tab_path', 'description',
 		'column_descriptions', 'stats', 'slice_stable',
@@ -74,100 +75,46 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 			. 'default (same range the user sees in the UI). Never hardcode "current month" '
 			. 'as a fallback; that silently narrows the range and hides data. '
 			. 'Use `sortBy`+`sortOrder` when the user asks for top/bottom-N by a specific column — '
-			. 'column names come from `column_descriptions` in the preceding get_dashboard_meta.';
+			. 'column names come from `column_descriptions` in the preceding get_dashboard_meta. '
+			. '`no_access_chart_ids` lists requested charts closed by the access rights of the user: '
+			. 'say they are not available to the user and do not guess their data.';
 	}
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'dashboardId' => [
-					'type' => 'integer',
-					'description' => 'Dashboard ID from the list_dashboards tool result.',
-					'minimum' => 1,
-				],
-				'chartIds' => [
-					'type' => 'array',
-					'description' => 'BI dashboard chart ids to fetch. Take them from the `id` '
-						. 'field of charts returned by get_dashboard_meta. Up to '
-						. self::MAX_CHARTS_PER_CALL . ' ids per call — all of them are fetched in a '
-						. 'single request, so prefer batching over multiple calls.',
-					'items' => [
-						'type' => 'integer',
-						'minimum' => 1,
-					],
-					'minItems' => 1,
-					'maxItems' => self::MAX_CHARTS_PER_CALL,
-				],
-				'appliedFilters' => [
-					'type' => 'array',
-					'description' => 'Filters to apply. Reuse the SAME list passed to the preceding '
-						. 'get_dashboard_meta call verbatim. '
-						. 'For period: name="period", value={"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}. '
-						. 'For column filters: column name from available_filters '
-						. '(e.g. name="finish_status", value=["Y"]). '
-						. 'If the user did not specify a period, OMIT the period entry — the server '
-						. 'applies the dashboard\'s native default.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'name' => [
-								'type' => 'string',
-								'description' => 'Filter name: "period" for date range, '
-									. 'or column name for column-level filters.',
-							],
-							'value' => [
-								'description' => 'Filter value. For period: {"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}. '
-									. 'For column filters: array of allowed values.',
-								'oneOf' => [
-									['type' => 'object'],
-									['type' => 'array'],
-								],
-							],
-						],
-						'required' => ['name', 'value'],
-						'additionalProperties' => false,
-					],
-				],
-				'urlParams' => [
-					'type' => 'object',
-					'description' => 'URL parameters for parameterized dashboards '
-						. '(e.g. {"tasks_flows_flow_id": 28}). Reuse the same urlParams that '
-						. 'were used for get_dashboard_meta on this dashboard.',
-					'additionalProperties' => true,
-				],
-				'rowLimit' => [
-					'type' => 'integer',
-					'description' => 'Max rows per chart. Default ' . self::ROW_LIMIT_DEFAULT
-						. ', hard max ' . self::ROW_LIMIT_MAX . '. Values over max are clamped.',
-					'minimum' => 1,
-					'maximum' => self::ROW_LIMIT_MAX,
-				],
-				'offset' => [
-					'type' => 'integer',
-					'description' => 'Number of rows to skip before returning, for paging through '
-						. 'a chart with more rows than `rowLimit`. Default 0. Advance by `rowLimit` '
-						. 'on each call while `has_more` is true. Combine with `sortBy` so pages are '
-						. 'deterministic; otherwise pages may overlap or skip rows.',
-					'minimum' => 0,
-				],
-				'sortBy' => [
-					'type' => 'string',
-					'description' => 'Column name to sort rows by before truncation to rowLimit. '
-						. 'Use the exact column name from `column_descriptions` in the preceding '
-						. 'get_dashboard_meta response. Omit for server default ordering.',
-				],
-				'sortOrder' => [
-					'type' => 'string',
-					'description' => 'Sort direction when `sortBy` is set. Default "desc" '
-						. '(top-N use case). Ignored when sortBy is not provided.',
-					'enum' => ['asc', 'desc'],
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.chart.data.get',
+			'mcp',
+			[
+				'dashboardId' => 'Dashboard ID from the list_dashboards tool result.',
+				'chartIds' => 'BI dashboard chart ids from get_dashboard_meta. Up to five unique ids per call. '
+					. 'Duplicates are removed before the limit is checked; prefer batching over multiple calls.',
+				'appliedFilters' => 'Filters to apply. Reuse the SAME list passed to the preceding '
+					. 'get_dashboard_meta call verbatim. '
+					. 'For period: name="period", value={"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}. '
+					. 'For column filters: column name from available_filters '
+					. '(e.g. name="finish_status", value=["Y"]). '
+					. 'If the user did not specify a period, OMIT the period entry — the server '
+					. 'applies the dashboard\'s native default.',
+				'appliedFilters[].name' => 'Filter name: "period" for date range, '
+					. 'or column name for column-level filters.',
+				'appliedFilters[].value' => 'Filter value. For period: {"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}. '
+					. 'For column filters: array of allowed values.',
+				'urlParams' => 'URL parameters for parameterized dashboards '
+					. '(e.g. {"tasks_flows_flow_id": 28}). Reuse the same urlParams that '
+					. 'were used for get_dashboard_meta on this dashboard.',
+				'rowLimit' => 'Max rows per chart. Default 20, maximum 300.',
+				'offset' => 'Number of rows to skip before returning, for paging through '
+					. 'a chart with more rows than `rowLimit`. Default 0. Advance by `rowLimit` '
+					. 'on each call while `has_more` is true. Combine with `sortBy` so pages are '
+					. 'deterministic; otherwise pages may overlap or skip rows.',
+				'sortBy' => 'Column name to sort rows by before truncation to rowLimit. '
+					. 'Use the exact column name from `column_descriptions` in the preceding '
+					. 'get_dashboard_meta response. Omit for server default ordering.',
+				'sortOrder' => 'Sort direction when `sortBy` is set. Default "desc" '
+					. '(top-N use case). Ignored when sortBy is not provided.',
 			],
-			'required' => ['dashboardId', 'chartIds', 'appliedFilters'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
@@ -346,6 +293,7 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 		}
 
 		$response = IntegratorFactory::getInstance()->getDashboardOverview(
+			self::findActAsUser($userId),
 			$externalId,
 			$supersetFilters,
 			$urlParams,
@@ -361,7 +309,7 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 			$context = ['stage' => 'get_chart_data.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
 
 			throw $pinnedArguments->findRunFailure($runId, $userId, $response, $context)
-				?? self::integratorFailureException($response, $context);
+				?? self::dashboardReadFailureException($response, $context);
 		}
 
 		$rawData = $response->getData();
@@ -385,6 +333,7 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 
 		$matchedCharts = [];
 		$missing = [];
+		$noAccess = [];
 		if (isset($rawData['missing_chart_ids']) && is_array($rawData['missing_chart_ids']))
 		{
 			foreach ($rawData['missing_chart_ids'] as $missingId)
@@ -406,6 +355,13 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 
 			$chart = $chartsById[$chartId];
 
+			// Closed by the table rights of the caller: answered by the other charts, the closed one only listed.
+			if (ActAsFailure::isChartAccessDenied($chart))
+			{
+				$noAccess[] = $chartId;
+				continue;
+			}
+
 			if (isset($chart['error']) && is_string($chart['error']) && $chart['error'] !== '')
 			{
 				throw self::unavailableDashboardException(
@@ -421,6 +377,11 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 			}
 
 			$matchedCharts[] = $chart;
+		}
+
+		if (empty($matchedCharts) && !empty($noAccess))
+		{
+			throw new McpException(ActAsFailure::CHARTS_ACCESS_DENIED_MESSAGE);
 		}
 
 		if (empty($matchedCharts))
@@ -460,6 +421,10 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 		if (!empty($missing))
 		{
 			$result['missing_chart_ids'] = $missing;
+		}
+		if (!empty($noAccess))
+		{
+			$result['no_access_chart_ids'] = $noAccess;
 		}
 
 		$pinnedArguments->completeRunCall($runId, $userId);

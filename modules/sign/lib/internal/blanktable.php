@@ -152,10 +152,19 @@ class BlankTable extends Entity\DataManager
 			]);
 			if ($row = $res->fetch())
 			{
+				$fileIds = [];
 				foreach ((array)$row['FILE_ID'] as $fId)
 				{
 					$fileId = (int)$fId;
-					if ($fileId <= 0 || self::isFileSharedWithOtherBlanks($fileId, (int)$primary['ID']))
+					if ($fileId > 0)
+					{
+						$fileIds[$fileId] = true;
+					}
+				}
+				$sharedFileIds = self::findFileIdsSharedWithOtherBlanks(array_keys($fileIds), (int)$primary['ID']);
+				foreach (array_keys($fileIds) as $fileId)
+				{
+					if (isset($sharedFileIds[$fileId]))
 					{
 						continue;
 					}
@@ -200,29 +209,56 @@ class BlankTable extends Entity\DataManager
 		return $result;
 	}
 
-	private static function isFileSharedWithOtherBlanks(int $fileId, int $deletingBlankId): bool
+	/**
+	 * FILE_ID keeps the whole page list of a blank as one serialized value, so a reference to a file
+	 * is only searchable by a pattern over that value and no index applies. A blank of a hundred
+	 * scanned pages must therefore cost one such pass, not one per page: the patterns of the whole
+	 * page list go into a single query and the ids it brings back are matched exactly here.
+	 *
+	 * @param int[] $fileIds
+	 * @return array<int, true> Ids of the files another blank still references.
+	 */
+	private static function findFileIdsSharedWithOtherBlanks(array $fileIds, int $deletingBlankId): array
 	{
-		$single = '[' . $fileId . ']';
-		$first  = '[' . $fileId . ',%';
-		$middle = '%,' . $fileId . ',%';
-		$last   = '%,' . $fileId . ']';
+		$pendingFileIds = array_fill_keys($fileIds, true);
+		if ($pendingFileIds === [])
+		{
+			return [];
+		}
 
 		$fileFilter = (new \Bitrix\Main\ORM\Query\Filter\ConditionTree())
 			->logic(\Bitrix\Main\ORM\Query\Filter\ConditionTree::LOGIC_OR)
-			->whereLike('FILE_ID', $single)
-			->whereLike('FILE_ID', $first)
-			->whereLike('FILE_ID', $middle)
-			->whereLike('FILE_ID', $last)
 		;
+		foreach (array_keys($pendingFileIds) as $fileId)
+		{
+			$fileFilter->whereLike('FILE_ID', '%' . $fileId . '%');
+		}
 
-		$row = self::query()
-			->setSelect(['ID'])
+		$otherBlanks = self::query()
+			->setSelect(['FILE_ID'])
 			->where('ID', '!=', $deletingBlankId)
 			->where($fileFilter)
-			->setLimit(1)
-			->fetch()
+			->exec()
 		;
 
-		return $row !== false && $row !== null;
+		$sharedFileIds = [];
+		while ($row = $otherBlanks->fetch())
+		{
+			foreach ((array)$row['FILE_ID'] as $referencedFileId)
+			{
+				$referencedFileId = (int)$referencedFileId;
+				if (isset($pendingFileIds[$referencedFileId]))
+				{
+					$sharedFileIds[$referencedFileId] = true;
+					unset($pendingFileIds[$referencedFileId]);
+				}
+			}
+			if ($pendingFileIds === [])
+			{
+				break;
+			}
+		}
+
+		return $sharedFileIds;
 	}
 }

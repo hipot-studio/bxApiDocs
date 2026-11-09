@@ -15,6 +15,7 @@ final class PromptCodeCatalog
 	public const CHANGE_AI_SITE_BLOCK_HTML_IMPROVE = 'landing_ai_change_site_block_html_improve';
 	public const CHANGE_AI_SITE_SELECTED_ELEMENT_HTML = 'landing_ai_change_site_selected_element_html';
 	public const CREATE_AI_SITE_MODERATION = 'landing_ai_site_moderation';
+	public const CREATE_MARKUP_SITE_MODERATION = 'landing_markup_site_moderation';
 
 	public static function all(): array
 	{
@@ -29,6 +30,7 @@ final class PromptCodeCatalog
 			self::CHANGE_AI_SITE_BLOCK_HTML_IMPROVE,
 			self::CHANGE_AI_SITE_SELECTED_ELEMENT_HTML,
 			self::CREATE_AI_SITE_MODERATION,
+			self::CREATE_MARKUP_SITE_MODERATION,
 		];
 	}
 
@@ -45,6 +47,7 @@ final class PromptCodeCatalog
 			self::CHANGE_AI_SITE_BLOCK_HTML_IMPROVE => 'ai-change-site-block-html-improve.txt',
 			self::CHANGE_AI_SITE_SELECTED_ELEMENT_HTML => 'ai-change-site-selected-element-html.txt',
 			self::CREATE_AI_SITE_MODERATION => 'ai-moderate-topic.txt',
+			self::CREATE_MARKUP_SITE_MODERATION => 'ai-moderate-markup.txt',
 		];
 	}
 }

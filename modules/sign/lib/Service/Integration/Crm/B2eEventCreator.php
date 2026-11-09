@@ -14,17 +14,27 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Timeline\SignB2eDocument\B2eController;
 use Bitrix\Crm\Timeline\SignDocument\DocumentData;
 use Bitrix\Crm\Timeline\SignDocument\MessageData;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Main\SystemException;
+use Bitrix\Sign\Config\Feature;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
+use Bitrix\Sign\Internal\MemberTable;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\MemberValidationCrmDispatchGuard;
 use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\Member\Role;
 
 final class B2eEventCreator
 {
+	public function __construct(private ?Logger $logger = null)
+	{
+	}
+
 	public function createEvent(
 		string $eventType,
 		ItemIdentifier $itemIdentifier,
@@ -104,17 +114,10 @@ final class B2eEventCreator
 				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
 			case EventData::TYPE_ON_SIGNED_BY_REVIEWER:
-				$crmController->onSignedByReviewer($itemIdentifier, $documentData, $messageData);
-				$this->executeTriggerOnSignedByReviewer($documentData, $itemIdentifier, $eventType, $eventData);
-				$this->notifyActivityChange($crmController, $itemIdentifier);
-				break;
 			case EventData::TYPE_ON_SIGNED_BY_EDITOR:
-				$crmController->onSignedByEditor($itemIdentifier, $documentData, $messageData);
-				SigningTrigger::executeBySmartDocumentId(
-					$itemIdentifier->getEntityId(),
-					$this->buildTriggerInputData($eventType, $eventData, $documentData),
+				$this->createValidationEvent(
+					$crmController, $documentData, $itemIdentifier, $eventType, $eventData, $messageData,
 				);
-				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
 			case EventData::TYPE_ON_DONE:
 				$crmController->onSignCompleted($itemIdentifier, $documentData);
@@ -230,6 +233,11 @@ final class B2eEventCreator
 		}
 	}
 
+	private function getLogger(): Logger
+	{
+		return $this->logger ??= Container::instance()->getLogger();
+	}
+
 	private function buildTriggerInputData(string $eventType, EventData $eventData, DocumentData $documentData): array
 	{
 		$inputData = [
@@ -305,30 +313,157 @@ final class B2eEventCreator
 		};
 	}
 
-	private function executeTriggerOnSignedByReviewer(
+	private function createValidationEvent(
+		B2eController $crmController,
+		DocumentData $documentData,
+		ItemIdentifier $itemIdentifier,
+		string $eventType,
+		EventData $eventData,
+		?MessageData $messageData,
+	): void
+	{
+		$dispatch = function (EventData $data, bool $eligible) use (
+			$crmController, $documentData, $itemIdentifier, $eventType, $messageData,
+		): void {
+			if ($eventType === EventData::TYPE_ON_SIGNED_BY_REVIEWER)
+			{
+				$crmController->onSignedByReviewer($itemIdentifier, $documentData, $messageData);
+			}
+			else
+			{
+				$crmController->onSignedByEditor($itemIdentifier, $documentData, $messageData);
+			}
+			if ($eligible)
+			{
+				$this->dispatchValidationTrigger($documentData, $itemIdentifier, $eventType, $data);
+			}
+			$this->notifyActivityChange($crmController, $itemIdentifier);
+		};
+		$memberId = $eventData->getMemberItem()?->id;
+		if ($memberId === null)
+		{
+			$dispatch($eventData, $eventData->isMemberStatusChanged()
+				&& $this->isSigningAnnouncedByMemberOfEvent($eventData, $documentData->getDocumentId()));
+
+			return;
+		}
+
+		(new MemberValidationCrmDispatchGuard())->run(
+			MemberTable::getEntity()->getConnection(),
+			$documentData->getDocumentId(),
+			$memberId,
+			function () use ($eventData, $documentData, $memberId, $dispatch): void {
+				[$freshEvent, $eligible] = $this->readValidationEligibility(
+					$eventData, $documentData->getDocumentId(), $memberId,
+				);
+				$dispatch($freshEvent, $eligible);
+			},
+		);
+	}
+
+	private function readValidationEligibility(EventData $eventData, int $documentId, int $memberId): array
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			$container = Container::instance();
+			$result = $container->getMemberRepository()->getValidationCrmDispatchState($memberId, $documentId);
+			$document = $container->getDocumentRepository()->getById($documentId);
+			if (!$result->isSuccess() || $document === null)
+			{
+				throw new \RuntimeException();
+			}
+			$state = $result->getData();
+			$member = $state['member'];
+			$fresh = (clone $eventData)->setMemberItem($member)->setDocumentItem($document);
+			if (!\Bitrix\Sign\Type\DocumentScenario::isB2eScenarioByDocument($document)
+				|| !in_array($member->role, [Role::REVIEWER, Role::EDITOR], true)
+				|| $member->status !== \Bitrix\Sign\Type\MemberStatus::DONE)
+			{
+				return [$fresh, false];
+			}
+			$last = $state['validators']->getFirst();
+			$eligible = $last?->id === $member->id
+				&& $state['marker'] !== 'handled'
+				&& ($eventData->isMemberStatusChanged()
+					|| (!Feature::instance()->isKedoStageReorderEnabled() && $state['marker'] === 'pending'));
+
+			return [$fresh, $eligible];
+		}
+		catch (\Throwable)
+		{
+			$this->getLogger()->error('Validation CRM guard failed.', [
+				'code' => 'SIGN_VALIDATION_CRM_GUARD_STATE_FAILED', 'phase' => 'state', 'reason' => 'read_failed',
+			]);
+
+			throw new SystemException('Validation CRM guard failed.', 25967006);
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
+	private function dispatchValidationTrigger(
 		DocumentData $documentData,
 		ItemIdentifier $itemIdentifier,
 		string $eventType,
 		EventData $eventData,
 	): void
 	{
-		$hasEditor = Container::instance()
-			->getMemberRepository()
-			->isDocumentHasEditor($documentData->getDocumentId())
-		;
+		$member = $eventData->getMemberItem();
+		$documentId = $documentData->getDocumentId();
+		$memberRepository = Container::instance()->getMemberRepository();
 
-		$hasWaitReviewer = Container::instance()
-			->getMemberRepository()
-			->isDocumentHasWaitReviewer($documentData->getDocumentId())
-		;
-
-		if ($hasWaitReviewer === false && $hasEditor === false)
+		SigningTrigger::executeBySmartDocumentId(
+			$itemIdentifier->getEntityId(),
+			$this->buildTriggerInputData($eventType, $eventData, $documentData),
+		);
+		if ($member?->id === null || !in_array($member->role, [Role::REVIEWER, Role::EDITOR], true))
 		{
-			SigningTrigger::executeBySmartDocumentId(
-				$itemIdentifier->getEntityId(),
-				$this->buildTriggerInputData($eventType, $eventData, $documentData),
-			);
+			return;
 		}
+
+		try
+		{
+			$result = $memberRepository->markValidationCrmDispatchHandled($member->id, $documentId);
+			if ($result->isSuccess())
+			{
+				return;
+			}
+		}
+		catch (\Throwable)
+		{
+			// Only marker persistence failures are translated; dispatch exceptions propagate.
+		}
+
+		$this->getLogger()->error('Validation CRM marker persistence failed.', [
+			'code' => 'SIGN_VALIDATION_CRM_MARKER_HANDLED_FAILED',
+			'phase' => 'handled',
+		]);
+
+		throw new SystemException('Validation CRM marker persistence failed.', 25967002);
+	}
+
+	/**
+	 * An event that names no member of its own, and a document whose composition names no validation
+	 * member, are both left announcing as they did before the member was asked about.
+	 */
+	private function isSigningAnnouncedByMemberOfEvent(EventData $eventData, int $documentId): bool
+	{
+		$eventMemberId = $eventData->getMemberItem()?->id;
+		$lastValidationMemberId = Container::instance()
+			->getMemberRepository()
+			->getLastValidationMemberId($documentId)
+		;
+
+		if ($eventMemberId === null || $lastValidationMemberId === null)
+		{
+			return true;
+		}
+
+		return $eventMemberId === $lastValidationMemberId;
 	}
 
 	private function executeTriggerOnStart(

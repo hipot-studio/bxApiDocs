@@ -4,12 +4,14 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\GetFilterValuesOperation;
@@ -50,65 +52,22 @@ final class GetFilterValuesTool extends BaseSubjectAwareBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'dashboardId' => [
-					'type' => 'integer',
-					'description' => 'Dashboard ID from list_dashboards.',
-					'minimum' => 1,
-				],
-				'filterColumn' => [
-					'type' => 'string',
-					'description' => 'Target column name — take it from `available_filters[].column` '
-						. 'in get_dashboard_meta (e.g. "responsible_name", "dep_name"). '
-						. 'NOT the filter display name ("Исполнитель").',
-				],
-				'search' => [
-					'type' => 'string',
-					'description' => 'Optional substring. The preview is narrowed by ILIKE %search% '
-						. 'case-insensitive before truncation. Helpful when the full list is long '
-						. 'and the user gave a fragment of a name.',
-					'maxLength' => 200,
-				],
-				'appliedFilters' => [
-					'type' => 'array',
-					'description' => 'Same filter list shape as get_dashboard_meta. Scopes the preview '
-						. '— a user who already narrowed the dashboard to Q1 sees the Q1 contributors, '
-						. 'not the all-time list. Reuse the filters passed to the preceding '
-						. 'get_dashboard_meta call.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'name' => ['type' => 'string'],
-							'value' => [
-								'oneOf' => [
-									['type' => 'object'],
-									['type' => 'array'],
-								],
-							],
-						],
-						'required' => ['name', 'value'],
-						'additionalProperties' => false,
-					],
-				],
-				'urlParams' => [
-					'type' => 'object',
-					'description' => 'Same urlParams as get_dashboard_meta — required for parameterized '
-						. 'dashboards, ignored otherwise.',
-					'additionalProperties' => true,
-				],
-				'limit' => [
-					'type' => 'integer',
-					'description' => 'Max values to return. Default ' . self::LIMIT_DEFAULT
-						. ', hard max ' . self::LIMIT_MAX . '. Values over max are clamped.',
-					'minimum' => 1,
-					'maximum' => self::LIMIT_MAX,
-				],
+		return BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			[
+				'dashboardId' => 'Dashboard ID from list_dashboards.',
+				'filterColumn' => 'Target column from `available_filters[].column` in get_dashboard_meta, '
+					. 'not the filter display name.',
+				'search' => 'Optional case-insensitive substring to narrow the values before truncation.',
+				'appliedFilters' => 'Same filter list shape as get_dashboard_meta. Reuse filters from the preceding call.',
+				'appliedFilters[].name' => 'Filter name: "period" or a column name.',
+				'appliedFilters[].value' => 'For period: from/to date object. For column filters: array of values.',
+				'urlParams' => 'Same urlParams as get_dashboard_meta; required for parameterized dashboards.',
+				'limit' => 'Max values to return. Default ' . self::LIMIT_DEFAULT
+					. ', maximum ' . self::LIMIT_MAX . '.',
 			],
-			'required' => ['dashboardId', 'filterColumn'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
@@ -236,6 +195,7 @@ final class GetFilterValuesTool extends BaseSubjectAwareBiTool
 		}
 
 		$response = IntegratorFactory::getInstance()->getFilterValues(
+			self::findActAsUser($userId),
 			$externalId,
 			$filterColumn,
 			$supersetFilters,
@@ -257,7 +217,7 @@ final class GetFilterValuesTool extends BaseSubjectAwareBiTool
 			$context = ['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
 
 			throw $pinnedArguments->findRunFailure($runId, $userId, $response, $context)
-				?? self::integratorFailureException($response, $context);
+				?? self::dashboardReadFailureException($response, $context);
 		}
 
 		$rawData = $response->getData();
@@ -267,6 +227,10 @@ final class GetFilterValuesTool extends BaseSubjectAwareBiTool
 				[new \Bitrix\Main\Error('Empty response from /filter_values')],
 				['stage' => 'get_filter_values.empty', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
+		}
+		if (ActAsFailure::isFilterAccessDenied($rawData))
+		{
+			throw new McpException(ActAsFailure::FILTER_ACCESS_DENIED_MESSAGE);
 		}
 
 		$pinnedArguments->completeRunCall($runId, $userId);

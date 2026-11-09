@@ -1786,6 +1786,17 @@ class CBPSignB2EDocumentConfigureActivity extends BaseActivity implements IBPCon
 			return (new Main\Result())->addError(self::makeError(self::ERROR_MEMBERS_WITHOUT_COMPANY));
 		}
 
+		$partyPlanResult = Container::instance()
+			->getCompanyInitiatedPartyPlanService()
+			->plan($document, $composition)
+		;
+		if (!$partyPlanResult->isSuccess())
+		{
+			return $partyPlanResult;
+		}
+
+		$composition = $partyPlanResult->members;
+
 		$representativeToApply = $representativeId ?? (int)$document->representativeId;
 		if (
 			$representativeToApply === (int)$document->representativeId

@@ -49,6 +49,12 @@ final class SelfHostedLicense
 	 */
 	private const GRACE_DAYS = 15;
 
+	/**
+	 * The state is read on every data request, so a record about the same condition is written once a day and not
+	 * once per request.
+	 */
+	private const LOG_INTERVAL = 86400;
+
 	private const REJECT_REASON_NOT_NUMERIC = 'notNumeric';
 	private const REJECT_REASON_OUT_OF_RANGE = 'outOfRange';
 
@@ -189,6 +195,11 @@ final class SelfHostedLicense
 		if (!$this->isCheckDisabledLogged)
 		{
 			$this->isCheckDisabledLogged = true;
+			if (!$this->takeLogWindow(LicenseOption::CHECK_DISABLED_LOGGED))
+			{
+				return true;
+			}
+
 			Logger::logInfo('Self-hosted license check is disabled by option', [
 				'option' => LicenseOption::CHECK_DISABLED,
 			]);
@@ -197,8 +208,17 @@ final class SelfHostedLicense
 		return true;
 	}
 
+	/**
+	 * One record a day and not one per read: the license is read on every hit, and the instance is reset several
+	 * times within one hit, so the mark lives in an option.
+	 */
 	private function logRejectedValue(string $raw, string $reason): void
 	{
+		if (!$this->takeLogWindow(LicenseOption::REJECTED_EXPIRY_LOGGED))
+		{
+			return;
+		}
+
 		Logger::logWarning(
 			[new Error('Self-hosted license expiry date value rejected')],
 			[
@@ -206,5 +226,28 @@ final class SelfHostedLicense
 				'value' => $raw,
 			],
 		);
+	}
+
+	/**
+	 * Parallel requests may pass the window together and write a record each - taken without a lock on purpose,
+	 * the same way the refusal of the data output is logged.
+	 *
+	 * The mark is the moment of the last record, one for any value: a broken term is not expected in practice, and
+	 * the record only has to say that it occurs.
+	 */
+	private function takeLogWindow(string $optionName): bool
+	{
+		$now = time();
+		$lastLogged = (int)Option::get('biconnector', $optionName, '0');
+
+		// A mark from the future is left by a clock moved back and must not silence the log beyond a day.
+		if ($lastLogged <= $now && $now - $lastLogged < self::LOG_INTERVAL)
+		{
+			return false;
+		}
+
+		Option::set('biconnector', $optionName, (string)$now);
+
+		return true;
 	}
 }

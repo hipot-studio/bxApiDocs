@@ -5,8 +5,10 @@ namespace Bitrix\BIConnector\Internal\Operation\Builder\Chart;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Result;
 
 /**
@@ -19,10 +21,12 @@ final class ReplaceChartConfigOperation
 	private const NAME_PLACEHOLDER = '__placeholder__';
 
 	private readonly ChartWriteGuard $guard;
+	private readonly SupersetIdentity $identity;
 
-	public function __construct(?ChartWriteGuard $guard = null)
+	public function __construct(?ChartWriteGuard $guard = null, ?SupersetIdentity $identity = null)
 	{
 		$this->guard = $guard ?? new ChartWriteGuard();
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	/**
@@ -63,18 +67,10 @@ final class ReplaceChartConfigOperation
 		['payload' => $payload, 'name' => $name] = $loaded->getData();
 
 		$response = IntegratorFactory::getInstance()->updateChart($chartId, $payload);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $chartId);
+		if (!$classified->isSuccess())
 		{
-			return ChartWriteGuard::unavailableBi(
-				$response->getErrors(),
-				[
-					'stage' => 'replace_chart_config',
-					'user_id' => $actor->userId,
-					'chart_id' => $chartId,
-					'dataset_id' => (int)($config['datasetId'] ?? 0),
-					'viz_type' => (string)($config['vizType'] ?? ''),
-				],
-			);
+			return $classified;
 		}
 
 		$data = $response->getData();
@@ -113,28 +109,37 @@ final class ReplaceChartConfigOperation
 		}
 		unset($payload['slice_name']);
 
-		$chartResponse = IntegratorFactory::getInstance()->getChartById($chartId);
-		if ($chartResponse->hasErrors())
+		$identityResult = $this->identity->forRead($actor->userId);
+		if (!$identityResult->isSuccess())
 		{
-			return ChartWriteGuard::unavailableBi(
-				$chartResponse->getErrors(),
-				['stage' => 'replace_chart_config.load', 'user_id' => $actor->userId, 'chart_id' => $chartId],
-			);
+			return $identityResult;
 		}
 
-		$chartData = $chartResponse->getData();
-		if (!is_array($chartData))
+		$lookup = (new EntityLookup())->chart($chartId, $identityResult->getData()['user']);
+		if (!$lookup->isSuccess())
 		{
-			$chartData = [];
+			return $lookup;
+		}
+
+		$chartData = $lookup->getData()['entity'];
+		if (!is_array($chartData['dashboards'] ?? []))
+		{
+			return Refusal::unavailableBi([], ['stage' => 'replace_chart_config.load', 'chart_id' => $chartId]);
 		}
 
 		$editable = $this->guard->checkEditable(
-			is_array($chartData['dashboards'] ?? null) ? $chartData['dashboards'] : [],
+			$chartData['dashboards'] ?? [],
 			$actor,
 		);
 		if (!$editable->isSuccess())
 		{
 			return $editable;
+		}
+
+		$dataset = (new ChartDatasetGuard())->validate($config, $identityResult->getData()['user']);
+		if (!$dataset->isSuccess())
+		{
+			return $dataset;
 		}
 
 		return (new Result())->setData([

@@ -392,15 +392,17 @@ final class Dashboard
 	 *
 	 * @param array $rlsRules Optional RLS rules for guest token
 	 *        Format: [['dataset' => datasetId, 'clause' => 'SQL WHERE clause'], ...]
+	 * @param Dto\User|null $user Whose identity the guest token carries; the current user when omitted.
 	 * @return $this
 	 */
-	public function loadCredentials(array $rlsRules = [], int $expSeconds = 0): self
+	public function loadCredentials(array $rlsRules = [], int $expSeconds = 0, ?Dto\User $user = null): self
 	{
 		$integrator = IntegratorFactory::getInstance();
 		$credentialsResponse = $integrator->getDashboardEmbeddedCredentials(
 			$this->getExternalId(),
 			$rlsRules,
 			$expSeconds,
+			$user,
 		);
 
 		$credentials = $credentialsResponse->getData();
@@ -412,10 +414,18 @@ final class Dashboard
 		return $this;
 	}
 
-	public function loadProxyData(): self
+	/**
+	 * @param int $streamTimeout Read timeout in seconds; 0 keeps the timeout of the integrator.
+	 * @param bool $arbitrateServiceFailure False keeps a failed read from moving the instance to ERROR.
+	 */
+	public function loadProxyData(int $streamTimeout = 0, bool $arbitrateServiceFailure = true): self
 	{
 		$integrator = IntegratorFactory::getInstance();
-		$integratorResult = $integrator->getDashboardById($this->getExternalId());
+		$integratorResult = $integrator->getDashboardById(
+			$this->getExternalId(),
+			$streamTimeout,
+			$arbitrateServiceFailure,
+		);
 		if ($integratorResult->hasErrors())
 		{
 			return $this;

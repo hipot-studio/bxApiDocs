@@ -21,6 +21,14 @@ Loc::loadMessages(__FILE__);
 class Landing extends \Bitrix\Landing\Internals\BaseTable
 {
 	/**
+	 * Error code: the custom markup page does not accept blocks.
+	 */
+	public const ERROR_MARKUP_PAGE_LOCKED = 'LANDING_MARKUP_PAGE_LOCKED';
+	// Not localized on purpose: AI sites and ordinary sites are kept apart, so the refusal is
+	// expected only from API calls that mix them.
+	private const MARKUP_PAGE_LOCKED_TEXT = 'Could not add block. A page built in chat can only be edited in chat.';
+
+	/**
 	 * Keys for get meta data from landing data
 	 */
 	protected const META_KEYS = [
@@ -36,6 +44,11 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	protected const META_KEYS_MODIFIABLE = [
 		'DATE_MODIFY', 'DATE_PUBLIC', 'ACTIVE', 'PUBLIC',
 	];
+
+	/**
+	 * Error code: the block type does not allow the site type of the target page.
+	 */
+	public const ERROR_BLOCK_INCOMPATIBLE_SITE_TYPE = 'BLOCK_INCOMPATIBLE_SITE_TYPE';
 
 	/**
 	 * Internal class.
@@ -171,6 +184,12 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 * @var string
 	 */
 	protected string $siteTypeCode = '';
+
+	/**
+	 * The last changeParentOfBlock() call was refused by the site type check.
+	 * @var bool
+	 */
+	private bool $pasteRejectedBySiteType = false;
 
 	/**
 	 * Domain id.
@@ -1178,7 +1197,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 										$absolute
 											? (
 												$row['SITE_PROTOCOL'] . '://' .
-												$row['SITE_DOMAIN']
+												Domain::toUnicode($row['SITE_DOMAIN'])
 											)
 											: ''
 									) .
@@ -2472,6 +2491,16 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			$data['PUBLIC'] = $this::$editMode ? 'N' : 'Y';
 		}
 
+		if (!$this->canPutBlockOnPage(0, $data['PUBLIC'] === 'Y' ? 'Y' : 'N'))
+		{
+			if ($saveInLastUsed)
+			{
+				$this->sendAddBlockErrorMetrika(self::ERROR_MARKUP_PAGE_LOCKED);
+			}
+
+			return false;
+		}
+
 		$block = Block::createFromRepository($this, $code, $data);
 
 		if ($block)
@@ -2595,6 +2624,10 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	public function markDeletedBlock($id, $mark)
 	{
 		$id = intval($id);
+		if (!$mark && !$this->canRestoreBlockOnPage($id))
+		{
+			return false;
+		}
 		if (!isset($this->blocks[$id]))
 		{
 			$this->blocks[$id] = new Block($id);
@@ -2947,7 +2980,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public function favoriteBlock(int $id, array $meta = []): ?int
 	{
-		$bewBlockId = $this->copyBlock($id, $id);
+		$bewBlockId = $this->pasteBlock($id, $id, false, false);
 		if ((int)$bewBlockId > 0)
 		{
 			if (
@@ -3027,7 +3060,12 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		$block = intval($block);
 		$move = isset($params['MOVE']) && $params['MOVE'];
 		$afterId = isset($params['AFTER_ID']) ? (int)$params['AFTER_ID'] : 0;
-		$fromLandingRow = Block::getRowByBlockId($block, ['ID', 'LID', 'SITE_TYPE' => 'LANDING.SITE.TYPE']);
+		$fromLandingRow = Block::getRowByBlockId(
+			$block,
+			['ID', 'LID', 'CODE', 'SITE_TYPE' => 'LANDING.SITE.TYPE']
+		);
+		$this->pasteRejectedBySiteType = false;
+		$blockCode = $fromLandingRow['CODE'] ?? null;
 		$fromLandingId = $fromLandingRow['LID'] ?? null;
 		$currentScopeId = Site\Type::getCurrentScopeId();
 		$same = $this->id == $fromLandingId;
@@ -3045,6 +3083,38 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		else
 		{
 			$fromLanding = self::createInstance($fromLandingId);
+		}
+
+		// checked only for a block of a page available to the caller: the refusal must not reveal others
+		if (
+			($params['CHECK_SITE_TYPE'] ?? true) !== false
+			&& $this->exist()
+			&& $fromLanding->exist()
+			&& is_string($blockCode)
+			&& $blockCode !== ''
+			&& !self::isBlockTypeAllowedForSite(
+				$blockCode,
+				self::getBlockTypeByCode($blockCode),
+				$this->getSiteTypeCode()
+			)
+		)
+		{
+			if ($currentScopeId === null)
+			{
+				// setScope() ignores an empty scope, so it cannot give back "no scope"
+				Site\Type::clearScope();
+			}
+			elseif ($currentScopeId !== $fromLandingRow['SITE_TYPE'])
+			{
+				Site\Type::setScope($currentScopeId);
+			}
+			$this->pasteRejectedBySiteType = true;
+			$this->error->addError(
+				self::ERROR_BLOCK_INCOMPATIBLE_SITE_TYPE,
+				Loc::getMessage('LANDING_BLOCK_INCOMPATIBLE_SITE_TYPE')
+			);
+
+			return null;
 		}
 
 		// if landing exist and available, get it blocks
@@ -3087,10 +3157,24 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 					// copy files
 					if ($newBlock)
 					{
-						File::copyBlockFiles(
-							$srcBlock->getId(),
-							$newBlock->getId()
-						);
+						// a markup package block takes only the files of its current version
+						// from the manifest: the draft also holds historical version files
+						// which the copy must not inherit
+						$packageManifest = $this->copyMarkupManifest($srcBlock, $newBlock);
+						if ($packageManifest)
+						{
+							File::addToBlock(
+								$newBlock->getId(),
+								Markup\FileStore::filterPackageFileIds($packageManifest->getFileIds())
+							);
+						}
+						else
+						{
+							File::copyBlockFiles(
+								$srcBlock->getId(),
+								$newBlock->getId()
+							);
+						}
 					}
 				}
 			}
@@ -3141,18 +3225,123 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Copy other block to this landing.
-	 * @param int $id Block id (from another landing).
+	 * A custom markup page is edited through the chat only: no block may be added, copied,
+	 * moved or restored onto it, and its carrier block never leaves the page alone.
+	 * The carrier itself is created by the markup intake while the page is still blank.
+	 * The lock belongs to the edition the block goes to: a blank draft of a published markup page is ordinary.
+	 * @param int $incomingBlockId Block id copied or moved to this landing.
+	 * @param string $public Edition the block goes to: 'N' - the draft, 'Y' - the published one.
+	 * @return bool
+	 */
+	protected function canPutBlockOnPage(int $incomingBlockId = 0, string $public = 'N'): bool
+	{
+		if (
+			Markup\MarkupPage::isMarkupLanding((int)$this->id, $public)
+			|| ($incomingBlockId > 0 && Markup\MarkupPage::isCarrierBlock($incomingBlockId))
+		)
+		{
+			$this->addMarkupPageLockedError();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * A removed block comes back only onto a page that is not custom, and a removed carrier
+	 * comes back only while no ordinary block has taken its page.
+	 * @param int $blockId Restored block id.
+	 * @return bool
+	 */
+	protected function canRestoreBlockOnPage(int $blockId): bool
+	{
+		$block = BlockTable::query()
+			->setSelect(['PUBLIC'])
+			->where('ID', $blockId)
+			->fetch()
+		;
+		if (!$this->canPutBlockOnPage(0, ($block['PUBLIC'] ?? 'N') === 'Y' ? 'Y' : 'N'))
+		{
+			return false;
+		}
+
+		if (
+			Markup\MarkupPage::isCarrierBlock($blockId)
+			&& Markup\MarkupPage::hasOrdinaryBlocksBeside((int)$this->id, $blockId)
+		)
+		{
+			$this->addMarkupPageLockedError();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function addMarkupPageLockedError(): void
+	{
+		$this->error->addError(
+			self::ERROR_MARKUP_PAGE_LOCKED,
+			self::MARKUP_PAGE_LOCKED_TEXT
+		);
+	}
+
+	/**
+	 * Raw `block.type` of the block manifest: of the repo record for repo blocks, of the file otherwise.
+	 * @param string $code Block code.
+	 * @return string|array Empty array if the manifest is not found.
+	 */
+	private static function getBlockTypeByCode(string $code): string|array
+	{
+		if (preg_match(Block::REPO_MASK, $code, $matches))
+		{
+			return Repo::getBlock((int)$matches[1])['block']['type'] ?? [];
+		}
+
+		return Block::getManifestFile($code)['block']['type'] ?? [];
+	}
+
+	/**
+	 * Whether the block type allows the block to be placed on a page of the site type.
+	 * @param string $code Block code.
+	 * @param string|array $type Raw `block.type` of the manifest.
+	 * @param string $siteType Site type of the target page.
+	 * @return bool
+	 */
+	private static function isBlockTypeAllowedForSite(string $code, string|array $type, string $siteType): bool
+	{
+		$types = BlockRepo::normalizeTypes($type);
+		// repo blocks of the `ai` type are available on any site
+		if (preg_match(Block::REPO_MASK, $code) && in_array('AI', $types ?? [], true))
+		{
+			return true;
+		}
+
+		return BlockRepo::isSiteTypeAllowed($types, $siteType);
+	}
+
+	/**
+	 * Common way of copyBlock / moveBlock / favoriteBlock.
+	 * @param int $id Block id.
 	 * @param int $afterId Put after this block id (in this landing).
+	 * @param bool $move Move the block instead of copying.
+	 * @param bool $checkSiteType Refuse the block incompatible with the site type of this landing.
 	 * @return int|null New Block id.
 	 */
-	public function copyBlock(int $id, int $afterId): ?int
+	private function pasteBlock(int $id, int $afterId, bool $move, bool $checkSiteType): ?int
 	{
+		if (!$this->canPutBlockOnPage($id))
+		{
+			return null;
+		}
+
 		$blockId = $this->changeParentOfBlock($id, [
-			'MOVE' => false,
+			'MOVE' => $move,
 			'AFTER_ID' => $afterId,
+			'CHECK_SITE_TYPE' => $checkSiteType,
 		]);
-		if (!$blockId)
+		if (!$blockId && !$this->pasteRejectedBySiteType)
 		{
 			$this->error->addError(
 				'BLOCK_NOT_FOUND',
@@ -3161,6 +3350,32 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		return $blockId;
+	}
+
+	/**
+	 * Carries the markup package manifest of an existing block over to its copy.
+	 * @return Markup\Manifest|null The manifest of the copy, null for an ordinary block.
+	 */
+	private function copyMarkupManifest(Block $from, Block $to): ?Markup\Manifest
+	{
+		$manifestJson = $from->getMarkupManifest();
+		if ($manifestJson === null || !$to->saveMarkupManifest($manifestJson))
+		{
+			return null;
+		}
+
+		return Markup\Manifest::fromJson($manifestJson);
+	}
+
+	/**
+	 * Copy other block to this landing.
+	 * @param int $id Block id (from another landing).
+	 * @param int $afterId Put after this block id (in this landing).
+	 * @return int|null New Block id.
+	 */
+	public function copyBlock(int $id, int $afterId): ?int
+	{
+		return $this->pasteBlock($id, $afterId, false, true);
 	}
 
 	/**
@@ -3197,6 +3412,16 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 					$oldNew[$block->getId()] = $newBlock;
 					$references[$block->getId()] = $newBlock->getId();
 					$this->addBlockToCollection($newBlock);
+					// a markup package block binds the files of its current version from the
+					// manifest: the wrapper content carries no data-fileid to scan below
+					$packageManifest = $this->copyMarkupManifest($block, $newBlock);
+					if ($packageManifest)
+					{
+						File::addToBlock(
+							$newBlock->getId(),
+							Markup\FileStore::filterPackageFileIds($packageManifest->getFileIds())
+						);
+					}
 				}
 			}
 			// replace old id of blocks to the new one and clone files
@@ -3507,19 +3732,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public function moveBlock(int $id, int $afterId): ?int
 	{
-		$blockId = $this->changeParentOfBlock($id, [
-			'MOVE' => true,
-			'AFTER_ID' => $afterId,
-		]);
-		if (!$blockId)
-		{
-			$this->error->addError(
-				'BLOCK_NOT_FOUND',
-				Loc::getMessage('LANDING_BLOCK_NOT_FOUND')
-			);
-		}
-
-		return $blockId;
+		return $this->pasteBlock($id, $afterId, true, true);
 	}
 
 	/**

@@ -25,8 +25,22 @@ final class DatasetService extends AbstractSupersetContext
 		'DATETIME' => 'DATETIME',
 	];
 
-	public function list(array $ids = [], array $neqIds = [], ?int $page = null, ?int $pageSize = null): Main\Result
+	/**
+	 * @param string|null $actAsLogin Superset login the list is built for (act-as); null — the service account.
+	 */
+	public function list(
+		array $ids = [],
+		array $neqIds = [],
+		?int $page = null,
+		?int $pageSize = null,
+		?string $actAsLogin = null,
+	): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		$filter = [];
 		if (!empty($ids))
 		{
@@ -48,7 +62,7 @@ final class DatasetService extends AbstractSupersetContext
 			}
 		}
 
-		$datasetApi = $this->getDatasetApi();
+		$datasetApi = $this->getDatasetApi($actAsLogin);
 
 		// Bounded mode: a single Superset page plus the total `count`, so the
 		// request cost does not grow with the number of datasets on the instance.
@@ -60,6 +74,11 @@ final class DatasetService extends AbstractSupersetContext
 			if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 			{
 				return $this->createRequestErrorResult($requestResult, 'Getting dataset list');
+			}
+			$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+			if ($notApplied !== null)
+			{
+				return $notApplied;
 			}
 
 			$datasets = $this->decode($requestResult->getAnswer());
@@ -86,7 +105,7 @@ final class DatasetService extends AbstractSupersetContext
 			return $result;
 		}
 
-		return $this->fetchAll($filter);
+		return $this->fetchAll($filter, $actAsLogin);
 	}
 
 	/**
@@ -116,9 +135,9 @@ final class DatasetService extends AbstractSupersetContext
 	 * by-ids reads, the idempotency check and the physical-dataset sweep — share it instead of each
 	 * paging on its own.
 	 */
-	private function fetchAll(array $filter): Main\Result
+	private function fetchAll(array $filter, ?string $actAsLogin = null): Main\Result
 	{
-		$datasetApi = $this->getDatasetApi();
+		$datasetApi = $this->getDatasetApi($actAsLogin);
 		$preparedDataset = [];
 		$currentPage = 0;
 
@@ -128,6 +147,11 @@ final class DatasetService extends AbstractSupersetContext
 			if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 			{
 				return $this->createRequestErrorResult($requestResult, 'Getting dataset list');
+			}
+			$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+			if ($notApplied !== null)
+			{
+				return $notApplied;
 			}
 
 			$datasets = $this->decode($requestResult->getAnswer());
@@ -201,9 +225,17 @@ final class DatasetService extends AbstractSupersetContext
 		return $result;
 	}
 
-	public function get(int $id): Main\Result
+	/**
+	 * @param string|null $actAsLogin Superset login the dataset is read for (act-as); null — the service account.
+	 */
+	public function get(int $id, ?string $actAsLogin = null): Main\Result
 	{
-		$datasetResult = $this->getDatasetByIdInternal($id);
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
+		$datasetResult = $this->getDatasetByIdInternal($id, $actAsLogin);
 		if (!$datasetResult->isSuccess())
 		{
 			return $datasetResult;
@@ -589,12 +621,17 @@ final class DatasetService extends AbstractSupersetContext
 		return $result;
 	}
 
-	private function getDatasetByIdInternal(int $id): Main\Result
+	private function getDatasetByIdInternal(int $id, ?string $actAsLogin = null): Main\Result
 	{
-		$requestResult = $this->getDatasetApi()->getDatasetById($id);
+		$requestResult = $this->getDatasetApi($actAsLogin)->getDatasetById($id);
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			return $this->createRequestErrorResult($requestResult, 'Dataset get');
+		}
+		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+		if ($notApplied !== null)
+		{
+			return $notApplied;
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
@@ -747,8 +784,8 @@ final class DatasetService extends AbstractSupersetContext
 		return new DatabaseService($this->server, $this->connector);
 	}
 
-	private function getDatasetApi(): Api\Dataset
+	private function getDatasetApi(?string $actAsLogin = null): Api\Dataset
 	{
-		return new Api\Dataset($this->connector);
+		return new Api\Dataset($this->getConnectorFor($actAsLogin));
 	}
 }

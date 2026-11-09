@@ -36,7 +36,7 @@ final class ShowGroupDetailPopupAction extends FormatMenuAction
 			return null;
 		}
 
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS))
 		{
 			return null;
 		}

@@ -23,6 +23,7 @@ use Bitrix\Landing\History\Action\SortBlockAction;
 use Bitrix\Landing\History\Action\UpdateContentAction;
 use Bitrix\Landing\History\Action\ChangeNodeNameAction;
 use Bitrix\Landing\History\Action\UpdateDynamicAction;
+use Bitrix\Landing\History\Action\UpdateMarkupPackageAction;
 use Bitrix\Landing\History\Action\MultiplyAction;
 use Bitrix\Landing\History\Action\RemoveNodeAction;
 use Bitrix\Landing\History\Action\AddNodeAction;
@@ -110,6 +111,10 @@ class ActionFactory
 		'UPDATE_DYNAMIC' => [
 			self::UNDO => UpdateDynamicAction::class,
 			self::REDO => UpdateDynamicAction::class,
+		],
+		'UPDATE_MARKUP_PACKAGE' => [
+			self::UNDO => UpdateMarkupPackageAction::class,
+			self::REDO => UpdateMarkupPackageAction::class,
 		],
 		'MULTIPLY' => [
 			self::UNDO => MultiplyAction::class,

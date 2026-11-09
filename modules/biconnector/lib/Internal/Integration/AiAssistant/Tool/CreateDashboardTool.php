@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\CreateDashboardOperation;
@@ -45,18 +46,12 @@ final class CreateDashboardTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'name' => [
-					'type' => 'string',
-					'minLength' => 1,
-					'description' => 'Dashboard display name. Must be non-empty.',
-				],
+		return BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			['name' => 'Dashboard display name. Must be non-empty after trim; maximum 128 characters before trim.',
 			],
-			'required' => ['name'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array

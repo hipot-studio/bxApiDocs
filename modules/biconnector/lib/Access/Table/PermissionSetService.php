@@ -21,6 +21,7 @@ final class PermissionSetService
 {
 	public const ERROR_BAD_REQUEST = 'BAD_REQUEST';
 	public const ERROR_PERMISSIONS_UNAVAILABLE = 'PERMISSIONS_UNAVAILABLE';
+	public const ERROR_BAD_SIGNATURE = 'BAD_SIGNATURE';
 
 	/**
 	 * Operation of the answer -> action of the access subsystem.
@@ -49,10 +50,12 @@ final class PermissionSetService
 	/**
 	 * Builds the answer for the permission set command.
 	 *
-	 * @param string|null $login Superset account login, as it arrives in the query string.
+	 * @param string|null $login Superset account login, as it arrives in the request body.
+	 * @param string|null $loginSign Signature of the login, see LoginSignature.
+	 * @param string $key BI key of the portal the request was let in with.
 	 * @return array Ready to be encoded as the endpoint answer.
 	 */
-	public function getResponse(?string $login): array
+	public function getResponse(?string $login, ?string $loginSign, string $key): array
 	{
 		try
 		{
@@ -71,6 +74,16 @@ final class PermissionSetService
 			{
 				// Only a broken caller omits the login, so this is an error and not an empty set.
 				return ['error' => self::ERROR_BAD_REQUEST];
+			}
+
+			if (!LoginSignature::isValid($key, $login, $loginSign))
+			{
+				// An error and not an empty set: the engine reads any error as "no answer" and closes the data
+				// while the axis is on. Neither the login nor the signature reaches the journal - a forged pair
+				// is what an attacker sends, and the record has to stay of a bounded and harmless shape.
+				Logger::logWarning([new Error('Permission set requested with a missing or invalid login signature')]);
+
+				return ['error' => self::ERROR_BAD_SIGNATURE];
 			}
 
 			$userId = $this->resolveUserId($login);
@@ -195,7 +208,7 @@ final class PermissionSetService
 	}
 
 	/**
-	 * The login comes from the query string of a branch deliberately left outside the load protection,
+	 * The login comes from the request body of a branch deliberately left outside the load protection,
 	 * so what reaches the journal is bounded here and not at the caller.
 	 *
 	 * @param string|null $login

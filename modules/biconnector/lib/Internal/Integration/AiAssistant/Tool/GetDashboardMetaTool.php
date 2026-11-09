@@ -3,11 +3,13 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\GetDashboardOperation;
@@ -18,6 +20,7 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 {
 	private const CHART_FIELDS = [
 		'id', 'name', 'kind', 'viz_label', 'tab_path', 'description', 'stats', 'stats_omitted', 'column_descriptions',
+		'no_access',
 	];
 
 	private const FILTER_FIELDS = [
@@ -50,60 +53,28 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 			. 'top-N items) — pick chart ids from the response and call get_chart_data. '
 			. 'Do NOT call this tool for row-level data (use get_chart_data), for filter-value '
 			. 'discovery (use get_filter_values), or repeatedly in the same turn — the skeleton '
-			. 'is stable for the session, cache it in your reasoning.';
+			. 'is stable for the session, cache it in your reasoning. '
+			. 'A chart with `no_access: true` is closed by the access rights of the user: answer by the '
+			. 'other charts, say this one is not available to the user, and do not request its data.';
 	}
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'dashboardId' => [
-					'type' => 'integer',
-					'description' => 'Dashboard ID from the list_dashboards tool result.',
-					'minimum' => 1,
-				],
-				'appliedFilters' => [
-					'type' => 'array',
-					'description' => 'Filters to apply. Each entry has `name` and `value`. '
-						. 'Use name="period" with value={"from":"YYYY-MM-DD","to":"YYYY-MM-DD"} for date range. '
-						. 'For column filters use the column name from `available_filters[].column` '
-						. '(e.g. name="finish_status", value=["Y"]).',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'name' => [
-								'type' => 'string',
-								'description' => 'Filter name: "period" for date range, '
-									. 'or a column name for column filters.',
-							],
-							'value' => [
-								'description' => 'For period: {"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}. '
-									. 'For column filters: array of allowed values.',
-								'oneOf' => [
-									['type' => 'object'],
-									['type' => 'array'],
-								],
-							],
-						],
-						'required' => ['name', 'value'],
-						'additionalProperties' => false,
-					],
-				],
-				'urlParams' => [
-					'type' => 'object',
-					'description' => 'URL parameters for parameterized dashboards '
-						. '(e.g. {"tasks_flows_flow_id": 28} for a specific Flow). '
-						. 'If the dashboard requires a url parameter and it is not provided, '
-						. 'the tool errors out with `availableValues` embedded in the error. '
-						. 'Global parameters (current_user) are auto-injected server-side — '
-						. 'do NOT pass them.',
-					'additionalProperties' => true,
-				],
+		return BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			[
+				'dashboardId' => 'Dashboard ID from the list_dashboards tool result.',
+				'appliedFilters' => 'Filters to apply. Each entry has `name` and `value`. '
+					. 'Use name="period" with value={"from":"YYYY-MM-DD","to":"YYYY-MM-DD"} for date range. '
+					. 'For column filters use the column name from `available_filters[].column`.',
+				'appliedFilters[].name' => 'Filter name: "period" for date range, or a column name for column filters.',
+				'appliedFilters[].value' => 'For period: {"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}. '
+					. 'For column filters: array of allowed values.',
+				'urlParams' => 'URL parameters for parameterized dashboards, for example '
+					. '{"tasks_flows_flow_id":28}. Global parameters are injected server-side; do not pass them.',
 			],
-			'required' => ['dashboardId'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
@@ -201,6 +172,7 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 		}
 
 		$response = IntegratorFactory::getInstance()->getDashboardOverview(
+			self::findActAsUser($userId),
 			$externalId,
 			$supersetFilters,
 			$urlParams,
@@ -212,7 +184,7 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 			$context = ['stage' => 'get_dashboard_meta.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
 
 			throw $pinnedArguments->findRunFailure($runId, $userId, $response, $context)
-				?? self::integratorFailureException($response, $context);
+				?? self::dashboardReadFailureException($response, $context);
 		}
 
 		$rawData = $response->getData();
@@ -258,7 +230,7 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 				'title' => (string)$dashboard->getTitle(),
 			],
 			'caller_filters' => $callerFiltersEcho,
-			'charts' => self::pickAllowedFields($rawData['charts'] ?? [], self::CHART_FIELDS),
+			'charts' => self::pickAllowedFields(self::markNoAccessCharts($rawData['charts'] ?? []), self::CHART_FIELDS),
 			'available_filters' => self::pickAllowedFields($rawData['available_filters'] ?? [], self::FILTER_FIELDS),
 		];
 		if (!empty($meta))
@@ -274,6 +246,23 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 		$pinnedArguments->completeRunCall($runId, $userId);
 
 		return $result;
+	}
+
+	/**
+	 * A chart closed by the table rights of the caller comes without stats; the flag tells the model so,
+	 * instead of leaving it to read an empty chart.
+	 */
+	private static function markNoAccessCharts(array $charts): array
+	{
+		foreach ($charts as $key => $chart)
+		{
+			if (is_array($chart) && ActAsFailure::isChartAccessDenied($chart))
+			{
+				$charts[$key]['no_access'] = true;
+			}
+		}
+
+		return $charts;
 	}
 
 	/**

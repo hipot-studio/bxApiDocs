@@ -40,6 +40,12 @@ final class Document implements Arrayable
 
 		$blankId = (int)$this->document->blankId;
 		$blank = $this->blankService->getById($blankId);
+		$isBlankDownloadable = $this->blankService->hasDownloadableFile($blank);
+		$sourceFileIsDocx = $isBlankDownloadable
+			? $blank->fileCollection->count() === 1
+				&& mb_strtolower(pathinfo($blank->fileCollection->first()->name, PATHINFO_EXTENSION)) === 'docx'
+			: null
+		;
 
 		return [
 			'id' => $this->document->id,
@@ -78,7 +84,8 @@ final class Document implements Arrayable
 			'dateSignUntil' => $this->document->dateSignUntil,
 			'previewUrl' => $this->blankService->getPreviewUrl($blankId),
 			'hasPlaceholders' => $blank?->hasPlaceholders ?? false,
-			'isBlankDownloadable' => $this->blankService->hasDownloadableFile($blank),
+			'isBlankDownloadable' => $isBlankDownloadable,
+			'sourceFileIsDocx' => $sourceFileIsDocx,
 
 			'externalDateCreateSourceType' => $this->document->externalDateCreateSourceType,
 			'hcmLinkDateSettingId' => $this->document->hcmLinkDateSettingId,

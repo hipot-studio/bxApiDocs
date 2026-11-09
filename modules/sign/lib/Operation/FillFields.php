@@ -528,8 +528,8 @@ class FillFields implements Contract\Operation
 	 */
 	private function updateHcmLinkLegalField(array $field, Document $document, string $fieldCode): void
 	{
-		// The callback carries no marker of a trusted value today and the fill action of the safe
-		// marks the whole filling trusted, so only a value declared untrusted is dropped here.
+		// The safe marks the trust of a value in the callback set: a value declared untrusted is dropped
+		// here, and a missing marker is trusted - it comes from a safe that sends no marker at all.
 		if (($field['trusted'] ?? true) !== true)
 		{
 			return;

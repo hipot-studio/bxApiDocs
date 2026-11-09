@@ -50,9 +50,18 @@ class RequestModerateAiSiteTopic extends RequestSingle
 		return null;
 	}
 
+	/**
+	 * The prompt of the moderated artifact. Overridden by the markup scenarios, whose
+	 * input is the text of a ready page instead of a user request.
+	 */
+	protected function getPromptCode(): string
+	{
+		return PromptCodeCatalog::CREATE_AI_SITE_MODERATION;
+	}
+
 	protected function getPrompt(): Prompt
 	{
-		$prompt = new Prompt(PromptCodeCatalog::CREATE_AI_SITE_MODERATION);
+		$prompt = new Prompt($this->getPromptCode());
 		$prompt->setMarkers(['{{input}}' => $this->resolveModerationInput()]);
 		$prompt->setSchema(new Schema\AiSiteModerationVerdict());
 		// Zero cost regardless of global toggles.

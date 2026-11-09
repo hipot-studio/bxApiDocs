@@ -26,6 +26,8 @@ final class LicenseOption
 	public const EXPIRY_WARNING_SHOWN = '~selfhost_license_expiry_warning_shown';
 	public const EARLY_WARNING_SHOWN = '~selfhost_license_early_warning_shown';
 	public const DATA_REFUSAL_LOGGED = '~selfhost_license_data_refusal_logged';
+	public const REJECTED_EXPIRY_LOGGED = '~selfhost_license_rejected_expiry_logged';
+	public const CHECK_DISABLED_LOGGED = '~selfhost_license_check_disabled_logged';
 	public const WORK_STOPPED = '~selfhost_license_work_stopped';
 	/**
 	 * Value is the term the start of its grace was announced for, not a yes or no: a renewed term is a

@@ -6,6 +6,7 @@ use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\SearchParametersOperation;
@@ -41,32 +42,16 @@ final class SearchDashboardParametersTool extends BaseSubjectAwareBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'dashboardId' => [
-					'type' => 'integer',
-					'description' => 'Dashboard ID from the list_dashboards tool result.',
-					'minimum' => 1,
-				],
-				'search' => [
-					'type' => 'string',
-					'maxLength' => 200,
-					'description' => 'Optional case-insensitive substring to narrow each parameter\'s '
-						. 'availableValues by name. Use when the user named the entity (e.g. a specific '
-						. 'flow or template) or the full list would be too long. Omit to get the full list.',
-				],
-				'offset' => [
-					'type' => 'integer',
-					'description' => 'Optional zero-based offset to page through a long list. When a '
-						. 'parameter\'s `hasMore` is true, call again with offset increased by the page '
-						. 'size to fetch the next page. Prefer `search` over paging when the user named '
-						. 'the entity. Defaults to 0.',
-				],
+		return BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			['dashboardId' => 'Dashboard ID from the list_dashboards tool result.',
+				'search' => 'Optional case-insensitive substring to narrow each parameter\'s availableValues by name. '
+					. 'Use when the user named the entity; omit to get the full list.',
+				'offset' => 'Optional offset to page through a long list. Negative values normalize to 0. '
+					. 'When a parameter hasMore is true, increase by the page size. Prefer search for a named entity.',
 			],
-			'required' => ['dashboardId'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array

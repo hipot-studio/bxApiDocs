@@ -11,8 +11,13 @@ final class TableService extends AbstractSupersetContext
 {
 	private const SCHEMA = 'bitrix24';
 
-	public function list(?string $schema = null): Main\Result
+	public function list(?string $schema = null, ?string $actAsLogin = null): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		$databaseResult = $this->getDatabaseService()->getTrinoDatabaseId();
 		if (!$databaseResult->isSuccess())
 		{
@@ -20,10 +25,15 @@ final class TableService extends AbstractSupersetContext
 		}
 
 		$databaseId = (int)$databaseResult->getData()['id'];
-		$requestResult = $this->getDatabaseApi()->getTables($databaseId, $schema ?? self::SCHEMA);
+		$requestResult = $this->getDatabaseApi($actAsLogin)->getTables($databaseId, $schema ?? self::SCHEMA);
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			return $this->createRequestErrorResult($requestResult, 'Getting table list');
+		}
+		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+		if ($notApplied !== null)
+		{
+			return $notApplied;
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
@@ -57,8 +67,17 @@ final class TableService extends AbstractSupersetContext
 		return $result;
 	}
 
-	public function getMetadata(string $tableName, ?string $schema = null): Main\Result
+	public function getMetadata(
+		string $tableName,
+		?string $schema = null,
+		?string $actAsLogin = null,
+	): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		if ($tableName === '')
 		{
 			return $this->createErrorResult('Empty table name', null, HttpStatus::UNPROCESSABLE_ENTITY);
@@ -71,7 +90,7 @@ final class TableService extends AbstractSupersetContext
 		}
 
 		$databaseId = (int)$databaseResult->getData()['id'];
-		$requestResult = $this->getDatabaseApi()->getTableMetadata(
+		$requestResult = $this->getDatabaseApi($actAsLogin)->getTableMetadata(
 			$databaseId,
 			$tableName,
 			$schema ?? self::SCHEMA,
@@ -79,6 +98,11 @@ final class TableService extends AbstractSupersetContext
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			return $this->createRequestErrorResult($requestResult, 'Getting table metadata');
+		}
+		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+		if ($notApplied !== null)
+		{
+			return $notApplied;
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
@@ -117,9 +141,9 @@ final class TableService extends AbstractSupersetContext
 		return $result;
 	}
 
-	private function getDatabaseApi(): Api\Database
+	private function getDatabaseApi(?string $actAsLogin = null): Api\Database
 	{
-		return new Api\Database($this->connector);
+		return new Api\Database($this->getConnectorFor($actAsLogin));
 	}
 
 	private function getDatabaseService(): DatabaseService

@@ -19,6 +19,7 @@ use Bitrix\Sender\Integration;
 use Bitrix\Sender\Internals\Model;
 use Bitrix\Sender\Posting;
 use Bitrix\Sender\PostingRecipientTable;
+use Bitrix\Sender\PostingTable;
 use Bitrix\Sender\Transport\TimeLimiter;
 
 Loc::loadMessages(__FILE__);
@@ -919,7 +920,21 @@ class State
 		}
 		if ($state === self::SENDING)
 		{
-			$fields['AUTO_SEND_TIME'] = $sendDate ?: new DateTime();
+			$isResume = $this->getCode() === self::PAUSED;
+			// A resume keeps the start of the launch the snapshots are judged against.
+			if (!$isResume)
+			{
+				$fields['AUTO_SEND_TIME'] = $sendDate ?: new DateTime();
+			}
+			$postingId = (int)$this->letter->get('POSTING_ID');
+			if (
+				$this->getCode() !== self::SENT
+				&& ($postingId > 0 || !$isResume)
+				&& PostingTable::isNotStarted($postingId)
+			)
+			{
+				$fields['WAITING_RECIPIENT'] = 'Y';
+			}
 		}
 		if ($state === self::PLANNED)
 		{

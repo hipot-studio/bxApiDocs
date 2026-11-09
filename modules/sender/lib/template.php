@@ -37,7 +37,10 @@ class TemplateTable extends ORM\Data\DataManager
 {
 	const LOCAL_DIR_IMG = '/images/sender/preset/template/';
 	public const PER_PAGE_LIMIT = 9;
+	public const USER_TYPE = 'USER';
+	private const FIRST_PAGE_CACHE_KEY = 'page';
 	private static array $loadedTemplates = [];
+	private static bool $hasMoreUserTemplates = false;
 
 	/**
 	 * Handler of event that return array of templates
@@ -49,62 +52,159 @@ class TemplateTable extends ORM\Data\DataManager
 	 */
 	public static function onPresetTemplateList($templateType = null, $templateId = null)
 	{
-		$resultList = array();
-		if($templateType && $templateType !== 'USER')
+		if($templateType && $templateType !== self::USER_TYPE)
 		{
-			return $resultList;
+			return array();
 		}
 
-		if (!empty(self::$loadedTemplates[$templateId]))
+		$id = is_scalar($templateId) ? (int)$templateId : 0;
+		$cacheKey = $templateId ? 'id-' . $id : self::FIRST_PAGE_CACHE_KEY;
+		if (array_key_exists($cacheKey, self::$loadedTemplates))
 		{
-			return self::$loadedTemplates[$templateId];
+			return self::$loadedTemplates[$cacheKey];
 		}
-
-		$localPathOfIcon = static::LOCAL_DIR_IMG . 'my.png';
-		//$fullPathOfIcon = Loader::getLocal($localPathOfIcon);
 
 		// return only active templates, but if requested template by id return any
-		$filter = array();
-		if($templateId)
+		if ($templateId)
 		{
-			$filter['ID'] = $templateId;
+			$resultList = static::getTemplateById($id);
 		}
 		else
 		{
-			$filter['ACTIVE'] = 'Y';
+			$page = static::getUserTemplatePage();
+			$resultList = $page['templates'];
+			self::$hasMoreUserTemplates = $page['hasMore'];
 		}
 
-		$templateDb = static::getList([
+		self::$loadedTemplates[$cacheKey] = $resultList;
+		return $resultList;
+	}
+
+	/**
+	 * Whether the first page of the user templates leaves anything beyond itself. The answer
+	 * belongs to the page the event handler gives away and is kept for exactly as long as that
+	 * page is: no cached page - no answer to give, ask for the page again.
+	 *
+	 * @return bool
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public static function hasMoreUserTemplates(): bool
+	{
+		if (!array_key_exists(self::FIRST_PAGE_CACHE_KEY, self::$loadedTemplates))
+		{
+			static::onPresetTemplateList(self::USER_TYPE);
+		}
+
+		return self::$hasMoreUserTemplates;
+	}
+
+	/**
+	 * Get one page of active templates ordered by ID desc.
+	 *
+	 * @param int $lastId ID of the last already received template.
+	 * @return array{templates: array, hasMore: bool} Templates of the page and whether anything is left beyond it.
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public static function getUserTemplatePage(int $lastId = 0): array
+	{
+		$filter = ['ACTIVE' => 'Y'];
+		if ($lastId > 0)
+		{
+			$filter['<ID'] = $lastId;
+		}
+
+		// one row beyond the page answers whether anything is left, without counting the rest
+		$rows = static::getList([
 			'filter' => $filter,
 			'order' => ['ID' => 'DESC'],
-			'limit' => self::PER_PAGE_LIMIT,
+			'limit' => self::PER_PAGE_LIMIT + 1,
 		]);
 
-		$count = static::getCount($filter);
-
-		while ($template = $templateDb->fetch())
+		$templates = [];
+		$hasMore = false;
+		while ($row = $rows->fetch())
 		{
-			$resultList[] = array(
-				'TYPE' => 'USER',
-				'ID' => $template['ID'],
-				'NAME' => $template['NAME'],
-				'ICON' => '',//(!empty($fullPathOfIcon) ? '/bitrix'.$localPathOfIcon : ''),
-				'FIELDS' => array(
-					'MESSAGE' => array(
-						'CODE' => 'MESSAGE',
-						'VALUE' => Security\Sanitizer::fixTemplateStyles($template['CONTENT']),
-						'ON_DEMAND' => static::isContentForBlockEditor($template['CONTENT'])
-					),
-					'SUBJECT' => array(
-						'CODE' => 'SUBJECT',
-						'VALUE' => $template['NAME'],
-					),
-				),
-				'COUNT' => $count,
-			);
+			if (count($templates) === self::PER_PAGE_LIMIT)
+			{
+				$hasMore = true;
+				break;
+			}
+
+			$templates[] = static::formatTemplate($row);
 		}
-		self::$loadedTemplates[$templateId] = $resultList;
-		return $resultList;
+
+		return [
+			'templates' => $templates,
+			'hasMore' => $hasMore,
+		];
+	}
+
+	/**
+	 * Get a template of any state: a letter keeps the ID of the template it was built from and has
+	 * to reach it even after it was switched off.
+	 *
+	 * @param int $id Template ID.
+	 * @return array List of the only found template, empty if there is none.
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	private static function getTemplateById(int $id): array
+	{
+		if ($id <= 0)
+		{
+			return [];
+		}
+
+		$row = static::getList([
+			'filter' => ['=ID' => $id],
+			'limit' => 1,
+		])->fetch();
+
+		return $row ? [static::formatTemplate($row, true)] : [];
+	}
+
+	/**
+	 * @param array $row Template row.
+	 * @param bool $withOnDemandContent Get the content of a template the client asks for separately.
+	 * @return array
+	 */
+	private static function formatTemplate(array $row, bool $withOnDemandContent = false): array
+	{
+		$content = (string)($row['CONTENT'] ?? '');
+		$onDemand = static::isContentForBlockEditor($content);
+		$messageValue = $onDemand && !$withOnDemandContent
+			? ''
+			: Security\Sanitizer::fixTemplateStyles($content)
+		;
+
+		return [
+			'TYPE' => self::USER_TYPE,
+			'CATEGORY' => self::USER_TYPE,
+			'MESSAGE_CODE' => Message\iBase::CODE_MAIL,
+			'VERSION' => 2,
+			'IS_TRIGGER' => false,
+			'ID' => $row['ID'],
+			'NAME' => $row['NAME'],
+			'ICON' => '',
+			'SEGMENTS' => [],
+			'DISPATCH' => [],
+			'FIELDS' => [
+				'MESSAGE' => [
+					'CODE' => 'MESSAGE',
+					'VALUE' => $messageValue,
+					'ON_DEMAND' => $onDemand,
+				],
+				'SUBJECT' => [
+					'CODE' => 'SUBJECT',
+					'VALUE' => $row['NAME'],
+				],
+			],
+		];
 	}
 
 	/**

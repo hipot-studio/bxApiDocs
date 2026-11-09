@@ -82,20 +82,34 @@ final class TableGroupRepository
 	 */
 	private function loadGroupRows(): array
 	{
-		if (!Feature::isTablePermissionsEnabled())
+		// The groups are a part of the workspace of the analyst: the section of tables, the import and
+		// the dialog of the filter that asks for these rows on behalf of any authorized user all answer
+		// to the right of the workspace, in either state of the axis.
+		if (!$this->getAccessController()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
 		{
 			return [];
 		}
 
-		$allowedGroupIds = $this->getAllowedGroupIds();
-		if (empty($allowedGroupIds))
+		$filter = [];
+		if (Feature::isTablePermissionsEnabled())
+		{
+			$allowedGroupIds = $this->getAllowedGroupIds();
+			if (empty($allowedGroupIds))
+			{
+				return [];
+			}
+
+			$filter['@ID'] = $allowedGroupIds;
+		}
+		// Without the axis every group is shown, yet only to whoever may enter BI Builder at all.
+		elseif (!$this->getAccessController()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
 			return [];
 		}
 
 		$groups = TableGroupTable::getList([
 			'select' => ['ID', 'CODE', 'NAME', 'TYPE', 'SORT', 'DATE_CREATE', 'CREATED_BY_ID', 'UPDATED_BY_ID'],
-			'filter' => ['@ID' => $allowedGroupIds],
+			'filter' => $filter,
 			'order' => ['SORT' => 'ASC', 'NAME' => 'ASC'],
 		])->fetchAll();
 
@@ -236,15 +250,16 @@ final class TableGroupRepository
 	/**
 	 * Returns the catalog codes no group holds.
 	 *
-	 * Such a table is shown on the top level of the section next to the group rows and only to the
-	 * person who manages the rights on tables: nobody else can do anything about it, while that one
-	 * has to see it to move it into a group.
+	 * Such a table is shown on the top level of the section next to the group rows. With the axis on
+	 * only the person who manages the rights on tables sees it: nobody else can do anything about it,
+	 * while that one has to see it to move it into a group. Without the axis everyone sees it, the way
+	 * everyone sees every other table: hidden from all, it would be reachable by nobody.
 	 *
 	 * @return string[]
 	 */
 	public function getUngroupedTableCodes(): array
 	{
-		if (!Feature::isTablePermissionsEnabled() || !$this->isGroupManager())
+		if (Feature::isTablePermissionsEnabled() && !$this->isGroupManager())
 		{
 			return [];
 		}
@@ -265,27 +280,21 @@ final class TableGroupRepository
 	/**
 	 * Returns the codes the grid is allowed to draw at the asked level of the section.
 	 *
-	 * Null keeps the section as it was before the axis: nothing is filtered at all. The top level
-	 * carries no table but the ungrouped ones, and an opened group carries its own composition
-	 * narrowed down to what the person may see.
+	 * The top level carries no table but the ungrouped ones, and an opened group carries its own
+	 * composition narrowed down to what the person may see - the whole of it while the axis is off.
 	 *
 	 * @param int|null $groupId Null asks about the top level of the section.
 	 *
-	 * @return string[]|null
+	 * @return string[]
 	 */
-	public function getVisibleTableCodes(?int $groupId): ?array
+	public function getVisibleTableCodes(?int $groupId): array
 	{
-		if (!Feature::isTablePermissionsEnabled())
-		{
-			return null;
-		}
-
 		if ($groupId === null || $groupId <= 0)
 		{
 			return $this->getUngroupedTableCodes();
 		}
 
-		return $this->getLevel([$groupId])->tableCodes;
+		return $this->getLevel([$groupId])->tableCodes ?? [];
 	}
 
 	/**
@@ -298,17 +307,12 @@ final class TableGroupRepository
 	 */
 	public function getLevel(array $groupIds): TableSectionLevel
 	{
-		if (!Feature::isTablePermissionsEnabled())
-		{
-			return new TableSectionLevel();
-		}
-
 		if ($groupIds === [])
 		{
 			return new TableSectionLevel($this->getUngroupedTableCodes());
 		}
 
-		$levelGroupIds = array_values(array_unique(array_intersect($groupIds, $this->getAllowedGroupIds())));
+		$levelGroupIds = array_values(array_unique(array_intersect($groupIds, $this->getLevelGroupIds())));
 		if ($levelGroupIds === [])
 		{
 			return new TableSectionLevel([]);
@@ -374,7 +378,23 @@ final class TableGroupRepository
 
 	public function isGroupManager(): bool
 	{
-		return $this->getAccessController()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_TABLE_RIGHTS);
+		return $this->getAccessController()->check(ActionDictionary::ACTION_BIC_TABLE_GROUP_MANAGE);
+	}
+
+	/**
+	 * Groups a level of the section may stand on: the allowed ones with the axis on, every existing
+	 * one without it.
+	 *
+	 * @return int[]
+	 */
+	private function getLevelGroupIds(): array
+	{
+		if (Feature::isTablePermissionsEnabled())
+		{
+			return $this->getAllowedGroupIds();
+		}
+
+		return array_map('intval', array_column($this->getGroupRows(), 'ID'));
 	}
 
 	/**

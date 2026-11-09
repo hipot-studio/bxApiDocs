@@ -13,7 +13,7 @@ use Bitrix\Main\Result;
  */
 final class ClientUpdater
 {
-	private const LAST_VERSION = 14;
+	private const LAST_VERSION = 15;
 
 	private const LOCK_KEY = 'biconnector_client_updater';
 

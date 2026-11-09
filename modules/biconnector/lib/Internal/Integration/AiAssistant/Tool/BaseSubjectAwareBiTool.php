@@ -7,6 +7,7 @@ use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\ImpactAwareTool;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 
 /**
  * Base of the BI tools that read the per-request signed subject. Shares its
@@ -36,8 +37,18 @@ abstract class BaseSubjectAwareBiTool extends SubjectAwareToolContract implement
 	{
 		$this->callerUserId = $userId;
 		$this->enforceRateLimit($userId);
+		$args = (new PinnedArgumentResolver())->apply($this, $subject, $args);
+		if (BuilderArgumentContract::methodForTool($this->getName()) !== null)
+		{
+			$result = BuilderToolArguments::prepare($this->getName(), $args);
+			if (!$result->isSuccess())
+			{
+				throw $this->toMcpException($result);
+			}
+			$args = $result->getData()['business'] + $result->getData()['control'];
+		}
 
-		return parent::run($userId, $subject, (new PinnedArgumentResolver())->apply($this, $subject, $args));
+		return parent::run($userId, $subject, $args);
 	}
 
 	public function canList(int $userId, ?RequestSubjectDto $subject): bool

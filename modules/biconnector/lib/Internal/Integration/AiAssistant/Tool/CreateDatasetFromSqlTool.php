@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dataset\WriteDatasetOperations;
 use Bitrix\Main\DI\ServiceLocator;
@@ -41,24 +42,16 @@ final class CreateDatasetFromSqlTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'datasetName' => [
-					'type' => 'string',
-					'minLength' => 1,
-					'description' => 'Display name for the new virtual dataset. Must be unique on the portal.',
-				],
-				'sql' => [
-					'type' => 'string',
-					'minLength' => 1,
-					'description' => 'Raw SQL SELECT statement used as the dataset source. '
-						. 'Must be a single SELECT valid for the Trino BI database.',
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.dataset.add',
+			'mcp',
+			[
+				'datasetName' => 'Display name for the new virtual dataset. Trimmed and must be nonblank '
+					. 'and unique on the portal.',
+				'sql' => 'Raw SQL SELECT statement used as the dataset source. Trimmed and must be nonblank. '
+					. 'Must be a single SELECT valid for the Trino BI database.',
 			],
-			'required' => ['datasetName', 'sql'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -140,7 +133,7 @@ final class CreateDatasetFromSqlTool extends BaseBiTool
 			}
 		}
 
-		$response = $integrator->createDatasetFromSql($datasetName, $sql);
+		$response = $integrator->createDatasetFromSql(self::requireSupersetUser($userId), $datasetName, $sql);
 		if ($response->hasErrors())
 		{
 			throw self::unavailableBiException(

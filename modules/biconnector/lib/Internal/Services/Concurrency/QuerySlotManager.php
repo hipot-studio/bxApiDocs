@@ -13,16 +13,27 @@ final class QuerySlotManager
 
 	public const MAX_SLOT_COUNT = 10;
 
+	/**
+	 * Pool of the requests to external servers. They do not load the database of the portal, but each answer is
+	 * spooled into a temporary file of up to a gigabyte, so their number is bounded apart from the portal slots.
+	 */
+	public const EXTERNAL_SLOT_NAME_PREFIX = 'biconnector_external_data_';
+
+	public const EXTERNAL_SLOT_COUNT = 3;
+
 	private Connection $connection;
 
 	private int $slotCount;
 
+	private string $slotNamePrefix;
+
 	private ?int $acquiredSlot = null;
 
-	public function __construct(Connection $connection, int $slotCount)
+	public function __construct(Connection $connection, int $slotCount, string $slotNamePrefix = self::SLOT_NAME_PREFIX)
 	{
 		$this->connection = $connection;
 		$this->slotCount = $slotCount > 0 ? $slotCount : 1;
+		$this->slotNamePrefix = $slotNamePrefix;
 	}
 
 	public function acquire(): ?int
@@ -41,7 +52,7 @@ final class QuerySlotManager
 			for ($i = 0; $i < $this->slotCount; $i++)
 			{
 				$slot = ($startSlot + $i) % $this->slotCount;
-				if ($this->connection->lock(self::SLOT_NAME_PREFIX . $slot, 0))
+				if ($this->connection->lock($this->slotNamePrefix . $slot, 0))
 				{
 					$this->acquiredSlot = $slot;
 
@@ -71,7 +82,7 @@ final class QuerySlotManager
 		$pool->useMasterOnly(true);
 		try
 		{
-			$this->connection->unlock(self::SLOT_NAME_PREFIX . $slot);
+			$this->connection->unlock($this->slotNamePrefix . $slot);
 		}
 		finally
 		{

@@ -5,7 +5,9 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\Dashboard as DashboardDto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
+use Bitrix\Main\Web\Json;
 
 /**
  * Read-side helper for Superset `json_metadata`: fetches the current dict from
@@ -74,6 +76,33 @@ final class DashboardJsonMetadataReader
 		}
 
 		return $dto;
+	}
+
+	/**
+	 * Layout the dashboard is saved with. Superset moves `positions` out of `json_metadata` into
+	 * `position_json` on save, so the metadata copy only holds a layout not yet saved that way.
+	 */
+	public static function savedPositions(DashboardDto $dashboard): array
+	{
+		if (is_string($dashboard->positionJson) && $dashboard->positionJson !== '')
+		{
+			try
+			{
+				$positions = Json::decode($dashboard->positionJson);
+			}
+			catch (ArgumentException)
+			{
+				$positions = null;
+			}
+			if (is_array($positions) && $positions !== [])
+			{
+				return $positions;
+			}
+		}
+
+		$positions = $dashboard->jsonMetadata['positions'] ?? [];
+
+		return is_array($positions) ? $positions : [];
 	}
 
 	/**

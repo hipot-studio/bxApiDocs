@@ -137,12 +137,12 @@ final class OverviewWarmupService
 		}
 
 		$response = $integrator->getDashboardOverview(
+			$user,
 			$externalId,
 			$filters->convertToSupersetExtraFormData($resolveResult->getData()['filters']),
 			$urlParamsResult->getData()['urlParams'],
 			$deadline->getStreamTimeout(),
 			arbitrateServiceFailure: false,
-			user: $user,
 		);
 
 		return self::isFailed($response) ? DigestReason::DashboardTimeout : null;

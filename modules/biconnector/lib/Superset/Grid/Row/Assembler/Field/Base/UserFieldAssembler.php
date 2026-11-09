@@ -76,7 +76,16 @@ class UserFieldAssembler extends Main\Grid\Row\Assembler\Field\UserFieldAssemble
 		return $src;
 	}
 
-	protected function prepareColumnWithParams($value, string $fieldId, string $clickHandler): string
+	/**
+	 * @param string|null $focusRole The role of the filter button; without it the editor column is filtered by
+	 *                               the editor and any other one by the author.
+	 */
+	protected function prepareColumnWithParams(
+		$value,
+		string $fieldId,
+		string $clickHandler,
+		?string $focusRole = null,
+	): string
 	{
 		$ormFilter = $this->getSettings()->getOrmFilter();
 		$isFiltered = isset($ormFilter[$fieldId], $value[$fieldId]) && in_array((int)$value[$fieldId], $ormFilter[$fieldId]);
@@ -94,36 +103,73 @@ class UserFieldAssembler extends Main\Grid\Row\Assembler\Field\UserFieldAssemble
 			}
 
 			$userName = $user['NAME'];
-			$event = Json::encode([
+			if ($userName === '')
+			{
+				return $this->renderNamelessUser($isFiltered);
+			}
+
+			// The name comes already escaped for HTML and the handler gets it unescaped. The former onclick passed
+			// the escaped one: its JSON hid "&" from the HTML parser, so the entities reached the handler as they were.
+			$payload = htmlspecialcharsbx(Json::encode([
 				'ID' => $userId,
-				'TITLE' => $userName,
+				'TITLE' => htmlspecialcharsback($userName),
 				'IS_FILTERED' => $isFiltered,
-			]);
+			]));
+			$isPressed = $isFiltered ? 'true' : 'false';
+			$focusRole ??= $fieldId === 'UPDATED_BY_ID' ? 'editor-filter' : 'author-filter';
+			$focusRole = htmlspecialcharsbx($focusRole);
+			$onclick = htmlspecialcharsbx($clickHandler) . '(JSON.parse(this.dataset.bicPayload))';
 
 			$selector = 'biconnector-grid-username-cell';
 			$closeIcon = '';
 			if ($isFiltered)
 			{
 				$selector .= ' biconnector-grid-username-cell-active';
-				$closeIcon = '<div class="biconnector-grid-filter-close ui-icon-set --cross-20"></div>';
+				$closeIcon = '<span class="biconnector-grid-filter-close ui-icon-set --cross-20"'
+					. ' aria-hidden="true"></span>'
+				;
 			}
 
 			return <<<HTML
-				<span
+				<button
+					type="button"
 					class="$selector"
-					onclick='{$clickHandler}($event)'
+					data-bic-focus-role="{$focusRole}"
+					aria-pressed="{$isPressed}"
+					data-bic-payload="{$payload}"
+					onclick="{$onclick}"
 				>
 					<span class="biconnector-grid-avatar ui-icon ui-icon-common-user">
 						<i{$avatar}></i>
 					</span>
 					<span class="biconnector-grid-username">$userName</span>
 					$closeIcon
-				</span>
+				</button>
 			HTML;
-
 		}
 
 		return '';
+	}
+
+	/**
+	 * A deleted author has no name to filter by: the cell shows the user as text, not as a control.
+	 */
+	protected function renderNamelessUser(bool $isFiltered): string
+	{
+		$selector = 'biconnector-grid-username-cell';
+		if ($isFiltered)
+		{
+			$selector .= ' biconnector-grid-username-cell-active';
+		}
+
+		return <<<HTML
+			<span class="{$selector}">
+				<span class="biconnector-grid-avatar ui-icon ui-icon-common-user">
+					<i></i>
+				</span>
+				<span class="biconnector-grid-username"></span>
+			</span>
+		HTML;
 	}
 
 	/**

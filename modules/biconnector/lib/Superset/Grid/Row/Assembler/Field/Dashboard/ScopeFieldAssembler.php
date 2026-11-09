@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Dashboard;
 
+use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\ScreenReaderText;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Grid\Row\FieldAssembler;
@@ -48,6 +49,7 @@ class ScopeFieldAssembler extends FieldAssembler
 					'[/hint]' => '</span>',
 				]
 			);
+			$result .= ScreenReaderText::renderRest(array_map('htmlspecialcharsbx', $scopeNamesToHide));
 		}
 		else
 		{

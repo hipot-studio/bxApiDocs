@@ -354,6 +354,77 @@ class TaskManager
 			;
 	}
 
+	/**
+	 * Returns ids of items of the type that have tasks the user has not answered yet (all workflow instances).
+	 *
+	 * @param int $typeId
+	 * @param int $userId
+	 * @return int[]
+	 */
+	public function getUserIncompleteTaskItemIds(int $typeId, int $userId): array
+	{
+		$rows = $this->fetchIncompleteTaskRows([
+			'MODULE_ID' => Driver::MODULE_ID,
+			'ENTITY' => Document\Item::class,
+			'USER_STATUS' => \CBPTaskUserStatus::Waiting,
+			'USER_ID' => $userId,
+			// tasks of other processes are not read
+			'~DOCUMENT_ID' => $typeId . ':%',
+		]);
+
+		$itemIds = [];
+		foreach ($rows as $row)
+		{
+			// the document id is "<typeId>:<itemId>", see Document\Item::makeComplexId()
+			[$documentTypeId, $itemId] = array_map('intval', explode(':', (string)$row['DOCUMENT_ID'], 2) + [1 => 0]);
+			if ($documentTypeId === $typeId && $itemId > 0)
+			{
+				$itemIds[$itemId] = $itemId;
+			}
+		}
+
+		return array_values($itemIds);
+	}
+
+	/**
+	 * Returns ids of users who have not answered tasks of the item yet (all workflow instances).
+	 *
+	 * @param Item $item
+	 * @return int[]
+	 */
+	public function getItemIncompleteParticipantIds(Item $item): array
+	{
+		$rows = $this->fetchIncompleteTaskRows([
+			'MODULE_ID' => Driver::MODULE_ID,
+			'ENTITY' => Document\Item::class,
+			'USER_STATUS' => \CBPTaskUserStatus::Waiting,
+			'DOCUMENT_ID' => $item->getType()->getId() . ':' . (int)$item->getId(),
+		]);
+
+		$userIds = [];
+		foreach ($rows as $row)
+		{
+			$userId = (int)$row['USER_ID'];
+			$userIds[$userId] = $userId;
+		}
+
+		return array_values($userIds);
+	}
+
+	/**
+	 * @param array $filter MODULE_ID, ENTITY, USER_STATUS and either USER_ID with ~DOCUMENT_ID ("<typeId>:%")
+	 * or DOCUMENT_ID
+	 * @return iterable rows with DOCUMENT_ID ("<typeId>:<itemId>") and USER_ID
+	 */
+	protected function fetchIncompleteTaskRows(array $filter): iterable
+	{
+		$tasksIterator = \CBPTaskService::GetList([], $filter, false, false, ['DOCUMENT_ID', 'USER_ID']);
+		while ($row = $tasksIterator->fetch())
+		{
+			yield $row;
+		}
+	}
+
 	public function onTaskPropertiesChanged(array $documentType, int $templateId, array $robotData): void
 	{
 		$workflowIds = WorkflowInstanceTable::getIdsByTemplateId($templateId);

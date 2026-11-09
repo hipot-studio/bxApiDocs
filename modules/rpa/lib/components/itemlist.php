@@ -59,7 +59,10 @@ abstract class ItemList extends Base
 			return;
 		}
 
-		if(!$this->getErrors())
+		if(
+			!$this->getErrors()
+			&& Driver::getInstance()->getUserPermissions()->canModifyType($this->type->getId())
+		)
 		{
 			$director = Driver::getInstance()->getDirector();
 			$scenarios = $director->getScenariosForType($this->type);

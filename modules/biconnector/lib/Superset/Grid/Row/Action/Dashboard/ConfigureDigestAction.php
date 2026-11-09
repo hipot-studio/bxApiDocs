@@ -70,7 +70,7 @@ final class ConfigureDigestAction extends FormatMenuAction
 		$this->onclick = 'BX.BIConnector.AiDigestSetup.open(' . Json::encode($options) . ')';
 
 		$result = parent::getControl($rawFields);
-		$result['html'] = $this->getMenuItem('--o-file-with-clock');
+		$result['html'] = $this->getMenuItem('--o-ai-robot biconnector-grid-menu-item-icon-bitrix-gpt');
 		$result['attrs'] = ['data-testid' => 'dashboard-configure-digest'];
 
 		return $result;

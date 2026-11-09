@@ -4,12 +4,14 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\GetChartOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
+use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Json;
@@ -83,18 +85,13 @@ final class GetChartTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'chartId' => [
-					'type' => 'integer',
-					'description' => 'Chart id from list_charts.',
-					'minimum' => 1,
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.chart.get',
+			'mcp',
+			[
+				'chartId' => 'Chart id from list_charts.',
 			],
-			'required' => ['chartId'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -134,19 +131,21 @@ final class GetChartTool extends BaseBiTool
 			throw new McpException('chartId is required and must be a positive integer.');
 		}
 
-		$response = IntegratorFactory::getInstance()->getChartById($chartId);
-		if ($response->hasErrors())
+		$lookup = (new EntityLookup())->chart($chartId, self::findActAsUser($userId));
+		if (!$lookup->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				['stage' => 'get_chart', 'user_id' => $userId, 'chart_id' => $chartId],
-			);
+			if ($lookup->getErrors()[0]->getCode() === FailureCode::NotFound->value)
+			{
+				throw new McpException(sprintf(GetChartOperation::CHART_NOT_AVAILABLE_MESSAGE, $chartId));
+			}
+
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$data = $response->getData();
-		if (!is_array($data))
+		$data = $lookup->getData()['entity'];
+		if (!is_array($data['dashboards'] ?? []))
 		{
-			$data = [];
+			throw self::unavailableBiException([], ['stage' => 'chart_lookup.dashboards', 'chart_id' => $chartId]);
 		}
 
 		$params = null;
@@ -171,7 +170,7 @@ final class GetChartTool extends BaseBiTool
 		}
 
 		return [
-			'id' => (int)($data['id'] ?? $chartId),
+			'id' => (int)$data['id'],
 			'name' => (string)($data['slice_name'] ?? $data['chart_name'] ?? ''),
 			'description' => (string)($data['description'] ?? ''),
 			'viz_type' => (string)($data['viz_type'] ?? ''),
@@ -189,22 +188,16 @@ final class GetChartTool extends BaseBiTool
 	 * `json_metadata` blob, which is large and irrelevant when inspecting a
 	 * chart — keeping it would waste the model's context.
 	 *
-	 * @param mixed $dashboards
 	 * @return array<int, array{id: int, title: string}>
 	 */
-	private static function trimDashboards(mixed $dashboards): array
+	private static function trimDashboards(array $dashboards): array
 	{
-		if (!is_array($dashboards))
-		{
-			return [];
-		}
-
 		$result = [];
 		foreach ($dashboards as $dashboard)
 		{
-			if (!is_array($dashboard))
+			if (!is_array($dashboard) || !is_numeric($dashboard['id'] ?? null) || (int)$dashboard['id'] <= 0)
 			{
-				continue;
+				throw self::unavailableBiException([], ['stage' => 'get_chart.dashboards']);
 			}
 
 			$result[] = [

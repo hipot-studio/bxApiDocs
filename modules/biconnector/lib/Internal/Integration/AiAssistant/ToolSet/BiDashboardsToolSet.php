@@ -5,9 +5,13 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\ToolSet;
 use Bitrix\AiAssistant\Definition\Dto\DefinitionMetadataDto;
 use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\AiAssistant\Definition\ToolSet\BaseToolSet;
+use Bitrix\AiAssistant\Definition\ToolSet\Contract\ToolProviderDefinitionInterface;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\AgentOperationsDescription;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ApplyDashboardLayoutTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetDashboardLayoutTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\CreateDashboardTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\DeleteDashboardTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiGuideTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetChartDataTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetDashboardMetaTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetFilterValuesTool;
@@ -18,8 +22,10 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\SetDashboardContent
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UnpublishDashboardTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\UpdateDashboardMetadataTool;
 
-final class BiDashboardsToolSet extends BaseToolSet
+final class BiDashboardsToolSet extends BaseToolSet implements ToolProviderDefinitionInterface
 {
+	use BuilderPairToolProvider;
+
 	public function getCode(): string
 	{
 		return 'bi_dashboards';
@@ -58,6 +64,9 @@ final class BiDashboardsToolSet extends BaseToolSet
 			PublishDashboardTool::class,
 			UnpublishDashboardTool::class,
 			DeleteDashboardTool::class,
+			GetDashboardLayoutTool::class,
+			ApplyDashboardLayoutTool::class,
+			GetBiGuideTool::class,
 		]);
 	}
 

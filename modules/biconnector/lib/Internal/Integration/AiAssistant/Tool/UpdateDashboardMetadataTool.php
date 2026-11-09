@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\DraftPolicy;
@@ -43,29 +44,20 @@ final class UpdateDashboardMetadataTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'dashboardId' => [
-					'type' => 'integer',
-					'description' => 'Local dashboard id (from create_dashboard or list_dashboards). '
-						. 'Positive integer.',
-					'minimum' => 1,
-				],
-				'name' => [
-					'type' => 'string',
-					'description' => 'New dashboard title. Must be non-empty.',
-					'minLength' => 1,
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved this rename. Omit or set '
-						. 'false to only preview. Do NOT self-confirm or assume approval from earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			['dashboardId' => 'Local dashboard id (from create_dashboard or list_dashboards). Positive integer.',
+				'name' => 'New dashboard title. Must be non-empty after trim; maximum 128 characters before trim.',
 			],
-			'required' => ['dashboardId', 'name'],
-			'additionalProperties' => false,
+		);
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved this rename. Omit or set '
+				. 'false to only preview. Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array

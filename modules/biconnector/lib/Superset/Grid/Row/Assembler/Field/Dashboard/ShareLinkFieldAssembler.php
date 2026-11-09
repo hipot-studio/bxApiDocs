@@ -171,11 +171,23 @@ class ShareLinkFieldAssembler extends FieldAssembler
 	{
 		$text = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_BANNED');
 		$hint = htmlspecialcharsbx(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_BANNED_HINT') ?? '');
+		$descriptionId = "bic-share-banned-{$dashboardId}";
 
+		// The hint is shown on hover only, so keyboard and screen reader users get the reason as a description.
 		return <<<HTML
-		<span class="dashboard-share-link dashboard-share-link--banned" data-dashboard-id="{$dashboardId}" data-banned="Y" data-hint="{$hint}" data-hint-no-icon>
+		<span
+			class="dashboard-share-link dashboard-share-link--banned"
+			data-dashboard-id="{$dashboardId}"
+			data-banned="Y"
+			data-hint="{$hint}"
+			data-hint-no-icon
+			tabindex="0"
+			data-bic-focus-role="banned-reason"
+			aria-describedby="{$descriptionId}"
+		>
 			{$text}
 		</span>
+		<span id="{$descriptionId}" class="biconnector-grid-sr-only">{$hint}</span>
 		HTML;
 	}
 
@@ -201,9 +213,18 @@ class ShareLinkFieldAssembler extends FieldAssembler
 			$titleEncoded = htmlspecialcharsbx($title);
 
 			return <<<HTML
-			<span class="dashboard-share-link {$cssClass}" data-dashboard-id="{$dashboardId}" data-share="{$shareDataEncoded}" data-type="{$typeEncoded}" data-title="{$titleEncoded}" onclick="{$onclick}">
+			<button
+				type="button"
+				class="dashboard-share-link {$cssClass}"
+				data-bic-focus-role="share"
+				data-dashboard-id="{$dashboardId}"
+				data-share="{$shareDataEncoded}"
+				data-type="{$typeEncoded}"
+				data-title="{$titleEncoded}"
+				onclick="{$onclick}"
+			>
 				{$text}
-			</span>
+			</button>
 			HTML;
 		}
 

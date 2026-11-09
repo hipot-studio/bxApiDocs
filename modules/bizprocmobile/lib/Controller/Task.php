@@ -4,6 +4,7 @@ namespace Bitrix\BizprocMobile\Controller;
 
 use Bitrix\BizprocMobile\EntityEditor\Converter;
 use Bitrix\BizprocMobile\EntityEditor\TaskProvider;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\BizprocMobile\UI\CommentCounterView;
 use Bitrix\BizprocMobile\Workflow\Task\Fields;
 use Bitrix\BizprocMobile\UI\TaskView;
@@ -22,6 +23,8 @@ Loader::requireModule('mobile');
 
 class Task extends BaseController
 {
+	use AddPublicErrorsTrait;
+
 	public function configureActions(): array
 	{
 		return [];
@@ -41,7 +44,7 @@ class Task extends BaseController
 		$getTaskResponse = $taskService->getUserTask($taskRequest);
 		if (!$getTaskResponse->isSuccess())
 		{
-			$this->addErrors($getTaskResponse->getErrors());
+			$this->addErrorsAsPublic($getTaskResponse->getErrors());
 
 			return null;
 		}
@@ -174,7 +177,7 @@ class Task extends BaseController
 			$getTasksResult = $taskService->doTask($request);
 			if (!$getTasksResult->isSuccess())
 			{
-				$this->addErrors($getTasksResult->getErrors());
+				$this->addErrorsAsPublic($getTasksResult->getErrors());
 
 				return null;
 			}

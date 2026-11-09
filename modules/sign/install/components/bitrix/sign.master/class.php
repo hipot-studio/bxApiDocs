@@ -212,6 +212,7 @@ class SignMasterComponent extends SignBaseComponent
 		$b2eTariffInstance = \Bitrix\Sign\Integration\Bitrix24\B2eTariff::instance();
 		$b2eFeatureConfig = [
 			'hcmLinkAvailable' => $this->isHcmlinkAvailable(),
+			'stageOrderEnabled' => Feature::instance()->isKedoStageReorderEnabled(),
 		];
 
 		return [

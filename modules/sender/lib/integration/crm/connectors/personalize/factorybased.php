@@ -85,6 +85,13 @@ class FactoryBased extends BasePersonalize
 		{
 			return [];
 		}
+
+		$entityIds = static::normalizeEntityIds($entityIds);
+		if (empty($entityIds))
+		{
+			return [];
+		}
+
 		$factory = static::getFactory($entityType);
 		if (!$factory)
 		{

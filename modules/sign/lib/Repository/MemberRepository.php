@@ -40,6 +40,9 @@ class MemberRepository
 	// same set of documents, and the safe export feeds up to SAFE_EXPORT_LIMIT of them.
 	private const SIGNERS_BY_DOCUMENTS_BATCH_SIZE = 300;
 	private const MAX_SOURCE_USER_COUNT = 1000;
+	private const VALIDATION_CRM_DISPATCH_META_KEY = 'sign.validation_crm_dispatch.v1';
+	private const VALIDATION_CRM_DISPATCH_PENDING = 'pending';
+	private const VALIDATION_CRM_DISPATCH_HANDLED = 'handled';
 
 	// lower bound of an "empty" signing date: SQL NULL or dates below this
 	// threshold (e.g. the zero seed date) are treated as an unset signing date.
@@ -720,6 +723,76 @@ class MemberRepository
 		return !!$model->fetch();
 	}
 
+	/**
+	 * Whether the parties of the document ask for the filling before the approval. The reordered
+	 * stages of a company document write exactly that queue, and a document written that way keeps
+	 * it whatever the feature is switched to afterwards.
+	 *
+	 * Grouped in the database: a document of a synced department holds thousands of members.
+	 */
+	public function isEditorPartyBeforeReviewerParty(int $documentId): bool
+	{
+		$rows = Internal\MemberTable::query()
+			->setSelect([
+				'ROLE',
+				new Main\Entity\ExpressionField('FIRST_PARTY', 'MIN(%s)', 'PART'),
+			])
+			->where('DOCUMENT_ID', $documentId)
+			->whereIn('ROLE', $this->getValidationRoleIds())
+			->setGroup(['ROLE'])
+			->fetchAll()
+		;
+
+		$firstParties = [];
+		foreach ($rows as $row)
+		{
+			$firstParties[$this->convertIntToRole((int)$row['ROLE'])] = (int)$row['FIRST_PARTY'];
+		}
+
+		$editorParty = $firstParties[Role::EDITOR] ?? null;
+		$reviewerParty = $firstParties[Role::REVIEWER] ?? null;
+
+		return $editorParty !== null && $reviewerParty !== null && $editorParty < $reviewerParty;
+	}
+
+	/**
+	 * The member the validation stage of the document ends with: the one holding the last party of the
+	 * filling and the approval. A document carrying no such member is named nothing.
+	 *
+	 * The parties are decided when the composition is written and frozen once the document is sent, so
+	 * the answer does not change while the document runs. A caller that has to act once per run can
+	 * bind the action to this member instead of watching the stage for the moment it ends.
+	 *
+	 * A party the composition would have to number twice is settled by the lower id, which keeps the
+	 * answer the same for every caller. Every party but the last one holds a single member, so the
+	 * composition never asks that question.
+	 */
+	public function getLastValidationMemberId(int $documentId): ?int
+	{
+		$row = Internal\MemberTable::query()
+			->addSelect('ID')
+			->where('DOCUMENT_ID', $documentId)
+			->whereIn('ROLE', $this->getValidationRoleIds())
+			->addOrder('PART', 'DESC')
+			->addOrder('ID', 'ASC')
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $row === false ? null : (int)$row['ID'];
+	}
+
+	/**
+	 * @return list<int>
+	 */
+	private function getValidationRoleIds(): array
+	{
+		return [
+			$this->convertRoleToInt(Role::EDITOR),
+			$this->convertRoleToInt(Role::REVIEWER),
+		];
+	}
+
 	public function isDocumentHasMemberWithRoles(int $documentId, array $roles): bool
 	{
 		$roleIds = array_map(fn(string $role) => $this->convertRoleToInt($role), $roles);
@@ -956,6 +1029,185 @@ class MemberRepository
 		return $result;
 	}
 
+	public function completeValidationMember(int $memberId, int $documentId, bool $local): Main\Result
+	{
+		return $this->writeValidationMember(
+			$memberId,
+			$documentId,
+			function (Internal\Member $model) use ($local): Main\Result {
+				$before = $this->extractItemFromModel($model, loadEntityNames: false);
+				$applicable = in_array($before->role, [Role::REVIEWER, Role::EDITOR], true);
+				$changed = $applicable && $before->status !== MemberStatus::DONE;
+				if ($changed)
+				{
+					$now = new DateTime();
+					$model->setSigned(MemberStatus::DONE);
+					$model->setDateStatusChanged($now);
+					$model->setDateModify($now);
+					if ($model->getDateSign() === null)
+					{
+						$model->setDateSign($now);
+					}
+					if ($local)
+					{
+						$meta = $model->getMeta() ?? [];
+						$meta[self::VALIDATION_CRM_DISPATCH_META_KEY] = self::VALIDATION_CRM_DISPATCH_PENDING;
+						$model->setMeta($meta);
+					}
+					$saveResult = $model->save();
+					if (!$saveResult->isSuccess())
+					{
+						return (new Main\Result())->addErrors($saveResult->getErrors());
+					}
+				}
+
+				return (new Main\Result())->setData([
+					'applicable' => $applicable,
+					'before' => $before,
+					'after' => $this->extractItemFromModel($model, loadEntityNames: false),
+					'changed' => $changed,
+				]);
+			},
+		);
+	}
+
+	/** @internal */
+	public function getValidationCrmDispatchState(int $memberId, int $documentId): Main\Result
+	{
+		try
+		{
+			$model = Internal\MemberTable::query()
+				->setSelect(['*'])
+				->where('ID', $memberId)
+				->where('DOCUMENT_ID', $documentId)
+				->setCacheTtl(0)
+				->fetchObject()
+			;
+			if ($model === null)
+			{
+				return (new Main\Result())->addError(new Error('Validation member not found in document.'));
+			}
+			$validators = Internal\MemberTable::query()
+				->setSelect(['*'])
+				->where('DOCUMENT_ID', $documentId)
+				->whereIn('ROLE', [Role::toIntMap()[Role::REVIEWER], Role::toIntMap()[Role::EDITOR]])
+				->setOrder(['PART' => 'DESC', 'ID' => 'ASC'])
+				->setCacheTtl(0)
+				->fetchCollection()
+			;
+			$marker = $model->getMeta()[self::VALIDATION_CRM_DISPATCH_META_KEY] ?? 'absent';
+
+			return (new Main\Result())->setData([
+				'member' => $this->extractItemFromModel($model, loadEntityNames: false),
+				'marker' => in_array($marker,
+					[self::VALIDATION_CRM_DISPATCH_PENDING, self::VALIDATION_CRM_DISPATCH_HANDLED], true)
+					? $marker : 'absent',
+				'validators' => $this->extractItemCollectionFromModelCollection($validators, loadEntityNames: false),
+			]);
+		}
+		catch (\Throwable)
+		{
+			return (new Main\Result())->addError(new Error('Validation CRM state read failed.'));
+		}
+	}
+
+	public function hasPendingValidationCrmDispatch(int $memberId, int $documentId): bool
+	{
+		$model = Internal\MemberTable::query()->setSelect(['*'])->where('ID', $memberId)->fetchObject();
+		if ($model === null || $model->getDocumentId() !== $documentId)
+		{
+			return false;
+		}
+		$member = $this->extractItemFromModel($model, loadEntityNames: false);
+
+		return in_array($member->role, [Role::REVIEWER, Role::EDITOR], true)
+			&& ($model->getMeta()[self::VALIDATION_CRM_DISPATCH_META_KEY] ?? null)
+				=== self::VALIDATION_CRM_DISPATCH_PENDING;
+	}
+
+	public function markValidationCrmDispatchHandled(int $memberId, int $documentId): Main\Result
+	{
+		return $this->writeValidationMember(
+			$memberId,
+			$documentId,
+			function (Internal\Member $model): Main\Result {
+				$member = $this->extractItemFromModel($model, loadEntityNames: false);
+				if (!in_array($member->role, [Role::REVIEWER, Role::EDITOR], true))
+				{
+					return (new Main\Result())->addError(new Error('Wrong validation member role.'));
+				}
+				$meta = $model->getMeta() ?? [];
+				if (($meta[self::VALIDATION_CRM_DISPATCH_META_KEY] ?? null) === self::VALIDATION_CRM_DISPATCH_HANDLED)
+				{
+					return new Main\Result();
+				}
+				$meta[self::VALIDATION_CRM_DISPATCH_META_KEY] = self::VALIDATION_CRM_DISPATCH_HANDLED;
+				$model->setMeta($meta);
+
+				return $model->save();
+			},
+		);
+	}
+
+	private function writeValidationMember(int $memberId, int $documentId, \Closure $write): Main\Result
+	{
+		$pool = Main\Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = null;
+		$transactionStarted = false;
+		try
+		{
+			$connection = Internal\MemberTable::getEntity()->getConnection();
+			$connection->startTransaction();
+			$transactionStarted = true;
+			$this->lockValidationMember($connection, $memberId);
+			$model = Internal\MemberTable::query()->setSelect(['*'])->where('ID', $memberId)
+				->where('DOCUMENT_ID', $documentId)->setCacheTtl(0)->fetchObject();
+			$result = $model === null || $model->getDocumentId() !== $documentId
+				? (new Main\Result())->addError(new Error('Validation member not found in document.'))
+				: $write($model);
+			// Main consumes the nesting level before executing commit or rollback SQL.
+			$transactionStarted = false;
+			if ($result->isSuccess())
+			{
+				$connection->commitTransaction();
+			}
+			else
+			{
+				$this->rollbackAnnulmentTransaction($connection);
+			}
+
+			return $result;
+		}
+		catch (\Throwable $error)
+		{
+			if ($transactionStarted)
+			{
+				$this->rollbackAnnulmentTransaction($connection);
+			}
+
+			return (new Main\Result())->addError(new Error($error->getMessage()));
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
+	private function lockValidationMember(Main\DB\Connection $connection, int $memberId): void
+	{
+		$sqlHelper = $connection->getSqlHelper();
+		$where = Query::buildFilterSql(
+			Internal\MemberTable::getEntity(),
+			(new ConditionTree())->where('ID', $memberId),
+		);
+		$connection->query(
+			'SELECT ' . $sqlHelper->quote('ID')
+			. ' FROM ' . $sqlHelper->quote(Internal\MemberTable::getTableName())
+			. " WHERE {$where} FOR UPDATE",
+		)->fetch();
+	}
+
 	public function getByDocumentAndPartAndEntityTypeAndEntityId(
 		int $documentId,
 		int $party,
@@ -1121,6 +1373,8 @@ class MemberRepository
 	/**
 	 * @param array<Role::*, int> $roleRelevance
 	 * @param array<MemberStatus::*, int> $statusRelevance
+	 * @param bool $orderByParty puts the stored party number ahead of the role relevance, so the members
+	 *   come back in the queue order of the document and the relevance only orders one party.
 	 */
 	public function listB2eMemberByDocumentId(
 		int $documentId,
@@ -1129,6 +1383,7 @@ class MemberRepository
 		array $statusRelevance = [],
 		int $limit = 10,
 		?int $offset = null,
+		bool $orderByParty = false,
 	): Item\MemberCollection
 	{
 		$roleRelevance = array_flip(
@@ -1147,6 +1402,10 @@ class MemberRepository
 		if ($offset !== null)
 		{
 			$query->setOffset($offset);
+		}
+		if ($orderByParty)
+		{
+			$query->addOrder('PART');
 		}
 		if (!empty($roleRelevance))
 		{

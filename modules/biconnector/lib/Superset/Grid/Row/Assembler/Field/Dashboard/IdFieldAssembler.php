@@ -34,16 +34,25 @@ class IdFieldAssembler extends DetailLinkFieldAssembler
 		elseif ($value['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
 		{
 			$ormFilter = $this->getSettings()->getOrmFilter();
+			$isFiltered = isset($ormFilter['GROUPS.ID']) && in_array((int)$value['ID'], $ormFilter['GROUPS.ID']);
 			$eventGroup = Json::encode([
 				'ID' => (int)$value['ID'],
 				'TITLE' => $value['TITLE'],
-				'IS_FILTERED' => isset($ormFilter['GROUPS.ID']) && in_array((int)$value['ID'], $ormFilter['GROUPS.ID']),
+				'IS_FILTERED' => $isFiltered,
 			]);
+			$isPressed = $isFiltered ? 'true' : 'false';
+			// The id enters the group the way its name does; the anchor is kept for the look of the id of a report.
+			$onkeydown = "if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }";
 
 			$link = "
 				<a 
 					style='cursor: pointer'
+					role='button'
+					tabindex='0'
+					aria-pressed='{$isPressed}'
+					data-bic-focus-role='group-id'
 					onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.handleGroupTitleClick($eventGroup)'
+					onkeydown=\"{$onkeydown}\"
 				>
 					{$id}
 				</a>

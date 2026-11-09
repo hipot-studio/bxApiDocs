@@ -15,6 +15,7 @@ readonly class SetLandingCrmFormDto
 		public ?int $blockId = null,
 		#[PositiveNumber]
 		public ?int $formId = null,
+		public ?string $formToken = null,
 	)
 	{
 	}
@@ -25,6 +26,7 @@ readonly class SetLandingCrmFormDto
 			pageId: self::mapInteger($props, 'pageId'),
 			blockId: self::mapInteger($props, 'blockId'),
 			formId: self::mapInteger($props, 'formId'),
+			formToken: self::mapString($props, 'formToken'),
 		);
 	}
 
@@ -43,5 +45,17 @@ readonly class SetLandingCrmFormDto
 		$value = filter_var($props[$key], FILTER_VALIDATE_INT);
 
 		return $value !== false ? (int)$value : null;
+	}
+
+	private static function mapString(array $props, string $key): ?string
+	{
+		if (!array_key_exists($key, $props) || !is_string($props[$key]))
+		{
+			return null;
+		}
+
+		$value = trim($props[$key]);
+
+		return $value !== '' ? $value : null;
 	}
 }

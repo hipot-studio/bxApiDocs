@@ -152,11 +152,8 @@ class TableGroup extends Controller
 			return false;
 		}
 
-		// Without the axis the groups are drawn nowhere, so there is nothing to arrange either.
-		if (
-			Feature::isTablePermissionsEnabled()
-			&& AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_TABLE_RIGHTS)
-		)
+		// The groups are arranged in either state of the axis; the rule tells which right arranges them.
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_TABLE_GROUP_MANAGE))
 		{
 			return true;
 		}

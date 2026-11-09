@@ -33,6 +33,11 @@ class UsageStat extends Controller
 			'toggleExternalStatCollection' => [
 				'prefilters' => $this->getKeyManageActionPreFilters(),
 			],
+			'getOpenUrl' => [
+				'+prefilters' => [
+					new ActionFilter\SupersetLoginAccess(),
+				],
+			],
 		];
 	}
 

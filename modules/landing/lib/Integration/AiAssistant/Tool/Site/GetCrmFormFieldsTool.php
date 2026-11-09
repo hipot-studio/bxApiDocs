@@ -52,13 +52,22 @@ class GetCrmFormFieldsTool extends AbstractCrmFormTool
 				if ($dto->pageId !== null && $dto->blockId !== null)
 				{
 					$this->assertPageEditPermission($dto->pageId);
-					$resolvedFormId = $this->resolveCrmFormIdFromBlockTarget($dto->pageId, $dto->blockId);
-					$this->assertReadableActiveFormExists($resolvedFormId);
-					if ($dto->formId !== null && $dto->formId !== $resolvedFormId)
+					$markupFormIds = $this->findMarkupBlockFormIds($dto->pageId, $dto->blockId);
+					if ($markupFormIds !== null)
 					{
-						throw new InvalidArgumentException(
-							'The provided formId does not match the CRM form bound to the selected block.',
-						);
+						$markupFormId = $this->resolveMarkupBlockFormId($markupFormIds, $dto->formId);
+						$this->assertReadableActiveFormExists($markupFormId);
+					}
+					else
+					{
+						$resolvedFormId = $this->resolveCrmFormIdFromBlockTarget($dto->pageId, $dto->blockId);
+						$this->assertReadableActiveFormExists($resolvedFormId);
+						if ($dto->formId !== null && $dto->formId !== $resolvedFormId)
+						{
+							throw new InvalidArgumentException(
+								'The provided formId does not match the CRM form bound to the selected block.',
+							);
+						}
 					}
 				}
 				if ($dto->formId !== null)

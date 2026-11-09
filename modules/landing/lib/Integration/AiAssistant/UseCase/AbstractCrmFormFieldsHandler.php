@@ -8,7 +8,6 @@ use Bitrix\Crm\Controller\Form as CrmFormController;
 use Bitrix\Crm\WebForm\EntityFieldProvider;
 use Bitrix\Crm\WebForm\Options;
 use Bitrix\Landing\Integration\AiAssistant\Dto\GetCrmFormFieldsDto;
-use Bitrix\Landing\Subtype\Form;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Json;
@@ -48,6 +47,12 @@ abstract class AbstractCrmFormFieldsHandler extends AbstractCrmFormHandler
 		$formId = $this->getFormIdByBlock($dto->blockId);
 		if ($formId === null)
 		{
+			$markupFormIds = $this->findMarkupFormIds($dto->pageId, $dto->blockId);
+			if ($markupFormIds !== null)
+			{
+				return self::resolveMarkupFormId($markupFormIds, $dto->formId);
+			}
+
 			throw new InvalidArgumentException('The selected block does not contain a CRM form binding.');
 		}
 
@@ -59,9 +64,56 @@ abstract class AbstractCrmFormFieldsHandler extends AbstractCrmFormHandler
 		return $formId;
 	}
 
-	protected function getFormIdByBlock(int $blockId): ?int
+	/**
+	 * Form ids bound to the markup block, null for a block that is not a markup carrier of the page.
+	 * @return list<int>|null
+	 */
+	protected function findMarkupFormIds(?int $pageId, ?int $blockId): ?array
 	{
-		return Form::getFormByBlock($blockId);
+		if ($pageId === null || $blockId === null)
+		{
+			return null;
+		}
+
+		$manifest = $this->findMarkupBlockManifest($pageId, $blockId);
+		if ($manifest === null)
+		{
+			return null;
+		}
+
+		return array_values(array_unique(array_column($manifest->getForms(), 'formId')));
+	}
+
+	/**
+	 * The form of a markup block: the given one must be bound to the block, a single binding is taken by itself.
+	 * @param list<int> $boundFormIds
+	 */
+	public static function resolveMarkupFormId(array $boundFormIds, ?int $formId): int
+	{
+		if ($boundFormIds === [])
+		{
+			throw new InvalidArgumentException('The selected block does not contain a CRM form binding.');
+		}
+
+		if ($formId !== null)
+		{
+			if (!in_array($formId, $boundFormIds, true))
+			{
+				throw new InvalidArgumentException('The provided formId is not bound to the selected block.');
+			}
+
+			return $formId;
+		}
+
+		if (count($boundFormIds) > 1)
+		{
+			throw new InvalidArgumentException(
+				'The selected block holds several CRM forms: pass formId (one of: '
+				. implode(', ', $boundFormIds) . ').',
+			);
+		}
+
+		return $boundFormIds[0];
 	}
 
 	protected function loadOptions(int $formId): array

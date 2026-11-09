@@ -5,9 +5,9 @@ namespace Bitrix\Landing\Copilot\Connector\AI;
 
 use Bitrix\Main;
 
-final class CreateAiSiteText implements IConnector
+final class CreateAiSiteText implements IConnector, UserAwareConnectorInterface
 {
-	private IConnector $connector;
+	private Text $connector;
 
 	public function __construct()
 	{
@@ -17,5 +17,13 @@ final class CreateAiSiteText implements IConnector
 	public function request(Prompt $prompt): Main\Result
 	{
 		return $this->connector->request($prompt);
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function setUserId(int $userId): void
+	{
+		$this->connector->setUserId($userId);
 	}
 }

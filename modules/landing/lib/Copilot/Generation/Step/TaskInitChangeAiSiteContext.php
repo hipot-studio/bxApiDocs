@@ -7,6 +7,7 @@ use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
+use Bitrix\Landing\Markup\MarkupPage;
 
 class TaskInitChangeAiSiteContext extends TaskStep
 {
@@ -20,6 +21,7 @@ class TaskInitChangeAiSiteContext extends TaskStep
 		parent::execute();
 
 		$landingId = $this->resolveRequiredLandingId();
+		$this->assertNotMarkupLanding($landingId);
 		$inputLines = $this->resolveRequiredInputLines();
 
 		ChangeAiSiteState::setInput($this->generation, [
@@ -59,6 +61,21 @@ class TaskInitChangeAiSiteContext extends TaskStep
 		}
 
 		ChangeAiSiteState::markStartEventSent($this->generation);
+	}
+
+	/**
+	 * Markup package pages are excluded from change_ai_site: the re-markup pipeline
+	 * would destroy the custom source. Edits go through the package intake only.
+	 */
+	private function assertNotMarkupLanding(int $landingId): void
+	{
+		if (MarkupPage::isMarkupLanding($landingId))
+		{
+			throw new GenerationException(
+				GenerationErrors::dataValidation,
+				'ChangeAiSite is not available on a markup package page.',
+			);
+		}
 	}
 
 	private function resolveRequiredLandingId(): int

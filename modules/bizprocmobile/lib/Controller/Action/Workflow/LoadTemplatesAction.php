@@ -4,12 +4,15 @@ namespace Bitrix\BizprocMobile\Controller\Action\Workflow;
 
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 
 class LoadTemplatesAction extends Action
 {
+	use AddPublicErrorsTrait;
+
 	public function run(string $signedDocument)
 	{
 		if (!\CBPRuntime::isFeatureEnabled())
@@ -20,7 +23,9 @@ class LoadTemplatesAction extends Action
 		$unsignedDocument = \CBPDocument::unSignParameters($signedDocument);
 		if (!$this->isCorrectUnsignedDocument($unsignedDocument))
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_TEMPLATES_ERROR')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_TEMPLATES_ERROR')),
+			]);
 
 			return null;
 		}

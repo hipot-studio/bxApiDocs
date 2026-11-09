@@ -151,7 +151,8 @@ class Rc
 				'MESSAGE_CODE' => $messageCodes,
 				'VERSION' => 2,
 				'HOT' => false,
-				'ICON' => BX_ROOT . self::IMAGE_DIR . "empty.png",
+				'ICON' => BX_ROOT . self::IMAGE_DIR . "empty.webp",
+				'ICON_2X' => BX_ROOT . self::IMAGE_DIR . "empty@2x.webp",
 
 				'NAME' => Loc::getMessage('SENDER_PRESET_TEMPLATE_RC_EMPTY'),
 				'DESC' => Loc::getMessage('SENDER_PRESET_TEMPLATE_RC_EMPTY_DESC'),
@@ -189,7 +190,8 @@ class Rc
 				'MESSAGE_CODE' => $messageCodes,
 				'VERSION' => 2,
 				'HOT' => $item['HOT'] ?? '',
-				'ICON' => BX_ROOT . self::IMAGE_DIR . "$originalCode.png",
+				'ICON' => BX_ROOT . self::IMAGE_DIR . "$originalCode.webp",
+				'ICON_2X' => BX_ROOT . self::IMAGE_DIR . "$originalCode@2x.webp",
 
 				'NAME' => $item['NAME'] ?? '',
 				'DESC' => $item['DESC'] ?? '',

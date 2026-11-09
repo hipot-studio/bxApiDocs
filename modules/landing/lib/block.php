@@ -154,6 +154,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	protected $content = '';
 
 	/**
+	 * Markup package manifest (JSON) of a custom code block, null for all other blocks.
+	 * @var string|null
+	 */
+	protected ?string $markupManifest = null;
+
+	/**
 	 * Required user action just added.
 	 * @var array
 	 */
@@ -252,6 +258,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	protected array $allowedRepoExtensions = [
 		'landing.widgetvue',
+		'landing.customcode',
 	];
 
 	/**
@@ -303,6 +310,8 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		$this->designed = isset($data['DESIGNED']) && $data['DESIGNED'] == 'Y';
 		$this->public = isset($data['PUBLIC']) && $data['PUBLIC'] == 'Y';
 		$this->content = (!$this->deleted && isset($data['CONTENT'])) ? trim($data['CONTENT']) : '';
+		$this->markupManifest = (!$this->deleted && isset($data['MARKUP_MANIFEST']) && $data['MARKUP_MANIFEST'] !== '')
+			? (string)$data['MARKUP_MANIFEST'] : null;
 
 		// access
 		if (isset($data['ACCESS']))
@@ -467,7 +476,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				'select' => [
 					'ID', 'LID', 'CODE', 'SORT', 'ACTIVE',
 					'CONTENT', 'PUBLIC', 'ACCESS', 'ANCHOR',
-					'DESIGNED',
+					'DESIGNED', 'MARKUP_MANIFEST',
 				],
 				'filter' => [
 					'LID' => $landing->getId(),
@@ -618,7 +627,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		}
 		$res = Internals\BlockTable::getList([
 			'select' => [
-				'ID', 'CODE', 'CONTENT', 'SOURCE_PARAMS', 'DESIGNED',
+				'ID', 'CODE', 'CONTENT', 'SOURCE_PARAMS', 'DESIGNED', 'MARKUP_MANIFEST',
 			],
 			'filter' => $filter,
 		]);
@@ -1475,6 +1484,32 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * Returns markup package manifest (JSON) of the custom code block, null for all other blocks.
+	 * @return string|null
+	 */
+	public function getMarkupManifest(): ?string
+	{
+		return $this->markupManifest;
+	}
+
+	/**
+	 * Saves markup package manifest of the custom code block. Trusted writers only: the intake
+	 * and the copy of an existing block; the manifest is never taken from the data of a block add.
+	 * @param string|null $manifestJson Manifest JSON or null to clear.
+	 * @return bool
+	 */
+	public function saveMarkupManifest(?string $manifestJson): bool
+	{
+		$res = Internals\BlockTable::update($this->id, ['MARKUP_MANIFEST' => $manifestJson ?? '']);
+		if ($res->isSuccess())
+		{
+			$this->markupManifest = ($manifestJson !== null && $manifestJson !== '') ? $manifestJson : null;
+		}
+
+		return $res->isSuccess();
+	}
+
+	/**
 	 * Get class of block.
 	 * @return LandingBlock
 	 */
@@ -2316,6 +2351,35 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * Returns the output of a custom code block: a mount point with the source as a JSON payload.
+	 * Null for any other block. The source is limited to the repo branch of the output, where the
+	 * content is echoed as is - the other branch evals it.
+	 * @return string|null
+	 */
+	private function getCustomCodeWrapper(): ?string
+	{
+		if (($this->markupManifest ?? '') === '')
+		{
+			return null;
+		}
+
+		$manifest = $this->getManifestInternal();
+		if (!Subtype\CustomCode::isCustomCode($manifest))
+		{
+			return null;
+		}
+
+		$packageManifest = Markup\Manifest::fromJson($this->markupManifest);
+		$source = $packageManifest
+			? (new Markup\Delivery\LinkRewriter())->getEntrySource($this, $packageManifest)
+			: null;
+
+		return $source !== null
+			? Subtype\CustomCode::getWrapper($this->id, $source, $manifest)
+			: null;
+	}
+
+	/**
 	 * Out the block.
 	 * @param boolean $edit Out block in edit mode.
 	 * @param Landing|null $landing Landing of this block.
@@ -2498,6 +2562,9 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 		}
 
+		// custom code block outputs a mount point instead of its source, in edit mode too
+		$viewContent = $this->getCustomCodeWrapper() ?? $this->content;
+
 		// show or not a wrapper of block
 		if ($params['wrapper_show'])
 		{
@@ -2521,7 +2588,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			$classFromCode = 'block-' . $this->code;
 			$classFromCode = preg_replace('/([^a-z0-9-])/i', '-', $classFromCode);
 			$classFromCode = ' ' . $classFromCode;
-			$stickyWrapperClass = StickyWrapperDetector::getWrapperClass((string)$this->content);
+			$stickyWrapperClass = StickyWrapperDetector::getWrapperClass((string)$viewContent);
 			$stickyWrapperClass = $stickyWrapperClass !== '' ? ' ' . $stickyWrapperClass : '';
 			$content = '';
 			if ($landing && $landing->getPreviewMode())
@@ -2537,12 +2604,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 								. $classFromCode
 								. $stickyWrapperClass
 						. '">'
-								. $this->content
+								. $viewContent
 						. '</div>';
 		}
 		else
 		{
-			$content = $this->content;
+			$content = $viewContent;
 		}
 
 		// replace in requisite page, marker to company title
@@ -2569,10 +2636,10 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				}
 				$sections = (array)($manifest['block']['section'] ?? null);
 				$designerRepository = $this->metaData['DESIGNER_MODE'] ? \Bitrix\Landing\Block\Designer::getRepository() : [];
-				$anchor = $this->anchor;
-				if (!$anchor)
+				$jsAnchor = $this->anchor;
+				if (!$jsAnchor)
 				{
-					$anchor = $this->parentId
+					$jsAnchor = $this->parentId
 						? 'block' . $this->parentId
 						: 'b' . $this->id;
 				}
@@ -2594,7 +2661,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 										. 'active: ' . ($this->active ? 'true' : 'false') . ', '
 										. 'allowedByTariff: ' . ($this->allowedByTariff ? 'true' : 'false') . ', '
 										. 'autoPublicationEnabled: ' . ($autoPublicationEnabled ? 'true' : 'false') . ', '
-										. 'anchor: ' . '"' . \CUtil::jsEscape($anchor) . '"' . ', '
+										. 'anchor: ' . '"' . \CUtil::jsEscape($jsAnchor) . '"' . ', '
 										. 'access: ' . '"' . $this->access . '"' . ', '
 					 					. 'dynamicParams: ' . Json::encode($this->dynamicParams) . ','
 					 					. ($this->metaData['DESIGNER_MODE'] ? 'repository: ' . Json::encode($designerRepository) . ',' : '')
@@ -2640,7 +2707,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 					]);
 					if ($params['wrapper_show'])
 					{
-						echo '<div id="' . $anchor . '" class="block-wrapper'
+						echo '<div id="' . $anchor . '" data-id="' . $this->id . '" class="block-wrapper'
 							 	. (!$this->active ? ' landing-block-deactive' : '') . '">'
 							 		. $errMessage
 							 . '</div>';
@@ -2806,8 +2873,29 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		{
 			$this->designed = true;
 		}
-		$this->content = trim($content);
+		$this->content = trim(self::expandSelfClosedTags($content));
 		$this->getDom(true);
+	}
+
+	/**
+	 * Writes an empty non-void element as `<tag></tag>`.
+	 *
+	 * HtmlParser serializes an element without child nodes as `<tag />`. A browser ignores
+	 * the slash of a non-void start tag, so such a tag opens an element that swallows its
+	 * siblings: an emptied title takes the text node next to it (mantis 0239424).
+	 * @param string $content Block content.
+	 * @return string
+	 */
+	private static function expandSelfClosedTags(string $content): string
+	{
+		$expanded = preg_replace(
+			'#<(h[1-6]|div|p|span|a|li|ul|ol|i|em|strong|b|td|th|section|article)'
+			. '(\s+[^\s>"\'](?:[^>"\']|"[^"]*"|\'[^\']*\')*?)?\s*/>#i',
+			'<$1$2></$1>',
+			$content,
+		);
+
+		return $expanded ?? $content;
 	}
 
 	/**
@@ -3354,6 +3442,8 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			$detailPage = isset($settings['detailPage'])
 						? (array)$settings['detailPage']
 						: [];
+			// the editor stores href "#" (or an empty string) when no detail page is selected
+			$hasDetailPage = !in_array(trim((string)($detailPage['href'] ?? '')), ['', '#'], true);
 			$pagesCount = (
 							isset($settings['pagesCount'])
 							&& $settings['pagesCount'] > 0
@@ -3465,6 +3555,18 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 							{
 								case 'detail':
 									{
+										if (!$hasDetailPage && isset($dataItem['LINK']))
+										{
+											$update[$selector][] = $detailPageData[$selector][] = $getDetailPage([
+												'text' => $field['text']
+														?? '',
+												'href' => $dataItem['LINK'],
+												'target' => '_self',
+												'query' => $dataItem['_GET'] ?? [],
+											]);
+
+											break;
+										}
 										$detailPage['text'] = $field['text']
 															?? '';
 										$update[$selector][] = $detailPageData[$selector][] = $getDetailPage(
@@ -3511,7 +3613,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 							$value = $dataItem[$fieldCode]
 								?? '';
 							$update[$selector][] = $value;
-							if ($detailPage)
+							if ($hasDetailPage)
 							{
 								$detailPageData[$selector][] = $getDetailPage(
 									$detailPage,
@@ -4529,10 +4631,13 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 						if (!empty($data[$relativeSelector]['style']))
 						{
 							$stylesInline = DOM\StyleInliner::getStyle($resultNode, false);
-							DOM\StyleInliner::setStyle(
-								$resultNode,
-								array_merge($stylesInline, $data[$relativeSelector]['style']),
+							$stylesMerged = array_merge($stylesInline, $data[$relativeSelector]['style']);
+							// empty value means "reset to default", so the property must be removed
+							$stylesMerged = array_filter(
+								$stylesMerged,
+								static fn($value) => is_array($value) || trim((string)$value) !== '',
 							);
+							DOM\StyleInliner::setStyle($resultNode, $stylesMerged);
 						}
 						elseif (preg_match_all('/background-image:.*;/i', $resultNode->getAttribute('style'), $matches))
 						{
@@ -4962,6 +5067,24 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		{
 			foreach ($manifest['nodes'] as $selector => $node)
 			{
+				/** @var Node $class */
+				$class = NodeType::getClassName($node['type']);
+				if (is_callable([$class, 'getSearchableNode']))
+				{
+					$search = array_merge($search, $class::getSearchableNode($this, $selector));
+				}
+			}
+		}
+
+		// get menu nodes
+		foreach ($manifest['menu'] ?? [] as $menu)
+		{
+			foreach ($menu['nodes'] ?? [] as $selector => $node)
+			{
+				if (isset($manifest['nodes'][$selector]) || !isset($node['type']))
+				{
+					continue;
+				}
 				/** @var Node $class */
 				$class = NodeType::getClassName($node['type']);
 				if (is_callable([$class, 'getSearchableNode']))

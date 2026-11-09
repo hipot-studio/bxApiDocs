@@ -23,6 +23,9 @@ abstract class BaseTool extends ToolContract
 {
 	public const ACTION_NAME = '';
 
+	/** Arguments whose text never goes to the journal of tool calls: only its length is written. */
+	protected const LOG_MASKED_ARGUMENTS = [];
+
 	private const USER_SESSION_KEYS = [
 		'SESS_AUTH',
 		'SESS_OPERATIONS',
@@ -54,7 +57,32 @@ abstract class BaseTool extends ToolContract
 			$this->logToolCall($userId, $effectiveUserId, $args);
 		}
 
-		return parent::run($effectiveUserId, ...$args);
+		try
+		{
+			$result = parent::run($effectiveUserId, ...$args);
+		}
+		catch (\Throwable $e)
+		{
+			if ($this->isToolCallLogEnabled())
+			{
+				$this->logToolResult($userId, $effectiveUserId, 'exception', [$e->getMessage()]);
+			}
+
+			throw $e;
+		}
+
+		if ($this->isToolCallLogEnabled())
+		{
+			$payload = is_array($result['json'] ?? null) ? $result['json'] : [];
+			$this->logToolResult(
+				$userId,
+				$effectiveUserId,
+				(string)($payload['status'] ?? 'ok'),
+				array_values(array_filter(array_column((array)($payload['errors'] ?? []), 'code'))),
+			);
+		}
+
+		return $result;
 	}
 
 	public function canList(int $userId): bool
@@ -106,13 +134,43 @@ abstract class BaseTool extends ToolContract
 
 	protected function logToolCall(int $userId, int $effectiveUserId, array $args): void
 	{
-		(new Log())->addToolCall(
+		$this->createToolLog()->addToolCall(
 			static::ACTION_NAME,
 			static::class,
 			$userId,
 			$effectiveUserId,
-			$args,
+			$this->maskLogArguments($args),
 		);
+	}
+
+	protected function logToolResult(int $userId, int $effectiveUserId, string $status, array $errorCodes): void
+	{
+		$this->createToolLog()->addToolResult(
+			static::ACTION_NAME,
+			static::class,
+			$userId,
+			$effectiveUserId,
+			$status,
+			$errorCodes,
+		);
+	}
+
+	protected function createToolLog(): Log
+	{
+		return new Log();
+	}
+
+	private function maskLogArguments(array $args): array
+	{
+		foreach (static::LOG_MASKED_ARGUMENTS as $name)
+		{
+			if (isset($args[$name]) && is_string($args[$name]))
+			{
+				$args[$name] = '[masked ' . strlen($args[$name]) . ' bytes]';
+			}
+		}
+
+		return $args;
 	}
 
 	/**

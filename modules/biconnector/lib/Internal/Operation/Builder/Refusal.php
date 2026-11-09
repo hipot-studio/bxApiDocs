@@ -2,6 +2,8 @@
 
 namespace Bitrix\BIConnector\Internal\Operation\Builder;
 
+use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\Main\Config\Option;
@@ -55,6 +57,12 @@ final class Refusal
 	public static function integratorFailure(IntegratorResponse $response, array $context): Result
 	{
 		$errors = $response->getErrors();
+		$actAsRefusal = self::actAsFailure($errors, $context);
+		if ($actAsRefusal !== null)
+		{
+			return $actAsRefusal;
+		}
+
 		$message = trim(($errors[0] ?? null)?->getMessage() ?? '');
 		if (
 			$response->getStatus() !== IntegratorResponse::STATUS_BAD_REQUEST
@@ -67,6 +75,66 @@ final class Refusal
 		AiToolsLogger::logWarning($errors, $context);
 
 		return self::error(FailureCode::DomainRule, $message);
+	}
+
+	/**
+	 * A request Superset could not run as the actor is not transient: the client must not be told to retry.
+	 * An outdated box is FeatureDisabled, told by ActAsFailure::OUTDATED_INSTANCE_MESSAGE from BI Builder switched
+	 * off (see isOutdatedInstance()); the rights of the tables and act-as itself are AccessDenied.
+	 *
+	 * @param Error[] $errors
+	 * @return Result|null The refusal, or null when the errors say nothing about act-as.
+	 */
+	public static function actAsFailure(array $errors, array $context): ?Result
+	{
+		$message = ActAsFailure::findMessage($errors);
+		if ($message === null)
+		{
+			return null;
+		}
+
+		AiToolsLogger::logErrors($errors, $context);
+
+		return self::error(
+			ActAsFailure::isOutdatedInstance($errors) ? FailureCode::FeatureDisabled : FailureCode::AccessDenied,
+			$message,
+		);
+	}
+
+	/**
+	 * Whether a refusal is the one of a box older than reading as the actor requires: the code is FeatureDisabled
+	 * as for BI Builder switched off, while the reason and what to do about it differ.
+	 */
+	public static function isOutdatedInstance(Result $refused): bool
+	{
+		$error = $refused->getErrors()[0] ?? null;
+
+		return $error !== null
+			&& $error->getCode() === FailureCode::FeatureDisabled->value
+			&& $error->getMessage() === ActAsFailure::OUTDATED_INSTANCE_MESSAGE
+		;
+	}
+
+	/**
+	 * A failed read of dashboard data (overview, filter values), worded as
+	 * BiToolBehaviour::dashboardReadFailureException(): read as the person, a `403`/`404` is a refusal,
+	 * not a dashboard to wait for.
+	 */
+	public static function dashboardReadFailure(IntegratorResponse $response, array $context): Result
+	{
+		$errors = $response->getErrors();
+		if (
+			ActAsFailure::findMessage($errors) === null
+			&& ActAsFailure::isDashboardRefused($response)
+			&& Feature::isTablePermissionsEnabled()
+		)
+		{
+			AiToolsLogger::logErrors($errors, $context);
+
+			return self::error(FailureCode::AccessDenied, ActAsFailure::DASHBOARD_ACCESS_DENIED_MESSAGE);
+		}
+
+		return self::integratorFailure($response, $context);
 	}
 
 	/**
@@ -88,12 +156,18 @@ final class Refusal
 
 	/**
 	 * A failure of BI Builder or of its storage where no dashboard is to blame, as unavailableBiException()
-	 * of the tools words it.
+	 * of the tools words it: a refusal of act-as keeps its own answer, see actAsFailure().
 	 *
 	 * @param Error[] $errors
 	 */
 	public static function unavailableBi(array $errors, array $context): Result
 	{
+		$actAsRefusal = self::actAsFailure($errors, $context);
+		if ($actAsRefusal !== null)
+		{
+			return $actAsRefusal;
+		}
+
 		AiToolsLogger::logWarning($errors, $context);
 
 		$message = self::UNAVAILABLE_BI_MESSAGE;

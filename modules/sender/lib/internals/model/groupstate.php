@@ -63,6 +63,9 @@ class GroupStateTable extends DataManager
 			'DATE_INSERT' => array(
 				'data_type' => 'datetime',
 			),
+			'DATE_COMPLETE' => array(
+				'data_type' => 'datetime',
+			),
 			'STATE' => array(
 				'data_type' => 'integer',
 			),

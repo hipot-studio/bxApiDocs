@@ -418,11 +418,8 @@ class MessageMarketingFb
 		$genders = $config->get('GENDERS') ? Json::decode($config->get('GENDERS')) : [];
 		$interests = $config->get('INTERESTS') ? Json::decode($config->get('INTERESTS')) : [];
 		$regions = $config->get('REGIONS') ? Json::decode($config->get('REGIONS')) : [];
-		$service = Marketing\Configurator::getService();
-		$service->setClientId($clientId);
-
-		$response = Marketing\Configurator::createCampaign(
-			Marketing\Services\AdCampaignFacebook::TYPE_CODE,
+		$response = $this->createCampaign(
+			$clientId,
 			[
 				'accountId'          => $accountId,
 				'instagramAccountId' => $instagramActorId,
@@ -453,25 +450,67 @@ class MessageMarketingFb
 			]
 		);
 
-		$config->set('ADS_ID', $response['adsId']);
-		$config->set('CREATIVE_ID', $response['creativeId']);
-		$config->set('CAMPAIGN_ID', $response['campaignId']);
-		$config->set('AD_SET_ID', $response['adSetId']);
+		$errorMessage = $this->getCampaignErrorMessage($response);
+		if ($errorMessage !== null)
+		{
+			// finalizePosting keeps the posting running forever on an unsuccessful result
+			$result->addError(new Error($errorMessage));
+			$result->setSuccess(true);
+
+			return $result;
+		}
+
+		$config->set('ADS_ID', $response['adsId'] ?? null);
+		$config->set('CREATIVE_ID', $response['creativeId'] ?? null);
+		$config->set('CAMPAIGN_ID', $response['campaignId'] ?? null);
+		$config->set('AD_SET_ID', $response['adSetId'] ?? null);
 		$config->set('STATUS', self::STATUS_ACTIVE);
 
 		$this->saveConfiguration($config);
 		$result->setSuccess(true);
 
-		if (isset($response['RESULT']))
-		{
-			$responseResult = json_decode($response['RESULT'], true);
-			$result->setSuccess(false);
-
-			$errors[] = new \Bitrix\Main\Error($responseResult['error']['message']?? '');
-			$result->addErrors($errors);
-
-		}
-		$result->setSuccess(true);
 		return $result;
+	}
+
+	protected function createCampaign($clientId, array $params): array
+	{
+		$service = Marketing\Configurator::getService();
+		$service->setClientId($clientId);
+
+		$response = Marketing\Configurator::createCampaign(
+			Marketing\Services\AdCampaignFacebook::TYPE_CODE,
+			$params
+		);
+
+		return is_array($response) ? $response : [];
+	}
+
+	private function getCampaignErrorMessage(array $response): ?string
+	{
+		$hasResult = isset($response['RESULT']);
+		if (!$hasResult && empty($response['error']))
+		{
+			return null;
+		}
+
+		$decoded = $hasResult && is_string($response['RESULT'])
+			? json_decode($response['RESULT'], true)
+			: null;
+		$message = is_array($decoded) ? ($decoded['error']['message'] ?? null) : null;
+		if (is_string($message) && $message !== '')
+		{
+			return $message;
+		}
+
+		$errors = is_array($response['errors'] ?? null)
+			? array_filter($response['errors'], static fn($error) => is_string($error) && $error !== '')
+			: [];
+		if ($errors)
+		{
+			return implode('; ', $errors);
+		}
+
+		// a missing phrase must not turn the failure into null, which means success here
+		return (string)Loc::getMessage('SENDER_INTEGRATION_SEO_MESSAGE_ERROR_CAMPAIGN_NOT_CREATED');
 	}
 }

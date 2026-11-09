@@ -13,6 +13,14 @@ class BuilderRequestValidationException extends RequestValidationException imple
 {
 	use FailureCodeAsRegistryCode;
 
+	/**
+	 * The same refusal of the framework with the validation list it carries.
+	 */
+	public static function fromRequestValidation(RequestValidationException $source): self
+	{
+		return new self($source->errors);
+	}
+
 	public function getFailureCode(): FailureCode
 	{
 		return FailureCode::InvalidArgument;

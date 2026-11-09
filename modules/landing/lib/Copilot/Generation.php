@@ -6,8 +6,10 @@ namespace Bitrix\Landing\Copilot;
 
 use Bitrix\Landing;
 use Bitrix\Landing\Agent;
+use Bitrix\Landing\Copilot\Generation\GenerationAbortedException;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
+use Bitrix\Landing\Copilot\Generation\Scenario\BaseScenario;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\IScenario;
 use Bitrix\Landing\Copilot\Generation\Scenario\Scenarist;
@@ -417,7 +419,14 @@ class Generation
 				->where('ID', '=', $generationId)
 		;
 
-		return $this->initExists($filter, $withHtmlBlocks);
+		if (!$this->initExists($filter, $withHtmlBlocks))
+		{
+			return false;
+		}
+
+		FirstSiteGenerationService::setCurrentGenerationId($generationId, $this->scenario::class);
+
+		return true;
 	}
 
 	/**
@@ -633,7 +642,10 @@ class Generation
 			return false;
 		}
 
-		FirstSiteGenerationService::setCurrentGenerationId($this->id ?? null);
+		FirstSiteGenerationService::setCurrentGenerationId(
+			$this->id ?? null,
+			isset($this->scenario) ? $this->scenario::class : null,
+		);
 
 		return $this->isExecutable() && $this->initScenarist();
 	}
@@ -680,8 +692,34 @@ class Generation
 		}
 		elseif (!$this->scenarist->isError())
 		{
+			// An abort of another process that landed after the last status write of the steps would be
+			// found by nobody: the agent set here would find an errored generation and nothing would end it
+			// - free its chat, record the cancel. The mark is read back once more before the run lets go.
+			if ($this->scenarist->isAbortedOutside())
+			{
+				throw new GenerationAbortedException();
+			}
+
 			$this->setAgent();
 		}
+	}
+
+	/**
+	 * Whether another process has aborted the generation - Generation::cancel() - while this run is
+	 * executing it. A step waiting between its requests asks this before every request it sends and
+	 * every answer it applies: an abort is adopted by the scenarist, and the step ends the run with
+	 * GenerationAbortedException instead of going on. See Scenarist::isAbortedOutside().
+	 *
+	 * @return bool True when a mark of an abort has just been found and adopted.
+	 */
+	public function isAbortedOutside(): bool
+	{
+		if (!$this->initScenarist())
+		{
+			return false;
+		}
+
+		return $this->scenarist->isAbortedOutside();
 	}
 
 	/**
@@ -709,6 +747,10 @@ class Generation
 				// the scenario hook may mark the generation data (analytics idempotency across resumes),
 				// so the data is persisted after it, not before
 				$this->scenario->onGenerationError($this, $e);
+				if (!$keepsExecutor)
+				{
+					$this->notifyTerminalFailure($e);
+				}
 				$this->save(false);
 			}
 			finally
@@ -728,6 +770,11 @@ class Generation
 		if (!($e instanceof GenerationTimeSliceException))
 		{
 			$this->rememberNonDomainFailure();
+		}
+
+		if (!$keepsExecutor)
+		{
+			$this->notifyTerminalFailure($e);
 		}
 
 		// Data a step has written - the applied operations of the change flow, the diagnostic reason of
@@ -756,6 +803,30 @@ class Generation
 		}
 
 		throw $e;
+	}
+
+	/**
+	 * Tells the scenario that the run has ended the generation for good. Only the failure branches that
+	 * drop the executor call it: before a failure the retry agent resumes, nothing is terminal yet.
+	 *
+	 * The hook runs before the failure is saved, so it is guarded: whatever it throws must not cost the run
+	 * the record of the failure, nor replace the exception that travels on.
+	 */
+	private function notifyTerminalFailure(\Throwable $e): void
+	{
+		if (!$this->scenario instanceof BaseScenario)
+		{
+			return;
+		}
+
+		try
+		{
+			$this->scenario->onTerminalFailure($this, $e);
+		}
+		catch (\Throwable)
+		{
+			// the record of the failure outweighs the hook
+		}
 	}
 
 	/**
@@ -893,6 +964,38 @@ class Generation
 	}
 
 	/**
+	 * Runs the operation under the execution lock of the generation without waiting for it.
+	 *
+	 * False, and nothing is run, while a run of the generation - its start or its retry agent - holds the
+	 * lock: the caller leaves its work to whoever comes later. Unlike the execution itself, a busy lock
+	 * schedules no agent.
+	 */
+	public function runExclusively(callable $operation): bool
+	{
+		if (!isset($this->id))
+		{
+			return false;
+		}
+
+		$connection = Application::getConnection();
+		if (!$connection->lock($this->getLockName()))
+		{
+			return false;
+		}
+
+		try
+		{
+			$operation();
+
+			return true;
+		}
+		finally
+		{
+			$connection->unlock($this->getLockName());
+		}
+	}
+
+	/**
 	 * Checks if the generation is executable (all required properties are set).
 	 *
 	 * @return bool
@@ -1017,6 +1120,40 @@ class Generation
 		{
 			$this->dateFinished = $dateFinished;
 		}
+	}
+
+	/**
+	 * Cancels an unfinished generation: the first pending step is marked as an error
+	 * and the retry agent is removed, so nothing resumes the run. Idempotent - false
+	 * when there is nothing to cancel (the generation is finished).
+	 *
+	 * @return bool
+	 */
+	public function cancel(): bool
+	{
+		if (!$this->initScenarist() || $this->isFinished())
+		{
+			return false;
+		}
+
+		if (!$this->scenarist->abort())
+		{
+			return false;
+		}
+
+		$this->deleteAgent();
+
+		return true;
+	}
+
+	/**
+	 * Records a cancel as the failure of the run: no refusal of the domain, whatever step the abort
+	 * marked - a cancel on the moderation step must not read as a refused topic. The caller persists
+	 * the data.
+	 */
+	public function rememberCancellation(): void
+	{
+		$this->rememberNonDomainFailure();
 	}
 
 	/**

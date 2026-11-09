@@ -41,4 +41,15 @@ class RequestResult extends Result
 	{
 		return $this->headers;
 	}
+
+	public function getHeader(string $name): ?string
+	{
+		$value = $this->headers->get($name);
+		if (is_array($value))
+		{
+			$value = reset($value);
+		}
+
+		return is_string($value) ? $value : null;
+	}
 }

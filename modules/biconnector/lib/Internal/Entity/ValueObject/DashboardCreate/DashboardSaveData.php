@@ -18,6 +18,21 @@ final class DashboardSaveData
 	{
 	}
 
+	public function withParams(array $params): self
+	{
+		return new self(
+			title: $this->title,
+			description: $this->description,
+			groups: $this->groups,
+			scopes: $this->scopes,
+			params: $params,
+			coverImage: $this->coverImage,
+			galleryImage: $this->galleryImage,
+			externalId: $this->externalId,
+			externalPublished: $this->externalPublished,
+		);
+	}
+
 	public function getCoverImageId(): ?int
 	{
 		$imageId = $this->coverImage['id'] ?? null;

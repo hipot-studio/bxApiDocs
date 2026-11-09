@@ -2,10 +2,14 @@
 
 namespace Bitrix\BIConnector\Internal\Grid\UsageStat\Row\Assembler\Field;
 
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 
 abstract class EntityLinkFieldAssembler extends FieldAssembler
 {
+	private ?bool $canOpenEntity = null;
+
 	abstract protected function getEntityType(): string;
 
 	abstract protected function getNameKey(): string;
@@ -28,14 +32,30 @@ abstract class EntityLinkFieldAssembler extends FieldAssembler
 		$name = htmlspecialcharsbx((string)($value['NAME'] ?? ''));
 
 		$entityId = (int)($value['ENTITY_ID'] ?? 0);
-		if ($name === '' || $entityId <= 0)
+		if ($name === '' || $entityId <= 0 || !$this->canOpenEntity())
 		{
 			return $name;
 		}
 
-		$onclick = 'BX.BIConnector.UsageStatGridManager.Instance.openElement(\'' . $this->getEntityType() . '\', ' . $entityId . '); return false;';
+		$onclick = 'BX.BIConnector.UsageStatGridManager.Instance.openElement(\''
+			. $this->getEntityType()
+			. '\', '
+			. $entityId
+			. ');'
+		;
 
-		return '<a class="biconnector-usage-stat-link" onclick="' . htmlspecialcharsbx($onclick) . '">' . $name . '</a>';
+		return '<button type="button" class="biconnector-usage-stat-link" data-bic-focus-role="entity-link"'
+			. ' onclick="' . htmlspecialcharsbx($onclick) . '">'
+			. $name
+			. '</button>'
+		;
+	}
+
+	private function canOpenEntity(): bool
+	{
+		$this->canOpenEntity ??= AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
+
+		return $this->canOpenEntity;
 	}
 
 	protected function prepareRow(array $row): array

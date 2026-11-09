@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Access\Role\RoleRelationTable;
 use Bitrix\BIConnector\Access\Role\RoleTable;
 use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupBindingTable;
+use Bitrix\BIConnector\Access\Update\PermissionSections\Migrator;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTable;
@@ -62,6 +63,13 @@ final class AccessInstaller
 			}
 		}
 
+		// A fresh portal gets the rights the sections brought by the same transition a living portal
+		// goes through: the right of the report section for the roles managing the rights and the
+		// table axis for every role. A second place handing them out would drift from the transition
+		// unnoticed, and the two kinds of portal would start with different rights.
+		$sectionsResult = Migrator::run();
+		$result->addErrors($sectionsResult->getErrors());
+
 		return $result;
 	}
 
@@ -91,6 +99,10 @@ final class AccessInstaller
 		SupersetDashboardGroupBindingTable::deleteByFilter(['>ID' => 0]);
 		TableGroupTable::deleteByFilter(['>ID' => 0]);
 		TableGroupBindingTable::deleteByFilter(['>ID' => 0]);
+		// The groups of tables are gone along with the roles and the rights, so the portal is back
+		// before the grant of the table axis: a mark left over would leave the groups the installation
+		// creates next closed to everybody.
+		Migrator::forgetGrantedGroupCodes();
 		// The groups are dropped past TableGroupService, so the snapshot of the membership
 		// would keep serving the deleted composition until the end of the hit.
 		TableGroupMembershipService::clearCache();

@@ -5,13 +5,17 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\ToolSet;
 use Bitrix\AiAssistant\Definition\Dto\DefinitionMetadataDto;
 use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\AiAssistant\Definition\ToolSet\BaseToolSet;
+use Bitrix\AiAssistant\Definition\ToolSet\Contract\ToolProviderDefinitionInterface;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\AgentOperationsDescription;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ExecuteSqlTool;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiGuideTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\GetBiTableSchemaTool;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool\ListBiTablesTool;
 
-final class BiTablesToolSet extends BaseToolSet
+final class BiTablesToolSet extends BaseToolSet implements ToolProviderDefinitionInterface
 {
+	use BuilderPairToolProvider;
+
 	public function getCode(): string
 	{
 		return 'bi_tables';
@@ -35,6 +39,7 @@ final class BiTablesToolSet extends BaseToolSet
 			ListBiTablesTool::class,
 			GetBiTableSchemaTool::class,
 			ExecuteSqlTool::class,
+			GetBiGuideTool::class,
 		]);
 	}
 

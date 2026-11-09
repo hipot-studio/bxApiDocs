@@ -4,6 +4,7 @@ namespace Bitrix\Landing\Connector;
 use Bitrix\Landing\Binding;
 use Bitrix\Landing\Copy\Integration\Group;
 use Bitrix\Landing\Manager;
+use Bitrix\Landing\Mobile\LegacyKnowledgeAccess;
 use Bitrix\Landing\Restriction;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Site;
@@ -106,7 +107,7 @@ class SocialNetwork
             if (self::canPerformOperation($groupId, Rights::ACCESS_TYPES['read']))
             {
                 $link = $bindings['PUBLIC_URL'];
-                self::processTabHit($link);
+                self::processTabHit($link, $groupId);
             }
 		}
 		// binding don't exist, allow to create new one
@@ -238,6 +239,12 @@ class SocialNetwork
 			}
 		}
 
+		if ($enable && LegacyKnowledgeAccess::isMobileAppRequest())
+		{
+			LegacyKnowledgeAccess::prepareResponse();
+			$enable = LegacyKnowledgeAccess::isGroupAllowed(Manager::getUserId(), (int)$result['Group']['ID']);
+		}
+
 		if ($enable)
 		{
 			$url = self::getSocNetMenuUrl($result['Group']['ID']);
@@ -281,13 +288,23 @@ class SocialNetwork
 	/**
 	 * If current hit is for opening url.
 	 * @param string $url Url for opening.
+	 * @param int $groupId Group id.
 	 * @return void
 	 */
-	protected static function processTabHit($url)
+	protected static function processTabHit($url, int $groupId)
 	{
 		$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 		if ($request->get('tab') == self::SETTINGS_CODE_SHORT)
 		{
+			if (LegacyKnowledgeAccess::isMobileAppRequest())
+			{
+				LegacyKnowledgeAccess::prepareResponse();
+				if (!LegacyKnowledgeAccess::isGroupAllowed(Manager::getUserId(), $groupId))
+				{
+					return;
+				}
+			}
+
 			$requestedPage = $request->get('page');
 			$url = self::resolveKnowledgeDeepLinkUrl($url, is_string($requestedPage) ? $requestedPage : null);
 			self::insertSliderOpenScript($url);
@@ -310,6 +327,15 @@ class SocialNetwork
 		if ($groupId <= 0)
 		{
 			return;
+		}
+
+		if (LegacyKnowledgeAccess::isMobileAppRequest())
+		{
+			LegacyKnowledgeAccess::prepareResponse();
+			if (!LegacyKnowledgeAccess::isGroupAllowed(Manager::getUserId(), $groupId))
+			{
+				return;
+			}
 		}
 
 		// knowledge base of the group is still being copied

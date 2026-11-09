@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Access;
 
 use Bitrix\BIConnector\Access\Filter\Factory\BIConstructorFilterFactory;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
+use Bitrix\BIConnector\Access\Model\DashboardAclBatch;
 use Bitrix\BIConnector\Access\Model\UserAccessItem;
 use Bitrix\BIConnector\Access\Rule\AbstractVariableRule;
 use Bitrix\BIConnector\Access\Rule\BaseRule;
@@ -17,6 +18,11 @@ use Bitrix\Main\Access\BaseAccessController;
 
 final class AccessController extends BaseAccessController
 {
+	private ?DashboardAclBatch $dashboardBatch = null;
+	private ?DashboardAccessItem $dashboardBatchItem = null;
+	private int $dashboardBatchDepth = 0;
+	private int $checkDepth = 0;
+
 	public function __construct(int $userId)
 	{
 		parent::__construct($userId);
@@ -85,7 +91,60 @@ final class AccessController extends BaseAccessController
 			$params['action'] = $action;
 		}
 
-		return parent::check($action, $item, $params);
+		$this->checkDepth++;
+		try
+		{
+			return parent::check($action, $item, $params);
+		}
+		finally
+		{
+			$this->checkDepth--;
+		}
+	}
+
+	/** @internal Runs the original VIEW dispatch with a chart-local loader scope. */
+	public function checkWithDashboardBatch(DashboardAccessItem $item, DashboardAclBatch $batch): bool
+	{
+		$batch->refresh();
+		$previousBatch = $this->dashboardBatch;
+		$previousItem = $this->dashboardBatchItem;
+		$previousDepth = $this->dashboardBatchDepth;
+		$this->dashboardBatch = $batch->isForUser($this->user->getUserId()) ? $batch : null;
+		$this->dashboardBatchItem = $item;
+		$this->dashboardBatchDepth = $this->checkDepth + 1;
+		try
+		{
+			$result = $this->check(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $item);
+			$batch->refresh();
+			if ($this->dashboardBatch !== null && !$batch->isLegacy())
+			{
+				$batch->observeAccess($this->user->isAdmin());
+			}
+
+			return $result;
+		}
+		finally
+		{
+			$this->dashboardBatch = $previousBatch;
+			$this->dashboardBatchItem = $previousItem;
+			$this->dashboardBatchDepth = $previousDepth;
+		}
+	}
+
+	/** @internal Effective draft permission may differ from the original VIEW dispatch. */
+	public function getDashboardBatch(DashboardAccessItem $item): ?DashboardAclBatch
+	{
+		if (
+			$this->dashboardBatchDepth !== $this->checkDepth
+			|| $this->dashboardBatchItem !== $item
+			|| $this->dashboardBatch === null
+			|| !$this->dashboardBatch->isForUser($this->user->getUserId())
+		)
+		{
+			return null;
+		}
+
+		return $this->dashboardBatch;
 	}
 
 	/**

@@ -9,8 +9,10 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dataset\WriteDatasetOperations;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -53,48 +55,26 @@ final class UpdateDatasetTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'datasetId' => [
-					'type' => 'integer',
-					'description' => 'Dataset id to update (from list_datasets / get_dataset). Positive integer.',
-					'minimum' => 1,
-				],
-				'columns' => [
-					'type' => 'array',
-					'description' => 'Full replacement list of columns to project. Include every column the '
-						. 'dataset should keep — columns omitted here are dropped from the dataset.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'name' => [
-								'type' => 'string',
-								'minLength' => 1,
-								'description' => 'Column name. Must match `^[A-Za-z_][A-Za-z0-9_]*$`.',
-								'pattern' => '^[A-Za-z_][A-Za-z0-9_]*$',
-							],
-							'type' => [
-								'type' => 'string',
-								'enum' => self::ALLOWED_COLUMN_TYPES,
-								'description' => 'Column data type.',
-							],
-						],
-						'required' => ['name', 'type'],
-						'additionalProperties' => false,
-					],
-					'minItems' => 1,
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved '
-						. 'this dataset update. Omit or set false to only preview the change. '
-						. 'Do NOT self-confirm or assume approval from earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			'biconnector.builder.dataset.update',
+			'mcp',
+			[
+				'datasetId' => 'Dataset id to update (from list_datasets / get_dataset). Positive integer.',
+				'columns' => 'Full replacement list of columns to project. Include every column the '
+					. 'dataset should keep — columns omitted here are dropped from the dataset.',
+				'columns[].name' => 'Column name. Trimmed and must be nonblank.',
+				'columns[].type' => 'Column data type.',
 			],
-			'required' => ['datasetId', 'columns'],
-			'additionalProperties' => false,
+		);
+
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved '
+				. 'this dataset update. Omit or set false to only preview the change. '
+				. 'Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -175,22 +155,13 @@ final class UpdateDatasetTool extends BaseBiTool
 
 		// Confirm the dataset exists and resolve its name for a meaningful preview
 		// before attempting a mutation.
-		$getResponse = $integrator->getDatasetById($datasetId);
-		if ($getResponse->hasErrors())
+		$lookup = (new EntityLookup())->dataset($datasetId, self::findActAsUser($userId));
+		if (!$lookup->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$getResponse->getErrors(),
-				['stage' => 'update_dataset.load', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$current = $getResponse->getData();
-		if (!is_array($current) || (int)($current['id'] ?? 0) <= 0)
-		{
-			throw new McpException(
-				"Dataset with id={$datasetId} was not found. Call list_datasets to get a valid id."
-			);
-		}
+		$current = $lookup->getData()['entity'];
 
 		$name = (string)($current['table_name'] ?? '');
 
@@ -213,12 +184,10 @@ final class UpdateDatasetTool extends BaseBiTool
 		}
 
 		$response = $integrator->updateDataset($datasetId, ['columns' => $columns]);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $datasetId);
+		if (!$classified->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				['stage' => 'update_dataset', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($classified));
 		}
 
 		return [

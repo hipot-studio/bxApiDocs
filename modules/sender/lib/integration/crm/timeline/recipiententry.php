@@ -76,7 +76,7 @@ class RecipientEntry extends Timeline\TimelineEntry
 		{
 			$bindings[] = array('ENTITY_TYPE_ID' => $entityTypeId, 'ENTITY_ID' => $entityId);
 		}
-		self::registerBindings($id, $bindings);
+		self::registerBindings($id, $bindings, $created);
 
 		return $id;
 	}

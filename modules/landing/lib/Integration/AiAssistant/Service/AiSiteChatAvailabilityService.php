@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Integration\AiAssistant\Service;
 
 use Bitrix\Landing\Copilot\Manager as CopilotManager;
 use Bitrix\Landing\Integration\AiAssistant\Dto\AiSiteChatAvailabilityResult;
+use Bitrix\Landing\Markup\MarkupPage;
 use Bitrix\Main\Loader;
 
 /**
@@ -24,6 +25,7 @@ class AiSiteChatAvailabilityService
 	public const ERROR_FEATURE_DISABLED_BY_OPTION = 'feature_disabled_by_option';
 	public const ERROR_FEATURE_LIMITED = 'feature_limited';
 	public const ERROR_FEATURE_INACTIVE = 'feature_inactive';
+	public const ERROR_PAGE_MODE_MISMATCH = 'ai_sites_page_mode_mismatch';
 
 	public function checkSitesAiProductAvailability(): AiSiteChatAvailabilityResult
 	{
@@ -189,6 +191,31 @@ class AiSiteChatAvailabilityService
 		)->getReasonCode();
 	}
 
+	/**
+	 * Format of an existing AI page against the selected generation. It does not replace the AI origin,
+	 * rights and product gates: call it after them, never for an ordinary page or a new draft.
+	 */
+	public function checkPageModeAvailability(int $pageId): AiSiteChatAvailabilityResult
+	{
+		if ($pageId <= 0)
+		{
+			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_ENTITY_REQUIRED);
+		}
+
+		return $this->checkPageFormatModeAvailability($this->isMarkupLanding($pageId));
+	}
+
+	// Same check for a caller that already knows the real format of the page.
+	public function checkPageFormatModeAvailability(bool $isMarkupPage): AiSiteChatAvailabilityResult
+	{
+		$isMarkupSelected = $this->getSelectedAiSitesMode() === CopilotManager::AI_SITES_MODE_MARKUP;
+
+		return $isMarkupPage === $isMarkupSelected
+			? AiSiteChatAvailabilityResult::available()
+			: AiSiteChatAvailabilityResult::unavailable(self::ERROR_PAGE_MODE_MISMATCH)
+		;
+	}
+
 	// Single source of truth for the entity-independent part of the trigger gates.
 	protected function checkTriggerRuntimeAvailability(): AiSiteChatAvailabilityResult
 	{
@@ -209,6 +236,16 @@ class AiSiteChatAvailabilityService
 			&& class_exists(\Bitrix\AiAssistant\Controller\Trigger::class)
 			&& class_exists(\Bitrix\AiAssistant\Trigger\TriggerRegistry::class)
 		;
+	}
+
+	protected function isMarkupLanding(int $landingId): bool
+	{
+		return MarkupPage::isMarkupLanding($landingId);
+	}
+
+	protected function getSelectedAiSitesMode(): string
+	{
+		return CopilotManager::getAiSitesMode();
 	}
 
 	protected function isLandingCopilotAvailable(): bool

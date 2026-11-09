@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Landing\Block\Cache;
+use Bitrix\Landing\Mobile\LegacyKnowledgeAccess;
 use \Bitrix\Landing\Hook;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Landing;
@@ -31,6 +32,8 @@ class LandingPubComponent extends LandingBaseComponent
 {
 	private const SEARCH_HIGHLIGHT_MAX_QUERY_LENGTH = 255;
 	private const SEARCH_HIGHLIGHT_MAX_PHRASES = 10;
+
+	private bool $legacyKnowledgeAccessDenied = false;
 
 	/**
 	 * Special page - robots.txt
@@ -1007,7 +1010,7 @@ class LandingPubComponent extends LandingBaseComponent
 		$filter['CHECK_PERMISSIONS'] = $this->arParams['CHECK_PERMISSIONS'];
 		$res = Site::getList(array(
 			'select' => array(
-				'ID', 'ACTIVE', 'DELETED', 'SPECIAL',
+				'ID', 'TYPE', 'ACTIVE', 'DELETED', 'SPECIAL',
 				'LANDING_ID_404', 'LANDING_ID_503',
 				'LANDING_ID_INDEX', 'DOMAIN_ID'
 			),
@@ -1055,7 +1058,12 @@ class LandingPubComponent extends LandingBaseComponent
 			!$this->isPreviewMode
 		)
 		{
-			$this->setHttpStatusOnce($this::ERROR_STATUS_UNAVAILABLE);
+			// the cloud front replaces the body of any 503 response with its own stub page,
+			// so there the chosen page is sent with the regular status
+			if (!Manager::isB24Cloud())
+			{
+				$this->setHttpStatusOnce($this::ERROR_STATUS_UNAVAILABLE);
+			}
 			return $site['LANDING_ID_503'];
 		}
 
@@ -1963,6 +1971,11 @@ class LandingPubComponent extends LandingBaseComponent
 			return null;
 		}
 
+		if (!$this->checkLegacyKnowledgeAccess('', 0, $forceLandingId))
+		{
+			return null;
+		}
+
 		// the same rights gate the resolved page goes through (CHECK_PERMISSIONS of the component):
 		// the visitor of a signed preview needs no session of the portal, and the target is a page
 		// of the very site the signature opens
@@ -1982,6 +1995,29 @@ class LandingPubComponent extends LandingBaseComponent
 
 		return $landingForce->getPublicUrl(false, false) . '?IFRAME=Y';
 	}
+
+	private function checkLegacyKnowledgeAccess(string $type = '', int $siteId = 0, int $landingId = 0): bool
+	{
+		if ($this->legacyKnowledgeAccessDenied)
+		{
+			return false;
+		}
+		$allowed = $type === \Bitrix\Landing\Site\Type::SCOPE_CODE_GROUP && $siteId <= 0 && $landingId <= 0
+			? LegacyKnowledgeAccess::isGroupPortalRequestAllowed()
+			: LegacyKnowledgeAccess::isRequestAllowed($type, $siteId, $landingId);
+		if (!$allowed)
+		{
+			$this->legacyKnowledgeAccessDenied = true;
+			$this->currentHttpStatus = self::ERROR_STATUS_FORBIDDEN;
+			\CHTTP::setStatus(self::ERROR_STATUS_FORBIDDEN);
+			ShowError(Loc::getMessage('LANDING_ERROR_ACCESS_DENIED'));
+
+			return false;
+		}
+
+		return true;
+	}
+
 
 	/**
 	 * Base executable method.
@@ -2030,6 +2066,15 @@ class LandingPubComponent extends LandingBaseComponent
 			$this->checkParam('PAGE_URL_SITE_SHOW', '');
 			$this->checkParam('PAGE_URL_ROLES', '');
 
+			if (!$this->checkLegacyKnowledgeAccess(
+				(string)$this->arParams['SITE_TYPE'],
+				(int)$this->arParams['SITE_ID'],
+				(int)$this->arParams['LID'],
+			))
+			{
+				return;
+			}
+
 			// the route brings the page ready as LID, so the preview is raised here, not by detectPage()
 			if ($this->arParams['PORTAL_PREVIEW'] === 'Y')
 			{
@@ -2048,11 +2093,18 @@ class LandingPubComponent extends LandingBaseComponent
 				$this->arParams['SITE_TYPE']
 			);
 
-			if (
-				($lid = $this->arParams['LID']) ||
-				($lid = $this->detectPage())
-			)
+			$lid = $this->arParams['LID'] ?: $this->detectPage();
+			if ($this->legacyKnowledgeAccessDenied)
 			{
+				return;
+			}
+			if ($lid)
+			{
+				if (!$this->checkLegacyKnowledgeAccess('', 0, (int)$lid))
+				{
+					return;
+				}
+
 				if ($this->isPreviewMode)
 				{
 					Hook::setEditMode();
@@ -2289,8 +2341,18 @@ class LandingPubComponent extends LandingBaseComponent
 				{
 					$this->arParams['CHECK_PERMISSIONS'] = 'N';
 
-					if ($realLandingId = $this->detectPage())
+					$realLandingId = $this->detectPage();
+					if ($this->legacyKnowledgeAccessDenied)
 					{
+						return;
+					}
+					if ($realLandingId)
+					{
+						if (!$this->checkLegacyKnowledgeAccess('', 0, (int)$realLandingId))
+						{
+							return;
+						}
+
 						$this->arResult['REAL_LANDING'] = Landing::createInstance($realLandingId, [
 							'check_permissions' => false,
 							'blocks_limit' => 0
@@ -2339,6 +2401,10 @@ class LandingPubComponent extends LandingBaseComponent
 				}
 				// try force reload
 				$forceReloadUrl = $this->getForceReloadUrl();
+				if ($this->legacyKnowledgeAccessDenied)
+				{
+					return;
+				}
 				if ($forceReloadUrl !== null)
 				{
 					\localRedirect($forceReloadUrl);

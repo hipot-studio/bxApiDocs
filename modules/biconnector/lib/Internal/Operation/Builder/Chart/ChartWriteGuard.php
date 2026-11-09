@@ -139,6 +139,12 @@ final class ChartWriteGuard
 	 */
 	public static function unavailableBi(array $errors, array $context): Result
 	{
+		$actAsRefusal = Refusal::actAsFailure($errors, $context);
+		if ($actAsRefusal !== null)
+		{
+			return $actAsRefusal;
+		}
+
 		AiToolsLogger::logWarning($errors, $context);
 
 		$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));

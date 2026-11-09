@@ -24,6 +24,9 @@ final class ModerationVerdictDto extends AbstractDto
 
 	public const CATEGORY_NONE = 'none';
 
+	/** The hint reaches the user as is, so it stays one short plain-text sentence. */
+	public const HINT_MAX_LENGTH = 300;
+
 	/**
 	 * Category codes from the approved CATEGORIES-forbidden-topics-draft.md (single source of truth).
 	 */
@@ -77,12 +80,11 @@ final class ModerationVerdictDto extends AbstractDto
 			return null;
 		}
 
-		$hint = is_scalar($data['hint'] ?? null) ? (string)$data['hint'] : '';
-		$hint = self::normalizeText($hint);
 		// The rewording hint is meaningful only for soft_block.
-		if ($decision !== self::DECISION_SOFT_BLOCK)
+		$hint = '';
+		if ($decision === self::DECISION_SOFT_BLOCK && is_scalar($data['hint'] ?? null))
 		{
-			$hint = '';
+			$hint = self::sanitizeHint((string)$data['hint']);
 		}
 
 		return new self($decision, $category, $hint);
@@ -118,10 +120,38 @@ final class ModerationVerdictDto extends AbstractDto
 		return $this->decision === self::DECISION_HARD_BLOCK;
 	}
 
-	private static function normalizeText(string $value): string
+	/**
+	 * The hint is written by a model that has read untrusted text: markup, links and
+	 * control characters are dropped, the length is capped.
+	 */
+	private static function sanitizeHint(string $hint): string
 	{
-		$value = preg_replace('/\s+/u', ' ', $value) ?: $value;
+		$hint = strip_tags($hint);
+		$replacements = [
+			// markdown link: keep the text only
+			'/\[([^\]]*)\]\([^)]*\)/u' => '$1',
+			'/\b[a-z][a-z0-9+.\-]*:\/\/\S*/iu' => ' ',
+			'/\b(?:www\.|(?:javascript|vbscript|data|mailto|tel):)\S*/iu' => ' ',
+			'/(?:[\p{L}\p{N}\-]+\.)+\p{L}{2,}(?:\/\S*)?/u' => ' ',
+			'/[\p{Cc}\p{Cf}]+/u' => ' ',
+			'/[<>\[\]`*_#|~\\\\]+/u' => ' ',
+			'/\s+/u' => ' ',
+		];
+		foreach ($replacements as $pattern => $replacement)
+		{
+			$hint = preg_replace($pattern, $replacement, $hint);
+			if (!is_string($hint))
+			{
+				return '';
+			}
+		}
 
-		return trim($value);
+		$hint = trim($hint);
+		if (mb_strlen($hint) > self::HINT_MAX_LENGTH)
+		{
+			$hint = rtrim(mb_substr($hint, 0, self::HINT_MAX_LENGTH - 1)) . '…';
+		}
+
+		return $hint;
 	}
 }

@@ -6,6 +6,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Connector;
+use Bitrix\Landing\Site\Type;
+use Bitrix\Landing\Mobile\LegacyKnowledgeAccess;
 use \Bitrix\Landing\Landing\UrlPreview;
 use \Bitrix\Main\Localization\Loc;
 
@@ -33,6 +35,14 @@ class LandingSocialnetworkGroupRedirectComponent extends LandingBaseComponent
 	{
 		if ($this->init())
 		{
+			if (!LegacyKnowledgeAccess::isGroupPortalRequestAllowed())
+			{
+				\CHTTP::setStatus(self::ERROR_STATUS_FORBIDDEN);
+				ShowError(Loc::getMessage('LANDING_ERROR_ACCESS_DENIED'));
+
+				return;
+			}
+
 			\Bitrix\Landing\Site\Type::setScope(
 				\Bitrix\Landing\Site\Type::SCOPE_CODE_GROUP
 			);
@@ -40,6 +50,14 @@ class LandingSocialnetworkGroupRedirectComponent extends LandingBaseComponent
 
 			if ($landingId)
 			{
+				if (!LegacyKnowledgeAccess::isRequestAllowed(Type::SCOPE_CODE_GROUP, 0, (int)$landingId))
+				{
+					\CHTTP::setStatus(self::ERROR_STATUS_FORBIDDEN);
+					ShowError(Loc::getMessage('LANDING_ERROR_ACCESS_DENIED'));
+
+					return;
+				}
+
 				$landing = Landing::createInstance($landingId, [
 					'skip_blocks' => true
 				]);

@@ -11,6 +11,7 @@ use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\HttpHeaders;
 use Bitrix\Main\Web\Json;
 use Bitrix\Superset\Internal\Entities\Server;
+use Bitrix\Superset\Internal\Support\ActAs;
 use Bitrix\Superset\Internal\HttpStatus;
 use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterFactory;
 use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterInterface;
@@ -34,6 +35,8 @@ class SupersetInstance extends BaseConnector
 	private ?float $deadline = null;
 	private ?int $lastTokenRefreshHttpStatus = null;
 
+	private ?string $actAsLogin = null;
+
 	/**
 	 * @param Server $server
 	 * @param array $options
@@ -52,6 +55,24 @@ class SupersetInstance extends BaseConnector
 	}
 
 	/**
+	 * Returns a copy of the connector whose requests ask Superset to run as the given user.
+	 *
+	 * @see ActAs
+	 */
+	public function withActAs(string $login): static
+	{
+		$copy = clone $this;
+		$copy->actAsLogin = $login;
+
+		return $copy;
+	}
+
+	public function getActAsLogin(): ?string
+	{
+		return $this->actAsLogin;
+	}
+
+	/**
 	 * @return void
 	 * @throws ArgumentException
 	 */
@@ -59,6 +80,10 @@ class SupersetInstance extends BaseConnector
 	{
 		$this->httpClient = new HttpClient($this->httpClientOptions);
 		$this->httpClient->setHeader('Content-Type', 'application/json');
+		if ($this->actAsLogin !== null)
+		{
+			$this->httpClient->setHeader(ActAs::HEADER, $this->actAsLogin);
+		}
 		if (!$this->server->isSslVerificationEnabled())
 		{
 			$this->httpClient->disableSslVerification();

@@ -100,7 +100,12 @@ class MailingManager
 		$letter = Model\LetterTable::getRowById($letterId);
 		if($letter && $letter['STATUS'] === Model\LetterTable::STATUS_PLAN)
 		{
-			$updateResult = Model\LetterTable::update($letterId, array('STATUS' => Model\LetterTable::STATUS_SEND));
+			$fields = ['STATUS' => Model\LetterTable::STATUS_SEND];
+			if (PostingTable::isNotStarted((int)$letter['POSTING_ID']))
+			{
+				$fields['WAITING_RECIPIENT'] = 'Y';
+			}
+			$updateResult = Model\LetterTable::update($letterId, $fields);
 			if ($updateResult->isSuccess())
 			{
 				$letter = Model\LetterTable::getRowById($letterId);
@@ -274,7 +279,7 @@ class MailingManager
 
 		$chainDb = MailingChainTable::getList(array(
 			'select' => array(
-				'ID', 'LAST_EXECUTED', 'POSTING_ID',
+				'ID', 'LAST_EXECUTED', 'POSTING_ID', 'AUTO_SEND_TIME',
 				'MONTHS_OF_YEAR', 'DAYS_OF_MONTH', 'DAYS_OF_WEEK', 'TIMES_OF_DAY'
 			),
 			'filter' => array(
@@ -314,18 +319,27 @@ class MailingManager
 				$arMailingChain["MONTHS_OF_YEAR"]
 			);
 
+			if (
+				$timeOfExecute
+				&& static::isPlannedLater($arMailingChain['AUTO_SEND_TIME'], $timeOfExecute, $datetimeToday)
+			)
+			{
+				continue;
+			}
+
 			if($timeOfExecute)
 			{
 				$arUpdateMailChain = array('LAST_EXECUTED' => $datetimeToday);
 
 				$postingDb = PostingTable::getList(array(
-					'select' => array('ID'),
+					'select' => array('ID', 'STATUS'),
 					'filter' => array(
 						'=MAILING_CHAIN_ID' => $arMailingChain['ID'],
 						'><DATE_CREATE' => $arDateFilter
 					)
 				));
 				$arPosting = $postingDb->fetch();
+				$isPostingNew = true;
 				if(!$arPosting)
 				{
 					$postingId = MailingChainTable::initPosting($arMailingChain['ID']);
@@ -334,13 +348,17 @@ class MailingManager
 				{
 					$postingId = $arPosting['ID'];
 					$arUpdateMailChain['POSTING_ID'] = $postingId;
-					PostingTable::initGroupRecipients($postingId);
+					$isPostingNew = $arPosting['STATUS'] === PostingTable::STATUS_NEW;
 				}
 
 				if ($postingId)
 				{
 					$arUpdateMailChain['STATUS'] = MailingChainTable::STATUS_SEND;
 					$arUpdateMailChain['AUTO_SEND_TIME'] = Type\DateTime::createFromPhp($timeOfExecute);
+					if ($isPostingNew)
+					{
+						$arUpdateMailChain['WAITING_RECIPIENT'] = 'Y';
+					}
 				}
 
 				$result = Model\LetterTable::update($arMailingChain['ID'], $arUpdateMailChain);
@@ -353,6 +371,32 @@ class MailingManager
 
 		(new Runtime\ReiteratedJob())->actualize();
 		return '';
+	}
+
+	/**
+	 * A letter saved after today's schedule slot is planned for the next slot
+	 * and must not start in today's slot that has already passed.
+	 *
+	 * @param Type\DateTime|null $plannedTime
+	 * @param \DateTime $timeOfExecute
+	 * @param Type\DateTime $now
+	 * @return bool
+	 */
+	protected static function isPlannedLater(
+		?Type\DateTime $plannedTime,
+		\DateTime $timeOfExecute,
+		Type\DateTime $now
+	): bool
+	{
+		if (!$plannedTime)
+		{
+			return false;
+		}
+
+		$plannedTimestamp = $plannedTime->getTimestamp();
+
+		return $plannedTimestamp > $now->getTimestamp()
+			&& $plannedTimestamp > $timeOfExecute->getTimestamp();
 	}
 
 	/**

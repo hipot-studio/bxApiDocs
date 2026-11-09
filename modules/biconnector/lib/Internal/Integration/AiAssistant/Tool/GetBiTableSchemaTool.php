@@ -4,10 +4,13 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Table\GetTableSchemaOperation;
 use Bitrix\Main\DI\ServiceLocator;
@@ -35,21 +38,14 @@ final class GetBiTableSchemaTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'tableName' => [
-					'type' => 'string',
-					'description' => 'Physical table name as returned by list_bi_tables.',
-				],
-				'schema' => [
-					'type' => 'string',
-					'description' => 'Optional schema name. If omitted, the default BI schema is used.',
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.table.schema.get',
+			'mcp',
+			[
+				'tableName' => 'Physical table name as returned by list_bi_tables. Must be nonblank after trim.',
+				'schema' => 'Optional schema name. If omitted or empty, the default BI schema is used.',
 			],
-			'required' => ['tableName'],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -100,9 +96,23 @@ final class GetBiTableSchemaTool extends BaseBiTool
 			: null
 		;
 
-		$response = IntegratorFactory::getInstance()->getTableMetadata($tableName, $schema);
+		$response = IntegratorFactory::getInstance()->getTableMetadata(
+			self::findActAsUser($userId),
+			$tableName,
+			$schema,
+		);
 		if ($response->hasErrors())
 		{
+			// Superset answers a table closed by the rights of the person as it answers a missing one; both are
+			// told alike, so that the answer does not confirm that a closed table exists.
+			if (
+				$response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND
+				&& ActAsFailure::findMessage($response->getErrors()) === null
+			)
+			{
+				throw new McpException(sprintf(GetTableSchemaOperation::TABLE_NOT_AVAILABLE_MESSAGE, $tableName));
+			}
+
 			throw self::unavailableBiException(
 				$response->getErrors(),
 				[

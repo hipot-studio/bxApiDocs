@@ -5,10 +5,18 @@ use Bitrix\Landing\Copilot\Manager as CopilotManager;
 use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use Bitrix\Landing\Internals\SiteTable;
 use Bitrix\Landing\Landing;
+use Bitrix\Landing\Markup\MarkupPage;
 use Bitrix\Landing\Site\Type as SiteType;
 
 class TailwindRuntimeEligibilityService
 {
+	/**
+	 * Per-request memoization of the page format, keyed by service class: every consumer creates
+	 * its own instance, and subclasses override the underlying query and must not share results.
+	 * @var array<string, array<int, bool>>
+	 */
+	private static array $markupLandingCache = [];
+
 	private CreateAiSiteChecker $createAiSiteChecker;
 
 	public function __construct(?CreateAiSiteChecker $createAiSiteChecker = null)
@@ -29,7 +37,26 @@ class TailwindRuntimeEligibilityService
 			return false;
 		}
 
-		return $this->isSiteSupported($siteId);
+		// The runtime follows the format of the page: a markup page of an AI site ships its own styles.
+		return $this->isSiteSupported($siteId) && !$this->isMarkupLandingCached($landingId);
+	}
+
+	/**
+	 * Drops the memoized page format. The markup intake calls it when a page becomes a markup one.
+	 */
+	public static function clearMarkupLandingCache(?int $landingId = null): void
+	{
+		if ($landingId === null)
+		{
+			self::$markupLandingCache = [];
+
+			return;
+		}
+
+		foreach (self::$markupLandingCache as $class => $cache)
+		{
+			unset(self::$markupLandingCache[$class][$landingId]);
+		}
 	}
 
 	public function isSiteSupported(int $siteId): bool
@@ -51,6 +78,18 @@ class TailwindRuntimeEligibilityService
 	protected function isAiSitesEnabled(): bool
 	{
 		return CopilotManager::isAiSitesEnabled();
+	}
+
+	private function isMarkupLandingCached(int $landingId): bool
+	{
+		self::$markupLandingCache[static::class][$landingId] ??= $this->isMarkupLanding($landingId);
+
+		return self::$markupLandingCache[static::class][$landingId];
+	}
+
+	protected function isMarkupLanding(int $landingId): bool
+	{
+		return MarkupPage::isMarkupLanding($landingId);
 	}
 
 	protected function resolveLandingSiteId(int $landingId): int

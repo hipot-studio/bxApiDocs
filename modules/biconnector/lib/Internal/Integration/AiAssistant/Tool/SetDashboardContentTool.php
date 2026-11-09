@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard\DashboardJsonM
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard\DashboardLayoutBuilder;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard\NativeFilterBuilder;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\DraftPolicy;
@@ -52,14 +53,14 @@ final class SetDashboardContentTool extends BaseBiTool
 			. '`range` is a numeric range filter. `value`/`range` need '
 			. '`datasetId` and `column` (use list_datasets / get_bi_table_schema '
 			. 'to look up real column names — never guess). '
-			. 'By default a filter applies to all charts in the current update; '
-			. 'restrict scope with `chartIds`. '
+			. 'By default a filter applies to all charts in the resulting layout; '
+			. 'restrict scope with `chartIds`; an empty list applies to no charts. '
 			. 'HARD INVARIANT — every dashboard MUST have a `time_range` filter. '
 			. 'The tool rejects `charts=[...]` updates when no `time_range` '
 			. 'filter is configured (either supplied in the same call or '
 			. 'already present on the dashboard). When attaching the first '
 			. 'chart, send `charts` and `filters` (with a time_range) together. '
-			. 'For `time_range`, ALWAYS provide `defaultValue` — a Superset '
+			. 'Supply at least one `time_range` with a nonblank `defaultValue` — a Superset '
 			. 'time expression that becomes the filter\'s initial value when '
 			. 'the user opens the dashboard. Translate the user\'s phrasing '
 			. 'literally: "first quarter <year>" → "<year>-01-01 : <year>-03-31"; '
@@ -79,112 +80,43 @@ final class SetDashboardContentTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'dashboardId' => [
-					'type' => 'integer',
-					'description' => 'Local dashboard id (from create_dashboard or list_dashboards). '
-						. 'Positive integer.',
-					'minimum' => 1,
-				],
-				'charts' => [
-					'type' => 'array',
-					'description' => 'Full chart layout. Replaces existing layout. '
-						. 'Charts are flowed left-to-right in input order; a chart wraps '
-						. 'to a new row whenever the running row width would exceed 12 '
-						. 'grid units.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'chartId' => [
-								'type' => 'integer',
-								'description' => 'Chart id (from list_charts or create_chart).',
-								'minimum' => 1,
-							],
-							'width' => [
-								'type' => 'integer',
-								'description' => 'Chart width in 1..12 grid units. Defaults to 6 (half row).',
-								'minimum' => 1,
-								'maximum' => 12,
-							],
-							'height' => [
-								'type' => 'integer',
-								'description' => 'Chart height in grid units. Defaults to 50. Range 10..200.',
-								'minimum' => 10,
-								'maximum' => 200,
-							],
-							'sliceName' => [
-								'type' => 'string',
-								'description' => 'Optional chart label override shown in the dashboard.',
-							],
-						],
-						'required' => ['chartId'],
-						'additionalProperties' => false,
-					],
-				],
-				'filters' => [
-					'type' => 'array',
-					'description' => 'Full filter configuration. Replaces existing filters.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'name' => [
-								'type' => 'string',
-								'description' => 'Filter display name shown in the dashboard sidebar.',
-							],
-							'filterType' => [
-								'type' => 'string',
-								'description' => '`time_range` — global date range (no dataset/column needed). '
-									. '`value` — multi-select dropdown filtering by column value. '
-									. '`range` — numeric range filter on a column.',
-								'enum' => NativeFilterBuilder::FILTER_TYPES,
-							],
-							'datasetId' => [
-								'type' => 'integer',
-								'description' => 'Dataset id the column belongs to. Required for `value` / `range`.',
-								'minimum' => 1,
-							],
-							'column' => [
-								'type' => 'string',
-								'description' => 'Column to filter on. Required for `value` / `range`. '
-									. 'Use real column names from get_bi_table_schema.',
-							],
-							'chartIds' => [
-								'type' => 'array',
-								'description' => 'Optional chart ids the filter applies to. If omitted, '
-									. 'the filter applies to every chart sent in this update.',
-								'items' => [
-									'type' => 'integer',
-									'minimum' => 1,
-								],
-							],
-							'defaultValue' => [
-								'type' => 'string',
-								'description' => 'For `time_range` only: initial date range '
-									. 'when the dashboard opens. Use Superset time '
-									. 'expressions: named ranges like "Last quarter", '
-									. '"Last month", "Last year", "previous calendar month", '
-									. '"Today", "Yesterday"; or explicit ISO date pairs '
-									. '"YYYY-MM-DD : YYYY-MM-DD" (e.g. "2024-01-01 : 2024-03-31"). '
-									. 'REQUIRED for every time_range filter.',
-							],
-						],
-						'required' => ['name', 'filterType'],
-						'additionalProperties' => false,
-					],
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved '
-						. 'overwriting the dashboard content (layout and/or filters). Omit or set '
-						. 'false to only preview. Do NOT self-confirm or assume approval from '
-						. 'earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			BuilderArgumentContract::methodForTool($this->getName()),
+			'mcp',
+			[
+				'dashboardId' => 'Local dashboard id (from create_dashboard or list_dashboards). Positive integer.',
+				'charts' => 'Full chart layout. Replaces existing layout. Charts flow left-to-right in input order; '
+					. 'a chart wraps to a new row whenever the running row width would exceed 12 grid units. '
+					. 'Omit to keep the layout; [] clears it.',
+				'charts[].chartId' => 'Chart id (from list_charts or create_chart).',
+				'charts[].width' => 'Chart width in 1..12 grid units. Defaults to 6 (half row).',
+				'charts[].height' => 'Chart height in grid units. Defaults to 50. Range 10..200.',
+				'charts[].sliceName' => 'Optional chart label override shown in the dashboard.',
+				'filters' => 'Full filter configuration. Replaces existing filters. Omit to keep the filters. '
+					. 'Supply at least one time_range with a nonblank defaultValue; [] is rejected.',
+				'filters[].name' => 'Filter display name shown in the dashboard sidebar.',
+				'filters[].filterType' => '`time_range` is a global date range (no dataset/column needed). '
+					. '`value` is a multi-select dropdown filtering by column value. '
+					. '`range` is a numeric range filter on a column.',
+				'filters[].datasetId' => 'Dataset id the column belongs to. Required for value/range.',
+				'filters[].column' => 'Column to filter on. Required for value/range. '
+					. 'Use real column names from get_bi_table_schema.',
+				'filters[].chartIds' => 'Optional chart ids the filter applies to. If omitted, applies to all charts '
+					. 'of the resulting layout; [] means no charts.',
+				'filters[].defaultValue' => 'For time_range: initial date range when the dashboard opens. '
+					. 'Use Superset expressions such as "Last quarter", "Last month", "Last year", '
+					. '"previous calendar month", "Today", "Yesterday", or ISO date pairs YYYY-MM-DD : YYYY-MM-DD. '
+					. 'At least one supplied time_range must have a nonblank defaultValue.',
 			],
-			'required' => ['dashboardId'],
-			'additionalProperties' => false,
+		);
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved '
+				. 'overwriting the dashboard content (layout and/or filters). Omit or set '
+				. 'false to only preview. Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -314,12 +246,14 @@ final class SetDashboardContentTool extends BaseBiTool
 		// .set_dash_metadata). Sending position_json as a top-level field
 		// updates the column but leaves slices empty, making the frontend
 		// render every chart as MissingChart.
-		$jsonMetadata = DashboardJsonMetadataReader::fetch(
+		$remote = DashboardJsonMetadataReader::fetchDashboard(
 			$externalId,
 			$userId,
 			$dashboardId,
 			'set_dashboard_content',
 		);
+		$jsonMetadata = $remote?->jsonMetadata ?? [];
+		$savedPositions = $remote ? DashboardJsonMetadataReader::savedPositions($remote) : [];
 
 		if ($hasCharts && !$timeRangeProvided && !DashboardJsonMetadataReader::hasTimeRange($jsonMetadata))
 		{
@@ -337,11 +271,9 @@ final class SetDashboardContentTool extends BaseBiTool
 			$jsonMetadata['cross_filters_enabled'] = true;
 		}
 
-		// Capture the OLD universe of chart IDs BEFORE positions are replaced
-		// below — the smart re-scope needs it to tell an "all charts" filter apart
-		// from one the user narrowed by hand. Once $jsonMetadata['positions'] is
-		// overwritten with the new layout this information is gone.
-		$oldChartIds = self::extractChartIdsFromPositions($jsonMetadata['positions'] ?? []);
+		// The OLD universe of chart IDs — the smart re-scope needs it to tell an
+		// "all charts" filter apart from one the user narrowed by hand.
+		$oldChartIds = self::extractChartIdsFromPositions($savedPositions);
 
 		if ($hasCharts)
 		{
@@ -359,7 +291,7 @@ final class SetDashboardContentTool extends BaseBiTool
 					static fn (array $c): int => (int)($c['chartId'] ?? 0),
 					$args['charts'],
 				)
-				: self::extractChartIdsFromPositions($jsonMetadata['positions'] ?? [])
+				: $oldChartIds
 			;
 			$jsonMetadata['native_filter_configuration'] = NativeFilterBuilder::build(
 				$args['filters'],
@@ -383,6 +315,18 @@ final class SetDashboardContentTool extends BaseBiTool
 					$args['charts'],
 				),
 			);
+		}
+
+		$access = SetContentOperation::checkContentAccess(
+			$hasCharts ? $args['charts'] : null,
+			$hasFilters ? $args['filters'] : null,
+			$hasCharts ? self::extractChartIdsFromPositions($jsonMetadata['positions']) : $oldChartIds,
+			new Actor($userId, Channel::Mcp),
+			$oldChartIds,
+		);
+		if (!$access->isSuccess())
+		{
+			throw self::toMcpException($access);
 		}
 
 		$confirm = ($args['confirm'] ?? false) === true;

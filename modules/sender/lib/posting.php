@@ -241,6 +241,21 @@ class PostingTable extends Entity\DataManager
 	}
 
 	/**
+	 * True when there is no such posting yet or it has not been taken into sending.
+	 */
+	public static function isNotStarted(int $postingId): bool
+	{
+		if ($postingId <= 0)
+		{
+			return true;
+		}
+
+		$posting = static::getRow(['select' => ['STATUS'], 'filter' => ['=ID' => $postingId]]);
+
+		return !$posting || $posting['STATUS'] === static::STATUS_NEW;
+	}
+
+	/**
 	 * @param $id
 	 * @param array|null $customFilter
 	 *

@@ -25,18 +25,23 @@ class KeyFieldAssembler extends FieldAssembler
 			}
 
 			$key = '';
-			$text = \CUtil::JSEscape(Loc::getMessage('BICONNECTOR_SETTINGS_GRID_RIW_ASSEMBLER_KEY_FIELD'));
+			$text = htmlspecialcharsbx((string)Loc::getMessage('BICONNECTOR_SETTINGS_GRID_RIW_ASSEMBLER_KEY_FIELD'));
 
 			if (isset($row['data']['ACCESS_KEY']))
 			{
-				$key = \CUtil::JSEscape($row['data']['ACCESS_KEY']);
+				$key = htmlspecialcharsbx((string)$row['data']['ACCESS_KEY']);
 			}
 
 			$result = '
-				<a onclick="BX.BIConnector.KeysGrid.copyKey(this)" style="text-decoration: none" class="ui-btn ui-btn-xs ui-btn-light-border ui-btn-round">
+				<button
+					type="button"
+					class="ui-btn ui-btn-xs ui-btn-light-border ui-btn-round"
+					data-bic-focus-role="copy-key"
+					onclick="BX.BIConnector.KeysGrid.copyKey(this)"
+				>
 					' . $text . '
 					<input data-key-id="" type="hidden" value="' . $key . '"/>
-				</a>
+				</button>
 			';
 
 			$row['columns'][$columnId] = $result;

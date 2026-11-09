@@ -3,26 +3,29 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Source;
 
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DetailLinkFieldAssembler;
-use CUtil;
 
 class NameFieldAssembler extends DetailLinkFieldAssembler
 {
 	protected function prepareColumn($value): string
 	{
 		$id = (int)($value['ID'] ?? 0);
-		$title = htmlspecialcharsbx(($value['TITLE'] ?? ''));
-		$moduleId = CUtil::JSEscape(($value['MODULE'] ?? ''));
-
-		$link = "
-				<a 
-					style='cursor: pointer' 
-					onclick='BX.BIConnector.ExternalSourceManager.Instance.openSourceDetail({$id}, \"{$moduleId}\")'
-				>{$title}</a>
-			";
+		$title = htmlspecialcharsbx((string)($value['TITLE'] ?? ''));
+		// The module reaches the handler through the data attribute, never through the code.
+		$moduleId = htmlspecialcharsbx((string)($value['MODULE'] ?? ''));
+		$onclick = 'BX.BIConnector.ExternalSourceManager.Instance'
+			. ".openSourceDetail({$id}, this.dataset.bicModule)"
+		;
 
 		return <<<HTML
 			<div class="source-title-wrapper">
-				{$link}
+				<button
+					type="button"
+					class="biconnector-grid-name-link-button"
+					data-bic-focus-role="title"
+					data-bic-entity-id="{$id}"
+					data-bic-module="{$moduleId}"
+					onclick="{$onclick}"
+				>{$title}</button>
 			</div>
 		HTML;
 	}

@@ -34,6 +34,15 @@ abstract class BaseScenario implements IScenario
 
 	abstract public function getQuotaCalculateStep(): ?int;
 
+	/**
+	 * Step whose failure means the request was refused on its topic rather than failed technically.
+	 * Null when the scenario moderates nothing, so such a failure can never be read as a refusal.
+	 */
+	public function getModerationStepId(): ?int
+	{
+		return null;
+	}
+
 	abstract public function getAnalyticCategory(): Metrika\Categories;
 
 	/**
@@ -48,6 +57,18 @@ abstract class BaseScenario implements IScenario
 	 * @inheritdoc
 	 */
 	public function onGenerationError(Generation $generation, GenerationException $e): void
+	{
+	}
+
+	/**
+	 * Called once a run has ended the generation for good - any throwable, not only a generation error,
+	 * whose Error mark has reached the database, so no executor is going to continue the generation.
+	 * Not called for the time budget exit nor for a failure the retry agent resumes.
+	 *
+	 * Runs before the failure is saved, so an implementation must not throw: an exception here would cost
+	 * the run the record of what happened. The generation guards the call anyway.
+	 */
+	public function onTerminalFailure(Generation $generation, \Throwable $e): void
 	{
 	}
 

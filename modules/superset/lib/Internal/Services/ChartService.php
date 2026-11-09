@@ -26,8 +26,22 @@ final class ChartService extends AbstractSupersetContext
 	 * @param int|null $page Zero-based page index (bounded mode only).
 	 * @param int|null $pageSize Page size; presence switches on bounded mode.
 	 */
-	public function list(array $ids = [], ?string $nameFilter = null, ?int $page = null, ?int $pageSize = null): Main\Result
+	/**
+	 * @param string|null $actAsLogin Superset login the list is built for (act-as); null — the service account.
+	 */
+	public function list(
+		array $ids = [],
+		?string $nameFilter = null,
+		?int $page = null,
+		?int $pageSize = null,
+		?string $actAsLogin = null,
+	): Main\Result
 	{
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
 		$filter = [];
 		if (!empty($ids))
 		{
@@ -46,7 +60,7 @@ final class ChartService extends AbstractSupersetContext
 			];
 		}
 
-		$chartApi = $this->getChartApi();
+		$chartApi = $this->getChartApi($actAsLogin);
 
 		if ($pageSize !== null)
 		{
@@ -54,6 +68,11 @@ final class ChartService extends AbstractSupersetContext
 			if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 			{
 				return $this->createRequestErrorResult($requestResult, 'Get charts list');
+			}
+			$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+			if ($notApplied !== null)
+			{
+				return $notApplied;
 			}
 
 			$charts = $this->decode($requestResult->getAnswer());
@@ -89,6 +108,11 @@ final class ChartService extends AbstractSupersetContext
 			if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 			{
 				return $this->createRequestErrorResult($requestResult, 'Get charts list');
+			}
+			$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+			if ($notApplied !== null)
+			{
+				return $notApplied;
 			}
 
 			$charts = $this->decode($requestResult->getAnswer());
@@ -145,12 +169,25 @@ final class ChartService extends AbstractSupersetContext
 		return $result;
 	}
 
-	public function get(int $id): Main\Result
+	/**
+	 * @param string|null $actAsLogin Superset login the chart is read for (act-as); null — the service account.
+	 */
+	public function get(int $id, ?string $actAsLogin = null): Main\Result
 	{
-		$requestResult = $this->getChartApi()->getChartById($id);
+		if ($actAsLogin === '')
+		{
+			return $this->createInvalidActAsLoginResult();
+		}
+
+		$requestResult = $this->getChartApi($actAsLogin)->getChartById($id);
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
 			return $this->createRequestErrorResult($requestResult, 'Get chart');
+		}
+		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
+		if ($notApplied !== null)
+		{
+			return $notApplied;
 		}
 
 		$decoded = $this->decode($requestResult->getAnswer());
@@ -309,8 +346,8 @@ final class ChartService extends AbstractSupersetContext
 		];
 	}
 
-	private function getChartApi(): Chart
+	private function getChartApi(?string $actAsLogin = null): Chart
 	{
-		return new Chart($this->connector);
+		return new Chart($this->getConnectorFor($actAsLogin));
 	}
 }

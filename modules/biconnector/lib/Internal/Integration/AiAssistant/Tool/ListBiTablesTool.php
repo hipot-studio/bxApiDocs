@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Table\ListBiTablesOperation;
 use Bitrix\Main\DI\ServiceLocator;
@@ -42,30 +43,18 @@ final class ListBiTablesTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'schema' => [
-					'type' => 'string',
-					'description' => 'Optional schema name to filter tables. '
-						. 'If omitted, the default BI schema is used.',
-				],
-				'limit' => [
-					'type' => 'integer',
-					'minimum' => 1,
-					'maximum' => self::LIMIT_MAX,
-					'description' => 'Page size. Default ' . self::LIMIT_DEFAULT
-						. ', maximum ' . self::LIMIT_MAX . '. Values over max are clamped.',
-				],
-				'offset' => [
-					'type' => 'integer',
-					'minimum' => 0,
-					'description' => 'Offset for pagination. Default 0. '
-						. 'When `has_more` is true, send the next request with `offset` = previous `offset` + `limit`.',
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.table.list',
+			'mcp',
+			[
+				'schema' => 'Optional schema name to filter tables. '
+					. 'If omitted or empty, the default BI schema is used.',
+				'limit' => 'Page size. Default ' . self::LIMIT_DEFAULT
+					. ', minimum 1, maximum ' . self::LIMIT_MAX . '.',
+				'offset' => 'Offset for pagination. Default 0. '
+					. 'When `has_more` is true, send the next request with `offset` = previous `offset` + `limit`.',
 			],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -135,7 +124,7 @@ final class ListBiTablesTool extends BaseBiTool
 			$offset = max(0, (int)$args['offset']);
 		}
 
-		$response = IntegratorFactory::getInstance()->listTables($schema);
+		$response = IntegratorFactory::getInstance()->listTables(self::findActAsUser($userId), $schema);
 		if ($response->hasErrors())
 		{
 			throw self::unavailableBiException(

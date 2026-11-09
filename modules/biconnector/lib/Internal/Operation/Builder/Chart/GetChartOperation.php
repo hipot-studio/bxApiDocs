@@ -4,10 +4,11 @@ namespace Bitrix\BIConnector\Internal\Operation\Builder\Chart;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
 
@@ -20,6 +21,10 @@ use Bitrix\Main\Web\Json;
  */
 final class GetChartOperation
 {
+	public const CHART_NOT_AVAILABLE_MESSAGE = 'Chart %d is not found or is not available to the current user. '
+		. 'Do not retry; call list_charts to see the charts the user can read.'
+	;
+
 	/**
 	 * Keys kept from the raw Superset `params` blob: those ChartParamsBuilder writes for the supported
 	 * vizTypes plus a few legacy/UI keys of charts created in the Superset UI. Decorative keys are dropped,
@@ -51,15 +56,17 @@ final class GetChartOperation
 
 	/** @var \Closure(int): AccessController */
 	private readonly \Closure $accessControllerFactory;
+	private readonly SupersetIdentity $identity;
 
 	/**
 	 * @param (\Closure(int): AccessController)|null $accessControllerFactory
 	 */
-	public function __construct(?\Closure $accessControllerFactory = null)
+	public function __construct(?\Closure $accessControllerFactory = null, ?SupersetIdentity $identity = null)
 	{
 		$this->accessControllerFactory = $accessControllerFactory
 			?? static fn(int $userId): AccessController => new AccessController($userId)
 		;
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	public function execute(int $chartId, Actor $actor): Result
@@ -79,23 +86,41 @@ final class GetChartOperation
 			);
 		}
 
-		$response = IntegratorFactory::getInstance()->getChartById($chartId);
-		if ($response->hasErrors())
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
 		{
-			return Refusal::unavailableBi(
-				$response->getErrors(),
-				['stage' => 'get_chart', 'user_id' => $userId, 'chart_id' => $chartId],
-			);
+			return $identityResult;
 		}
 
-		$data = $response->getData();
-		if (!is_array($data))
+		$lookup = (new EntityLookup())->chart($chartId, $identityResult->getData()['user']);
+		if (!$lookup->isSuccess())
 		{
-			$data = [];
+			if ($lookup->getErrors()[0]->getCode() === FailureCode::NotFound->value)
+			{
+				return Refusal::error(FailureCode::NotFound, sprintf(self::CHART_NOT_AVAILABLE_MESSAGE, $chartId))
+					->setData($lookup->getData())
+				;
+			}
+
+			return $lookup;
+		}
+
+		$data = $lookup->getData()['entity'];
+		$dashboards = $data['dashboards'] ?? [];
+		if (!is_array($dashboards))
+		{
+			return Refusal::unavailableBi([], ['stage' => 'get_chart.dashboards', 'chart_id' => $chartId]);
+		}
+		foreach ($dashboards as $dashboard)
+		{
+			if (!is_array($dashboard) || !is_numeric($dashboard['id'] ?? null) || (int)$dashboard['id'] <= 0)
+			{
+				return Refusal::unavailableBi([], ['stage' => 'get_chart.dashboards', 'chart_id' => $chartId]);
+			}
 		}
 
 		return (new Result())->setData([
-			'id' => (int)($data['id'] ?? $chartId),
+			'id' => (int)$data['id'],
 			'name' => (string)($data['slice_name'] ?? $data['chart_name'] ?? ''),
 			'description' => (string)($data['description'] ?? ''),
 			'viz_type' => (string)($data['viz_type'] ?? ''),
@@ -103,7 +128,7 @@ final class GetChartOperation
 			'datasource_type' => (string)($data['datasource_type'] ?? 'table'),
 			'params' => self::trimParams($data['params'] ?? null),
 			'owners' => $data['owners'] ?? [],
-			'dashboards' => self::trimDashboards($data['dashboards'] ?? []),
+			'dashboards' => self::trimDashboards($dashboards),
 		]);
 	}
 
@@ -143,21 +168,11 @@ final class GetChartOperation
 	 *
 	 * @return array<int, array{id: int, title: string}>
 	 */
-	private static function trimDashboards(mixed $dashboards): array
+	private static function trimDashboards(array $dashboards): array
 	{
-		if (!is_array($dashboards))
-		{
-			return [];
-		}
-
 		$result = [];
 		foreach ($dashboards as $dashboard)
 		{
-			if (!is_array($dashboard))
-			{
-				continue;
-			}
-
 			$result[] = [
 				'id' => (int)($dashboard['id'] ?? 0),
 				'title' => (string)($dashboard['dashboard_title'] ?? $dashboard['title'] ?? ''),

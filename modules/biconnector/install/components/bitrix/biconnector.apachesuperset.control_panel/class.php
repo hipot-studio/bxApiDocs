@@ -7,6 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Component\PermissionSection\SectionFactory;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -134,6 +135,9 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 				'ID' => 'ai_agents',
 				'TEXT' => Loc::getMessage('BICONNECTOR_SUPERSET_CONTROL_PANEL_AI_AGENTS'),
 				'URL' => AiAgentsSection::getUrl(AiAgentsEntrySource::SOURCE_MENU),
+				'ON_CLICK' => "BX.SidePanel.Instance.open('"
+					. \CUtil::JSEscape(AiAgentsSection::getUrl(AiAgentsEntrySource::SOURCE_MENU))
+					. "', " . AiAgentsSection::getSliderOptions() . ')',
 				'ADDITIONAL_URL' => [$path],
 				'IS_ACTIVE' => $this->request->getRequestedPageDirectory() === $path,
 				'IS_LOCKED' => false,
@@ -236,7 +240,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			];
 		}
 
-		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
+		if (SectionFactory::hasAvailableSection())
 		{
 			$menuTitle = Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_RIGHTS_SETTINGS');
 			if (!$isFeatureEnabled)
@@ -268,7 +272,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 				$settingsItems[] = [
 					'ID' => 'RIGHTS_SETTINGS',
 					'TEXT' => $menuTitle,
-					'ON_CLICK' => "BX.SidePanel.Instance.open('" . \CUtil::JSEscape('/bi/settings/permissions/') . "', {cacheable: false})",
+					'ON_CLICK' => "BX.SidePanel.Instance.open('" . \CUtil::JSEscape('/bi/settings/permissions/') . "', {cacheable: false, customLeftBoundary: 0})",
 				];
 			}
 		}

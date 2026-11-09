@@ -34,7 +34,47 @@ class RpaAutomationTaskFieldsComponent extends Bitrix\Rpa\Components\ItemDetail
 
 	protected function checkAccess(): Main\Result
 	{
-		return new Main\Result();
+		$result = new Main\Result();
+		if (
+			$this->isIncompleteTaskParticipant()
+			|| Driver::getInstance()->getUserPermissions()->canViewItem($this->item)
+		)
+		{
+			return $result;
+		}
+
+		$result->addError(new Error(
+			Main\Localization\Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'),
+			Rpa\Command::ERROR_CODE_ITEM_VIEW_PERMISSION,
+		));
+
+		return $result;
+	}
+
+	/**
+	 * Returns true if the user has not answered the task taskId of this item yet.
+	 */
+	protected function isIncompleteTaskParticipant(): bool
+	{
+		$taskManager = Driver::getInstance()->getTaskManager();
+		$taskId = (int)($this->arParams['taskId'] ?? 0);
+		if (!$taskManager || $taskId <= 0)
+		{
+			return false;
+		}
+		$task = $taskManager->getTaskById($taskId);
+		$documentId = $task['PARAMETERS']['DOCUMENT_ID'] ?? null;
+		if (
+			!is_array($documentId)
+			|| ($documentId[0] ?? null) !== Driver::MODULE_ID
+			|| ($documentId[1] ?? null) !== Rpa\Integration\Bizproc\Document\Item::class
+			|| (string)($documentId[2] ?? '') !== $this->type->getId() . ':' . $this->item->getId()
+		)
+		{
+			return false;
+		}
+
+		return in_array(Driver::getInstance()->getUserId(), $task['INCOMPLETE_USERS'] ?? [], false);
 	}
 
 	protected function prepareFormConfig(): array
@@ -238,6 +278,11 @@ class RpaAutomationTaskFieldsComponent extends Bitrix\Rpa\Components\ItemDetail
 		}
 
 		return $params;
+	}
+
+	protected function isReadOnly(): bool
+	{
+		return empty($this->arParams['fieldsToSet']);
 	}
 
 	protected function getEditorConfigId(): string

@@ -9,6 +9,7 @@ use Bitrix\BizprocMobile\EntityEditor\Converter;
 use Bitrix\BizprocMobile\EntityEditor\ParametersProvider;
 use Bitrix\BizprocMobile\EntityEditor\ProcessDataProvider;
 use Bitrix\BizprocMobile\UI\CommentCounterView;
+use Bitrix\BizprocMobile\Trait\AddPublicErrorsTrait;
 use Bitrix\BizprocMobile\UI\WorkflowUserDetailView;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
@@ -17,6 +18,8 @@ use Bitrix\Mobile\UI\EntityEditor\FormWrapper;
 
 class LoadDetailsAction extends Action
 {
+	use AddPublicErrorsTrait;
+
 	private \CBPDocumentService $documentService;
 
 	public function run(string $workflowId)
@@ -24,7 +27,9 @@ class LoadDetailsAction extends Action
 		$currentUserId = (int)($this->getCurrentUser()?->getId());
 		if ($workflowId === '' || $currentUserId <= 0)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_DETAILS')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_DETAILS')),
+			]);
 
 			return null;
 		}
@@ -33,7 +38,9 @@ class LoadDetailsAction extends Action
 		$state = WorkflowStateTable::getByPrimary($workflowId, ['select' => $select])->fetchObject();
 		if (!$state)
 		{
-			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_DETAILS')));
+			$this->addErrorsAsPublic([
+				new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_ACTION_LOAD_DETAILS')),
+			]);
 
 			return null;
 		}

@@ -649,6 +649,16 @@ class Dashboard extends Controller
 			$urlParams = $paramsService->getGlobalValues();
 		}
 
+		// The company structure filter may be added in Superset after the parameters were saved;
+		// a dashboard whose filters were not loaded may hold it as well. The value of the client is not taken for it.
+		$requiredParamList = UrlParameter\RequiredParameters::getList($dashboard)
+			?? UrlParameter\ScopeMap::getRequiredParamList()
+		;
+		foreach (array_keys($requiredParamList) as $code)
+		{
+			$urlParams[$code] = UrlParameter\ScopeMap::loadGlobalValue(UrlParameter\Parameter::from($code));
+		}
+
 		return [
 			'dashboard' => [
 				'type' =>  $dashboard->getType(),
@@ -862,28 +872,20 @@ class Dashboard extends Controller
 	}
 
 	/**
-	 * @example BX.ajax.runAction('biconnector.dashboard.getEditUrl', {data: {editUrl: '', dashboardId: 192}});
+	 * @example BX.ajax.runAction('biconnector.dashboard.getSupersetEntityLoginUrl', {data: {entityUrl: ''}});
 	 *
-	 * @param Model\Dashboard $dashboard
-	 * @param string $editUrl
+	 * @param string $entityUrl
 	 *
 	 * @return string|null
 	 */
 	public function getSupersetEntityLoginUrlAction(string $entityUrl): ?string
 	{
-		$loginUrl = (new SupersetController())->getLoginUrl();
-
-		if ($loginUrl)
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT))
 		{
-			$url = new Uri($loginUrl);
-			$url->addParams([
-				'next' => $entityUrl,
-			]);
-
-			return $url->getLocator();
+			return $entityUrl;
 		}
 
-		return $entityUrl;
+		return $this->getLoginUrlWithNext($entityUrl);
 	}
 
 	public function getConstructorUrlAction(): ?string
@@ -926,19 +928,28 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$loginUrl = (new SupersetController())->getLoginUrl();
+		return $this->getLoginUrlWithNext($editUrl);
+	}
 
-		if ($loginUrl)
+	private function getLoginUrlWithNext(string $next): ?string
+	{
+		$loginUrlResult = (new SupersetController())->getLoginUrlResult();
+		if (!$loginUrlResult->isSuccess())
 		{
-			$url = new Uri($loginUrl);
-			$url->addParams([
-				'next' => $editUrl,
-			]);
+			$this->addError(IntegrationErrorPresenter::present(
+				$loginUrlResult->getErrors(),
+				Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_OPEN_CONSTRUCTOR_ERROR'),
+			));
 
-			return $url->getLocator();
+			return null;
 		}
 
-		return $editUrl;
+		$url = new Uri($loginUrlResult->getData()['url']);
+		$url->addParams([
+			'next' => $next,
+		]);
+
+		return $url->getLocator();
 	}
 
 	public function renameAction(Model\Dashboard $dashboard, string $title): void

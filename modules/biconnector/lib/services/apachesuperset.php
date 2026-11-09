@@ -132,6 +132,19 @@ class ApacheSuperset extends MicrosoftPowerBI
 		return $this->applySqlTimeLimit($this->rememberDataSourceConnector($dataSources[$name]));
 	}
 
+	/**
+	 * Whether a request to the table has to queue behind the other data requests of the portal. An unknown table
+	 * keeps the queue: the request is answered with an error anyway, and the decision must not depend on that.
+	 *
+	 * @param string $tableName
+	 *
+	 * @return bool
+	 */
+	public function isPortalDataLockRequired(string $tableName): bool
+	{
+		return $this->getDataSourceConnector($tableName)?->requiresPortalDataLock() ?? true;
+	}
+
 	private function applySqlTimeLimit(Connector\Base $connector): Connector\Base
 	{
 		if ($this->isLoadProtectionEnabled)

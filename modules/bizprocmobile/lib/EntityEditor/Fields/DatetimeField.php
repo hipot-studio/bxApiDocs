@@ -65,14 +65,17 @@ class DatetimeField extends BaseField
 
 	protected function getTimestampFromDateString(string $date, int $offset = 0): ?int
 	{
-		if (DateTime::isCorrect($date))
+		$format = null;
+		if (!DateTime::isCorrect($date))
 		{
-			$timestamp = (new DateTime($date))->getTimestamp();
-			$timestamp -= $offset;
+			if (!DateTime::isCorrect($date, DATE_ISO8601))
+			{
+				return null;
+			}
 
-			return $timestamp;
+			$format = DATE_ISO8601;
 		}
 
-		return null;
+		return (new DateTime($date, $format))->getTimestamp() - $offset;
 	}
 }

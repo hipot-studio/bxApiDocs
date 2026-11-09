@@ -9,6 +9,7 @@ use Bitrix\Landing\Copilot\Generation\Descriptor;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSiteState;
 use Bitrix\Landing\Copilot\Manager as CopilotManager;
+use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
 use Bitrix\Landing\Integration\AiAssistant\Dto\AiSiteChatAvailabilityResult;
 use Bitrix\Landing\Integration\AiAssistant\Dto\FailedGenerationContextDto;
@@ -220,6 +221,7 @@ class GetAiSiteStatusHandler
 		if (
 			$descriptor === null
 			|| !$descriptor->isScenario(CreateAiSite::class)
+			|| !$this->isLegacyScenario($descriptor->scenarioClass)
 			|| !$descriptor->isOwnedBy($userId)
 		)
 		{
@@ -245,6 +247,7 @@ class GetAiSiteStatusHandler
 		if (
 			!$generation->initByIdWithoutHtmlBlocks($generationId)
 			|| !$generation->getScenario() instanceof CreateAiSite
+			|| !$this->isLegacyScenario($generation->getScenario()::class)
 		)
 		{
 			throw new GenerationNotFoundException(self::MESSAGE_JOB_NOT_FOUND);
@@ -256,6 +259,15 @@ class GetAiSiteStatusHandler
 		}
 
 		return $generation;
+	}
+
+	/**
+	 * The markup scenarios inherit CreateAiSite, so the lineage check alone would let a markup job
+	 * through: it is polled by its own status tool and gets the common "not found" answer here.
+	 */
+	private function isLegacyScenario(string $scenarioClass): bool
+	{
+		return CreateAiSiteChecker::getScenarioFamily($scenarioClass) === CreateAiSiteChecker::SCENARIO_FAMILY_LEGACY;
 	}
 
 	protected function finalizeCompletedGenerationBinding(Generation $generation): bool

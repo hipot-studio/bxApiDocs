@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Dashboard;
 
+use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\ScreenReaderText;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
@@ -45,6 +46,7 @@ class UrlParamsFieldAssembler extends FieldAssembler
 					'[/hint]' => '</span>',
 				]
 			);
+			$shownPart .= ScreenReaderText::renderRest(array_map('htmlspecialcharsbx', $urlParamsToHide));
 		}
 		else
 		{

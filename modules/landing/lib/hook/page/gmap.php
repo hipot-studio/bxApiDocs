@@ -86,7 +86,7 @@ class GMap extends Page
 		);
 		$lang = $this->getLang();
 		$assets->addString(
-			'<script defer src="https://maps.googleapis.com/maps/api/js?key='
+			'<script async src="https://maps.googleapis.com/maps/api/js?loading=async&key='
 			. $code
 			. '&region='
 			. $lang

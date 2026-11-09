@@ -2,10 +2,15 @@
 
 namespace Bitrix\BIConnector\Internal\Operation\Builder\Dashboard;
 
+use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -23,6 +28,7 @@ final class GetDashboardOperation
 {
 	private const CHART_FIELDS = [
 		'id', 'name', 'kind', 'viz_label', 'tab_path', 'description', 'stats', 'stats_omitted', 'column_descriptions',
+		'no_access',
 	];
 
 	private const FILTER_FIELDS = [
@@ -30,10 +36,18 @@ final class GetDashboardOperation
 	];
 
 	private readonly ReadyDashboardGuard $guard;
+	/** @var \Closure(int): ?User */
+	private readonly \Closure $findSupersetUser;
 
-	public function __construct(?ReadyDashboardGuard $guard = null)
+	/**
+	 * @param \Closure(int): ?User|null $findSupersetUser Superset account of a portal user; the repository by default.
+	 */
+	public function __construct(?ReadyDashboardGuard $guard = null, ?\Closure $findSupersetUser = null)
 	{
 		$this->guard = $guard ?? new ReadyDashboardGuard();
+		$this->findSupersetUser = $findSupersetUser
+			?? static fn(int $userId): ?User => (new SupersetUserRepository())->getById($userId)
+		;
 	}
 
 	/**
@@ -86,14 +100,27 @@ final class GetDashboardOperation
 			return Refusal::invalidArgument($urlParamsResult);
 		}
 
+		// While the table permission axis is on, Superset reads on behalf of the actor, and without a Superset
+		// account there is no read at all. Without the axis the read goes under the service account, as before.
+		$supersetUser = null;
+		if (Feature::isTablePermissionsEnabled())
+		{
+			$supersetUser = ($this->findSupersetUser)($userId);
+			if ($supersetUser === null)
+			{
+				return Refusal::error(FailureCode::AccessDenied, 'A Superset user is required to read BI data.');
+			}
+		}
+
 		$response = IntegratorFactory::getInstance()->getDashboardOverview(
+			$supersetUser,
 			$externalId,
 			$supersetFilters,
 			$urlParamsResult->getData()['urlParams'],
 		);
 		if ($response->hasErrors())
 		{
-			return Refusal::integratorFailure(
+			return Refusal::dashboardReadFailure(
 				$response,
 				['stage' => 'get_dashboard_meta.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
@@ -142,7 +169,7 @@ final class GetDashboardOperation
 				'title' => (string)$dashboard->getTitle(),
 			],
 			'caller_filters' => $callerFiltersEcho,
-			'charts' => self::pickAllowedFields($rawData['charts'] ?? [], self::CHART_FIELDS),
+			'charts' => self::pickAllowedFields(self::markNoAccessCharts($rawData['charts'] ?? []), self::CHART_FIELDS),
 			'available_filters' => self::pickAllowedFields($rawData['available_filters'] ?? [], self::FILTER_FIELDS),
 		];
 		if (!empty($meta))
@@ -156,6 +183,23 @@ final class GetDashboardOperation
 		}
 
 		return (new Result())->setData($skeleton);
+	}
+
+	/**
+	 * A chart closed by the table rights of the caller comes without stats; the flag tells the model so,
+	 * instead of leaving it to read an empty chart.
+	 */
+	private static function markNoAccessCharts(array $charts): array
+	{
+		foreach ($charts as $key => $chart)
+		{
+			if (is_array($chart) && ActAsFailure::isChartAccessDenied($chart))
+			{
+				$charts[$key]['no_access'] = true;
+			}
+		}
+
+		return $charts;
 	}
 
 	/**

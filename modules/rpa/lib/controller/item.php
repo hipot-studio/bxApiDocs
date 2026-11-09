@@ -13,6 +13,7 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\UserField\Types\DateTimeType;
+use Bitrix\Rpa\Command;
 use Bitrix\Rpa\Driver;
 use Bitrix\Rpa\Filter\Item\Provider;
 use Bitrix\Rpa\Filter\Item\Settings;
@@ -181,7 +182,7 @@ class Item extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError($this->getViewAccessDeniedError());
 			return null;
 		}
 
@@ -225,18 +226,25 @@ class Item extends Base
 			$this->addError(new Error(Loc::getMessage('RPA_ITEM_NOT_FOUND_ERROR')));
 			return null;
 		}
+		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
+		{
+			$this->addError($this->getUpdateWithoutViewAccessError($item, $fields));
+			$this->deleteUploadedFiles();
+
+			return null;
+		}
 		$previousItemId = null;
 		if(isset($fields['previousItemId']))
 		{
 			$previousItemId = (int) $fields['previousItemId'];
 		}
 
-		$stageId = $item->getStageId();
 		if(isset($fields['stageId']))
 		{
 			$item->setStageId($fields['stageId']);
 		}
 		$this->processFields($item, $fields);
+		$expectedStageId = $item->getStageId();
 		$command = Driver::getInstance()->getFactory()->getUpdateCommand($item);
 		if($eventId)
 		{
@@ -246,13 +254,19 @@ class Item extends Base
 		if($result->isSuccess())
 		{
 			$item = $command->getItem();
-			if($previousItemId !== null && $item->getStageId() === $stageId)
+			if(!$command->isTerminated() && $previousItemId !== null && $item->getStageId() === $expectedStageId)
 			{
 				$userId = Driver::getInstance()->getUserId();
 				if($userId > 0)
 				{
 					$sort = $this->getSortByPreviousItemId($item, $userId, $previousItemId);
-					ItemSortTable::setSortForItem($item, $userId, $sort);
+					$sortResult = ItemSortTable::setSortForItem($item, $userId, $sort);
+					if($sortResult->isSuccess())
+					{
+						Driver::getInstance()->getPullManager()->sendItemSortedEvent(
+							$item, $userId, $previousItemId, $eventId ?? ''
+						);
+					}
 				}
 			}
 			return [
@@ -281,7 +295,7 @@ class Item extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError($this->getViewAccessDeniedError());
 			return null;
 		}
 		$userId = Driver::getInstance()->getUserId();
@@ -443,9 +457,10 @@ class Item extends Base
 		$withUsers = $params['withUsers'] ?? true;
 
 		$userPermissions = Driver::getInstance()->getUserPermissions();
-		$canModifyItemsInStage = $userPermissions->canModifyItemsInStage($item->getType(), $item->getStageId());
+		$canModifyItem = $userPermissions->canModifyItem($item);
 		$canMoveFromStage = $userPermissions->canMoveFromStage($item->getType(), $item->getStageId());
 		$canMoveToStage = $userPermissions->canMoveToStage($item->getStage());
+		$canMoveItem = $userPermissions->canMoveItemFromStage($item);
 
 		$data = [];
 		$data['id'] = $item->getId();
@@ -472,11 +487,7 @@ class Item extends Base
 		{
 			$userFieldCollection = $item->getType()->getUserFieldCollection();
 		}
-		if(
-			$canModifyItemsInStage
-			|| $canMoveFromStage
-			|| ($canMoveToStage && $item->getMovedBy() === $userPermissions->getUserId())
-		)
+		if($userPermissions->canViewItem($item))
 		{
 			foreach($userFieldCollection as $userField)
 			{
@@ -491,7 +502,7 @@ class Item extends Base
 		if($withPermissions)
 		{
 			$hasEmptyNotEditableMandatoryFields = false;
-			if(!$canModifyItemsInStage)
+			if(!$canModifyItem)
 			{
 				foreach($userFieldCollection as $userField)
 				{
@@ -507,12 +518,10 @@ class Item extends Base
 				}
 			}
 			$data['permissions'] = [
-				'draggable' => (
-					($canMoveFromStage && !$hasEmptyNotEditableMandatoryFields) ||
-					($canMoveToStage && $item->getMovedBy() === $userPermissions->getUserId())
-				),
-				'droppable' => ($canModifyItemsInStage || $canMoveFromStage || $canMoveToStage),
+				'draggable' => ($canMoveItem && !$hasEmptyNotEditableMandatoryFields),
+				'droppable' => ($canModifyItem || $canMoveFromStage || $canMoveToStage),
 				'canDelete' => $userPermissions->canDeleteItem($item),
+				'canModify' => $canModifyItem,
 			];
 		}
 
@@ -552,6 +561,37 @@ class Item extends Base
 		}
 
 		return $data;
+	}
+
+	protected function getViewAccessDeniedError(): Error
+	{
+		return new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'), Command::ERROR_CODE_ITEM_VIEW_PERMISSION);
+	}
+
+	/**
+	 * The code depends only on the request, not on the item data: the user without access learns nothing
+	 * about the stage and the values of the item.
+	 */
+	protected function getUpdateWithoutViewAccessError(\Bitrix\Rpa\Model\Item $item, array $fields): Error
+	{
+		$code = Command::ERROR_CODE_ITEM_VIEW_PERMISSION;
+		if(isset($fields['stageId']))
+		{
+			$code = Command::ERROR_CODE_ITEM_MOVE_PERMISSION;
+		}
+		else
+		{
+			foreach($item->getType()->getUserFieldCollection() as $userField)
+			{
+				if(array_key_exists($userField->getName(), $fields))
+				{
+					$code = Command::ERROR_CODE_ITEM_MODIFY_PERMISSION;
+					break;
+				}
+			}
+		}
+
+		return new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED'), $code);
 	}
 
 	protected function prepareValue(UserField $userField, \Bitrix\Rpa\Model\Item $item)
@@ -628,7 +668,7 @@ class Item extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError($this->getViewAccessDeniedError());
 			return null;
 		}
 
@@ -663,7 +703,7 @@ class Item extends Base
 		}
 		if(!Driver::getInstance()->getUserPermissions()->canViewItem($item))
 		{
-			$this->addError(new Error(Loc::getMessage('RPA_VIEW_ITEM_ACCESS_DENIED')));
+			$this->addError($this->getViewAccessDeniedError());
 			return null;
 		}
 

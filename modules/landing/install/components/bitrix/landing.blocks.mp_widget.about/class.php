@@ -166,8 +166,8 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 		$this->checkParam('SHOW_SUPERVISORS', 'Y');
 		$this->checkParam('SHOW_DEPARTMENTS', 'Y');
 
-		$realData['TITLE'] = $this->arParams['TITLE'];
-		$realData['TEXT'] = $this->arParams['TEXT'];
+		$realData['TITLE'] = $this->getPlainTextParam('TITLE');
+		$realData['TEXT'] = $this->getPlainTextParam('TEXT');
 
 		if (!isset($this->arParams['BOSS_ID']))
 		{
@@ -227,6 +227,15 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 	 *
 	 * @return array Associative array with boss information (name, last name, photo, position, etc.)
 	 */
+	/**
+	 * The editor saves a text param encoded, and the template escapes it once more on output:
+	 * the raw value is taken with the encoding of the editor undone.
+	 */
+	protected function getPlainTextParam(string $code): string
+	{
+		return htmlspecialcharsback((string)($this->arParams['~' . $code] ?? ''));
+	}
+
 	protected function getBoss(): array
 	{
 		if (!$this->arParams['BOSS_ID'] || $this->arParams['BOSS_ID'] <= 0)

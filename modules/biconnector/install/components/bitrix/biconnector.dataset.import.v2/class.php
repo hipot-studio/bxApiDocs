@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 \Bitrix\Main\Loader::includeModule('biconnector');
 
 use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\Install\TableGroupInstaller;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
@@ -79,6 +80,11 @@ class DatasetImportV2Component extends CBitrixComponent
 					$arParams['sectionsConfig'][$section][$key] = $value === 'true';
 				}
 			}
+		}
+
+		if (!empty($arParams['sourceId']) && self::isNewDataset($arParams))
+		{
+			self::ensureSystemTableGroups();
 		}
 
 		if (empty($arParams['sourceId']))
@@ -156,7 +162,7 @@ class DatasetImportV2Component extends CBitrixComponent
 			$this->arResult['initialData']['config']['connectionProperties'] = $connectionProperties;
 		}
 
-		if ($this->isNewDatasetMode() && $this->getTableAccessChecker()->isRestricted())
+		if ($this->isNewDatasetMode())
 		{
 			$this->arResult['initialData']['config']['tableGroupIds'] = $this->getDefaultTableGroupIds();
 		}
@@ -232,6 +238,25 @@ class DatasetImportV2Component extends CBitrixComponent
 	private function canViewTable(string $tableCode): bool
 	{
 		return $this->getTableAccessChecker()->canDo(ActionDictionary::ACTION_BIC_TABLE_VIEW, $tableCode);
+	}
+
+	/**
+	 * Creates the system table groups on a portal that has none yet: a new table has to name its group.
+	 *
+	 * The groups come with the lifecycle of the Superset instance and with the updaters, so a new install
+	 * has none until Superset first starts, while tables are created before that as well. The installer
+	 * only adds what is missing, and the group of user tables, which a new table starts in, tells whether
+	 * there is anything to add.
+	 */
+	private static function ensureSystemTableGroups(): void
+	{
+		if (TableGroupMembershipService::getUserTablesGroupId() !== null)
+		{
+			return;
+		}
+
+		TableGroupInstaller::install();
+		TableGroupMembershipService::clearCache();
 	}
 
 	/**
@@ -398,10 +423,8 @@ class DatasetImportV2Component extends CBitrixComponent
 			'isSystem' => true,
 			'externalDatasets' => $externalDatasets,
 		];
-		if ($this->getTableAccessChecker()->isRestricted())
-		{
-			$datasetProperties['tableGroups'] = $this->getVisibleTableGroups($name);
-		}
+		// The groups are folders of the section in either state of the axis
+		$datasetProperties['tableGroups'] = $this->getVisibleTableGroups($name);
 
 		$createPhysicalUrl = $this->getSystemDatasetCreateUrl($tableName, false, $externalDatasets);
 		if ($createPhysicalUrl !== null)
@@ -476,7 +499,11 @@ class DatasetImportV2Component extends CBitrixComponent
 
 	private function getSystemDatasetCreateUrl(string $tableName, bool $isVirtual, array $externalDatasets): ?string
 	{
-		if ($tableName === '' || !SupersetInitializer::isSupersetReady())
+		if (
+			$tableName === ''
+			|| !SupersetInitializer::isSupersetReady()
+			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT)
+		)
 		{
 			return null;
 		}
@@ -523,7 +550,11 @@ class DatasetImportV2Component extends CBitrixComponent
 
 	private function getPhysicalDatasetCreateUrl(ExternalSource\Internal\ExternalDataset $dataset, array $externalDatasets): ?string
 	{
-		if (empty($dataset->getName()) || !SupersetInitializer::isSupersetReady())
+		if (
+			empty($dataset->getName())
+			|| !SupersetInitializer::isSupersetReady()
+			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT)
+		)
 		{
 			return null;
 		}
@@ -559,7 +590,11 @@ class DatasetImportV2Component extends CBitrixComponent
 
 	private function getVirtualDatasetCreateUrl(ExternalSource\Internal\ExternalDataset $dataset): ?string
 	{
-		if (empty($dataset->getName()) || !SupersetInitializer::isSupersetReady())
+		if (
+			empty($dataset->getName())
+			|| !SupersetInitializer::isSupersetReady()
+			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT)
+		)
 		{
 			return null;
 		}
@@ -617,10 +652,7 @@ class DatasetImportV2Component extends CBitrixComponent
 			ActionDictionary::ACTION_BIC_TABLE_EXPORT,
 			$dataset->getName(),
 		);
-		if ($this->getTableAccessChecker()->isRestricted())
-		{
-			$result['datasetProperties']['tableGroups'] = $this->getVisibleTableGroups($dataset->getName());
-		}
+		$result['datasetProperties']['tableGroups'] = $this->getVisibleTableGroups($dataset->getName());
 
 		if ($dataset->getEnumType() !== ExternalSource\Type::Csv)
 		{
@@ -935,9 +967,9 @@ class DatasetImportV2Component extends CBitrixComponent
 
 		if ($this->isNewDatasetMode())
 		{
-			$isTablePermissionsEnabled = $this->getTableAccessChecker()->isRestricted();
-			$this->arResult['appParams']['isTablePermissionsEnabled'] = $isTablePermissionsEnabled;
-			$this->arResult['appParams']['tableGroups'] = $isTablePermissionsEnabled ? $this->getEditableTableGroups() : [];
+			// A new table is put into a group with the axis off as well; the axis only narrows down the
+			// groups offered, and without it every group is offered.
+			$this->arResult['appParams']['tableGroups'] = $this->getEditableTableGroups();
 		}
 	}
 

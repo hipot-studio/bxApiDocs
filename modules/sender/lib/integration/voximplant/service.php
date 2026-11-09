@@ -54,7 +54,7 @@ class Service
 
 		$result = \CVoxImplantOutgoing::StartInfoCallWithText(
 			$outputNumber,
-			$number,
+			static::formatNumberToDial($number),
 			$text,
 			$voiceLanguage,
 			$voiceSpeed,
@@ -87,7 +87,7 @@ class Service
 
 		$result = \CVoxImplantOutgoing::StartInfoCallWithSound(
 			$outputNumber,
-			$number,
+			static::formatNumberToDial($number),
 			$fileUrl
 		);
 
@@ -120,6 +120,19 @@ class Service
 		}
 
 		CallLogTable::removeByCallId($callId);
+	}
+
+	/**
+	 * Number to dial from a recipient code stored in E.164.
+	 * A SIP line receives the number as is, and a leading plus breaks the call there,
+	 * so the number is dialed without it, as a regular call from the portal does.
+	 *
+	 * @param string|null $number Recipient phone number.
+	 * @return string
+	 */
+	public static function formatNumberToDial(?string $number): string
+	{
+		return ltrim((string)$number, '+');
 	}
 
 	public static function getFormattedOutputNumber($value)

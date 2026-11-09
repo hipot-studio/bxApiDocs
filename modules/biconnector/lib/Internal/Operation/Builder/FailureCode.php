@@ -23,4 +23,5 @@ enum FailureCode: string
 	case DestructiveBudget = 'DESTRUCTIVE_BUDGET_EXCEEDED';
 	case RateLimit = 'RATE_LIMIT_EXCEEDED';
 	case DomainRule = 'DOMAIN_RULE';
+	case VersionConflict = 'VERSION_CONFLICT';
 }

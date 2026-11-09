@@ -108,6 +108,11 @@ class BlankRepository
 		return $result;
 	}
 
+	public function updateHasPlaceholders(int $blankId, bool $hasPlaceholders): UpdateResult
+	{
+		return Internal\BlankTable::update($blankId, ['HAS_PLACEHOLDERS' => $hasPlaceholders]);
+	}
+
 	/**
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException

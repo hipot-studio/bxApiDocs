@@ -3,11 +3,11 @@
 namespace Bitrix\BIConnector\Access\Component;
 
 use Bitrix\BIConnector\Access\Component\PermissionConfig\RoleMembersInfo;
+use Bitrix\BIConnector\Access\Component\PermissionSection\SectionSet;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionTable;
 use Bitrix\BIConnector\Access\Role\RoleDictionary;
 use Bitrix\BIConnector\Access\Role\RoleUtil;
-use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Public\Features\PublicLinksControl;
 use Bitrix\Main\Config\Feature as FeatureFlag;
 use Bitrix\Main\Localization\Loc;
@@ -18,76 +18,44 @@ final class PermissionConfig
 	public const SECTION_DASHBOARD_GROUP_RIGHTS = 'SECTION_RIGHTS_GROUP';
 	public const SECTION_TABLE_GROUP_RIGHTS = 'SECTION_RIGHTS_TABLE_GROUP';
 
-	/** Sections a group row can be added to; both group axes are added by the same button. */
-	private const GROUP_SECTION_CODES = [
-		self::SECTION_DASHBOARD_GROUP_RIGHTS,
-		self::SECTION_TABLE_GROUP_RIGHTS,
-	];
+	/**
+	 * The matrix is built of the sections the person may edit, all of them at once: the screen is
+	 * one, and a section he holds no right of is not a part of his screen.
+	 */
+	public function __construct(
+		private readonly SectionSet $sections,
+	)
+	{
+	}
 
 	/**
-	 * Access rights.
+	 * Access rights of the sections the config was built for, in the order of the screen.
 	 *
 	 * @return array in format of ExternalAccessRightSection type of BX.UI.AccessRights.V2.App.
 	 */
 	public function getAccessRights(): array
 	{
 		$result = [];
-
-		$sections = $this->getSections();
-
-		foreach ($sections as $sectionCode => $permissions)
+		foreach ($this->sections->getSections() as $section)
 		{
-			$rights = [];
-			foreach ($permissions as $permissionId)
-			{
-				$rights[] = PermissionDictionary::getPermission($permissionId);
-			}
-
-			if ($sectionCode === self::SECTION_TABLE_GROUP_RIGHTS)
-			{
-				$rights = $this->withTableGroupSubtitles($rights);
-			}
-
-			$section = [
-				'sectionCode' => $sectionCode,
-				'sectionTitle' => Loc::getMessage("BICONNECTOR_CONFIG_PERMISSION_{$sectionCode}"),
-				'sectionHint' => Loc::getMessage("HINT_BICONNECTOR_CONFIG_PERMISSION_{$sectionCode}"),
-				'rights' => $rights,
+			$item = [
+				'sectionCode' => $section->getCode(),
+				'sectionTitle' => $section->getTitle(),
+				'sectionHint' => $section->getHint(),
+				'rights' => $section->getRights(),
 			];
 
-			if (in_array($sectionCode, self::GROUP_SECTION_CODES, true))
+			if ($section->canAddGroup())
 			{
-				$section['action'] = [
+				$item['action'] = [
 					'buttonText' => Loc::getMessage('BICONNECTOR_CONFIG_PERMISSION_SECTION_BUTTON_ADD_GROUP'),
 				];
 			}
 
-			$result[] = $section;
+			$result[] = $item;
 		}
 
 		return $result;
-	}
-
-	/**
-	 * Adds the caption to every row of the table axis.
-	 *
-	 * The caption costs a read of the whole table catalog, so the dictionary builds it only when
-	 * asked: the slider is the only reader that shows it.
-	 *
-	 * @param array $rights
-	 *
-	 * @return array
-	 */
-	private function withTableGroupSubtitles(array $rights): array
-	{
-		$subtitles = PermissionDictionary::getTableGroupSubtitles();
-
-		foreach ($rights as $index => $right)
-		{
-			$rights[$index]['subtitle'] = $subtitles[$right['id']] ?? '';
-		}
-
-		return $rights;
 	}
 
 	/**
@@ -108,7 +76,7 @@ final class PermissionConfig
 			$roles[] = [
 				'id' => $roleId,
 				'title'  => RoleDictionary::getRoleName($row['NAME']),
-				'accessRights' => $accessRights[$roleId] ?? [],
+				'accessRights' => $this->keepRightsOfSections($accessRights[$roleId] ?? []),
 				'members' => $members[$roleId] ?? [],
 			];
 		}
@@ -128,52 +96,23 @@ final class PermissionConfig
 	}
 
 	/**
-	 * Get sections for view on rights settings page.
+	 * Rows of a role the screen of this person draws.
+	 *
+	 * A row of a section outside his set is not the business of this matrix: he may not edit it,
+	 * and carrying it here would return it in the payload of a save that never showed it.
+	 *
+	 * @param array $accessRights
 	 *
 	 * @return array
 	 */
-	private function getSections(): array
+	private function keepRightsOfSections(array $accessRights): array
 	{
-		$dashboardPermissions = PermissionDictionary::getDashboardGroupPermissions();
-
-		$shareControlRights =
-			in_array((string)PermissionDictionary::BIC_SHARE_CONTROL, self::getHiddenPermissionIds(), true)
-				? []
-				: [PermissionDictionary::BIC_SHARE_CONTROL]
-		;
-
-		$mainRights = [
-			PermissionDictionary::BIC_ACCESS,
-			PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
-			PermissionDictionary::BIC_DASHBOARD_SHARE,
-			...$shareControlRights,
-			PermissionDictionary::BIC_SETTINGS_ACCESS,
-			PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
-		];
-
-		if (Feature::isTablePermissionsEnabled())
-		{
-			$mainRights[] = PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS;
-		}
-
-		if (Feature::isExternalEntitiesEnabled())
-		{
-			$mainRights[] = PermissionDictionary::BIC_EXTERNAL_DASHBOARD_CONFIG;
-			$mainRights[] = PermissionDictionary::BIC_DELETE_ALL_UNUSED_ELEMENTS;
-		}
-
-		$sections = [
-			self::SECTION_MAIN_RIGHTS => $mainRights,
-			self::SECTION_DASHBOARD_GROUP_RIGHTS => array_keys($dashboardPermissions),
-		];
-
-		if (Feature::isTablePermissionsEnabled())
-		{
-			$tablePermissions = PermissionDictionary::getTableGroupPermissions();
-			$sections[self::SECTION_TABLE_GROUP_RIGHTS] = array_keys($tablePermissions);
-		}
-
-		return $sections;
+		return array_values(
+			array_filter(
+				$accessRights,
+				fn(array $accessRight): bool => $this->sections->ownsPermissionId($accessRight['id']),
+			)
+		);
 	}
 
 	/**

@@ -15,9 +15,23 @@ use Bitrix\Main\Validation\ValidationService;
 
 class CreateAiSiteTool extends BaseTool
 {
-	use AiSiteRuntimeAvailabilityToolGate;
+	use AiSiteLegacyModeToolGate;
+	use AiSiteRuntimeAvailabilityToolGate {
+		AiSiteRuntimeAvailabilityToolGate::canList as private availabilityGateCanList;
+		AiSiteRuntimeAvailabilityToolGate::canRun as private availabilityGateCanRun;
+	}
 
 	public const ACTION_NAME = 'create_ai_site';
+
+	public function canList(int $userId): bool
+	{
+		return $this->availabilityGateCanList($userId) && $this->isAiSiteLegacyModeSelected();
+	}
+
+	public function canRun(int $userId): bool
+	{
+		return $this->availabilityGateCanRun($userId) && $this->isAiSiteLegacyModeSelected();
+	}
 
 	public function __construct(
 		private readonly CreateAiSiteHandler $handler,
@@ -61,6 +75,8 @@ class CreateAiSiteTool extends BaseTool
 
 	protected function executeStructured(int $userId, ...$args): array
 	{
+		$this->assertAiSiteLegacyModeSelected();
+
 		$dto = CreateAiSiteDto::fromArray($args);
 		$effectiveUserId = $this->resolveEffectiveUserId($userId);
 

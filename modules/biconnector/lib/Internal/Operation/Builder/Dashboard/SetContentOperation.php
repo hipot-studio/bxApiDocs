@@ -210,8 +210,9 @@ final class SetContentOperation
 			$jsonMetadata['cross_filters_enabled'] = true;
 		}
 
-		// Taken before the positions are replaced: the rescope compares a filter with the old chart set.
-		$oldChartIds = self::extractChartIdsFromPositions($jsonMetadata['positions'] ?? []);
+		$savedPositions = DashboardJsonMetadataReader::savedPositions($remote);
+		// The rescope compares a filter with the old chart set.
+		$oldChartIds = self::extractChartIdsFromPositions($savedPositions);
 
 		// The builders refuse a malformed part with an exception of the caller's choice, here one of our own.
 		$refusal = static fn(string $message): \Throwable => new ContentRefusedException($message);
@@ -230,7 +231,7 @@ final class SetContentOperation
 						static fn (array $c): int => (int)($c['chartId'] ?? 0),
 						$command->charts,
 					)
-					: self::extractChartIdsFromPositions($jsonMetadata['positions'] ?? [])
+					: $oldChartIds
 				;
 				$jsonMetadata['native_filter_configuration'] = NativeFilterBuilder::build(
 					$command->filters,
@@ -255,11 +256,61 @@ final class SetContentOperation
 			return $result->addError(new Error($exception->getMessage(), FailureCode::InvalidArgument->value));
 		}
 
+		$access = self::checkContentAccess(
+			$command->charts,
+			$command->filters,
+			$hasCharts ? self::extractChartIdsFromPositions($jsonMetadata['positions']) : $oldChartIds,
+			$actor,
+			$oldChartIds,
+		);
+		if (!$access->isSuccess())
+		{
+			return $access;
+		}
+
 		return $result->setData([
 			'dashboard' => $dashboard,
 			'jsonMetadata' => $jsonMetadata,
 			'publishedInSuperset' => $remote->published,
 		]);
+	}
+
+	/**
+	 * Checks only supplied references against the validated final layout, leaving saved links alone.
+	 *
+	 * @param int[] $savedChartIds Charts of the saved layout: allowed by the EDIT of the target, not read.
+	 */
+	public static function checkContentAccess(
+		?array $charts,
+		?array $filters,
+		array $layoutChartIds,
+		Actor $actor,
+		array $savedChartIds = [],
+	): Result
+	{
+		$chartIds = [];
+		foreach ($charts ?? [] as $chart)
+		{
+			$chartIds[] = $chart['chartId'];
+		}
+
+		$layout = array_fill_keys($layoutChartIds, true);
+		foreach ($filters ?? [] as $filter)
+		{
+			foreach ($filter['chartIds'] ?? [] as $id)
+			{
+				if (!isset($layout[(int)$id]))
+				{
+					return Refusal::error(
+						FailureCode::InvalidArgument,
+						'filters[].chartIds must reference charts in the dashboard layout.',
+					);
+				}
+				$chartIds[] = $id;
+			}
+		}
+
+		return (new ContentAccessPreflight())->check($chartIds, $actor, $savedChartIds);
 	}
 
 	/**

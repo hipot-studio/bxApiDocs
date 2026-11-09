@@ -44,6 +44,14 @@ abstract class Base
 	 */
 	private ?Aggregation\AppliedWhere $appliedWhere = null;
 
+	/**
+	 * A date range was asked for and none of it reached the filter.
+	 *
+	 * Kept apart from the flag that decides whether the filter is compiled: the dataset's own FILTER and
+	 * the joins it pulls in are printed all the same, only the answer is not reported as filtered.
+	 */
+	private bool $dateRangeNotApplied = false;
+
 	/** @var array<string, array> One prepared answer per argument set, see getFormattedData(). */
 	private array $formattedData = [];
 
@@ -211,12 +219,13 @@ abstract class Base
 		$canBeFiltered = true;
 		$sqlWhere = $tableInfo['FILTER'] ?? [];
 		$this->appliedWhere = Aggregation\AppliedWhere::createEmpty();
+		$this->dateRangeNotApplied = false;
 
 		if (array_key_exists('dateRange', $parameters) && !is_array($parameters['dateRange']))
 		{
 			// The range was asked for in a shape that carries no bounds, so nothing is applied and the
 			// answer must not be reported as filtered.
-			$canBeFiltered = false;
+			$this->dateRangeNotApplied = true;
 		}
 
 		if (isset($parameters['dateRange']) && is_array($parameters['dateRange']))
@@ -282,6 +291,10 @@ abstract class Base
 			$this->appliedWhere = Aggregation\AppliedWhere::createEmpty();
 		}
 
+		// Whether the filter carries everything that was asked for. Only this is reported, while the
+		// compilation above follows $canBeFiltered alone.
+		$filterAppliedAsAsked = $canBeFiltered && !$this->dateRangeNotApplied;
+
 		// array_key_exists and not isset: a present `aggregation: null` is a value the schema forbids,
 		// so it must produce a protocol error instead of quietly falling through to the raw path.
 		if (array_key_exists('aggregation', $parameters))
@@ -291,7 +304,7 @@ abstract class Base
 				$queryWhere,
 				$strQueryWhere,
 				$sqlWhere,
-				$canBeFiltered,
+				$filterAppliedAsAsked,
 			);
 		}
 
@@ -314,7 +327,7 @@ abstract class Base
 					$tableField = $tableFields[$fieldName];
 					if (
 						(!isset($field['forFilterOnly']) || !$field['forFilterOnly'])
-						|| !($strQueryWhere && $canBeFiltered)
+						|| !($strQueryWhere && $filterAppliedAsAsked)
 					)
 					{
 						if (isset($tableField['GROUP_KEY']))
@@ -426,7 +439,7 @@ abstract class Base
 		// refused: the empty condition is applied exactly. What must not be confirmed is a filter that
 		// was asked for and did not reach the statement - refused while it was assembled, or lost when
 		// the statement failed to compile.
-		$filtersApplied = $canBeFiltered && ($strQueryWhere !== '' || !$sqlWhere);
+		$filtersApplied = $filterAppliedAsAsked && ($strQueryWhere !== '' || !$sqlWhere);
 
 		$dto = new ConnectorDto(
 			$schema,
@@ -454,6 +467,7 @@ abstract class Base
 	{
 		$this->formattedData = [];
 		$this->appliedWhere = null;
+		$this->dateRangeNotApplied = false;
 	}
 
 	/**
@@ -583,7 +597,8 @@ abstract class Base
 			// it filters itself - slower, and right.
 			//
 			// Both readings of "not applied" are refused: a rule the filter refused while it was being
-			// assembled, and a filter that was assembled and did not compile.
+			// assembled, or a date range that did not reach it, and a filter that was assembled and did not
+			// compile.
 			if (!$canBeFiltered || ($sqlWhere && $strQueryWhere === ''))
 			{
 				throw Aggregation\AggregationException::unsupported(
@@ -712,7 +727,8 @@ abstract class Base
 	 * @param array $sqlWhere Modified where.
 	 * @param array $dateRange Filters from input.
 	 * @param string $timeFilterColumn Column from input.
-	 * @param bool &$canBeFiltered Cleared when the requested range is not applied as asked.
+	 * @param bool &$canBeFiltered Left intact: clearing it would also drop the dataset filter. A range that
+	 * is not applied is recorded in $dateRangeNotApplied instead.
 	 *
 	 * @return array
 	 */
@@ -733,9 +749,13 @@ abstract class Base
 
 		// A range that carries no bound at all applies nothing, so the answer is not reported as
 		// filtered. A single unreadable bound is left to the other one, which still narrows the answer.
+		// It returns before the fingerprint is recorded: with the dataset filter compiled, the fingerprint
+		// would otherwise confirm a range that was never applied.
 		if (!array_key_exists('startDate', $dateRange) && !array_key_exists('endDate', $dateRange))
 		{
-			$canBeFiltered = false;
+			$this->dateRangeNotApplied = true;
+
+			return $sqlWhere;
 		}
 
 		$filterColumnName = false;
@@ -763,7 +783,7 @@ abstract class Base
 		if (!$filterColumnName)
 		{
 			// A range was asked for on a dataset that has no date column at all.
-			$canBeFiltered = false;
+			$this->dateRangeNotApplied = true;
 
 			return $sqlWhere;
 		}
@@ -1152,6 +1172,17 @@ abstract class Base
 	public function isFulfilledOutput(): bool
 	{
 		return false;
+	}
+
+	/**
+	 * Whether the output has to wait for the portal-wide data lock, which queues the data requests
+	 * that load the database of the portal.
+	 *
+	 * @return bool
+	 */
+	public function requiresPortalDataLock(): bool
+	{
+		return true;
 	}
 
 	/**

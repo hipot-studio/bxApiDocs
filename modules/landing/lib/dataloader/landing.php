@@ -5,6 +5,7 @@ use \Bitrix\Landing\Block;
 use \Bitrix\Landing\Hook;
 use \Bitrix\Landing\Landing as LandingCore;
 use \Bitrix\Landing\Landing\Cache;
+use \Bitrix\Landing\Manager;
 
 class Landing extends \Bitrix\Landing\Source\DataLoader
 {
@@ -246,13 +247,12 @@ class Landing extends \Bitrix\Landing\Source\DataLoader
 		// and feel result data with meta data
 		foreach ($result as $id => &$item)
 		{
-			if (
-				$needPreviewPicture &&
-				isset($metaData[$id]['IMAGE'])
-			)
+			if ($needPreviewPicture)
 			{
 				$item['IMAGE'] = [
-					'src' => $metaData[$id]['IMAGE'],
+					'src' => !empty($metaData[$id]['IMAGE'])
+						? $metaData[$id]['IMAGE']
+						: Manager::getUrlFromFile('/bitrix/images/landing/nopreview.jpg'),
 					'alt' => $item['TITLE'] ?? ''
 				];
 			}

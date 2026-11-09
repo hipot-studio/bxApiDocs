@@ -4,6 +4,7 @@ namespace Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field;
 
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Grid\Row\FieldAssembler;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 
 class ActiveFieldAssembler extends FieldAssembler
@@ -31,6 +32,7 @@ class ActiveFieldAssembler extends FieldAssembler
 			$switcherId = \CUtil::JSEscape(Random::getString('6'));
 			$isCanWrite = CurrentUser::get()->canDoOperation('biconnector_key_manage');
 			$isDisable = $isCanWrite ? 'false' : 'true';
+			$ariaLabel = \CUtil::JSEscape((string)Loc::getMessage('BICONNECTOR_SETTINGS_GRID_KEY_ACTIVE_ARIA'));
 
 			if (isset($row['data']['ID'], $row['data']['ACTIVE']))
 			{
@@ -45,7 +47,9 @@ class ActiveFieldAssembler extends FieldAssembler
 						node: document.getElementById('switcher-$switcherId'),
 						checked: {$checked},
 						id: '{$switcherId}',
-						disabled: {$isDisable}
+						disabled: {$isDisable},
+						accessible: true,
+						ariaLabel: '{$ariaLabel}'
 					})).handlers = {
 						checked: () => {
                             BX.BIConnector.KeysGrid.deactivateKey({$id}, this);

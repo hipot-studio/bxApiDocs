@@ -10,8 +10,11 @@ use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ReplaceChartConfigOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ChartDatasetGuard;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -62,142 +65,67 @@ final class ReplaceChartConfigTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'chartId' => [
-					'type' => 'integer',
-					'description' => 'Chart id to update (from list_charts). Positive integer.',
-					'minimum' => 1,
-				],
-				'datasetId' => [
-					'type' => 'integer',
-					'description' => 'Source dataset id (from list_datasets). May differ from '
-						. 'the chart\'s current dataset — this is a full replace.',
-					'minimum' => 1,
-				],
-				'vizType' => [
-					'type' => 'string',
-					'description' => 'Visualization type alias for the new config.',
-					'enum' => ChartParamsBuilder::VIZ_TYPES,
-				],
-				'temporalColumn' => [
-					'type' => 'string',
-					'description' => 'Date/datetime column from the dataset that the chart '
-						. 'binds to. MANDATORY — every chart must react to the dashboard '
-						. 'date filter, and Superset only rewrites filters with '
-						. 'operator=TEMPORAL_RANGE. The server injects exactly such a '
-						. 'filter on this column. Pass the real column name from '
-						. 'get_bi_table_schema (e.g. `CREATED_DATE`); never guess.',
-				],
-				'metrics' => [
-					'type' => 'array',
-					'description' => 'Metric definitions (column + aggregate). '
-						. 'Required for bar/line/scatter/pie/big_number. Optional for '
-						. 'table (omit for raw-row mode). pie/big_number use only the '
-						. 'first metric; bar/line/scatter/table accept multiple.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'column' => [
-								'type' => 'string',
-								'description' => 'Column name from the dataset.',
-							],
-							'aggregate' => [
-								'type' => 'string',
-								'description' => 'Aggregation function applied to the column.',
-								'enum' => ['SUM', 'AVG', 'COUNT', 'COUNT_DISTINCT', 'MIN', 'MAX'],
-							],
-							'label' => [
-								'type' => 'string',
-								'description' => 'Optional display label. Defaults to '
-									. '"AGGREGATE(column)".',
-							],
-						],
-						'required' => ['column', 'aggregate'],
-						'additionalProperties' => false,
-					],
-				],
-				'dimensions' => [
-					'type' => 'array',
-					'description' => 'Dimension column names (group-by). '
-						. 'For bar/line/scatter: dimensions other than xAxis become '
-						. 'series breakdown. For pie: slice categories. For table '
-						. 'aggregate mode: group-by columns. For table raw mode: '
-						. 'projected columns. Not used by big_number.',
-					'items' => ['type' => 'string'],
-				],
-				'xAxis' => [
-					'type' => 'string',
-					'description' => 'X-axis column for bar/line/scatter charts. MUST be a '
-						. 'date/datetime column — bar/line/scatter internally map to '
-						. 'echarts_timeseries_* viz_types and require a temporal '
-						. 'axis. A categorical x-axis will break the chart. Usually '
-						. 'the same as `temporalColumn`. If omitted, the first '
-						. 'dimension is used.',
-				],
-				'filters' => [
-					'type' => 'array',
-					'description' => 'Filter expressions applied to the dataset. '
-						. 'IMPORTANT — date/datetime columns: use ONLY operator '
-						. '`between` for filtering by time. Operators `<`/`>`/`=`/`!=` '
-						. 'compare as strings and break on Trino/Presto datasources.',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'column' => [
-								'type' => 'string',
-								'description' => 'Column to filter on.',
-							],
-							'operator' => [
-								'type' => 'string',
-								'description' => 'Comparison operator. Use `between` '
-									. 'for date/datetime columns — value is either a '
-									. 'Superset time expression string ("Last 6 months", '
-									. '"2024-01-01 : 2024-03-31", "No filter") or a '
-									. '`[from, to]` array of two ISO strings.',
-								'enum' => [
-									'=', '!=', '<', '>', '<=', '>=',
-									'in', 'not_in', 'like', 'is_null', 'is_not_null',
-									'between',
-								],
-							],
-							'value' => [
-								'description' => 'Comparison value. Use array for '
-									. '`in`/`not_in`. Omit for `is_null`/`is_not_null`. '
-									. 'For `between`: a Superset time expression string '
-									. 'or a [from, to] pair.',
-								'oneOf' => [
-									['type' => 'string'],
-									['type' => 'number'],
-									['type' => 'boolean'],
-									['type' => 'array'],
-									['type' => 'null'],
-								],
-							],
-						],
-						'required' => ['column', 'operator'],
-						'additionalProperties' => false,
-					],
-				],
-				'rowLimit' => [
-					'type' => 'integer',
-					'description' => 'Row limit for the underlying query. Defaults '
-						. 'depend on vizType (pie=100, table=1000, otherwise 10000). '
-						. 'Hard maximum 50000.',
-					'minimum' => 1,
-					'maximum' => 50000,
-				],
-				'confirm' => [
-					'type' => 'boolean',
-					'description' => 'Set to true ONLY after the user has explicitly approved '
-						. 'overwriting this chart config. Omit or set false to only preview. '
-						. 'Do NOT self-confirm or assume approval from earlier context.',
-				],
+		$schema = BuilderArgumentContract::schema(
+			'biconnector.builder.chart.config.set',
+			'mcp',
+			[
+				'chartId' => 'Chart id to update (from list_charts). Positive integer.',
+				'datasetId' => 'Source dataset id (from list_datasets). May differ from '
+					. 'the chart\'s current dataset — this is a full replace.',
+				'vizType' => 'Visualization type alias for the new config.',
+				'temporalColumn' => 'Date/datetime column from the dataset that the chart '
+					. 'binds to. MANDATORY — every chart must react to the dashboard '
+					. 'date filter, and Superset only rewrites filters with '
+					. 'operator=TEMPORAL_RANGE. The server injects exactly such a '
+					. 'filter on this column. Pass the real column name from '
+					. 'get_bi_table_schema (e.g. `CREATED_DATE`); never guess.',
+				'metrics' => 'Metric definitions (column + aggregate). '
+					. 'Required for bar/line/scatter/pie/big_number. Optional for '
+					. 'table (omit for raw-row mode). pie/big_number use only the '
+					. 'first metric; bar/line/scatter/table accept multiple.',
+				'metrics[].column' => 'Column name from the dataset.',
+				'metrics[].aggregate' => 'Aggregation function applied to the column.',
+				'metrics[].label' => 'Optional display label. Defaults to '
+					. '"AGGREGATE(column)".',
+				'dimensions' => 'Dimension column names (group-by). '
+					. 'For bar/line/scatter: dimensions other than xAxis become '
+					. 'series breakdown. For pie: slice categories. For table '
+					. 'aggregate mode: group-by columns. For table raw mode: '
+					. 'projected columns. Not used by big_number.',
+				'xAxis' => 'X-axis column for bar/line/scatter charts. MUST be a '
+					. 'date/datetime column — bar/line/scatter internally map to '
+					. 'echarts_timeseries_* viz_types and require a temporal '
+					. 'axis. A categorical x-axis will break the chart. Usually '
+					. 'the same as `temporalColumn`. If omitted, the first '
+					. 'dimension is used.',
+				'filters' => 'Filter expressions applied to the dataset. '
+					. 'IMPORTANT — date/datetime columns: use ONLY operator '
+					. '`between` for filtering by time. Operators `<`/`>`/`=`/`!=` '
+					. 'compare as strings and break on Trino/Presto datasources.',
+				'filters[].column' => 'Column to filter on.',
+				'filters[].operator' => 'Comparison operator. Use `between` '
+					. 'for date/datetime columns — value is either a '
+					. 'Superset time expression string ("Last 6 months", '
+					. '"2024-01-01 : 2024-03-31", "No filter") or a '
+					. '`[from, to]` array of two ISO strings.'
+					. ' Optional; defaults to =. Aliases == and <> are also accepted.',
+				'filters[].value' => 'Comparison value. Use array for '
+					. '`in`/`not_in`. Omit for `is_null`/`is_not_null`. '
+					. 'For `between`: a Superset time expression string '
+					. 'or a [from, to] pair.'
+					. ' Other operators accept recursive JSON, including dictionaries and null.',
+				'rowLimit' => 'Row limit for the underlying query. Defaults depend on vizType '
+					. '(pie=100, table=1000, otherwise 10000). Integer inputs are clamped to 1..50000.',
 			],
-			'required' => ['chartId', 'datasetId', 'vizType', 'temporalColumn'],
-			'additionalProperties' => false,
+		);
+		$schema['properties']['confirm'] = [
+			'type' => 'boolean',
+			'description' => 'Set to true ONLY after the user has explicitly approved '
+				. 'overwriting this chart config. Omit or set false to only preview. '
+				. 'Do NOT self-confirm or assume approval from earlier context.',
 		];
+
+		return $schema;
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -286,28 +214,33 @@ final class ReplaceChartConfigTool extends BaseBiTool
 		// PATCHes only the params blob and drops slice_name (renaming is
 		// UpdateChartMetadataTool's job) — so the pre-update name is the correct
 		// value to echo back on both the preview and the confirmed call.
-		$chartResponse = $integrator->getChartById($chartId);
-		if ($chartResponse->hasErrors())
+		$user = self::findActAsUser($userId);
+		$lookup = (new EntityLookup())->chart($chartId, $user);
+		if (!$lookup->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$chartResponse->getErrors(),
-				['stage' => 'replace_chart_config.load', 'user_id' => $userId, 'chart_id' => $chartId],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($lookup));
 		}
 
-		$chartData = $chartResponse->getData();
-		if (!is_array($chartData))
+		$chartData = $lookup->getData()['entity'];
+		if (!is_array($chartData['dashboards'] ?? []))
 		{
-			$chartData = [];
+			throw self::unavailableBiException([], ['stage' => 'chart_lookup.dashboards', 'chart_id' => $chartId]);
 		}
+
 		$name = (string)($chartData['slice_name'] ?? $chartData['chart_name'] ?? '');
 
 		// Object-level scope: only a user who can edit one of the chart's consumer
 		// dashboards may overwrite its config (matches the web UI).
 		$this->assertChartEditableByDashboards(
 			$userId,
-			is_array($chartData['dashboards'] ?? null) ? $chartData['dashboards'] : [],
+			$chartData['dashboards'] ?? [],
 		);
+
+		$dataset = (new ChartDatasetGuard())->validate($args, $user);
+		if (!$dataset->isSuccess())
+		{
+			throw self::toMcpException(OperationRefusal::forTool($dataset));
+		}
 
 		$confirm = ($args['confirm'] ?? false) === true;
 		if (!$confirm)
@@ -328,18 +261,10 @@ final class ReplaceChartConfigTool extends BaseBiTool
 		}
 
 		$response = $integrator->updateChart($chartId, $payload);
-		if ($response->hasErrors())
+		$classified = (new EntityLookup())->classify($response, $chartId);
+		if (!$classified->isSuccess())
 		{
-			throw self::unavailableBiException(
-				$response->getErrors(),
-				[
-					'stage' => 'replace_chart_config',
-					'user_id' => $userId,
-					'chart_id' => $chartId,
-					'dataset_id' => (int)($args['datasetId'] ?? 0),
-					'viz_type' => (string)($args['vizType'] ?? ''),
-				],
-			);
+			throw self::toMcpException(OperationRefusal::forTool($classified));
 		}
 
 		$data = $response->getData();

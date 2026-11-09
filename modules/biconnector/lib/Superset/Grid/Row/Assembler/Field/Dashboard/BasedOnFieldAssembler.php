@@ -30,9 +30,15 @@ class BasedOnFieldAssembler extends FieldAssembler
 			return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_SOURCE_TYPE_SYSTEM');
 		}
 
-		$detailUrl = $value['SOURCE_DETAIL_URL'] ?? "/bi/dashboard/detail/{$sourceId}/";
+		// A report made from scratch has no source: an empty link would be a tab stop with nothing to see.
+		if (empty($sourceId) || $sourceTitle === '')
+		{
+			return '';
+		}
 
-		return "<a href='{$detailUrl}'>{$sourceTitle}</a>";
+		$detailUrl = htmlspecialcharsbx($value['SOURCE_DETAIL_URL'] ?? "/bi/dashboard/detail/{$sourceId}/");
+
+		return "<a href=\"{$detailUrl}\">{$sourceTitle}</a>";
 	}
 
 	protected function prepareRow(array $row): array

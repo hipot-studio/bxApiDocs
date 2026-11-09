@@ -238,17 +238,6 @@ class GroupConnectorTable extends Entity\DataManager
 			),
 		);
 	}
-
-	public static function onAfterUpdate(Entity\Event $event)
-	{
-		$result = new Entity\EventResult;
-
-		$data = $event->getParameters();
-		$groupId = $data['fields']['GROUP_ID'];
-
-		SegmentDataBuilder::actualize($groupId, false);
-		return $result;
-	}
 }
 
 

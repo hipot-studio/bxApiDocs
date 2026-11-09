@@ -114,7 +114,7 @@ class ImService
 			return (new Main\Result())->addError(new Main\Error('Invalid sender id.'));
 		}
 
-		$diskFiles = CIMDisk::UploadFileFromMain($chatId, [$fileId]);
+		$diskFiles = CIMDisk::UploadFileFromMain($chatId, [$fileId], $senderId);
 
 		if (!is_array($diskFiles))
 		{

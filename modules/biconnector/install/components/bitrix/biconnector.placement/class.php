@@ -42,6 +42,7 @@ class HandlerPlacement extends CBitrixComponent
 		if ($placement !== false && preg_match('#^(?:/|https?://)#', $placement['PLACEMENT_HANDLER']) > 0)
 		{
 			$this->arResult['URL'] = $placement['PLACEMENT_HANDLER'];
+			$this->arResult['FRAME_TITLE'] = (string)($placement['TITLE'] ?: $placement['APP_NAME']);
 		}
 
 		if ($this->arResult && $this->arParams['SET_TITLE'] == 'Y')

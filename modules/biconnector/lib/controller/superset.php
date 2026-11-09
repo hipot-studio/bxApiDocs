@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Access\Role\RoleTable;
 use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
 use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\BIConnector\Superset\DomainLinkService;
 use Bitrix\BIConnector\Superset\Error\IntegrationErrorPresenter;
@@ -31,6 +32,18 @@ class Superset extends Controller
 		return $prefilters;
 	}
 
+	public function configureActions(): array
+	{
+		$configureActions = parent::configureActions();
+		$configureActions['getUpdatingState'] = [
+			'+prefilters' => [
+				new BIConstructorAccess(),
+			],
+		];
+
+		return $configureActions;
+	}
+
 	public function onStartupMetricSendAction(): void
 	{
 		\Bitrix\Main\Config\Option::set('biconnector', 'superset_startup_metric_send', true);
@@ -40,6 +53,19 @@ class Superset extends Controller
 	{
 		return [
 			'isNeeded' => SupersetInitializer::isSupersetPendingDelete() && SupersetInitializer::isSupersetInstanceExists(),
+		];
+	}
+
+	/**
+	 * Polled by the update stub of the section. The status check is made here and not only read: a frozen
+	 * instance leaves the update only after a request to the proxy, which a page render would make otherwise.
+	 */
+	public function getUpdatingStateAction(): array
+	{
+		SupersetInitializer::initializeOrCheckSupersetStatus();
+
+		return [
+			'updating' => SupersetInitializer::isSupersetUpdating(),
 		];
 	}
 

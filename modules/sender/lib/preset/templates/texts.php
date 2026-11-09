@@ -22,6 +22,19 @@ class Texts
 {
 	const IMAGE_DIR = '/images/sender/preset/template_v2/';
 
+	private const HTML_VALUE_ESCAPES = [
+		'&' => '&amp;',
+		'<' => '&lt;',
+		'>' => '&gt;',
+		'"' => '&quot;',
+		"'" => '&#039;',
+		'?' => '&#63;',
+		'%' => '&#37;',
+		'#' => '&#35;',
+	];
+
+	private static ?array $replacements = null;
+
 	/**
 	 * Get codes.
 	 *
@@ -86,61 +99,110 @@ class Texts
 	}
 
 	/**
-	 * Get replace.
+	 * Replace company requisites placeholders with raw values (plain text channels).
 	 *
 	 * @param string $text Text.
 	 * @return string
 	 */
-	public static function replace($text = '')
+	public static function replace($text = ''): string
 	{
-		static $replace = null;
-		if ($replace === null)
-		{
-			$card = array();
-			foreach (Integration\EventHandler::onSenderCompanyCard() as $card)
-			{
-				if (!isset($card['DATA']) || !is_array($card['DATA']))
-				{
-					continue;
-				}
-				$card = $card['DATA'];
-
-				if (!$card['COMPANY_NAME'])
-				{
-					continue;
-				}
-
-				break;
-			}
-
-			if (!isset($card['COMPANY_NAME']) || !$card['COMPANY_NAME'])
-			{
-				$card['COMPANY_NAME'] = Loc::getMessage('SENDER_PRESET_TEMPLATE_DEFAULT_COMPANY');
-			}
-
-			if (!isset($card['PHONE']) || !$card['PHONE'])
-			{
-				$card['PHONE'] = Loc::getMessage('SENDER_PRESET_TEMPLATE_DEFAULT_PHONE');
-			}
-
-			$replace = array(
-				'%COMPANY%' => $card['COMPANY_NAME'],
-				'%PHONE_FORMATTED%' => $card['PHONE'],
-				'%PHONE%' => preg_replace('/[^\d]/', '', $card['PHONE']),
-			);
-		}
-
-		if (count($replace) === 0)
-		{
-			return $text;
-		}
-
-		return str_replace(array_keys($replace), array_values($replace), $text);
+		return strtr((string)$text, self::getReplacements()['text']);
 	}
 
-	protected static function getMessage($code)
+	/**
+	 * Replace company requisites placeholders with HTML-escaped values.
+	 *
+	 * @param string $html Html.
+	 * @return string
+	 */
+	public static function replaceHtml(string $html): string
 	{
-		return self::replace(Loc::getMessage($code));
+		return strtr($html, self::getReplacements()['html']);
+	}
+
+	/**
+	 * Override the company card; null resets to the card of the portal.
+	 *
+	 * @internal For tests only.
+	 * @param array|null $card Card ['COMPANY_NAME' => string, 'PHONE' => string].
+	 * @return void
+	 */
+	public static function setCompanyCard(?array $card): void
+	{
+		self::$replacements = ($card === null) ? null : self::buildReplacements($card);
+	}
+
+	protected static function getMessage($code, bool $html = false): string
+	{
+		$message = (string)Loc::getMessage($code);
+
+		return $html ? self::replaceHtml($message) : self::replace($message);
+	}
+
+	private static function getReplacements(): array
+	{
+		self::$replacements ??= self::buildReplacements(self::loadCompanyCard());
+
+		return self::$replacements;
+	}
+
+	private static function loadCompanyCard(): array
+	{
+		$card = [];
+		foreach (Integration\EventHandler::onSenderCompanyCard() as $card)
+		{
+			if (!isset($card['DATA']) || !is_array($card['DATA']))
+			{
+				continue;
+			}
+			$card = $card['DATA'];
+
+			if (!$card['COMPANY_NAME'])
+			{
+				continue;
+			}
+
+			break;
+		}
+
+		return is_array($card) ? $card : [];
+	}
+
+	private static function buildReplacements(array $card): array
+	{
+		$companyName = empty($card['COMPANY_NAME'])
+			? Loc::getMessage('SENDER_PRESET_TEMPLATE_DEFAULT_COMPANY')
+			: $card['COMPANY_NAME']
+		;
+		$phone = empty($card['PHONE'])
+			? Loc::getMessage('SENDER_PRESET_TEMPLATE_DEFAULT_PHONE')
+			: $card['PHONE']
+		;
+
+		$text = [
+			'%COMPANY%' => (string)$companyName,
+			'%PHONE_FORMATTED%' => (string)$phone,
+			'%PHONE%' => preg_replace('/[^\d]/', '', (string)$phone),
+		];
+
+		// strtr() prefers the longest key, so "<" right before a placeholder is escaped in the same pass
+		$html = [];
+		foreach ($text as $placeholder => $value)
+		{
+			$value = self::escapeHtmlValue($value);
+			$html[$placeholder] = $value;
+			$html['<' . $placeholder] = '&lt;' . $value;
+		}
+
+		return [
+			'text' => $text,
+			'html' => $html,
+		];
+	}
+
+	private static function escapeHtmlValue(string $value): string
+	{
+		return strtr($value, self::HTML_VALUE_ESCAPES);
 	}
 
 	/**
@@ -170,7 +232,7 @@ class Texts
 
 		$isHot = mb_strpos($code, 'hot_') === 0;
 		$iconPath = $isHot? mb_substr($code, 4) : $code;
-		$iconPath = BX_ROOT . self::IMAGE_DIR . $iconPath . '.png';
+		$iconPath = BX_ROOT . self::IMAGE_DIR . $iconPath;
 
 		$code = mb_strtoupper($code);
 		$result = array(
@@ -178,7 +240,8 @@ class Texts
 			'NAME' => Loc::getMessage('SENDER_PRESET_TEMPLATE_' . $code . '_NAME'),
 			'DESC' => Loc::getMessage('SENDER_PRESET_TEMPLATE_' . $code . '_DESC'),
 			'HOT' => $isHot,
-			'ICON' => $iconPath,
+			'ICON' => $iconPath . '.webp',
+			'ICON_2X' => $iconPath . '@2x.webp',
 			'TYPES' => array(),
 		);
 
@@ -193,7 +256,8 @@ class Texts
 			foreach ($keys as $key)
 			{
 				$msgId = 'SENDER_PRESET_' . $type . '_' . $code . '_' . $key;
-				$result['TYPES'][$type][$key] = self::getMessage(mb_strtoupper($msgId));
+				$isHtml = $type === Message\iBase::CODE_MAIL && in_array($key, ['TEXT_HEAD', 'TEXT_BODY'], true);
+				$result['TYPES'][$type][$key] = self::getMessage(mb_strtoupper($msgId), $isHtml);
 			}
 		}
 

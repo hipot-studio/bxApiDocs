@@ -39,7 +39,7 @@ class StatusFieldAssembler extends FieldAssembler
 
 		if (SupersetInitializer::isSupersetLoading())
 		{
-			return $this->getStatusLabelByStatusType($value['STATUS'], $value['ID']);
+			return $this->getStatusLabelByStatusType($value['STATUS'], $value['ID'], $value['TITLE']);
 		}
 
 		if (!$this->getSettings()->isSupersetAvailable())
@@ -62,10 +62,10 @@ class StatusFieldAssembler extends FieldAssembler
 			return $this->getStatusLabelByStatusType(self::DASHBOARD_STATUS_COMPUTED_PROHIBITED);
 		}
 
-		return $this->getStatusLabelByStatusType($value['STATUS'], $value['ID']);
+		return $this->getStatusLabelByStatusType($value['STATUS'], $value['ID'], $value['TITLE']);
 	}
 
-	private function getStatusLabelByStatusType(string $status, ?int $dashboardId = null): string
+	private function getStatusLabelByStatusType(string $status, ?int $dashboardId = null, string $title = ''): string
 	{
 		switch ($status)
 		{
@@ -103,18 +103,7 @@ class StatusFieldAssembler extends FieldAssembler
 			case SupersetDashboardTable::DASHBOARD_STATUS_FAILED:
 				$statusText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_FAILED');
 
-				if ($dashboardId !== null)
-				{
-					$refreshBtn = <<<HTML
-					<div id="restart-dashboard-load-btn" onclick="BX.BIConnector.SupersetDashboardGridManager.Instance.restartDashboardLoad($dashboardId)" class="dashboard-status-label-error-btn">
-						<div class="ui-icon-set --refresh-5 dashboard-status-label-error-icon"></div>
-					</div>
-					HTML;
-				}
-				else
-				{
-					$refreshBtn = '';
-				}
+				$refreshBtn = $dashboardId !== null ? $this->getRetryButton($dashboardId, $title) : '';
 
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
@@ -157,6 +146,27 @@ class StatusFieldAssembler extends FieldAssembler
 		return '';
 	}
 
+	private function getRetryButton(int $dashboardId, string $title): string
+	{
+		$label = htmlspecialcharsbx((string)Loc::getMessage(
+			'BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_RETRY_ARIA',
+			['#TITLE#' => $title],
+		));
+
+		return <<<HTML
+		<button
+			type="button"
+			id="restart-dashboard-load-btn-{$dashboardId}"
+			class="dashboard-status-label-error-btn"
+			data-bic-focus-role="retry"
+			aria-label="{$label}"
+			onclick="BX.BIConnector.SupersetDashboardGridManager.Instance.restartDashboardLoad({$dashboardId})"
+		>
+			<span class="ui-icon-set --refresh-5 dashboard-status-label-error-icon" aria-hidden="true"></span>
+		</button>
+		HTML;
+	}
+
 	protected function prepareRow(array $row): array
 	{
 		if (empty($this->getColumnIds()))
@@ -174,6 +184,7 @@ class StatusFieldAssembler extends FieldAssembler
 					'STATUS' => $row['data']['STATUS'],
 					'EDIT_URL' => $row['data']['EDIT_URL'],
 					'ID' => $row['data']['ID'],
+					'TITLE' => (string)($row['data']['TITLE'] ?? ''),
 					'IS_ACCESS_ALLOWED' => $row['data']['IS_ACCESS_ALLOWED'],
 					'TYPE' => $row['data']['TYPE'],
 				];

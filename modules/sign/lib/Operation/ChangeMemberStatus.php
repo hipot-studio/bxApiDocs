@@ -46,7 +46,7 @@ final class ChangeMemberStatus implements Contract\Operation
 	private readonly LoggerInterface $logger;
 
 	public function __construct(
-		private readonly Item\Member $member,
+		private Item\Member $member,
 		private readonly Item\Document $document,
 		private readonly string $status,
 		?ProviderCodeService $providerService = null,
@@ -93,37 +93,80 @@ final class ChangeMemberStatus implements Contract\Operation
 			return $result->addError(new Main\Error("Unknown member status '{$this->member->status}'"));
 		}
 
+		$completion = null;
 		if (
-			$this->message === null
-			&& $this->member->status === $this->status
+			$this->status === Type\MemberStatus::DONE
+			&& Type\DocumentScenario::isB2EScenario($this->document->scenario ?? '')
 		)
 		{
-			return $result->addError(
-				new Main\Error(
-					'Member status is already set.',
-					self::MEMBER_STATUS_ALREADY_SET_ERROR_CODE,
-				),
+			$completionResult = $this->memberRepository->completeValidationMember(
+				$this->member->id,
+				$this->document->id,
+				$this->message === null,
 			);
+			if (!$completionResult->isSuccess())
+			{
+				if ($this->message !== null)
+				{
+					return $result->addErrors($completionResult->getErrors());
+				}
+				$code = 'SIGN_VALIDATION_CRM_MARKER_ARM_FAILED';
+				$this->logger->error('Validation CRM marker persistence failed.', [
+					'code' => $code,
+					'phase' => 'arm',
+				]);
+
+				return $result->addError(new Main\Error('Validation CRM marker persistence failed.', $code));
+			}
+			$data = $completionResult->getData();
+			if ($data['applicable'])
+			{
+				$completion = $data;
+				$this->member->status = $data['after']->status;
+				$this->member->dateSigned = $data['after']->dateSigned;
+				$this->member->dateStatusChanged = $data['after']->dateStatusChanged;
+				$this->member = $data['after'];
+				if ($this->message === null && !$data['changed'])
+				{
+					return $result;
+				}
+			}
 		}
 
-		if ($this->member->status !== $this->status)
+		if ($completion !== null)
 		{
-			$this->member->dateStatusChanged =  new Main\Type\DateTime();
+			$oldStatus = $completion['before']->status;
+			$actionWasOver = InviteCardService::isActionOver($completion['before'], $this->document);
 		}
-		$oldStatus = $this->member->status;
-		// Whether this participant was expected to act as things stood, taken while the object still
-		// carries the old status. Read below, where the card is marked.
-		$actionWasOver = InviteCardService::isActionOver($this->member, $this->document);
-		$this->member->status = $this->status;
-		if ($this->member->dateSigned === null && $this->status === Type\MemberStatus::DONE)
+		else
 		{
-			$this->member->dateSigned = new Main\Type\DateTime();
-		}
+			if ($this->message === null && $this->member->status === $this->status)
+			{
+				return $result->addError(
+					new Main\Error(
+						'Member status is already set.',
+						self::MEMBER_STATUS_ALREADY_SET_ERROR_CODE,
+					),
+				);
+			}
 
-		$updateResult = $this->memberRepository->update($this->member);
-		if (!$updateResult->isSuccess())
-		{
-			return $result->addErrors($updateResult->getErrors());
+			if ($this->member->status !== $this->status)
+			{
+				$this->member->dateStatusChanged = new Main\Type\DateTime();
+			}
+			$oldStatus = $this->member->status;
+			$actionWasOver = InviteCardService::isActionOver($this->member, $this->document);
+			$this->member->status = $this->status;
+			if ($this->member->dateSigned === null && $this->status === Type\MemberStatus::DONE)
+			{
+				$this->member->dateSigned = new Main\Type\DateTime();
+			}
+
+			$updateResult = $this->memberRepository->update($this->member);
+			if (!$updateResult->isSuccess())
+			{
+				return $result->addErrors($updateResult->getErrors());
+			}
 		}
 
 		// Right here on purpose, and not at the end of the method: the status is already committed,
@@ -169,7 +212,36 @@ final class ChangeMemberStatus implements Contract\Operation
 		{
 			$this->legalLogService->registerFromMemberStatusChanged($this->document, $this->member, $this->message);
 
-			$this->eventHandlerService->handleCurrentMemberStatus($this->document, $this->member, $this->message);
+			try
+			{
+				$this->eventHandlerService->handleCurrentMemberStatus(
+					$this->document,
+					$this->member,
+					$this->message,
+					$oldStatus,
+				);
+			}
+			catch (Main\SystemException $error)
+			{
+				$code = match ($error->getCode()) {
+					25967002 => 'SIGN_VALIDATION_CRM_MARKER_HANDLED_FAILED',
+					25967007 => 'SIGN_VALIDATION_CRM_GUARD_ACQUIRE_FAILED',
+					25967004 => 'SIGN_VALIDATION_CRM_GUARD_RELEASE_FAILED',
+					25967005 => 'SIGN_VALIDATION_CRM_GUARD_REENTRY',
+					25967006 => 'SIGN_VALIDATION_CRM_GUARD_STATE_FAILED',
+					default => null,
+				};
+				if ($code === null)
+				{
+					throw $error;
+				}
+
+				return $result->addError(new Main\Error(
+					$error->getCode() === 25967002
+						? 'Validation CRM marker persistence failed.' : 'Validation CRM guard failed.',
+					$code,
+				));
+			}
 
 			$sendMessageResult = $this->hrBotMessageService->handleMemberStatusChangedMessage($this->document, $this->member);
 			$result->addErrors($sendMessageResult->getErrors());

@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ListChartsOperation;
 use Bitrix\Main\DI\ServiceLocator;
@@ -43,27 +44,17 @@ final class ListChartsTool extends BaseBiTool
 
 	public function getInputSchema(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'limit' => [
-					'type' => 'integer',
-					'minimum' => 1,
-					'maximum' => self::LIMIT_MAX,
-					'description' => 'Page size. Default ' . self::LIMIT_DEFAULT
-						. ', maximum ' . self::LIMIT_MAX . '. Values over max are clamped.',
-				],
-				'offset' => [
-					'type' => 'integer',
-					'minimum' => 0,
-					'description' => 'Offset for pagination. Default 0. Rounded down to a '
-						. 'multiple of `limit` (page-aligned); the response echoes the '
-						. 'effective `offset`. When `has_more` is true, send the next '
-						. 'request with `offset` = previous `offset` + `limit`.',
-				],
+		return BuilderArgumentContract::schema(
+			'biconnector.builder.chart.list',
+			'mcp',
+			[
+				'limit' => 'Page size. Default 20, maximum 50.',
+				'offset' => 'Offset for pagination. Default 0. Rounded down to a '
+					. 'multiple of `limit` (page-aligned); the response echoes the '
+					. 'effective `offset`. When `has_more` is true, send the next '
+					. 'request with `offset` = previous `offset` + `limit`.',
 			],
-			'additionalProperties' => false,
-		];
+		);
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
@@ -130,7 +121,9 @@ final class ListChartsTool extends BaseBiTool
 		$page = intdiv($offset, $limit);
 		$effectiveOffset = $page * $limit;
 
-		$response = IntegratorFactory::getInstance()->listCharts([], null, $page, $limit);
+		$response = IntegratorFactory::getInstance()
+			->listCharts(self::findActAsUser($userId), [], null, $page, $limit)
+		;
 		if ($response->hasErrors())
 		{
 			throw self::unavailableBiException(

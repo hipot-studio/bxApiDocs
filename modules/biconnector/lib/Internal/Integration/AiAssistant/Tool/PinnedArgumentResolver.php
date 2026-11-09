@@ -7,6 +7,7 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 use Bitrix\AiAssistant\Definition\Tool\Contract\ToolInterface;
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Internal\Digest\PinnedContextPacker;
 use Bitrix\BIConnector\Internal\Digest\Reason\DigestReason;
@@ -165,8 +166,13 @@ final class PinnedArgumentResolver
 	 * Inside a digest run a report that did not answer is recorded for the recipient, so the step after the
 	 * agent can tell it from a failure, and the model is told to stop: another call would wait just as long.
 	 *
+	 * A read refused because it could not run as the person - an outdated box, a substitution Superset did not
+	 * confirm, a table closed by the rights of the person - is not the report being slow: waiting does not change
+	 * it, so it is left to the reason the caller gives outside a run.
+	 *
 	 * @param array $context Log context of the failed call.
-	 * @return McpException|null Null when the call is not made for a run or Superset refused the request itself.
+	 * @return McpException|null Null when the call is not made for a run, Superset refused the request itself
+	 *     or the request could not run as the person.
 	 */
 	public function findRunFailure(
 		?string $runId,
@@ -175,7 +181,11 @@ final class PinnedArgumentResolver
 		array $context,
 	): ?McpException
 	{
-		if ($runId === null || !self::isUnavailability($response))
+		if (
+			$runId === null
+			|| !self::isUnavailability($response)
+			|| ActAsFailure::findMessage($response->getErrors()) !== null
+		)
 		{
 			return null;
 		}

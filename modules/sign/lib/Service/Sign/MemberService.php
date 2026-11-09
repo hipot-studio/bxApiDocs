@@ -196,6 +196,28 @@ class MemberService
 		$member->channelValue = $fakeMember->channelValue;
 	}
 
+	/**
+	 * The party the signers of a B2E document hold: the last one, or the first one when the employee
+	 * started the document. Employees of a synced department join the document as signers and belong
+	 * to that party.
+	 *
+	 * Read from the document itself, so it names the composition that was actually written. A caller
+	 * that numbered the parties before the server built the composition, as the wizard does, carries
+	 * a number the reordered stages have since shifted.
+	 *
+	 * @see self::setupB2eMembers() writes the party count this is read from
+	 * @see \Bitrix\Sign\Service\Sign\Document\CompanyInitiatedPartyPlanService the renumbering
+	 */
+	public function getB2eSignerParty(Item\Document $document): ?int
+	{
+		if ($document->isInitiatedByEmployee())
+		{
+			return 1;
+		}
+
+		return ($document->parties ?? 0) >= 1 ? $document->parties : null;
+	}
+
 	public function prepareDepartmentsForSync(
 		string $documentUid,
 		Item\Hr\EntitySelector\EntityCollection $departments,
@@ -1191,32 +1213,47 @@ class MemberService
 	{
 		if ($member->entityType !== EntityType::COMPANY)
 		{
-			return (new Main\Result())->addError(new Main\Error("Member must be the company. Now: `{$member->entityType}`"));
+			return (new Main\Result())->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_MEMBER_STAMP_MEMBER_IS_NOT_COMPANY'),
+			));
 		}
 		if ($member->documentId === null)
 		{
-			return (new Main\Result())->addError(new Main\Error("Member must be the company. Now: `{$member->entityType}`"));
+			return (new Main\Result())->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_MEMBER_DOCUMENT_NOT_FOUND'),
+			));
 		}
+
 		$stamp = new File($fileId);
 
 		if (!$stamp->isExist())
 		{
-			return (new Main\Result())->addError(new Main\Error("File with id: `$fileId` doesnt exist"));
+			return (new Main\Result())->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_MEMBER_STAMP_FILE_NOT_FOUND'),
+			));
 		}
 		$stamp->setModule('crm');
 		$savedStampFileId = $stamp->save();
 		if ($savedStampFileId === null)
 		{
-			$stamp->unlink();
-			return (new Main\Result())->addError(new Main\Error("Cant save stamp file"));
+			return (new Main\Result())->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_MEMBER_STAMP_FILE_NOT_SAVED'),
+			));
 		}
 
-		$result = \Bitrix\Sign\Integration\CRM::saveCompanyStamp($member->entityId, $stamp);
-		if (!$result)
+		// The stamp of the company is stored in its requisite, and CRM asks for the right to change that
+		// company. A caller without it is refused here, and the refusal is an ordinary answer of this
+		// action rather than a breakdown: the document is left exactly as it was, and the call counts as
+		// done only when both the requisite and the member carry the new stamp.
+		$saveResult = CRM::saveCompanyStamp($member->entityId, $stamp);
+		if (!$saveResult->isSuccess())
 		{
-			$stamp->unlink();
-			return (new Main\Result())->addError(new Main\Error("Cant save stamp file"));
+			// The file is left alone: it is not this action's to delete - the uploader that sent it holds
+			// it and collects it on its own - and the same id can already be the stamp the company keeps,
+			// in which case erasing it would break a reference that is in use.
+			return (new Main\Result())->addError(self::getStampRequisiteError($saveResult));
 		}
+
 		$member->stampFileId = $savedStampFileId;
 
 		$updateResult = $this->memberRepository->update($member);
@@ -1226,6 +1263,31 @@ class MemberService
 		}
 
 		return (new Main\Result())->setData(['fileId' => $stamp->getId()]);
+	}
+
+	/**
+	 * The refusal of CRM told apart from everything else the requisite can answer: the first one is
+	 * about the right to change the company and is worth explaining to the caller, the rest is a
+	 * failure of the write itself.
+	 *
+	 * The code is compared as a literal on purpose: it is the value of
+	 * \Bitrix\Crm\Controller\ErrorCode::ACCESS_DENIED, and reading the constant would need the module
+	 * loaded on a path that is reached when it is not.
+	 */
+	private static function getStampRequisiteError(Main\Result $requisiteResult): Main\Error
+	{
+		foreach ($requisiteResult->getErrors() as $error)
+		{
+			if ($error->getCode() === 'ACCESS_DENIED')
+			{
+				return new Main\Error(
+					Loc::getMessage('SIGN_SERVICE_MEMBER_STAMP_ACCESS_DENIED'),
+					'ACCESS_DENIED',
+				);
+			}
+		}
+
+		return new Main\Error(Loc::getMessage('SIGN_SERVICE_MEMBER_STAMP_REQUISITE_NOT_SAVED'));
 	}
 
 	public function getStampFileFromMemberOrEntity(Item\Member $member): ?Item\Fs\File

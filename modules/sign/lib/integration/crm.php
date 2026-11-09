@@ -475,13 +475,18 @@ class CRM
 
 	/**
 	 * Saves requisite field of crm entity.
+	 *
+	 * The result is handed back whole rather than as a flag: the refusal of a caller who may not change
+	 * the company in CRM is an ordinary answer here, and it can only be told from a broken requisite by
+	 * the code CRM put on the error.
+	 *
 	 * @param int $entityId Entity id.
 	 * @param int $entityType Entity type.
 	 * @param string $fieldCode Field code.
 	 * @param File $file File instance.
-	 * @return bool
+	 * @return Result
 	 */
-	private static function upsertRequisiteField(int $entityId, int $entityType, string $fieldCode, File $file): bool
+	private static function upsertRequisiteField(int $entityId, int $entityType, string $fieldCode, File $file): Result
 	{
 		// retrieve current file to delete
 		$fileOld = self::getRequisiteFile($entityId, $entityType, $fieldCode);
@@ -501,7 +506,7 @@ class CRM
 			$fileOld->unlink();
 		}
 
-		return $result->isSuccess();
+		return $result;
 	}
 
 	/**
@@ -546,7 +551,7 @@ class CRM
 	{
 		if (\Bitrix\Main\Loader::includeModule('crm'))
 		{
-			return self::upsertRequisiteField($companyId, \CCrmOwnerType::Company, 'RQ_SIGNATURE', $file);
+			return self::upsertRequisiteField($companyId, \CCrmOwnerType::Company, 'RQ_SIGNATURE', $file)->isSuccess();
 		}
 
 		return false;
@@ -554,18 +559,23 @@ class CRM
 
 	/**
 	 * Saves company stamp.
+	 *
+	 * Writing it asks CRM for the right to change the company, and a caller without that right is
+	 * refused with the access code of CRM. The whole result travels back so that the refusal can be
+	 * told apart from a requisite that failed for its own reasons.
+	 *
 	 * @param int $companyId Company id.
 	 * @param File $file File instance.
-	 * @return bool
+	 * @return Result
 	 */
-	public static function saveCompanyStamp(int $companyId, File $file): bool
+	public static function saveCompanyStamp(int $companyId, File $file): Result
 	{
-		if (\Bitrix\Main\Loader::includeModule('crm'))
+		if (!\Bitrix\Main\Loader::includeModule('crm'))
 		{
-			return self::upsertRequisiteField($companyId, \CCrmOwnerType::Company, 'RQ_STAMP', $file);
+			return (new Result())->addError(new \Bitrix\Main\Error('Module crm is not installed'));
 		}
 
-		return false;
+		return self::upsertRequisiteField($companyId, \CCrmOwnerType::Company, 'RQ_STAMP', $file);
 	}
 
 	/**

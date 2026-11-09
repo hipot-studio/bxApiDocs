@@ -184,6 +184,28 @@ final class TableAccessChecker
 	}
 
 	/**
+	 * Tells whether every one of these groups exists, rights aside.
+	 *
+	 * With the axis on a group the user may use is an existing one by definition; without the axis
+	 * existence is the only thing a group named for a table is checked for.
+	 *
+	 * @param int[] $groupIds
+	 */
+	public function doGroupsExist(array $groupIds): bool
+	{
+		$existingGroupIds = $this->getExistingGroupIds();
+		foreach ($groupIds as $groupId)
+		{
+			if (!in_array((int)$groupId, $existingGroupIds, true))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Creation drops every binding of the code outside the system groups, which is a move of the code out of
 	 * them: each custom group the code is bound to has to allow editing. Bindings to system groups are left
 	 * to the reserved code check of TableGroupService.

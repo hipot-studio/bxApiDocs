@@ -23,6 +23,7 @@ use Bitrix\Sign\Service\Container;
 /**
  * @property string[] $responsible
  * @property string[] $employee
+ * @property string $employeeGroups
  * @property string[] $representative
  * @property string[] $reviewer
  * @property string[] $editor
@@ -40,6 +41,7 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 	public const PARAM_MESSAGE = 'message';
 	public const PARAM_RESPONSIBLE = 'responsible';
 	public const PARAM_EMPLOYEE = 'employee';
+	public const PARAM_EMPLOYEE_GROUPS = 'employeeGroups';
 	public const PARAM_REPRESENTATIVE = 'representative';
 	public const PARAM_REVIEWER = 'reviewer';
 	public const PARAM_EDITOR = 'editor';
@@ -49,6 +51,9 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 	public const RETURN_STATUS_SUCCESS = 'SUCCESS';
 	public const RETURN_STATUS_FAIL = 'FAIL';
 	private const EVENT_MODULE_NAME = 'sign';
+	private const EMPLOYEE_GROUP_QUERY_BATCH_SIZE = 500;
+	private const EMPLOYEE_GROUP_SELECTOR_LIMIT = 50;
+	private const EMPLOYEE_LIMIT = 1000;
 
 	private bool $isInEventActivityMode = false;
 	private int $createdDocumentId = 0;
@@ -79,6 +84,10 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 				'Type' => FieldType::USER,
 				'Multiple' => true,
 			],
+			self::PARAM_EMPLOYEE_GROUPS => [
+				'Type' => FieldType::STRING,
+				'Required' => false,
+			],
 			self::PARAM_REPRESENTATIVE => [
 				'Type' => FieldType::USER,
 			],
@@ -105,6 +114,7 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			'Title' => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_ROBOT_TITLE'),
 			self::PARAM_RESPONSIBLE => null,
 			self::PARAM_EMPLOYEE => null,
+			self::PARAM_EMPLOYEE_GROUPS => null,
 			self::PARAM_REPRESENTATIVE => null,
 			self::PARAM_REVIEWER => null,
 			self::PARAM_EDITOR => null,
@@ -261,6 +271,28 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 		$editorUserId = $editorRoleName === null ? CBPHelper::extractFirstUser($this->editor, $docId) : null;
 
 		$signerUserIdList = CBPHelper::extractUsers($this->employee, $docId);
+		$employeeGroups = $this->getEmployeeGroups();
+		if ($employeeGroups === null)
+		{
+			$this->trackError(
+				Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_ERROR_MEMBERS_NOT_SET'),
+			);
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$resolveSignerUserIdsResult = self::resolveSignerUserIds($signerUserIdList, $employeeGroups);
+		if (!$resolveSignerUserIdsResult->isSuccess())
+		{
+			foreach ($resolveSignerUserIdsResult->getErrors() as $error)
+			{
+				$this->trackError($error->getMessage());
+			}
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+		$signerUserIdList = $resolveSignerUserIdsResult->getData()['userIds'] ?? [];
+
         $prepareMemberListForTemplateSendOperationResult = (new Sign\Operation\Document\Template\PrepareMemberListForTemplateSend(
             signerUserIdList: $signerUserIdList,
 			companyId: $companyId,
@@ -487,7 +519,12 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 				"message" => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_ERROR_RESPONSIBLE_NOT_SET'),
 			];
 		}
-		if (empty($properties[self::PARAM_EMPLOYEE]))
+		$employeeGroups = self::decodeEmployeeGroups($properties[self::PARAM_EMPLOYEE_GROUPS] ?? null);
+		if ($employeeGroups === null)
+		{
+			$errors[] = self::getEmployeePreparationError();
+		}
+		elseif (empty($properties[self::PARAM_EMPLOYEE]) && empty($employeeGroups))
 		{
 			$errors[] = [
 				"code" => "NotExist",
@@ -568,6 +605,11 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			'siteId' => $siteId,
 		]))
 			->setMap(static::getPropertiesMap($documentType))
+			->setRuntimeData([
+				'employeeText' => is_array($arCurrentValues)
+					? $arCurrentValues[self::PARAM_EMPLOYEE] ?? ''
+					: null,
+			])
 		;
 	}
 
@@ -720,6 +762,14 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 				'Required' => true,
 				'Multiple' => true,
 			],
+			self::PARAM_EMPLOYEE_GROUPS => [
+				'Name' => '',
+				'FieldName' => self::PARAM_EMPLOYEE_GROUPS,
+				'Type' => FieldType::STRING,
+				'Required' => false,
+				'AllowSelection' => false,
+				'Hidden' => true,
+			],
 			self::PARAM_REPRESENTATIVE => [
 				'Name' => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_REPRESENTATIVE'),
 				'FieldName' => self::PARAM_REPRESENTATIVE,
@@ -818,6 +868,46 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 	): bool
     {
 		$arErrors = [];
+		$employeeGroupErrors = [];
+		$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName(
+			$arWorkflowTemplate,
+			$activityName,
+		);
+		$previousEmployeeGroups = self::decodeEmployeeGroups(
+			$arCurrentActivity['Properties'][self::PARAM_EMPLOYEE_GROUPS] ?? null,
+		);
+		if ($previousEmployeeGroups === null)
+		{
+			$employeeGroupErrors[] = self::getEmployeePreparationError();
+		}
+
+		$employeeValue = $arCurrentValues[self::PARAM_EMPLOYEE] ?? '';
+		$signersListService = Container::instance()->getSignersListService();
+		$availableEmployeeGroupsById = self::loadAvailableEmployeeGroupsById(
+			self::extractEmployeeGroupCandidateIds($employeeValue),
+			$signersListService,
+		);
+		$employeeGroupTitlesById = $availableEmployeeGroupsById;
+		foreach ($previousEmployeeGroups ?? [] as $previousEmployeeGroup)
+		{
+			$groupId = $previousEmployeeGroup['id'];
+			if (isset($employeeGroupTitlesById[$groupId]))
+			{
+				$employeeGroupTitlesById[$groupId]['previousTitles'][] = $previousEmployeeGroup['title'];
+			}
+		}
+		[$employeeValue, $employeeGroupIds] = self::splitEmployeeValue(
+			$employeeValue,
+			$employeeGroupErrors,
+			$employeeGroupTitlesById,
+		);
+		$employeeGroups = self::prepareEmployeeGroups(
+			$employeeGroupIds,
+			$employeeGroupErrors,
+			$signersListService,
+			$availableEmployeeGroupsById,
+		);
+
 		$arProperties = [
 			self::PARAM_RESPONSIBLE => self::getPropertyValue(
 				self::PARAM_RESPONSIBLE,
@@ -826,10 +916,11 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 				$arErrors,
 			),
 			self::PARAM_EMPLOYEE => CBPHelper::usersStringToArray(
-				$arCurrentValues[self::PARAM_EMPLOYEE] ?? '',
+				$employeeValue,
 				$documentType,
 				$arErrors,
 			),
+			self::PARAM_EMPLOYEE_GROUPS => Main\Web\Json::encode($employeeGroups),
 			self::PARAM_REPRESENTATIVE => self::getPropertyValue(
 				self::PARAM_REPRESENTATIVE,
 				$arCurrentValues,
@@ -862,9 +953,13 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			) ? $arCurrentValues[self::PARAM_IS_SUBSCRIPTION_ENABLED] : '',
 		];
 
-		$arErrors = self::validateProperties(
-			$arProperties,
-			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
+		$arErrors = array_merge(
+			$arErrors,
+			$employeeGroupErrors,
+			self::validateProperties(
+				$arProperties,
+				new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
+			),
 		);
 
 		if ($arErrors)
@@ -872,12 +967,587 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			return false;
 		}
 
-		$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName(
-			$arWorkflowTemplate, $activityName,
-		);
 		$arCurrentActivity["Properties"] = $arProperties;
 
 		return true;
+	}
+
+	private static function decodeEmployeeGroups(mixed $value): ?array
+	{
+		if ($value === null || $value === '')
+		{
+			return [];
+		}
+
+		if (!is_string($value))
+		{
+			return null;
+		}
+
+		try
+		{
+			$decodedGroups = json_decode($value, false, 512, JSON_THROW_ON_ERROR);
+		}
+		catch (JsonException)
+		{
+			return null;
+		}
+
+		if (!is_array($decodedGroups))
+		{
+			return null;
+		}
+
+		$employeeGroups = [];
+		foreach ($decodedGroups as $group)
+		{
+			if (
+				!is_object($group)
+				|| !property_exists($group, 'id')
+				|| !property_exists($group, 'title')
+				|| !is_int($group->id)
+				|| $group->id < 1
+				|| !is_string($group->title)
+			)
+			{
+				return null;
+			}
+
+			$employeeGroups[] = [
+				'id' => $group->id,
+				'title' => $group->title,
+			];
+		}
+
+		return $employeeGroups;
+	}
+
+	private function getEmployeeGroups(): ?array
+	{
+		return self::decodeEmployeeGroups($this->getRawProperty(self::PARAM_EMPLOYEE_GROUPS));
+	}
+
+	private static function splitEmployeeValue(
+		mixed $value,
+		array &$arErrors,
+		array $availableEmployeeGroupsById = [],
+	): array
+	{
+		$employeeValue = is_string($value) ? $value : '';
+		$serializedEmployeeGroupIds = [];
+		$hasInvalidEmployeeGroup = false;
+		$serializedGroupLines = self::extractSerializedEmployeeGroupLines($employeeValue);
+		foreach ($serializedGroupLines as [$line, $offset])
+		{
+			if (preg_match('/\[SL([^\[\]\r\n]*)\]\h*$/u', $line, $matches) === 1)
+			{
+				$groupId = filter_var(
+					$matches[1],
+					FILTER_VALIDATE_INT,
+					['options' => ['min_range' => 1]],
+				);
+				if ($groupId === false)
+				{
+					$hasInvalidEmployeeGroup = true;
+				}
+				else
+				{
+					$serializedEmployeeGroupIds[] = $groupId;
+				}
+			}
+			elseif (preg_match('/^\x{2063}\h*$/u', $line) !== 1)
+			{
+				$hasInvalidEmployeeGroup = true;
+			}
+		}
+		$employeeValue = self::removeEmployeeGroupLines($employeeValue, $serializedGroupLines);
+
+		if (CBPActivity::isExpression(trim($employeeValue)))
+		{
+			if ($hasInvalidEmployeeGroup)
+			{
+				$arErrors[] = self::getEmployeePreparationError();
+			}
+
+			return [$employeeValue, array_values(array_unique($serializedEmployeeGroupIds))];
+		}
+
+		$manualEmployeeGroupIds = [];
+		preg_match_all(
+			'/(?:^|[\r\n])\K[^\r\n]+/u',
+			$employeeValue,
+			$employeeLines,
+			PREG_OFFSET_CAPTURE,
+		);
+		$manualGroupLines = [];
+		foreach ($employeeLines[0] as [$line, $offset])
+		{
+			$employeePrefix = $line;
+			$lineEmployeeGroupIds = [];
+			while (preg_match(
+				'/\[SL([^\[\]\r\n]*)\]\h*$/u',
+				$employeePrefix,
+				$matches,
+				PREG_OFFSET_CAPTURE,
+			) === 1)
+			{
+				$groupTitle = trim(substr($employeePrefix, 0, $matches[0][1]));
+				$groupId = filter_var(
+					$matches[1][0],
+					FILTER_VALIDATE_INT,
+					['options' => ['min_range' => 1]],
+				);
+				if ($groupId === false)
+				{
+					$hasInvalidEmployeeGroup = true;
+
+					break;
+				}
+
+				$prefixBeforeGroup = self::extractEmployeePrefixBeforeGroupTitle(
+					$groupId,
+					$groupTitle,
+					$availableEmployeeGroupsById,
+				);
+				if ($prefixBeforeGroup !== null)
+				{
+					$lineEmployeeGroupIds[] = $groupId;
+					$employeePrefix = $prefixBeforeGroup;
+
+					continue;
+				}
+
+				$isEmployeeGroupTitle = self::isEmployeeGroupTitle(
+					$groupId,
+					$groupTitle,
+					$availableEmployeeGroupsById,
+				);
+				if (!$isEmployeeGroupTitle && preg_match('/[,;]\h*$/u', $groupTitle) === 1)
+				{
+					break;
+				}
+				if (!$isEmployeeGroupTitle && self::containsEmployeeReference($groupTitle))
+				{
+					break;
+				}
+				if (!$isEmployeeGroupTitle && preg_match('/[,;]/u', $groupTitle) === 1)
+				{
+					$hasInvalidEmployeeGroup = true;
+
+					break;
+				}
+
+				$lineEmployeeGroupIds[] = $groupId;
+				$employeePrefix = '';
+
+				break;
+			}
+
+			if ($lineEmployeeGroupIds === [])
+			{
+				continue;
+			}
+
+			$manualEmployeeGroupIds = array_merge(
+				$manualEmployeeGroupIds,
+				array_reverse($lineEmployeeGroupIds),
+			);
+			$manualGroupLines[] = $employeePrefix === ''
+				? [$line, $offset]
+				: [$line, $offset, $employeePrefix]
+			;
+		}
+		$employeeValue = self::removeEmployeeGroupLines($employeeValue, $manualGroupLines);
+
+		$legacyEmployeeGroupIds = [];
+		preg_match_all('/[^,;]+/u', $employeeValue, $tokens, PREG_OFFSET_CAPTURE);
+
+		foreach (array_reverse($tokens[0]) as [$token, $offset])
+		{
+			if (preg_match('/\[SL([^\[\]]*)\]\s*$/u', $token, $matches, PREG_OFFSET_CAPTURE) === 1)
+			{
+				$groupTitle = trim(substr($token, 0, $matches[0][1]));
+				if (
+					self::containsNonSignersListReference($groupTitle)
+					&& !self::isEmployeeGroupTitle(
+						(int)$matches[1][0],
+						$groupTitle,
+						$availableEmployeeGroupsById,
+					)
+				)
+				{
+					$hasInvalidEmployeeGroup = true;
+
+					continue;
+				}
+
+				$groupId = filter_var(
+					$matches[1][0],
+					FILTER_VALIDATE_INT,
+					['options' => ['min_range' => 1]],
+				);
+				if ($groupId === false)
+				{
+					$hasInvalidEmployeeGroup = true;
+				}
+				else
+				{
+					$legacyEmployeeGroupIds[] = $groupId;
+				}
+			}
+			elseif (preg_match('/\[SL[^\[\]]*$/u', $token) === 1)
+			{
+				$hasInvalidEmployeeGroup = true;
+			}
+			else
+			{
+				continue;
+			}
+
+			$start = $offset > 0 ? $offset - 1 : 0;
+			$length = strlen($token) + ($offset > 0 ? 1 : 0);
+			if ($offset === 0 && isset($employeeValue[$length]))
+			{
+				$length++;
+			}
+			$employeeValue = substr_replace($employeeValue, '', $start, $length);
+
+			if (CBPActivity::isExpression(trim($employeeValue)))
+			{
+				break;
+			}
+		}
+
+		if ($hasInvalidEmployeeGroup)
+		{
+			$arErrors[] = self::getEmployeePreparationError();
+		}
+
+		$employeeGroupIds = array_merge(
+			array_reverse($legacyEmployeeGroupIds),
+			$manualEmployeeGroupIds,
+			$serializedEmployeeGroupIds,
+		);
+
+		return [$employeeValue, array_values(array_unique($employeeGroupIds))];
+	}
+
+	private static function extractEmployeeGroupCandidateIds(mixed $value): array
+	{
+		if (!is_string($value))
+		{
+			return [];
+		}
+
+		$serializedEmployeeGroupIds = [];
+		$serializedGroupLines = self::extractSerializedEmployeeGroupLines($value);
+		foreach ($serializedGroupLines as [$line])
+		{
+			if (preg_match('/\[SL(\d+)]\h*$/u', $line, $matches) === 1)
+			{
+				$serializedEmployeeGroupIds[] = (int)$matches[1];
+			}
+		}
+
+		$value = self::removeEmployeeGroupLines($value, $serializedGroupLines);
+		if (CBPActivity::isExpression(trim($value)))
+		{
+			return array_values(array_filter(
+				array_unique($serializedEmployeeGroupIds),
+				static fn(int $groupId): bool => $groupId > 0,
+			));
+		}
+
+		preg_match_all('/\[SL(\d+)]\h*(?=[,;\r\n]|$)/u', $value, $matches);
+
+		return array_values(array_filter(
+			array_unique(array_merge(
+				array_map('intval', $matches[1]),
+				$serializedEmployeeGroupIds,
+			)),
+			static fn(int $groupId): bool => $groupId > 0,
+		));
+	}
+
+	private static function extractSerializedEmployeeGroupLines(string $employeeValue): array
+	{
+		preg_match_all(
+			'/(?:^|[\r\n])\K\x{2063}[^\r\n]*/u',
+			$employeeValue,
+			$serializedGroupLines,
+			PREG_OFFSET_CAPTURE,
+		);
+
+		return $serializedGroupLines[0];
+	}
+
+	private static function isEmployeeGroupTitle(
+		int $groupId,
+		string $title,
+		array $availableEmployeeGroupsById,
+	): bool
+	{
+		return in_array(
+			$title,
+			self::getEmployeeGroupTitles($groupId, $availableEmployeeGroupsById),
+			true,
+		);
+	}
+
+	private static function extractEmployeePrefixBeforeGroupTitle(
+		int $groupId,
+		string $value,
+		array $availableEmployeeGroupsById,
+	): ?string
+	{
+		$titles = self::getEmployeeGroupTitles($groupId, $availableEmployeeGroupsById);
+		usort($titles, static fn(string $first, string $second): int => strlen($second) <=> strlen($first));
+		foreach ($titles as $title)
+		{
+			if (preg_match(
+				'/[,;]\h*' . preg_quote($title, '/') . '$/u',
+				$value,
+				$matches,
+				PREG_OFFSET_CAPTURE,
+			) === 1)
+			{
+				return rtrim(substr($value, 0, $matches[0][1]));
+			}
+		}
+
+		return null;
+	}
+
+	private static function getEmployeeGroupTitles(int $groupId, array $availableEmployeeGroupsById): array
+	{
+		if (!isset($availableEmployeeGroupsById[$groupId]))
+		{
+			return [];
+		}
+
+		$group = $availableEmployeeGroupsById[$groupId];
+		$titles = array_merge([(string)$group['title']], $group['previousTitles'] ?? []);
+
+		return array_values(array_filter(
+			array_unique(array_map('trim', $titles)),
+			static fn(string $title): bool => $title !== '',
+		));
+	}
+
+	private static function containsEmployeeReference(string $value): bool
+	{
+		return self::containsNonSignersListReference($value)
+			|| preg_match('/\[SL[^\[\]]*\]/u', $value) === 1
+		;
+	}
+
+	private static function containsNonSignersListReference(string $value): bool
+	{
+		return preg_match(
+			'/(?:\buser_\d+\b|\{=|\[(?:\d+|G\d+|SG[^\[\]]+|D\d+|DR\d+|HR\d+|HRR\d+|UA)\])/u',
+			$value,
+		) === 1;
+	}
+
+	private static function removeEmployeeGroupLines(string $employeeValue, array $groupLines): string
+	{
+		foreach (array_reverse($groupLines) as $groupLine)
+		{
+			[$line, $offset] = $groupLine;
+			$replacement = $groupLine[2] ?? null;
+			if ($replacement !== null)
+			{
+				$employeeValue = substr_replace($employeeValue, $replacement, $offset, strlen($line));
+
+				continue;
+			}
+
+			$start = $offset;
+			$length = strlen($line);
+			if ($offset > 1 && substr($employeeValue, $offset - 2, 2) === "\r\n")
+			{
+				$start -= 2;
+				$length += 2;
+			}
+			elseif ($offset > 0 && in_array($employeeValue[$offset - 1], ["\r", "\n"], true))
+			{
+				$start--;
+				$length++;
+			}
+			elseif (substr($employeeValue, $length, 2) === "\r\n")
+			{
+				$length += 2;
+			}
+			elseif (isset($employeeValue[$length]) && in_array($employeeValue[$length], ["\r", "\n"], true))
+			{
+				$length++;
+			}
+
+			$employeeValue = substr_replace($employeeValue, '', $start, $length);
+		}
+
+		return $employeeValue;
+	}
+
+	private static function prepareEmployeeGroups(
+		array $employeeGroupIds,
+		array &$arErrors,
+		?Sign\Service\SignersListService $signersListService = null,
+		?array $availableGroupsById = null,
+	): array
+	{
+		if (empty($employeeGroupIds))
+		{
+			return [];
+		}
+
+		$signersListService ??= Container::instance()->getSignersListService();
+		$availableGroupsById ??= self::loadAvailableEmployeeGroupsById(
+			$employeeGroupIds,
+			$signersListService,
+		);
+
+		$employeeGroups = [];
+		$hasUnknownEmployeeGroup = false;
+		foreach ($employeeGroupIds as $employeeGroupId)
+		{
+			if (isset($availableGroupsById[$employeeGroupId]))
+			{
+				$employeeGroups[] = $availableGroupsById[$employeeGroupId];
+
+				continue;
+			}
+
+			$hasUnknownEmployeeGroup = true;
+		}
+
+		if ($hasUnknownEmployeeGroup)
+		{
+			$arErrors[] = self::getEmployeePreparationError();
+		}
+
+		return $employeeGroups;
+	}
+
+	private static function loadAvailableEmployeeGroupsById(
+		array $employeeGroupIds,
+		Sign\Service\SignersListService $signersListService,
+	): array
+	{
+		$availableEmployeeGroupIds = array_values(array_filter(
+			$employeeGroupIds,
+			static fn(int $groupId): bool => !$signersListService->isRejectedList($groupId),
+		));
+		$availableGroupsById = [];
+		foreach (array_chunk($availableEmployeeGroupIds, self::EMPLOYEE_GROUP_QUERY_BATCH_SIZE) as $employeeGroupIdsChunk)
+		{
+			foreach ($signersListService->listByIds($employeeGroupIdsChunk) as $list)
+			{
+				$groupId = (int)$list->id;
+				if ($groupId < 1)
+				{
+					continue;
+				}
+
+				$availableGroupsById[$groupId] = [
+					'id' => $groupId,
+					'title' => $list->title,
+				];
+			}
+		}
+
+		return $availableGroupsById;
+	}
+
+	private static function resolveSignerUserIds(
+		array $directSignerUserIds,
+		array $employeeGroups,
+		?Sign\Service\SignersListService $signersListService = null,
+		?Sign\Service\Sign\MemberService $memberService = null,
+	): Main\Result
+	{
+		$result = new Main\Result();
+		if ($employeeGroups === [])
+		{
+			return $result->setData(['userIds' => $directSignerUserIds]);
+		}
+
+		$employeeGroupIds = [];
+		foreach ($employeeGroups as $employeeGroup)
+		{
+			$employeeGroupIds[$employeeGroup['id']] = $employeeGroup['id'];
+		}
+		$employeeGroupIds = array_values($employeeGroupIds);
+
+		$container = Container::instance();
+		$signersListService ??= $container->getSignersListService();
+		$memberService ??= $container->getMemberService();
+
+		$existingEmployeeGroupIds = [];
+		foreach (array_chunk($employeeGroupIds, self::EMPLOYEE_GROUP_QUERY_BATCH_SIZE) as $employeeGroupIdsChunk)
+		{
+			foreach ($employeeGroupIdsChunk as $employeeGroupId)
+			{
+				if ($signersListService->isRejectedList($employeeGroupId))
+				{
+					return $result->addError(new Main\Error(
+						Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_ERROR_MEMBERS_NOT_SET') ?? '',
+					));
+				}
+			}
+
+			foreach ($signersListService->listByIds($employeeGroupIdsChunk) as $employeeGroup)
+			{
+				if ($employeeGroup->id !== null)
+				{
+					$existingEmployeeGroupIds[$employeeGroup->id] = true;
+				}
+			}
+		}
+
+		if (array_diff($employeeGroupIds, array_keys($existingEmployeeGroupIds)) !== [])
+		{
+			return $result->addError(new Main\Error(
+				Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_ERROR_MEMBERS_NOT_SET') ?? '',
+			));
+		}
+
+		$directSignerUserIds = array_values(array_filter(
+			array_unique(array_map('intval', $directSignerUserIds)),
+			static fn(int $userId): bool => $userId > 0,
+		));
+		$remainingSignerLimit = self::EMPLOYEE_LIMIT - count($directSignerUserIds) + 1;
+		$groupSignerUserIds = $remainingSignerLimit > 0
+			? $signersListService->listSignerUserIdsByListIds(
+				$employeeGroupIds,
+				$remainingSignerLimit,
+				$directSignerUserIds,
+			)
+			: []
+		;
+		$signerUserIds = array_values(array_unique(array_merge(
+			$directSignerUserIds,
+			$groupSignerUserIds,
+		)));
+		$entities = new Item\Hr\EntitySelector\EntityCollection();
+		foreach ($signerUserIds as $signerUserId)
+		{
+			$entities->add(new Item\Hr\EntitySelector\Entity(
+				$signerUserId,
+				Sign\Type\Hr\EntitySelector\EntityType::User,
+			));
+		}
+
+		return $memberService->resolveUniqueSignerIds($entities, false);
+	}
+
+	private static function getEmployeePreparationError(): array
+	{
+		return [
+			'code' => 'InvalidEmployeeGroups',
+			'parameter' => self::PARAM_EMPLOYEE,
+			'message' => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_ERROR_MEMBERS_NOT_SET'),
+		];
 	}
 
 	private static function normalizeFileValueToId(mixed $value): int
@@ -935,14 +1605,94 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 		return $result;
 	}
 
-	public static function getAjaxResponse(): array
+	public static function getAjaxResponse(array $params = []): array
 	{
 		if (!static::isAvailable())
 		{
 			return [];
 		}
 
+		if (($params['request'] ?? null) === 'employeeGroups')
+		{
+			if (!self::canUseAutomationDocumentSigned($params['automationDocumentSigned'] ?? null))
+			{
+				return [];
+			}
+
+			return self::getEmployeeGroupSelectorItems((string)($params['query'] ?? ''));
+		}
+
 		return self::getTemplateSelectOptions();
+	}
+
+	private static function getEmployeeGroupSelectorItems(string $query): array
+	{
+		$signersListService = Container::instance()->getSignersListService();
+		$query = trim($query);
+		$lists = $query === ''
+			? $signersListService->list(self::EMPLOYEE_GROUP_SELECTOR_LIMIT)
+			: $signersListService->listWithFilter(
+				(new Main\ORM\Query\Filter\ConditionTree())->whereLike('TITLE', "%{$query}%"),
+				self::EMPLOYEE_GROUP_SELECTOR_LIMIT,
+			)
+		;
+
+		$items = [];
+		foreach ($lists as $list)
+		{
+			$items[] = [
+				'id' => $list->id,
+				'entityId' => 'signers-list',
+				'title' => $list->title,
+				'searchable' => true,
+				'hidden' => false,
+				'tabs' => ['signers-list'],
+			];
+		}
+
+		return $items;
+	}
+
+	private static function canUseAutomationDocumentSigned(mixed $documentSigned): bool
+	{
+		if (!is_string($documentSigned) || $documentSigned === '')
+		{
+			return false;
+		}
+
+		$documentInformation = CBPDocument::unSignParameters($documentSigned);
+		if (count($documentInformation) !== 3 || !is_array($documentInformation[0] ?? null))
+		{
+			return false;
+		}
+
+		try
+		{
+			$documentType = CBPHelper::ParseDocumentId($documentInformation[0]);
+		}
+		catch (CBPArgumentNullException)
+		{
+			return false;
+		}
+
+		$currentUserId = (int)Main\Engine\CurrentUser::get()->getId();
+		if ($currentUserId < 1)
+		{
+			return false;
+		}
+
+		$templateUser = new CBPWorkflowTemplateUser($currentUserId);
+		if ($templateUser->isAdmin())
+		{
+			return true;
+		}
+
+		return CBPDocument::CanUserOperateDocumentType(
+			CBPCanUserOperateOperation::CreateAutomation,
+			$currentUserId,
+			$documentType,
+			['DocumentCategoryId' => (int)$documentInformation[1]],
+		);
 	}
 
 	public function subscribe(IBPActivityExternalEventListener $eventHandler): void

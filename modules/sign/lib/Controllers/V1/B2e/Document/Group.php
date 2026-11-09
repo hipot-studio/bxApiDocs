@@ -66,6 +66,7 @@ final class Group extends Controller
 		int $groupId = 0,
 		bool $hasPlaceholders = false,
 		?string $initiatedByType = null,
+		bool $autoDetectType = false,
 	): array
 	{
 		$fileIds = [];
@@ -81,7 +82,7 @@ final class Group extends Controller
 			$fileIds[] = $fileId;
 		}
 
-		if ($fileIds === [] || count($fileIds) > GroupService::MAX_DOCUMENT_COUNT)
+		if ($fileIds === [] || count($fileIds) > $this->getMaxBatchFileCount($autoDetectType))
 		{
 			$this->addError(new Error('Invalid file count', 'INVALID_FILE_LIST'));
 
@@ -105,6 +106,7 @@ final class Group extends Controller
 			groupId: $groupId,
 			hasPlaceholders: $hasPlaceholders,
 			initiatedByType: $initiatedBy,
+			autoDetectType: $autoDetectType,
 		))->launch();
 
 		if (!$result instanceof AddGroupDocumentsResult || !$result->isSuccess())
@@ -118,6 +120,28 @@ final class Group extends Controller
 			'groupId' => $result->getGroupId(),
 			'items' => $result->getItems(),
 		];
+	}
+
+	/**
+	 * How many files one request may carry, which is not the same as how many documents the group
+	 * may hold: automatic detection puts every image of a batch into a single document, so a batch
+	 * of images fills one place of the group. The places themselves are counted per created document
+	 * by the operation, and the free capacity of the group rejects the files over it one by one.
+	 *
+	 * The largest input the group can still take is one document of images, capped by the image
+	 * limit of a blank, plus one file for each remaining place. Without automatic detection every
+	 * file becomes a document of its own, so there the input limit is the limit of the group.
+	 */
+	private function getMaxBatchFileCount(bool $autoDetectType): int
+	{
+		if (!$autoDetectType)
+		{
+			return GroupService::MAX_DOCUMENT_COUNT;
+		}
+
+		$imagesPerDocument = max(Storage::instance()->getImagesCountLimitForBlankUpload(), 1);
+
+		return GroupService::MAX_DOCUMENT_COUNT - 1 + $imagesPerDocument;
 	}
 
 	#[Attribute\ActionAccess(

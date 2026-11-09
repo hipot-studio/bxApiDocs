@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DetailLinkFieldAss
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\FieldAssemblerPencilTrait;
 use Bitrix\Main\Grid\Row\Assembler\Field\StringFieldAssembler;
 use Bitrix\Main\Grid\Row\FieldAssembler;
+use Bitrix\Main\Localization\Loc;
 
 class DescriptionFieldAssembler extends FieldAssembler
 {
@@ -15,7 +16,13 @@ class DescriptionFieldAssembler extends FieldAssembler
 	{
 		$result = htmlspecialcharsbx($value['DESCRIPTION'] ?? '');
 
-		return $this->addPencil('DESCRIPTION', $result, ($value['ID'] ?? 0));
+		return $this->addPencil(
+			'DESCRIPTION',
+			$result,
+			($value['ID'] ?? 0),
+			(string)Loc::getMessage('BICONNECTOR_SUPERSET_GRID_SOURCE_DESCRIPTION_FIELD_ARIA'),
+			(string)Loc::getMessage('BICONNECTOR_SUPERSET_GRID_SOURCE_DESCRIPTION_EDIT_EMPTY_ARIA'),
+		);
 	}
 
 	protected function prepareRow(array $row): array

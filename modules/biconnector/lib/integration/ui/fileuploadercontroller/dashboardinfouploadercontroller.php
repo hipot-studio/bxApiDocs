@@ -4,8 +4,10 @@ namespace Bitrix\BIConnector\Integration\UI\FileUploaderController;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\UI\FileUploader\CanUploadResult;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\FileOwnershipCollection;
+use Bitrix\UI\FileUploader\UploadRequest;
 use Bitrix\UI\FileUploader\UploaderController;
 use Bitrix\UI\FileUploader\UploadResult;
 
@@ -34,7 +36,7 @@ class DashboardInfoUploaderController extends UploaderController
 		return $configuration;
 	}
 
-	public function canUpload()
+	public function canUpload(?UploadRequest $uploadRequest = null): CanUploadResult|bool
 	{
 		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
 	}

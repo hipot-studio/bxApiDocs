@@ -335,6 +335,18 @@ class Type
 	}
 
 	/**
+	 * Has the current scope its own model of site operations (getOperationsForSite()).
+	 * @return bool
+	 */
+	public static function hasOwnOperationsForSite(): bool
+	{
+		return
+			self::$currentScopeClass !== null
+			&& is_callable([self::$currentScopeClass, 'getOperationsForSite'])
+		;
+	}
+
+	/**
 	 * Change manifest field by special conditions of site type
 	 * @param array $manifest
 	 * @return array prepared manifest

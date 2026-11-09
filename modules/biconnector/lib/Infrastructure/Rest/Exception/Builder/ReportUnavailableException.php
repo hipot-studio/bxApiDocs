@@ -20,6 +20,11 @@ class ReportUnavailableException extends BuilderRestException
 
 	protected function getMessagePhraseCode(): string
 	{
+		if (($this->getData()['reason'] ?? null) === 'write_unknown')
+		{
+			return 'BICONNECTOR_REST_BUILDER_EXCEPTION_LAYOUT_WRITE_UNKNOWN';
+		}
+
 		return 'BICONNECTOR_REST_BUILDER_EXCEPTION_REPORT_UNAVAILABLE';
 	}
 }

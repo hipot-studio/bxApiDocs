@@ -128,6 +128,17 @@ class DictionaryManager
 		DictionaryCacheTable::delete($dictionaryId);
 	}
 
+	/**
+	 * Invalidates dictionaries that contain department names.
+	 *
+	 * @return void
+	 */
+	public static function invalidateDepartmentNameCache(): void
+	{
+		static::invalidateCache(Dictionary::USER_DEPARTMENT);
+		static::invalidateCache(Dictionary::DEPARTMENT_PARENT_AGGREGATION);
+	}
+
 	protected static $validated = [];
 
 	/**

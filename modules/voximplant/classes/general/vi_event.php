@@ -338,21 +338,30 @@ class CVoxImplantEvent
 	{
 		return [
 			"voximplant" => [
-				"notifications" => [
-					"NAME" => Loc::getMessage('VI_EVENTS_NOTIFICATIONS'),
-					"SITE" => "Y",
-					"MAIL" => "Y",
-					"XMPP" => "N",
-					"PUSH" => "N",
-					"DISABLED" => [],
+				"PRODUCT_SOURCE" => [
+					"ID" => "telephony",
+					"NAME" => Loc::getMessage('VI_PRODUCT_SOURCE_NAME'),
+					"DESCRIPTION" => Loc::getMessage('VI_PRODUCT_SOURCE_DESCRIPTION'),
+					"ICON" => ["TYPE" => "named", "VALUE" => "telephony"],
+					"SORT" => 1300,
 				],
-				"status_notifications" => [
-					"NAME" => Loc::getMessage('VI_EVENTS_SIP_STATUS_NOTIFICATIONS_V3'),
-					"SITE" => "Y",
-					"MAIL" => "Y",
-					"XMPP" => "N",
-					"PUSH" => "N",
-					"DISABLED" => [IM_NOTIFY_FEATURE_PUSH],
+				'NOTIFY' => [
+					"notifications" => [
+						"NAME" => Loc::getMessage('VI_EVENTS_NOTIFICATIONS'),
+						"SITE" => "Y",
+						"MAIL" => "Y",
+						"XMPP" => "N",
+						"PUSH" => "N",
+						"DISABLED" => [],
+					],
+					"status_notifications" => [
+						"NAME" => Loc::getMessage('VI_EVENTS_SIP_STATUS_NOTIFICATIONS_V3'),
+						"SITE" => "Y",
+						"MAIL" => "Y",
+						"XMPP" => "N",
+						"PUSH" => "N",
+						"DISABLED" => [IM_NOTIFY_FEATURE_PUSH],
+					],
 				],
 			],
 		];

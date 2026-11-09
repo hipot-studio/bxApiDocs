@@ -8,10 +8,19 @@ use Bitrix\Main\DB;
 
 final class SqlTimeLimit
 {
+	private const MYSQL_LIMIT = 'mysql';
+
+	private const MARIADB_LIMIT = 'mariadb';
+
+	private const NO_LIMIT = 'none';
+
 	/** @var array<int, array{connection: DB\Connection, sql: string}> */
 	private static array $pendingRestore = [];
 
 	private static bool $shutdownRegistered = false;
+
+	/** @var \WeakMap<DB\Connection, string>|null */
+	private static ?\WeakMap $mysqlLimitKind = null;
 
 	public static function apply(DB\Connection $connection, int $seconds): bool
 	{
@@ -125,6 +134,17 @@ final class SqlTimeLimit
 
 	private static function applyMysql(DB\Connection $connection, int $seconds): bool
 	{
+		$limitKind = self::detectMysqlLimitKind($connection);
+		if ($limitKind === self::MARIADB_LIMIT)
+		{
+			return self::applyMariaDb($connection, $seconds);
+		}
+
+		if ($limitKind === self::NO_LIMIT)
+		{
+			return true;
+		}
+
 		$requestedMs = $seconds * 1000;
 		$currentMs = (int)self::readValue($connection, 'SELECT @@SESSION.max_execution_time');
 
@@ -137,6 +157,35 @@ final class SqlTimeLimit
 		self::rememberRestore($connection, 'SET SESSION max_execution_time = ' . $currentMs);
 
 		return true;
+	}
+
+	/**
+	 * max_execution_time appeared in MySQL 5.7.8; an older server has no time limit for a SELECT at all,
+	 * so the query runs without one instead of being refused. A MariaDB behind a proxy that reports
+	 * its own version reaches this branch too and still has max_statement_time.
+	 */
+	private static function detectMysqlLimitKind(DB\Connection $connection): string
+	{
+		self::$mysqlLimitKind ??= new \WeakMap();
+
+		if (!isset(self::$mysqlLimitKind[$connection]))
+		{
+			self::$mysqlLimitKind[$connection] = match (true)
+			{
+				self::readVariable($connection, 'max_execution_time') !== null => self::MYSQL_LIMIT,
+				stripos((string)self::readVariable($connection, 'version'), 'MariaDB') !== false => self::MARIADB_LIMIT,
+				default => self::NO_LIMIT,
+			};
+		}
+
+		return self::$mysqlLimitKind[$connection];
+	}
+
+	private static function readVariable(DB\Connection $connection, string $name): ?string
+	{
+		$row = $connection->query("SHOW VARIABLES LIKE '" . $name . "'")->fetch();
+
+		return $row ? (string)($row['Value'] ?? '') : null;
 	}
 
 	private static function applyMariaDb(DB\Connection $connection, int $seconds): bool

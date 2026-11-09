@@ -15,6 +15,7 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Error;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UserTable;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
@@ -108,6 +109,7 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 
 		$publishedById = (int)$dashboardInfo->getPublishedById();
 		$updatedById = (int)$dashboardInfo->getUpdatedById();
+		$users = $this->getUsers([$publishedById, $updatedById]);
 
 		return [
 			'TITLE' => $dashboardInfo->getTitle(),
@@ -123,13 +125,15 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 				: null
 			,
 			'PUBLISHED_BY_ID' => $publishedById,
-			'PUBLISHED_BY_PERSONAL_PHOTO' => $this->getUserPersonalPhoto($publishedById),
+			'PUBLISHED_BY_NAME' => $users[$publishedById]['NAME'] ?? null,
+			'PUBLISHED_BY_PERSONAL_PHOTO' => $users[$publishedById]['PERSONAL_PHOTO'] ?? null,
 			'PUBLISHED_DATE' => $dashboardInfo->getPublishedDate()
 				? $this->prepareDate($dashboardInfo->getPublishedDate())
 				: null
 			,
 			'UPDATED_BY_ID' => $updatedById,
-			'UPDATED_BY_PERSONAL_PHOTO' => $this->getUserPersonalPhoto($updatedById),
+			'UPDATED_BY_NAME' => $users[$updatedById]['NAME'] ?? null,
+			'UPDATED_BY_PERSONAL_PHOTO' => $users[$updatedById]['PERSONAL_PHOTO'] ?? null,
 			'UPDATED_DATE' => $dashboardInfo->getUpdatedDate()
 				? $this->prepareDate($dashboardInfo->getUpdatedDate())
 				: null
@@ -214,26 +218,39 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 		;
 	}
 
-	private function getUserPersonalPhoto(int $userId): ?string
+	/**
+	 * @param int[] $userIds
+	 *
+	 * @return array<int, array{NAME: ?string, PERSONAL_PHOTO: ?string}>
+	 */
+	private function getUsers(array $userIds): array
 	{
-		if ($userId <= 0)
+		$userIds = array_values(array_unique(array_filter($userIds, static fn(int $id): bool => $id > 0)));
+		if ($userIds === [])
 		{
-			return null;
+			return [];
 		}
 
-		$user = \CUser::getByID($userId)->fetch();
-		if (!$user)
+		$rows = UserTable::query()
+			->setSelect(['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL', 'PERSONAL_PHOTO'])
+			->whereIn('ID', $userIds)
+			->exec()
+		;
+
+		$users = [];
+		$nameFormat = \CSite::GetNameFormat(false);
+		while ($row = $rows->fetch())
 		{
-			return null;
+			$name = (string)\CUser::FormatName($nameFormat, $row, true, false);
+			$photoId = (int)$row['PERSONAL_PHOTO'];
+
+			$users[(int)$row['ID']] = [
+				'NAME' => $name !== '' ? $name : null,
+				'PERSONAL_PHOTO' => $photoId > 0 ? $this->resizeImageGet($photoId, 22, 22) : null,
+			];
 		}
 
-		$photoId = (int)$user['PERSONAL_PHOTO'];
-		if ($photoId <= 0)
-		{
-			return null;
-		}
-
-		return $this->resizeImageGet($photoId, 22, 22);
+		return $users;
 	}
 
 	private function resizeImageGet(int $fileId, int $width, int $height): ?string

@@ -55,6 +55,12 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 			'delete' => [
 				'+prefilters' => $filters,
 			],
+			'getOpenUrl' => [
+				'+prefilters' => [
+					...$filters,
+					new ActionFilter\SupersetLoginAccess(),
+				],
+			],
 		];
 	}
 

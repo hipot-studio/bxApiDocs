@@ -20,6 +20,7 @@ class FlagGate
 	public const BUILDER_MCP_ALIGNMENT = 'Bitrix\\BIConnector\\Public\\Features\\BuilderMcpAlignment';
 	public const BUILDER_REST = 'Bitrix\\BIConnector\\Public\\Features\\BuilderRest';
 	public const REST_SOURCE_DIAGNOSTICS = 'Bitrix\\BIConnector\\Public\\Features\\RestSourceDiagnostics';
+	public const BUILDER_AGENT_SKILL = 'Bitrix\\BIConnector\\Public\\Features\\BuilderAgentSkill';
 
 	private readonly FeatureFlagChecker $flagChecker;
 

@@ -26,6 +26,11 @@ class SetLandingCrmFormSchema extends BaseSchema
 				'description' => 'CRM web form identifier to set into the target block. Must be readable by the current user.',
 				'minimum' => 1,
 			],
+			'formToken' => [
+				'type' => 'string',
+				'description' => 'Form token of a custom markup block from get_landing_crm_form_blocks.'
+					. ' Required when the block holds several CRM forms; omit it for an ordinary CRM-form block.',
+			],
 		];
 	}
 

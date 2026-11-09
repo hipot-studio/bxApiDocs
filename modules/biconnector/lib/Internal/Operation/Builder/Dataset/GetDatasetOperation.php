@@ -5,10 +5,11 @@ namespace Bitrix\BIConnector\Internal\Operation\Builder\Dataset;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
-use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\Main\Result;
 
 /**
@@ -22,15 +23,17 @@ final class GetDatasetOperation
 {
 	/** @var \Closure(int): AccessController */
 	private readonly \Closure $accessControllerFactory;
+	private readonly SupersetIdentity $identity;
 
 	/**
 	 * @param (\Closure(int): AccessController)|null $accessControllerFactory
 	 */
-	public function __construct(?\Closure $accessControllerFactory = null)
+	public function __construct(?\Closure $accessControllerFactory = null, ?SupersetIdentity $identity = null)
 	{
 		$this->accessControllerFactory = $accessControllerFactory
 			?? static fn(int $userId): AccessController => new AccessController($userId)
 		;
+		$this->identity = $identity ?? new SupersetIdentity();
 	}
 
 	public function execute(int $datasetId, Actor $actor): Result
@@ -55,23 +58,19 @@ final class GetDatasetOperation
 			);
 		}
 
-		$response = IntegratorFactory::getInstance()->getDatasetById($datasetId);
-		if ($response->hasErrors())
+		$identityResult = $this->identity->forRead($userId);
+		if (!$identityResult->isSuccess())
 		{
-			return Refusal::unavailableBi(
-				$response->getErrors(),
-				['stage' => 'get_dataset', 'user_id' => $userId, 'dataset_id' => $datasetId],
-			);
+			return $identityResult;
 		}
 
-		$data = $response->getData();
-		if (!is_array($data) || (int)($data['id'] ?? 0) <= 0)
+		$lookup = (new EntityLookup())->dataset($datasetId, $identityResult->getData()['user']);
+		if (!$lookup->isSuccess())
 		{
-			return Refusal::error(
-				FailureCode::NotFound,
-				"Dataset with id={$datasetId} was not found. Call list_datasets to get a valid id.",
-			);
+			return $lookup;
 		}
+
+		$data = $lookup->getData()['entity'];
 
 		$columns = [];
 		foreach (is_array($data['columns'] ?? null) ? $data['columns'] : [] as $column)

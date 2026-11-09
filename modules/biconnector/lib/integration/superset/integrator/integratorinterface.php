@@ -193,14 +193,21 @@ interface IntegratorInterface
 	 *         Format: [['dataset' => datasetId, 'clause' => 'SQL WHERE clause'], ...]
 	 *
 	 * @param int $expSeconds Expiration seconds.
+	 * @param Dto\User|null $user Whose identity the guest token carries; the current user when omitted.
+	 *        A guest of a public link has no portal user, so the link passes its author here.
 	 * @return IntegratorResponse<Dto\DashboardEmbeddedCredentials>
 	 */
-	public function getDashboardEmbeddedCredentials(int $dashboardId, array $rlsRules = [], int $expSeconds = 0): IntegratorResponse;
+	public function getDashboardEmbeddedCredentials(
+		int $dashboardId,
+		array $rlsRules = [],
+		int $expSeconds = 0,
+		?Dto\User $user = null,
+	): IntegratorResponse;
 
 	/**
 	 * @return IntegratorResponse<Dto\DashboardEmbeddedCredentials>
 	 */
-	public function getDemoEmbeddedCredentials(string $reportCode, string $lang): IntegratorResponse;
+	public function getDemoEmbeddedCredentials(string $dashboardCode, string $lang): IntegratorResponse;
 
 	/**
 	 * Returns response with ID of copied dashboard on success request.
@@ -321,11 +328,14 @@ interface IntegratorInterface
 	 * @param array{by?: string, order?: string} $sort Drill-down sort; ignored in skeleton mode.
 	 * @param int|null $limit Drill-down row cap; ignored in skeleton mode.
 	 * @param int $offset Drill-down page offset into the sorted rows; ignored in skeleton mode.
+	 * @param User|null $user The person the data is read for: while the table permission axis is on, Superset runs
+	 *        the request as this user (act-as) and the read is refused without one; without the axis the read
+	 *        goes under the service account and the user is optional.
 	 * @param bool $arbitrateServiceFailure Same meaning as in getDashboardById().
-	 * @param User|null $user The user the overview is built for; null builds it for the user of the request.
 	 * @return IntegratorResponse
 	 */
 	public function getDashboardOverview(
+		?User $user,
 		int $dashboardId,
 		array $appliedFilters = [],
 		array $urlParams = [],
@@ -335,16 +345,17 @@ interface IntegratorInterface
 		?int $limit = null,
 		int $offset = 0,
 		bool $arbitrateServiceFailure = true,
-		?User $user = null,
 	): IntegratorResponse;
 
 	/**
 	 * Gets available values for a dashboard native filter.
 	 *
+	 * @param User|null $user The person the values are read for, as in getDashboardOverview().
 	 * @param bool $arbitrateServiceFailure Same meaning as in getDashboardById().
 	 * @return IntegratorResponse
 	 */
 	public function getFilterValues(
+		?User $user,
 		int $dashboardId,
 		string $filterColumn,
 		array $appliedFilters = [],
@@ -422,19 +433,21 @@ interface IntegratorInterface
 	/**
 	 * Returns response with the list of physical tables available in the BI database.
 	 *
+	 * @param User|null $user The person the list is built for, as in getDashboardOverview().
 	 * @param string|null $schema Schema to filter tables by (defaults to bitrix24).
 	 * @return IntegratorResponse
 	 */
-	public function listTables(?string $schema = null): IntegratorResponse;
+	public function listTables(?User $user, ?string $schema = null): IntegratorResponse;
 
 	/**
 	 * Returns response with the columns/metadata of a physical table in the BI database.
 	 *
+	 * @param User|null $user The person the metadata is read for, as in getDashboardOverview().
 	 * @param string $tableName Physical table name.
 	 * @param string|null $schema Schema of the table (defaults to bitrix24).
 	 * @return IntegratorResponse
 	 */
-	public function getTableMetadata(string $tableName, ?string $schema = null): IntegratorResponse;
+	public function getTableMetadata(?User $user, string $tableName, ?string $schema = null): IntegratorResponse;
 
 	// endregion
 
@@ -462,9 +475,11 @@ interface IntegratorInterface
 	 * Returns response with dataset info on successful request.
 	 *
 	 * @param int $id
+	 * @param User|null $user When set, Superset reads the dataset as this user (act-as);
+	 *        null — as the service account, for callers that are not acting for a person.
 	 * @return IntegratorResponse
 	 */
-	public function getDatasetById(int $id): IntegratorResponse;
+	public function getDatasetById(int $id, ?User $user = null): IntegratorResponse;
 
 	/**
 	 * Returns response with dataset info on successful request by name.
@@ -487,10 +502,12 @@ interface IntegratorInterface
 	 * @param int[] $ids Optional filter: only datasets with these ids.
 	 * @param int[] $neqIds Optional filter: exclude datasets with these ids.
 	 * @param int|null $page Zero-based page index (bounded mode).
+	 * @param User|null $user The person the list is built for, as in getDashboardOverview().
 	 * @param int|null $pageSize Page size; presence switches on bounded mode.
 	 * @return IntegratorResponse
 	 */
 	public function listDatasets(
+		?User $user,
 		array $ids = [],
 		array $neqIds = [],
 		?int $page = null,
@@ -507,7 +524,9 @@ interface IntegratorInterface
 
 	/**
 	 * Creates a virtual dataset (SQL-backed view) in Superset based on a source table.
+	 * Superset creates it as the user (act-as), so the permissions on tables of the user apply.
 	 *
+	 * @param User $user Employee the dataset is created for.
 	 * @param string $datasetName Display name of the new dataset.
 	 * @param string $sourceTable Source physical table name in the BI database.
 	 * @param string[] $columns Columns to project from the source table.
@@ -515,6 +534,7 @@ interface IntegratorInterface
 	 * @return IntegratorResponse
 	 */
 	public function createVirtualDataset(
+		User $user,
 		string $datasetName,
 		string $sourceTable,
 		array $columns,
@@ -523,12 +543,14 @@ interface IntegratorInterface
 
 	/**
 	 * Creates a virtual dataset (SQL-backed view) in Superset from a raw SQL query.
+	 * Superset creates it as the user (act-as), so the permissions on tables of the user apply.
 	 *
+	 * @param User $user Employee the dataset is created for.
 	 * @param string $datasetName Display name of the new dataset.
 	 * @param string $sql Raw SQL SELECT used as the dataset source.
 	 * @return IntegratorResponse
 	 */
-	public function createDatasetFromSql(string $datasetName, string $sql): IntegratorResponse;
+	public function createDatasetFromSql(User $user, string $datasetName, string $sql): IntegratorResponse;
 
 	/**
 	 * Updates dataset
@@ -597,10 +619,12 @@ interface IntegratorInterface
 	 * @param int[] $ids Optional filter: only charts with these ids.
 	 * @param string|null $nameFilter Optional filter: charts whose name contains this.
 	 * @param int|null $page Zero-based page index (bounded mode).
+	 * @param User|null $user The person the list is built for, as in getDashboardOverview().
 	 * @param int|null $pageSize Page size; presence switches on bounded mode.
 	 * @return IntegratorResponse
 	 */
 	public function listCharts(
+		?User $user,
 		array $ids = [],
 		?string $nameFilter = null,
 		?int $page = null,
@@ -611,9 +635,11 @@ interface IntegratorInterface
 	 * Returns chart config (slice_name, viz_type, datasource, params, etc.) by id.
 	 *
 	 * @param int $id
+	 * @param User|null $user When set, Superset reads the chart as this user (act-as);
+	 *        null — as the service account, for callers that are not acting for a person.
 	 * @return IntegratorResponse
 	 */
-	public function getChartById(int $id): IntegratorResponse;
+	public function getChartById(int $id, ?User $user = null): IntegratorResponse;
 
 	/**
 	 * Creates a new chart.

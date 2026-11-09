@@ -5,17 +5,20 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sender\Access\ActionDictionary;
-use Bitrix\Sender\Access\Service\RoleDealCategoryService;
+use Bitrix\Sender\Access\Service\SegmentConnectorAccessService;
 use Bitrix\Sender\Connector;
 use Bitrix\Sender\ContactListTable;
 use Bitrix\Sender\Entity;
 use Bitrix\Sender\GroupTable;
 use Bitrix\Sender\Integration\Crm;
 use Bitrix\Sender\Integration\Crm\Connectors\Client;
+use Bitrix\Sender\Internals\Dto\SegmentSnapshotDTO;
 use Bitrix\Sender\ListTable;
 use Bitrix\Sender\Posting\SegmentDataBuilder;
+use Bitrix\Sender\Posting\SegmentSnapshotState;
 use Bitrix\Sender\Security;
 use Bitrix\Sender\Segment;
+use Bitrix\Sender\Segment\EndpointAccessGuard;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
@@ -41,6 +44,8 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 	 * @var array
 	 */
 	private $usedConnectors;
+
+	private ?SegmentConnectorAccessService $connectorAccess = null;
 
 	protected function initParams()
 	{
@@ -91,6 +96,8 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 			'ENDPOINTS' => Connector\Manager::getEndpointFromFields($settings)
 		);
 
+		$guard = new EndpointAccessGuard($this->getConnectorAccess());
+		$savedEndpoints = $this->entitySegment->getData()['ENDPOINTS'] ?? [];
 		foreach ($data["ENDPOINTS"] as &$endpoint)
 		{
 			if(
@@ -100,6 +107,11 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 				&& !isset($endpoint["FIELDS"]["DEAL_CATEGORY_ID"])
 			)
 			{
+				if ($guard->isUnchangedSaved($savedEndpoints, $endpoint))
+				{
+					continue;
+				}
+
 				$categories = \Bitrix\Crm\Category\DealCategory::getAllIDs();
 				if (count($categories) < 2)
 				{
@@ -122,8 +134,8 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 
 		if($this->errors->isEmpty())
 		{
-			$this->entitySegment->mergeData($data)->save();
-			$this->errors->add($this->entitySegment->getErrors());
+			$result = $guard->save($this->entitySegment, $data);
+			$this->errors->add($result->getErrors());
 		}
 
 		if ($this->errors->isEmpty())
@@ -236,6 +248,9 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 			$this->preparePost();
 		}
 
+		// after the request: a save above may have started a build of its own
+		$this->prepareSnapshotState();
+
 		$endpoints = $this->entitySegment->get('ENDPOINTS');
 		if (!is_array($endpoints) || empty($endpoints))
 		{
@@ -259,6 +274,26 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 
 
 		return true;
+	}
+
+	/**
+	 * State of the segment snapshot for the form: build date and the reasons a refresh is refused.
+	 *
+	 * @return void
+	 */
+	protected function prepareSnapshotState()
+	{
+		if ($this->arParams['ID'] <= 0)
+		{
+			$this->arResult['SNAPSHOT'] = (new SegmentSnapshotDTO())->toArray();
+
+			return;
+		}
+
+		$this->arResult['SNAPSHOT'] = (new SegmentSnapshotState($this->arParams['ID']))
+			->toDto((bool)$this->arParams['CAN_EDIT'])
+			->toArray()
+		;
 	}
 
 	/**
@@ -399,9 +434,9 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 				}
 				$connectorData['FORM'] = str_replace('%CONNECTOR_NUM%', $connectorData['NUM'], $connectorData['FORM']);
 
-				$addressCounter += $connectorData['COUNT']['summary'] ?? 0;
-
 				$this->prepareConnectorDataCounter($connectorData, $connector, true);
+
+				$addressCounter += $connectorData['COUNT']['summary'] ?? 0;
 				$connectorData['COUNTER'] = Json::encode($connectorData['COUNT']);
 				$connectorData['COUNT'] = $connectorData['COUNT']['summary'];
 
@@ -467,18 +502,12 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 
 	private function checkConnectorAccessDenied($connector)
 	{
-		return
-			($connector->getCode() === 'crm_lead'
-				&& !$this->accessController->check(ActionDictionary::ACTION_SEGMENT_LEAD_EDIT))
-			||
-			($connector->getCode() === 'crm_client'
-				&& !$this->accessController->check(ActionDictionary::ACTION_SEGMENT_CLIENT_EDIT)
-			)
-			||
-			($connector->getCode() === 'contact_list'
-				&& !$this->accessController->check(ActionDictionary::ACTION_SEGMENT_CLIENT_PERSONAL_EDIT)
-			);
+		return !$this->getConnectorAccess()->canUseConnector($connector->getCode());
+	}
 
+	private function getConnectorAccess(): SegmentConnectorAccessService
+	{
+		return $this->connectorAccess ??= new SegmentConnectorAccessService((int)$this->userId);
 	}
 
 	protected function prepareConnectorData(Connector\Base $connector, $checkFilter = true)
@@ -561,8 +590,7 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 		{
 			if($filter['id'] === Crm\Connectors\Client::DEAL_CATEGORY_ID)
 			{
-				$dealCategories = (new RoleDealCategoryService())
-					->getFilteredDealCategories($this->userId, $filter['items']);
+				$dealCategories = $this->getConnectorAccess()->filterDealCategoryItems($filter['items']);
 
 				$filters[$key]['items'] = $dealCategories;
 				if(!empty($dealCategories))
@@ -573,29 +601,7 @@ class SenderSegmentEditComponent extends Bitrix\Sender\Internals\CommonSenderCom
 			}
 			if($filter['id'] === 'DEAL_STAGE_ID')
 			{
-				$dealCategories = (new RoleDealCategoryService())
-					->getFilteredDealCategories($this->userId, Crm\Connectors\Client::getDealCategoryList());
-
-				$currentItems = $filters[$key]['items'];
-				$items = [];
-				foreach ($currentItems as $itemCode => $item)
-				{
-					$data = explode(":", $itemCode);
-					if(count($data) > 1)
-					{
-						$dealCategoryId = (int)substr($data[0], 1);
-						if(isset($dealCategories[$dealCategoryId]))
-						{
-							$items[$itemCode] = $item;
-						}
-
-						continue;
-					}
-
-					$items[$itemCode] = $item;
-				}
-
-				$filters[$key]['items'] = $items;
+				$filters[$key]['items'] = $this->getConnectorAccess()->filterDealStageItems($filters[$key]['items']);
 			}
 		}
 

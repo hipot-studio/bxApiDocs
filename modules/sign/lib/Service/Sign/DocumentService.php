@@ -16,7 +16,6 @@ use Bitrix\Sign\Document;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Sign\Internal\DocumentTable;
 use Bitrix\Sign\Item;
-use Bitrix\Sign\Item\Document\Binding;
 use Bitrix\Sign\Item\Document\BindingCollection;
 use Bitrix\Sign\Item\Document\Template\TemplateFolderRelation;
 use Bitrix\Sign\Main\User;
@@ -991,37 +990,9 @@ class DocumentService
 			;
 
 			$result->addErrors($addResult->getErrors());
-
-			if ($addResult->isSuccess())
-			{
-				$this->addProcessActivity($document, $binding);
-			}
 		}
 
 		return $result;
-	}
-
-	/**
-	 * Deal "Process: ..." in the timeline of a document a personnel process created. The handler answers
-	 * with nothing for every binding that is not such a process, so no branching happens here.
-	 *
-	 * Whatever the deal fails at stays inside: this method exists to tie the document to the entity, an
-	 * unsuccessful result of it aborts the whole registration of the document, and a timeline row is not
-	 * a reason to leave a document unbound.
-	 */
-	private function addProcessActivity(Item\Document $document, Binding $binding): void
-	{
-		try
-		{
-			Container::instance()->getCrmProcessActivityHandler()->createForBoundDocument(
-				(int)$document->entityId,
-				$binding->entityType,
-				$binding->entityId,
-			);
-		}
-		catch (\Throwable)
-		{
-		}
 	}
 
 	/**
@@ -1073,6 +1044,7 @@ class DocumentService
 		int $blankId,
 		bool $copyBlocksFromPreviousBlank = false,
 		bool $deleteOldBlank = true,
+		bool $autoDetectType = false,
 	): Main\Result
 	{
 		['document' => $document, 'blank' => $blank, 'result' => $extractionResult] = $this->extractDocumentAndBlank($uid, $blankId);
@@ -1091,7 +1063,8 @@ class DocumentService
 		}
 
 		if (
-			Type\DocumentScenario::isB2EScenario($document->scenario)
+			!$autoDetectType
+			&& Type\DocumentScenario::isB2EScenario($document->scenario)
 			&& $this->documentRepository->getCountByBlankId($blankId) === 0
 		)
 		{
@@ -1099,26 +1072,77 @@ class DocumentService
 		}
 
 		$oldBlankId = $document->blankId;
-
-		$document->blankId = $blankId;
-
-		$result = $this->documentRepository->update($document);
-		if (!$result->isSuccess())
+		$oldBlank = $oldBlankId === null ? null : $this->blankRepository->getById($oldBlankId);
+		if ($autoDetectType)
 		{
-			return $result;
-		}
+			if (
+				!Type\DocumentScenario::isB2EScenario($document->scenario)
+				|| !Type\DocumentStatus::isEditableByDocument($document)
+				|| $oldBlank === null
+				|| $this->documentRepository->getCountByBlankId($blankId) > 0
+			)
+			{
+				return (new Main\Result())->addError(new Main\Error('Cannot replace document blank'));
+			}
 
-		$oldBlank = $this->blankRepository->getById($oldBlankId);
-		if ($copyBlocksFromPreviousBlank && $oldBlank !== null)
-		{
-			$this->blockRepository->loadBlocks($oldBlank);
-			$newBlocks = $oldBlank->blockCollection->copyWithBlackId($blankId);
+			$files = new Item\Fs\FileCollection();
+			foreach ($blank->fileCollection ?? [] as $file)
+			{
+				$validationFile = clone $file;
+				$validationFile->type = pathinfo($file->name, PATHINFO_EXTENSION);
+				$files->addItem($validationFile);
+			}
+			$validation = $this->blankService->validateAutoDetectionFiles($files, $blank->scenario);
+			if (!$validation->isSuccess())
+			{
+				return $validation;
+			}
 
-			$result = $this->blockRepository->addCollection($newBlocks);
+			$blank->hasPlaceholders = mb_strtolower((string)$files->first()->type) === 'docx';
+			$result = $this->blankRepository->updateHasPlaceholders($blankId, $blank->hasPlaceholders);
 			if (!$result->isSuccess())
 			{
 				return $result;
 			}
+			$copyBlocksFromPreviousBlank = !$oldBlank->hasPlaceholders && !$blank->hasPlaceholders;
+		}
+
+		if ($copyBlocksFromPreviousBlank && $oldBlank !== null && $oldBlankId !== $blankId)
+		{
+			try
+			{
+				$this->blockRepository->loadBlocks($oldBlank);
+				$newBlocks = $oldBlank->blockCollection->copyWithBlackId($blankId);
+				$result = $this->blockRepository->addCollection($newBlocks);
+			}
+			catch (\Throwable $exception)
+			{
+				$result = (new Main\Result())->addError(Main\Error::createFromThrowable($exception));
+			}
+			if (!$result->isSuccess())
+			{
+				return $result->setData(['oldBlankId' => $oldBlankId]);
+			}
+		}
+
+		$document->blankId = $blankId;
+		try
+		{
+			$result = $this->documentRepository->update($document);
+		}
+		catch (\Throwable $exception)
+		{
+			$result = (new Main\Result())->addError(Main\Error::createFromThrowable($exception));
+		}
+		if (!$result->isSuccess())
+		{
+			$rollbackResult = $this->rollbackBlankChange($document, $oldBlankId);
+			$result->addErrors($rollbackResult->getErrors());
+
+			return $result->setData([
+				'preserveNewBlank' => !$rollbackResult->isSuccess(),
+				'oldBlankId' => $oldBlankId,
+			]);
 		}
 
 		if ($deleteOldBlank)
@@ -1146,17 +1170,33 @@ class DocumentService
 		string $documentUid,
 		int $newBlankId,
 		bool $copyBlocksFromPreviousBlank = false,
+		bool $autoDetectType = false,
 	): Main\Result
 	{
-		$changeBlankResult = $this->changeBlank(
-			$documentUid,
-			$newBlankId,
-			$copyBlocksFromPreviousBlank,
-			deleteOldBlank: false,
-		);
+		try
+		{
+			$changeBlankResult = $this->changeBlank(
+				$documentUid,
+				$newBlankId,
+				$copyBlocksFromPreviousBlank,
+				deleteOldBlank: false,
+				autoDetectType: $autoDetectType,
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			return (new Main\Result())->addError(Main\Error::createFromThrowable($exception));
+		}
 		if (!$changeBlankResult->isSuccess())
 		{
-			$this->tryDeleteBlank($newBlankId, skipForTemplateCheck: true);
+			if (!($changeBlankResult->getData()['preserveNewBlank'] ?? false))
+			{
+				$this->tryDeleteBlank(
+					$newBlankId,
+					skipForTemplateCheck: true,
+					preserveFilesFromBlankId: $changeBlankResult->getData()['oldBlankId'] ?? null,
+				);
+			}
 
 			return $changeBlankResult;
 		}
@@ -1170,59 +1210,96 @@ class DocumentService
 			return $result->addError(new Main\Error('Cannot change document blank'));
 		}
 
-		if (!$document->uid)
+		if (!$document->uid || $document->uid !== $documentUid)
 		{
-			return $result->addError(new Main\Error('Invalid document uid'));
+			$uploadResult = (new Main\Result())->addError(new Main\Error('Invalid document uid after blank change'));
+		}
+		else
+		{
+			try
+			{
+				$uploadResult = $this->upload($document->uid);
+			}
+			catch (\Throwable $exception)
+			{
+				$uploadResult = (new Main\Result())->addError(Main\Error::createFromThrowable($exception));
+			}
 		}
 
-		if ($document->uid !== $documentUid)
-		{
-			return $result->addError(new Main\Error('Document uid has been changed after blank change, cannot upload document'));
-		}
-
-		$uploadResult = $this->upload($document->uid);
 		if (!$uploadResult->isSuccess())
 		{
-			$this->rollbackBlankChange($document, $oldBlankId);
+			$rollbackResult = $this->rollbackBlankChange($document, $oldBlankId);
+			if ($rollbackResult->isSuccess() && $newBlankId !== $oldBlankId)
+			{
+				$this->tryDeleteBlank($newBlankId, skipForTemplateCheck: true, preserveFilesFromBlankId: $oldBlankId);
+			}
 
-			return $result->addErrors($uploadResult->getErrors());
+			return $result->addErrors($uploadResult->getErrors())->addErrors($rollbackResult->getErrors());
 		}
 
-		if (
-			$document->id !== null
-			&& $oldBlankId !== null
-			&& $oldBlankId !== $document->blankId
-		)
+		if ($oldBlankId !== null && $oldBlankId !== $document->blankId)
 		{
-			Container::instance()
-				->getDocumentPlaceholderCacheService()
-				->deleteRawPlaceholders($document->id, $oldBlankId)
-			;
-		}
+			try
+			{
+				if ($document->id !== null)
+				{
+					Container::instance()
+						->getDocumentPlaceholderCacheService()
+						->deleteRawPlaceholders($document->id, $oldBlankId)
+					;
+				}
 
-		$this->tryDeleteBlank($oldBlankId);
+				$this->tryDeleteBlank(
+					$oldBlankId,
+					skipForTemplateCheck: $autoDetectType,
+					preserveFilesFromBlankId: $document->blankId,
+				);
+			}
+			catch (\Throwable $exception)
+			{
+				Container::instance()->getLogger()->error('Cannot clean up replaced document blank', [
+					'documentId' => $document->id,
+					'blankId' => $oldBlankId,
+					'exception' => $exception,
+				]);
+			}
+		}
 
 		return \Bitrix\Sign\Result\Result::createByData(['document' => $document]);
 	}
 
-	private function rollbackBlankChange(Item\Document $document, ?int $oldBlankId): void
+	private function rollbackBlankChange(Item\Document $document, ?int $oldBlankId): Main\Result
 	{
 		if ($oldBlankId === null)
 		{
-			return;
+			return (new Main\Result())->addError(new Main\Error('Cannot restore document blank', 'BLANK_RESTORE_FAILED'));
 		}
 
 		$newBlankId = $document->blankId;
+		$document->initOriginal();
 		$document->blankId = $oldBlankId;
-		$this->documentRepository->update($document);
-
-		if ($newBlankId !== null && $newBlankId !== $oldBlankId)
+		try
 		{
-			$this->tryDeleteBlank($newBlankId, skipForTemplateCheck: true);
+			$result = $this->documentRepository->update($document);
 		}
+		catch (\Throwable $exception)
+		{
+			$result = (new Main\Result())->addError(Main\Error::createFromThrowable($exception));
+		}
+		if (!$result->isSuccess())
+		{
+			$document->blankId = $newBlankId;
+			$result->addError(new Main\Error('Cannot restore document blank', 'BLANK_RESTORE_FAILED'));
+		}
+
+		return $result;
 	}
 
-	private function tryDeleteBlank(?int $blankId, bool $skipForTemplateCheck = false): void
+	private function tryDeleteBlank(
+		?int $blankId,
+		bool $skipForTemplateCheck = false,
+		?int $preserveFilesFromBlankId = null,
+	): void
 	{
 		if ($blankId === null)
 		{
@@ -1232,7 +1309,41 @@ class DocumentService
 		$blank = $this->blankRepository->getById($blankId);
 		if ($blank !== null)
 		{
-			(new Delete($blank, $skipForTemplateCheck))->launch();
+			if ($preserveFilesFromBlankId !== null)
+			{
+				$retainedFileIds = [];
+				foreach ($this->blockRepository->getCollectionByBlankId($preserveFilesFromBlankId) as $block)
+				{
+					$fileId = $block->data['fileId'] ?? null;
+					if (is_numeric($fileId))
+					{
+						$retainedFileIds[(int)$fileId] = true;
+					}
+				}
+				$this->blockRepository->loadBlocks($blank);
+				foreach ($blank->blockCollection ?? new Item\BlockCollection() as $block)
+				{
+					if (isset($retainedFileIds[(int)($block->data['fileId'] ?? 0)]))
+					{
+						// The surviving blank still references this file.
+						unset($block->data['fileId']);
+					}
+				}
+			}
+			$result = (new Delete($blank, $skipForTemplateCheck))->launch();
+			if (
+				!$result->isSuccess()
+				&& !in_array($result->getError()?->getCode(), [
+					Delete::ERROR_BLANK_USED_IN_DOCUMENTS,
+					Delete::ERROR_BLANK_USED_FOR_RESENT_DOCUMENTS,
+				], true)
+			)
+			{
+				Container::instance()->getLogger()->error('Cannot delete document blank', [
+					'blankId' => $blankId,
+					'errors' => $result->getErrorMessages(),
+				]);
+			}
 		}
 	}
 

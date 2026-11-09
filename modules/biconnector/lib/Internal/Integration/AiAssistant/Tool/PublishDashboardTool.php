@@ -10,9 +10,14 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard\DashboardJsonMetadataReader;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\PublishDashboardOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\PublishPolicy;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 
@@ -73,6 +78,59 @@ final class PublishDashboardTool extends BaseBiTool
 
 	protected function executeStructured(int $userId, ...$args): array
 	{
+		if (!(new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_OPERATIONS, $userId))
+		{
+			return $this->legacyExecuteStructured($userId, ...$args);
+		}
+
+		Loader::includeModule('biconnector');
+
+		$dashboardId = (int)($args['dashboardId'] ?? 0);
+		if ($dashboardId <= 0)
+		{
+			throw self::toMcpException(
+				Refusal::error(FailureCode::InvalidArgument, 'dashboardId is required and must be a positive integer.'),
+			);
+		}
+
+		$actor = new Actor($userId, Channel::Mcp);
+		$operation = ServiceLocator::getInstance()->get(PublishDashboardOperation::class);
+		$confirm = ($args['confirm'] ?? false) === true;
+		if (!$confirm)
+		{
+			$result = $operation->preview($dashboardId, $actor);
+			if (!$result->isSuccess())
+			{
+				throw self::toMcpException($result);
+			}
+
+			return [
+				'requiresConfirmation' => true,
+				'action' => 'publish_dashboard',
+				'id' => $result->getData()['id'],
+				'name' => $result->getData()['name'],
+				'impact' => 'The dashboard will be published (moved from DRAFT to READY) and '
+					. 'become visible to other portal users. Charts, filters and the title '
+					. 'are not affected.',
+				'confirmHint' => 'Show this preview to the user; only AFTER they explicitly approve, call '
+					. 'publish_dashboard again with the same dashboardId and confirm=true.',
+			];
+		}
+
+		$policy = (new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_ALIGNMENT, $userId)
+			? PublishPolicy::ThroughDomain
+			: PublishPolicy::PreservePrevious;
+		$result = $operation->execute($dashboardId, $actor, $policy);
+		if (!$result->isSuccess())
+		{
+			throw self::toMcpException($result);
+		}
+
+		return $result->getData();
+	}
+
+	private function legacyExecuteStructured(int $userId, ...$args): array
+	{
 		Loader::includeModule('biconnector');
 
 		$dashboardId = (int)($args['dashboardId'] ?? 0);
@@ -108,7 +166,7 @@ final class PublishDashboardTool extends BaseBiTool
 				. 'set_dashboard_content with a `filters` array containing at '
 				. 'least one `time_range` entry (use "Last quarter" as default '
 				. 'if the user did not specify a period), then retry '
-				. 'publish_dashboard.'
+				. 'publish_dashboard.',
 			);
 		}
 

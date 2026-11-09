@@ -28,7 +28,10 @@ class CreatedByFieldAssembler extends UserFieldAssembler
 			$authorText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_AUTHOR_MARKET_MSGVER_1');
 
 			return "<span class=\"biconnector-grid-market-cell\">
-				<img src=\"/bitrix/images/biconnector/superset-dashboard-grid/icon-type-market.png\" width='24' height='24' alt=\"{$authorText}\"> 
+				<img
+					src=\"/bitrix/images/biconnector/superset-dashboard-grid/icon-type-market.png\"
+					width='24' height='24' alt=\"\"
+				>
 				<span class=\"biconnector-grid-username\">{$authorText}</span>
 			</span>";
 		}
@@ -38,13 +41,19 @@ class CreatedByFieldAssembler extends UserFieldAssembler
 			$authorText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_AUTHOR_SYSTEM');
 
 			return "<span class=\"biconnector-grid-market-cell\">
-				<img src=\"/bitrix/images/biconnector/database-connections/system.svg\" width='24' height='24' alt=\"{$authorText}\">
+				<img src=\"/bitrix/images/biconnector/database-connections/system.svg\" width='24' height='24' alt=\"\">
 				<span class=\"biconnector-grid-username\">{$authorText}</span>
 			</span>";
 		}
 
 		if ($createdById > 0)
 		{
+			$userName = $this->loadUserName($createdById);
+			if ($userName === '')
+			{
+				return $this->renderNamelessUser($isFiltered);
+			}
+
 			$user = \CUser::getByID($createdById)->fetch();
 			$avatar = '';
 			if ((int)$user['PERSONAL_PHOTO'] > 0)
@@ -53,32 +62,43 @@ class CreatedByFieldAssembler extends UserFieldAssembler
 				$avatar = " style=\"background-image: url('{$avatarSrc}');\"";
 			}
 
-			$userName = $this->loadUserName($createdById);
-			$event = Json::encode([
+			// The name comes already escaped for HTML and the handler gets it unescaped. The former onclick passed
+			// the escaped one: its JSON hid "&" from the HTML parser, so the entities reached the handler as they were.
+			$payload = htmlspecialcharsbx(Json::encode([
 				'ID' => $createdById,
-				'TITLE' => $userName,
+				'TITLE' => htmlspecialcharsback($userName),
 				'IS_FILTERED' => $isFiltered,
-			]);
+			]));
+			$isPressed = $isFiltered ? 'true' : 'false';
+			$onclick = 'BX.BIConnector.SupersetDashboardGridManager.Instance'
+				. '.handleCreatedByClick(JSON.parse(this.dataset.bicPayload))'
+			;
 
 			$selector = 'biconnector-grid-username-cell';
 			$closeIcon = '';
 			if ($isFiltered)
 			{
 				$selector .= ' biconnector-grid-username-cell-active';
-				$closeIcon = '<div class="biconnector-grid-filter-close ui-icon-set --cross-20"></div>';
+				$closeIcon = '<span class="biconnector-grid-filter-close ui-icon-set --cross-20"'
+					. ' aria-hidden="true"></span>'
+				;
 			}
 
 			return <<<HTML
-<span 
+<button
+	type="button"
 	class="$selector"
-	onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.handleCreatedByClick($event)'
+	data-bic-focus-role="author-filter"
+	aria-pressed="{$isPressed}"
+	data-bic-payload="{$payload}"
+	onclick="{$onclick}"
 >
 	<span class="biconnector-grid-avatar ui-icon ui-icon-common-user">
 		<i{$avatar}></i>
 	</span>
 	<span class="biconnector-grid-username">$userName</span>
 	$closeIcon
-</span>
+</button>
 HTML;
 		}
 

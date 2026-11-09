@@ -4,10 +4,15 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\UnpublishDashboardOperation;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
 final class UnpublishDashboardTool extends BaseBiTool
@@ -68,6 +73,67 @@ final class UnpublishDashboardTool extends BaseBiTool
 	}
 
 	protected function executeStructured(int $userId, ...$args): array
+	{
+		if (!(new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_OPERATIONS, $userId))
+		{
+			return $this->legacyExecuteStructured($userId, ...$args);
+		}
+
+		Loader::includeModule('biconnector');
+
+		$dashboardId = (int)($args['dashboardId'] ?? 0);
+		if ($dashboardId <= 0)
+		{
+			throw self::toMcpException(
+				Refusal::error(FailureCode::InvalidArgument, 'dashboardId is required and must be a positive integer.'),
+			);
+		}
+
+		$actor = new Actor($userId, Channel::Mcp);
+		$operation = ServiceLocator::getInstance()->get(UnpublishDashboardOperation::class);
+		$confirm = ($args['confirm'] ?? false) === true;
+		if (!$confirm)
+		{
+			$result = $operation->preview($dashboardId, $actor);
+			if (!$result->isSuccess())
+			{
+				throw self::toMcpException($result);
+			}
+			$data = $result->getData();
+
+			return [
+				'requiresConfirmation' => true,
+				'action' => 'unpublish_dashboard',
+				'id' => $data['id'],
+				'name' => $data['name'],
+				'impact' => $data['wasPublished']
+					? 'The dashboard will be moved to DRAFT and hidden from other portal users. '
+						. 'ALL its public share links will be permanently revoked and cannot be restored.'
+					: 'The dashboard is already a draft; this is a safe no-op (no live share links to revoke).',
+				'confirmHint' => 'Show this preview to the user; only AFTER they explicitly approve, call '
+					. 'unpublish_dashboard again with the same dashboardId and confirm=true.',
+			];
+		}
+
+		$result = $operation->execute($dashboardId, $actor);
+		if (!$result->isSuccess())
+		{
+			if ($result->getError()->getCode() === FailureCode::DomainRule->value)
+			{
+				$result = Refusal::error(
+					FailureCode::DomainRule,
+					$result->getError()->getMessage() . '. '
+						. json_encode(['completed' => $result->getData()['completed']], JSON_UNESCAPED_UNICODE),
+				);
+			}
+
+			throw self::toMcpException($result);
+		}
+
+		return $result->getData();
+	}
+
+	private function legacyExecuteStructured(int $userId, ...$args): array
 	{
 		Loader::includeModule('biconnector');
 

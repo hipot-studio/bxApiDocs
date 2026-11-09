@@ -662,38 +662,54 @@ class BlockRepo
 	}
 
 	/**
+	 * Array with available types
+	 * Empty array - available all types
+	 * Null - non available (hidden block)
+	 * @param string|array $type
+	 * @return array|null
+	 */
+	public static function normalizeTypes(string|array $type): ?array
+	{
+		$type = (array)$type;
+		$type = array_map('strtoupper', $type);
+		if (in_array('PAGE', $type, true))
+		{
+			$type[] = 'SMN';
+		}
+		if (
+			in_array('NULL', $type, true)
+			|| in_array('', $type, true)
+		)
+		{
+			return null;
+		}
+
+		return $type;
+	}
+
+	/**
+	 * Checks that normalized types (see normalizeTypes) do not forbid the site type
+	 * @param array|null $normalizedTypes
+	 * @param string $siteType
+	 * @return bool
+	 */
+	public static function isSiteTypeAllowed(?array $normalizedTypes, string $siteType): bool
+	{
+		if (empty($normalizedTypes))
+		{
+			return true;
+		}
+
+		return in_array($siteType, $normalizedTypes, true);
+	}
+
+	/**
 	 * Remove unnecessary sections and blocks
 	 * @param array $repository
 	 * @return array
 	 */
 	private function filterRepository(array $repository): array
 	{
-		/**
-		 * Array with available types
-		 * Empty array - available all types
-		 * Null - non available (hidden block)
-		 * @param string|array $item
-		 * @return array|null
-		 */
-		$prepareType = static function (string|array $item): ?array
-		{
-			$type = (array)$item;
-			$type = array_map('strtoupper', $type);
-			if (in_array('PAGE', $type, true))
-			{
-				$type[] = 'SMN';
-			}
-			if (
-				in_array('NULL', $type, true)
-				|| in_array('', $type, true)
-			)
-			{
-				return null;
-			}
-
-			return $type;
-		};
-
 		$filtered = [];
 
 		$isStoreEnabled = Manager::isStoreEnabled();
@@ -702,7 +718,7 @@ class BlockRepo
 
 		foreach ($repository as $sectionCode => $section)
 		{
-			$sectionTypes = $prepareType($section['type'] ?? []);
+			$sectionTypes = self::normalizeTypes($section['type'] ?? []);
 
 			if (
 				empty($sectionTypes)
@@ -721,10 +737,7 @@ class BlockRepo
 				continue;
 			}
 
-			if (
-				is_array($sectionTypes)
-				&& !empty($sectionTypes)
-				&& !in_array($this->siteType, $sectionTypes, true))
+			if (!self::isSiteTypeAllowed($sectionTypes, $this->siteType))
 			{
 				continue;
 			}
@@ -739,7 +752,7 @@ class BlockRepo
 
 			foreach ($section["items"] ?? [] as $blockCode => $block)
 			{
-				$blockTypes = $prepareType($block['type'] ?? []);
+				$blockTypes = self::normalizeTypes($block['type'] ?? []);
 
 				if (
 					empty($blockTypes)
@@ -757,11 +770,7 @@ class BlockRepo
 					continue;
 				}
 
-				if (
-					is_array($blockTypes)
-					&& !empty($blockTypes)
-					&& !in_array($this->siteType, $blockTypes, true)
-				)
+				if (!self::isSiteTypeAllowed($blockTypes, $this->siteType))
 				{
 					continue;
 				}

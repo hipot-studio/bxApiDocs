@@ -3,6 +3,7 @@
 namespace Bitrix\Landing\Controller;
 
 use Bitrix\Landing\Copilot\Generation;
+use Bitrix\Landing\Copilot\Generation\Scenario\ChangeMarkupSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Scenario\IScenario;
@@ -129,7 +130,7 @@ class Copilot extends Controller
 			return null;
 		}
 
-		if (!$generation->getScenario() instanceof CreateAiSite)
+		if (!$this->isMagicSiteScenario($generation->getScenario()))
 		{
 			$this->addError(new Error('Generation belongs to a different scenario.', 'WRONG_SCENARIO'));
 
@@ -144,6 +145,16 @@ class Copilot extends Controller
 		}
 
 		return $generation;
+	}
+
+	/**
+	 * The magic site status follows the creation of a site only: an edit of a markup page subclasses
+	 * the creation scenario, and its status would make the page of creation show the placeholder and
+	 * leave for the editor.
+	 */
+	private function isMagicSiteScenario(?IScenario $scenario): bool
+	{
+		return $scenario instanceof CreateAiSite && !$scenario instanceof ChangeMarkupSite;
 	}
 
 	private function buildMagicSiteResponse(Generation $generation, array $extra = []): ?array

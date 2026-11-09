@@ -17,6 +17,7 @@ use Bitrix\Main\Result;
 use Bitrix\Sender\Consent;
 use Bitrix\Sender\Integration;
 use Bitrix\Sender\Message;
+use Bitrix\Sender\Preset;
 use Bitrix\Sender\Recipient;
 use Bitrix\Sender\Runtime\Env;
 use Bitrix\Sender\Transport;
@@ -40,6 +41,12 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 
 	/** @var Mail\Address $mailAddress Mail address. */
 	protected $mailAddress;
+
+	/** @var Mail\Sender\Identity|null $senderIdentity Sender the letter is sent on behalf of. */
+	private ?Mail\Sender\Identity $senderIdentity = null;
+
+	private bool $isSenderIdentityResolved = false;
+	private ?Main\Error $lastError = null;
 
 	/**
 	 * TransportMail constructor.
@@ -122,6 +129,8 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 	 */
 	public function send(Message\Adapter $message)
 	{
+		$this->lastError = null;
+
 		$headers = $message->getConfiguration()->get('HEADERS');
 		$headers = is_array($headers) ? $headers : array();
 		$fields = $message->getFields();
@@ -190,7 +199,7 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 			unset($messageAttachment[$key]);
 		}
 
-		$canTrackMail = $message->getConfiguration()->get('TRACK_MAIL', $this->canTrackMails());
+		$canTrackMail = $this->isTrackMailEnabled($message->getConfiguration());
 		$mailMessageParams = array(
 			'EVENT' => [],
 			'FIELDS' => $this->prepareFields($fields, $message),
@@ -275,9 +284,27 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 		}
 		unset($eventMailParams['MAILING_CHAIN_ID']);
 		$mailParams = $eventMailParams;
+		if (
+			is_string($mailParams['BODY'] ?? null)
+			&& Option::get('main', 'attach_images', 'N') !== 'Y'
+		)
+		{
+			$mailParams['BODY'] = Preset\Templates\Mail::addPresetBannerWebpSources(
+				$mailParams['BODY'],
+				$mailParams['LINK_PROTOCOL'] ?? null,
+				($mailParams['LINK_DOMAIN'] ?? '') ?: Option::get('main', 'server_name', ''),
+			);
+		}
+		if (is_array($mailParams['HEADER'] ?? null))
+		{
+			$mailParams['HEADER'] = FeedbackId::applyTo(
+				$mailParams['HEADER'],
+				(int)$message->getConfiguration()->get('LETTER_ID')
+			);
+		}
 
 		$errorsBefore = error_get_last();
-		$sendResult = Mail\Mail::send($mailParams);
+		$sendResult = $this->sendMail($mailParams);
 
 		if (!$sendResult && $logMessageOption === 'Y')
 		{
@@ -354,7 +381,11 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 			$limiters[] = self::getTimeLimiter($message);
 			$email = $message->getConfiguration()->get('EMAIL_FROM');
 			$address = new \Bitrix\Main\Mail\Address($email);
-			$limiters[] = Integration\Bitrix24\Limitation\Limiter::getEmailMonthly($address->getEmail());
+			$identity = $message instanceof Message\Adapter ? $this->getSenderIdentity($message) : null;
+			$limiters[] = Integration\Bitrix24\Limitation\Limiter::getEmailMonthly(
+				$address->getEmail(),
+				$identity,
+			);
 		}
 
 		return $limiters;
@@ -381,6 +412,23 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 	protected function canTrackMails()
 	{
 		return Option::get('sender', 'track_mails') === 'Y';
+	}
+
+	/**
+	 * Tells whether open and click tracking is enabled for the message.
+	 *
+	 * TRACK_MAIL is stored as a 'Y'/'N' string, so tracking is on for 'Y' only.
+	 * The global sender.track_mails option is used as the default and applies solely when the message
+	 * carries no TRACK_MAIL at all: a declared option holding an empty value resolves to disabled tracking.
+	 *
+	 * @param Message\Configuration $configuration Message configuration.
+	 * @return bool
+	 */
+	private function isTrackMailEnabled(Message\Configuration $configuration): bool
+	{
+		$trackMail = $configuration->get('TRACK_MAIL', $this->canTrackMails());
+
+		return is_string($trackMail) ? $trackMail === 'Y' : (bool)$trackMail;
 	}
 
 	protected function getMailContext()
@@ -498,12 +546,32 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 			'CONTEXT' => $this->getMailContextForMessage($message),
 		);
 
-		return Mail\Mail::send($mailParams);
+		return $this->sendMail($mailParams);
+	}
+
+	protected function sendMail(array $mailParams): bool
+	{
+		if (!method_exists(Mail\Mail::class, 'sendResult'))
+		{
+			return Mail\Mail::send($mailParams);
+		}
+
+		$result = Mail\Mail::sendResult($mailParams);
+		$this->lastError = $result->getError();
+
+		return $result->isSuccess();
+	}
+
+	public function getLastError(): ?Main\Error
+	{
+		return $this->lastError;
 	}
 
 	protected function getMailContextForMessage(Message\Adapter $message): Mail\Context
 	{
 		$context = $this->getMailContext();
+
+		$this->applySenderIdentity($context, $message);
 
 		//set callback entity Id
 		if (Integration\Bitrix24\Service::isCloud())
@@ -525,7 +593,62 @@ class TransportMail implements Transport\iBase, Transport\iDuration, Transport\i
 		return $context;
 	}
 
-	private function getAgreement(int $agreementId): ?Main\UserConsent\Agreement
+	/**
+	 * Tells the kernel which sender the letter belongs to: the transport and the quota are those of its
+	 * author, not of whoever owns the return address. Older kernels have no identity and use the address.
+	 */
+	protected function applySenderIdentity(Mail\Context $context, Message\Adapter $message): void
+	{
+		if (!method_exists($context, 'setSenderIdentity'))
+		{
+			return;
+		}
+
+		$identity = $this->getSenderIdentity($message);
+		if ($identity !== null)
+		{
+			$context->setSenderIdentity($identity);
+		}
+	}
+
+	/**
+	 * The return address is the same for the whole letter, so the identity is resolved once: the mailer
+	 * caches the sender instance by the hash of the context and keeps the connection alive.
+	 */
+	private function getSenderIdentity(Message\Adapter $message): ?Mail\Sender\Identity
+	{
+		if (!$this->isSenderIdentityResolved)
+		{
+			$this->senderIdentity = $this->resolveSenderIdentity($message);
+			$this->isSenderIdentityResolved = true;
+		}
+
+		return $this->senderIdentity;
+	}
+
+	/**
+	 * Sender of the letter is the pair "author of the letter and its current return address".
+	 */
+	private function resolveSenderIdentity(Message\Adapter $message): ?Mail\Sender\Identity
+	{
+		if (!class_exists(Mail\Sender\Identity::class))
+		{
+			return null;
+		}
+
+		$configuration = $message->getConfiguration();
+		$ownerId = (int)$configuration->get('LETTER_CREATED_BY_ID');
+		$address = new Mail\Address((string)$configuration->get('EMAIL_FROM'));
+
+		if ($ownerId <= 0 || !$address->validate())
+		{
+			return null;
+		}
+
+		return SenderIdentityResolver::resolve($ownerId, $address->getEmail());
+	}
+
+	protected function getAgreement(int $agreementId): ?Main\UserConsent\Agreement
 	{
 		$agreement = new Main\UserConsent\Agreement($agreementId, ['fields' => ['IP']]);
 		if (!$agreement->isActive() || !$agreement->isExist())

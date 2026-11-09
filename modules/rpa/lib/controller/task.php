@@ -156,15 +156,7 @@ class Task extends Base
 				}
 			}
 
-			if($this->createdTimeline)
-			{
-				$item = $this->createdTimeline->getItem();
-				if($item)
-				{
-					$result['item'] = (new Item())->prepareItemData($item);
-				}
-				$result['timeline'] = $this->createdTimeline->preparePublicData();
-			}
+			$result = $this->prepareDoResult($result, $this->createdTimeline);
 			$this->unSubscribeOnTimelineAddEvent($eventHandlerKey);
 
 		}
@@ -174,6 +166,43 @@ class Task extends Base
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Adds the item and the timeline record to the result of the task answer, if the user can view the item.
+	 *
+	 * @param array $result
+	 * @param \Bitrix\Rpa\Model\Timeline|null $timeline
+	 * @return array
+	 */
+	protected function prepareDoResult(array $result, ?\Bitrix\Rpa\Model\Timeline $timeline): array
+	{
+		if(!$timeline)
+		{
+			return $result;
+		}
+		$item = $timeline->getItem();
+		if(!$item)
+		{
+			return $result;
+		}
+		$userPermissions = Driver::getInstance()->getUserPermissions();
+		// the task is answered: the tasks read earlier in this hit are stale
+		$userPermissions->clearIncompleteTaskCache();
+		if(!$userPermissions->canViewItem($item))
+		{
+			return $result;
+		}
+
+		$result['item'] = $this->getItemController()->prepareItemData($item);
+		$result['timeline'] = $timeline->preparePublicData();
+
+		return $result;
+	}
+
+	protected function getItemController(): Item
+	{
+		return new Item();
 	}
 
 	protected function subscribeOnTimelineAddEvent(int $taskId): ?int

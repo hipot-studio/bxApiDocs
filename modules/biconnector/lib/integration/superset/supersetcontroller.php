@@ -14,6 +14,8 @@ use Bitrix\Main;
 
 final class SupersetController
 {
+	public const ERROR_EMPTY_LOGIN_URL = 'EMPTY_LOGIN_URL';
+
 	private IntegratorInterface $integrator;
 	private DashboardRepository $dashboardRepository;
 	private DashboardGroupRepository $dashboardGroupRepository;
@@ -127,13 +129,32 @@ final class SupersetController
 
 	public function getLoginUrl(): ?string
 	{
+		$result = $this->getLoginUrlResult();
+
+		return $result->isSuccess() ? $result->getData()['url'] : null;
+	}
+
+	public function getLoginUrlResult(): Main\Result
+	{
+		$result = new Main\Result();
+
 		$response = $this->integrator->getLoginUrl();
 		if ($response->hasErrors())
 		{
-			return null;
+			return $result->addErrors($response->getErrors());
 		}
 
+		// An empty 4xx from the proxy carries no errors, so the missing url is the only trace of the failure.
 		$data = $response->getData();
-		return $data['url'];
+		$url = is_array($data) ? ($data['url'] ?? null) : null;
+		if (!is_string($url) || $url === '')
+		{
+			return $result->addError(new Main\Error(
+				"Superset integrator returned no login url, response status {$response->getStatus()}.",
+				self::ERROR_EMPTY_LOGIN_URL,
+			));
+		}
+
+		return $result->setData(['url' => $url]);
 	}
 }

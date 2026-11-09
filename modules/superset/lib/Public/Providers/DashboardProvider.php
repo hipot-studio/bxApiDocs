@@ -4,6 +4,7 @@ namespace Bitrix\Superset\Public\Providers;
 
 use Bitrix\Main\Result;
 use Bitrix\Superset\Internal\Services\DashboardService;
+use Bitrix\Superset\Public\Dto\SupersetUserReferenceDto;
 use Bitrix\Superset\Public\Support\AbstractPublicEntryPoint;
 
 final class DashboardProvider extends AbstractPublicEntryPoint
@@ -11,6 +12,17 @@ final class DashboardProvider extends AbstractPublicEntryPoint
 	public function getById(int $dashboardId): Result
 	{
 		return $this->getService()->get($dashboardId);
+	}
+
+	/**
+	 * Returns the complete chart membership without querying chart data.
+	 *
+	 * @param int $dashboardId
+	 * @return Result Data contains chartIds: list<int> on success.
+	 */
+	public function getChartIds(int $dashboardId): Result
+	{
+		return $this->getService()->getChartIds($dashboardId);
 	}
 
 	public function list(array $ids = [], array $neqIds = []): Result
@@ -56,6 +68,7 @@ final class DashboardProvider extends AbstractPublicEntryPoint
 		array $sort = [],
 		?int $limit = null,
 		int $offset = 0,
+		?SupersetUserReferenceDto $user = null,
 	): Result
 	{
 		return $this->getService()->getOverview(
@@ -67,6 +80,7 @@ final class DashboardProvider extends AbstractPublicEntryPoint
 			$sort,
 			$limit,
 			$offset,
+			$user?->getLogin(),
 		);
 	}
 
@@ -78,6 +92,7 @@ final class DashboardProvider extends AbstractPublicEntryPoint
 		?string $search = null,
 		?int $limit = null,
 		int $streamTimeout = 60,
+		?SupersetUserReferenceDto $user = null,
 	): Result
 	{
 		return $this->getService()->getFilterValues(
@@ -88,6 +103,7 @@ final class DashboardProvider extends AbstractPublicEntryPoint
 			$search,
 			$limit,
 			$streamTimeout,
+			$user?->getLogin(),
 		);
 	}
 

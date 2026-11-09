@@ -31,12 +31,19 @@ final class AiSiteChatContextService
 		string $pageTitle = '',
 		string $suggestedTitle = '',
 		string $initialMessage = '',
+		bool $isMarkupPage = false,
 	): array
 	{
 		$contextData = [
 			'siteId' => $siteId,
 			'pageId' => $pageId,
 		];
+
+		// the chat skills route edits of a custom page by this flag, a false value is never written
+		if ($isMarkupPage)
+		{
+			$contextData['isMarkupPage'] = true;
+		}
 
 		$siteTitle = $this->sanitizeText($siteTitle, self::CONTEXT_TITLE_MAX_LENGTH);
 		if ($siteTitle !== '')

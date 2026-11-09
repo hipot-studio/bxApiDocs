@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Mail\Address;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Sender\Access;
 use Bitrix\Sender\Access\ActionDictionary;
 use Bitrix\Sender\Access\Map\AdsAction;
 use Bitrix\Sender\Access\Map\MailingAction;
@@ -35,6 +36,8 @@ Loc::loadMessages(__FILE__);
 
 class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComponent
 {
+	protected const OPTION_CODE_DEAL_CATEGORY = 'CATEGORY_ID';
+
 	/** @var ErrorCollection $errors */
 	protected $errors;
 
@@ -42,6 +45,8 @@ class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComp
 	protected $letter;
 
 	protected $contentValue = null;
+
+	private ?Access\Service\RoleDealCategoryServiceInterface $roleDealCategoryService = null;
 
 	protected function checkRequiredParams()
 	{
@@ -127,10 +132,83 @@ class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComp
 			Integration\Bitrix24\Service::isCampaignsAvailable();
 	}
 
+	protected function getRoleDealCategoryService(): Access\Service\RoleDealCategoryServiceInterface
+	{
+		return $this->roleDealCategoryService ??= new Access\Service\RoleDealCategoryService();
+	}
+
+	/**
+	 * The value must be in the set the access service allows this user and, unless it is the empty
+	 * "last deal" value, a named item of the option: a role may still list a deleted category.
+	 */
+	protected function isDealCategoryAllowed($categoryId, array $items): bool
+	{
+		if ($categoryId !== null && !is_scalar($categoryId))
+		{
+			return false;
+		}
+
+		$categoryKey = (string) $categoryId;
+		$itemsByCode = $this->indexItemsByCode($items);
+		$allowedCategories = $this->getRoleDealCategoryService()
+			->getFilteredDealCategories($this->userId, $itemsByCode);
+
+		return array_key_exists($categoryKey, $allowedCategories)
+			&& ($categoryKey === '' || isset($itemsByCode[$categoryKey]))
+		;
+	}
+
+	/**
+	 * A role may still list a deleted category: the service returns it with no name, and it is not offered.
+	 */
+	protected function prepareDealCategoryItems(array $items): array
+	{
+		$allowedCategories = $this->getRoleDealCategoryService()
+			->getFilteredDealCategories($this->userId, $this->indexItemsByCode($items));
+
+		$preparedItems = [];
+		foreach ($allowedCategories as $code => $name)
+		{
+			if ($name !== null)
+			{
+				$preparedItems[] = ['code' => $code, 'value' => $name];
+			}
+		}
+
+		return $preparedItems;
+	}
+
+	private function indexItemsByCode(array $items): array
+	{
+		$categories = [];
+		foreach ($items as $item)
+		{
+			$categories[$item['code']] = $item['value'];
+		}
+
+		return $categories;
+	}
+
 	protected function preparePostMessage()
 	{
 		$message = $this->letter->getMessage();
 		$configuration = $message->getConfiguration();
+
+		$dealCategoryOption = $configuration->getOption(self::OPTION_CODE_DEAL_CATEGORY);
+		if (
+			$dealCategoryOption
+			&& !$this->isDealCategoryAllowed(
+				$this->request->get('CONFIGURATION_' . self::OPTION_CODE_DEAL_CATEGORY),
+				$dealCategoryOption->getItems()
+			)
+		)
+		{
+			$this->errors->setError(
+				new Error(Loc::getMessage('SENDER_COMP_LETTER_EDIT_ERROR_DEAL_CATEGORY_ACCESS'))
+			);
+
+			return;
+		}
 
 		foreach ($configuration->getOptions() as $option)
 		{
@@ -249,7 +327,7 @@ class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComp
 
 		$templateType = $this->letter->get('TEMPLATE_TYPE');
 		$templateId = $this->letter->get('TEMPLATE_ID');
-		$message = $this->request->get('CONFIGURATION_MESSAGE');
+		$message = Security\Sanitizer::sanitizeHtml($this->request->getRaw('CONFIGURATION_MESSAGE'));
 		$name = $this->request->get('CONFIGURATION_SUBJECT') ?: $this->letter->get('TITLE');
 
 		if (!$message)
@@ -446,26 +524,9 @@ class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComp
 			{
 				foreach ($message->getConfiguration()->getOptions() as $option)
 				{
-					if($option->getCode() === 'CATEGORY_ID')
+					if($option->getCode() === self::OPTION_CODE_DEAL_CATEGORY)
 					{
-						$items = $option->getItems();
-						$newItems = [];
-
-						foreach ($items as $item)
-						{
-							$newItems[$item['code']] = $item['value'];
-						}
-
-						$items = (new \Bitrix\Sender\Access\Service\RoleDealCategoryService())
-							->getFilteredDealCategories($this->userId, $newItems);
-						$convertedItems = [];
-
-						foreach($items as $key => $item)
-						{
-							$convertedItems[] = ['code' => $key, 'value' => $item];
-						}
-
-						$option->setItems($convertedItems);
+						$option->setItems($this->prepareDealCategoryItems($option->getItems()));
 					}
 				}
 			}
@@ -564,14 +625,15 @@ class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComp
 		$this->arResult['CAN_CHANGE_TEMPLATE'] = $this->letter->canChangeTemplate();
 
 
+		$isRecipientCountExact = $this->isRecipientCountExact();
 		$this->arResult['SEGMENTS'] = array(
 			'INCLUDE' => $this->arResult['ROW']['SEGMENTS_INCLUDE'] + $this->letter->get('SEGMENTS_INCLUDE'),
 			'EXCLUDE' => $this->arResult['ROW']['SEGMENTS_EXCLUDE'],
-			'RECIPIENT_COUNT' => $this->letter->getId() ?
+			'RECIPIENT_COUNT' => $isRecipientCountExact ?
 				$this->letter->getCounter()->getAll()
 				:
 				null,
-			'IS_RECIPIENT_COUNT_EXACT' => $this->letter->getId() > 0,
+			'IS_RECIPIENT_COUNT_EXACT' => $isRecipientCountExact,
 			'DURATION_FORMATTED' => !$this->letter->getState()->isFinished() ?
 				$this->letter->getDuration()->getFormattedInterval()
 				:
@@ -631,6 +693,18 @@ class SenderLetterEditComponent extends Bitrix\Sender\Internals\CommonSenderComp
 		}
 
 		return true;
+	}
+
+	/**
+	 * The posting is filled with recipients only at the start of sending, a planned letter included,
+	 * so until then its counter keeps the audience of a previous fill or zero and the selector estimates
+	 * the count by the current segments.
+	 */
+	protected function isRecipientCountExact(): bool
+	{
+		$state = $this->letter->getState();
+
+		return $this->letter->getId() > 0 && $state->wasPostingBuilt() && !$state->isPlanned();
 	}
 
 	protected function prepareDefaultSegments()

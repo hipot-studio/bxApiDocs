@@ -18,6 +18,7 @@ final class GridStubRenderer
 		$iconPath = htmlspecialcharsbx($iconPath);
 
 		$titleHtml = Headline::render(
+			tag: 'h2',
 			align: 'center',
 			className: 'biconnector-grid-stub__title',
 			content: $title,

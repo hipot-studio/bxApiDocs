@@ -29,6 +29,7 @@ final class Config extends AbstractBuilderController
 	 */
 	#[Quota(BuilderQuotaClass::Write)]
 	#[FailureCodes(
+		FailureCode::NotFound,
 		FailureCode::AccessDenied,
 		FailureCode::FeatureDisabled,
 		FailureCode::Unavailable,
@@ -45,6 +46,6 @@ final class Config extends AbstractBuilderController
 			$actor,
 		);
 
-		return new ArrayResponse($this->answer($result));
+		return new ArrayResponse($this->answer($result, $request->chartId));
 	}
 }

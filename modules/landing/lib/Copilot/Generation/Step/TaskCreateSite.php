@@ -13,6 +13,7 @@ use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Hook\Page\B24button;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Manager;
+use Bitrix\Landing\Markup\Dev\FailureInjection;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Site;
 use Bitrix\Main\ORM\Data\AddResult;
@@ -31,9 +32,16 @@ class TaskCreateSite extends TaskStep
 	{
 		parent::execute();
 
+		$this->createFailureInjection()->raiseOnStep($this->generation, (int)($this->stepId ?? 0));
+
 		$this->createSite();
 
 		return true;
+	}
+
+	protected function createFailureInjection(): FailureInjection
+	{
+		return new FailureInjection();
 	}
 
 	private function createSite(): void
