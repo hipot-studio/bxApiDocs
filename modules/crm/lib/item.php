@@ -929,9 +929,13 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			$implementation->beforeItemSave($this, $this->entityObject);
 		}
 
+		$removedProducts = $this->collectRemovedProducts();
+
 		$result = $this->entityObject->save();
 		if($result->isSuccess())
 		{
+			$this->deleteRemovedProductsLeftInStorage($removedProducts, $result);
+
 			foreach ($this->getAllImplementations() as $implementation)
 			{
 				$implementation->afterSuccessfulItemSave($this, $this->entityObject);
@@ -1672,6 +1676,73 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		if (!$this->isNew() && $this->hasField(self::FIELD_NAME_PRODUCTS))
 		{
 			$this->entityObject->fill($this->getEntityFieldNameByMap(self::FIELD_NAME_PRODUCTS));
+		}
+	}
+
+	/**
+	 * Collected before the save: the save resets the changes of the collection.
+	 *
+	 * @return array<int, ProductRow> products removed from the collection, by id
+	 */
+	private function collectRemovedProducts(): array
+	{
+		if ($this->isNew() || !$this->hasField(self::FIELD_NAME_PRODUCTS))
+		{
+			return [];
+		}
+
+		$products = $this->entityObject->get($this->getEntityFieldNameByMap(self::FIELD_NAME_PRODUCTS));
+		if (!($products instanceof Collection) || !$products->sysIsChanged())
+		{
+			return [];
+		}
+
+		$removedProducts = [];
+		foreach ($products->sysGetChanges() as [$product, $changeType])
+		{
+			if ($changeType === Collection::OBJECT_REMOVED)
+			{
+				$removedProducts[(int)$product->getId()] = $product;
+			}
+		}
+
+		return $removedProducts;
+	}
+
+	/**
+	 * Removed products are deleted by ProductRowTable::handleOwnerUpdate() in onAfterUpdate of the owner,
+	 * but the owner update is skipped when no scalar field has changed - for example, when the modification
+	 * time falls into the same second as the previous save. A refused deletion fails the save, the same way
+	 * a refused save of a field implementation does.
+	 *
+	 * @param array<int, ProductRow> $removedProducts by id
+	 */
+	private function deleteRemovedProductsLeftInStorage(array $removedProducts, Result $result): void
+	{
+		if ($removedProducts === [])
+		{
+			return;
+		}
+
+		$storedIds = array_column(
+			ProductRowTable::getList([
+				'select' => ['ID'],
+				'filter' => [
+					'@ID' => array_keys($removedProducts),
+					'=OWNER_TYPE' => \CCrmOwnerTypeAbbr::ResolveByTypeID($this->getEntityTypeId()),
+					// a row unbound by the save keeps the owner id or has it reset to zero
+					'@OWNER_ID' => [0, (int)$this->getId()],
+				],
+			])->fetchAll(),
+			'ID',
+		);
+		foreach ($storedIds as $storedId)
+		{
+			$deleteResult = ProductRowTable::deleteUnboundRow($removedProducts[(int)$storedId]);
+			if (!$deleteResult->isSuccess())
+			{
+				$result->addErrors($deleteResult->getErrors());
+			}
 		}
 	}
 	//endregion

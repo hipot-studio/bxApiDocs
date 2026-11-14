@@ -3,6 +3,7 @@
 namespace Bitrix\StaffTrack\Internal\Service\Office;
 
 use Bitrix\StaffTrack\Dictionary\OfficePresence;
+use Bitrix\StaffTrack\Internal\Repository\EmployeeSearchRepository;
 use Bitrix\StaffTrack\Internal\Repository\OfficeEmployeeRepository;
 use Bitrix\StaffTrack\Item;
 use Bitrix\StaffTrack\Provider\UserProvider;
@@ -44,15 +45,31 @@ class EmployeeService
 	/**
 	 * A page of the staff of an office, continued by the cursor of the previous one; zero starts it.
 	 *
+	 * A query narrows the staff by name and is measured the way the search of the module measures it,
+	 * after normalizing; one outside those bounds is an empty page, and nothing is read for it.
+	 *
 	 * @return array{
 	 *     employees: Item\Collection\OfficeEmployeeCollection,
 	 *     nextAfterUserId: int,
 	 *     hasMore: bool,
 	 * }
 	 */
-	public function getPage(int $officeId, int $afterUserId = 0): array
+	public function getPage(int $officeId, int $afterUserId = 0, string $query = ''): array
 	{
-		$page = $this->officeEmployeeRepository->getUserIdsPage($officeId, $afterUserId, self::PAGE_SIZE);
+		if ($query !== '')
+		{
+			$query = EmployeeSearchRepository::normalizeQuery($query);
+			if (!$this->isSearchable($query))
+			{
+				return [
+					'employees' => new Item\Collection\OfficeEmployeeCollection([]),
+					'nextAfterUserId' => $afterUserId,
+					'hasMore' => false,
+				];
+			}
+		}
+
+		$page = $this->officeEmployeeRepository->getUserIdsPage($officeId, $afterUserId, self::PAGE_SIZE, $query);
 		$presence = $this->presenceService->getStatuses($officeId, $page['userIds']);
 
 		return [
@@ -124,5 +141,14 @@ class EmployeeService
 		}
 
 		return new Item\Collection\OfficeEmployeeCollection($employees);
+	}
+
+	private function isSearchable(string $query): bool
+	{
+		$length = mb_strlen($query);
+
+		return $length >= EmployeeSearchService::MIN_QUERY_LENGTH
+			&& $length <= EmployeeSearchService::MAX_QUERY_LENGTH
+		;
 	}
 }

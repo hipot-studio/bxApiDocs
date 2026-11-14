@@ -15,6 +15,7 @@ class AttributesProvider
 	protected ?array $userAttributes = null;
 	protected $userAttributesCodes;
 	protected $entityAttributes;
+	private ?array $rawUserAccessCodes = null;
 
 	private const CACHE_TIME = 8640000; // 100 days
 
@@ -63,13 +64,16 @@ class AttributesProvider
 		return $this->entityAttributes;
 	}
 
-	protected function loadUserAttributes(): array
+	/**
+	 * @param bool $withSubNodes False leaves out sub-departments and sub-teams: the company structure is not queried.
+	 */
+	protected function loadUserAttributes(bool $withSubNodes = true): array
 	{
 		$attributesByUser = [];
 
 		Loader::requireModule('humanresources');
 
-		$userAccessCodes = $this->getRawUserAccessCodes();
+		$userAccessCodes = $this->rawUserAccessCodes ??= $this->getRawUserAccessCodes();
 		$hrDepartmentsIds = [];
 		$hrSubDepartmentsIds = [];
 		$hrTeamsIds = [];
@@ -94,7 +98,11 @@ class AttributesProvider
 			}
 		}
 
-		if (\Bitrix\Crm\Security\Controller\Compatible::isAvailable() && !empty($attributesByUser['INTRANET']))
+		if (
+			$withSubNodes
+			&& \Bitrix\Crm\Security\Controller\Compatible::isAvailable()
+			&& !empty($attributesByUser['INTRANET'])
+		)
 		{
 			foreach ($attributesByUser['INTRANET'] as $iDepartment)
 			{
@@ -109,12 +117,12 @@ class AttributesProvider
 			}
 		}
 
-		if (!empty($hrDepartmentsIds))
+		if ($withSubNodes && !empty($hrDepartmentsIds))
 		{
 			$hrSubDepartmentsIds = $this->getHrChildDepartmentNodesIds($hrDepartmentsIds);
 		}
 
-		if (!empty($hrTeamsIds))
+		if ($withSubNodes && !empty($hrTeamsIds))
 		{
 			$hrSubTeamsIds = $this->getHrChildTeamNodesIds($hrTeamsIds);
 		}
@@ -156,7 +164,8 @@ class AttributesProvider
 
 	protected function loadEntityAttributes(): array
 	{
-		$userAttributes = $this->getUserAttributes();
+		// Entity attributes use neither sub-departments nor sub-teams: a list asks for them per responsible user
+		$userAttributes = $this->loadUserAttributes(false);
 
 		$attributes = array_merge(
 			[

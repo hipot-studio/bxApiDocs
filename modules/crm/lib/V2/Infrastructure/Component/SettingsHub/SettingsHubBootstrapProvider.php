@@ -6,13 +6,12 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub;
 
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubNavigationProvider;
-use Bitrix\Crm\V2\Internal\Service\Settings\Presentation\SettingsPresentationProvider;
 use Bitrix\Main\Result;
 
 final class SettingsHubBootstrapProvider
 {
 	public function __construct(
-		private readonly SettingsPresentationProvider $settingsProvider,
+		private readonly SettingsHubProvider $settingsProvider,
 		private readonly SettingsHubNavigationProvider $navigationProvider,
 	)
 	{
@@ -20,7 +19,7 @@ final class SettingsHubBootstrapProvider
 
 	public function get(UserPermissions $permissions): Result
 	{
-		$settingsResult = $this->settingsProvider->get($permissions);
+		$settingsResult = $this->settingsProvider->getList($permissions);
 		if (!$settingsResult->isSuccess())
 		{
 			return $settingsResult;

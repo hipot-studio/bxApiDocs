@@ -9,6 +9,7 @@ use Bitrix\Crm;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\EditorHelper;
+use Bitrix\Crm\Component\EntityDetails\ClientTab\ClientTabBuilder;
 use Bitrix\Crm\Component\EntityDetails\Traits;
 use Bitrix\Crm\Conversion\LeadConversionWizard;
 use Bitrix\Crm\EntityAddress;
@@ -628,6 +629,20 @@ class CCrmContactDetailsComponent
 					($this->entityID === 0)
 				)
 			);
+		}
+
+		// a contact in a category has no client tab, like the other relation tabs
+		if (!$this->arResult['CATEGORY_ID'])
+		{
+			$clientTab = (new ClientTabBuilder())->build(
+				CCrmOwnerType::Contact,
+				$this->entityID,
+				$this->entityID <= 0 || $this->isCopyMode,
+			);
+			if ($clientTab !== null)
+			{
+				$this->arResult['TABS'] = ClientTabBuilder::insert($this->arResult['TABS'], $clientTab);
+			}
 		}
 		//endregion
 

@@ -182,6 +182,143 @@ abstract class AITask
 		return null;
 	}
 
+	/**
+	 * Whether an analysis of this very track is already running.
+	 *
+	 * Asked by track and status, not as "is the newest task of the track pending": a restart
+	 * adds a task to a track that already has one, so a finished newer task can stand in front
+	 * of a pending older one.
+	 */
+	public static function hasPendingTaskForTrack(int $trackId, SenseType $senseType): bool
+	{
+		$pending = CallAITaskTable::query()
+			->setSelect(['ID'])
+			->where('TRACK_ID', $trackId)
+			->where('TYPE', $senseType->value)
+			->where('STATUS', self::STATUS_PENDING)
+			->setLimit(1)
+			->exec()
+		;
+
+		return $pending->getSelectedRowsCount() > 0;
+	}
+
+	/**
+	 * Id of the newest task of the call, 0 for a call that has none.
+	 *
+	 * The boundary of a generation is read from here: a restart that erases the previous analysis
+	 * reads it once before it creates a task of its own, and everything at or below it belongs to
+	 * the generation being replaced {@see \Bitrix\Call\Integration\AI\CallAIService::restartWithPurge()}.
+	 */
+	public static function getLatestTaskId(int $callId): int
+	{
+		$row = CallAITaskTable::query()
+			->setSelect(['ID'])
+			->where('CALL_ID', $callId)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
+
+		return (int)($row['ID'] ?? 0);
+	}
+
+	/**
+	 * Ids of the tasks of one type of the call that are not newer than the boundary of the
+	 * generation.
+	 *
+	 * By the sequence of the tasks and not by a date: two tasks of one attempt can share a second,
+	 * while the id of a row is the order it was written in.
+	 *
+	 * Ids and not objects, for the reason the results are read as ids
+	 * {@see \Bitrix\Call\Integration\AI\Outcome::getOutcomeIdsOfSenseUpTo()}: the one caller
+	 * erases them, and building a task object per row of the history of the call is work done
+	 * inside the lock of a restart to no end.
+	 *
+	 * @return int[] oldest first
+	 */
+	public static function getTaskIdsOfSenseUpTo(int $callId, SenseType $senseType, int $boundaryId): array
+	{
+		if ($boundaryId <= 0)
+		{
+			return [];
+		}
+
+		$ids = [];
+		$rows = CallAITaskTable::query()
+			->setSelect(['ID'])
+			->where('CALL_ID', $callId)
+			->where('TYPE', $senseType->value)
+			->where('ID', '<=', $boundaryId)
+			->setOrder(['ID' => 'ASC'])
+			->exec()
+		;
+		while ($row = $rows->fetch())
+		{
+			$ids[] = (int)$row['ID'];
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Whether the call still has a task nobody has answered for.
+	 *
+	 * Asked by task and not by type: a type whose newest task is finished may still have an older
+	 * one running, and what the caller needs to know is whether the call itself is quiet
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::hasPendingTasks()}.
+	 *
+	 * Both statuses of an unanswered task are counted, the same two
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::hasAnythingToWaitFor()} counts. A task is
+	 * written with {@see self::STATUS_READY} - the default of the field - and turns
+	 * {@see self::STATUS_PENDING} only in the callback of a launch that reached the queue
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::launchTask()}. Between the two the row of
+	 * the task is already there and its answer is still coming, so a question asked in that window
+	 * by another process of the same attempt must not read the call as quiet: it would report the
+	 * analysis in the middle of its own chain, out of two generations at once, and again at the
+	 * end of it.
+	 *
+	 * $attemptBoundary is the task whose result the caller is holding, and it bounds the question
+	 * to the attempt that result belongs to - for the one type where an unanswered row can outlive
+	 * its attempt for good. A transcription older than that task is not a step the attempt is
+	 * waiting for: a chain is rooted in a transcription, and a chain that is running has had its
+	 * answer already. What it is, is a row of an earlier run that nothing is going to answer for -
+	 * the launch a handler of `call:onCallAiTask` refused before the queue, which by the decision
+	 * of the owner keeps the status it was created with
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::processTrack()}, or a queued one whose
+	 * callback was lost. Left in the question, such a row makes every later analysis of the call
+	 * silent for good, and only the agent of the old tasks would free it, sixty days on
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::finishTasks()}.
+	 *
+	 * Nothing else is bounded by it. A text type cannot be left unanswerable any more - every
+	 * place that launches one writes off what the queue did not take
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::writeOffUnlaunchedTask()} - and an older
+	 * text row of the very same attempt is the ordinary case of two steps running side by side,
+	 * which is exactly what this question exists to catch. Zero asks about the call whole, as
+	 * every caller that holds no result of its own means.
+	 */
+	public static function hasPendingTaskForCall(int $callId, int $attemptBoundary = 0): bool
+	{
+		$query = CallAITaskTable::query()
+			->setSelect(['ID'])
+			->where('CALL_ID', $callId)
+			->whereIn('STATUS', [self::STATUS_READY, self::STATUS_PENDING])
+			->setLimit(1)
+		;
+		if ($attemptBoundary > 0)
+		{
+			$query->where(
+				\Bitrix\Main\ORM\Query\Query::filter()
+					->logic('or')
+					->where('ID', '>=', $attemptBoundary)
+					->where('TYPE', '!=', SenseType::TRANSCRIBE->value)
+			);
+		}
+
+		return $query->exec()->getSelectedRowsCount() > 0;
+	}
+
 	public function getContextId(): string
 	{
 		return (new \ReflectionClass(static::class))->getShortName();
@@ -288,6 +425,17 @@ abstract class AITask
 		return $this->getStatus() == self::STATUS_FINISHED;
 	}
 
+	/**
+	 * Whether the task ended in a failure - the only state a restart of the failed types selects
+	 * by {@see \Bitrix\Call\Integration\AI\CallAIService::restartCallAiTask()}. The code of the
+	 * failure narrows nothing: the repeat is asked for by an operator, and that decision outweighs
+	 * any guess about the nature of the failure.
+	 */
+	public function isFailed(): bool
+	{
+		return $this->getStatus() == self::STATUS_FAILED;
+	}
+
 	public function getAIEngineCode(): string
 	{
 		return '';
@@ -351,22 +499,24 @@ abstract class AITask
 		}
 
 		$jsonData = null;
+		$text = (string)$aiResult->getPrettifiedData();
 		try
 		{
-			if (preg_match('/```json\s*(\{(.|\s)*?\})\s*```/', $aiResult->getPrettifiedData(), $matches))
+			if (preg_match('/```json\s*(\{(.|\s)*?\})\s*```/', $text, $matches))
 			{
 				$jsonData = Json::decode($matches[1]);
 			}
 			else
 			{
-				$jsonData = Json::decode($aiResult->getPrettifiedData());
+				$jsonData = Json::decode($text);
 			}
 		}
 		catch (ArgumentException $exception)
 		{
 		}
 
-		return $jsonData;
+		// A scalar answer such as "42" is valid JSON but carries no fields to fill the outcome from
+		return is_array($jsonData) ? $jsonData : null;
 	}
 
 	public function decodePayload(string $str): string

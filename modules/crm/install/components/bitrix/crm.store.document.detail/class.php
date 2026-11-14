@@ -1157,12 +1157,8 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 
 		$this->entityData['USER_LIST_SELECT'] = $this->getDefaultUserList();
 
-		$isClientRecentBySectionEnabled = Crm\Feature::enabled(Crm\Feature\ClientRecentBySection::class);
-		[$recentCategory, $clientCategoryEntityTypeId] = $isClientRecentBySectionEnabled
-			? ['crm.store.document.details', CCrmOwnerType::StoreDocument]
-			: ['crm.deal.details', CCrmOwnerType::OrderShipment]
-		;
-		$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams($clientCategoryEntityTypeId);
+		$recentCategory = 'crm.store.document.details';
+		$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams(CCrmOwnerType::StoreDocument);
 		$this->entityData['LAST_COMPANY_INFOS'] = Crm\Controller\Action\Entity\SearchAction::prepareSearchResultsJson(
 			Crm\Controller\Entity::getRecentlyUsedItems(
 				$recentCategory,

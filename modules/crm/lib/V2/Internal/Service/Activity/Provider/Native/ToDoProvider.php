@@ -94,7 +94,6 @@ final class ToDoProvider implements
 	private const SETTING_LOCATION = 'LOCATION';
 	private const SETTING_SECTION_ID = 'CALENDAR_SECTION_ID';
 	private const SETTING_TAGS = 'TAGS';
-	private const SETTING_USERS = 'USERS';
 
 	private const TAG_OVERLAP_EVENT = 'OVERLAP_EVENT';
 
@@ -159,9 +158,9 @@ final class ToDoProvider implements
 	 *
 	 * WHAT A CALENDAR-INITIATED OPERATION DOES NOT OVERWRITE. When the calendar is the one writing, the values
 	 * a person edits in CRM are left as the calendar has them: the description of an update comes back from the
-	 * state before the write, a new activity gets the default colour, and the attendees and the place are taken
-	 * off the event itself. Without that, saving an event in the calendar would silently rewrite the text of
-	 * the activity with the text the event was built from.
+	 * state before the write, a new activity gets the default colour, and the place the caller took off the event
+	 * is put where a to-do keeps it. Without that, saving an event in the calendar would silently rewrite the
+	 * text of the activity with the text the event was built from.
 	 *
 	 * THE ENRICHED DESCRIPTION IS ANSWERED, NOT WRITTEN. The text a calendar event is described with is no
 	 * column of an activity, so it travels in the data of the result to the step synchronizing the event, which
@@ -198,7 +197,7 @@ final class ToDoProvider implements
 			$settings[self::SETTING_COLOR] = ColorSettingsProvider::getDefaultColorId();
 		}
 
-		$this->applyEventOfTheCalendar($settings, $transit, $calendarEventId);
+		$this->normalizeLocationOfTheCalendar($settings, $transit);
 
 		if ($settings !== $given)
 		{
@@ -248,7 +247,12 @@ final class ToDoProvider implements
 	}
 
 	/**
-	 * The attendees and the place of the event the activity is bound to, put where a to-do keeps them.
+	 * The place of the event the calendar handed over, put where a to-do keeps it: a meeting room in the column
+	 * and in the settings, a free-form address in the settings alone.
+	 *
+	 * THE EVENT IS NOT READ AGAIN. The caller writing on behalf of the calendar has already taken the attendees
+	 * and the place off the event - with groups and departments expanded, the organizer added and an event that
+	 * is not stored yet described by its snapshot - so the settings of the users are left as it gave them.
 	 *
 	 * A PLACE THE CALENDAR CANNOT SPELL OUT LEAVES BOTH SETTINGS BEHIND. An event without a place, and a portal
 	 * whose calendar is not installed, take the settings of the place out instead of writing them: whatever the
@@ -256,32 +260,15 @@ final class ToDoProvider implements
 	 *
 	 * @param array<string, mixed> $settings
 	 */
-	private function applyEventOfTheCalendar(
-		array &$settings,
-		StorageFieldTransit $transit,
-		int $calendarEventId,
-	): void
+	private function normalizeLocationOfTheCalendar(array &$settings, StorageFieldTransit $transit): void
 	{
-		if ($calendarEventId <= 0)
+		if (!$transit->has(self::COLUMN_LOCATION))
 		{
 			return;
 		}
 
-		$event = Calendar::getEvent($calendarEventId);
-		if (!is_array($event))
-		{
-			return;
-		}
-
-		$settings[self::SETTING_USERS] = array_map(
-			static fn(mixed $attendee): mixed => is_array($attendee) ? ($attendee['id'] ?? null) : null,
-			(array)($event['attendeesEntityList'] ?? []),
-		);
-
-		$location = empty($event[self::COLUMN_LOCATION])
-			? null
-			: $this->calendar->parsedLocationOf((string)$event[self::COLUMN_LOCATION])
-		;
+		$given = $transit->get(self::COLUMN_LOCATION);
+		$location = empty($given) ? null : $this->calendar->parsedLocationOf((string)$given);
 
 		if ($location === null)
 		{
@@ -294,12 +281,14 @@ final class ToDoProvider implements
 		{
 			$transit->set(self::COLUMN_LOCATION, $location[ActivityCalendarSync::LOCATION_TEXT]);
 			$settings[self::SETTING_LOCATION] = $location[ActivityCalendarSync::LOCATION_TEXT];
+			unset($settings[self::SETTING_ADDRESS]);
 
 			return;
 		}
 
 		$transit->set(self::COLUMN_LOCATION, '');
 		$settings[self::SETTING_ADDRESS] = $location[ActivityCalendarSync::LOCATION_TEXT];
+		unset($settings[self::SETTING_LOCATION]);
 	}
 
 	//endregion

@@ -2,7 +2,10 @@
 namespace Bitrix\ImOpenLines\Integrations\Report\Handlers;
 
 use Bitrix\ImOpenLines\Config;
+use Bitrix\ImOpenLines\Integrations\Report\EventHandler;
+use Bitrix\ImOpenLines\Security\Permissions;
 use Bitrix\ImConnector\Connector;
+use Bitrix\Main\AccessDeniedException;
 use Bitrix\ImOpenLines\Model\QueueTable;
 use Bitrix\ImOpenLines\Integrations\Report\Statistics\Entity\DialogStatTable;
 use Bitrix\ImOpenLines\Integrations\Report\VisualConstructor\Fields\Valuable\DropDownResponsible;
@@ -38,6 +41,11 @@ abstract class Base extends BaseReport
 	/**
 	 *  Collect form elements for specific widget configuration form
 	 *
+	 * Skipped while default board templates are being assembled: the report module
+	 * sends its collect event to every module before filtering boards by key, so this
+	 * runs even for a user who opened a board of another module and no data is served.
+	 *
+	 * @throws AccessDeniedException
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\LoaderException
 	 * @throws \Bitrix\Main\ObjectPropertyException
@@ -45,6 +53,11 @@ abstract class Base extends BaseReport
 	 */
 	protected function collectFormElements()
 	{
+		if (!EventHandler::isCollectingDefaultBoards())
+		{
+			$this->assertCanViewStatistics();
+		}
+
 		$listOpenLinesOptions = $this->getOpenLinesOptions();
 		$listChanelOptions = $this->getChanelOptions();
 		$listResponsibleOptions = $this->getResponsibleOptions();
@@ -250,10 +263,37 @@ abstract class Base extends BaseReport
 	}
 
 	/**
+	 * Ensures the current user is allowed to view open lines statistics.
+	 *
+	 * Report data is computed here, in imopenlines handlers, while the generic
+	 * report.api.* controllers do no access checks. So the guard must live in
+	 * this module to also cover direct API calls: report data (widget.load) and
+	 * widget configuration, where the report handler is hydrated.
+	 *
+	 * Copying a pattern widget (board.submitAddForm) never instantiates a report
+	 * handler, so it is not covered here. It exposes no statistics on its own.
+	 *
+	 * Assembly of default board templates is not a user request either and is
+	 * excluded by the caller, see EventHandler::isCollectingDefaultBoards().
+	 *
+	 * @throws AccessDeniedException
+	 */
+	protected function assertCanViewStatistics(): void
+	{
+		if (!Permissions::createWithCurrentUser()->canViewStatistics())
+		{
+			throw new AccessDeniedException(Loc::getMessage('REPORT_STATISTICS_ACCESS_DENIED'));
+		}
+	}
+
+	/**
 	 * @return Query
+	 * @throws AccessDeniedException
 	 */
 	protected function getQueryForPrepareData()
 	{
+		$this->assertCanViewStatistics();
+
 		$query = $this->getQueryInstance();
 		$query = $this->prepareQueryForFiltering($query);
 

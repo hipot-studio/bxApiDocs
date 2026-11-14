@@ -152,6 +152,133 @@ class BasketService
 	}
 
 	/**
+	 * Get relations sale basket items and crm product rows of several owners of one type.
+	 *
+	 * Each owner is matched only with the basket items of its own orders, as `getRowIdsToBasketIdsByEntity` does.
+	 *
+	 * @param int $ownerTypeId
+	 * @param int[] $ownerIds
+	 *
+	 * @return array in format `[ownerId => [rowId => basketId]]`; every requested owner is a key,
+	 * an owner without rows, orders or relations has an empty array.
+	 */
+	public function getRowIdsToBasketIdsByEntities(int $ownerTypeId, array $ownerIds): array
+	{
+		$result = [];
+		foreach ($ownerIds as $ownerId)
+		{
+			$result[(int)$ownerId] = [];
+		}
+
+		$ownerIds = array_filter(array_keys($result), static fn(int $ownerId) => $ownerId > 0);
+		if (empty($ownerIds))
+		{
+			return $result;
+		}
+
+		$rowsByOwner = [];
+		$rows = ProductRowTable::getList([
+			'select' => [
+				'ID',
+				'OWNER_ID',
+				'PRODUCT_ID',
+				'PRICE',
+				'QUANTITY',
+				'XML_ID',
+			],
+			'filter' => [
+				'=OWNER_TYPE' => CCrmOwnerTypeAbbr::ResolveByTypeID($ownerTypeId),
+				'@OWNER_ID' => $ownerIds,
+			],
+			'order' => [
+				'ID' => 'ASC',
+			],
+		]);
+		foreach ($rows as $row)
+		{
+			$rowsByOwner[(int)$row['OWNER_ID']][] = $row;
+		}
+		if (empty($rowsByOwner))
+		{
+			return $result;
+		}
+
+		$ownersByOrder = [];
+		$rows = OrderEntityTable::getList([
+			'select' => [
+				'ORDER_ID',
+				'OWNER_ID',
+			],
+			'filter' => [
+				'=OWNER_TYPE_ID' => $ownerTypeId,
+				'@OWNER_ID' => array_keys($rowsByOwner),
+			],
+		]);
+		foreach ($rows as $row)
+		{
+			$ownersByOrder[(int)$row['ORDER_ID']][] = (int)$row['OWNER_ID'];
+		}
+		if (empty($ownersByOrder))
+		{
+			return $result;
+		}
+
+		$basketItemsByOwner = [];
+		$rows = BasketTable::getList([
+			'select' => [
+				'ID',
+				'ORDER_ID',
+				'PRODUCT_ID',
+				'QUANTITY',
+				'PRICE',
+				'XML_ID',
+			],
+			'filter' => [
+				'@ORDER_ID' => array_keys($ownersByOrder),
+			],
+			'order' => [
+				'ID' => 'ASC',
+			],
+		]);
+		foreach ($rows as $row)
+		{
+			foreach ($ownersByOrder[(int)$row['ORDER_ID']] ?? [] as $ownerId)
+			{
+				$basketItemsByOwner[$ownerId][] = $row;
+			}
+		}
+
+		foreach ($basketItemsByOwner as $ownerId => $basketItems)
+		{
+			$productRelations = new ProductRelationsBuilder();
+			foreach ($rowsByOwner[$ownerId] ?? [] as $row)
+			{
+				$productRelations->addCrmProductRow(
+					(int)$row['ID'],
+					(int)$row['PRODUCT_ID'],
+					(float)$row['PRICE'],
+					(float)$row['QUANTITY'],
+					(string)$row['XML_ID']
+				);
+			}
+			foreach ($basketItems as $row)
+			{
+				$productRelations->addSaleBasketItem(
+					(int)$row['ID'],
+					(int)$row['PRODUCT_ID'],
+					(float)$row['PRICE'],
+					(float)$row['QUANTITY'],
+					(string)$row['XML_ID']
+				);
+			}
+
+			$result[$ownerId] = $productRelations->getRelations();
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Get relations sale basket items and crm product rows.
 	 *
 	 * @param array $rowsIds

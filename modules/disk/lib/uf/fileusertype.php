@@ -170,10 +170,9 @@ final class FileUserType
 			$values = [$userField['VALUE']];
 		}
 
-		$searchData = [];
+		$objects = [];
 		$fileIdsForLoad = [];
 		$attachedIdsForLoad = [];
-		$contentManager = new ContentManager();
 
 		foreach ($values as $value)
 		{
@@ -182,10 +181,7 @@ final class FileUserType
 			{
 				if (self::isLoadedFile($realValue))
 				{
-					$searchData[] =
-						$contentManager->getFileContentFromIndex(self::getFileById($realValue))?:
-						$contentManager->getFileContent(self::getFileById($realValue))
-					;
+					$objects[] = self::getFileById($realValue);
 				}
 				else
 				{
@@ -208,10 +204,7 @@ final class FileUserType
 			]);
 			foreach ($attachedObjects as $attachedObject)
 			{
-				$searchData[] =
-					$contentManager->getFileContentFromIndex($attachedObject->getObject())?:
-					$contentManager->getObjectContent($attachedObject->getObject())
-				;
+				$objects[] = $attachedObject->getObject();
 			}
 		}
 
@@ -224,11 +217,22 @@ final class FileUserType
 			]);
 			foreach ($files as $file)
 			{
-				$searchData[] =
-					$contentManager->getFileContentFromIndex($file)?:
-					$contentManager->getObjectContent($file)
-				;
+				$objects[] = $file;
 			}
+		}
+
+		$contentManager = new ContentManager();
+		$storedContents = $contentManager->getFilesContentFromIndex(
+			array_filter($objects, static fn($object) => $object instanceof File)
+		);
+
+		$searchData = [];
+		foreach ($objects as $object)
+		{
+			$searchData[] =
+				($object instanceof File ? ($storedContents[$object->getId()] ?? null) : null)
+				?: $contentManager->getObjectContent($object)
+			;
 		}
 
 		return implode("\r\n", $searchData);
@@ -256,7 +260,11 @@ final class FileUserType
 					}
 
 					$needToDetach = array_diff($alreadyExistsValues, $values);
-					AttachedObject::detachByFilter(['ID' => $needToDetach]);
+					Driver::getInstance()->getUserFieldManager()->detachOwnAttachedObjects(
+						$needToDetach,
+						$userField['ENTITY_ID'],
+						(int)($userField['ENTITY_VALUE_ID'] ?? 0),
+					);
 				}
 			}
 		}
@@ -351,7 +359,11 @@ final class FileUserType
 			{
 				$alreadyExistsValues = array($userField['VALUE']);
 			}
-			AttachedObject::detachByFilter(array('ID' => $alreadyExistsValues));
+			Driver::getInstance()->getUserFieldManager()->detachOwnAttachedObjects(
+				$alreadyExistsValues,
+				$userField['ENTITY_ID'],
+				(int)($userField['ENTITY_VALUE_ID'] ?? 0),
+			);
 
 			return $value;
 		}
@@ -365,7 +377,8 @@ final class FileUserType
 				return '';
 			}
 
-			$fileTransferToCollab = new FileTransferToCollab($userField['VALUE_ID'], $userField['ENTITY_ID'], $fileModel);
+			$actorId = $userId === false ? self::getActivityUserId() : (int)$userId;
+			$fileTransferToCollab = new FileTransferToCollab($userField['VALUE_ID'], $userField['ENTITY_ID'], $fileModel, $actorId);
 			if ($fileTransferToCollab->isNeedTransfer())
 			{
 				if (self::isNewUploadedFile($fileModel))
@@ -405,7 +418,7 @@ final class FileUserType
 				[
 					'isEditable' => $canUpdate,
 					'allowEdit' => ($canUpdate && (int)self::getValueForAllowEdit($userField, $value)),
-					'createdBy' => $userId === false? self::getActivityUserId() : $userId,
+					'createdBy' => $actorId,
 				]
 			);
 
@@ -590,6 +603,32 @@ final class FileUserType
 			}
 			$res = ob_get_clean();
 		}
+		elseif ($id === false && $type === self::TYPE_NEW_OBJECT)
+		{
+			$unavailableFileUserField = $userField;
+			$unavailableFileUserField['VALUE'] = [];
+
+			$newParams = $settings;
+			$newParams['arUserField'] = $unavailableFileUserField;
+			$newParams['INLINE'] = 'Y';
+			$newParams['IS_FILE_UNAVAILABLE'] = 'Y';
+
+			if (($newParams['TEMPLATE'] ?? null) === 'mobile')
+			{
+				$newParams['MOBILE'] = 'Y';
+			}
+
+			$newEmptyResult = ["VALUE" => []];
+			ob_start();
+
+			$userFieldManager->showInlineView(
+				$newParams,
+				$newEmptyResult,
+				null
+			);
+
+			$res = ob_get_clean();
+		}
 		return $res;
 	}
 
@@ -620,7 +659,8 @@ final class FileUserType
 		$userFieldManager = Driver::getInstance()->getUserFieldManager();
 		$errors = [];
 
-		if ($value === '')
+		// 0 and '0' are not empty for the mandatory check of main, so they still go through the checks below
+		if ($value === '' || $value === null || $value === false)
 		{
 			return [];
 		}
@@ -640,9 +680,15 @@ final class FileUserType
 				return $errors;
 			}
 			[$connectorClass, $moduleId] = $userFieldManager->getConnectorDataByEntityType($userField['ENTITY_ID']);
+			$entityValueId = (int)($userField['ENTITY_VALUE_ID'] ?? 0);
+			$belongsToEntity = $userFieldManager->belongsToEntity(
+				$attachedModel,
+				$userField['ENTITY_ID'],
+				$entityValueId,
+			);
 
 			if(
-				!$userFieldManager->belongsToEntity($attachedModel, $userField['ENTITY_ID'], $userField['ENTITY_VALUE_ID']) &&
+				!$belongsToEntity &&
 				!(
 					is_subclass_of($connectorClass, 'Bitrix\Disk\Uf\ISupportForeignConnector') ||
 					in_array('Bitrix\Disk\Uf\ISupportForeignConnector', class_implements($connectorClass)) //5.3.9
@@ -652,6 +698,26 @@ final class FileUserType
 				$errors[] = [
 					"id" => $userField["FIELD_NAME"],
 					"text" => Loc::getMessage('DISK_FILE_USER_TYPE_ERROR_COULD_NOT_FIND_FILE'),
+				];
+
+				return $errors;
+			}
+
+			// An attachment of another entity is accepted only if the entity already holds it or the user can read it.
+			if (
+				!$belongsToEntity
+				&& !UserFieldManager::hasAttachedObjectIdInValue($userField['VALUE'] ?? null, $realValue)
+				&& !$userFieldManager->canUseAttachedObject(
+					$attachedModel,
+					$userField['ENTITY_ID'],
+					$entityValueId,
+					UserFieldManager::resolveCheckingUserId($userId),
+				)
+			)
+			{
+				$errors[] = [
+					"id" => $userField["FIELD_NAME"],
+					"text" => Loc::getMessage('DISK_FILE_USER_TYPE_ERROR_BAD_RIGHTS'),
 				];
 
 				return $errors;

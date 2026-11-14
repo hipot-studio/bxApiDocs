@@ -15,6 +15,7 @@ use Bitrix\Main\ORM\Data\DataManager;
  * <li> USERLOG_ID int mandatory
  * <li> SEARCH_CONTENT text optional
  * <li> SEARCH_TITLE string optional
+ * <li> USER_ID int optional
  * </ul>
  *
  * @package Bitrix\Call
@@ -54,6 +55,9 @@ class CallUserLogIndexTable extends DataManager
 			],
 			'SEARCH_CONTENT' => [
 				'data_type' => 'text',
+			],
+			'USER_ID' => [
+				'data_type' => 'integer',
 			],
 		];
 	}

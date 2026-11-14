@@ -37,8 +37,11 @@ use Bitrix\Main\Result;
  * fields being written, the previous state and the re-read one - and the contract of V2 carries the same four
  * answers in another shape: the model of the run carries the identifier and the current state, the set of changes
  * carries what legacy expresses by the difference of its two snapshots, the context carries the options, and the
- * model of the input is the fields being written. Projecting all of it back into the four legacy arrays is the
- * business of the wrapper of a legacy provider and not of this row.
+ * model of the input is the fields being written. The previous state, which this row has made sure is loaded, is
+ * handed over as well: the set of changes says nothing about a value the update left alone, and legacy hands its
+ * snapshot over whole. So is the transit of the run, which past the re-read of row 17 holds the storage columns of
+ * the state after the write - the owner row 6 resolved off the bindings included. Projecting all of it back into
+ * the four legacy arrays is the business of the wrapper of a legacy provider and not of this row.
  *
  * THE FIELDS BEING WRITTEN COME OFF THE INPUT AND NOT OFF THE STATE OF THE RUN, exactly as they do for the
  * subscribers of row 47 ({@see PublishOnActivityUpdate}), and for the same reason: past the re-read of row 17 the
@@ -104,6 +107,9 @@ final class ProviderOnAfterUpdate implements PipelineStepInterface
 				$context->getChanges(),
 				$context->getOperationContext(),
 				$context->getInputActivity(),
+				$context->getPreviousActivity(),
+				$context->getPreviousTransit(),
+				$context->getTransit(),
 			);
 		}
 

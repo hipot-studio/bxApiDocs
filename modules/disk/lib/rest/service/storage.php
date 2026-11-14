@@ -269,12 +269,18 @@ final class Storage extends Base
 	 * @param    int $id     Id of storage.
 	 * @param array  $filter Filter.
 	 * @param array  $order  Order.
-	 * @return Disk\BaseObject[]
+	 * @return Disk\BaseObject[]|null
 	 * @throws RestException
 	 */
 	protected function getChildren($id, array $filter = array(), array $order = array())
 	{
-		$storage = $this->getStorageById($id);
+		if (!is_numeric($id))
+		{
+			return null;
+		}
+
+		// is_numeric() passes numbers out of the int range too, and the typed lookup answers those with a TypeError.
+		$storage = $this->getStorageById((int)$id);
 		$securityContext = $storage->getCurrentUserSecurityContext();
 
 		$internalizer = new Disk\Rest\Internalizer(new Entity\BaseObject, $this);

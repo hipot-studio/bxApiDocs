@@ -14,6 +14,8 @@ use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Internals\TrackedObjectTable;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
@@ -112,12 +114,30 @@ final class FileLink extends File
 	 * Adds row to entity table, fills error collection and builds model.
 	 * @param array           $data Data.
 	 * @param ErrorCollection $errorCollection Error collection.
+	 * @param array           $options Options of the write operation. A link has no own content, so they are unused.
 	 * @return \Bitrix\Disk\Internals\Model|static|null
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @internal
 	 */
-	public static function add(array $data, ErrorCollection $errorCollection)
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		array &$options = [],
+		?AuditTransaction $auditTransaction = null,
+		?bool $hasUploadCleanupMarker = null,
+	)
 	{
+		$realObjectId = (int)($data['REAL_OBJECT_ID'] ?? 0);
+		if (
+			$realObjectId > 0
+			&& !(new MarkerService())->revokeBeforeUse($realObjectId, $hasUploadCleanupMarker)
+		)
+		{
+			$errorCollection->addOne(new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+			return null;
+		}
+
 		$result = FileTable::add($data);
 		if (!$result->isSuccess())
 		{
@@ -279,12 +299,18 @@ final class FileLink extends File
 	 *
 	 * @param array $file Structure like $_FILES.
 	 * @param int $updatedBy Id of user.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function updateContent(array $file, $updatedBy)
+	public function updateContent(
+		array $file,
+		$updatedBy,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
-		return $this->getRealObject()->updateContent($file, $updatedBy);
+		return $this->getRealObject()->updateContent($file, $updatedBy, $options, $auditTransaction);
 	}
 
 	/**
@@ -295,12 +321,25 @@ final class FileLink extends File
 	 * @param array $file Structure like $_FILES.
 	 * @param int $createdBy Id of user.
 	 * @param bool $disableJoin If set false the method attempts to join version with last version (@see \Bitrix\Disk\Configuration::getSecondsToJoinVersion()).
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return Version|null
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function addVersion(array $file, $createdBy, $disableJoin = false, array $options = [])
+	public function addVersion(
+		array $file,
+		$createdBy,
+		$disableJoin = false,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
-		return $this->getRealObject()->addVersion($file, $createdBy, $disableJoin, $options);
+		return $this->getRealObject()->addVersion(
+			$file,
+			$createdBy,
+			$disableJoin,
+			$options,
+			$auditTransaction,
+		);
 	}
 
 	/**
@@ -456,6 +495,7 @@ final class FileLink extends File
 		{
 			return false;
 		}
+		Driver::getInstance()->getIndexManager()->dropIndex($this);
 
 		// A link is a place the real object is seen at, and the journal is kept over real objects: the
 		// place went, the file behind it stayed. The record is published inside a cascade too, because

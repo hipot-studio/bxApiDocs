@@ -39,8 +39,13 @@ class AiUrlManager
 
 	public function getPromptBaseUrl(): string
 	{
-		return Config::getValue('ai_box_prompt_db_uri')
-			?? self::STATIC_PROXY_HOST . $this->domain . self::PROMPT_BASE_ENDPOINT;
+		$override = Config::getValue('ai_box_prompt_db_uri');
+		if (is_string($override) && trim($override) !== '')
+		{
+			return $override;
+		}
+
+		return self::STATIC_PROXY_HOST . $this->domain . self::PROMPT_BASE_ENDPOINT;
 	}
 
 	public function getServerListConfigUrl(): string

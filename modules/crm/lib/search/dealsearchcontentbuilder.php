@@ -6,6 +6,7 @@ use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\DealTable;
 use Bitrix\Crm\Entity\Index;
+use Bitrix\Crm\Item;
 use CCrmCurrency;
 use CCrmDeal;
 use CCrmOwnerType;
@@ -17,9 +18,35 @@ final class DealSearchContentBuilder extends SearchContentBuilder
 	protected string $entityIndexTable = 'b_crm_deal_index';
 	protected string $entityIndexTablePrimaryColumn = 'DEAL_ID';
 
+	private const INDEXED_FIELDS = [
+		Item::FIELD_NAME_TITLE,
+		Item::FIELD_NAME_OPPORTUNITY,
+		Item::FIELD_NAME_CURRENCY_ID,
+		Item::FIELD_NAME_ASSIGNED,
+		Item::FIELD_NAME_COMPANY_ID,
+		Item::FIELD_NAME_TYPE_ID,
+		Item::FIELD_NAME_STAGE_ID,
+		Item::FIELD_NAME_CATEGORY_ID,
+		Item::FIELD_NAME_BEGIN_DATE,
+		Item::FIELD_NAME_CLOSE_DATE,
+		Item::FIELD_NAME_COMMENTS,
+		Item::FIELD_NAME_SOURCE_ID,
+		Item::FIELD_NAME_SOURCE_DESCRIPTION,
+	];
+
 	public function getEntityTypeId(): int
 	{
 		return CCrmOwnerType::Deal;
+	}
+
+	public function getSearchSelectFields(): ?array
+	{
+		return [Item::FIELD_NAME_ID, ...self::INDEXED_FIELDS];
+	}
+
+	protected function getIndexedItemFieldNames(): ?array
+	{
+		return [...self::INDEXED_FIELDS, Item::FIELD_NAME_CONTACT_BINDINGS];
 	}
 	
 	protected function prepareSearchMap(array $fields, array $options = null): SearchMap

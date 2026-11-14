@@ -5,6 +5,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Public\Feature\Node\EmailNodeSenderTemplatesFlag;
+use Bitrix\Bizproc\Public\Integration\Sender\Service\EmailTemplateService;
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Main;
@@ -13,7 +16,21 @@ use Bitrix\Main\Mail;
 use Bitrix\Crm\Automation\ClientCommunications\ClientCommunications;
 use Bitrix\Mail\Helper;
 
-class CBPCrmSendEmailActivity extends CBPActivity
+// Without the sender field able to load the "add sender" form itself the node keeps the legacy dialog that loads it.
+if (method_exists(\Bitrix\Bizproc\Controller\FieldType::class, 'getMailConfirmFormAction'))
+{
+	abstract class CBPCrmSendEmailActivityBase extends CBPActivity implements IBPConfigurableActivity
+	{
+	}
+}
+else
+{
+	abstract class CBPCrmSendEmailActivityBase extends CBPActivity
+	{
+	}
+}
+
+class CBPCrmSendEmailActivity extends CBPCrmSendEmailActivityBase
 {
 	public const TEXT_TYPE_BBCODE = 'bbcode';
 	public const TEXT_TYPE_HTML = 'html';
@@ -23,6 +40,19 @@ class CBPCrmSendEmailActivity extends CBPActivity
 	private const SELECT_RULE_FIRST = 'first';
 	private const SELECT_RULE_LAST = 'last';
 	//private const SELECT_RULE_ALL = 'all';
+
+	private const NODE_FORM_FIELD_ORDER = [
+		'MessageFrom',
+		'Subject',
+		'MessageText',
+		'MessageTextType',
+		'EmailType',
+		'EmailSelectRule',
+		'AttachmentType',
+		'Attachment',
+		'AttachmentDisk',
+		'UseLinkTracker',
+	];
 
 	public function __construct($name)
 	{
@@ -40,16 +70,19 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			'UseLinkTracker' => 'Y',
 			'AttachmentType' => static::ATTACHMENT_TYPE_FILE,
 			'Attachment' => [],
+			'EmailTemplateId' => null,
 		];
 	}
 
 	public function Execute()
 	{
-		if (
-			$this->MessageText === ''
-			|| !CModule::IncludeModule("crm")
-			|| !CModule::IncludeModule('subscribe')
-		)
+		if (!CModule::IncludeModule("crm") || !CModule::IncludeModule('subscribe'))
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$emailTemplateId = $this->getUsableEmailTemplateId();
+		if ($emailTemplateId === null && $this->MessageText === '')
 		{
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -143,32 +176,34 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		$subject = $this->getSubject();
 		$messageType = $this->MessageTextType;
 		$message = $this->getMessageText($messageType);
+		$descriptionType = $messageType === self::TEXT_TYPE_HTML ? CCrmContentType::Html : CCrmContentType::BBCode;
 
-		if ($message !== '')
+		$templateLetter = null;
+		if ($emailTemplateId !== null)
 		{
-			CCrmActivity::AddEmailSignature(
-				$message,
-				$messageType === self::TEXT_TYPE_HTML ? CCrmContentType::Html : CCrmContentType::BBCode
+			$signatureHtml = '';
+			Crm\Integration\Bitrix24Email::addSignature($signatureHtml, CCrmContentType::Html);
+			$templateLetter = self::getEmailTemplateService()?->buildLetter(
+				$emailTemplateId,
+				self::convertMessageToHtml((string)$message, $messageType),
+				$signatureHtml,
 			);
 		}
 
-		if ($message === '')
+		if ($templateLetter !== null)
+		{
+			$messageHtml = $templateLetter;
+			$message = $messageHtml;
+			$descriptionType = CCrmContentType::Html;
+		}
+		elseif ($message === '')
 		{
 			$messageHtml = '';
 		}
 		else
 		{
-			if ($messageType !== self::TEXT_TYPE_HTML)
-			{
-				//Convert BBCODE to HTML
-				$parser = new CTextParser();
-				$parser->allow['SMILES'] = 'N';
-				$messageHtml = $parser->convertText($message);
-			}
-			else
-			{
-				$messageHtml = $message;
-			}
+			CCrmActivity::AddEmailSignature($message, $descriptionType);
+			$messageHtml = self::convertMessageToHtml($message, $messageType);
 
 			if (mb_strpos($messageHtml, '</html>') === false)
 			{
@@ -187,7 +222,7 @@ class CBPCrmSendEmailActivity extends CBPActivity
 
 		$description = $message;
 
-		if ($messageType === self::TEXT_TYPE_HTML)
+		if ($descriptionType === CCrmContentType::Html)
 		{
 			//$description = preg_replace('/<style[^>]*>.*?<\/style>/is', '', $description);
 			$description = preg_replace('/<script[^>]*>.*?<\/script>/is', '', $description);
@@ -212,7 +247,7 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			'RESPONSIBLE_ID' => $userId,
 			'PRIORITY' => CCrmActivityPriority::Medium,
 			'DESCRIPTION' => $description,
-			'DESCRIPTION_TYPE' => $messageType === self::TEXT_TYPE_HTML ? CCrmContentType::Html : CCrmContentType::BBCode,
+			'DESCRIPTION_TYPE' => $descriptionType,
 			'DIRECTION' => CCrmActivityDirection::Outgoing,
 			'BINDINGS' => array_values($bindings),
 			'COMMUNICATIONS' => $communications,
@@ -221,16 +256,7 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		if ($this->AttachmentType === static::ATTACHMENT_TYPE_DISK)
 		{
 			$attachmentStorageType = Bitrix\Crm\Integration\StorageType::Disk;
-			$attachment = [];
-
-			foreach ((array)$this->Attachment as $fileId)
-			{
-				$fileId = (int)$fileId;
-				if (\Bitrix\Crm\Integration\DiskManager::checkFileDownloadPermission($fileId, $userId))
-				{
-					$attachment[] = $fileId;
-				}
-			}
+			$attachment = $this->filterDownloadableDiskFiles((array)$this->Attachment, $userId);
 		}
 		else
 		{
@@ -514,6 +540,54 @@ class CBPCrmSendEmailActivity extends CBPActivity
 	}
 
 	/**
+	 * A file is attached when the template author or the document responsible may download it.
+	 * A user id <= 0 is never checked: DiskManager would substitute the current user for it.
+	 */
+	private function filterDownloadableDiskFiles(array $fileIds, int $responsibleId): array
+	{
+		$authorId = (int)$this->getTemplateUserId();
+		$attachment = [];
+		$droppedCount = 0;
+
+		foreach ($fileIds as $fileId)
+		{
+			$fileId = (int)$fileId;
+			if ($fileId > 0 && $this->canDownloadDiskFile($fileId, [$authorId, $responsibleId]))
+			{
+				$attachment[] = $fileId;
+			}
+			else
+			{
+				$droppedCount++;
+			}
+		}
+
+		if ($droppedCount > 0)
+		{
+			$this->WriteToTrackingService(
+				GetMessage('CRM_SEMA_DISK_ATTACHMENT_DROPPED', ['#COUNT#' => $droppedCount]),
+				0,
+				CBPTrackingType::Custom
+			);
+		}
+
+		return $attachment;
+	}
+
+	private function canDownloadDiskFile(int $fileId, array $userIds): bool
+	{
+		foreach (array_unique($userIds) as $userId)
+		{
+			if ($userId > 0 && \Bitrix\Crm\Integration\DiskManager::checkFileDownloadPermission($fileId, $userId))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * A string must never reach CFile::MakeFileArray: it reads a local file or downloads a URL for one.
 	 */
 	private static function makeAttachmentFileArray(mixed $value): ?array
@@ -783,7 +857,9 @@ class CBPCrmSendEmailActivity extends CBPActivity
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
-		return [
+		Main\Loader::includeModule('crm');
+
+		$map = [
 			'Subject' => [
 				'Name' => GetMessage('CRM_SEMA_EMAIL_SUBJECT'),
 				'Description' => GetMessage('CRM_SEMA_EMAIL_SUBJECT'),
@@ -857,6 +933,160 @@ class CBPCrmSendEmailActivity extends CBPActivity
 				'Type' => 'mail_sender',
 			]
 		];
+
+		if (array_key_exists('Template', $context))
+		{
+			$map = static::adaptMapToNodeForm($map);
+			if (Config\Feature::isEnabled(EmailNodeSenderTemplatesFlag::class))
+			{
+				$map = static::addEmailTemplateField($map, $context['Properties']['EmailTemplateId'] ?? null);
+			}
+			$map = array_replace(array_intersect_key(array_flip(self::NODE_FORM_FIELD_ORDER), $map), $map);
+		}
+
+		return $map;
+	}
+
+	private static function adaptMapToNodeForm(array $map): array
+	{
+		$map['MessageText']['Getter'] = static function ($dialog, $property, $activity, $compatible = false): string {
+			$properties = $activity['Properties'] ?? [];
+			$text = (string)($properties['MessageText'] ?? '');
+
+			return (int)($properties['MessageTextEncoded'] ?? 0) === 1 ? static::decodeMessageText($text) : $text;
+		};
+		unset($map['MessageTextEncoded']);
+		unset($map['Subject']['Description']);
+		foreach (['MessageTextType', 'EmailType', 'EmailSelectRule', 'AttachmentType', 'UseLinkTracker'] as $key)
+		{
+			$map[$key]['AllowSelection'] = false;
+		}
+
+		if (!Main\Loader::includeModule('disk'))
+		{
+			unset($map['AttachmentType']['Options'][static::ATTACHMENT_TYPE_DISK]);
+
+			return $map;
+		}
+
+		$map['Attachment']['Getter'] = static function ($dialog, $property, $activity, $compatible = false) {
+			$properties = $activity['Properties'] ?? [];
+
+			return static::isDiskAttachmentType($properties) ? [] : ($properties['Attachment'] ?? null);
+		};
+
+		$map['AttachmentDisk'] = [
+			'Name' => $map['Attachment']['Name'],
+			'FieldName' => 'attachment_disk',
+			'Type' => FieldType::CUSTOM,
+			'CustomType' => 'crmSendEmailDisk',
+			'Settings' => [
+				'chooseLabel' => GetMessage('CRM_SEMA_ATTACHMENT_DISK_CHOOSE') ?? '',
+				'removeLabel' => GetMessage('CRM_SEMA_ATTACHMENT_DISK_REMOVE_ARIA') ?? '',
+			],
+			'Getter' => static function ($dialog, $property, $activity, $compatible = false): array {
+				$properties = $activity['Properties'] ?? [];
+
+				return static::isDiskAttachmentType($properties)
+					? static::loadDiskFiles((array)($properties['Attachment'] ?? []))
+					: []
+				;
+			},
+		];
+
+		return $map;
+	}
+
+	private static function isDiskAttachmentType(array $properties): bool
+	{
+		return ($properties['AttachmentType'] ?? null) === static::ATTACHMENT_TYPE_DISK;
+	}
+
+	/**
+	 * @return list<array{id: int, name: string}>
+	 */
+	private static function loadDiskFiles(array $fileIds): array
+	{
+		$files = [];
+		foreach ($fileIds as $fileId)
+		{
+			$file = (int)$fileId > 0 ? \Bitrix\Disk\File::loadById((int)$fileId) : null;
+			if ($file)
+			{
+				$files[] = ['id' => (int)$file->getId(), 'name' => (string)$file->getName()];
+			}
+		}
+
+		return $files;
+	}
+
+	private static function addEmailTemplateField(array $map, mixed $savedTemplateId): array
+	{
+		$service = self::getEmailTemplateService();
+		$isSavedTemplateUnavailable =
+			!\CBPHelper::isEmptyValue($savedTemplateId)
+			&& !$service?->isUsable((int)$savedTemplateId)
+		;
+		$unavailableWarning = GetMessage('CRM_SEMA_EMAIL_TEMPLATE_UNAVAILABLE') ?? '';
+
+		if ($service === null)
+		{
+			if ($isSavedTemplateUnavailable)
+			{
+				$map['MessageText']['Warning'] = $unavailableWarning;
+			}
+
+			return $map;
+		}
+
+		$userId = self::getCurrentUserId();
+		$selectorSettings = $service->getSelectorSettings($userId);
+		$field = [
+			'Name' => GetMessage('CRM_SEMA_EMAIL_TEMPLATE') ?? '',
+			'Description' => GetMessage('CRM_SEMA_EMAIL_TEMPLATE_DESCRIPTION') ?? '',
+			'AllowSelection' => false,
+			'FieldName' => 'email_template_id',
+			'Type' => FieldType::ENTITYSELECTOR,
+			'Settings' => [
+				'entity' => [
+					'id' => $selectorSettings->entityId,
+					'dynamicLoad' => true,
+					'dynamicSearch' => true,
+				],
+				'enableSearch' => true,
+			],
+		];
+
+		if ($selectorSettings->editUrlTemplate !== null)
+		{
+			$field['Settings']['entity']['itemOptions']['default'] = [
+				'link' => $selectorSettings->editUrlTemplate,
+				'linkTitle' => GetMessage('CRM_SEMA_EMAIL_TEMPLATE_EDIT') ?? '',
+			];
+			$field['Settings']['openLinkInSlider'] = true;
+		}
+
+		if ($selectorSettings->createUrl !== null)
+		{
+			$field['Settings']['dialogOptions']['footerOptions'] = [
+				'label' => GetMessage('CRM_SEMA_EMAIL_TEMPLATE_CREATE') ?? '',
+				'url' => $selectorSettings->createUrl,
+				'requestMethod' => 'get',
+			];
+		}
+
+		if ($isSavedTemplateUnavailable)
+		{
+			$field['Warning'] = $unavailableWarning;
+		}
+		elseif ($selectorSettings->editUrlTemplate === null || !$service->canView($userId))
+		{
+			$field['Warning'] = GetMessage('CRM_SEMA_EMAIL_TEMPLATE_NO_ACCESS') ?? '';
+		}
+
+		$map['EmailTemplateId'] = $field;
+
+		return $map;
 	}
 
 	public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate, &$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$errors)
@@ -873,8 +1103,30 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			'EmailSelectRule' => (string)($arCurrentValues['email_select_rule'] ?? ''),
 			'UseLinkTracker' => $arCurrentValues['use_link_tracker'] === 'Y' ? 'Y' : 'N',
 			'MessageTextEncoded' => 0,
-			'Attachment' => []
+			'Attachment' => [],
+			'EmailTemplateId' => null,
 		];
+
+		$isSavedTemplateKept = !array_key_exists('email_template_id', $arCurrentValues);
+		$emailTemplateId =
+			$isSavedTemplateKept
+				? self::getSavedEmailTemplateId($arWorkflowTemplate, $activityName)
+				: (int)$arCurrentValues['email_template_id']
+		;
+		if ($emailTemplateId > 0)
+		{
+			$properties['EmailTemplateId'] = $emailTemplateId;
+		}
+
+		$templateId = $properties['EmailTemplateId'];
+		if (!static::canCurrentUserChooseEmailTemplate($templateId, $isSavedTemplateKept))
+		{
+			$errors[] = [
+				'code' => 'AccessDenied',
+				'parameter' => 'EmailTemplateId',
+				'message' => GetMessage('CRM_SEMA_EMAIL_TEMPLATE_NO_ACCESS') ?? '',
+			];
+		}
 
 		if (
 			isset($arCurrentValues['message_from'])
@@ -950,6 +1202,46 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		return true;
 	}
 
+	private static function canCurrentUserChooseEmailTemplate(?int $templateId, bool $isSavedTemplateKept): bool
+	{
+		if (\CBPHelper::isEmptyValue($templateId))
+		{
+			return true;
+		}
+
+		$service = self::getEmailTemplateService();
+		if (!$service)
+		{
+			return $isSavedTemplateKept;
+		}
+
+		return $service->canView(self::getCurrentUserId());
+	}
+
+	private static function getSavedEmailTemplateId(array $workflowTemplate, ?string $activityName): int
+	{
+		$savedActivity = CBPWorkflowTemplateLoader::FindActivityByName($workflowTemplate, $activityName);
+
+		return (int)($savedActivity['Properties']['EmailTemplateId'] ?? 0);
+	}
+
+	private static function getEmailTemplateService(): ?EmailTemplateService
+	{
+		if (!method_exists(EmailTemplateService::class, 'buildLetter'))
+		{
+			return null;
+		}
+
+		$service = new EmailTemplateService();
+
+		return $service->isAvailable() ? $service : null;
+	}
+
+	private static function getCurrentUserId(): int
+	{
+		return (int)Main\Engine\CurrentUser::get()->getId();
+	}
+
 	private function getSubject()
 	{
 		$subject = $this->Subject;
@@ -959,6 +1251,32 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		}
 
 		return $subject;
+	}
+
+	private function getUsableEmailTemplateId(): ?int
+	{
+		$templateId = $this->EmailTemplateId;
+		if (\CBPHelper::isEmptyValue($templateId))
+		{
+			return null;
+		}
+
+		$templateId = (int)$templateId;
+
+		return self::getEmailTemplateService()?->isUsable($templateId) ? $templateId : null;
+	}
+
+	private static function convertMessageToHtml($message, $messageType)
+	{
+		if ($messageType === self::TEXT_TYPE_HTML)
+		{
+			return $message;
+		}
+
+		$parser = new CTextParser();
+		$parser->allow['SMILES'] = 'N';
+
+		return $parser->convertText($message);
 	}
 
 	private function getMessageText($messageType)

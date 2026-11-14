@@ -143,22 +143,18 @@ final class StateCheckMethodProvider extends SyncMethodProvider
 								'description' =>
 									'How many objects of the area are asked for, ' . $limits->getPageSizeMax()
 									. ' by default. Of the mode over an area alone. A value above the ceiling '
-									. 'is refused rather than trimmed. A page that asks for a heavy section is '
-									. 'served at most ' . $limits->getPageSizeMaxHeavy() . ' objects - a '
-									. 'shorter page, not a refusal - and a list of that many sections is '
-									. 'bounded by the same number.'
+									. 'is refused rather than trimmed. '
+									. SnapshotListMethodProvider::describeHeavyCeiling('objects')
+									. ' A list of objects asked with a heavy section is bounded by the same '
+									. 'number.'
 								,
 							],
 							self::PARAMETER_SECTIONS => [
 								'type' => 'array',
 								'items' => ['type' => 'string', 'enum' => SectionsStructure::getDeclaredSections()],
-								'description' =>
-									'The sections of a card to fill on the visible objects of the answer. '
-									. 'Everything this portal serves when the parameter is absent. A section '
-									. 'the portal declares but does not fill is refused when asked for rather '
-									. 'than answered empty, and so is a parameter the schema does not declare '
-									. 'at all.'
-								,
+								'description' => SnapshotListMethodProvider::describeSectionsParameter(
+									'The sections of a card to fill on the visible objects of the answer.'
+								),
 							],
 						],
 					],
@@ -223,6 +219,7 @@ final class StateCheckMethodProvider extends SyncMethodProvider
 			client does not go and recreate a session the check never used. A token of another user,
 			of another application of the same user, of another kind or damaged in any way is refused
 			with CURSOR_INVALID.
-			TEXT;
+			TEXT
+			. "\n\n" . SnapshotListMethodProvider::describeAccessSection();
 	}
 }

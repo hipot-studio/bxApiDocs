@@ -14,6 +14,7 @@ use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\FolderProvider;
+use Bitrix\Im\V2\Link\PersonalPin\PersonalPinCollection;
 use Bitrix\Im\V2\Link\Pin\PinCollection;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\MessageError;
@@ -28,6 +29,7 @@ use Bitrix\Im\V2\Rest\RestError;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
 use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Im\V2\SharingLink\SharingLink;
+use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -189,15 +191,26 @@ abstract class BaseController extends Controller
 		$pinLimit = $this->getLimit($pinLimit);
 		$messageService = new MessageService($targetMessage ?? $chat->getLoadContextMessage($ignoreMark));
 		$messages = $messageService->getMessageContext($messageLimit, Message::REST_FIELDS)->getResult();
-		$pins = PinCollection::find(
-			['CHAT_ID' => $chat->getChatId(), 'START_ID' => $chat->getStartId() ?: null],
+		$pinFilter = ['CHAT_ID' => $chat->getChatId(), 'START_ID' => $chat->getStartId() ?: null];
+		$pins = PinCollection::find($pinFilter, ['ID' => 'DESC'], $pinLimit);
+		$personalPins = PersonalPinCollection::findForOwner(
+			(int)($this->getCurrentUser()?->getId() ?? 0),
+			$pinFilter,
 			['ID' => 'DESC'],
 			$pinLimit
 		);
 
-		$restAdapter = new RestAdapter($chat, $messages, $pins);
+		$restAdapter = new RestAdapter($chat, $messages, $pins, $personalPins);
 
 		$rest = $restAdapter->toRestFormat();
+
+		// Both blocks are capped by the controller limit, so the client is told when it has to read
+		// the rest of a block through paging before numbering or searching over it. The flag counts
+		// the records of the answer and not the rows read: the adapter narrows a block by the tariff
+		// limit on its way out, and a flag raised over records the client never got would send it
+		// paging for records that never come.
+		$rest['pinsHasNextPage'] = count($rest[PinCollection::getRestEntityName()]) >= $pinLimit;
+		$rest['personalPinsHasNextPage'] = count($rest[PersonalPinCollection::getRestEntityName()]) >= $pinLimit;
 
 		$rest = $messageService->fillContextPaginationData($rest, $messages, $messageLimit);
 
@@ -209,6 +222,18 @@ abstract class BaseController extends Controller
 	protected function toRestFormatWithPaginationData(array $entities, int $needCount, int $realCount): array
 	{
 		$rest = (new RestAdapter(...$entities))->toRestFormat();
+
+		// $realCount is the number of rows the caller read, and a tariff-filterable block gets narrowed
+		// by the adapter on its way out. The flag has to describe the answer: raised over records the
+		// client never got it would send it paging for records that never come.
+		foreach ($entities as $entity)
+		{
+			if ($entity instanceof DateFilterable)
+			{
+				$realCount = min($realCount, count($rest[$entity::getRestEntityName()]));
+			}
+		}
+
 		$rest['hasNextPage'] = $realCount >= $needCount;
 
 		return $rest;

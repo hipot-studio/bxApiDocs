@@ -8,7 +8,11 @@ use Bitrix\Crm\AddressTable;
 use Bitrix\Crm\RequisiteTable;
 use Bitrix\Crm\V2\Public\Entity\Address\AddressIdentifier;
 use Bitrix\Crm\V2\Internal\Entity\Address\AddressPlacement;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ORM\Query\Filter\Condition;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use CCrmOwnerType;
 
 /**
@@ -20,7 +24,9 @@ use CCrmOwnerType;
  * therefore goes through the anchor columns, while updating and deleting address a known row by the
  * composite key of the record.
  *
- * Rows leave the class as plain column-keyed arrays; ORM objects never do.
+ * Rows leave the class as plain column-keyed arrays; ORM objects never do. {@see self::findAll()} is the
+ * one exception, and a deliberate one: the reads that address a single row feed the write path, which
+ * speaks columns, while the page of the portal feeds the transport, which must never see one.
  *
  * Every read is neutral and returns whatever the table holds. Access checks belong to the scenario that
  * resolves the logical owner before exposing a row.
@@ -29,7 +35,19 @@ use CCrmOwnerType;
  */
 final class AddressRepository
 {
-	private const ANCHOR_OWNER_TYPES = [CCrmOwnerType::Lead, CCrmOwnerType::Contact, CCrmOwnerType::Company];
+	/**
+	 * The CRM owners an address of this table belongs to; nothing else is read for. Public because it is
+	 * part of the contract of the read rather than an implementation detail: the transport above refuses
+	 * an owner type the client names, and it must refuse by this list rather than by a copy of it.
+	 */
+	public const ANCHOR_OWNER_TYPES = [CCrmOwnerType::Lead, CCrmOwnerType::Contact, CCrmOwnerType::Company];
+
+	/**
+	 * The largest page {@see self::findAll()} answers. The same ceiling the standard pagination of REST v3
+	 * cuts a request down to, named here rather than read from the transport: the read is the one that has
+	 * to hold the line, and it stands below every caller - the ones that speak REST and the ones that do not.
+	 */
+	private const MAX_PAGE_SIZE = 1000;
 
 	private const KEY_FIELDS = ['TYPE_ID', 'ENTITY_TYPE_ID', 'ENTITY_ID'];
 
@@ -64,7 +82,7 @@ final class AddressRepository
 		'COUNTRY_CODE',
 	];
 
-	private const INT_FIELDS = [
+	private const INT_COLUMNS = [
 		'ID',
 		'TYPE_ID',
 		'ENTITY_TYPE_ID',
@@ -73,6 +91,62 @@ final class AddressRepository
 		'ANCHOR_ID',
 		'LOC_ADDR_ID',
 	];
+
+	/**
+	 * A page of the addresses of the whole portal, ordered as asked. The filter, the ordering and the page
+	 * are all applied in SQL: nothing is dropped or sorted after the fact, so the page and the order stay
+	 * what the caller asked for.
+	 *
+	 * **Rights are not checked here** - the portal administrator gate stands above this read. An address
+	 * carries no access control of its own, and this selection deliberately derives none from its owner:
+	 * put it behind anything weaker and every address of every counterparty of the portal is open.
+	 *
+	 * @param ConditionTree|null $filter conditions whose columns are address field names. The owner types
+	 *        of the read are added to it here and are not the caller's to widen. The tree the caller holds
+	 *        is left as it was, in field names: the read translates a copy of it
+	 *        ({@see self::translateFilter()}), so one tree serves as many reads as the caller needs.
+	 * @param array<string, string> $order address field name => `ASC`/`DESC`; the identifier settles
+	 *        whatever the ordering leaves equal, so the pages of one read do not overlap.
+	 * @param int $limit rows of the page, from 1 to {@see self::MAX_PAGE_SIZE}. A page is asked for rather
+	 *        than offered: this read spans the addresses of the whole portal, and a call naming no page at
+	 *        all would walk `b_crm_addr` end to end - a possibility no caller should have to notice it has.
+	 * @param int $offset rows passed over before the page; never negative.
+	 * @param string[] $select the address fields the caller needs; an empty list means every field of the
+	 *        storage. A field left out is not read at all and is absent from the row, while the identifier
+	 *        is read whether it was asked for or not - without it there is nothing to address a row by.
+	 * @return array<int, array<string, mixed>> rows keyed by **field name** rather than by column.
+	 * @throws ArgumentException a page outside its bounds, or a filter, an ordering or a field set over a
+	 *         name that is not a field of an address.
+	 * @throws SystemException a failure of the query itself.
+	 */
+	public function findAll(
+		?ConditionTree $filter,
+		array $order,
+		int $limit,
+		int $offset = 0,
+		array $select = [],
+	): array
+	{
+		self::assertPage($limit, $offset);
+
+		$fields = $select === [] ? AddressColumnMap::allFields() : $select;
+		$fields[] = 'id';
+
+		$query = AddressTable::query()->setSelect(AddressColumnMap::expandToColumns($fields));
+
+		if ($filter !== null && $filter->hasConditions())
+		{
+			$query->where(self::translateFilter($filter));
+		}
+		$query->whereIn(AddressColumnMap::COLUMN_BY_FIELD['ownerTypeId'], self::ANCHOR_OWNER_TYPES);
+
+		$query->setOrder(self::translateOrder($order));
+
+		$query->setLimit($limit);
+		$query->setOffset($offset);
+
+		return array_map(self::toFieldNames(...), $query->fetchAll());
+	}
 
 	/**
 	 * One row by its own numeric identifier, without any permission restriction: the caller needs the
@@ -331,6 +405,25 @@ final class AddressRepository
 	}
 
 	/**
+	 * The page {@see self::findAll()} answers, refused before the read does anything else.
+	 *
+	 * @throws ArgumentException a page of no rows, of more than {@see self::MAX_PAGE_SIZE} of them, or one
+	 *         starting before the first row.
+	 */
+	private static function assertPage(int $limit, int $offset): void
+	{
+		if ($limit < 1 || $limit > self::MAX_PAGE_SIZE)
+		{
+			throw new ArgumentException(sprintf('Invalid address page limit `%d`', $limit), 'limit');
+		}
+
+		if ($offset < 0)
+		{
+			throw new ArgumentException(sprintf('Invalid address page offset `%d`', $offset), 'offset');
+		}
+	}
+
+	/**
 	 * @return array<string, int>
 	 */
 	private static function buildPrimary(int $typeId, int $entityTypeId, int $entityId): array
@@ -368,14 +461,104 @@ final class AddressRepository
 	}
 
 	/**
+	 * A copy of the tree with address field names replaced by the columns behind them.
+	 *
+	 * The copy is what leaves the caller its tree: cloning a condition tree clones every condition in it,
+	 * nested trees included ({@see ConditionTree::__clone()}), so renaming the columns of the copy reaches
+	 * nothing the caller still holds.
+	 *
+	 * @throws ArgumentException
+	 */
+	private static function translateFilter(ConditionTree $filter): ConditionTree
+	{
+		$translated = clone $filter;
+		self::translateTreeColumns($translated);
+
+		return $translated;
+	}
+
+	/**
+	 * @throws ArgumentException
+	 */
+	private static function translateTreeColumns(ConditionTree $tree): void
+	{
+		foreach ($tree->getConditions() as $condition)
+		{
+			if ($condition instanceof ConditionTree)
+			{
+				self::translateTreeColumns($condition);
+
+				continue;
+			}
+
+			$column = $condition instanceof Condition ? $condition->getColumn() : null;
+			if (!is_string($column))
+			{
+				throw new ArgumentException('Unsupported condition of an address filter', 'filter');
+			}
+
+			$condition->setColumn(AddressColumnMap::requireColumn($column));
+		}
+	}
+
+	/**
+	 * @param array<string, string> $order
+	 * @return array<string, string> never empty: the identifier settles the order of the rows a requested
+	 *         ordering leaves equal, so a page is repeatable.
+	 * @throws ArgumentException
+	 */
+	private static function translateOrder(array $order): array
+	{
+		$translated = [];
+		foreach ($order as $field => $direction)
+		{
+			$translated[AddressColumnMap::requireColumn($field)] = $direction;
+		}
+
+		$translated[AddressColumnMap::COLUMN_BY_FIELD['id']] ??= 'ASC';
+
+		return $translated;
+	}
+
+	/**
+	 * A row of {@see self::findAll()} keyed by field name. A column the query did not load is left out
+	 * rather than answered as empty, so a field nobody asked for is absent instead of indistinguishable
+	 * from an empty one.
+	 *
+	 * A text column blank in the storage holds a null rather than an empty string, and a field of the
+	 * contract is never null, so the value is cast to the type of its field either way.
+	 *
+	 * @param array<string, mixed> $row
+	 * @return array<string, mixed>
+	 */
+	private static function toFieldNames(array $row): array
+	{
+		$values = [];
+		foreach (AddressColumnMap::COLUMN_BY_FIELD as $field => $column)
+		{
+			if (!array_key_exists($column, $row))
+			{
+				continue;
+			}
+
+			$values[$field] = isset(AddressColumnMap::INT_FIELDS[$field])
+				? (int)$row[$column]
+				: (string)($row[$column] ?? '')
+			;
+		}
+
+		return $values;
+	}
+
+	/**
 	 * @param array<string, mixed> $row
 	 * @return array<string, mixed>
 	 */
 	private static function normalizeRow(array $row): array
 	{
-		foreach (self::INT_FIELDS as $field)
+		foreach (self::INT_COLUMNS as $column)
 		{
-			$row[$field] = (int)$row[$field];
+			$row[$column] = (int)$row[$column];
 		}
 
 		$row['IS_DEF'] = (bool)$row['IS_DEF'];

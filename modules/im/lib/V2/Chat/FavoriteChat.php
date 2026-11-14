@@ -6,6 +6,7 @@ use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\Model\EO_Chat;
 use Bitrix\Im\V2\Service\Context;
@@ -15,6 +16,11 @@ use Bitrix\Im\V2\Chat\Add\AddResult;
 
 class FavoriteChat extends PrivateChat
 {
+	private const UNAVAILABLE_ACTIONS = [
+		Action::DeleteHistoryForSelf,
+		Action::DeleteHistoryForAll,
+	];
+
 	protected function getDefaultEntityType(): string
 	{
 		return self::ENTITY_TYPE_FAVORITE;
@@ -143,6 +149,16 @@ class FavoriteChat extends PrivateChat
 	}
 
 	//region Access & Permissions
+
+	public function canDo(Action $action, mixed $target = null): bool
+	{
+		if (in_array($action, self::UNAVAILABLE_ACTIONS, true))
+		{
+			return false;
+		}
+
+		return parent::canDo($action, $target);
+	}
 
 	protected function checkAccessInternal(int $userId): Result
 	{

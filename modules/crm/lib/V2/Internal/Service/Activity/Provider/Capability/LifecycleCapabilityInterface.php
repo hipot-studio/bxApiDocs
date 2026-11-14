@@ -6,6 +6,7 @@ namespace Bitrix\Crm\V2\Internal\Service\Activity\Provider\Capability;
 
 use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityChangeSet;
+use Bitrix\Crm\V2\Internal\Entity\Activity\StorageFieldTransit;
 use Bitrix\Crm\V2\Internal\Service\Activity\ActivityOperationContext;
 use Bitrix\Main\Result;
 
@@ -36,7 +37,20 @@ use Bitrix\Main\Result;
  */
 interface LifecycleCapabilityInterface
 {
-	public function onAfterAdd(Activity $activity, ActivityOperationContext $context): void;
+	/**
+	 * THE STORAGE COLUMNS OF THE STATE OF THE RUN TRAVEL WITH THE ACTIVITY, because the model holds none of them and
+	 * the input of the operation holds only what the caller named: an owner a step derived from the bindings, or the
+	 * storage type it defaulted, is in the run alone - and legacy hands its hook the field array those values were
+	 * written into (crm_activity.php:104-109, :467). Optional, so that a provider with no interest in it declares two.
+	 *
+	 * @param StorageFieldTransit|null $transit the storage columns of the state of the run after the write, or null
+	 *        where the caller of the hook holds no such state.
+	 */
+	public function onAfterAdd(
+		Activity $activity,
+		ActivityOperationContext $context,
+		?StorageFieldTransit $transit = null,
+	): void;
 
 	/**
 	 * Announced with the activity as well as with what changed: the set of changes names ten fields and the
@@ -54,14 +68,32 @@ interface LifecycleCapabilityInterface
 	 *
 	 * The argument is optional so that a provider with no interest in it declares three.
 	 *
+	 * THE STATE BEFORE THE UPDATE TRAVELS NEXT TO IT, for the same reason legacy hands it over as a snapshot of
+	 * its own: the set of changes holds only what moved, and a reader deciding by a value the update left alone -
+	 * whether a call had its record already - finds nothing there. It is the model and the storage columns the
+	 * update loaded before its write, files included; both are optional for the same reason as the input.
+	 *
+	 * THE STORAGE COLUMNS OF THE STATE OF THE RUN TRAVEL TOO, because the model of the first argument holds none
+	 * of them: they are the columns as the run holds them after its write - the ones a step of the run resolved,
+	 * the owner derived from the bindings among them, and the re-read row for the rest - which is what legacy
+	 * reads off the snapshot it re-read. Optional for the same reason as the others.
+	 *
 	 * @param Activity|null $inputActivity the activity as the operation named and wrote it, or null where the
 	 *        caller of the hook holds no such state.
+	 * @param Activity|null $previousActivity the activity as it was stored before the update, or null where the
+	 *        caller of the hook holds no such state.
+	 * @param StorageFieldTransit|null $previousTransit the storage columns of that same state.
+	 * @param StorageFieldTransit|null $transit the storage columns of the state of the run after the write, or
+	 *        null where the caller of the hook holds no such state.
 	 */
 	public function onAfterUpdate(
 		Activity $activity,
 		ActivityChangeSet $changes,
 		ActivityOperationContext $context,
-		?Activity $inputActivity = null
+		?Activity $inputActivity = null,
+		?Activity $previousActivity = null,
+		?StorageFieldTransit $previousTransit = null,
+		?StorageFieldTransit $transit = null,
 	): void;
 
 	public function onAfterDelete(Activity $activity, ActivityOperationContext $context): void;

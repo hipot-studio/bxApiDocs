@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat\Tree;
 
 use Bitrix\Im\V2\Chat\Type\Query\TypeFilter;
 use Bitrix\Im\V2\Chat\Type\TypeCondition;
+use Bitrix\Im\V2\Common\Normalize;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
@@ -29,6 +30,7 @@ use Bitrix\Main\ORM\Query\Query;
 final class ChatAncestorFilter
 {
 	private readonly TreeOrigin $origin;
+	private readonly ChatTreeLevelParents $levelParents;
 
 	public function __construct(
 		private readonly ChatAncestorNavigator $navigator,
@@ -36,14 +38,93 @@ final class ChatAncestorFilter
 		private readonly ?TypeCondition $typeCondition = null,
 		private readonly int $maxDepth = ChatAncestorNavigator::DEFAULT_DEPTH,
 		?TreeOrigin $origin = null,
+		?ChatTreeLevelParents $levelParents = null,
 	)
 	{
 		$this->origin = $origin ?? TreeOrigin::forChat('CHAT');
+		$this->levelParents = $levelParents ?? new ChatTreeLevelParents();
 	}
 
+	/**
+	 * Adds the tree condition in the OR-across-levels form. For ID selections with parentId > 0
+	 * use {@see self::fetchChatIds()}: it does not scan all the source rows of the user.
+	 */
 	public function apply(Query $query): void
 	{
 		$query->where($this->toConditionTree($query));
+	}
+
+	/**
+	 * For parentId > 0 the source is filtered by the parents of each level, resolved from the chat tree first.
+	 *
+	 * @param \Closure(): Query $makeQuery returns a new source query without the tree condition on each call
+	 * @return int[] unique positive IDs, order is not guaranteed
+	 */
+	public function fetchChatIds(\Closure $makeQuery, string $idField): array
+	{
+		if ($this->parentId === null || $this->parentId <= 0)
+		{
+			$query = $makeQuery();
+			$this->apply($query);
+
+			return $this->fetchIds($query, $idField);
+		}
+
+		return $this->fetchChatIdsByLevelParents($makeQuery, $idField);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function fetchChatIdsByLevelParents(\Closure $makeQuery, string $idField): array
+	{
+		$chatIds = $this->fetchIds($this->buildFirstLevelQuery($makeQuery()), $idField);
+
+		$levelParentIds = [$this->parentId];
+		for ($depth = 2; $depth <= $this->getNormalizedDepth(); $depth++)
+		{
+			$levelParentIds = $this->levelParents->findNextLevelParentIds(
+				$levelParentIds,
+				$depth === 2 ? $this->typeCondition : null,
+			);
+			if (empty($levelParentIds))
+			{
+				break;
+			}
+
+			foreach (array_chunk($levelParentIds, ChatTreeLevelParents::IN_CHUNK_SIZE) as $chunk)
+			{
+				$query = $makeQuery()->whereIn($this->origin->parentRef, $chunk);
+				array_push($chatIds, ...$this->fetchIds($query, $idField));
+			}
+		}
+
+		return Normalize::uniquePositiveIntegers($chatIds);
+	}
+
+	private function buildFirstLevelQuery(Query $query): Query
+	{
+		$query->where($this->origin->parentRef, $this->parentId);
+
+		if ($this->typeCondition !== null)
+		{
+			$typeFilter = new TypeFilter(
+				condition: $this->typeCondition,
+				typeField: $this->origin->typeField,
+				entityTypeField: $this->origin->entityTypeField,
+			);
+			$query->where($typeFilter->toConditionTree());
+		}
+
+		return $query;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function fetchIds(Query $query, string $idField): array
+	{
+		return Normalize::uniquePositiveIntegers(array_column($query->fetchAll(), $idField));
 	}
 
 	private function toConditionTree(Query $query): ConditionTree

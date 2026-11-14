@@ -12,6 +12,7 @@ use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallCriteria;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallScriptDescription;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallScriptFromDialog;
+use Bitrix\Crm\Integration\AI\Operation\GenerateClientSummary;
 use Bitrix\Crm\Integration\AI\Operation\GenerateManagerSummary;
 use Bitrix\Crm\Integration\AI\Operation\GroupSuspiciousCalls;
 use Bitrix\Crm\Integration\AI\Operation\Sandbox;
@@ -46,6 +47,7 @@ final class OperationRegistry
 			ScreeningRepeatSaleItem::TYPE_ID => ScreeningRepeatSaleItem::class,
 			Sandbox\FillRepeatSaleTips::TYPE_ID => Sandbox\FillRepeatSaleTips::class,
 			AnalyzeCommunication::TYPE_ID => AnalyzeCommunication::class,
+			GenerateClientSummary::TYPE_ID => GenerateClientSummary::class,
 		];
 	}
 

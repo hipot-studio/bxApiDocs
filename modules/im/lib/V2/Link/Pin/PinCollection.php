@@ -24,6 +24,11 @@ class PinCollection extends BaseLinkCollection
 {
 	use SidebarFilterProcessorTrait;
 
+	/**
+	 * The order key is the pinned message, not the pin row: the canonical sequence goes from the
+	 * newest message to the oldest no matter when it was pinned. The `ID` key of the order argument
+	 * keeps naming the direction only, so the paging cursor and the sort share the message key.
+	 */
 	public static function find(
 		array $filter,
 		array $order = ['ID' => 'DESC'],
@@ -33,12 +38,7 @@ class PinCollection extends BaseLinkCollection
 	{
 		$context = $context ?? Locator::getContext();
 
-		$pinOrder = ['ID' => 'DESC'];
-
-		if (isset($order['ID']))
-		{
-			$pinOrder['ID'] = $order['ID'];
-		}
+		$pinOrder = ['MESSAGE_ID' => $order['ID'] ?? 'DESC'];
 
 		$query = LinkPinTable::query()
 			->setSelect(['ID', 'CHAT_ID', 'AUTHOR_ID', 'DATE_CREATE', 'MESSAGE_ID'])
@@ -50,6 +50,32 @@ class PinCollection extends BaseLinkCollection
 		}
 
 		static::processFilters($query, $filter, $pinOrder);
+
+		return static::initByEntityCollection($query->fetchCollection());
+	}
+
+	/**
+	 * The legacy REST method im.chat.pin.get keeps the order and the cursor of the pin row it was
+	 * released with: its callers page by the `id` of the answer, and that field names the pin row, not
+	 * the message. The canonical sequence of the feature lives in find(), where both the order and the
+	 * cursor are the message - moving the old method onto it would make the cursor of its own answer
+	 * point at another record.
+	 */
+	public static function findOrderedByPinId(array $filter, array $order = ['ID' => 'DESC'], ?int $limit = null): self
+	{
+		$pinOrder = ['ID' => $order['ID'] ?? 'DESC'];
+
+		$query = LinkPinTable::query()
+			->setSelect(['ID', 'CHAT_ID', 'AUTHOR_ID', 'DATE_CREATE', 'MESSAGE_ID'])
+			->setOrder($pinOrder)
+		;
+
+		if (isset($limit))
+		{
+			$query->setLimit($limit);
+		}
+
+		static::processSidebarFilters($query, $filter, $pinOrder);
 
 		return static::initByEntityCollection($query->fetchCollection());
 	}
@@ -108,7 +134,12 @@ class PinCollection extends BaseLinkCollection
 
 	protected static function processFilters(Query $query, array $filter, array $order): void
 	{
-		static::processSidebarFilters($query, $filter, $order);
+		static::processSidebarFilters($query, $filter, $order, ['ID' => 'MESSAGE_ID']);
+
+		if (isset($filter['SEARCH_MESSAGE']))
+		{
+			$query->whereLike('MESSAGE.MESSAGE', "%{$filter['SEARCH_MESSAGE']}%");
+		}
 	}
 
 	public function getAuthorIds(): array

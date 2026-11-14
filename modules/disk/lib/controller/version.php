@@ -14,6 +14,7 @@ use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\HttpResponse;
+use Bitrix\Main\Localization\Loc;
 
 final class Version extends Engine\Controller
 {

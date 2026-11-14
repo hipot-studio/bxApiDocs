@@ -9,7 +9,11 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Document\SessionManager;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internals\FileTable;
+use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Web\Json;
 
 final class DocumentSessionManager extends SessionManager
@@ -32,6 +36,9 @@ final class DocumentSessionManager extends SessionManager
 	 * timestamp. Written only here, so non-vibeoffice sessions keep the legacy timestamp check.
 	 */
 	public const CONTEXT_VO_CONTENT_VERSION_KEY = 'contentVersion';
+
+	/** Immutable file-version boundary captured when the local generation is bound. */
+	public const CONTEXT_VO_SAVED_VERSION_ID_KEY = 'savedVersionId';
 
 	/**
 	 * Sub-key (inside {@see self::CONTEXT_VO_KEY}) carrying the editor visual mode
@@ -95,18 +102,11 @@ final class DocumentSessionManager extends SessionManager
 
 		try
 		{
-			$documentSession = $this->findOrCreatePinnedSession($exactUser);
-			if ($documentSession?->isEdit())
-			{
-				$ticket->commit($documentSession->getExternalHash());
-			}
-
-			return $documentSession;
+			return $this->findOrCreatePinnedSession($exactUser);
 		}
 		finally
 		{
 			$this->sessionType = $requestedSessionType;
-			$ticket->cancel();
 		}
 	}
 
@@ -196,7 +196,7 @@ final class DocumentSessionManager extends SessionManager
 	protected function buildFields(): array
 	{
 		$fields = parent::buildFields();
-		$fields['TYPE'] = $this->sessionType;
+		$fields['TYPE'] = $this->getEffectiveSessionType();
 		if ($this->preparedExternalHash !== null)
 		{
 			$fields['EXTERNAL_HASH'] = $this->preparedExternalHash;
@@ -228,22 +228,49 @@ final class DocumentSessionManager extends SessionManager
 	}
 
 	/**
-	 * Persists the current file `GLOBAL_CONTENT_VERSION` into `CONTEXT.vo.contentVersion`
-	 * (merged over any existing vo-metadata, leaving the base context keys untouched).
+	 * Persists one consistent snapshot of the file content version and latest immutable version ID.
 	 */
 	public function persistContentVersionSnapshot(DocumentSession $documentSession, ?File $file = null): bool
 	{
-		$contentVersion = $file
-			? (int)$file->getGlobalContentVersion()
-			: $this->resolveContentVersion();
-		if ($contentVersion === null)
+		$objectId = $file ? (int)$file->getRealObjectId() : (int)$documentSession->getObjectId();
+		if ($objectId !== (int)$documentSession->getObjectId())
+		{
+			return false;
+		}
+		$snapshot = FileTable::query()
+			->setSelect(['GLOBAL_CONTENT_VERSION', 'SAVED_VERSION_ID'])
+			->registerRuntimeField(new Reference(
+				'SAVED_VERSION',
+				VersionTable::class,
+				['=this.ID' => 'ref.OBJECT_ID'],
+				['join_type' => 'LEFT'],
+			))
+			->registerRuntimeField(new ExpressionField('SAVED_VERSION_ID', 'MAX(%s)', ['SAVED_VERSION.ID']))
+			->where('ID', $objectId)
+			->setGroup(['ID', 'GLOBAL_CONTENT_VERSION'])
+			->fetch();
+		if (!$snapshot || $snapshot['GLOBAL_CONTENT_VERSION'] === null)
 		{
 			return false;
 		}
 
 		return $this->persistSessionMetadata($documentSession, [
-			self::CONTEXT_VO_CONTENT_VERSION_KEY => $contentVersion,
+			self::CONTEXT_VO_CONTENT_VERSION_KEY => (int)$snapshot['GLOBAL_CONTENT_VERSION'],
+			self::CONTEXT_VO_SAVED_VERSION_ID_KEY => (int)$snapshot['SAVED_VERSION_ID'],
 		]);
+	}
+
+	/** Returns the immutable latest version ID of a real file, or zero before its first version. */
+	public static function getLatestSavedVersionId(int $objectId): int
+	{
+		$row = VersionTable::query()
+			->setSelect(['ID'])
+			->where('OBJECT_ID', $objectId)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->fetch();
+
+		return $row ? (int)$row['ID'] : 0;
 	}
 
 	public function cloneSessionWithCurrentContentVersion(
@@ -306,7 +333,7 @@ final class DocumentSessionManager extends SessionManager
 
 	private function refreshLiveFile(): void
 	{
-		if ($this->version)
+		if ($this->version || $this->attachedObject?->isSpecificVersion())
 		{
 			return;
 		}

@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory;
 use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
 use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\ORM\Query\Query;
 
 class Executor
 {
@@ -27,11 +28,37 @@ class Executor
 			return new DeleteResult(chatIds: $chatIds);
 		}
 
+		// The owners are read ahead of the delete: once the rows are gone, nothing tells whose they were.
+		$rowOwnerIds = $this->audience->getUserIds() === null ? null : $this->fetchRowOwnerIds($filter);
+		if ($rowOwnerIds === [])
+		{
+			return new DeleteResult(chatIds: $chatIds);
+		}
+
 		$deletedCount = MessageUnreadTable::deleteByFilter($filter);
-		$this->deleteOverflow();
-		$this->clearCache();
+		$this->deleteOverflow($rowOwnerIds);
+		$this->clearCache($rowOwnerIds);
 
 		return new DeleteResult($deletedCount, $chatIds);
+	}
+
+	/**
+	 * The users of the group who really hold rows in the scope. A bounded group is walked in batches
+	 * of hundreds, and dropping the cache of every member of a batch would rebuild counters that have
+	 * not changed for most of them.
+	 *
+	 * @return int[]
+	 */
+	protected function fetchRowOwnerIds(array $filter): array
+	{
+		$rows = MessageUnreadTable::query()
+			->setSelect(['USER_ID'])
+			->setDistinct()
+			->setFilter($filter)
+			->fetchAll()
+		;
+
+		return array_map('intval', array_column($rows, 'USER_ID'));
 	}
 
 	protected function buildFilter(): array
@@ -72,7 +99,17 @@ class Executor
 			$filter['!@MESSAGE_ID'] = $excludeMessageIds;
 		}
 
-		if (!$this->audience->isForAll())
+		$userIds = $this->audience->getUserIds();
+		if ($userIds !== null)
+		{
+			if (empty($userIds))
+			{
+				return [];
+			}
+
+			$filter['@USER_ID'] = $userIds;
+		}
+		elseif (!$this->audience->isForAll())
 		{
 			$filter['=USER_ID'] = $this->audience->getUserId();
 		}
@@ -80,11 +117,22 @@ class Executor
 		return $filter;
 	}
 
-	protected function deleteOverflow(): void
+	/**
+	 * @param int[]|null $rowOwnerIds the users of a bounded group whose rows were found, null otherwise
+	 */
+	protected function deleteOverflow(?array $rowOwnerIds): void
 	{
 		$chatIds = $this->getChatIds();
 		if ($chatIds !== null && empty($chatIds))
 		{
+			return;
+		}
+
+		if ($rowOwnerIds !== null)
+		{
+			// An overflow needs rows to overflow with, so its owners are among the owners of the rows.
+			CounterOverflowService::deleteByChatIdsForUsers($chatIds ?? [], $rowOwnerIds);
+
 			return;
 		}
 
@@ -122,30 +170,40 @@ class Executor
 
 		$userId = $this->audience->getUserId();
 
-		$query = MessageUnreadTable::query()
-			->setSelect(['CHAT_ID'])
-			->setDistinct()
-		;
+		$makeQuery = static function () use ($userId): Query {
+			$query = MessageUnreadTable::query()
+				->setSelect(['CHAT_ID'])
+				->setDistinct()
+			;
 
-		if ($userId !== null)
-		{
-			$query->where('USER_ID', $userId);
-		}
+			if ($userId !== null)
+			{
+				$query->where('USER_ID', $userId);
+			}
 
-		ServiceLocator::getInstance()
+			return $query;
+		};
+
+		return ServiceLocator::getInstance()
 			->get(ChatTreeFilterFactory::class)
 			->forTreeScopeUnreadCounters($treeScope)
-			->apply($query)
+			->fetchChatIds($makeQuery, 'CHAT_ID')
 		;
-
-		$rows = $query->fetchAll();
-
-		return array_map('intval', array_column($rows, 'CHAT_ID'));
 	}
 
-	protected function clearCache(): void
+	/**
+	 * @param int[]|null $rowOwnerIds the users of a bounded group whose rows were found, null otherwise
+	 */
+	protected function clearCache(?array $rowOwnerIds): void
 	{
-		if ($this->audience->isForAll())
+		if ($rowOwnerIds !== null)
+		{
+			foreach ($rowOwnerIds as $userId)
+			{
+				$this->scope->getCache()->remove($userId);
+			}
+		}
+		elseif ($this->audience->isForAll())
 		{
 			$invalidateFor = $this->audience->getAffectedUserIds();
 			if ($invalidateFor !== null)

@@ -18,6 +18,7 @@ use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Entity\Application\AppAttribute;
 use Bitrix\Rest\Internal\Model\AppAttributeTable;
 use Bitrix\Rest\EO_App_Collection;
+use Bitrix\Rest\Internal\Model\EO_AppAccess_Collection;
 use Bitrix\Rest\Internal\Model\EO_AppAttribute;
 use Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection;
 use Bitrix\Rest\Internal\Model\EO_AppLang;
@@ -29,10 +30,19 @@ class AppMapper
 		EO_App $ormModel,
 		EO_AppAttribute_Collection|\Closure|null $attributes = null,
 		EO_AppLang_Collection|\Closure|null $langs = null,
+		?EO_AppAccess_Collection $access = null,
 	): App
 	{
 		$storedStatus = $ormModel->getStatus();
 		$status = $storedStatus === '' ? null : AppStatus::from($storedStatus);
+		$accessCodes = [];
+		foreach ($access ?? [] as $accessRow)
+		{
+			if ($accessRow->getAppId() === $ormModel->getId())
+			{
+				$accessCodes[] = $accessRow->getAccessCode();
+			}
+		}
 
 		$app = new App(
 			clientId: $ormModel->getClientId(),
@@ -55,7 +65,7 @@ class AppMapper
 			sharedKey: $ormModel->getSharedKey(),
 			clientSecret: $ormModel->getClientSecret(),
 			appName: $ormModel->getAppName(),
-			access: $ormModel->getAccess(),
+			access: implode(',', $accessCodes),
 			applicationToken: $ormModel->getApplicationToken(),
 			mobile: $ormModel->getMobile(),
 			userInstall: $ormModel->getUserInstall(),
@@ -123,7 +133,6 @@ class AppMapper
 			->setSharedKey($entity->getSharedKey())
 			->setClientSecret($entity->getClientSecret())
 			->setAppName($entity->getAppName())
-			->setAccess($entity->getAccess())
 			->setApplicationToken($entity->getApplicationToken())
 			->setMobile($entity->isMobile())
 			->setUserInstall($entity->isUserInstall())
@@ -248,6 +257,7 @@ class AppMapper
 		EO_App_Collection $ormCollection,
 		EO_AppAttribute_Collection|\Closure|null $attributes = null,
 		EO_AppLang_Collection|\Closure|null $langs = null,
+		?EO_AppAccess_Collection $access = null,
 	): AppCollection
 	{
 		$collection = new AppCollection();
@@ -271,6 +281,13 @@ class AppMapper
 			}
 		}
 
+		$ormAccess = [];
+		foreach ($access ?? [] as $accessRow)
+		{
+			$ormAccess[$accessRow->getAppId()] ??= new EO_AppAccess_Collection();
+			$ormAccess[$accessRow->getAppId()]->add($accessRow);
+		}
+
 		foreach ($ormCollection as $ormModel)
 		{
 			$appId = $ormModel->getId();
@@ -278,6 +295,7 @@ class AppMapper
 				$ormModel,
 				$attributes instanceof \Closure ? $attributes : ($ormAttributes[$appId] ?? null),
 				$langs instanceof \Closure ? $langs : ($ormLangs[$appId] ?? null),
+				$ormAccess[$appId] ?? null,
 			);
 
 			$collection->add($app);

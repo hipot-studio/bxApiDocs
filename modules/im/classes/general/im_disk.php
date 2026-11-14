@@ -7,6 +7,9 @@ use Bitrix\Disk\SystemUser;
 use \Bitrix\Im as IM;
 use Bitrix\Im\V2\Entity\File\Param\Transcribable;
 use Bitrix\Im\V2\Entity\File\ParamCollection;
+use Bitrix\Im\V2\Integration\Disk\UploadCleanupService;
+use Bitrix\Im\V2\Integration\Disk\UploadQuotaService;
+use Bitrix\Im\V2\Integration\Disk\UploadQuotaStop;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use \Bitrix\Main\Localization\Loc;
@@ -439,11 +442,17 @@ class CIMDisk
 
 		/** global \CUser $USER */
 		global $USER;
+		$messageIdsOfFile = [];
 		if (
 			$fileModel->getCreatedBy() == self::GetUserId()
 			|| $USER->IsAdmin()
 		)
 		{
+			// read before the deletion: OnAfterDeleteFile strips FILE_ID, and the messages of the file
+			// are no longer reachable by it afterwards. The chat is a part of the filter on purpose: the
+			// folder of the file is already known to belong to it, and only there the user acted
+			$messageIdsOfFile = \CIMMessageParam::GetMessageIdByParam('FILE_ID', $fileId, $chatId);
+
 			// allow deleting only owned files
 			$fileModel->delete(self::GetUserId());
 			$notifyUsers = array_keys($chatRelation);
@@ -496,7 +505,96 @@ class CIMDisk
 			}
 		}
 
+		self::deleteMessagesLeftWithoutContent($messageIdsOfFile);
+
 		return true;
+	}
+
+	/**
+	 * A message whose whole content was the deleted file must not stay in the chat. The send path refuses
+	 * to create such a message at all (@see \Bitrix\Im\V2\Message::isCompletelyEmpty), so a row left
+	 * behind breaks an invariant the rest of the product relies on: clients draw it as a stub, and the
+	 * menu of that stub offers no way out of it. A video note and a voice message are exactly this case.
+	 *
+	 * The regular message deletion is used on purpose and not a direct removal: it is what weighs the read
+	 * state of the message and chooses between a complete and a soft delete, the same way the menu of the
+	 * message does. A message that keeps text, another file or any other content is left alone - there the
+	 * deletion of one file is what the person asked for.
+	 *
+	 * One message per file is the usual case, but not the only one: in a collab the same disk file is reused
+	 * instead of copied, so a note sent twice leaves two empty messages behind. They come from one chat -
+	 * the filter of the read above says so - and are handed to the deletion as one collection, which is what
+	 * weighs the access of the chat and cleans its cache once for all of them.
+	 *
+	 * @param array $messageIds ids of the messages that declared the file, read before its deletion
+	 */
+	protected static function deleteMessagesLeftWithoutContent(array $messageIds): void
+	{
+		$ids = array_values(array_map('intval', $messageIds));
+		if (empty($ids))
+		{
+			return;
+		}
+
+		$messages = new IM\V2\MessageCollection($ids);
+		$messages->fillParams();
+
+		$emptyMessages = $messages->filter(
+			static fn(IM\V2\Message $message): bool => $message->isCompletelyEmpty()
+		);
+
+		if ($emptyMessages->count() === 0)
+		{
+			return;
+		}
+
+		// the outcome is not propagated on purpose: the file is already gone, and a refusal of the
+		// message deletion (no access to the chat of a foreign copy of the file) must not turn the
+		// successful deletion of the file into a failure. It goes to the log instead - a refused
+		// deletion leaves behind exactly the message this method exists to remove
+		$deleteService = new IM\V2\Message\Delete\DeleteService($emptyMessages);
+
+		// the modes are asked before the deletion and kept along with the messages: a refused message is
+		// dropped from the collection by delete() itself, and it is the one the log exists for
+		$messagesWithMode = [];
+		foreach ($emptyMessages as $message)
+		{
+			$messagesWithMode[] = [$message, $deleteService->canDelete((int)$message->getMessageId())];
+		}
+
+		$deleteResult = $deleteService->delete();
+
+		foreach ($messagesWithMode as [$message, $deletionMode])
+		{
+			if ($deletionMode === IM\V2\Message\Delete\DeletionMode::None || !$deleteResult->isSuccess())
+			{
+				self::logMessageLeftWithoutContent($message, $deleteResult);
+			}
+		}
+	}
+
+	/**
+	 * The deletion of the file answers success either way, so the log is the only trace of a message that
+	 * stayed in the chat without any content. The refusal is silent by design and it is not exotic: the right
+	 * to delete the file and the right to delete the message are decided by different predicates. An
+	 * administrator of the portal passes \CUser::IsAdmin() of the file branch, while the deletion of the
+	 * message asks \Bitrix\Im\V2\Entity\User\User::isSuperAdmin and the actions of the chat; a member of a
+	 * channel may hold no right to delete even own message. An empty error list means the rights of the chat
+	 * refused the deletion, a filled one means the chat itself was unreachable.
+	 *
+	 * @param IM\V2\Message $message message that kept no content after the deletion of the file
+	 * @param \Bitrix\Main\Result $result outcome of the message deletion
+	 */
+	private static function logMessageLeftWithoutContent(IM\V2\Message $message, \Bitrix\Main\Result $result): void
+	{
+		(new IM\V2\Logger('chat_message_left_without_content'))->logArray([
+			'messageId' => $message->getMessageId(),
+			'chatId' => $message->getChatId(),
+			'errors' => array_map(
+				static fn(\Bitrix\Main\Error $error): string => $error->getCode() . ': ' . $error->getMessage(),
+				$result->getErrors()
+			),
+		]);
 	}
 
 	/**
@@ -509,7 +607,7 @@ class CIMDisk
 	 */
 	public static function UploadFileFromDisk($chatId, $files, $text = '', $options = [], $robot = false)
 	{
-		$preparedFiles = self::prepareFilesInChat($chatId, $files, $options, $robot);
+		$preparedFiles = self::prepareFilesInChat($chatId, $files, $options, $robot, true);
 		if ($preparedFiles === false)
 		{
 			return false;
@@ -532,7 +630,13 @@ class CIMDisk
 	 * @param bool $robot
 	 * @return array|bool
 	 */
-	public static function prepareFilesInChat($chatId, $files, $options = [], $robot = false)
+	public static function prepareFilesInChat(
+		$chatId,
+		$files,
+		$options = [],
+		$robot = false,
+		bool $claimUploadsForPublication = false,
+	)
 	{
 		if ((int)$chatId <= 0 || empty($files))
 		{
@@ -586,7 +690,34 @@ class CIMDisk
 		$result['FILES'] = [];
 		$result['DISK_ID'] = [];
 		$result['FILE_MODELS'] = [];
+		$result['CREATED_FILE_MODELS'] = [];
 		$uploadedFileIds = [];
+		$preparedBatch = self::prepareUploadedFilesForChat(
+			(int)$chatId,
+			$files,
+			$skipUserCheck ? null : $userId,
+			$claimUploadsForPublication,
+		);
+		if ($preparedBatch === false)
+		{
+			return false;
+		}
+		$preparedUploads = $preparedBatch['files'];
+		$confirmedRevokedIds = array_fill_keys($preparedBatch['confirmedRevokedIds'], true);
+		$publicationClaims = [];
+		foreach ($preparedBatch['publicationClaims'] as $objectId => $claimToken)
+		{
+			$file = $preparedUploads['upload' . $objectId] ?? null;
+			if ($file instanceof File)
+			{
+				$publicationClaims[$objectId] = [
+					'file' => $file,
+					'claimToken' => $claimToken,
+					'expectedGlobalContentVersion' => (int)$file->getGlobalContentVersion(),
+				];
+			}
+		}
+
 		foreach ($files as $fileId)
 		{
 			// a preloaded model is a cache for getFileModel(), never a permission to read the file
@@ -600,16 +731,24 @@ class CIMDisk
 			}
 
 			$uploaded = false;
+			$sourceFileId = null;
 			if (mb_substr($fileId, 0, 6) === 'upload')
 			{
 				$uploaded = true;
 				$sourceFileId = (int)mb_substr($fileId, 6);
+				$uploadFileModel = $preparedUploads[(string)$fileId] ?? null;
+				// the cleanup marker is revoked per source id, so a model of another object must not be published
+				if ($preloadedFileModel !== null && (int)$preloadedFileModel->getId() === $sourceFileId)
+				{
+					$uploadFileModel = $preloadedFileModel;
+				}
 				$newFile = self::uploadFromLocalDisk(
 					$chatId,
 					$sourceFileId,
 					$skipUserCheck ? 0 : $userId,
 					$asFile,
-					$preloadedFileModel,
+					$uploadFileModel,
+					isset($confirmedRevokedIds[$sourceFileId]),
 				);
 			}
 			else
@@ -624,14 +763,31 @@ class CIMDisk
 				);
 			}
 
+			if (!$newFile)
+			{
+				self::cleanupCreatedFiles($result['CREATED_FILE_MODELS'], $userId);
+				(new UploadCleanupService())->rollbackPublicationClaims($publicationClaims, $userId);
+
+				return false;
+			}
+
 			if ($newFile)
 			{
 				$result['DISK_ID'][] = $newFile->getId();
 				$result['FILE_MODELS'][$fileId] = $newFile;
+				if (!$uploaded && (int)$newFile->getId() !== $sourceFileId)
+				{
+					$result['CREATED_FILE_MODELS'][] = $newFile;
+				}
 
 				if ($uploaded)
 				{
 					$uploadedFileIds[] = $newFile->getId();
+					if (isset($publicationClaims[(int)$newFile->getId()]))
+					{
+						$publicationClaims[(int)$newFile->getId()]['expectedGlobalContentVersion'] =
+							(int)$newFile->getGlobalContentVersion();
+					}
 				}
 
 				if ($robot)
@@ -684,7 +840,13 @@ class CIMDisk
 		}
 		if (empty($result['DISK_ID']))
 		{
+			(new UploadCleanupService())->rollbackPublicationClaims($publicationClaims, $userId);
+
 			return false;
+		}
+		if ($publicationClaims !== [])
+		{
+			$result['UPLOAD_CLEANUP_PUBLICATION_CLAIMS'] = $publicationClaims;
 		}
 
 		// params of a file that is not in any chat yet belong to a deleted file whose id came back into use:
@@ -734,6 +896,10 @@ class CIMDisk
 		// prepareFilesInChat() has already rejected a missing chat and options naming no user on the same input
 		$chat = IM\V2\Chat::getInstance($chatId);
 		$userId = (int)self::resolveUploadUserId($options);
+		$createdFileModels = $result['CREATED_FILE_MODELS'] ?? [];
+		unset($result['CREATED_FILE_MODELS']);
+		$publicationClaims = $result['UPLOAD_CLEANUP_PUBLICATION_CLAIMS'] ?? [];
+		unset($result['UPLOAD_CLEANUP_PUBLICATION_CLAIMS']);
 
 		$skipUserCheck = isset($options['SKIP_USER_CHECK']) && $options['SKIP_USER_CHECK'] === true;
 		$linesSilentMode = isset($options['LINES_SILENT_MODE']) && $options['LINES_SILENT_MODE'] === true;
@@ -802,11 +968,15 @@ class CIMDisk
 		$messageId = \CIMMessage::Add($ar);
 		if (!$messageId)
 		{
-			foreach ($result['FILE_MODELS'] as $file)
-			{
-				$file->delete($userId);
-			}
+			self::cleanupCreatedFiles($createdFileModels, $userId);
+			(new UploadCleanupService())->rollbackPublicationClaims($publicationClaims, $userId);
+
 			return false;
+		}
+
+		if ($publicationClaims !== [])
+		{
+			(new UploadCleanupService())->commitPublicationClaims($publicationClaims);
 		}
 
 		$result['MESSAGE_ID'] = $messageId;
@@ -1032,6 +1202,7 @@ class CIMDisk
 		?int $userId = null,
 		bool $asFile = false,
 		?File $fileModel = null,
+		bool $markerAlreadyRevoked = false,
 	): File|false
 	{
 		$fileModel ??= self::getFileModel($fileId, $userId);
@@ -1056,7 +1227,15 @@ class CIMDisk
 			return false;
 		}
 
-		$fileModel->increaseGlobalContentVersion();
+		$increaseVersion = static fn(): bool => $fileModel->increaseGlobalContentVersion();
+		$versionIncreased = $markerAlreadyRevoked
+			? (new UploadCleanupService())->runWithConfirmedRevokedMarker((int)$fileModel->getId(), $increaseVersion)
+			: $increaseVersion()
+		;
+		if (!$versionIncreased)
+		{
+			return false;
+		}
 
 		if ($asFile)
 		{
@@ -1066,6 +1245,93 @@ class CIMDisk
 		(new IM\V2\Analytics\ChatAnalytics($chat))->addUploadFile($fileModel);
 
 		return $fileModel;
+	}
+
+	/**
+	 * @param array<int, string|int> $files
+	 * @return array{files: array<string, File>, confirmedRevokedIds: int[], publicationClaims: array<int, string>}|false
+	 */
+	protected static function prepareUploadedFilesForChat(
+		int $chatId,
+		array $files,
+		?int $userId,
+		bool $claimForPublication = false,
+	): array|false
+	{
+		$folder = self::GetFolderModel($chatId);
+		if (!$folder)
+		{
+			return false;
+		}
+
+		$prepared = [];
+		$identities = [];
+		foreach ($files as $wireId)
+		{
+			$wireId = (string)$wireId;
+			if (mb_substr($wireId, 0, 6) !== 'upload')
+			{
+				continue;
+			}
+
+			$file = self::getFileModel((int)mb_substr($wireId, 6), $userId);
+			if (!$file)
+			{
+				return false;
+			}
+
+			if ($userId !== null)
+			{
+				$checkResult = self::checkDirectlyUseFileAccess($file, $folder, $userId);
+				if (!$checkResult->isSuccess())
+				{
+					(new IM\V2\Logger('chat_incorrect_file_upload'))->logErrors($checkResult->getErrorCollection());
+					if ((new UploadCleanupService())->hasMarker((int)$file->getId()))
+					{
+						return false;
+					}
+				}
+			}
+
+			$objectId = (int)$file->getId();
+			$prepared[$wireId] = $file;
+			$identities[$objectId] = [
+				'userId' => (int)$file->getCreatedBy(),
+				'parentId' => (int)$file->getParentId(),
+			];
+		}
+
+		$reserved = (new UploadCleanupService())->reserveBatchBeforeUse($identities, $claimForPublication);
+		if ($reserved === null)
+		{
+			return false;
+		}
+
+		return [
+			'files' => $prepared,
+			'confirmedRevokedIds' => $reserved['confirmedRevokedIds'],
+			'publicationClaims' => $reserved['publicationClaims'],
+		];
+	}
+
+	/**
+	 * @param File[] $files
+	 */
+	private static function cleanupCreatedFiles(array $files, int $userId): void
+	{
+		$unique = [];
+		foreach ($files as $file)
+		{
+			if ($file instanceof File)
+			{
+				$unique[(int)$file->getId()] = $file;
+			}
+		}
+
+		foreach ($unique as $file)
+		{
+			$file->delete($userId);
+		}
 	}
 
 	/**
@@ -1322,6 +1588,52 @@ class CIMDisk
 		$newFileModel->increaseGlobalContentVersion();
 
 		return $newFileModel;
+	}
+
+	/**
+	 * Classifies quota before copying existing Disk files into a chat.
+	 * Invalid or unreadable source ids deliberately return no verdict and stay on the
+	 * regular SAVE_ERROR path, so this pre-check cannot become an object oracle.
+	 */
+	public static function GetFileCommitQuotaStop(int $chatId, array $fileIds, int $userId): ?UploadQuotaStop
+	{
+		// GetFolderModel() answers with false, not null, so ?-> would not short-circuit here
+		$folder = self::GetFolderModel($chatId);
+		$storage = $folder ? $folder->getStorage() : null;
+		$chat = IM\V2\Chat::getInstance($chatId);
+		if (!$storage || $chat instanceof IM\V2\Chat\NullChat)
+		{
+			return null;
+		}
+
+		$totalSize = 0;
+		foreach ($fileIds as $fileId)
+		{
+			$file = self::getFileModel((int)$fileId, $userId);
+			if (!$file)
+			{
+				return null;
+			}
+			if ($chat instanceof IM\V2\Chat\CollabChat && (int)$file->getParentId() === (int)$folder->getId())
+			{
+				continue;
+			}
+			if ($file instanceof FileLink)
+			{
+				$file = $file->getRealObject();
+				if (!$file)
+				{
+					return null;
+				}
+			}
+			$totalSize += max(0, (int)$file->getSize());
+		}
+		if ($totalSize === 0)
+		{
+			return null;
+		}
+
+		return (new UploadQuotaService())->detectStop($storage, $totalSize);
 	}
 
 	protected static function createSymlink(
@@ -1720,9 +2032,10 @@ class CIMDisk
 			return $fileArray;
 		}
 
-		if ($relation['LAST_FILE_ID'] > 0)
+		$lastFileId = self::getHistoryFileBorder((int)$chatId, $relation);
+		if ($lastFileId > 0)
 		{
-			$filter['>ID'] = $relation['LAST_FILE_ID'];
+			$filter['>ID'] = $lastFileId;
 		}
 
 		/**
@@ -1791,9 +2104,10 @@ class CIMDisk
 			return $fileArray;
 		}
 
-		if ($relation['LAST_FILE_ID'] > 0)
+		$lastFileId = self::getHistoryFileBorder((int)$chatId, $relation);
+		if ($lastFileId > 0)
 		{
-			$filter['>ID'] = $relation['LAST_FILE_ID'];
+			$filter['>ID'] = $lastFileId;
 		}
 
 		/**
@@ -1817,6 +2131,29 @@ class CIMDisk
 		}
 
 		return $fileArray;
+	}
+
+	/**
+	 * The folder of the chat is read by a single threshold of disk ids. The relation carries one for a
+	 * cleanup for oneself; a cleanup for everyone leaves its border on the chat, and a member the walk of
+	 * that cleanup has not reached yet still carries the old relation, so the threshold is the higher of
+	 * the two. The walk raises START_ID and LAST_FILE_ID of a relation together, so a relation standing
+	 * at the border of the chat carries the file border already, and the folder is not scanned for it.
+	 */
+	private static function getHistoryFileBorder(int $chatId, array $relation): int
+	{
+		$lastFileId = (int)($relation['LAST_FILE_ID'] ?? 0);
+		$historyStartId = IM\V2\Chat::getInstance($chatId)->getHistoryStartId();
+
+		if ($historyStartId <= 0 || (int)($relation['START_ID'] ?? 0) >= $historyStartId)
+		{
+			return $lastFileId;
+		}
+
+		return max(
+			$lastFileId,
+			IM\V2\Chat\Cleanup\ChatContentCollector::findLastFileIdBehindBorder($chatId, $historyStartId - 1)
+		);
 	}
 
 	/**

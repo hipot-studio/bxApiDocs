@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment;
 
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AutoCheckType;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 
@@ -25,9 +24,8 @@ final class CallAssessmentItem
 	private array $clientTypeIds;
 	private ?CallType $callType = null;
 	private ?AutoCheckType $autoCheckType = null;
-	private AvailabilityType $availabilityType = AvailabilityType::ALWAYS_ACTIVE;
-	private array $availabilityData = [];
 	private bool $isEnabled;
+	private bool $isEnabledValid = true;
 	private bool $isDefault = false;
 	private bool $isAiImprovementEnabled = true;
 	private int $jobId = 0;
@@ -60,19 +58,6 @@ final class CallAssessmentItem
 		// a stored script may have no call direction yet, it must not break every list it is shown in
 		$instance->callType = CallType::tryFrom((int)$callAssessmentItem->getCallType());
 		$instance->autoCheckType = AutoCheckType::from($callAssessmentItem->getAutoCheckType());
-		$instance->availabilityType = AvailabilityType::from($callAssessmentItem->getAvailabilityType());
-		$instance->availabilityData = [];
-		$availabilityData = $callAssessmentItem->getAvailabilityData() ?? [];
-		/** @var EO_CopilotCallAssessmentAvailability $availabilityDataItem */
-		foreach ($availabilityData as $availabilityDataItem)
-		{
-			$instance->availabilityData[] = [
-				'startPoint' => $availabilityDataItem->getStartPoint(),
-				'endPoint' => $availabilityDataItem->getEndPoint(),
-				'weekdayType' => $availabilityDataItem->getWeekdayType(),
-			];
-		}
-
 		$instance->isEnabled = $callAssessmentItem->getIsEnabled();
 		$instance->isDefault = true; // not used in Crm.Copilot.CallAssessment
 		$instance->isAiImprovementEnabled = $callAssessmentItem->getIsAiImprovementEnabled() ?? true;
@@ -117,14 +102,8 @@ final class CallAssessmentItem
 			$instance->autoCheckType = AutoCheckType::from($data['autoCheckTypeId']);
 		}
 
-		$instance->availabilityType = isset($data['availabilityType'])
-			? AvailabilityType::from($data['availabilityType'])
-			: AvailabilityType::ALWAYS_ACTIVE
-		;
-
-		$instance->availabilityData = $data['availabilityData'] ?? [];
-
-		$instance->isEnabled = $instance->availabilityType !== AvailabilityType::INACTIVE;
+		$instance->isEnabledValid = !array_key_exists('isEnabled', $data) || is_bool($data['isEnabled']);
+		$instance->isEnabled = array_key_exists('isEnabled', $data) ? $data['isEnabled'] === true : true;
 		$instance->isDefault = true; // not used in Crm.Copilot.CallAssessment
 		$instance->isAiImprovementEnabled = $data['isAiImprovementEnabled'] ?? true;
 		$instance->jobId = $data['jobId'] ?? 0;
@@ -159,9 +138,7 @@ final class CallAssessmentItem
 			'clientTypeIds' => $this->clientTypeIds,
 			'callTypeId' => $this->callType?->value,
 			'autoCheckTypeId' => $this->autoCheckType?->value,
-			'availabilityType' => $this->availabilityType->value,
-			'availabilityData' => $this->availabilityData,
-			'isEnabled' => $this->availabilityType !== AvailabilityType::INACTIVE,
+			'isEnabled' => $this->isEnabled,
 			'isAiImprovementEnabled' => $this->isAiImprovementEnabled,
 			'jobId' => $this->jobId,
 			'status' => $this->status,
@@ -262,26 +239,14 @@ final class CallAssessmentItem
 		return $this->autoCheckType?->value;
 	}
 
-	public function getAvailabilityType(): string
-	{
-		return $this->availabilityType->value;
-	}
-
-	public function setAvailabilityType(AvailabilityType $availabilityType): self
-	{
-		$this->availabilityType = $availabilityType;
-
-		return $this;
-	}
-
-	public function getAvailabilityData(): array
-	{
-		return $this->availabilityData;
-	}
-
 	public function isEnabled(): bool
 	{
-		return $this->getAvailabilityType() !== AvailabilityType::INACTIVE->value;
+		return $this->isEnabled;
+	}
+
+	public function isEnabledValid(): bool
+	{
+		return $this->isEnabledValid;
 	}
 
 	public function isDefault(): bool

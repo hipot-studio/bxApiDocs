@@ -60,6 +60,9 @@ final class CreateBlankDocumentScenario
 
 		$fileData = new BlankFileData($typeFile, $this->language);
 
+		// The document is added to the Disk by the user, so it is written like anything else they
+		// add: a format the portal restricts is refused here, in the "Add" menu, and the refusal
+		// travels back to the interface through the errors of the folder.
 		$newFile = $targetFolder->uploadFile(
 			\CFile::makeFileArray($fileData->getSrc()),
 			[
@@ -67,7 +70,7 @@ final class CreateBlankDocumentScenario
 				'CREATED_BY' => $this->userId,
 			],
 			[],
-true
+			true,
 		);
 
 		if (!$newFile)

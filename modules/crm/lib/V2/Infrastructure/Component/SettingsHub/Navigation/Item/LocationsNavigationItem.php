@@ -2,9 +2,14 @@
 
 namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class LocationsNavigationItem implements SettingsHubUrlNavigationItem
 {
@@ -23,15 +28,42 @@ final class LocationsNavigationItem implements SettingsHubUrlNavigationItem
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return true;
+		return $permissions->isCrmAdmin();
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $permissions->isCrmAdmin()
-			&& $this->isSaleAvailable
-			&& $this->isCurrencyAvailable
-			&& $this->isCatalogAvailable;
+		if (!$this->isSaleAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_LOCATIONS_SALE_UNAVAILABLE'),
+					'LOCATIONS_SALE_UNAVAILABLE',
+				),
+			);
+		}
+
+		if (!$this->isCurrencyAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_LOCATIONS_CURRENCY_UNAVAILABLE'),
+					'LOCATIONS_CURRENCY_UNAVAILABLE',
+				),
+			);
+		}
+
+		if (!$this->isCatalogAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_LOCATIONS_CATALOG_UNAVAILABLE'),
+					'LOCATIONS_CATALOG_UNAVAILABLE',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function url(): ?Uri

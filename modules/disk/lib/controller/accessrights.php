@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Controller;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Controller\ActionFilter\RequiredParameter;
 use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\Document\Flipchart\BoardSessionTerminationService;
 use Bitrix\Disk\Document\OnlyOffice\Service\OnlyOfficeSessionTerminationService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\UnifiedLinkAccessChecker;
@@ -12,6 +13,20 @@ use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Command\UnifiedLink\SetAccessCommand;
 use Bitrix\Disk\Internal\Enum\ExternalLinkDisableReason;
 use Bitrix\Disk\Internal\Enum\MembersAccessDisableReason;
+use Bitrix\Disk\Internal\Entity\Audit\AuditChannel;
+use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditCaptureService;
+use Bitrix\Disk\Internal\Service\Audit\AuditRightsChangeAuditService;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionResult;
+use Bitrix\Disk\Internal\Service\Access\AccessContactCandidateProvider;
+use Bitrix\Disk\Internal\Service\Access\AccessContactEligibilityChecker;
+use Bitrix\Disk\Internal\Service\Access\AccessContactResolver;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration as UnifiedLinkConfiguration;
 use Bitrix\Disk\Internal\Enum\SharingMemberType;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\File;
@@ -47,6 +62,7 @@ final class AccessRights extends Engine\Controller
 	protected RequiredParameter $requiredParameterFilter;
 	protected UnifiedLinkAccessChecker $readAccessChecker;
 	protected ExternalLinkProvider $externalLinkProvider;
+	private ?AccessContactResolver $accessContactResolver = null;
 
 	public function __construct(?Request $request = null)
 	{
@@ -69,6 +85,18 @@ final class AccessRights extends Engine\Controller
 	{
 		return [
 			'getUnified' => [
+				'-prefilters' => [
+					CheckReadPermission::class,
+				],
+				'+prefilters' => [
+					$this->requiredParameterFilter,
+					$this->readAccessChecker,
+				],
+				'+postfilters' => [
+					$this->requiredParameterFilter,
+				],
+			],
+			'getUnifiedAccessContact' => [
 				'-prefilters' => [
 					CheckReadPermission::class,
 				],
@@ -146,6 +174,44 @@ final class AccessRights extends Engine\Controller
 		return $this->getInternal($object, $canEdit, $securityContext);
 	}
 
+	public function getAccessContactAction($objectId): ?array
+	{
+		$object = BaseObject::loadById((int)$objectId, ['STORAGE']);
+		if (!$object || !$object->getRealObject())
+		{
+			$this->errorCollection[] = new Error(
+				'DISK_FOLDER_LIST_ERROR_COULD_NOT_FIND_OBJECT',
+				self::ERROR_COULD_NOT_FIND_OBJECT,
+			);
+
+			return null;
+		}
+
+		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
+		if (!$securityContext || !$object->canRead($securityContext))
+		{
+			return null;
+		}
+
+		return $this->getAccessContactInternal($object, $securityContext);
+	}
+
+	public function getUnifiedAccessContactAction(?BaseObject $object): ?array
+	{
+		if ($object === null)
+		{
+			return null;
+		}
+
+		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
+		if ($securityContext === null)
+		{
+			return null;
+		}
+
+		return $this->getAccessContactInternal($object, $securityContext);
+	}
+
 	public function setAction($objectId): void
 	{
 		/** @var File|Folder $object */
@@ -176,8 +242,10 @@ final class AccessRights extends Engine\Controller
 			$this->sendJsonAccessDeniedResponse();
 		}
 
+		$oldMembersAccess = $this->getMembersAccessView($object);
+
 		$this->handlePrivateFlags($object);
-		$this->processActionChangeSharingAndRights($object, $securityContext);
+		$this->processActionChangeSharingAndRights($object, $securityContext, $oldMembersAccess);
 	}
 
 	private function getPublicLinkData(
@@ -255,6 +323,14 @@ final class AccessRights extends Engine\Controller
 		$objectOptions = $object->getRealObject()->getObjectOptions();
 		$isObjectEditable = $canEdit && $this->isObjectEditable($object->getRealObject());
 		$membersAccessDisableReason = $this->checkManageMembersAccess($object->getRealObject());
+		$membersAccess = $this->processActionShowSharingDetailChangeRights($object, $membersAccessDisableReason);
+		if (self::shouldResolveAccessContact($membersAccess, $membersAccessDisableReason))
+		{
+			$membersAccess['accessContact'] = $this->getAccessContactResolver()->resolveFast(
+				$object,
+				(int)$this->getUser()->getId(),
+			);
+		}
 
 		return [
 			'fileName' => $object->getName(),
@@ -265,13 +341,60 @@ final class AccessRights extends Engine\Controller
 			,
 			'allowDownloadingWithViewingRights'	=> $objectOptions[ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ],
 			'membersAccessDisableReason' => $membersAccessDisableReason,
-			'membersAccess' => $this->processActionShowSharingDetailChangeRights($object, $membersAccessDisableReason),
+			'membersAccess' => $membersAccess,
 			'publicLink' => $this->getPublicLinkData(
 				$object,
 				$isObjectEditable,
 				$securityContext,
 			),
 		];
+	}
+
+	private function getAccessContactInternal(
+		BaseObject $object,
+		Disk\Security\SecurityContext $securityContext,
+	): array
+	{
+		$realObject = $object->getRealObject();
+		$disableReason = $this->checkManageMembersAccess($realObject);
+		if (
+			$disableReason !== null
+			|| !$realObject->supportsUnifiedLink()
+			|| $object->canChangeRights($securityContext)
+		)
+		{
+			return ['contact' => null];
+		}
+
+		return [
+			'contact' => $this->getAccessContactResolver()->resolveExtended(
+				$realObject,
+				(int)$this->getUser()->getId(),
+			),
+		];
+	}
+
+	private static function shouldResolveAccessContact(
+		array|false $membersAccess,
+		?MembersAccessDisableReason $disableReason,
+	): bool
+	{
+		return
+			$disableReason === null
+			&& is_array($membersAccess)
+			&& ($membersAccess['canChangeRights'] ?? false) === false
+			&& !empty($membersAccess['unifiedLink']['link'])
+		;
+	}
+
+	private function getAccessContactResolver(): AccessContactResolver
+	{
+		$this->accessContactResolver ??= new AccessContactResolver(
+			new AccessContactCandidateProvider(),
+			new AccessContactEligibilityChecker(),
+		);
+
+		return $this->accessContactResolver;
 	}
 
 	protected function setPublicLinkRights(
@@ -297,8 +420,76 @@ final class AccessRights extends Engine\Controller
 
 		$data = $this->getRequest()->getJsonList()->toArray();
 		$extLink = $this->externalLinkProvider->getForUse($realObject->getId());
-		$enabled = boolval($data['enabled'] ?? false);
 		$isObjectEditable = $canEdit && $this->isObjectEditable($realObject);
+
+		return $this->runPublicLinkRightsCommand(
+			$realObject,
+			$extLink,
+			$data,
+			$isObjectEditable,
+			$securityContext,
+		);
+	}
+
+	private function runPublicLinkRightsCommand(
+		BaseObject $realObject,
+		?Disk\ExternalLink $extLink,
+		array $data,
+		bool $isObjectEditable,
+		Disk\Security\SecurityContext $securityContext,
+	): ?array
+	{
+		$operationContext = AuditOperationContext::create(channel: AuditChannel::WEB);
+
+		return AuditOperationContextStack::runWithContextIfEmpty(
+			$operationContext,
+			function () use ($realObject, $extLink, $data, $isObjectEditable, $securityContext): ?array {
+				$transactionResult = (new AuditTransaction(Application::getConnection()))->execute(
+					function (AuditTransaction $transaction) use (
+						$realObject,
+						$extLink,
+						$data,
+						$isObjectEditable,
+						$securityContext,
+					): AuditTransactionOutcome {
+						$response = $this->applyPublicLinkRights(
+							$realObject,
+							$extLink,
+							$data,
+							$isObjectEditable,
+							$securityContext,
+							$transaction,
+						);
+
+						return $response === null
+							? AuditTransactionOutcome::failure()
+							: AuditTransactionOutcome::success($response)
+						;
+					},
+				);
+
+				if ($transactionResult->isSuccess())
+				{
+					return $transactionResult->getOutcome()->getValue();
+				}
+
+				$this->applyPublicLinkTransactionFailure($transactionResult);
+
+				return null;
+			},
+		);
+	}
+
+	private function applyPublicLinkRights(
+		BaseObject $realObject,
+		?Disk\ExternalLink $extLink,
+		array $data,
+		bool $isObjectEditable,
+		Disk\Security\SecurityContext $securityContext,
+		AuditTransaction $auditTransaction,
+	): ?array
+	{
+		$enabled = (bool)($data['enabled'] ?? false);
 		$settingsFields = ['rights', 'canDownloadWithReadAccess', 'newPassword', 'publicLinkTtl'];
 
 		if (!$enabled)
@@ -306,15 +497,26 @@ final class AccessRights extends Engine\Controller
 			if ($extLink)
 			{
 				$externalLinkId = (int)$extLink->getId();
-				if ($extLink->delete())
+				if (!$extLink->delete($auditTransaction))
 				{
-					Application::getInstance()->addBackgroundJob(
-						static function () use ($realObject, $externalLinkId) {
-							$service = new OnlyOfficeSessionTerminationService($realObject);
-							$service->terminateSessionsByExternalLink($externalLinkId);
-						},
-					);
+					$this->addErrors($extLink->getErrors());
+
+					return null;
 				}
+
+				$auditTransaction->addAfterCommit(
+					static function () use ($realObject, $externalLinkId): void {
+						Application::getInstance()->addBackgroundJob(
+							static function () use ($realObject, $externalLinkId): void {
+								$boardService = new BoardSessionTerminationService($realObject);
+								$boardService->terminateSessionsByExternalLink($externalLinkId);
+
+								$service = new OnlyOfficeSessionTerminationService($realObject);
+								$service->terminateSessionsByExternalLink($externalLinkId);
+							},
+						);
+					},
+				);
 			}
 
 			return $this->getPublicLinkData(
@@ -381,7 +583,7 @@ final class AccessRights extends Engine\Controller
 				$addData['DEATH_TIME'] = DateTime::createFromTimestamp($publicLinkTtl);
 			}
 
-			$extLink = $realObject->addExternalLink($addData);
+			$extLink = $realObject->addExternalLink($addData, $auditTransaction);
 			if (!$extLink)
 			{
 				$this->addErrors($realObject->getErrors());
@@ -392,29 +594,56 @@ final class AccessRights extends Engine\Controller
 			return $this->getPublicLinkData($realObject, $isObjectEditable, $securityContext);
 		}
 
+		$newAccessRight = $extLink->getAccessRight();
 		if ($isObjectEditable && isset($data['rights']))
 		{
 			$rights = AccessRight::tryFrom($data['rights']);
 			if ($rights)
 			{
-				$extLink->changeAccessRight($rights->toExternalLinkRight());
+				$externalLinkRight = $rights->toExternalLinkRight();
+				if ($externalLinkRight !== null)
+				{
+					$newAccessRight = $externalLinkRight;
+				}
 			}
 		}
 
-		if (isset($data['canDownloadWithReadAccess']) && (bool)$data['canDownloadWithReadAccess'] !== $extLink->isCanDownloadWithReadAccess())
+		$newCanDownloadWithReadAccess = isset($data['canDownloadWithReadAccess'])
+			? (bool)$data['canDownloadWithReadAccess']
+			: $extLink->isCanDownloadWithReadAccess()
+		;
+		if (
+			$newAccessRight !== $extLink->getAccessRight()
+			|| $newCanDownloadWithReadAccess !== $extLink->isCanDownloadWithReadAccess()
+		)
 		{
-			$extLink->changeCanDownloadWithReadAccess($data['canDownloadWithReadAccess']);
+			if (!$extLink->changeAccessSettings($newAccessRight, $newCanDownloadWithReadAccess))
+			{
+				$this->addErrors($extLink->getErrors());
+
+				return null;
+			}
 		}
 
 		if (isset($data['newPassword']))
 		{
 			if ($data['newPassword'] === false)
 			{
-				$extLink->revokePassword();
+				if (!$extLink->revokePassword())
+				{
+					$this->addErrors($extLink->getErrors());
+
+					return null;
+				}
 			}
 			else
 			{
-				$extLink->changePassword((string)$data['newPassword']);
+				if (!$extLink->changePassword((string)$data['newPassword']))
+				{
+					$this->addErrors($extLink->getErrors());
+
+					return null;
+				}
 			}
 		}
 
@@ -426,15 +655,41 @@ final class AccessRights extends Engine\Controller
 
 			if (!$deathTime)
 			{
-				$extLink->revokeDeathTime();
+				if (!$extLink->revokeDeathTime())
+				{
+					$this->addErrors($extLink->getErrors());
+
+					return null;
+				}
 			}
 			elseif($publicLinkTtl > time())
 			{
-				$extLink->changeDeathTime($deathTime);
+				if (!$extLink->changeDeathTime($deathTime))
+				{
+					$this->addErrors($extLink->getErrors());
+
+					return null;
+				}
 			}
 		}
 
 		return $this->getPublicLinkData($realObject, $isObjectEditable, $securityContext);
+	}
+
+	private function applyPublicLinkTransactionFailure(AuditTransactionResult $result): void
+	{
+		$exception = $result->getExceptions()[0] ?? null;
+		if ($exception !== null)
+		{
+			$this->addError(new Error($exception->getMessage()));
+
+			return;
+		}
+
+		if (!$result->isRollbackConfirmed())
+		{
+			$this->addError(new Error('Public link transaction failed.'));
+		}
 	}
 
 	private function hasAnyKey(array $data, array $keys): bool
@@ -708,86 +963,177 @@ final class AccessRights extends Engine\Controller
 	protected function processActionChangeSharingAndRights(
 		BaseObject $object,
 		Disk\Security\SecurityContext $securityContext,
+		array $oldMembersAccess = [],
 	)
 	{
+		$entityToNewShared = $this->request->getPost('entityToNewShared');
+		$transactionResult = $this->runSharingAndRightsCommand(
+			$object,
+			$securityContext,
+			$oldMembersAccess,
+			$entityToNewShared,
+		);
+		if (!$transactionResult->isSuccess())
+		{
+			$this->applySharingAndRightsTransactionFailure($transactionResult);
+			$errorResponse = $transactionResult->getOutcome()->getValue();
+			if (is_array($errorResponse))
+			{
+				$this->sendJsonErrorResponse($errorResponse);
+			}
+			else
+			{
+				$this->sendJsonErrorResponse();
+			}
+
+			return;
+		}
+
+		$response = $transactionResult->getOutcome()->getValue();
+		if (is_array($response) && $response !== [])
+		{
+			$this->sendJsonSuccessResponse($response);
+		}
+		else
+		{
+			$this->sendJsonSuccessResponse();
+		}
+	}
+
+	private function runSharingAndRightsCommand(
+		File|Folder $object,
+		Disk\Security\SecurityContext $securityContext,
+		array $oldMembersAccess,
+		mixed $entityToNewShared,
+	): AuditTransactionResult
+	{
+		$operationContext = AuditOperationContext::create(channel: AuditChannel::WEB);
+
+		return AuditOperationContextStack::runWithContextIfEmpty(
+			$operationContext,
+			function () use (
+				$object, $securityContext, $oldMembersAccess, $entityToNewShared,
+			): AuditTransactionResult {
+				$command = fn(AuditTransaction $transaction): AuditTransactionOutcome => $this->applySharingAndRightsCommand(
+					$object,
+					$securityContext,
+					$oldMembersAccess,
+					$entityToNewShared,
+					$transaction,
+				);
+				if (AuditTransaction::isActive())
+				{
+					$outcome = AuditTransaction::run(static fn(AuditTransaction $owner) => $owner->join($command));
+
+					return $outcome->isSuccess() ? AuditTransactionResult::committed($outcome)
+						: AuditTransactionResult::rolledBack($outcome);
+				}
+
+				return (new AuditTransaction(Application::getConnection()))->execute($command);
+			},
+		);
+	}
+
+	private function applySharingAndRightsCommand(
+		File|Folder $object,
+		Disk\Security\SecurityContext $securityContext,
+		array $oldMembersAccess,
+		mixed $entityToNewShared,
+		AuditTransaction $transaction,
+	): AuditTransactionOutcome
+	{
+		$auditService = new AuditRightsChangeAuditService();
+		$before = $auditService->capture($object);
 		Driver::getInstance()->getTrackedObjectManager()->refresh($object, $this->getUser()->getId());
 
 		$isBoard = $object instanceof File && $object->getTypeFile() == TypeFile::FLIPCHART;
-		$isFolder = $object instanceof Folder;
+		$shouldSendBoardAccessAnalytics = false;
+		$currentUserId = (int)$this->getUser()->getId();
 
-		$currentUserId = $this->getUser()->getId();
-		$entityToNewShared = $this->request->getPost('entityToNewShared');
-		if(!empty($entityToNewShared) && is_array($entityToNewShared))
+		if (!empty($entityToNewShared) && is_array($entityToNewShared))
 		{
 			$unifiedLinkAccessChanged = false;
-			$unifiedLinkData = $entityToNewShared['unifiedLink'];
-			if (isset($unifiedLinkData['newAccessLevel']))
+			$unifiedLinkData = $entityToNewShared['unifiedLink'] ?? null;
+			if (is_array($unifiedLinkData) && isset($unifiedLinkData['newAccessLevel']))
 			{
-				$unifiedLinkNewAccessLevel = UnifiedLinkAccessLevel::tryFrom($unifiedLinkData['newAccessLevel']);
+				$unifiedLinkNewAccessLevel = UnifiedLinkAccessLevel::tryFrom(
+					(string)$unifiedLinkData['newAccessLevel'],
+				);
+				$realObject = $object->getRealObject();
 				if ($unifiedLinkNewAccessLevel !== null)
 				{
-					if (!$this->isUnifiedLinkAccessLevelAllowed($object->getRealObject(), $unifiedLinkNewAccessLevel))
+					if (!$this->isUnifiedLinkAccessLevelAllowed($realObject, $unifiedLinkNewAccessLevel))
 					{
 						$this->addError(new Error(
 							message: 'Access level is lower than allowed.',
 							code: 'DISK_UNIFIED_LINK_ACCESS_LEVEL_RESTRICTED',
 						));
 
-						$this->sendJsonErrorResponse([
+						return AuditTransactionOutcome::failure([
 							'unifiedLinkChangeError' => true,
 						]);
 					}
 
-					$result = (new SetAccessCommand($object->getRealObjectId(), $unifiedLinkNewAccessLevel))->run();
+					$oldUnifiedLinkAccessLevel = UnifiedLinkAccessRepository::getByObjectId($realObject->getId())
+						?? UnifiedLinkConfiguration::getDefaultAccessLevelForObject($realObject)
+					;
+					$result = (new SetAccessCommand(
+						$realObject->getId(),
+						$unifiedLinkNewAccessLevel,
+						$currentUserId,
+					))->run();
+					if (!$result->isSuccess())
+					{
+						$this->addErrors($result->getErrors());
 
-					if ($result->isSuccess())
-					{
-						$unifiedLinkAccessChanged = true;
-					}
-					else
-					{
-						$this->sendJsonErrorResponse([
+						return AuditTransactionOutcome::failure([
 							'unifiedLinkChangeError' => true,
 						]);
 					}
+
+					$unifiedLinkAccessChanged = $oldUnifiedLinkAccessLevel !== $unifiedLinkNewAccessLevel;
 				}
 			}
 
-			$extendedRights = $entityToNewShared;
-			$newExtendedRightsReformat = array();
-			foreach($extendedRights as $entityId => $right)
+			$newExtendedRights = [];
+			foreach ($entityToNewShared as $entityId => $right)
 			{
-				switch($right['right'])
+				if (!is_array($right))
 				{
-					case \Bitrix\Disk\RightsManager::TASK_READ:
-					case \Bitrix\Disk\RightsManager::TASK_ADD:
-					case \Bitrix\Disk\RightsManager::TASK_EDIT:
-					case \Bitrix\Disk\RightsManager::TASK_FULL:
-						$newExtendedRightsReformat[$entityId] = $right['right'];
+					continue;
+				}
+
+				switch ($right['right'] ?? null)
+				{
+					case Disk\RightsManager::TASK_READ:
+					case Disk\RightsManager::TASK_ADD:
+					case Disk\RightsManager::TASK_EDIT:
+					case Disk\RightsManager::TASK_FULL:
+						$newExtendedRights[$entityId] = $right['right'];
 						break;
 				}
 			}
-			//todo move this code to Object or Sharing model (reset sharing)
-			$query = Disk\Sharing::getList(array(
-				'filter' => array(
+
+			$query = Disk\Sharing::getList([
+				'filter' => [
 					'REAL_OBJECT_ID' => $object->getRealObjectId(),
 					'REAL_STORAGE_ID' => $object->getRealObject()->getStorageId(),
 					'!=STATUS' => SharingTable::STATUS_IS_DECLINED,
 					'PARENT_ID' => null,
-				),
-			));
-			$needToOverwrite = $needToDelete = $needToAdd = array();
-			while($sharingRow = $query->fetch())
+				],
+			]);
+			$needToOverwrite = $needToDelete = [];
+			while ($sharingRow = $query->fetch())
 			{
-				if(isset($newExtendedRightsReformat[$sharingRow['TO_ENTITY']]))
+				if (isset($newExtendedRights[$sharingRow['TO_ENTITY']]))
 				{
-					if($newExtendedRightsReformat[$sharingRow['TO_ENTITY']] != $sharingRow['TASK_NAME'])
+					if ($newExtendedRights[$sharingRow['TO_ENTITY']] !== $sharingRow['TASK_NAME'])
 					{
 						$needToOverwrite[$sharingRow['TO_ENTITY']] = $sharingRow;
 					}
-					elseif($newExtendedRightsReformat[$sharingRow['TO_ENTITY']] == $sharingRow['TASK_NAME'])
+					else
 					{
-						unset($newExtendedRightsReformat[$sharingRow['TO_ENTITY']]);
+						unset($newExtendedRights[$sharingRow['TO_ENTITY']]);
 					}
 				}
 				else
@@ -796,7 +1142,7 @@ final class AccessRights extends Engine\Controller
 				}
 			}
 
-			$needToAdd = array_diff_key($newExtendedRightsReformat, $needToOverwrite);
+			$needToAdd = array_diff_key($newExtendedRights, $needToOverwrite);
 			foreach ($needToAdd as $entity => $taskName)
 			{
 				if (!Disk\Sharing::hasRightToKnowAboutEntity($currentUserId, $entity))
@@ -805,132 +1151,212 @@ final class AccessRights extends Engine\Controller
 				}
 			}
 
-			if($needToAdd)
+			if ($needToAdd)
 			{
-
-				$sharings = Disk\Sharing::addToManyEntities(array(
-					'FROM_ENTITY' => Disk\Sharing::CODE_USER . $currentUserId,
-					'REAL_OBJECT' => $object,
-					'CREATED_BY' => $this->getUser()->getId(),
-					'CAN_FORWARD' => false,
-				), $needToAdd, $this->errorCollection);
-
-				if (is_array($sharings))
+				$sharings = Disk\Sharing::addToManyEntities(
+					[
+						'FROM_ENTITY' => Disk\Sharing::CODE_USER . $currentUserId,
+						'REAL_OBJECT' => $object,
+						'CREATED_BY' => $currentUserId,
+						'CAN_FORWARD' => false,
+					],
+					$needToAdd,
+					$this->errorCollection,
+					$transaction,
+				);
+				if ($sharings === null)
 				{
-					$destinationCodes = [];
-					foreach($sharings as $key => $sharing)
-					{
-						$destinationCodes[] = $sharing->getToEntity();
-					}
-
-					if (!empty($destinationCodes))
-					{
-						\Bitrix\Main\FinderDestTable::merge([
-							"CONTEXT" => "DISK_SHARE",
-							"CODE" => \Bitrix\Main\FinderDestTable::convertRights(array_unique($destinationCodes))
-						]);
-					}
-
-					if ($isBoard)
-					{
-						Application::getInstance()->addBackgroundJob(function() {
-							$event = new AnalyticsEvent('give_access', 'boards', 'boards');
-							$event->send();
-						});
-					}
+					return AuditTransactionOutcome::failure();
 				}
+
+				$destinationCodes = [];
+				foreach ($sharings as $sharing)
+				{
+					$destinationCodes[] = $sharing->getToEntity();
+				}
+				if ($destinationCodes !== [])
+				{
+					$finderCodes = \Bitrix\Main\FinderDestTable::convertRights(
+						array_unique($destinationCodes),
+					);
+					$transaction->addAfterCommit(static function () use ($finderCodes): void {
+						\Bitrix\Main\FinderDestTable::merge([
+							'CONTEXT' => 'DISK_SHARE',
+							'CODE' => $finderCodes,
+						]);
+					});
+				}
+
+				$shouldSendBoardAccessAnalytics = $isBoard;
 			}
-			if($needToOverwrite)
+
+			if ($needToOverwrite)
 			{
 				$rightsManager = Driver::getInstance()->getRightsManager();
-				foreach($needToOverwrite as $sharingRow)
+				foreach ($needToOverwrite as $sharingRow)
 				{
-					$rightsManager->deleteByDomain($object->getRealObject(), $rightsManager->getSharingDomain($sharingRow['ID']));
+					if (
+						!$rightsManager->deleteByDomain(
+							$object->getRealObject(),
+							$rightsManager->getSharingDomain($sharingRow['ID']),
+							$transaction,
+						)
+					)
+					{
+						$this->addErrors($rightsManager->getErrors());
+
+						return AuditTransactionOutcome::failure();
+					}
 				}
 
-				$newRights = array();
-				foreach($needToOverwrite as $sharingRow)
+				$newRights = [];
+				foreach ($needToOverwrite as $sharingRow)
 				{
+					$newTaskName = $newExtendedRights[$sharingRow['TO_ENTITY']];
 					$sharingDomain = $rightsManager->getSharingDomain($sharingRow['ID']);
 					$isSharingToGroup = $sharingRow['TYPE'] == SharingTable::TYPE_TO_GROUP;
-					$accessCodeSuffix = $isSharingToGroup ? '_K' : ''; // todo refactor. Move this logic to Sharing
-					$newRights[] = array(
+					$accessCodeSuffix = $isSharingToGroup ? '_K' : '';
+					$newRights[] = [
 						'ACCESS_CODE' => $sharingRow['TO_ENTITY'] . $accessCodeSuffix,
-						'TASK_ID' => $rightsManager->getTaskIdByName($newExtendedRightsReformat[$sharingRow['TO_ENTITY']]),
+						'TASK_ID' => $rightsManager->getTaskIdByName($newTaskName),
 						'DOMAIN' => $sharingDomain,
-					);
-					//todo refactor. Move most logic to Sharing and SharingTable!
-					if($sharingRow['TYPE'] == SharingTable::TYPE_TO_DEPARTMENT)
+					];
+					SharingTable::updateBatch(['TASK_NAME' => $newTaskName], ['ID' => $sharingRow['ID']]);
+					if ($sharingRow['TYPE'] == SharingTable::TYPE_TO_DEPARTMENT)
 					{
-						/** @var \Bitrix\Disk\Sharing $sharingModel */
-						$sharingModel = Disk\Sharing::buildFromArray($sharingRow);
-						$sharingModel->changeTaskName($newExtendedRightsReformat[$sharingRow['TO_ENTITY']]);
-					}
-					else
-					{
-						SharingTable::update($sharingRow['ID'], array(
-							'TASK_NAME' => $newExtendedRightsReformat[$sharingRow['TO_ENTITY']],
-						));
+						SharingTable::updateBatch(['TASK_NAME' => $newTaskName], ['PARENT_ID' => $sharingRow['ID']]);
 					}
 				}
 
-				if($newRights)
+				if ($newRights && !$rightsManager->append($object->getRealObject(), $newRights, $transaction))
 				{
-					$rightsManager->append($object->getRealObject(), $newRights);
+					$this->addErrors($rightsManager->getErrors());
+
+					return AuditTransactionOutcome::failure();
 				}
 			}
-			if($needToDelete)
+
+			if ($needToDelete)
 			{
-				$ids = array();
-				foreach($needToDelete as $sharingRow)
+				$ids = array_column($needToDelete, 'ID');
+				foreach (Disk\Sharing::getModelList(['filter' => ['ID' => $ids]]) as $sharing)
 				{
-					$ids[] = $sharingRow['ID'];
-				}
+					if (!$sharing->delete($currentUserId, true, $transaction))
+					{
+						$this->addErrors($sharing->getErrors());
 
-				foreach(Disk\Sharing::getModelList(array('filter' => array('ID' => $ids))) as $sharing)
-				{
-					$sharing->delete($currentUserId);
+						return AuditTransactionOutcome::failure();
+					}
 				}
 			}
 
-			Application::getInstance()->addBackgroundJob(
-				function () use ($object) {
-					$this->terminateSessionsWithInsufficientRights($object);
-				},
+			$backgroundPayload = $this->prepareRightsChangeBackgroundJobs(
+				$object,
+				$securityContext,
+				$shouldSendBoardAccessAnalytics,
 			);
+			$this->scheduleRightsAuditEvents($object, $oldMembersAccess, $before, $transaction, $auditService);
 
-			if ($isFolder)
-			{
-				/** @var Folder $object */
-				$this->terminateSessionsForAllBoardsInFolder($object, $securityContext);
-			}
+			$transaction->addAfterCommit(function () use ($backgroundPayload): void {
+				$this->scheduleRightsChangeBackgroundJobs($backgroundPayload);
+			});
 
-			$this->sendJsonSuccessResponse([
+			return AuditTransactionOutcome::success([
 				'unifiedLinkAccessChanged' => $unifiedLinkAccessChanged,
 			]);
 		}
-		else
-		{
-			//user delete all sharing
-			foreach ($object->getRealObject()->getSharingsAsReal() as $sharing)
-			{
-				$sharing->delete($currentUserId);
-			}
 
-			Application::getInstance()->addBackgroundJob(
-				function () use ($object) {
-					$this->terminateSessionsWithInsufficientRights($object);
-				},
+		foreach ($object->getRealObject()->getSharingsAsReal() as $sharing)
+		{
+			if (!$sharing->delete($currentUserId, true, $transaction))
+			{
+				$this->addErrors($sharing->getErrors());
+
+				return AuditTransactionOutcome::failure();
+			}
+		}
+
+		$backgroundPayload = $this->prepareRightsChangeBackgroundJobs($object, $securityContext);
+		$this->scheduleRightsAuditEvents($object, $oldMembersAccess, $before, $transaction, $auditService);
+
+		$transaction->addAfterCommit(function () use ($backgroundPayload): void {
+			$this->scheduleRightsChangeBackgroundJobs($backgroundPayload);
+		});
+
+		return AuditTransactionOutcome::success([]);
+	}
+
+	private function applySharingAndRightsTransactionFailure(AuditTransactionResult $result): void
+	{
+		$exception = $result->getExceptions()[0] ?? null;
+		if ($exception !== null)
+		{
+			$this->addError(new Error($exception->getMessage()));
+
+			return;
+		}
+
+		if (!$result->isRollbackConfirmed())
+		{
+			$this->addError(new Error('Sharing and rights transaction failed.'));
+		}
+	}
+
+	private function getMembersAccessView(File|Folder $object): array
+	{
+		$realObject = $object->getRealObject();
+		if (!$realObject)
+		{
+			return [];
+		}
+
+		$query = SharingTable::getList([
+			'select' => [
+				'TO_ENTITY',
+				'TASK_NAME',
+			],
+			'filter' => [
+				'REAL_OBJECT_ID' => $realObject->getId(),
+				'REAL_STORAGE_ID' => $realObject->getStorageId(),
+				'!=STATUS' => SharingTable::STATUS_IS_DECLINED,
+				'PARENT_ID' => null,
+			],
+		]);
+
+		$membersAccess = [];
+		while ($sharing = $query->fetch())
+		{
+			$membersAccess[] = [
+				'entityId' => (string)$sharing['TO_ENTITY'],
+				'right' => (string)$sharing['TASK_NAME'],
+			];
+		}
+
+		return $membersAccess;
+	}
+
+	private function scheduleRightsAuditEvents(
+		File|Folder $object,
+		array $oldMembersAccess,
+		?array $before,
+		AuditTransaction $transaction,
+		AuditRightsChangeAuditService $auditService,
+	): void
+	{
+		AuditCaptureService::runFailOpen(function () use (
+			$object, $oldMembersAccess, $before, $transaction, $auditService,
+		): \Bitrix\Main\Result {
+			$context = AuditOperationContext::create(
+				operationId: AuditOperationContextStack::current()?->operationId,
+				actionContext: AuditOperationContextStack::current()?->actionContext
+					?? (new AuditActionContextResolver())->resolveForWeb((int)$this->getUser()->getId()),
 			);
 
-			if ($isFolder)
-			{
-				/** @var Folder $object */
-				$this->terminateSessionsForAllBoardsInFolder($object, $securityContext);
-			}
-
-			$this->sendJsonSuccessResponse();
-		}
+			return $auditService->schedule($object, $before, $context, $transaction, [
+				'before' => $oldMembersAccess,
+				'after' => $this->getMembersAccessView($object),
+			]);
+		});
 	}
 
 	protected function isUnifiedLinkAccessLevelAllowed(
@@ -954,26 +1380,65 @@ final class AccessRights extends Engine\Controller
 		}
 	}
 
-	protected function terminateSessionsForAllBoardsInFolder(Folder $object, Disk\Security\SecurityContext $securityContext): void
+	/**
+	 * @return array{object: File|Folder, boards: BaseObject[], sendBoardAccessAnalytics: bool}
+	 */
+	private function prepareRightsChangeBackgroundJobs(
+		File|Folder $object,
+		Disk\Security\SecurityContext $securityContext,
+		bool $shouldSendBoardAccessAnalytics = false,
+	): array
 	{
-		$objectsInFolder = $object->getDescendants($securityContext, [
-			'filter' => [
-				'=TYPE' => Disk\Internals\ObjectTable::TYPE_FILE,
-				'=TYPE_FILE' => TypeFile::FLIPCHART,
-			],
-		]);
-
-		$boardsInFolder = [];
-		foreach ($objectsInFolder as $descObject)
+		$boards = [];
+		if ($object instanceof Folder)
 		{
-			$boardsInFolder[] = $descObject->getRealObject();
+			$objectsInFolder = $object->getDescendants($securityContext, [
+				'filter' => [
+					'=TYPE' => Disk\Internals\ObjectTable::TYPE_FILE,
+					'@TYPE_FILE' => [TypeFile::FLIPCHART, TypeFile::DOCUMENT, TypeFile::PDF],
+				],
+			]);
+			foreach ($objectsInFolder as $descObject)
+			{
+				$realObject = $descObject->getRealObject();
+				if ($realObject instanceof BaseObject)
+				{
+					$boards[] = $realObject;
+				}
+			}
 		}
 
-		if ($boardsInFolder)
+		return [
+			'object' => $object,
+			'boards' => $boards,
+			'sendBoardAccessAnalytics' => $shouldSendBoardAccessAnalytics,
+		];
+	}
+
+	/** @param array{object: File|Folder, boards: BaseObject[], sendBoardAccessAnalytics: bool} $payload */
+	private function scheduleRightsChangeBackgroundJobs(array $payload): void
+	{
+		if ($payload['sendBoardAccessAnalytics'])
+		{
+			Application::getInstance()->addBackgroundJob(static function (): void {
+				$event = new AnalyticsEvent('give_access', 'boards', 'boards');
+				$event->send();
+			});
+		}
+
+		$object = $payload['object'];
+		Application::getInstance()->addBackgroundJob(
+			function () use ($object): void {
+				$this->terminateSessionsWithInsufficientRights($object);
+			},
+		);
+
+		$boards = $payload['boards'];
+		if ($boards !== [])
 		{
 			Application::getInstance()->addBackgroundJob(
-				function () use ($boardsInFolder) {
-					foreach ($boardsInFolder as $board)
+				function () use ($boards): void {
+					foreach ($boards as $board)
 					{
 						$this->terminateSessionsWithInsufficientRights($board);
 					}

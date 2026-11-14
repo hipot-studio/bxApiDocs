@@ -7,6 +7,9 @@ use Bitrix\Main\Text\Emoji;
 
 class CheckInNormalizer
 {
+	private const MIN_ZONE_OFFSET = -12 * 3600;
+	private const MAX_ZONE_OFFSET = 14 * 3600;
+
 	/**
 	 * @param array $data
 	 * @param int $timezoneOffset
@@ -40,6 +43,24 @@ class CheckInNormalizer
 		}
 
 		return date('Y-m-d H:i:s', $timestamp + (int)($data['USER_TIMEZONE'] ?? $timezoneOffset));
+	}
+
+	public static function zoneOffsetFromDateCreate(int $timestamp, ?string $dateCreate): ?int
+	{
+		if ($timestamp <= 0 || $dateCreate === null || $dateCreate === '')
+		{
+			return null;
+		}
+
+		$wallClock = strtotime($dateCreate . ' UTC');
+		if ($wallClock === false)
+		{
+			return null;
+		}
+
+		$offset = $wallClock - $timestamp;
+
+		return $offset >= self::MIN_ZONE_OFFSET && $offset <= self::MAX_ZONE_OFFSET ? $offset : null;
 	}
 
 	/**

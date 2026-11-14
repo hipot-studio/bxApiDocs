@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Search;
@@ -6,6 +7,7 @@ namespace Bitrix\Disk\Search;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
 use Bitrix\Disk\Search\Reindex\HeadIndex;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Search\Content;
 
 /**
@@ -21,7 +23,7 @@ final class SearchFilterBuilder
 	 * @param string|null $refencePathToIndex The reference path to the index (e.g., 'FILE'). Default is null and means the root of the file table.
 	 */
 	public function __construct(
-		protected ?string $refencePathToIndex = null
+		protected ?string $refencePathToIndex = null,
 	)
 	{
 	}
@@ -58,12 +60,11 @@ final class SearchFilterBuilder
 		if ($fulltextContent && Content::canUseFulltextSearch($fulltextContent))
 		{
 			if (
-				Configuration::allowUseExtendedFullText() &&
-				ExtendedIndex::isReady()
+				Configuration::allowUseExtendedFullText()
+				&& ExtendedIndex::isReady()
 			)
 			{
-				$filter["*{$refencePathToIndex}EXTENDED_INDEX.SEARCH_INDEX"] = $fulltextContent;
-				unset($filter['%=NAME']);
+				$filter = $this->buildExtendedIndexFilter($search, $fulltextContent);
 			}
 			elseif (HeadIndex::isReady())
 			{
@@ -73,5 +74,35 @@ final class SearchFilterBuilder
 		}
 
 		return $filter;
+	}
+
+	public function buildExtendedIndexFilter(string $search, string $fulltextContent): array
+	{
+		$referencePathToIndex = $this->refencePathToIndex ?: '';
+		if ($referencePathToIndex)
+		{
+			$referencePathToIndex .= '.';
+		}
+
+		if (Configuration::isBoardIndexEnabled())
+		{
+			return ["*{$referencePathToIndex}EXTENDED_INDEX.SEARCH_INDEX" => $fulltextContent];
+		}
+
+		return [
+			'LOGIC' => 'OR',
+			[
+				"*{$referencePathToIndex}OPTIONAL_EXTENDED_INDEX.SEARCH_INDEX" => $fulltextContent,
+				[
+					'LOGIC' => 'OR',
+					"!={$referencePathToIndex}TYPE_FILE" => TypeFile::BOARD,
+					"={$referencePathToIndex}TYPE_FILE" => null,
+				],
+			],
+			[
+				"={$referencePathToIndex}TYPE_FILE" => TypeFile::BOARD,
+				"%={$referencePathToIndex}NAME" => str_replace('%', '', trim($search)) . '%',
+			],
+		];
 	}
 }

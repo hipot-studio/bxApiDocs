@@ -22,6 +22,8 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Dto\EventListResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Dto\EventResponse;
+use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Dto\EventSearchItemResponse;
+use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Dto\EventSearchPageResponse;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\HttpClient;
 
@@ -38,7 +40,7 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	 * @throws UnexpectedException
 	 * @throws NoResponseException
 	 */
-	public function createEvent(Event $event, string $googleCalendarId): EventResponse
+	public function createEvent(Event $event, string $googleCalendarId, bool $withICalUid): EventResponse
 	{
 		try
 		{
@@ -53,11 +55,12 @@ class GoogleEventGateway extends AbstractGoogleGateway
 			);
 		}
 
-		$data['extendedProperties'] = [
-			'private' => [
-				'bxId' => $event->getId(),
-			],
-		];
+		if (!$withICalUid)
+		{
+			unset($data['iCalUID']);
+		}
+
+		$data['extendedProperties'] = $this->buildExtendedProperties($event);
 
 		$this->request(
 			HttpClient::HTTP_POST,
@@ -87,13 +90,155 @@ class GoogleEventGateway extends AbstractGoogleGateway
 	{
 		$data = $this->buildEventDataForUpdate($event, $eventConnection);
 
+		return $this->putEvent($data, $googleCalendarId, $eventConnection->getVendorEventId());
+	}
+
+	/**
+	 * Replaces an event found in the calendar with the current data of the event, keeping the event's own iCalUID,
+	 * the bxId marker by which it was found and its Google attendees, as an ordinary update does.
+	 *
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	public function updateFoundEvent(
+		Event $event,
+		EventSearchItemResponse $foundEvent,
+		string $googleCalendarId,
+	): EventResponse
+	{
+		$eventConnection = (new EventConnection())
+			->setVendorEventId($foundEvent->id)
+			->setData($foundEvent->attendees ? ['attendees' => $foundEvent->attendees] : [])
+		;
+
+		$data = $this->buildEventDataForUpdate($event, $eventConnection);
+		unset($data['iCalUID']);
+		$data['extendedProperties'] = $this->buildExtendedProperties($event);
+
+		return $this->putEvent($data, $googleCalendarId, $foundEvent->id);
+	}
+
+	/**
+	 * Returns all events of the calendar, cancelled ones included, marked with the bxId.
+	 *
+	 * @return EventSearchItemResponse[]
+	 *
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	public function findEventsByBxId(string $googleCalendarId, int $bxId): array
+	{
+		return $this->findEvents($googleCalendarId, ['privateExtendedProperty' => 'bxId=' . $bxId]);
+	}
+
+	/**
+	 * Returns all events of the calendar, cancelled ones included, with the iCalUID.
+	 *
+	 * @return EventSearchItemResponse[]
+	 *
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	public function findEventsByICalUid(string $googleCalendarId, string $iCalUid): array
+	{
+		return $this->findEvents($googleCalendarId, ['iCalUID' => $iCalUid]);
+	}
+
+	/**
+	 * Filters are not compatible with a sync token, and the import window would hide events, so the search reads
+	 * every page of the whole calendar on its own page tokens.
+	 *
+	 * @return EventSearchItemResponse[]
+	 *
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	private function findEvents(string $googleCalendarId, array $filter): array
+	{
+		$items = [];
+		$pageToken = null;
+		$readPageTokens = [];
+
+		do
+		{
+			$params = $filter;
+			$params['showDeleted'] = 'true';
+
+			if ($pageToken !== null)
+			{
+				$params['pageToken'] = $pageToken;
+				$readPageTokens[$pageToken] = true;
+			}
+
+			$this->request(
+				HttpClient::HTTP_GET,
+				sprintf(
+					'%s/calendars/%s/events?%s',
+					self::BASE_PATH,
+					urlencode($googleCalendarId),
+					http_build_query($params, '', '&', PHP_QUERY_RFC3986),
+				),
+			);
+
+			if (!$this->isRequestSuccess())
+			{
+				$this->processErrors('Events search was not retrieved from Google');
+			}
+
+			$page = EventSearchPageResponse::fromJson($this->client->getResult());
+
+			array_push($items, ...$page->items);
+
+			$pageToken = $page->nextPageToken;
+		}
+		while ($pageToken !== null && !isset($readPageTokens[$pageToken]));
+
+		return $items;
+	}
+
+	/**
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	private function putEvent(array $data, string $googleCalendarId, string $vendorEventId): EventResponse
+	{
 		$this->request(
 			HttpClient::HTTP_PUT,
 			sprintf(
 				'%s/calendars/%s/events/%s',
 				self::BASE_PATH,
 				urlencode($googleCalendarId),
-				urlencode($eventConnection->getVendorEventId()),
+				urlencode($vendorEventId),
 			),
 			$this->encode($data),
 		);
@@ -104,6 +249,15 @@ class GoogleEventGateway extends AbstractGoogleGateway
 		}
 
 		$this->processErrors('Event was not updated');
+	}
+
+	private function buildExtendedProperties(Event $event): array
+	{
+		return [
+			'private' => [
+				'bxId' => $event->getId(),
+			],
+		];
 	}
 
 	/**

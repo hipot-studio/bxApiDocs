@@ -7,6 +7,8 @@
  */
 namespace Bitrix\Crm\WebForm;
 
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry;
+
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\WebForm\Internals\ResultTable;
 use Bitrix\Crm\WebForm\Internals\Model;
@@ -25,6 +27,9 @@ class Result extends Model
 
 	/** @var string $resultUrl Result Url. */
 	protected $url;
+	private bool $legalWriting = false;
+	private bool $legalReplay = false;
+	private ?array $legalOutcome = null;
 
 	protected function getClassTable()
 	{
@@ -83,6 +88,11 @@ class Result extends Model
 
 	public function save($onlyCheck = false)
 	{
+		if (!$this->legalWriting && $this->id === null && !empty($this->params['LEGAL_SUBMISSION']))
+		{
+			$this->saveLegalResult();
+			return;
+		}
 		$fields = $this->params;
 		$fieldsResult = array(
 			'FORM_ID' => $fields['FORM_ID'],
@@ -118,6 +128,153 @@ class Result extends Model
 		}
 
 		$this->prepareResult($result);
+	}
+
+	public function isLegalReplay(): bool { return $this->legalReplay; }
+
+	public function getLegalOutcome(): ?array { return $this->legalOutcome; }
+
+	public function getLegalReplayResponse(): array
+	{
+		$response = ['resultId' => (int)$this->id, 'replayed' => true, 'recovered' => true];
+		if (isset($this->legalOutcome['response']))
+		{
+			$response += $this->legalOutcome['response'];
+			$response['redirect'] = [
+				'url' => $this->getUrl(),
+				'delay' => $response['redirect']['delay'],
+			];
+			if ($response['pay'] && !empty($this->legalOutcome['orderId']))
+			{
+				$urlInfo = \Bitrix\SalesCenter\Integration\LandingManager::getInstance()->getUrlInfoByOrderId(
+					$this->legalOutcome['orderId'],
+					[
+						'paymentId' => $this->legalOutcome['paymentId'] ?: 0,
+						'excludedPS' => $this->legalOutcome['response']['excludedPaySystems'] ?? [],
+					],
+				);
+				$response['redirect']['url'] = $this->paymentUrl($urlInfo['url'] ?? null);
+			}
+			elseif ($response['pay'] && !empty($this->legalOutcome['invoiceId']))
+			{
+				$response['redirect']['url'] = $this->paymentUrl(
+					\CAllCrmInvoice::getPublicLink($this->legalOutcome['invoiceId']),
+				);
+			}
+			unset($response['excludedPaySystems']);
+
+			return $response;
+		}
+		if (!empty($this->legalOutcome['url']) && empty($this->legalOutcome['invoiceId'])
+			&& empty($this->legalOutcome['orderId']) && $this->getUrl() !== null)
+		{
+			$response['redirect'] = ['url' => $this->getUrl()];
+		}
+
+		return $response;
+	}
+
+	private function paymentUrl(?string $url): ?string
+	{
+		if (!$url) { return null; }
+		$redirect = new \Bitrix\Main\Web\Uri($url);
+		$redirect->addParams(['form_id' => $this->legalOutcome['formId']]);
+		$this->setUrl($redirect->getLocator());
+
+		return $this->getUrl();
+	}
+
+
+	public static function fromLegalReceipt(array $receipt): self
+	{
+		$result = new self(null);
+		$result->restoreLegalReceipt($receipt);
+
+		return $result;
+	}
+
+	private function restoreLegalReceipt(array $receipt): void
+	{
+		$this->id = $receipt['resultId'];
+		$this->legalReplay = true;
+		$this->legalOutcome = $receipt['outcome'];
+		$this->url = $receipt['outcome']['url'] ?? null;
+		$this->resultEntity = ResultEntity::fromLegalOutcome($receipt['outcome']);
+	}
+
+	private function saveLegalResult(): void
+	{
+		$legal = $this->params['LEGAL_SUBMISSION'];
+		$service = new LegalRegistry\FormSubmissionService();
+		$recovery = new LegalRegistry\FormSubmissionRecovery();
+		try
+		{
+			$receipt = $service->commitResult((int)$this->params['FORM_ID'], $legal['submissionId'], $legal['requestHash'],
+				function (): array {
+					$this->legalWriting = true;
+					try
+					{
+						if (!$this->check()) { throw new \UnexpectedValueException('CRM_RESULT_REJECTED'); }
+						$this->save();
+					}
+					finally { $this->legalWriting = false; }
+					if ($this->hasErrors() || !$this->id || !$this->resultEntity)
+					{
+						throw new \RuntimeException('STORAGE_ERROR');
+					}
+					$outcome = [
+						'entities' => $this->resultEntity->getResultEntities(),
+						'activityId' => $this->resultEntity->getActivityId() ?: null,
+						'orderId' => $this->resultEntity->getOrderId() ?: null,
+						'paymentId' => $this->resultEntity->getPaymentId() ?: null,
+						'invoiceId' => $this->resultEntity->getInvoiceId() ?: null,
+						'url' => $this->params['FORM']['RESULT_SUCCESS_URL'] ?? null,
+						'response' => [
+							'pay' => ($this->params['FORM']['IS_PAY'] ?? null) === 'Y',
+							'message' => $this->params['FORM']['RESULT_SUCCESS_TEXT'],
+							'gid' => $this->resultEntity->getTrace()->getGid(),
+							'redirect' => [
+								'delay' => (int)($this->params['FORM']['FORM_SETTINGS']['REDIRECT_DELAY'] ?? Form::REDIRECT_DELAY),
+							],
+							'refill' => [
+								'active' => ($this->params['FORM']['FORM_SETTINGS']['REFILL']['ACTIVE'] ?? 'N') === 'Y',
+								'caption' => $this->params['FORM']['FORM_SETTINGS']['REFILL']['CAPTION'] ?? '',
+							],
+							'excludedPaySystems' => $this->params['FORM']['FORM_SETTINGS']['DISABLED_PAY_SYSTEMS'] ?? [],
+						],
+					];
+					if ($outcome['orderId'] !== null || $outcome['invoiceId'] !== null) { $outcome['url'] = null; }
+					$this->legalOutcome = $outcome;
+					return ['resultId' => (int)$this->id, 'outcome' => $outcome];
+				});
+		}
+		catch (\Throwable $error)
+		{
+			$this->id = null;
+			$this->resultEntity = null;
+			$code = $error->getMessage();
+			if ($code === 'CRM_RESULT_REJECTED') { $recovery->markFailed($legal['submissionId'], $legal['requestHash']); }
+			else { $service->recordCrmFailure((int)$this->params['FORM_ID'], $legal['submissionId'], $legal['requestHash']); }
+			if ($this->errors === [])
+			{
+				$this->errors[] = in_array($code, [
+					'INVALID_PAYLOAD', 'INVALID_STATE', 'IDEMPOTENCY_CONFLICT', 'POLICY_UNAVAILABLE', 'FEATURE_UNAVAILABLE',
+				], true) ? $code : 'STORAGE_ERROR';
+			}
+			return;
+		}
+		if ($receipt['replay']) { $this->restoreLegalReceipt($receipt); }
+		$recovery->complete($legal['submissionId'], $legal['requestHash']);
+		if (!$receipt['replay'])
+		{
+			try { $this->resultEntity->runDeferredEffects(); }
+			catch (\Throwable)
+			{
+				\Bitrix\Crm\Service\Container::getInstance()->getLogger('Webform')->error(
+					'Legal form post-commit effect failed.', ['submissionId' => $legal['submissionId']],
+				);
+			}
+		}
 	}
 
 	public function check()
@@ -417,6 +574,7 @@ class Result extends Model
 		$agreements = $this->params['AGREEMENTS'];
 
 		$resultEntity = new ResultEntity;
+		if (!empty($this->params['LEGAL_SUBMISSION'])) { $resultEntity->deferExternalEffects(); }
 		$resultEntity->setFormData($this->params['FORM']);
 		$resultEntity->setFormId($this->params['FORM_ID']);
 		$resultEntity->setResultId($this->id);

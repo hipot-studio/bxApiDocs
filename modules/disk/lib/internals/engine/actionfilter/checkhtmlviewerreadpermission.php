@@ -6,7 +6,6 @@ namespace Bitrix\Disk\Internals\Engine\ActionFilter;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
-use Bitrix\Disk\Configuration;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessContext;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessTokenService;
@@ -118,7 +117,6 @@ class CheckHtmlViewerReadPermission extends CheckReadPermission
 			(int)$version->getId(),
 		)
 			&& $this->isActiveUser($context->getUserId())
-			&& Configuration::isEnabledHtmlViewer()
 			&& HtmlViewerPolicy::isViewableExtension($version->getExtension())
 			&& $this->unifiedLinkAccessService->check(
 				$file,
@@ -178,7 +176,6 @@ class CheckHtmlViewerReadPermission extends CheckReadPermission
 		$version = $attachedObject->getVersion();
 
 		return $version instanceof Version
-			&& Configuration::isEnabledHtmlViewer()
 			&& HtmlViewerPolicy::isViewableExtension($version->getExtension())
 		;
 	}

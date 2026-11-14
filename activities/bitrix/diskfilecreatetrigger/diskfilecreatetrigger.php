@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Bitrix\Bizproc\Public\Activity\ReturnDocumentTrait;
 use Bitrix\Disk\BizProcDocument;
+use Bitrix\Disk\Integration\Ui\EntitySelector\FileProvider;
+use Bitrix\Disk\Storage;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -71,6 +73,25 @@ class CBPDiskFileCreateTrigger extends CBPCreateDocumentTrigger
 		}
 
 		return \Bitrix\Bizproc\Result::createOk();
+	}
+
+	public static function getTestRunDocumentDeclaration(array $documentType): ?array
+	{
+		[$moduleId, $entity, $type] = array_values($documentType) + [null, null, null];
+		$storageId = $moduleId === 'disk' && $entity === BizProcDocument::class
+			? (int)BizProcDocument::getStorageIdByType((string)$type)
+			: 0
+		;
+
+		if ($storageId <= 0 || !Storage::loadById($storageId))
+		{
+			return null;
+		}
+
+		return [
+			'createFields' => ['NAME'],
+			'documentSelector' => ['entityId' => FileProvider::ENTITY_ID, 'options' => ['storageId' => $storageId]],
+		];
 	}
 
 	protected static function getModuleId(): string

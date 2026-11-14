@@ -20,7 +20,7 @@ use Bitrix\Rest\RestException;
 use Bitrix\Rest\Exceptions;
 use Bitrix\Rest\Lang;
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Rest\Internal\Access\AppAccessChecker;
+use Bitrix\Rest\Internal\Access\EmbeddingAccessChecker;
 use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Exception\Embedding\EmbeddingHandlerAlreadyBoundException;
 use Bitrix\Rest\Internal\Service\Embedding\EmbeddingConflictGuard;
@@ -155,6 +155,12 @@ class Placement extends \IRestService
 				'PLACEMENT_HANDLER' => $placementHandler,
 				'OPTIONS' => static::prepareOptions($paramsOptions, $placementInfoOptions),
 			);
+
+			$optionsLengthError = PlacementTable::validateOptionsLength($placementBind['OPTIONS']);
+			if (is_string($optionsLengthError))
+			{
+				throw new Exceptions\ArgumentException($optionsLengthError, 'OPTIONS');
+			}
 
 			if (
 				$placementBind['USER_ID'] !== PlacementTable::DEFAULT_USER_ID_VALUE
@@ -747,7 +753,7 @@ class Placement extends \IRestService
 			throw new AccessException();
 		}
 
-		$accessChecker = (new AppAccessChecker($userId));
+		$accessChecker = (new EmbeddingAccessChecker($userId));
 
 		$hasAccess = false;
 		switch ($permission)

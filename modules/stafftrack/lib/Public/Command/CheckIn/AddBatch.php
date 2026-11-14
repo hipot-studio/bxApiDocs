@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Public\Command\CheckIn;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Application;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Error;
 use Bitrix\Main\Text\Emoji;
@@ -31,6 +32,15 @@ class AddBatch extends AbstractCommand
 	 * that day - a single delta for the batch leaves it with a stale tail until it is reopened.
 	 */
 	private array $batchDeltas = [];
+
+	/**
+	 * The local days the batch wrote, as the daily stats named them - the write and the map have to mean
+	 * the same day by the same point. Read once the transaction is through, to drop the cached map of the
+	 * days that are closed to new points.
+	 *
+	 * @var Date[]
+	 */
+	private array $writtenLocalDates = [];
 
 	protected PointAcceptanceService $acceptanceService;
 
@@ -237,6 +247,13 @@ class AddBatch extends AbstractCommand
 				}
 			}
 
+			// Once before the write and once after it. The drop that follows the commit is the one that
+			// matters, but it is lost if the process is stopped between the two, and the map of the day
+			// would then answer without the point until the entry expires thirty days later. This one also
+			// heals the repeat of a batch whose answer never reached the client: the repeated closing point
+			// is refused by age, nothing is written, and the drop after the commit has nothing to say.
+			$this->invalidateMapOfClosedDates($userId, $this->localDatesOfPointsReachingAClosedDay($dtos));
+
 			if (!empty($storedDtos) && !$this->saveBatch($storedDtos))
 			{
 				return $result->addError(self::saveFailedError());
@@ -266,6 +283,10 @@ class AddBatch extends AbstractCommand
 		}
 
 		$this->applyOfficePresence($userId, $storedDtos);
+
+		// Before the push: a client told of the point asks the map for its day straight away, and a map
+		// answered from an entry this write has not dropped yet is the very staleness this closes.
+		$this->invalidateMapOfClosedDates($userId, $this->writtenLocalDates);
 
 		$this->sendBatchPushToDepartment($storedDtos, $this->batchDeltas);
 
@@ -386,6 +407,14 @@ class AddBatch extends AbstractCommand
 			);
 
 			return false;
+		}
+
+		foreach ($batchStates as $batchState)
+		{
+			if ($batchState['localDate'] instanceof Date)
+			{
+				$this->writtenLocalDates[] = $batchState['localDate'];
+			}
 		}
 
 		// A rolled back batch never reaches this point, and the delta only reads, so it is built after

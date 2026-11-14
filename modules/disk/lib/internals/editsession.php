@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Disk\Internals;
 
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Type\DateTime;
 
@@ -39,6 +40,19 @@ use Bitrix\Main\Type\DateTime;
 
 final class EditSessionTable extends DataManager
 {
+	public static function onBeforeAdd(Entity\Event $event): Entity\EventResult
+	{
+		$result = new Entity\EventResult();
+		$fields = $event->getParameter('fields');
+		$objectId = (int)($fields['OBJECT_ID'] ?? 0);
+		if ($objectId > 0 && !(new MarkerService())->revokeBeforeUse($objectId))
+		{
+			$result->addError(new Entity\EntityError(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+		}
+
+		return $result;
+	}
+
 	public static function getTableName()
 	{
 		return 'b_disk_edit_session';

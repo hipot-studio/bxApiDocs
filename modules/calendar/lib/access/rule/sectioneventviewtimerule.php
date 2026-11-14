@@ -8,6 +8,7 @@ use Bitrix\Calendar\Access\Rule\Traits\ExtranetUserTrait;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Calendar\Access\ActionDictionary;
+use Bitrix\Calendar\Access\NativeReservationOperations;
 use Bitrix\Calendar\Access\Rule\Traits\CurrentUserTrait;
 use Bitrix\Calendar\Access\Rule\Traits\SectionTrait;
 use CCalendarSect;
@@ -21,6 +22,11 @@ class SectionEventViewTimeRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		if (!$item instanceof SectionModel)
 		{
 			return false;
+		}
+
+		if ($params instanceof NativeReservationOperations)
+		{
+			$params->assertSection($item, $this->user->getUserId());
 		}
 
 		if ($item->getType() === Dictionary::CALENDAR_TYPE['open_event'])
@@ -53,14 +59,19 @@ class SectionEventViewTimeRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		if ($item->getType() !== \Bitrix\Calendar\Core\Event\Tools\Dictionary::CALENDAR_TYPE['resource'])
 		{
-			$typeCheck = $this->controller->check(ActionDictionary::ACTION_TYPE_VIEW, $type);
+			$typeCheck = $this->controller->check(
+				ActionDictionary::ACTION_TYPE_VIEW, $type,
+				$params instanceof NativeReservationOperations ? $params : null,
+			);
 		}
 
 		return
 			$typeCheck
 			&& in_array(
 				ActionDictionary::getOldActionKeyByNewActionKey(ActionDictionary::ACTION_SECTION_EVENT_VIEW_TIME),
-				CCalendarSect::GetOperations($item->getId(), $this->user->getUserId()),
+				$params instanceof NativeReservationOperations
+					? $params->getSectionOperations($item, $this->user->getUserId())
+					: CCalendarSect::GetOperations($item->getId(), $this->user->getUserId()),
 				true
 			);
 	}

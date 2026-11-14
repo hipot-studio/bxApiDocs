@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Entity\File\ChatAvatar;
 use Bitrix\Im\V2\Folder\FolderCascadeHandler;
 use Bitrix\Im\V2\Guest\GuestLinkService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
+use Bitrix\Im\V2\Integration\Search\IndexService;
 use Bitrix\Im\V2\Recent\AncestorContextSender;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
@@ -95,6 +96,16 @@ class UpdateService
 		{
 			ServiceLocator::getInstance()->get(FolderCascadeHandler::class)
 				->onChatAttachedToParent($this->chat->getChatId())
+			;
+		}
+
+		// The parent answers for the reach of the shared access code of the search index while the type
+		// of a chat needs membership in it: a chat hung elsewhere keeps a code the messenger no longer
+		// gives, and the general search surface runs no re-check of its own.
+		if ($this->updateFields->getParentChatId() !== null && $newParentChatId !== $oldParentChatId)
+		{
+			ServiceLocator::getInstance()->get(IndexService::class)
+				->onChatReparented([$this->chat->getChatId()])
 			;
 		}
 

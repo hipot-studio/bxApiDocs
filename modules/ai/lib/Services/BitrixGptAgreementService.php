@@ -5,32 +5,22 @@ declare(strict_types=1);
 namespace Bitrix\AI\Services;
 
 use Bitrix\AI\Facade\Portal;
-use Bitrix\AI\Tuning\Defaults;
-use Bitrix\AI\Tuning\Manager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Request;
-use Bitrix\Main\Web\Json;
 use CBitrix24;
 
 class BitrixGptAgreementService
 {
 	private const MODULE_AI_ID = 'ai';
-	private const MODULE_AIASSISTANT_ID = 'aiassistant';
 	private const OPTION_AGREEMENT_STATUS = 'bitrixgpt_agreement_status';
 	private const OPTION_AGREEMENT_ACCEPTED_USER_ID = 'bitrixgpt_agreement_accepted_user_id';
 	private const OPTION_AGREEMENT_ACCEPTED_AT = 'bitrixgpt_agreement_accepted_at';
 	private const OPTION_POPUP_SHOW_COUNT = 'bitrixgpt_agreement_popup_show_count';
 	private const OPTION_POPUP_SKIP_UNTIL = 'bitrixgpt_agreement_popup_skip_until';
-	private const OPTION_TUNING = 'tuning';
-	private const AIASSISTANT_SCENARIO_OPTIONS = [
-		'remote_mcp_server_active',
-		'remote_mcp_server_sharing_only',
-		'enable_bitrix_internal_mcp_server',
-	];
 	private const AGREEMENT_ACCEPTED = 'Y';
 	private const AGREEMENT_DECLINED = 'N';
 	private const SHOW_LIMIT = 2;
@@ -233,63 +223,11 @@ class BitrixGptAgreementService
 
 	private function hasEnabledScenario(): bool
 	{
-		$manager = new Manager();
-		foreach ($manager->getList() as $group)
-		{
-			foreach ($group->getItems() as $item)
-			{
-				if (Defaults::isItemInternal($item))
-				{
-					continue;
-				}
-
-				if ($item->isBoolean() && $item->getValue() === true)
-				{
-					return true;
-				}
-			}
-		}
-
-		if (Loader::includeModule(self::MODULE_AIASSISTANT_ID))
-		{
-			foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
-			{
-				if (Option::get(self::MODULE_AIASSISTANT_ID, $optionName, 'N') === 'Y')
-				{
-					return true;
-				}
-			}
-		}
-
-		return false;
+		return Portal::hasEnabledAiScenario();
 	}
 
 	public function disableAllScenarios(): void
 	{
-		$manager = new Manager();
-		$storage = Manager::getTuningStorage();
-
-		foreach ($manager->getList() as $group)
-		{
-			foreach ($group->getItems() as $item)
-			{
-				if (Defaults::isItemInternal($item) || !$item->isBoolean())
-				{
-					continue;
-				}
-
-				$storage[$item->getCode()] = false;
-			}
-		}
-
-		Option::set(self::MODULE_AI_ID, self::OPTION_TUNING, Json::encode($storage));
-
-		if (Loader::includeModule(self::MODULE_AIASSISTANT_ID))
-		{
-			foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
-			{
-				Option::set(self::MODULE_AIASSISTANT_ID, $optionName, 'N');
-			}
-		}
+		Portal::disableAllAiScenarios();
 	}
 }

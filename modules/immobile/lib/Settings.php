@@ -5,6 +5,7 @@ namespace Bitrix\ImMobile;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
+use Bitrix\StaffTrack\Public\Provider\CheckInProvider;
 use Bitrix\Vibecodeconnector\Public\Service\AvailabilityService;
 use Bitrix\Vibecodeconnector\Public\Service\NewAppsBadgeAvailability;
 
@@ -190,5 +191,52 @@ class Settings
 		}
 
 		return Features::isVideoNotePlaybackRateAvailable();
+	}
+
+	/**
+	 * Whether the current user has ever checked in. State of the user, not a gate of the feature, so it
+	 * travels next to the startup flags and not inside the feature object.
+	 *
+	 * The startup data is assembled on every start of the application, so the verdict of the domain is
+	 * asked first: it is the object already built for IM_FEATURES next to this field, while the history
+	 * costs an index read of its own that nobody the check-in is closed for would see the answer of.
+	 */
+	public static function hasCheckInHistory(): bool
+	{
+		if (!static::isCheckInAvailable())
+		{
+			return false;
+		}
+
+		return static::readCheckInHistory();
+	}
+
+	protected static function isCheckInAvailable(): bool
+	{
+		$features = self::getImFeatures();
+
+		// immobile and im are updated independently, so an older im may not ship the flag yet
+		if ($features === null || !property_exists($features, 'isCheckInAvailable'))
+		{
+			return false;
+		}
+
+		return $features->isCheckInAvailable;
+	}
+
+	protected static function readCheckInHistory(): bool
+	{
+		if (!Loader::includeModule('stafftrack'))
+		{
+			return false;
+		}
+
+		// immobile and stafftrack are updated independently, so an older stafftrack may not ship the method yet
+		if (!method_exists(CheckInProvider::class, 'hasCheckIns'))
+		{
+			return false;
+		}
+
+		return (new CheckInProvider())->hasCheckIns((int)CurrentUser::get()->getId());
 	}
 }

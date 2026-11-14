@@ -19,6 +19,18 @@ class BaseFileList extends Base
 			'items' => [],
 			'users' => [],
 			'storages' => [],
+			'features' => $this->getFeatures(),
+		];
+	}
+
+	/**
+	 * Portal options the mobile client needs to pick an interface branch. Nothing is allowed by them:
+	 * every server domain checks its own option again.
+	 */
+	private function getFeatures(): array
+	{
+		return [
+			'destinationPicker' => Disk\Configuration::isDestinationPickerEnabled(),
 		];
 	}
 

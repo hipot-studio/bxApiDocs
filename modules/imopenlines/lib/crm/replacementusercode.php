@@ -22,6 +22,8 @@ Loc::loadMessages(__FILE__);
 class ReplacementUserCode extends Stepper
 {
 	public const OPTION_NAME = 'imopenlines_crm_replacement_user_code';
+	/** Seconds to wait before the first step of the bound agent runs */
+	public const AGENT_DELAY = 60;
 	public static $moduleId = 'imopenlines';
 	protected static $moduleIdCrm = 'crm';
 	protected static $stepSize = 50;

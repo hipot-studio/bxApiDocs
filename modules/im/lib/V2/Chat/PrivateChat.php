@@ -113,11 +113,6 @@ class PrivateChat extends Chat
 		return implode(':', $userIds);
 	}
 
-	public function getStartId(?int $userId = null): int
-	{
-		return 0;
-	}
-
 	public function getMultidialogData(): array
 	{
 		if (!Loader::includeModule('imbot'))

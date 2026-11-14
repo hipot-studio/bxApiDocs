@@ -136,7 +136,7 @@ abstract class AbstractCreator
 
 		Locator::getContext()->setUser($userId);
 		$transcriptionHandler = ServiceLocator::getInstance()->get(TranscriptionHandler::class);
-		$transcriptionHandler->handle($data, $this->message, $userId, $launchType);
+		$transcriptionHandler->handle($data, $this->message, $userId, $launchType, $sourceText);
 	}
 
 	protected function isEmptyMessage(): bool

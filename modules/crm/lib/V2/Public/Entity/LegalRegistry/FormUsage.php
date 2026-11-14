@@ -13,6 +13,7 @@ final readonly class FormUsage
 {
 	public array $versionIds;
 	public array $intervals;
+	public array $versionNumbers;
 
 	public function __construct(
 		public int $sourceId,
@@ -25,6 +26,7 @@ final readonly class FormUsage
 		public int $sourceRevision,
 		array $versionIds,
 		array $intervals,
+		array $versionNumbers = [],
 	)
 	{
 		foreach ([$sourceId, $formId, $documentId, $sourceRevision] as $id) { self::id($id); }
@@ -43,6 +45,14 @@ final readonly class FormUsage
 			$ids[$id] = $id;
 		}
 		$this->versionIds = array_values($ids);
+		$numbers = [];
+		foreach ($versionNumbers as $versionId => $number)
+		{
+			self::id($versionId); self::id($number);
+			if (!isset($ids[$versionId])) { throw new InvalidArgumentException('Invalid version number.'); }
+			$numbers[$versionId] = $number;
+		}
+		$this->versionNumbers = $numbers;
 		$history = [];
 		$keys = ['versionId', 'revision', 'checked', 'required', 'startsAt', 'endsAt', 'formNameSnapshot'];
 		foreach ($intervals as $interval)

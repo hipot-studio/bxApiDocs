@@ -153,7 +153,7 @@ abstract class AbstractStorage
 	abstract public function deleteFile($file);
 	abstract public function deleteDirectory($directory);
 	abstract public function getVersionDelete($element);
-	abstract public function isUnique($name, $targetDirectoryId, &$opponentId = null);
+	abstract public function isUnique($name, $targetDirectoryId, &$opponentId = null, ?int $excludeId = null);
 	abstract public function isCorrectName($name, &$msg);
 
 	abstract public function getPublicLink(array $objectData);

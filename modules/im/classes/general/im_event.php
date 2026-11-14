@@ -8,6 +8,8 @@ use Bitrix\Socialnetwork\Livefeed;
 
 class CIMEvent
 {
+	private const PIN_CLEANUP_CHUNK_SIZE = 500;
+
 	public static function OnFileDelete($params)
 	{
 		if (!in_array($params['MODULE_ID'], ['im', 'imopenlines']))
@@ -897,6 +899,8 @@ class CIMEvent
 		}
 		else
 		{
+			self::deletePinsOnMessagesOfAuthor($ID);
+
 			$strSQL = "DELETE FROM b_im_message WHERE AUTHOR_ID = ".$ID;
 			$DB->Query($strSQL, true);
 
@@ -906,9 +910,17 @@ class CIMEvent
 			IM\V2\Link\Url\UrlCollection::deleteByAuthorsIds([$ID]);
 		}
 
+		\Bitrix\Main\DI\ServiceLocator::getInstance()
+			->get(IM\V2\Integration\Search\IndexService::class)
+			->onPortalUserDeleted($ID, $arChat)
+		;
+
 		\Bitrix\Im\Bot::unRegister(['BOT_ID' => $ID]);
 
 		IM\V2\SharingLink\SharingLinkMemberService::getInstance()->deleteByUser($ID);
+
+		// By owner, not by the author of the pinned message: a personal pin belongs to the one who sees it.
+		IM\Model\LinkPinPersonalTable::deleteByFilter(['=AUTHOR_ID' => $ID]);
 
 		$strSQL = "DELETE FROM b_im_recent WHERE USER_ID = ".$ID;
 		$DB->Query($strSQL, true);
@@ -930,6 +942,39 @@ class CIMEvent
 		IM\V2\Sync\UserLifecycleService::onUserDelete($ID);
 
 		return true;
+	}
+
+	/**
+	 * The messages of the author are wiped by raw SQL, past the collection that unpins a deleted
+	 * message, so the pins the other members hold on them have to be named here. Such a row shows in
+	 * no list - the reference of the message is an inner join - and still takes a place in the quota.
+	 */
+	private static function deletePinsOnMessagesOfAuthor(int $authorId): void
+	{
+		$lastMessageId = 0;
+
+		while (true)
+		{
+			$rows = IM\Model\MessageTable::query()
+				->setSelect(['ID'])
+				->where('AUTHOR_ID', $authorId)
+				->where('ID', '>', $lastMessageId)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(self::PIN_CLEANUP_CHUNK_SIZE)
+				->fetchAll()
+			;
+
+			if (empty($rows))
+			{
+				return;
+			}
+
+			$messageIds = array_map('intval', array_column($rows, 'ID'));
+			$lastMessageId = (int)end($messageIds);
+
+			IM\Model\LinkPinTable::deleteByFilter(['@MESSAGE_ID' => $messageIds]);
+			IM\Model\LinkPinPersonalTable::deleteByFilter(['@MESSAGE_ID' => $messageIds]);
+		}
 	}
 
 	public static function OnGetDependentModule()

@@ -184,6 +184,7 @@ final class RestManager extends IRestService implements IErrorable
 			->checkMethodName($restServer->getMethod())
 			->buildService($params, $start, $restServer)
 		;
+		$previousApplicationException = $GLOBALS['APPLICATION']->GetException();
 		$data = $service->processMethodRequest();
 
 		if($data === null)
@@ -192,16 +193,50 @@ final class RestManager extends IRestService implements IErrorable
 			$errors = $this->getErrors();
 			if($errors)
 			{
+				$this->preservePortalQuotaErrorCode($restServer->getMethod(), $previousApplicationException);
 				throw $this->createExceptionFromErrors($errors);
 			}
 		}
 
-		$externalizer = new Externalizer($service, $restServer);
+		$externalizer = new Externalizer(
+			$service,
+			$restServer,
+			$service instanceof Service\File ? [$service, 'shouldBuildDetailUrl'] : null,
+		);
 		$externalData = $externalizer->getExternalData($data);
 
 		Diag::getInstance()->logDebugInfo($restServer->getMethod());
 
 		return $externalData;
+	}
+
+	private function preservePortalQuotaErrorCode($methodName, $previousApplicationException)
+	{
+		if(!in_array(strtolower($methodName), array(
+			'disk.folder.uploadfile',
+			'disk.storage.uploadfile',
+			\CRestUtil::METHOD_UPLOAD,
+		), true))
+		{
+			return;
+		}
+
+		$exception = $GLOBALS['APPLICATION']->GetException();
+		if(!($exception instanceof \CAdminException) || $exception === $previousApplicationException || $exception->GetID())
+		{
+			return;
+		}
+
+		$messages = $exception->GetMessages();
+		foreach($messages as $message)
+		{
+			if(is_array($message) && ($message['id'] ?? null) === 'QUOTA_BAD')
+			{
+				$GLOBALS['APPLICATION']->ThrowException(new \CAdminException($messages, 'QUOTA_BAD'));
+
+				return;
+			}
+		}
 	}
 
 	/**

@@ -9,6 +9,8 @@
 namespace Bitrix\Crm\WebForm\Embed;
 
 use Bitrix\Crm\Feature\WebFormConsentBySubmit;
+use Bitrix\Crm\V2\Internal\Model\LegalRegistry\SourceTable;
+use Bitrix\Crm\V2\Internal\Model\LegalRegistry\UsageTable;
 use Bitrix\Crm\WebForm\Agreement\Batch;
 use Bitrix\Crm\WebForm\ReCaptcha;
 use Bitrix\Crm\WebForm\YandexCaptcha;
@@ -166,6 +168,16 @@ class Config
 			]
 		];
 
+		if (!$this->editMode && $this->hasLegalDocuments())
+		{
+			$config['data']['legalDocuments'] = [
+				'enabled' => true,
+				'presentationAction' => 'crm.site.form.get',
+				'presentationParameter' => 'legalDocumentsOnly',
+				'submissionSupported' => true,
+			];
+		}
+
 		// The public config is shared by every visitor of the form and is cached as a whole,
 		// so a right of the current user belongs to the editor answer only.
 		if ($this->editMode)
@@ -174,6 +186,58 @@ class Config
 		}
 
 		return $config;
+	}
+
+	/** Returns whether the form requires the separate legal document runtime. */
+	public function hasLegalDocuments(bool $lockForSubmission = false): bool
+	{
+		$formId = (int)$this->form->getId();
+		if ($formId <= 0)
+		{
+			return !empty($this->form->get()['FORM_SETTINGS']['LEGAL_DOCUMENTS']);
+		}
+
+		// Submission reads wait for binding writes held inside a caller's outer transaction.
+		$connectionPool = Main\Application::getInstance()->getConnectionPool();
+		$connectionPool->useMasterOnly(true);
+		try
+		{
+			$form = self::legalRow(WebForm\Internals\FormTable::class, [
+				'select' => ['FORM_SETTINGS'],
+				'filter' => ['=ID' => $formId],
+			], $lockForSubmission);
+			if (!empty($form['FORM_SETTINGS']['LEGAL_DOCUMENTS'])) { return true; }
+			$source = self::legalRow(SourceTable::class, [
+				'select' => ['ID'],
+				'filter' => ['=FORM_ID' => $formId],
+			], $lockForSubmission);
+
+			return (bool)$source && (bool)self::legalRow(UsageTable::class, [
+				'select' => ['ID'],
+				'filter' => ['=SOURCE_ID' => (int)$source['ID'], '=DATE_END' => null],
+			], $lockForSubmission);
+		}
+		finally { $connectionPool->useMasterOnly(false); }
+	}
+
+	private static function legalRow(string $model, array $options, bool $current): array|false|null
+	{
+		if (!$current) { return $model::getRow($options); }
+		$query = new class($model::getEntity()) extends Main\ORM\Query\Query {
+			protected function query($sql)
+			{
+				$result = $this->entity->getConnection()->query($sql . ' FOR UPDATE');
+				$result->setReplacedAliases($this->replaced_aliases);
+				if ($this->isFetchModificationRequired())
+				{
+					$result->addFetchDataModifier([$this, 'fetchDataModificationCallback']);
+				}
+
+				return $result;
+			}
+		};
+
+		return $query->setSelect($options['select'])->setFilter($options['filter'])->setOrder(['ID' => 'ASC'])->fetch();
 	}
 
 	public function setDataFromArray(array $data)

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\DocumentHeader;
 
+use Bitrix\Disk\Document\Vibeoffice\Feature;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\document\SharingControlType;
 use Bitrix\Disk\Document\BoardsHandler;
@@ -15,7 +16,6 @@ use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
-use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Enum\DocumentHeaderElement;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\UrlManager;
@@ -81,13 +81,20 @@ class HeaderCompositionService
 		$isBoard = $openingContext->isBoard();
 		$isIntranetUser = $this->isIntranetUser($userId);
 		$isPortalEmployee = $this->isPortalEmployee($userId, $isIntranetUser);
-		$sharingControlType = $isPortalEmployee
-			? $this->resolveSharingControlType($openingContext, $isBoard)
+		$isPublicLinkPinnedToVersion = $openingContext->hasPublicLinkAccess()
+			&& $openingContext->versionId() !== null
+		;
+		$offersAccessControl = $userId > 0 && !$isPublicLinkPinnedToVersion && (
+			$isPortalEmployee
+			|| $openingContext->hasPublicLinkAccess()
+		);
+		$sharingControlType = $offersAccessControl
+			? $this->resolveSharingControlType($openingContext)
 			: null
 		;
 		// A symbolic link resolves its real object to answer this, so it is asked at most once for the
 		// whole description - and not at all by an opening which neither copies the link of the object
-		// nor names it: a public page pays for no read of the portal.
+		// nor names it.
 		$uniqueCode = null;
 		$resolveUniqueCode = function () use (&$uniqueCode, $openingContext): string {
 			return $uniqueCode ??= $this->getUniqueCode($openingContext->file());
@@ -176,7 +183,11 @@ class HeaderCompositionService
 	 *
 	 * @return array|null null when the page holds nothing to put in a header at all
 	 */
-	public function composeMinimalForPage(string $name, string $downloadUrl): ?array
+	public function composeMinimalForPage(
+		string $name,
+		string $downloadUrl,
+		string $mode = HeaderCompositionDto::MODE_VIEW,
+	): ?array
 	{
 		$hasDownload = $downloadUrl !== '';
 		if ($name === '' && !$hasDownload)
@@ -200,7 +211,7 @@ class HeaderCompositionService
 		return (new HeaderCompositionDto(
 			elements: array_column($elements, 'value'),
 			objectType: HeaderCompositionDto::OBJECT_TYPE_DOCUMENT,
-			mode: HeaderCompositionDto::MODE_VIEW,
+			mode: $mode,
 			objectId: null,
 			objectName: $name,
 			objectUniqueCode: null,
@@ -269,17 +280,22 @@ class HeaderCompositionService
 				// user is asked first: the availability of the purchase resolves BaaS and the tariff
 				// group.
 				DocumentHeaderElement::Boost => !$isBoard
+					&& !$this->isEditingServedByVibeoffice()
 					&& $hasEditingEngine
 					&& $isIntranetUser
 					&& $this->getSessionBoostService()->isAvailable(),
 
 				// A frozen state carries no editing, and an extension the engine cannot edit is refused
-				// by the shell itself (@see isExtensionEditableByTheEngineOfTheOpening()).
+				// by the shell itself (@see isExtensionEditableByTheEngineOfTheOpening()). The portal
+				// itself is asked last: a restricted format or an exhausted personal quota closes the
+				// way in for a visitor holding every right, and the header names the reason instead of
+				// drawing a button leading nowhere (@see describeEditRefusal()).
 				DocumentHeaderElement::Edit => !$isBoard
 					&& !$isVersion
 					&& $openingContext->isViewMode()
 					&& $isExtensionEditable()
-					&& $openingContext->canEdit(),
+					&& $openingContext->canEdit()
+					&& $openingContext->editRefusal() === null,
 
 				// An opening by a public link keeps the roster too: it is the live channel of that roster
 				// such an opening never gets, not the roster itself.
@@ -323,15 +339,14 @@ class HeaderCompositionService
 		$hasElement = static fn(DocumentHeaderElement $element): bool => in_array($element, $elements, true);
 		// Only an opening that offers the object itself is told which object that is: the identifier and
 		// the unique code are read by the access popup and by the transition to editing, and an opening
-		// offering neither - a revision, an attachment, a page entered by a public link - has no place to
-		// use them at. The unique code addresses the unified link of the object, so a reader authorized by
+		// offering neither - a revision or an attachment - has no place to use them at. The unique code
+		// addresses the unified link of the object, so a reader authorized by
 		// an attachment would otherwise be handed the way to an object it was never given rights on.
 		// Both name the real object: rights of a sharing are written on it and not on the link pointing
 		// at it {@see \Bitrix\Disk\Sharing::addToManyEntities()}. A pair naming the link by one and its
 		// target by the other shows the popup the settings of one object and saves them onto another.
 		$file = $openingContext->file();
-		$isPublicOpening = $openingContext->accessType() === OpeningContext::ACCESS_TYPE_EXTERNAL;
-		$namesObjectInPortal = !$isPublicOpening && $file !== null && $openingContext->offersObjectSharing();
+		$namesObjectInPortal = $file !== null && $openingContext->offersObjectSharing();
 
 		return new HeaderCompositionDto(
 			elements: array_column($elements, 'value'),
@@ -360,13 +375,46 @@ class HeaderCompositionService
 			// the object, which a guest of a link never has.
 			editors: (
 				$hasElement(DocumentHeaderElement::Edit)
+				&& !(
+					$openingContext->servesContentItself()
+					&& HtmlViewerPolicy::isViewableExtension($openingContext->contentExtension())
+				)
 				&& $openingContext->accessType() !== OpeningContext::ACCESS_TYPE_UNIFIED
 			)
 				? $this->listEditors()
 				: [],
 			presenceEnabled: $hasElement(DocumentHeaderElement::Presence),
 			boostContainerRequired: $hasElement(DocumentHeaderElement::Boost),
+			editRefusal: $this->describeEditRefusal($openingContext),
 		);
+	}
+
+	/**
+	 * Why the portal keeps a viewing from turning into editing - a restricted format or an exhausted
+	 * personal quota - with the words the reader is shown. Only a viewing is explained: an opening
+	 * already editing saves to the end of it and is told nothing (AC-048), and a version is a frozen
+	 * state nobody edits. A board is explained the same way as a document: left to viewing by the
+	 * policy, it must not go on promising an autosave.
+	 *
+	 * @return array{code: string, message: string}|null
+	 */
+	private function describeEditRefusal(OpeningContext $openingContext): ?array
+	{
+		if (!$openingContext->isViewMode() || $openingContext->versionId() !== null)
+		{
+			return null;
+		}
+
+		$refusal = $openingContext->editRefusal();
+		if ($refusal === null)
+		{
+			return null;
+		}
+
+		return [
+			'code' => (string)$refusal->getCode(),
+			'message' => (string)$refusal->getMessage(),
+		];
 	}
 
 	/**
@@ -431,6 +479,13 @@ class HeaderCompositionService
 	private function isExtensionEditableByTheEngineOfTheOpening(OpeningContext $openingContext): bool
 	{
 		$extension = (string)$openingContext->file()?->getExtension();
+		if (
+			$openingContext->servesContentItself()
+			&& HtmlViewerPolicy::isViewableExtension($openingContext->contentExtension())
+		)
+		{
+			return Configuration::isEnabledHtmlEditor();
+		}
 
 		return match ($openingContext->editorService())
 		{
@@ -442,24 +497,11 @@ class HeaderCompositionService
 		};
 	}
 
-	private function resolveSharingControlType(
-		OpeningContext $openingContext,
-		bool $isBoard,
-	): ?SharingControlType
+	private function resolveSharingControlType(OpeningContext $openingContext): ?SharingControlType
 	{
-		// An opening which does not offer the object itself has no access of its own to control, and an
-		// opening entered by a link is bounded by that link and not by the rights on the object.
-		if (
-			!$openingContext->offersObjectSharing()
-			|| $openingContext->accessType() === OpeningContext::ACCESS_TYPE_UNIFIED
-		)
+		if (!$openingContext->offersObjectSharing())
 		{
 			return null;
-		}
-
-		if (!$this->isSharingFeatureEnabled($isBoard, $openingContext->editorService() !== null))
-		{
-			return SharingControlType::BlockedByFeature;
 		}
 
 		if ($openingContext->canChangeRights())
@@ -475,29 +517,9 @@ class HeaderCompositionService
 		return SharingControlType::WithoutEdit;
 	}
 
-	/**
-	 * A board is given out by the link of the object alone, so the tariff which closes its access
-	 * button is the one of board links and not the one of file sharing.
-	 *
-	 * The tariff of the editor answers only for an opening an editing engine serves. An opening served
-	 * by none is gated by file sharing alone, which is the tariff its previous page was gated by
-	 * (@see \Bitrix\Disk\Internal\Service\HtmlViewerPageService).
-	 */
-	protected function isSharingFeatureEnabled(bool $isBoard, bool $hasEditingEngine): bool
+	protected function isEditingServedByVibeoffice(): bool
 	{
-		if ($isBoard)
-		{
-			return $this->isFeatureEnabled('disk_board_external_link');
-		}
-
-		return $this->isFeatureEnabled('disk_file_sharing')
-			|| ($hasEditingEngine && $this->isFeatureEnabled('disk_onlyoffice_edit'))
-		;
-	}
-
-	protected function isFeatureEnabled(string $feature): bool
-	{
-		return Bitrix24Manager::isFeatureEnabled($feature);
+		return Feature::servesPortalEditing();
 	}
 
 	protected function isIntranetUser(int $userId): bool

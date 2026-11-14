@@ -53,32 +53,21 @@ final class ControllerDataManager
 
 	public function getData()
 	{
-		if (isset(self::$byName) && isset(self::$byModule))
+		if (!isset(self::$byName) || !isset(self::$byModule))
 		{
-			return [
-				'byName' => self::$byName,
-				'byModule' => self::$byModule,
-			];
+			$this->loadControllersData();
 		}
 
+		return [
+			'byName' => self::$byName,
+			'byModule' => self::$byModule,
+		];
+	}
+
+	private function loadControllersData(): void
+	{
 		$items = CacheManager::get(self::CONTROLLERS_DATA_CACHE_KEY);
-		if ($items !== null)
-		{
-			$controllersCacheData = $items['controllers'] ?? $items;
-			$this->generatedDtoCatalog = $this->restoreGeneratedDtoCatalogFromCacheData($items);
-			foreach ($controllersCacheData as $controllerCacheData)
-			{
-				if (!Loader::includeModule($controllerCacheData['module']))
-				{
-					continue;
-				}
-
-				$controllerData = ControllerData::fromArray($controllerCacheData);
-				self::$byName[$controllerData->controllerFqcn] = $controllerData;
-				self::$byModule[$controllerData->module][$controllerData->controllerFqcn] = $controllerData;
-			}
-		}
-		else
+		if (!is_array($items) || !$this->restoreControllersFromCache($items))
 		{
 			$controllersCacheData = [];
 			$this->generatedDtoCatalog = new GeneratedDtoCatalog();
@@ -241,11 +230,31 @@ final class ControllerDataManager
 			);
 			$this->saveGeneratedDtoCatalog($generatedDtoCatalog);
 		}
+	}
 
-		return [
-			'byName' => self::$byName,
-			'byModule' => self::$byModule,
-		];
+	/**
+	 * A cache that loads no controller, for example after the modules of its controllers were removed,
+	 * is treated as missing.
+	 */
+	private function restoreControllersFromCache(array $items): bool
+	{
+		$controllersCacheData = $items['controllers'] ?? $items;
+		$this->generatedDtoCatalog = $this->restoreGeneratedDtoCatalogFromCacheData($items);
+		$isRestored = false;
+		foreach ($controllersCacheData as $controllerCacheData)
+		{
+			if (!Loader::includeModule($controllerCacheData['module']))
+			{
+				continue;
+			}
+
+			$controllerData = ControllerData::fromArray($controllerCacheData);
+			self::$byName[$controllerData->controllerFqcn] = $controllerData;
+			self::$byModule[$controllerData->module][$controllerData->controllerFqcn] = $controllerData;
+			$isRestored = true;
+		}
+
+		return $isRestored;
 	}
 
 	/**
@@ -654,6 +663,7 @@ final class ControllerDataManager
 				$resourceUri,
 				$declaredActionUris,
 				$dto,
+				true,
 			);
 		}
 	}
@@ -688,6 +698,7 @@ final class ControllerDataManager
 		string $resourceUri,
 		array $declaredActionUris,
 		?Dto $dto = null,
+		bool $customFieldRoutesRequireAccessProvider = false,
 	): void
 	{
 		/** @var FieldAccess|null $fieldAccessAttribute */
@@ -740,7 +751,11 @@ final class ControllerDataManager
 			$this->systemControllersData[Field::class]->addMethod($getMethodDescription);
 		}
 
-		if ($dto !== null && $dto->issetUserFields())
+		if (
+			$dto !== null
+			&& $dto->issetUserFields()
+			&& ($accessProvider !== null || !$customFieldRoutesRequireAccessProvider)
+		)
 		{
 			$entityId = $dto->getAttributeByName(OrmEntity::class)->getUserFieldId();
 			$customMethods = ['list', 'get', 'delete', 'update', 'add'];

@@ -11,7 +11,7 @@ use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 
-final class CursorStructure extends Structure
+final class CursorStructure extends Structure implements ReferencesDtoFields
 {
 	protected string $field;
 	protected mixed $value = null;
@@ -38,8 +38,8 @@ final class CursorStructure extends Structure
 			/** @var Dto $dto */
 			$dto = self::getDto($dtoClass);
 
-			$fields = $dto->getFields();
-			if (!isset($fields[$value['field']]))
+			$field = $dto->getFields()->getMeta($value['field']);
+			if ($field === null)
 			{
 				throw new UnknownDtoPropertyException($dto->getShortName(), $value['field']);
 			}
@@ -52,10 +52,9 @@ final class CursorStructure extends Structure
 
 		if ($value['value'] !== null)
 		{
-			$field = $dto->getFields()[$structure->field];
-			$itemValue = FieldsConverter::convertValueByDtoField($field, $value['value']);
+			$itemValue = FieldsConverter::convertValueByFieldMeta($field, $value['value']);
 
-			if (!FieldsValidator::validateDtoFieldValue($field, $itemValue))
+			if (!FieldsValidator::validateFieldMetaValue($field, $itemValue))
 			{
 				$typeLabel = $field->getDynamicEnumProvider() !== null
 					? (new \ReflectionClass($field->getDynamicEnumProvider()))->getShortName()
@@ -87,6 +86,26 @@ final class CursorStructure extends Structure
 		}
 
 		return $structure;
+	}
+
+	/**
+	 * @return list<string>
+	 * @throws InvalidPaginationException
+	 */
+	public static function getReferencedFields(mixed $value): array
+	{
+		$field = is_array($value) ? ($value['field'] ?? null) : null;
+		if (empty($field))
+		{
+			return [];
+		}
+
+		if (!is_string($field))
+		{
+			throw new InvalidPaginationException(['field' => $field]);
+		}
+
+		return [$field];
 	}
 
 	public function getField(): string

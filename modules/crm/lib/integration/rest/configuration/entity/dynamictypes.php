@@ -97,7 +97,17 @@ class DynamicTypes
 				continue;
 			}
 
-			foreach (['CREATED_BY', 'CREATED_TIME', 'UPDATED_TIME', 'UPDATED_BY', 'DESCRIPTION'] as $fieldName)
+			$excludedFields = [
+				'CREATED_BY',
+				'CREATED_TIME',
+				'UPDATED_TIME',
+				'UPDATED_BY',
+				'DESCRIPTION',
+				'IS_START_CATALOG_ENABLED',
+				'START_CATALOG_FORM_ID',
+				'IS_CREATE_BY_FORM_ENABLED',
+			];
+			foreach ($excludedFields as $fieldName)
 			{
 				unset($typeFields[$fieldName]);
 			}

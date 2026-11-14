@@ -182,6 +182,70 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 		);
 	}
 
+	protected function resolveImportManifestCode(
+		array $serverManifest,
+		array $importManifestFile,
+		array $app,
+		string $currentCode
+	): array
+	{
+		$code = $this->selectImportManifestCode($serverManifest, $importManifestFile, $app, $currentCode);
+		$accessCode = (!empty($serverManifest) && !empty($importManifestFile))
+			? (string)($serverManifest['CODE'] ?? '')
+			: $code;
+		if ($code === null || !$this->isManifestAccess($accessCode))
+		{
+			return [
+				'result' => false,
+				'code' => '',
+			];
+		}
+
+		return [
+			'result' => true,
+			'code' => $code,
+		];
+	}
+
+	private function selectImportManifestCode(
+		array $serverManifest,
+		array $importManifestFile,
+		array $app,
+		string $currentCode
+	): ?string
+	{
+		if (empty($importManifestFile))
+		{
+			return $currentCode;
+		}
+
+		$archiveCode = (string)($importManifestFile['CODE'] ?? '');
+
+		if (!empty($serverManifest))
+		{
+			if (
+				$archiveCode !== (string)($serverManifest['CODE'] ?? '')
+				&& !$this->areCompatibleManifests($serverManifest, $importManifestFile)
+			)
+			{
+				$this->errors->setError(
+					new Error(Loc::getMessage('REST_CONFIGURATION_IMPORT_MANIFEST_NOT_CURRENT'))
+				);
+
+				return null;
+			}
+
+			return htmlspecialcharsbx($archiveCode);
+		}
+
+		if (empty($app['ID']))
+		{
+			return $currentCode;
+		}
+
+		return htmlspecialcharsbx($archiveCode);
+	}
+
 	protected function prepareResult()
 	{
 		$result = [
@@ -473,35 +537,17 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 				try
 				{
 					$result['IMPORT_MANIFEST_FILE'] = Json::decode($data);
-					if(!empty($result['IMPORT_MANIFEST_FILE']))
+					$access = $this->resolveImportManifestCode(
+						$result['MANIFEST'] ?? [],
+						$result['IMPORT_MANIFEST_FILE'] ?? [],
+						$result['APP'] ?? [],
+						(string)$result['MANIFEST_CODE']
+					);
+					if (!$access['result'])
 					{
-						if(!empty($result['MANIFEST']))
-						{
-							if (
-								$result['IMPORT_MANIFEST_FILE']['CODE'] != $result['MANIFEST']['CODE']
-								&&
-								!$this->areCompatibleManifests(
-									$result['MANIFEST'],
-									$result['IMPORT_MANIFEST_FILE']
-								)
-							)
-							{
-								$this->errors->setError(
-									new Error(Loc::getMessage('REST_CONFIGURATION_IMPORT_MANIFEST_NOT_CURRENT'))
-								);
-
-								return false;
-							}
-							else
-							{
-								$result['MANIFEST_CODE'] = htmlspecialcharsbx($result['IMPORT_MANIFEST_FILE']['CODE']);
-							}
-						}
-						elseif(!empty($result['APP']['ID']))
-						{
-							$result['MANIFEST_CODE'] = htmlspecialcharsbx($result['IMPORT_MANIFEST_FILE']['CODE']);
-						}
+						return false;
 					}
+					$result['MANIFEST_CODE'] = $access['code'];
 				}
 				catch(ArgumentException $e)
 				{

@@ -92,7 +92,7 @@ class Base
 
 		if(!$this->data)
 		{
-			$fileObject = File::getById($this->fileId);
+			$fileObject = File::load(['=FILE_ID' => (int)$this->fileId]);
 			if($fileObject)
 			{
 				$fileObject->changeViewId(null);
@@ -127,7 +127,7 @@ class Base
 
 		if(!$this->previewData)
 		{
-			$fileObject = File::getById($this->fileId);
+			$fileObject = File::load(['=FILE_ID' => (int)$this->fileId]);
 			if($fileObject)
 			{
 				$fileObject->changePreviewId(null);

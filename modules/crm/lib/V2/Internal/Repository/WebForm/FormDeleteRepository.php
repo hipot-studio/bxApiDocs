@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Internal\Repository\WebForm;
 
 use Bitrix\Crm\Ads\AdsForm;
+use Bitrix\Crm\Ads\Internals\AdsFormLinkTable;
 use Bitrix\Crm\UI\Webpack;
 use Bitrix\Crm\V2\Internal\Integration\Landing\FormPage;
 use Bitrix\Crm\WebForm\Form;
@@ -18,13 +19,15 @@ use Bitrix\Crm\WebForm\Internals\PresetFieldTable;
 use Bitrix\Crm\WebForm\Internals\ResultTable;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\Result;
+use Bitrix\Main\Error;
 
 /**
  * Removes a CRM form and the data the legacy cascade removes with it.
  *
  * The composition of the cascade is reproduced literally, orphans included: what is not listed
- * here stays behind - the agreements, the responsible queue, the dependency groups, the rotation
- * option and the background image. The built package goes too, the way the legacy delete removes
+ * here stays behind - the agreements, the responsible queue, the dependency groups and the
+ * background image. The position of the responsible queue is removed by the delete handler of the
+ * form table together with the row. The built package goes too, the way the legacy delete removes
  * it after the row: the only thing naming that package is the form, so a package left behind is a
  * file served for a form nobody can reach any more.
  *
@@ -58,6 +61,16 @@ class FormDeleteRepository
 	 */
 	public function deleteCascade(int $formId): Result
 	{
+		return $this->deleteCascadeInternal($formId, false);
+	}
+
+	public function deleteCascadeDeferred(int $formId): Result
+	{
+		return $this->deleteCascadeInternal($formId, true);
+	}
+
+	private function deleteCascadeInternal(int $formId, bool $deferExternal): Result
+	{
 		$result = new Result();
 
 		// The links of the form in the ad accounts go through the legacy mechanism owning their
@@ -65,16 +78,19 @@ class FormDeleteRepository
 		// exception, bounded to these two places and lifted when the mechanism moves into the layer.
 		// It answers with nothing, the way legacy leaves it: whether a failed unsubscribe should stop
 		// a delete is an open question of the audit, not a decision of this task.
-		$form = new Form();
-		$form->setId($formId);
-		$form->getIntegration()->delete();
-		AdsForm::unlinkForm($formId);
+		if (!$deferExternal)
+		{
+			$form = new Form();
+			$form->setId($formId);
+			$form->getIntegration()->delete();
+			AdsForm::unlinkForm($formId);
+		}
 
 		// The steps keep the order of the legacy cascade, the package of the form after them. Only
 		// the ones that can answer join the list: a set removal and the daily statistics report a
 		// failure by raising instead.
 		$results = [];
-		$results[] = $this->formPage->deletePages($formId);
+		if (!$deferExternal) { $results[] = $this->formPage->deletePages($formId); }
 		self::deleteRowsOfForm(FieldTable::class, $formId);
 		self::deleteRowsOfForm(FieldDependenceTable::class, $formId);
 		$results[] = PresetFieldTable::delete(['FORM_ID' => $formId]);
@@ -82,7 +98,7 @@ class FormDeleteRepository
 		$results[] = FormStartEditTable::delete(['FORM_ID' => $formId]);
 		self::deleteRowsOfForm(FormCounterTable::class, $formId);
 		$results[] = self::deleteResultsOfForm($formId);
-		$results[] = self::deletePackageOfForm($formId);
+		if (!$deferExternal) { $results[] = self::deletePackageOfForm($formId); }
 
 		foreach ($results as $stepResult)
 		{
@@ -101,6 +117,56 @@ class FormDeleteRepository
 	public function deleteFormRow(int $formId): Result
 	{
 		return FormTable::delete($formId);
+	}
+
+	public function deleteFormRowDeferred(int $formId): Result
+	{
+		FormTable::beginDeferredExternalDelete($formId);
+		try { return FormTable::delete($formId); }
+		finally { FormTable::endDeferredExternalDelete($formId); }
+	}
+
+	public function captureExternalDelete(int $formId): array
+	{
+		return AdsFormLinkTable::getList(['select' => ['ID', 'ADS_TYPE', 'ADS_ACCOUNT_ID', 'ADS_FORM_ID'],
+			'filter' => ['=WEBFORM_ID' => $formId,
+				'=LINK_DIRECTION' => AdsFormLinkTable::LINK_DIRECTION_EXPORT]])->fetchAll();
+	}
+
+	public function completeExternalDelete(int $formId, array $exportLinks): Result
+	{
+		$result = new Result();
+		$form = new Form();
+		$form->setId($formId);
+		try
+		{
+			if (!$form->getIntegration()->deleteWithResult()->isSuccess())
+			{
+				$result->addError(new Error('CRM form integration removal failed.'));
+			}
+		}
+		catch (\Throwable) { $result->addError(new Error('CRM form integration removal failed.')); }
+		foreach ($exportLinks as $link)
+		{
+			try
+			{
+				if (!AdsFormLinkTable::getById((int)$link['ID'])->fetch()) { continue; }
+				$adsForm = AdsForm::getService()->getForm($link['ADS_TYPE']);
+				$adsForm->setAccountId($link['ADS_ACCOUNT_ID']);
+				if (!$adsForm->unlink($link['ADS_FORM_ID'])
+					|| !AdsFormLinkTable::delete((int)$link['ID'])->isSuccess())
+				{
+					$result->addError(new Error('CRM form advertisement unlink failed.'));
+				}
+			}
+			catch (\Throwable) { $result->addError(new Error('CRM form advertisement unlink failed.')); }
+		}
+		$pages = $this->formPage->deletePages($formId);
+		if (!$pages->isSuccess()) { $result->addErrors($pages->getErrors()); }
+		$package = self::deletePackageOfForm($formId);
+		if (!$package->isSuccess()) { $result->addErrors($package->getErrors()); }
+
+		return $result;
 	}
 
 	/**

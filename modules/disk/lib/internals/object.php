@@ -3,6 +3,7 @@ namespace Bitrix\Disk\Internals;
 
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\MysqlCommonConnection;
@@ -48,6 +49,8 @@ Loc::loadMessages(__FILE__);
  * <li> VIEW_ID int optional
  * <li> SEARCH_INDEX string optional
  * <li> UNIQUE_CODE string optional
+ * <li> HAS_UPLOAD_CLEANUP_MARKER bool optional
+ * <li> NAME_KEY string(64) optional
  * </ul>
  *
  * @package Bitrix\Disk
@@ -70,6 +73,18 @@ Loc::loadMessages(__FILE__);
 
 class ObjectTable extends DataManager
 {
+	private const CLEANUP_MARKER_REVOKE_FIELDS = [
+		'GLOBAL_CONTENT_VERSION',
+		'FILE_ID',
+		'SIZE',
+		'ETAG',
+		'NAME',
+		'PARENT_ID',
+		'STORAGE_ID',
+		'DELETED_BY',
+		'DELETED_TYPE',
+	];
+
 	const TYPE_FOLDER = 2;
 	const TYPE_FILE   = 3;
 
@@ -308,6 +323,13 @@ class ObjectTable extends DataManager
 				),
 				'join_type' => 'INNER',
 			),
+			'OPTIONAL_EXTENDED_INDEX' => array(
+				'data_type' => '\Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable',
+				'reference' => array(
+					'=this.ID' => 'ref.OBJECT_ID'
+				),
+				'join_type' => 'LEFT',
+			),
 			'HAS_SEARCH_INDEX' => array(
 				'data_type' => 'boolean',
 				'expression'  => [
@@ -324,6 +346,17 @@ class ObjectTable extends DataManager
 			'UNIQUE_CODE' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateUniqueCode'),
+			),
+			'UPLOAD_INTENT_TOKEN' => array(
+				'data_type' => 'string',
+			),
+			'HAS_UPLOAD_CLEANUP_MARKER' => array(
+				'data_type' => 'boolean',
+				'values' => array(0, 1),
+				'default_value' => 0,
+			),
+			'NAME_KEY' => array(
+				'data_type' => 'string',
 			),
 			'ALLOW_DOWNLOAD_ON_READ' => array(
 				'data_type' => '\Bitrix\Disk\Internals\ObjectOptionsTable',
@@ -440,6 +473,18 @@ class ObjectTable extends DataManager
 		parent::checkFields($result, $primary, $data);
 	}
 
+	public static function onBeforeAdd(Entity\Event $event)
+	{
+		$result = new Entity\EventResult();
+		$data = $event->getParameter('fields');
+		if (isset($data['NAME']))
+		{
+			$result->modifyFields(['NAME_KEY' => ObjectNameKey::of((string)$data['NAME'])]);
+		}
+
+		return $result;
+	}
+
 	public static function onAfterAdd(Entity\Event $event)
 	{
 		$fields = $event->getParameter('fields');
@@ -469,6 +514,10 @@ class ObjectTable extends DataManager
 		{
 			$result->modifyFields(array('SYNC_UPDATE_TIME' => new DateTime()));
 		}
+		if (isset($data['NAME']))
+		{
+			$result->modifyFields($result->getModified() + ['NAME_KEY' => ObjectNameKey::of((string)$data['NAME'])]);
+		}
 
 		/** @var EO_Object $object */
 		$object = $event->getParameter('object');
@@ -476,6 +525,31 @@ class ObjectTable extends DataManager
 		if ($isSetUniqueCodeField && $object->remindActual('UNIQUE_CODE') !== null)
 		{
 			$result->unsetField('UNIQUE_CODE');
+		}
+
+		if (array_intersect(array_keys($data), self::CLEANUP_MARKER_REVOKE_FIELDS))
+		{
+			$primary = $event->getParameter('id');
+			$objectId = is_array($primary) ? (int)($primary['ID'] ?? 0) : (int)$primary;
+			$hasMarker = array_key_exists('HAS_UPLOAD_CLEANUP_MARKER', $data)
+				? (bool)$data['HAS_UPLOAD_CLEANUP_MARKER']
+				: $object->remindActual('HAS_UPLOAD_CLEANUP_MARKER')
+			;
+			$markerService = new MarkerService();
+			if (
+				$objectId > 0
+				&& !$markerService->revokeBeforeUse($objectId, $hasMarker === null ? null : (bool)$hasMarker)
+			)
+			{
+				$result->addError(new Entity\EntityError(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+			}
+			elseif ($objectId > 0 && $hasMarker !== null)
+			{
+				// modifyFields() replaces the whole set, so the sync mark raised above has to be carried along
+				$result->modifyFields($result->getModified() + [
+					'HAS_UPLOAD_CLEANUP_MARKER' => $markerService->markerPresenceHint($objectId, (bool)$hasMarker) ? 1 : 0,
+				]);
+			}
 		}
 
 		return $result;
@@ -497,13 +571,14 @@ class ObjectTable extends DataManager
 	/**
 	 * Move object from node to another node.
 	 * Use this method instead update.
-	 * If the target node already holds an object with the same name (IX_DISK_O_5), returns
-	 * a failed result with the error code ObjectNameService::ERROR_NON_UNIQUE_NAME.
+	 * If the target node already holds an object with the same name (UX_DISK_OBJECT_PARENT_NAME_KEY),
+	 * returns a failed result with the error code ObjectNameService::ERROR_NON_UNIQUE_NAME.
+	 * Rows whose NAME_KEY is not filled yet are not guarded by the database.
 	 * @param $primary
 	 * @param $newParentId
 	 * @return \Bitrix\Main\Entity\UpdateResult
 	 */
-	public static function move($primary, $newParentId)
+	public static function move($primary, $newParentId, ?bool $hasUploadCleanupMarker = null)
 	{
 		$newParentId = (int)$newParentId;
 		// check primary
@@ -515,6 +590,16 @@ class ObjectTable extends DataManager
 		);
 		$entity = static::getEntity();
 		$result = new UpdateResult();
+		$objectId = (int)($primary['ID'] ?? 0);
+		if (
+			$objectId > 0
+			&& !(new MarkerService())->revokeBeforeUse($objectId, $hasUploadCleanupMarker)
+		)
+		{
+			$result->addError(new Entity\EntityError(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+			return $result;
+		}
 
 		$event = new Entity\Event($entity, self::EVENT_ON_BEFORE_MOVE, array("id"=>$primary, "fields"=>$data));
 		$event->send();
@@ -645,6 +730,11 @@ class ObjectTable extends DataManager
 
 		$connection = Main\Application::getConnection();
 		$helper = $connection->getSqlHelper();
+
+		if (isset($attributes['NAME']))
+		{
+			$attributes['NAME_KEY'] = ObjectNameKey::of((string)$attributes['NAME']);
+		}
 
 		$tableName = static::getEntity()->getDBTableName();
 		$update = $helper->prepareUpdate($tableName, $attributes);

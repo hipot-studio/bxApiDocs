@@ -68,8 +68,9 @@ final class PlaceDto extends Dto
 
 	/**
 	 * Whether the object went to the trashcan with an ancestor rather than on its own. Only
-	 * meaningful while trashed, and needed for restoring: a folder brought back must leave behind
-	 * those of its descendants that were thrown away before it.
+	 * meaningful while trashed. Descendants thrown away before the folder do not keep a trash of
+	 * their own: trashing the folder turns them into ones trashed with it, and restoring the folder
+	 * brings them back along with the rest (Folder::markDeletedDescendants, Folder::restore).
 	 */
 	public bool $trashedWithAncestor;
 }

@@ -18,7 +18,7 @@ use Bitrix\Main\Result;
  */
 final class AutoReturnCustomerGenerationEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.lead.return_customer_auto_generation.enabled';
+	public const ID = 'crm.lead.return_customer_auto_generation.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly LeadSettings $leadSettings;
@@ -28,18 +28,20 @@ final class AutoReturnCustomerGenerationEnabledSetting extends AbstractSetting
 		$this->leadSettings = $leadSettings ?? LeadSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'enable_auto_gen_rc',
 		);
 	}
 

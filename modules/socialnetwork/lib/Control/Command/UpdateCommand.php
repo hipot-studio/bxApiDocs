@@ -14,6 +14,7 @@ use Bitrix\Socialnetwork\Control\Enum\ViewMode;
 use Bitrix\Socialnetwork\Control\Mapper\Field\AvatarMapper;
 use Bitrix\Socialnetwork\Control\Mapper\Field\DepartmentMapper;
 use Bitrix\Socialnetwork\Control\Mapper\Field\ViewModeMapper;
+use Bitrix\Socialnetwork\Control\Mapper\Field\TagNamesMapper;
 use Bitrix\Socialnetwork\Item\Workgroup\AvatarType;
 use Bitrix\Socialnetwork\Permission\GroupAccessController;
 use Bitrix\Socialnetwork\Control\Command\Attribute\AccessController;
@@ -56,6 +57,8 @@ use Bitrix\Socialnetwork\Item\Workgroup\Type;
  * @method null|Features getFeatures()
  * @method self setViewMode(ViewMode $viewMode)
  * @method null|ViewMode getViewMode()
+ * @method self setTagNames(?array $tagNames)
+ * @method null|array getTagNames()
  */
 
 #[AccessController(GroupAccessController::class)]
@@ -111,4 +114,7 @@ class UpdateCommand extends InitiatedCommand
 
 	#[AccessCode]
 	protected ?array $deleteModeratorMembers;
+
+	#[Map('KEYWORDS', TagNamesMapper::class)]
+	protected ?array $tagNames;
 }

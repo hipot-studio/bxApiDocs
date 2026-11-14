@@ -3,6 +3,8 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\SmartProcessStartForms;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Model\Dynamic;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
@@ -11,6 +13,7 @@ use Bitrix\Crm\Relation\Collection;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\StartCatalog\FormResolver;
 use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
 use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\UserField\UserFieldManager;
@@ -524,6 +527,23 @@ class Type extends Base
 			}
 		}
 
+		$fields = $this->prepareStartCatalogFields($type, $fields, $isNew);
+		if ($fields === null)
+		{
+			return null;
+		}
+
+		if (!$this->isStartCatalogFormBindingValid($type, $fields, $isNew))
+		{
+			return null;
+		}
+
+		// the browser cannot send null, so an emptied choice comes as 0 or an empty string
+		if (array_key_exists('START_CATALOG_FORM_ID', $fields) && (int)$fields['START_CATALOG_FORM_ID'] <= 0)
+		{
+			$fields['START_CATALOG_FORM_ID'] = null;
+		}
+
 		foreach($fields as $name => $value)
 		{
 			if($type->entity->hasField($name) && !in_array($name, $fieldKeysToNotSetToType, true))
@@ -570,6 +590,108 @@ class Type extends Base
 
 		$this->addErrors($result->getErrors());
 		return null;
+	}
+
+	private function prepareStartCatalogFields(Dynamic\Type $type, array $fields, bool $isNew): ?array
+	{
+		if (Feature::enabled(SmartProcessStartForms::class))
+		{
+			return $fields;
+		}
+
+		foreach (['IS_START_CATALOG_ENABLED', 'START_CATALOG_FORM_ID', 'IS_CREATE_BY_FORM_ENABLED'] as $name)
+		{
+			if (!array_key_exists($name, $fields))
+			{
+				continue;
+			}
+
+			$field = $type->entity->getField($name);
+			$currentValue = $isNew ? $field->getDefaultValue() : $type->get($name);
+			$value = $this->normalizeStartCatalogFieldValue($name, $fields[$name]);
+			if ($value === null || $value !== $this->normalizeStartCatalogFieldValue($name, $currentValue))
+			{
+				$this->addError(ErrorCode::getAccessDeniedError());
+
+				return null;
+			}
+
+			unset($fields[$name]);
+		}
+
+		return $fields;
+	}
+
+	private function normalizeStartCatalogFieldValue(string $name, mixed $value): int|bool|null
+	{
+		if ($name !== 'START_CATALOG_FORM_ID')
+		{
+			if (!in_array($value, [true, false, 1, 0, 'Y', 'N', '1', '0', 'true', 'false'], true))
+			{
+				return null;
+			}
+
+			return in_array($value, [true, 1, 'Y', '1', 'true'], true);
+		}
+
+		if ($value === null || $value === '')
+		{
+			return 0;
+		}
+
+		if (is_int($value))
+		{
+			return $value >= 0 ? $value : null;
+		}
+
+		if (
+			is_string($value)
+			&& preg_match('/^[0-9]+$/D', $value) === 1
+			&& (string)(int)$value === (ltrim($value, '0') ?: '0')
+		)
+		{
+			return (int)$value;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Only a living form of this smart process may be chosen; a new smart process has none yet.
+	 * An unchanged binding is kept even if the form has become unavailable since.
+	 */
+	private function isStartCatalogFormBindingValid(Dynamic\Type $type, array $fields, bool $isNew): bool
+	{
+		if (!array_key_exists('START_CATALOG_FORM_ID', $fields))
+		{
+			return true;
+		}
+
+		$formId = (int)$fields['START_CATALOG_FORM_ID'];
+		if ($formId <= 0 || (!$isNew && $formId === (int)$type->getStartCatalogFormId()))
+		{
+			return true;
+		}
+
+		if (!$isNew)
+		{
+			$entityTypeId = (int)$type->getEntityTypeId();
+			$liveForms = (new FormResolver())->getLiveForms([$entityTypeId])[$entityTypeId] ?? [];
+			$liveFormIds = array_column($liveForms, 'id');
+			if (in_array($formId, $liveFormIds, true))
+			{
+				return true;
+			}
+		}
+
+		$this->addError(
+			new Error(
+				Loc::getMessage('CRM_CONTROLLER_TYPE_START_CATALOG_UNSUITABLE_FORM_ERROR'),
+				ErrorCode::INVALID_ARG_VALUE,
+			),
+		);
+
+		return false;
 	}
 
 	private function normalizeFields(array $fields): array

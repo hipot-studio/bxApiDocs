@@ -4,7 +4,6 @@ namespace Bitrix\Rest\V3\Event\Payload;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Rest\V3\Dto\Dto;
-use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\Mapping\Mapper;
 use Bitrix\Rest\V3\Event\EventType;
 
@@ -52,8 +51,7 @@ final class DtoPayload extends AbstractPayload
 	{
 		$schema = [];
 		$dto = $this->dtoClass::create();
-		/** @var DtoField $field */
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			$schema[] = $field->getPropertyName();
 		}

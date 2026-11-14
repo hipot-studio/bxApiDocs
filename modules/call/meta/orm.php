@@ -1,6 +1,6 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallTrackTable:call/lib/model/calltracktable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallTrackTable:call/lib/Model/CallTrackTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * Track
@@ -286,7 +286,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallTrack_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallChatEntityTable:call/lib/model/callchatentitytable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallChatEntityTable:call/lib/Model/CallChatEntityTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * CallChatEntity
@@ -427,7 +427,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallChatEntity_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallOutcomeTable:call/lib/model/calloutcometable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallOutcomeTable:call/lib/Model/CallOutcomeTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * Outcome
@@ -642,7 +642,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallOutcome_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallOutcomePropertyTable:call/lib/model/calloutcomepropertytable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallOutcomePropertyTable:call/lib/Model/CallOutcomePropertyTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * Property
@@ -808,7 +808,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallOutcomeProperty_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallTable:call/lib/model/calltable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallTable:call/lib/Model/CallTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_Call
@@ -1022,6 +1022,16 @@ namespace Bitrix\Call\Model {
 	 * @method \Bitrix\Call\Model\EO_Call resetAiAnalyze()
 	 * @method \Bitrix\Call\Model\EO_Call unsetAiAnalyze()
 	 * @method \boolean fillAiAnalyze()
+	 * @method null|\boolean getRecordDestroyed()
+	 * @method \Bitrix\Call\Model\EO_Call setRecordDestroyed(null|\boolean|\Bitrix\Main\DB\SqlExpression $recordDestroyed)
+	 * @method bool hasRecordDestroyed()
+	 * @method bool isRecordDestroyedFilled()
+	 * @method bool isRecordDestroyedChanged()
+	 * @method null|\boolean remindActualRecordDestroyed()
+	 * @method null|\boolean requireRecordDestroyed()
+	 * @method \Bitrix\Call\Model\EO_Call resetRecordDestroyed()
+	 * @method \Bitrix\Call\Model\EO_Call unsetRecordDestroyed()
+	 * @method null|\boolean fillRecordDestroyed()
 	 * @method \Bitrix\Call\Model\EO_CallUser getCallUser()
 	 * @method \Bitrix\Call\Model\EO_CallUser remindActualCallUser()
 	 * @method \Bitrix\Call\Model\EO_CallUser requireCallUser()
@@ -1116,6 +1126,8 @@ namespace Bitrix\Call\Model {
 	 * @method \boolean[] fillRecordAudio()
 	 * @method \boolean[] getAiAnalyzeList()
 	 * @method \boolean[] fillAiAnalyze()
+	 * @method null|\boolean[] getRecordDestroyedList()
+	 * @method null|\boolean[] fillRecordDestroyed()
 	 * @method \Bitrix\Call\Model\EO_CallUser[] getCallUserList()
 	 * @method \Bitrix\Call\Model\EO_Call_Collection getCallUserCollection()
 	 * @method \Bitrix\Call\Model\EO_CallUser_Collection fillCallUser()
@@ -1178,7 +1190,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_Call_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserTable:call/lib/model/callusertable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserTable:call/lib/Model/CallUserTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_CallUser
@@ -1373,7 +1385,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallUser_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserLogTable:call/lib/model/calluserlogtable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserLogTable:call/lib/Model/CallUserLogTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_CallUserLog
@@ -1437,6 +1449,16 @@ namespace Bitrix\Call\Model {
 	 * @method \Bitrix\Call\Model\EO_CallUserLog resetStatusTime()
 	 * @method \Bitrix\Call\Model\EO_CallUserLog unsetStatusTime()
 	 * @method \Bitrix\Main\Type\DateTime fillStatusTime()
+	 * @method null|\string getDirection()
+	 * @method \Bitrix\Call\Model\EO_CallUserLog setDirection(null|\string|\Bitrix\Main\DB\SqlExpression $direction)
+	 * @method bool hasDirection()
+	 * @method bool isDirectionFilled()
+	 * @method bool isDirectionChanged()
+	 * @method null|\string remindActualDirection()
+	 * @method null|\string requireDirection()
+	 * @method \Bitrix\Call\Model\EO_CallUserLog resetDirection()
+	 * @method \Bitrix\Call\Model\EO_CallUserLog unsetDirection()
+	 * @method null|\string fillDirection()
 	 * @method \Bitrix\Main\EO_User getUser()
 	 * @method \Bitrix\Main\EO_User remindActualUser()
 	 * @method \Bitrix\Main\EO_User requireUser()
@@ -1447,6 +1469,16 @@ namespace Bitrix\Call\Model {
 	 * @method bool isUserFilled()
 	 * @method bool isUserChanged()
 	 * @method \Bitrix\Main\EO_User fillUser()
+	 * @method \Bitrix\Call\Model\EO_Call getImCall()
+	 * @method \Bitrix\Call\Model\EO_Call remindActualImCall()
+	 * @method \Bitrix\Call\Model\EO_Call requireImCall()
+	 * @method \Bitrix\Call\Model\EO_CallUserLog setImCall(\Bitrix\Call\Model\EO_Call $object)
+	 * @method \Bitrix\Call\Model\EO_CallUserLog resetImCall()
+	 * @method \Bitrix\Call\Model\EO_CallUserLog unsetImCall()
+	 * @method bool hasImCall()
+	 * @method bool isImCallFilled()
+	 * @method bool isImCallChanged()
+	 * @method \Bitrix\Call\Model\EO_Call fillImCall()
 	 * @method \Bitrix\Voximplant\EO_Statistic getVoximplantStat()
 	 * @method \Bitrix\Voximplant\EO_Statistic remindActualVoximplantStat()
 	 * @method \Bitrix\Voximplant\EO_Statistic requireVoximplantStat()
@@ -1511,9 +1543,14 @@ namespace Bitrix\Call\Model {
 	 * @method \string[] fillStatus()
 	 * @method \Bitrix\Main\Type\DateTime[] getStatusTimeList()
 	 * @method \Bitrix\Main\Type\DateTime[] fillStatusTime()
+	 * @method null|\string[] getDirectionList()
+	 * @method null|\string[] fillDirection()
 	 * @method \Bitrix\Main\EO_User[] getUserList()
 	 * @method \Bitrix\Call\Model\EO_CallUserLog_Collection getUserCollection()
 	 * @method \Bitrix\Main\EO_User_Collection fillUser()
+	 * @method \Bitrix\Call\Model\EO_Call[] getImCallList()
+	 * @method \Bitrix\Call\Model\EO_CallUserLog_Collection getImCallCollection()
+	 * @method \Bitrix\Call\Model\EO_Call_Collection fillImCall()
 	 * @method \Bitrix\Voximplant\EO_Statistic[] getVoximplantStatList()
 	 * @method \Bitrix\Call\Model\EO_CallUserLog_Collection getVoximplantStatCollection()
 	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fillVoximplantStat()
@@ -1576,7 +1613,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallUserLog_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\ConferenceUserRoleTable:call/lib/model/conferenceuserroletable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\ConferenceUserRoleTable:call/lib/Model/ConferenceUserRoleTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_ConferenceUserRole
@@ -1711,7 +1748,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_ConferenceUserRole_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallAITaskTable:call/lib/model/callaitasktable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallAITaskTable:call/lib/Model/CallAITaskTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_CallAITask
@@ -1999,7 +2036,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallAITask_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserLogIndexTable:call/lib/model/calluserlogindextable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserLogIndexTable:call/lib/Model/CallUserLogIndexTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_CallUserLogIndex
@@ -2033,6 +2070,16 @@ namespace Bitrix\Call\Model {
 	 * @method \Bitrix\Call\Model\EO_CallUserLogIndex resetSearchContent()
 	 * @method \Bitrix\Call\Model\EO_CallUserLogIndex unsetSearchContent()
 	 * @method \string fillSearchContent()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Call\Model\EO_CallUserLogIndex setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Call\Model\EO_CallUserLogIndex resetUserId()
+	 * @method \Bitrix\Call\Model\EO_CallUserLogIndex unsetUserId()
+	 * @method \int fillUserId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2081,6 +2128,8 @@ namespace Bitrix\Call\Model {
 	 * @method \string[] fillSearchTitle()
 	 * @method \string[] getSearchContentList()
 	 * @method \string[] fillSearchContent()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2140,7 +2189,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_CallUserLogIndex_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\ConferenceTable:call/lib/model/conferencetable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\ConferenceTable:call/lib/Model/ConferenceTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_Conference
@@ -2342,7 +2391,7 @@ namespace Bitrix\Call\Model {
 	 */
 	class EO_Conference_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserLogCountersTable:call/lib/model/calluserlogcounterstable.php */
+/* ORMENTITYANNOTATION:Bitrix\Call\Model\CallUserLogCountersTable:call/lib/Model/CallUserLogCountersTable.php */
 namespace Bitrix\Call\Model {
 	/**
 	 * EO_CallUserLogCounters

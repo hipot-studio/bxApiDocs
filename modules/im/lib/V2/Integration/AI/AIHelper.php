@@ -21,4 +21,14 @@ class AIHelper
 
 		return CopilotChatBot::getBotId() ?: CopilotChatBot::register();
 	}
+
+	public static function getExistingCopilotBotId(): int
+	{
+		if (!Loader::includeModule('imbot'))
+		{
+			return 0;
+		}
+
+		return (int)CopilotChatBot::getBotId();
+	}
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\Step\Update;
 
+use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
+use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityStorageElement;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityRepository;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityRepositoryInterface;
 use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\PipelineContext;
@@ -37,6 +39,11 @@ use Bitrix\Main\Result;
  * THE BINDINGS OF THE PREVIOUS STATE ARE NOT READ HERE EITHER. They live in a table of their own and legacy reads
  * them two steps later, after the check of the fields has had its say (:511); the step of that row writes them
  * into the model of the state this one loaded.
+ *
+ * THE FILES OF THE PREVIOUS STATE ARE, because the same row lists them. They go into the model of the state the
+ * way the bindings do, so that the write of the files compares against them and the hook of a legacy provider
+ * is handed them as the files the activity had (crm_activity.php:1216-1221) - a read of their own would be one
+ * more query per update. A state that says nothing about them leaves the files of the model unknown.
  *
  * @internal
  */
@@ -96,8 +103,17 @@ final class LoadPreviousState implements PipelineStepInterface
 			));
 		}
 
+		$activity = $state[ActivityRepositoryInterface::STATE_ACTIVITY];
+		if (isset($state[ActivityRepositoryInterface::STATE_STORAGE_ELEMENT_IDS]))
+		{
+			$activity->internalSet(Activity::files, array_map(
+				static fn(int $id): ActivityStorageElement => new ActivityStorageElement($id),
+				$state[ActivityRepositoryInterface::STATE_STORAGE_ELEMENT_IDS],
+			));
+		}
+
 		$context->setPreviousState(
-			$state[ActivityRepositoryInterface::STATE_ACTIVITY],
+			$activity,
 			$state[ActivityRepositoryInterface::STATE_PAYLOAD],
 			$state[ActivityRepositoryInterface::STATE_TRANSIT],
 		);

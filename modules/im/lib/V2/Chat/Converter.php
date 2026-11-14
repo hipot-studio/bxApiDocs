@@ -8,6 +8,7 @@ use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Tree\ChatTreeScopeFactory;
+use Bitrix\Im\V2\Integration\Search\IndexService;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission;
@@ -112,6 +113,23 @@ class Converter
 		CounterService::clearCache();
 		ChatRelations::cleanInstance($this->chatId);
 		$this->sendPush();
+		$this->updateSearchIndexRights();
+	}
+
+	/**
+	 * A conversion publishes no server event, so this is the only place the search index learns that
+	 * the openness of a chat has changed. Switching a collab open and back goes through here as well:
+	 * UpdateService flips COLLAB and OPEN_COLLAB by the same converter.
+	 */
+	protected function updateSearchIndexRights(): void
+	{
+		$becameOpen = $this->fromCloseToOpenType();
+		if (!$becameOpen && !$this->fromOpenToCloseType())
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()->get(IndexService::class)->onChatConverted($this->getChat(), $becameOpen);
 	}
 
 	/**

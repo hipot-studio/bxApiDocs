@@ -7,9 +7,7 @@ use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentTable;
 use Bitrix\Crm\Copilot\CallAssessment\EntitySelector\PullManager as ScriptSelectorPullManager;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Copilot\PullManager;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\ItemIdentifier;
@@ -34,9 +32,6 @@ final class CopilotCallAssessmentController
 	private const DEFAULT_SELECT = [
 		'*',
 		'CLIENT_TYPES.CLIENT_TYPE_ID',
-		'AVAILABILITY_DATA.START_POINT',
-		'AVAILABILITY_DATA.END_POINT',
-		'AVAILABILITY_DATA.WEEKDAY_TYPE',
 	];
 
 	private const DISTINCT_BORDERS_CACHE_TTL = 86400;
@@ -57,7 +52,10 @@ final class CopilotCallAssessmentController
 
 	public function add(CallAssessmentItem $callAssessmentItem): AddResult
 	{
-		$result = CopilotCallAssessmentTable::add($this->getFields($callAssessmentItem));
+		$result = CopilotCallAssessmentTable::add([
+			'IS_ENABLED' => $callAssessmentItem->isEnabled(),
+			...$this->getFields($callAssessmentItem),
+		]);
 		if ($result->isSuccess())
 		{
 			$modifyClientResult = $this->modifyClientTypeIds(
@@ -68,18 +66,6 @@ final class CopilotCallAssessmentController
 			if (!$modifyClientResult->isSuccess())
 			{
 				$result->addErrors($modifyClientResult->getErrors());
-			}
-
-
-			$modifyAvailabilityResult = $this->modifyAvailability(
-				$result->getId(),
-				$callAssessmentItem->getAvailabilityType(),
-				$callAssessmentItem->getAvailabilityData(),
-				false,
-			);
-			if (!$modifyAvailabilityResult->isSuccess())
-			{
-				$result->addErrors($modifyAvailabilityResult->getErrors());
 			}
 		}
 
@@ -101,16 +87,28 @@ final class CopilotCallAssessmentController
 				$result->addErrors($modifyClientResult->getErrors());
 			}
 
-			$modifyAvailabilityResult = $this->modifyAvailability(
-				$id,
-				$callAssessmentItem->getAvailabilityType(),
-				$callAssessmentItem->getAvailabilityData(),
-			);
-			if (!$modifyAvailabilityResult->isSuccess())
+			if ($context)
 			{
-				$result->addErrors($modifyAvailabilityResult->getErrors());
+				(new PullManager())->sendUpdateAssessmentPullEvent($id, [
+					'eventId' => $context->getEventId(),
+				]);
 			}
 
+			(new ScriptSelectorPullManager())->dispatchUpdateById($id);
+		}
+
+		return $result;
+	}
+
+	public function updateEnabled(int $id, bool $isEnabled, ?Context $context = null): Result
+	{
+		$result = CopilotCallAssessmentTable::update($id, [
+			'IS_ENABLED' => $isEnabled,
+			'UPDATED_AT' => new DateTime(),
+			'UPDATED_BY_ID' => Container::getInstance()->getContext()->getUserId(),
+		]);
+		if ($result->isSuccess())
+		{
 			if ($context)
 			{
 				(new PullManager())->sendUpdateAssessmentPullEvent($id, [
@@ -198,7 +196,6 @@ final class CopilotCallAssessmentController
 		}
 
 		CopilotCallAssessmentClientTypeController::getInstance()->deleteByAssessmentId($id);
-		CopilotCallAssessmentAvailabilityController::getInstance()->deleteByAssessmentId($id);
 		CopilotCallAssessmentCriteriaController::getInstance()->deleteByAssessmentId($id);
 
 		// clean jobs if needed
@@ -207,28 +204,6 @@ final class CopilotCallAssessmentController
 		);
 
 		return CopilotCallAssessmentTable::delete($id);
-	}
-
-	public function getCurrentAvailableAssessmentFilter(): array
-	{
-		if (!Feature::enabled(Feature\CopilotCallAssessmentAvailability::class))
-		{
-			return [];
-		}
-
-		$assessmentIds = CopilotCallAssessmentAvailabilityController::getInstance()->getCurrentAvailableAssessmentIds();
-		// Every caller reads an empty filter as "no restriction", so nothing available right now must still
-		// leave the always active settings as the only choice instead of opening up the scheduled ones.
-		if (empty($assessmentIds))
-		{
-			return ['=AVAILABILITY_TYPE' => AvailabilityType::ALWAYS_ACTIVE->value];
-		}
-
-		return [
-			'LOGIC' => 'OR',
-			'=AVAILABILITY_TYPE' => AvailabilityType::ALWAYS_ACTIVE->value,
-			'@ID' => $assessmentIds,
-		];
 	}
 
 	public function syncBordersToAll(?int $lowBorder, ?int $highBorder): void
@@ -365,7 +340,6 @@ final class CopilotCallAssessmentController
 			'GIST' => $callAssessmentItem->getGist(),
 			'CALL_TYPE' => $callAssessmentItem->getCallTypeId(),
 			'AUTO_CHECK_TYPE' => $callAssessmentItem->getAutoCheckTypeId(),
-			'IS_ENABLED' => $callAssessmentItem->isEnabled(),
 			'IS_DEFAULT' => $callAssessmentItem->isDefault(),
 			'IS_AI_IMPROVEMENT_ENABLED' => $callAssessmentItem->isAiImprovementEnabled(),
 			'JOB_ID' => $callAssessmentItem->getJobId(),
@@ -373,7 +347,6 @@ final class CopilotCallAssessmentController
 			'CODE' => $callAssessmentItem->getCode(),
 			'LOW_BORDER' => $callAssessmentItem->getLowBorder(),
 			'HIGH_BORDER' => $callAssessmentItem->getHighBorder(),
-			'AVAILABILITY_TYPE' => $callAssessmentItem->getAvailabilityType(),
 			'UPDATED_AT' => new DateTime(),
 			'UPDATED_BY_ID' => Container::getInstance()->getContext()->getUserId(),
 		];
@@ -391,42 +364,6 @@ final class CopilotCallAssessmentController
 		foreach ($clientTypeIds as $clientTypeId)
 		{
 			$addResult = $controller->add($assessmentId, $clientTypeId);
-			if (!$addResult->isSuccess())
-			{
-				return $addResult;
-			}
-		}
-
-		return new Result();
-	}
-
-	private function modifyAvailability(
-		int $assessmentId,
-		string $availabilityType,
-		array $availabilityData,
-		bool $deleteOldRecords = true,
-	): Result
-	{
-		if (!Feature::enabled(Feature\CopilotCallAssessmentAvailability::class))
-		{
-			return new Result();
-		}
-
-		$controller = CopilotCallAssessmentAvailabilityController::getInstance();
-
-		if ($deleteOldRecords)
-		{
-			$controller->deleteByAssessmentId($assessmentId);
-		}
-
-		if (!AvailabilityType::isExtendedAvailabilityType($availabilityType))
-		{
-			return new Result();
-		}
-
-		foreach ($availabilityData as $row)
-		{
-			$addResult = $controller->add($assessmentId, $row);
 			if (!$addResult->isSuccess())
 			{
 				return $addResult;

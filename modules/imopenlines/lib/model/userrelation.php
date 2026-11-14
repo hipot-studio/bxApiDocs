@@ -14,6 +14,7 @@ Loc::loadMessages(__FILE__);
  * <li> USER_ID int optional
  * <li> CHAT_ID int optional
  * <li> AGREES bool optional default 'N'
+ * <li> SHOWN_AGREEMENT_ID int optional default 0
  * </ul>
  *
  * @package Bitrix\Imopenlines
@@ -69,6 +70,14 @@ class UserRelationTable extends Main\Entity\DataManager
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'N',
+			),
+			// the agreement whose text was shown to the client, so that a line switched to another
+			// agreement asks for the consent again; an empty value means a relation created before
+			// the field existed
+			'SHOWN_AGREEMENT_ID' => array(
+				'data_type' => 'integer',
+				'nullable' => true,
+				'default_value' => 0,
 			),
 		);
 	}

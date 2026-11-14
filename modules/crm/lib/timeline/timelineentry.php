@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Timeline;
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Service\Timeline\Item\Factory\HistoryItem;
 use Bitrix\Crm\Timeline\Entity\TimelineBindingTable;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
@@ -468,6 +469,19 @@ class TimelineEntry
 	public static function isFixed(int $id, int $ownerTypeId, int $ownerId): bool
 	{
 		return Entity\TimelineBindingTable::isFixed($id, $ownerTypeId, $ownerId);
+	}
+
+	public static function isPinnedLimitReached(int $ownerTypeId, int $ownerId): bool
+	{
+		$existedItems = TimelineBindingTable::query()
+			->where('ENTITY_TYPE_ID', $ownerTypeId)
+			->where('ENTITY_ID', $ownerId)
+			->where('IS_FIXED', true)
+			->setSelect(['OWNER_ID'])
+			->setLimit(HistoryItem::MAX_PINNED_ITEMS_COUNT)
+		;
+
+		return count($existedItems->exec()->fetchAll()) >= HistoryItem::MAX_PINNED_ITEMS_COUNT;
 	}
 
 	public static function setIsFixed(int $id, int $ownerTypeId, int $ownerId, bool $isFixed): UpdateResult

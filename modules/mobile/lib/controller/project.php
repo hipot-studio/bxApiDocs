@@ -3,6 +3,7 @@
 namespace Bitrix\Mobile\Controller;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Error;
@@ -10,14 +11,15 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Internal\Dto\Project\ProjectCreateDto;
 use Bitrix\Mobile\Internal\Dto\Project\ProjectSaveResultDto;
-use Bitrix\Mobile\Internal\Services\Project\OperationResultErrorResolver;
 use Bitrix\Mobile\Internal\Services\Project\ProjectAdapterService;
-use Bitrix\Mobile\Internal\Services\Project\ProjectChatSettingsService;
+use Bitrix\Mobile\Internal\Services\Project\ProjectAdapterServiceFactory;
 use Bitrix\Mobile\Internal\Services\Project\ProjectReadService;
-use Bitrix\Mobile\Internal\Services\Project\ProjectSettingsValidator;
+use Bitrix\Mobile\Internal\Services\Project\ProjectReadServiceFactory;
 use Bitrix\Mobile\Trait\PublicErrorsTrait;
 use Bitrix\Socialnetwork\Helper;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectAccessProvider;
 use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectViewInfoProvider;
 use RuntimeException;
 
 Loc::loadMessages(__FILE__);
@@ -26,11 +28,10 @@ final class Project extends JsonController
 {
 	use PublicErrorsTrait;
 
-	private ?ProjectSettingsValidator $settingsValidator = null;
-	private ?OperationResultErrorResolver $errorResolver = null;
-	private ?ProjectChatSettingsService $projectChatSettingsService = null;
 	private ?ProjectReadService $projectReadService = null;
 	private ?ProjectAdapterService $projectAdapterService = null;
+	private ?ProjectAccessProvider $projectAccessProvider = null;
+	private ?ProjectViewInfoProvider $projectViewInfoProvider = null;
 
 	/**
 	 * @restMethod mobile.Project.getCreateSettings
@@ -196,8 +197,33 @@ final class Project extends JsonController
 		}
 
 		return [
-			'hasCollabers' => (new ProjectProvider())->hasCollabers($projectId),
+			'hasCollabers' => ServiceLocator::getInstance()->get(ProjectProvider::class)->hasCollabers($projectId),
 		];
+	}
+
+	/**
+	 * @restMethod mobile.Project.getViewInfo
+	 */
+	#[CloseSession]
+	public function getViewInfoAction(int $projectId): ?array
+	{
+		$viewInfo = $this->getProjectViewInfoProvider()->getViewInfoWithAccessCheck(
+			projectId: $projectId,
+			userId: (int)$this->getCurrentUser()?->getId(),
+			checkAdminSession: ($this->getScope() !== self::SCOPE_REST),
+		);
+
+		if ($viewInfo === null)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('MOBILE_CONTROLLER_PROJECT_ACCESS_DENIED'),
+				'PROJECT_ACCESS_DENIED',
+			));
+
+			return null;
+		}
+
+		return $viewInfo->toArray();
 	}
 
 	/**
@@ -293,10 +319,11 @@ final class Project extends JsonController
 
 	private function canViewProject(int $projectId): bool
 	{
-		return Helper\Workgroup\Access::canView([
-			'groupId' => $projectId,
-			'checkAdminSession' => ($this->getScope() !== self::SCOPE_REST),
-		]);
+		return $this->getProjectAccessProvider()->canView(
+			projectId: $projectId,
+			userId: (int)$this->getCurrentUser()?->getId(),
+			checkAdminSession: ($this->getScope() !== self::SCOPE_REST),
+		);
 	}
 
 	private function turnOnProjectsTrialIfNeeded(): bool
@@ -313,40 +340,37 @@ final class Project extends JsonController
 		return false;
 	}
 
-	private function getSettingsValidator(): ProjectSettingsValidator
+	private function getProjectReadServiceFactory(): ProjectReadServiceFactory
 	{
-		return $this->settingsValidator ??= new ProjectSettingsValidator();
+		return ServiceLocator::getInstance()->get(ProjectReadServiceFactory::class);
 	}
 
-	private function getErrorResolver(): OperationResultErrorResolver
+	private function getProjectAdapterServiceFactory(): ProjectAdapterServiceFactory
 	{
-		return $this->errorResolver ??= new OperationResultErrorResolver();
-	}
-
-	private function getProjectChatSettingsService(): ProjectChatSettingsService
-	{
-		return $this->projectChatSettingsService ??= new ProjectChatSettingsService(
-			$this->getSettingsValidator(),
-			$this->getErrorResolver(),
-		);
+		return ServiceLocator::getInstance()->get(ProjectAdapterServiceFactory::class);
 	}
 
 	private function getProjectReadService(): ProjectReadService
 	{
-		return $this->projectReadService ??= new ProjectReadService(
+		return $this->projectReadService ??= $this->getProjectReadServiceFactory()->createReadService(
 			(int)$this->getCurrentUser()?->getId(),
-			$this->getProjectChatSettingsService(),
 		);
 	}
 
 	private function getProjectAdapterService(): ProjectAdapterService
 	{
-		return $this->projectAdapterService ??= new ProjectAdapterService(
+		return $this->projectAdapterService ??= $this->getProjectAdapterServiceFactory()->createAdapterService(
 			(int)$this->getCurrentUser()?->getId(),
-			$this->getSettingsValidator(),
-			$this->getErrorResolver(),
-			$this->getProjectChatSettingsService(),
-			new \Bitrix\Mobile\Internal\Services\Project\ProjectLegacyUpdateService(),
 		);
+	}
+
+	private function getProjectAccessProvider(): ProjectAccessProvider
+	{
+		return $this->projectAccessProvider ??= ServiceLocator::getInstance()->get(ProjectAccessProvider::class);
+	}
+
+	private function getProjectViewInfoProvider(): ProjectViewInfoProvider
+	{
+		return $this->projectViewInfoProvider ??= ServiceLocator::getInstance()->get(ProjectViewInfoProvider::class);
 	}
 }

@@ -26,6 +26,7 @@ final class TabPresetDataProvider
 	public function __construct(
 		private readonly Manager $manager,
 		private readonly Context $context,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly PresetAccessPolicy $accessPolicy = new PresetAccessPolicy(),
 		private readonly UserPresetStateService $stateService = new UserPresetStateService(),
 		?TabPresetConfigProvider $configProvider = null,
@@ -41,11 +42,28 @@ final class TabPresetDataProvider
 		$this->siteId = (string)$this->context->siteId;
 		$this->configProvider = $configProvider ?? new TabPresetConfigProvider($this->manager);
 		$this->managedService = $managedService
-			?? new ManagedPresetService($this->manager, $this->accessPolicy, $this->stateService, $this->configProvider);
+			?? new ManagedPresetService(
+				manager: $this->manager,
+				cacheInvalidator: $this->cacheInvalidator,
+				accessPolicy: $this->accessPolicy,
+				stateService: $this->stateService,
+				configProvider: $this->configProvider,
+			);
 		$this->presetResolver = $presetResolver
-			?? new PresetResolver($this->manager, $this->accessPolicy, $this->stateService, $this->configProvider);
+			?? new PresetResolver(
+				manager: $this->manager,
+				cacheInvalidator: $this->cacheInvalidator,
+				accessPolicy: $this->accessPolicy,
+				stateService: $this->stateService,
+				configProvider: $this->configProvider,
+			);
 		$this->assignmentService = $assignmentService
-			?? new PresetAssignmentV2Service($this->manager, $this->accessPolicy, $this->configProvider);
+			?? new PresetAssignmentV2Service(
+				manager: $this->manager,
+				cacheInvalidator: $this->cacheInvalidator,
+				accessPolicy: $this->accessPolicy,
+				configProvider: $this->configProvider,
+			);
 		$this->recipientFormatter = $recipientFormatter ?? new AssignmentRecipientFormatter($this->accessPolicy);
 		$this->portalDefaultService = $portalDefaultService ?? new PortalDefaultPresetService(
 			$this->manager,
@@ -57,6 +75,7 @@ final class TabPresetDataProvider
 			manager: $this->manager,
 			userId: $this->userId,
 			siteId: $this->siteId,
+			cacheInvalidator: $this->cacheInvalidator,
 			accessPolicy: $this->accessPolicy,
 			stateService: $this->stateService,
 			configProvider: $this->configProvider,
@@ -100,6 +119,11 @@ final class TabPresetDataProvider
 				'list' => $this->getAvailableTabs(),
 			],
 			'capabilities' => $this->getCapabilities(),
+			'assignmentNotification' => (new AssignmentNotificationService(
+				context: $this->context,
+				cacheInvalidator: $this->cacheInvalidator,
+			))
+				->getNotification($current, $latestAssignment, assignmentLoaded: true),
 		];
 
 		$latestAssignedManagedPresetId = PresetResolver::getManagedPresetIdFromAssignment(

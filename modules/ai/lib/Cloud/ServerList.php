@@ -85,14 +85,58 @@ final class ServerList
 	}
 
 	/**
+	 * Check whether the service URL matches an allowed server entry.
+	 * @param string $serviceUrl
+	 * @param array|null $allowedServers entries like ['proxy' => string] or bare strings; null loads the live list
+	 * @return bool
+	 * @throws ArgumentException
+	 */
+	public function isAllowedServer(string $serviceUrl, ?array $allowedServers = null): bool
+	{
+		$allowedServers ??= $this->getAllowedServers();
+		$serviceUrl = self::normalizeServiceUrl($serviceUrl);
+
+		foreach ($allowedServers as $server)
+		{
+			$proxy = is_array($server) ? ($server['proxy'] ?? null) : $server;
+			if (!is_string($proxy) || $proxy === '')
+			{
+				continue;
+			}
+
+			if (self::normalizeServiceUrl($proxy) === $serviceUrl)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Normalize a URL for strict comparison: trim, default to https scheme, lowercase, strip trailing slashes.
+	 */
+	private static function normalizeServiceUrl(string $url): string
+	{
+		$url = trim($url);
+		if (!preg_match('~^https?://~i', $url))
+		{
+			$url = 'https://' . $url;
+		}
+
+		return rtrim(strtolower($url), '/');
+	}
+
+	/**
 	 * Get the most suitable server based on the current region.
+	 * @param array|null $allowedServers Preloaded server list; null loads it lazily.
 	 * @return string|null
 	 * @throws ArgumentException
 	 */
-	public function getMostSuitableServer(): ?string
+	public function getMostSuitableServer(?array $allowedServers = null): ?string
 	{
 		$region = Application::getInstance()->getLicense()->getRegion();
-		$allowedServers = $this->getAllowedServers();
+		$allowedServers ??= $this->getAllowedServers();
 
 		if (empty($allowedServers))
 		{

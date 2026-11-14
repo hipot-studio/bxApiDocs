@@ -6,6 +6,8 @@ namespace Bitrix\Rest\Internal\Service\Placement;
 
 use Bitrix\Rest\Api\UserFieldType;
 use Bitrix\Rest\AppTable;
+use Bitrix\Rest\Internal\Access\App\AppBatchAccessChecker;
+use Bitrix\Rest\Internal\Access\App\Model\AppModel;
 use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Service\Embedding\ApplicationOnlyPlacements;
 use Bitrix\Rest\Lang;
@@ -26,10 +28,12 @@ final class LegacyHandlerAdapter
 		string $placement,
 		bool $skipInstallCheck,
 		array $accessibleEmbeddingIds,
+		?int $userId = null,
 	): array
 	{
 		$accessibleEmbeddingIds = array_fill_keys($accessibleEmbeddingIds, true);
 		$isApplicationOnlyPlacement = $this->applicationOnlyPlacements->contains($placement);
+		$batchChecker = $this->createBatchChecker($rows, HandlerReader::resolveUserId($userId));
 		$result = [];
 
 		foreach ($rows as $row)
@@ -42,12 +46,13 @@ final class LegacyHandlerAdapter
 					continue;
 				}
 			}
-			elseif (!$this->isApplicationVisible($row, $placement, $skipInstallCheck))
+			elseif (!$this->isApplicationVisible($row, $placement, $skipInstallCheck, $batchChecker))
 			{
 				continue;
 			}
 
 			unset($row['ACTIVE']);
+			unset($row['APP_ACCESS_DATA']);
 			$row = Lang::mergeFromLangAll($row);
 			if (empty($row['TITLE']))
 			{
@@ -73,6 +78,7 @@ final class LegacyHandlerAdapter
 	{
 		$accessibleEmbeddingIds = array_fill_keys($accessibleEmbeddingIds, true);
 		$isApplicationOnlyPlacement = $this->applicationOnlyPlacements->contains($placement);
+		$batchChecker = $this->createBatchChecker($rows, $userId);
 		$result = [];
 		$userAccessCodes = null;
 		$isAdmin = null;
@@ -86,7 +92,14 @@ final class LegacyHandlerAdapter
 					continue;
 				}
 			}
-			elseif (!$this->isApplicationAccessible($row, $placement, $userId, $userAccessCodes, $isAdmin))
+			elseif (!$this->isApplicationAccessible(
+				$row,
+				$placement,
+				$userId,
+				$userAccessCodes,
+				$isAdmin,
+				$batchChecker,
+			))
 			{
 				continue;
 			}
@@ -106,7 +119,12 @@ final class LegacyHandlerAdapter
 		return !$isApplicationOnlyPlacement && isset($accessibleEmbeddingIds[(int)$row['ID']]);
 	}
 
-	private function isApplicationVisible(array $row, string $placement, bool $skipInstallCheck): bool
+	private function isApplicationVisible(
+		array $row,
+		string $placement,
+		bool $skipInstallCheck,
+		?AppBatchAccessChecker $batchChecker,
+	): bool
 	{
 		if (!$this->isApplicationActive($row))
 		{
@@ -117,11 +135,29 @@ final class LegacyHandlerAdapter
 			return false;
 		}
 
-		return $placement === UserFieldType::PLACEMENT_UF_TYPE
-			|| CRestUtil::checkAppAccess(
-				(int)($row['APP_ID'] ?? 0),
-				['ACCESS' => (string)($row['APP_ACCESS'] ?? '')],
-			);
+		if ($placement === UserFieldType::PLACEMENT_UF_TYPE)
+		{
+			return true;
+		}
+
+		if (array_key_exists('APP_ACCESS_DATA', $row))
+		{
+			if (!is_array($row['APP_ACCESS_DATA']) || $batchChecker === null)
+			{
+				return false;
+			}
+
+			$app = AppModel::createFromAccessData($row['APP_ACCESS_DATA']);
+
+			return $skipInstallCheck
+				? $batchChecker->canAccessBeforeInstallationCompleted($app)
+				: $batchChecker->canAccess($app);
+		}
+
+		return CRestUtil::checkAppAccess(
+			(int)($row['APP_ID'] ?? 0),
+			['ACCESS' => (string)($row['APP_ACCESS'] ?? '')],
+		);
 	}
 
 	private function isApplicationAccessible(
@@ -130,6 +166,7 @@ final class LegacyHandlerAdapter
 		int $userId,
 		?array &$userAccessCodes,
 		?bool &$isAdmin,
+		?AppBatchAccessChecker $batchChecker,
 	): bool
 	{
 		if (
@@ -140,8 +177,19 @@ final class LegacyHandlerAdapter
 			return false;
 		}
 
+		if ($placement === UserFieldType::PLACEMENT_UF_TYPE)
+		{
+			return true;
+		}
+		if (array_key_exists('APP_ACCESS_DATA', $row))
+		{
+			return is_array($row['APP_ACCESS_DATA'])
+				&& $batchChecker !== null
+				&& $batchChecker->canAccess(AppModel::createFromAccessData($row['APP_ACCESS_DATA']));
+		}
+
 		$appAccess = (string)($row['APP_ACCESS'] ?? '');
-		if ($placement === UserFieldType::PLACEMENT_UF_TYPE || $appAccess === '')
+		if ($appAccess === '')
 		{
 			return true;
 		}
@@ -169,6 +217,21 @@ final class LegacyHandlerAdapter
 		$isAdmin ??= RestUserModel::createFromId($userId)->isAdmin();
 
 		return $isAdmin;
+	}
+
+	private function createBatchChecker(array $rows, int $userId): ?AppBatchAccessChecker
+	{
+		$apps = [];
+		foreach ($rows as $row)
+		{
+			$data = $row['APP_ACCESS_DATA'] ?? null;
+			if (is_array($data))
+			{
+				$apps[$data['ID']] = $data;
+			}
+		}
+
+		return $apps === [] ? null : new AppBatchAccessChecker($userId, array_values($apps));
 	}
 
 	private function isInstalled(mixed $value): bool

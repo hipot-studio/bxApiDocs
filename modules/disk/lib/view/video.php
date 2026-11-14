@@ -55,16 +55,6 @@ class Video extends Base
 		return true;
 	}
 
-	public function isTransformationAllowed($size = 0)
-	{
-		if (!$this->isViewerFormatEnabled())
-		{
-			return false;
-		}
-
-		return parent::isTransformationAllowed($size);
-	}
-
 	/**
 	 * Returns maximum allowed transformation file size.
 	 *
@@ -93,11 +83,6 @@ class Video extends Base
 	 */
 	public function render($params = array())
 	{
-		if (!$this->isViewerFormatEnabled())
-		{
-			return '';
-		}
-
 		if(empty($params) || !isset($params['PATH']) || empty($params['PATH']))
 		{
 			return '';
@@ -146,13 +131,6 @@ class Video extends Base
 			$this->renderForDesktop($params, $autostart, $sizeType);
 		}
 		return ob_get_clean();
-	}
-
-	private function isViewerFormatEnabled(): bool
-	{
-		return mb_strtolower($this->fileExtension) !== 'mkv'
-			|| Configuration::isEnabledFileViewerFormats()
-		;
 	}
 
 	public function getSizes($maxWidth = null, $maxHeight = null): array
@@ -277,11 +255,6 @@ class Video extends Base
 	 */
 	public function isHtmlAvailable()
 	{
-		if (!$this->isViewerFormatEnabled())
-		{
-			return false;
-		}
-
 		if($this->getData() || $this->isTransformationAllowed())
 		{
 			return true;
@@ -506,8 +479,8 @@ class Video extends Base
 			'autostart' => $autostart !== 'Y' && ($params['AUTOSTART_ON_SCROLL'] ?? null) === 'Y',
 			'preload' => false,
 			'controls' => true,
-			'height' => $params['WIDTH'],
-			'width' => $params['HEIGHT'],
+			'height' => $params['HEIGHT'],
+			'width' => $params['WIDTH'],
 			'fluid' => $sizeType === 'fluid',
 			'skin' => 'vjs-disk_player-skin',
 			'lazyload' => ($params['LAZYLOAD'] ?? null) === 'Y',

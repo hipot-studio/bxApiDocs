@@ -93,6 +93,39 @@ final class RightsAccessPublisher
 	}
 
 	/**
+	 * The codes of the root as a recalculation that has just run left them, taken from the simple rights
+	 * it computed rather than read through the rights of the module.
+	 *
+	 * Needed when another edit of the same root has already rewritten its rows of b_disk_right and is
+	 * still waiting for its own recalculation: the rights then describe that later edit, and the root
+	 * they would lead the reading to is not the one this recalculation materialized.
+	 *
+	 * @param string[] $simpleCodes Access codes of the simple rights the recalculation computed for the root.
+	 * @return string[]|null null when they could not be resolved; the caller then reads the rights as usual
+	 */
+	public function codesOfRecalculated(int $objectId, array $simpleCodes): ?array
+	{
+		if ($objectId <= 0 || !$this->feature->isEnabled())
+		{
+			return null;
+		}
+
+		try
+		{
+			return $this->audience->rightsCodesFrom($simpleCodes, $objectId);
+		}
+		catch (Throwable $exception)
+		{
+			$this->logger->error(
+				'the codes left by the recalculation of rights were not resolved: {message}',
+				['message' => $exception->getMessage(), 'objectId' => $objectId, 'exception' => $exception],
+			);
+
+			return null;
+		}
+	}
+
+	/**
 	 * Hands the captured codes over to the recalculation that has just been registered, so that they
 	 * outlive the process that captured them.
 	 *
@@ -168,9 +201,11 @@ final class RightsAccessPublisher
 	 * taken away would leave it publishing to the current codes - the very record refused here, hours
 	 * later. The cleaning by age is what takes it in the end.
 	 *
+	 * @param string[]|null $codesAfter Codes of the root after the recalculation, when the caller knows
+	 *        them better than the rights do (see {@see codesOfRecalculated}). Null reads them here.
 	 * @return bool whether a record was written
 	 */
-	public function publishRecalculated(int $setupSessionId, int $objectId): bool
+	public function publishRecalculated(int $setupSessionId, int $objectId, ?array $codesAfter = null): bool
 	{
 		if ($setupSessionId <= 0 || $objectId <= 0 || !$this->feature->isEnabled())
 		{
@@ -180,7 +215,7 @@ final class RightsAccessPublisher
 		try
 		{
 			$snapshot = $this->snapshots->findBySetupSession($setupSessionId);
-			$currentCodes = $this->audience->rightsCodesOf($objectId);
+			$currentCodes = $codesAfter ?? $this->audience->rightsCodesOf($objectId);
 
 			if ($snapshot === null)
 			{

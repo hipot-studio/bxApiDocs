@@ -12,6 +12,8 @@ class ChatRelations
 {
 	protected const NEED_ADDITIONAL_FILTER_BY_ACCESS = false;
 
+	private const USER_IDS_CHUNK_SIZE = 300;
+
 	/**
 	 * @var self[]
 	 */
@@ -187,6 +189,40 @@ class ChatRelations
 		$this->mergeWithExistingRelations($this->rawFullRelations);
 
 		return $this->rawFullRelations;
+	}
+
+	/**
+	 * Returns relations of the given users without the access filter: the write path asks whether a row
+	 * exists, while the filter hides relations and marks them for lazy cleanup.
+	 *
+	 * @param int[] $userIds
+	 * @return RelationCollection
+	 */
+	public function getRawByUserIds(array $userIds): RelationCollection
+	{
+		$userIds = Normalizer::toUniquePositiveIntegers($userIds);
+		if (empty($userIds))
+		{
+			return new RelationCollection();
+		}
+
+		if (isset($this->rawFullRelations))
+		{
+			// drops the users left out from the process wide RelationCollection::$startIdStaticCache,
+			// getStartId() reads the same value again with a query per user
+			return $this->getRawFullRelations()->filterByUserIds($userIds);
+		}
+
+		$relations = new RelationCollection();
+		foreach (array_chunk($userIds, self::USER_IDS_CHUNK_SIZE) as $chunk)
+		{
+			$chunkRelations = RelationCollection::find(['CHAT_ID' => $this->chatId, 'USER_ID' => $chunk]);
+			$relations->mergeRegistry($chunkRelations);
+		}
+
+		$this->mergeWithExistingRelations($relations);
+
+		return $relations;
 	}
 
 	protected function loadFullRelations(): RelationCollection

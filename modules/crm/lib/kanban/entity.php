@@ -2557,6 +2557,9 @@ abstract class Entity
 			'hasRestictionToMoveToWinColumn' => false,
 			'useRequiredVisibleFields' => false,
 			'isQuickEditorEnabled' => $this->isInlineEditorSupported(),
+			// the plus button of a column has no markup of ours to read attributes from, so the
+			// decision reaches it as data: null or the smart process and the form to open
+			'createByForm' => (new Service\StartCatalog\CreateByForm())->getOpenParameters($this->getTypeId()),
 			'isRecyclebinEnabled' => false,
 
 			'canUseIgnoreItemInPanel' => false,

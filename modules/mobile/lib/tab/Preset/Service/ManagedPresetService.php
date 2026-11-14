@@ -23,10 +23,10 @@ final class ManagedPresetService
 
 	public function __construct(
 		private readonly Manager $manager,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly PresetAccessPolicy $accessPolicy = new PresetAccessPolicy(),
 		private readonly UserPresetStateService $stateService = new UserPresetStateService(),
 		?TabPresetConfigProvider $configProvider = null,
-		private readonly MobileMenuCacheInvalidator $cacheInvalidator = new MobileMenuCacheInvalidator(),
 		private readonly PresetWriteTransaction $transaction = new PresetWriteTransaction(),
 		?PresetAssignmentService $legacyAssignmentService = null,
 		?PresetAssignmentV2Service $assignmentV2Service = null,
@@ -36,12 +36,16 @@ final class ManagedPresetService
 	{
 		$this->configProvider = $configProvider ?? new TabPresetConfigProvider($this->manager);
 		$this->legacyAssignmentService = $legacyAssignmentService
-			?? new PresetAssignmentService($this->accessPolicy, transaction: $this->transaction);
+			?? new PresetAssignmentService(
+				accessPolicy: $this->accessPolicy,
+				transaction: $this->transaction,
+			);
 		$this->assignmentV2Service = $assignmentV2Service
 			?? new PresetAssignmentV2Service(
-				$this->manager,
-				$this->accessPolicy,
-				$this->configProvider,
+				manager: $this->manager,
+				cacheInvalidator: $this->cacheInvalidator,
+				accessPolicy: $this->accessPolicy,
+				configProvider: $this->configProvider,
 				transaction: $this->transaction,
 			);
 		$this->portalDefaultService = $portalDefaultService
@@ -54,10 +58,11 @@ final class ManagedPresetService
 			);
 		$this->presetResolver = $presetResolver
 			?? new PresetResolver(
-				$this->manager,
-				$this->accessPolicy,
-				$this->stateService,
-				$this->configProvider,
+				manager: $this->manager,
+				cacheInvalidator: $this->cacheInvalidator,
+				accessPolicy: $this->accessPolicy,
+				stateService: $this->stateService,
+				configProvider: $this->configProvider,
 				assignmentV2Service: $this->assignmentV2Service,
 			);
 	}
@@ -116,8 +121,16 @@ final class ManagedPresetService
 				}
 				if ($configChanged && $this->canAssignPreset($ownerId, $id))
 				{
-					$this->legacyAssignmentService->refreshByPresetId($id);
-					$this->assignmentV2Service->refreshManagedPreset($id);
+					$affectedUserIds = array_values(array_unique(array_merge(
+						$this->legacyAssignmentService->refreshByPresetId($id),
+						$this->assignmentV2Service->refreshManagedPreset($id),
+					)));
+					if ($affectedUserIds !== [])
+					{
+						$this->transaction->afterCommit(function () use ($affectedUserIds): void {
+							$this->cacheInvalidator->clearUsers($affectedUserIds);
+						});
+					}
 				}
 				if ($configChanged)
 				{
@@ -159,8 +172,16 @@ final class ManagedPresetService
 				'IS_DELETED' => 'Y',
 				'UPDATED_AT' => new DateTime(),
 			]);
-			$this->legacyAssignmentService->deactivateByPresetId($id);
-			$this->assignmentV2Service->deactivateManagedPreset($id);
+			$affectedUserIds = array_values(array_unique(array_merge(
+				$this->legacyAssignmentService->deactivateByPresetId($id),
+				$this->assignmentV2Service->deactivateManagedPreset($id),
+			)));
+			if ($affectedUserIds !== [])
+			{
+				$this->transaction->afterCommit(function () use ($affectedUserIds): void {
+					$this->cacheInvalidator->clearUsers($affectedUserIds);
+				});
+			}
 			if ($siteId !== null)
 			{
 				$this->portalDefaultService->resetIfManagedPresetDeleted($siteId, $id);

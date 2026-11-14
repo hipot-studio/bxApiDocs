@@ -13,6 +13,8 @@ final class DeletionNotifyManager
 {
 	/** @var array */
 	private $map = [];
+	/** @var array */
+	private $notifiedFolderKeys = [];
 
 	public function put(BaseObject $object, int $deletedBy): void
 	{
@@ -29,18 +31,27 @@ final class DeletionNotifyManager
 			return;
 		}
 
-		$this->map[$object->getParentId() . "-{$object->getCreatedBy()}"][] = [
+		//notification about a folder replaces notifications about its content, whatever order the cascade takes
+		if ($object instanceof Folder)
+		{
+			$folderKey = $object->getId() . "-{$object->getCreatedBy()}";
+			$this->notifiedFolderKeys[$folderKey] = true;
+			unset($this->map[$folderKey]);
+		}
+
+		$key = $object->getParentId() . "-{$object->getCreatedBy()}";
+		if (isset($this->notifiedFolderKeys[$key]))
+		{
+			return;
+		}
+
+		$this->map[$key][] = [
 			$deletedBy,
 			$object->getCreatedBy(),
 			$object->getId(),
 			$object->getName(),
 			$object instanceof Folder,
 		];
-
-		if ($object instanceof Folder)
-		{
-			unset($this->map[$object->getId() . "-{$object->getCreatedBy()}"]);
-		}
 	}
 
 	public function send()
@@ -63,13 +74,10 @@ final class DeletionNotifyManager
 				]);
 
 				$type = $isFolder? 'FOLDER' : 'FILE';
-				$text = Loc::getMessage("DISK_DELETION_MANAGER_NOTIFY_ABOUT_DELETION_{$type}_M", [
+				$gender = $deleteUser->getPersonalGender() === 'F' ? 'F' : 'M';
+				$text = Loc::getMessage("DISK_DELETION_MANAGER_NOTIFY_ABOUT_DELETION_{$type}_{$gender}", [
 					'#NAME#' => "<a href=\"{$link}\">{$name}</a>",
 				]);
-				if($deleteUser->getPersonalGender() === 'F')
-				{
-					$text = Loc::getMessage("DISK_DELETION_MANAGER_NOTIFY_ABOUT_DELETION_{$type}_F");
-				}
 
 				Driver::getInstance()->sendNotify($createdBy, [
 					'FROM_USER_ID' => $deletedBy,
@@ -81,5 +89,6 @@ final class DeletionNotifyManager
 		}
 
 		$this->map = [];
+		$this->notifiedFolderKeys = [];
 	}
 }

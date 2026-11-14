@@ -2,9 +2,6 @@
 
 namespace Bitrix\Crm\Service;
 
-use Bitrix\Crm\Feature;
-use Bitrix\Crm\Feature\ClientRecentBySection;
-
 final class ClientRecentCategoryResolver
 {
 	public const CLASSIC_CATEGORY = 'crm.client.recent.classic';
@@ -14,13 +11,12 @@ final class ClientRecentCategoryResolver
 	// and reading them writes them back into the bucket it read from
 	public const MY_COMPANY_CATEGORY_SUFFIX = '.my';
 
-	public function resolve(int $parentEntityTypeId, string $legacyCategory, bool $isMyCompany = false): string
+	public function resolve(
+		int $parentEntityTypeId,
+		string $legacyCategory = self::CLASSIC_CATEGORY,
+		bool $isMyCompany = false
+	): string
 	{
-		if (!Feature::enabled(ClientRecentBySection::class))
-		{
-			return $legacyCategory;
-		}
-
 		if (
 			in_array(
 				$parentEntityTypeId,

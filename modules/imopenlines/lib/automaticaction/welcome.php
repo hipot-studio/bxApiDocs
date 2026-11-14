@@ -1,14 +1,13 @@
 <?php
 namespace Bitrix\ImOpenLines\AutomaticAction;
 
+use Bitrix\ImOpenLines\AutomaticAction\Welcome\NetworkSettings;
 use Bitrix\ImOpenLines\Chat;
 use Bitrix\ImOpenLines\Connector;
 use Bitrix\ImOpenLines\Im;
 use	Bitrix\ImOpenLines\Session;
 use Bitrix\ImOpenLines\Widget\FormHandler;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Web\Json;
 
 /**
  * Class Welcome
@@ -24,6 +23,21 @@ class Welcome
 	protected $clientChat = null;
 	/** @var Chat */
 	protected $chat = null;
+	private static ?NetworkSettings $networkSettings = null;
+
+	/**
+	 * Injection point for the settings the network welcome rule depends on.
+	 * Null restores the default reader.
+	 */
+	public static function setNetworkSettings(?NetworkSettings $settings): void
+	{
+		self::$networkSettings = $settings;
+	}
+
+	private static function getNetworkSettings(): NetworkSettings
+	{
+		return self::$networkSettings ??= new NetworkSettings();
+	}
 
 	/**
 	 * Welcome constructor.
@@ -110,33 +124,36 @@ class Welcome
 	}
 
 	/**
-	 * By default Network lines is not allowed to send a welcome message,
-	 * but it can be "whitelisted" in imopenlines.network_welcome_allowed_list option
+	 * A network line sends its own welcome message only when the channel has no welcome text of its own,
+	 * so that the client always gets exactly one greeting.
+	 * Lines listed in the imopenlines.network_welcome_allowed_list option send it in any case.
+	 *
+	 * @internal Public for tests only, the rule belongs to sendMessage().
 	 */
-	private function isWelcomeAllowedIfNetwork(): bool
+	public function isWelcomeAllowedIfNetwork(): bool
 	{
 		if ($this->session['SOURCE'] !== Connector::TYPE_NETWORK)
 		{
 			return true;
 		}
 
-		$rawList = Option::get('imopenlines', 'network_welcome_allowed_list', '[]');
-		$idList = Json::decode($rawList);
-		if (!is_array($idList) || empty($idList))
+		$lineId = (int)$this->config['ID'];
+		$settings = self::getNetworkSettings();
+
+		if (in_array($lineId, $settings->getForcedLineIds(), true))
+		{
+			return true;
+		}
+
+		$statusData = $settings->getChannelStatusData($lineId);
+		if ($statusData === null)
 		{
 			return false;
 		}
 
-		$configIds = [];
-		foreach ($idList as $id)
-		{
-			if (is_numeric($id))
-			{
-				$configIds[] = (int)$id;
-			}
-		}
+		$channelWelcome = $statusData['FIRST_MESSAGE'] ?? '';
 
-		return in_array((int)$this->config['ID'], $configIds, true);
+		return is_string($channelWelcome) && trim($channelWelcome) === '';
 	}
 
 	public function sendWelcomeForm(): bool

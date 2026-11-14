@@ -3,11 +3,40 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\EditSessionTable;
+use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Main\Type\DateTime;
 
 final class EditSession extends Internals\Model
 {
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		?bool $hasUploadCleanupMarker = null,
+	)
+	{
+		$objectId = (int)($data['OBJECT_ID'] ?? 0);
+		if ($objectId <= 0)
+		{
+			return parent::add($data, $errorCollection);
+		}
+
+		$markerService = new MarkerService();
+		if (!$markerService->revokeBeforeUse($objectId, $hasUploadCleanupMarker))
+		{
+			$errorCollection->addOne(new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+			return null;
+		}
+
+		return $markerService->runWithConfirmedRevokedMarker(
+			$objectId,
+			static fn() => parent::add($data, $errorCollection),
+		);
+	}
+
 	/** @var int */
 	protected $objectId;
 	/** @var File */

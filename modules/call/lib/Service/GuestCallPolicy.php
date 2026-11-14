@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace Bitrix\Call\Service;
 
 use Bitrix\Call\Integration\EntityType;
-use Bitrix\Call\Settings;
 use Bitrix\Main\Loader;
 
 /**
  * What a guest - a user without a portal account, reaching the portal by a chat link - may do
  * around starting a call.
  *
- * A guest answers calls and takes part in them regardless of any option here. Two things are
- * governed: starting a call at all (a portal-level switch), and who a guest may ring - the people
- * of their own chat and nobody else.
+ * A guest answers, starts and takes part in calls like anyone else. What is governed is who a guest
+ * may ring - the people of their own chat and nobody else.
  */
 class GuestCallPolicy
 {
@@ -47,20 +45,6 @@ class GuestCallPolicy
 		}
 
 		return $this->callLogService->isGuestUser($userId);
-	}
-
-	/**
-	 * Whether the user may start a call at all. Everyone but a guest always may; a guest may
-	 * while the portal keeps guest outgoing calls switched on.
-	 */
-	public function canStartCall(int $userId): bool
-	{
-		if (Settings::isGuestOutgoingCallEnabled())
-		{
-			return true;
-		}
-
-		return !$this->isGuest($userId);
 	}
 
 	/**

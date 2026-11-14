@@ -3,12 +3,19 @@
 namespace Bitrix\Disk;
 
 use Bitrix\Disk\Document\DocumentHandler;
-use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Internal\Enum\ExternalLinkScenario;
+use Bitrix\Disk\Internal\Service\Audit\AuditPublicLinkEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionResult;
+use Bitrix\Disk\Internal\Service\Document\OfficeEngineRecognizer;
 use Bitrix\Disk\Internal\Service\Sync\Access\LinkAccessPublisher;
+use Bitrix\Disk\Internal\Service\Sync\Access\PublicAccessPublisher;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ExternalLinkTable;
+use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
@@ -317,14 +324,10 @@ final class ExternalLink extends Internals\Model
 
 	public function changeCanDownloadWithReadAccess($val)
 	{
-		if (!$this->canChangeSettings())
-		{
-			return false;
-		}
-
-		return $this->update([
-			'CAN_DOWNLOAD_WITH_READ_ACCESS' => $val ? 1 : 0,
-		]);
+		return $this->changeAccessSettings(
+			$this->getAccessRight(),
+			(bool)$val,
+		);
 	}
 
 	public function getCanEditSettings(): bool
@@ -355,6 +358,12 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
+		// Boards are edited by their own editor, so the default document viewer does not restrict them.
+		if ((int)$object->getTypeFile() === TypeFile::BOARD)
+		{
+			return true;
+		}
+
 		if (!DocumentHandler::isEditable($object->getExtension()))
 		{
 			return false;
@@ -363,7 +372,7 @@ final class ExternalLink extends Internals\Model
 		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 		$documentHandler = $documentHandlersManager->getDefaultHandlerForView();
 
-		return ($documentHandler instanceof OnlyOfficeHandler);
+		return OfficeEngineRecognizer::isOfficeEngine($documentHandler);
 	}
 
 	/**
@@ -473,11 +482,22 @@ final class ExternalLink extends Internals\Model
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @internal
 	 */
-	public static function add(array $data, ErrorCollection $errorCollection)
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		?bool $hasUploadCleanupMarker = null,
+	)
 	{
 		static::checkRequiredInputParams($data, array(
 			'OBJECT_ID',
 		));
+
+		if (!(new MarkerService())->revokeBeforeUse((int)$data['OBJECT_ID'], $hasUploadCleanupMarker))
+		{
+			$errorCollection->addOne(new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+			return null;
+		}
 
 		if(!empty($data['PASSWORD']))
 		{
@@ -560,17 +580,36 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
-		$deathTimeBefore = $this->getDeathTime();
-		$success = $this->update(array(
-			'DEATH_TIME' => null,
-		));
+		return $this->runAuditCoveredMutation(function (): bool {
+			$deathTimeBefore = $this->getDeathTime();
+			$oldTtl = $deathTimeBefore?->getTimestamp();
+			$updated = $this->update(array(
+				'DEATH_TIME' => null,
+			));
 
-		if ($success)
-		{
-			$this->publishLifetimeChange($deathTimeBefore, null);
-		}
+			if ($updated && $oldTtl !== null)
+			{
+				$auditResult = (new AuditPublicLinkEventProducer())->publishTtlChanged(
+					$this,
+					$oldTtl,
+					null,
+					$this->getCurrentUserId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
 
-		return $success;
+				$this->publishPublicAccessUpdated();
+			}
+
+			if ($updated)
+			{
+				$this->publishLifetimeChange($deathTimeBefore, null);
+			}
+
+			return $updated;
+		});
 	}
 
 	public function revokePassword()
@@ -580,10 +619,29 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
-		return $this->update(array(
-			'PASSWORD' => null,
-			'SALT' => null,
-		));
+		return $this->runAuditCoveredMutation(function (): bool {
+			$hadPassword = $this->hasPassword();
+			$updated = $this->update(array(
+				'PASSWORD' => null,
+				'SALT' => null,
+			));
+
+			if ($updated && $hadPassword)
+			{
+				$auditResult = (new AuditPublicLinkEventProducer())->publishPasswordDisabled(
+					$this,
+					$this->getCurrentUserId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
+
+				$this->publishPublicAccessUpdated();
+			}
+
+			return $updated;
+		});
 	}
 
 	/**
@@ -598,17 +656,37 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
-		$deathTimeBefore = $this->getDeathTime();
-		$success = $this->update(array(
-			'DEATH_TIME' => $dateTime,
-		));
+		return $this->runAuditCoveredMutation(function () use ($dateTime): bool {
+			$deathTimeBefore = $this->getDeathTime();
+			$oldTtl = $deathTimeBefore?->getTimestamp();
+			$newTtl = $dateTime->getTimestamp();
+			$updated = $this->update(array(
+				'DEATH_TIME' => $dateTime,
+			));
 
-		if ($success)
-		{
-			$this->publishLifetimeChange($deathTimeBefore, $dateTime);
-		}
+			if ($updated && $oldTtl !== $newTtl)
+			{
+				$auditResult = (new AuditPublicLinkEventProducer())->publishTtlChanged(
+					$this,
+					$oldTtl,
+					$newTtl,
+					$this->getCurrentUserId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
 
-		return $success;
+				$this->publishPublicAccessUpdated();
+			}
+
+			if ($updated)
+			{
+				$this->publishLifetimeChange($deathTimeBefore, $dateTime);
+			}
+
+			return $updated;
+		});
 	}
 
 	/**
@@ -625,6 +703,15 @@ final class ExternalLink extends Internals\Model
 	}
 
 	/**
+	 * Only the mode, the lifetime and the protection by a password are a part of the public access of the
+	 * object, so the callers publish only a change of one of them.
+	 */
+	private function publishPublicAccessUpdated(): void
+	{
+		(new PublicAccessPublisher())->publishUpdated($this, $this->getCurrentUserId());
+	}
+
+	/**
 	 * Changes password.
 	 * @param string $newPassword Password (plain).
 	 * @return bool
@@ -636,22 +723,81 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
-		$data = array();
-		list($data['PASSWORD'], $data['SALT']) = ExternalLink::generatePasswordAndSalt($newPassword);
+		return $this->runAuditCoveredMutation(function () use ($newPassword): bool {
+			$hadPassword = $this->hasPassword();
+			$data = array();
+			list($data['PASSWORD'], $data['SALT']) = ExternalLink::generatePasswordAndSalt($newPassword);
 
-		return $this->update($data);
+			$updated = $this->update($data);
+			if ($updated && !$hadPassword)
+			{
+				$auditResult = (new AuditPublicLinkEventProducer())->publishPasswordEnabled(
+					$this,
+					$this->getCurrentUserId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
+
+				$this->publishPublicAccessUpdated();
+			}
+
+			return $updated;
+		});
 	}
 
 	public function changeAccessRight(int $right): bool
+	{
+		return $this->changeAccessSettings(
+			$right,
+			$this->isCanDownloadWithReadAccess(),
+		);
+	}
+
+	public function changeAccessSettings(int $right, bool $canDownloadWithReadAccess): bool
 	{
 		if (!$this->canChangeSettings())
 		{
 			return false;
 		}
 
-		return $this->update([
-			'ACCESS_RIGHT' => $right,
-		]);
+		return $this->runAuditCoveredMutation(function () use ($right, $canDownloadWithReadAccess): bool {
+			$oldAccessRight = $this->getAccessRight();
+			$oldCanDownloadWithReadAccess = $this->isCanDownloadWithReadAccess();
+			if ($oldAccessRight === $right && $oldCanDownloadWithReadAccess === $canDownloadWithReadAccess)
+			{
+				return true;
+			}
+
+			$updated = $this->update([
+				'ACCESS_RIGHT' => $right,
+				'CAN_DOWNLOAD_WITH_READ_ACCESS' => $canDownloadWithReadAccess ? 1 : 0,
+			]);
+
+			if ($updated)
+			{
+				$auditResult = (new AuditPublicLinkEventProducer())->publishAccessChanged(
+					$this,
+					$oldAccessRight,
+					$right,
+					$canDownloadWithReadAccess,
+					$this->getCurrentUserId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
+
+				// the right to download by a read link is not a part of the public access of the object
+				if ($oldAccessRight !== $right)
+				{
+					$this->publishPublicAccessUpdated();
+				}
+			}
+
+			return $updated;
+		});
 	}
 
 	private function canChangeSettings(): bool
@@ -707,31 +853,130 @@ final class ExternalLink extends Internals\Model
 	 * Deletes external link and short uri.
 	 * @return bool
 	 */
-	public function delete()
+	public function delete(?AuditTransaction $auditTransaction = null)
 	{
-		if($this->getType() === self::TYPE_MANUAL)
-		{
-			$urlManager = Driver::getInstance()->getUrlManager();
+		$mutation = function (): bool {
+			$deleted = $this->deleteInternal();
+			if ($deleted)
+			{
+				// the object may have left the sight of whoever held it by this link and by nothing else
+				(new LinkAccessPublisher())->publishExternalLinkRevoked((int)$this->getObjectId());
+			}
+			if ($deleted && $this->getType() === self::TYPE_MANUAL)
+			{
+				$auditResult = (new AuditPublicLinkEventProducer())->publishDisabled(
+					$this,
+					$this->getCurrentUserId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
 
-			$this->deleteShortUri($urlManager->getUrlExternalLink([
-				'hash' => $this->getHash(),
-				'action' => 'default',
-			]));
-			$this->deleteShortUri($urlManager->getUrlExternalLink([
-				'hash' => $this->getHash(),
-				'action' => 'default',
-			], true));
+				(new PublicAccessPublisher())->publishDisabled($this, $this->getCurrentUserId());
+			}
+
+			return $deleted;
+		};
+		$afterCommit = function (): void {
+			$this->deleteShortUris();
+		};
+
+		if ($auditTransaction !== null)
+		{
+			$deleted = $this->runAuditCoveredMutation($mutation);
+			if ($deleted && $this->getType() === self::TYPE_MANUAL)
+			{
+				$auditTransaction->addAfterCommit($afterCommit);
+			}
+
+			return $deleted;
 		}
 
-		$success = $this->deleteInternal();
+		$transactionResult = (new AuditTransaction(Application::getConnection()))->execute(
+			function (AuditTransaction $transaction) use ($mutation, $afterCommit): AuditTransactionOutcome {
+				$deleted = $mutation();
+				if (!$deleted)
+				{
+					return AuditTransactionOutcome::failure(false);
+				}
 
-		if ($success)
+				if ($this->getType() === self::TYPE_MANUAL)
+				{
+					$transaction->addAfterCommit($afterCommit);
+				}
+
+				return AuditTransactionOutcome::success(true);
+			},
+		);
+
+		if ($transactionResult->isSuccess())
 		{
-			// the object may have left the sight of whoever held it by this link and by nothing else
-			(new LinkAccessPublisher())->publishExternalLinkRevoked((int)$this->getObjectId());
+			return true;
 		}
 
-		return $success;
+		$this->applyAuditTransactionFailure($transactionResult);
+
+		return false;
+	}
+
+	private function runAuditCoveredMutation(callable $callback): bool
+	{
+		return AuditTransaction::run($callback);
+	}
+
+	private function applyAuditResult(\Bitrix\Main\Result $result): bool
+	{
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		$this->errorCollection->add($result->getErrors());
+
+		return false;
+	}
+
+	private function getCurrentUserId(): ?int
+	{
+		global $USER;
+
+		if ($USER instanceof \CUser && $USER->isAuthorized())
+		{
+			return (int)$USER->getId();
+		}
+
+		return null;
+	}
+
+	private function applyAuditTransactionFailure(AuditTransactionResult $result): void
+	{
+		$exception = $result->getExceptions()[0] ?? null;
+		if ($exception !== null)
+		{
+			$this->errorCollection[] = new Error($exception->getMessage());
+
+			return;
+		}
+
+		if (!$result->isRollbackConfirmed())
+		{
+			$this->errorCollection[] = new Error('External link transaction failed.');
+		}
+	}
+
+	private function deleteShortUris(): void
+	{
+		$urlManager = Driver::getInstance()->getUrlManager();
+
+		$this->deleteShortUri($urlManager->getUrlExternalLink([
+			'hash' => $this->getHash(),
+			'action' => 'default',
+		]));
+		$this->deleteShortUri($urlManager->getUrlExternalLink([
+			'hash' => $this->getHash(),
+			'action' => 'default',
+		], true));
 	}
 
 	private function deleteShortUri($uri)

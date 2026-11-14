@@ -6478,16 +6478,12 @@ class CAllCrmActivity
 		$bindings = self::GetBindings($ID);
 		if(is_array($bindings) && !empty($bindings))
 		{
-			foreach($bindings as &$binding)
+			if (self::checkBindingsUpdatePermission($bindings, $userPermissions))
 			{
-				if(self::CheckUpdatePermission($binding['OWNER_TYPE_ID'], $binding['OWNER_ID'], $userPermissions))
-				{
-					$cache[$ID][$userID] = true;
+				$cache[$ID][$userID] = true;
 
-					return true;
-				}
+				return true;
 			}
-			unset($binding);
 			$cache[$ID][$userID] = false;
 
 			return false;
@@ -6504,6 +6500,80 @@ class CAllCrmActivity
 
 		return $result;
 	}
+
+	private static function checkBindingsUpdatePermission(array $bindings, mixed $userPermissions): bool
+	{
+		$firstBinding = array_shift($bindings);
+		if (self::CheckUpdatePermission($firstBinding['OWNER_TYPE_ID'], $firstBinding['OWNER_ID'], $userPermissions))
+		{
+			return true;
+		}
+
+		foreach (array_chunk($bindings, 20) as $chunk)
+		{
+			$permissionEntityTypes = [];
+			$attributesByType = [];
+			foreach ($chunk as $index => $binding)
+			{
+				$ownerTypeName = CCrmOwnerType::ResolveName((int)$binding['OWNER_TYPE_ID']);
+				if ((int)$binding['OWNER_ID'] <= 0 || $ownerTypeName === CCrmOwnerType::DealRecurringName)
+				{
+					if (self::CheckUpdatePermission($binding['OWNER_TYPE_ID'], $binding['OWNER_ID'], $userPermissions))
+					{
+						return true;
+					}
+
+					continue;
+				}
+
+				$permissionEntityType = $permissionEntityTypes[$index] ??= CCrmPerms::ResolvePermissionEntityType(
+					$ownerTypeName,
+					$binding['OWNER_ID'],
+				);
+				if (!array_key_exists($permissionEntityType, $attributesByType))
+				{
+					$entityIds = [];
+					foreach ($chunk as $candidateIndex => $candidate)
+					{
+						if (
+							$candidateIndex < $index
+							|| (int)$candidate['OWNER_ID'] <= 0
+							|| (int)$candidate['OWNER_TYPE_ID'] !== (int)$binding['OWNER_TYPE_ID']
+						)
+						{
+							continue;
+						}
+
+						$candidateType = $permissionEntityTypes[$candidateIndex] ??= CCrmPerms::ResolvePermissionEntityType(
+							$ownerTypeName,
+							$candidate['OWNER_ID'],
+						);
+						if ($candidateType === $permissionEntityType)
+						{
+							$entityIds[] = (int)$candidate['OWNER_ID'];
+						}
+					}
+
+					$attributesByType[$permissionEntityType] = Crm\Security\Manager::resolveController($permissionEntityType)
+						->getPermissionAttributes($permissionEntityType, $entityIds)
+					;
+				}
+
+				if (CCrmAuthorizationHelper::CheckUpdatePermission(
+					$permissionEntityType,
+					$binding['OWNER_ID'],
+					$userPermissions,
+					$attributesByType[$permissionEntityType],
+				))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	public static function CheckCompletePermission($ownerType, $ownerID, $userPermissions = null, $params = null)
 	{
 		$ownerTypeName = is_numeric($ownerType)
@@ -9198,7 +9268,7 @@ class CAllCrmActivity
 			}
 		}
 
-		return $arPingOffsets;
+		return $arPingOffsets ?? [];
 	}
 
 	private static function queryLightTimeDateByActId(int $ID): ?DateTime

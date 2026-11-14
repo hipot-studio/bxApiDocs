@@ -198,6 +198,8 @@ class Util
 		{
 			// *** ADD MEETING ROOM ***
 			$locOld = self::parseLocation($old);
+			$locOld['occupancyLock'] = $params['parentParams']['occupancyLock'] ?? null;
+			$locOld['originalFrom'] = $params['parentParams']['originalFrom'] ?? null;
 			$locNew = self::parseLocation($new);
 			$res = $locNew['mrid'] ? $locNew['str'] : $new;
 			$settings = CCalendar::GetSettings(['request' => false]);
@@ -319,13 +321,17 @@ class Util
 			'room_event_id' => $loc['room_event_id'] ?? false,
 			'mrevid' => $loc['mrevid'] ?? false,
 			'mrid' => $loc['mrid'] ?? false,
+			'occupancyLock' => $loc['occupancyLock'] ?? null,
+			'originalFrom' => $loc['originalFrom'] ?? null,
 		];
 
 		if ($loc['room_id'] && $loc['room_event_id'] !== false)
 		{
 			if (!Manager::releaseRoom([
 				'room_id' => $loc['room_id'],
-				'room_event_id' => $loc['room_event_id']
+				'room_event_id' => $loc['room_event_id'],
+				'occupancyLock' => $loc['occupancyLock'],
+				'originalFrom' => $loc['originalFrom'],
 			]))
 			{
 				return false;

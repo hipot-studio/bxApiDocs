@@ -14,10 +14,14 @@ class Event
 	public const USER_FIRED_EVENT = 'userFired';
 	public const USER_RESTORED_EVENT = 'userRestored';
 	public const CHAT_ENTITY = 'chat';
+	public const CHAT_CLEANUP_ENTITY = 'chatCleanup';
 	public const PIN_MESSAGE_ENTITY = 'pin';
+	public const PERSONAL_PIN_MESSAGE_ENTITY = 'personalPin';
 	public const MESSAGE_ENTITY = 'message';
 	public const UPDATED_MESSAGE_ENTITY = 'updatedMessage';
 	public const USER_ENTITY = 'user';
+	public const DELETE_HISTORY_FOR_SELF_EVENT = 'deleteHistoryForSelf';
+	public const DELETE_HISTORY_FOR_ALL_EVENT = 'deleteHistoryForAll';
 
 	private ?int $id;
 	private DateTime $dateCreate;

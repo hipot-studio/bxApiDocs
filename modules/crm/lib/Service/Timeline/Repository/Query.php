@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Repository;
 
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Type\DateTime;
 
 class Query
@@ -11,6 +12,7 @@ class Query
 	protected int $limit = 10;
 	protected bool $searchForFixedItems = false;
 	protected array $filter = [];
+	protected ?ConditionTree $additionalFilter = null;
 
 	public function getOffsetId(): int
 	{
@@ -68,6 +70,18 @@ class Query
 	public function setSearchForFixedItems(bool $searchForFixed): self
 	{
 		$this->searchForFixedItems = $searchForFixed;
+
+		return $this;
+	}
+
+	public function getAdditionalFilter(): ?ConditionTree
+	{
+		return $this->additionalFilter;
+	}
+
+	public function setAdditionalFilter(ConditionTree $filter): self
+	{
+		$this->additionalFilter = $filter;
 
 		return $this;
 	}

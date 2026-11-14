@@ -95,21 +95,28 @@ class TaskItem extends BaseLinkItem
 		return self::$cache[$entity->getTaskId()];
 	}
 
-	public static function getByMessageId(int $messageId): ?self
+	/**
+	 * One message can carry several tasks (one voice message with several assignments), so the
+	 * links are returned as a list: picking an arbitrary one of them silently addresses the wrong
+	 * task. A caller that can act on exactly one link must check the count itself.
+	 *
+	 * @return static[]
+	 */
+	public static function getAllByMessageId(int $messageId): array
 	{
-		$chatTask = LinkTaskTable::query()
+		$chatTasks = LinkTaskTable::query()
 			->setSelect(['ID', 'MESSAGE_ID', 'CHAT_ID', 'TASK_ID', 'AUTHOR_ID', 'DATE_CREATE'])
 			->where('MESSAGE_ID', $messageId)
-			->setLimit(1)
-			->fetchObject()
+			->fetchCollection()
 		;
 
-		if ($chatTask === null)
+		$result = [];
+		foreach ($chatTasks as $chatTask)
 		{
-			return null;
+			$result[] = new static($chatTask);
 		}
 
-		return new static($chatTask);
+		return $result;
 	}
 
 	protected static function getEntityIdFieldName(): string

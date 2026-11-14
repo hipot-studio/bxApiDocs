@@ -124,7 +124,10 @@ class TranscriptionInsights extends AITask
 		}
 
 		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId, [SenseType::TRANSCRIBE->value]);
-		$transcription = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
+		// The latest contentful transcription: a repeated run that came back with nothing stores
+		// an empty result of the type on top, and taking the latest one would refuse the payload
+		// while the call holds a perfectly good transcription.
+		$transcription = $outcomeCollection->getLatestContentfulByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
 		if (
 			!($transcription instanceof Transcription)
 			|| !$transcription->hasContent()

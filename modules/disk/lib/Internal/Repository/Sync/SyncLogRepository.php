@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Internal\Repository\Sync;
 
 use Bitrix\Disk\Internal\Model\SyncLogCodeTable;
 use Bitrix\Disk\Internal\Model\SyncLogTable;
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
@@ -37,6 +38,7 @@ final class SyncLogRepository
 	/**
 	 * @param string[] $accessCodes Codes the record is published to.
 	 * @param string[]|null $changedFields Names of the fields the change touched.
+	 * @param bool $affectsDescendants Set only by a change of the state of access of a folder.
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
@@ -49,6 +51,7 @@ final class SyncLogRepository
 		?int $authorId = null,
 		?array $changedFields = null,
 		?string $tombstoneReason = null,
+		bool $affectsDescendants = false,
 	): AddResult
 	{
 		return $this->add(
@@ -60,6 +63,7 @@ final class SyncLogRepository
 				'AUTHOR_ID' => $authorId,
 				'CHANGED_FIELDS' => $this->encodeChangedFields($changedFields),
 				'TOMBSTONE_REASON' => $tombstoneReason,
+				'AFFECTS_DESCENDANTS' => $affectsDescendants,
 			],
 			$accessCodes,
 		);
@@ -272,6 +276,8 @@ final class SyncLogRepository
 	 * @param string[] $resourceTypes
 	 * @param string|null $operation narrows the answer to one operation - a tombstone, say - instead of
 	 *        any record about the object
+	 * @param bool $includeAccessState false leaves out the changes of the sharing and of the public
+	 *        access. They are stored as updates, yet they do not report that the object itself changed.
 	 * @return array<int, DateTime> resource identifier => the moment of its newest such record
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -282,13 +288,14 @@ final class SyncLogRepository
 		array $resourceTypes,
 		DateTime $since,
 		?string $operation = null,
+		bool $includeAccessState = true,
 	): array
 	{
 		return $this->latestTimesByResource(
 			$resourceIds,
 			$resourceTypes,
 			$since,
-			static function (Query $query) use ($operation): void {
+			static function (Query $query) use ($operation, $includeAccessState): void {
 				if ($operation === null)
 				{
 					// Object changes carry an operation and changes of access never do, so the column
@@ -299,18 +306,67 @@ final class SyncLogRepository
 				{
 					$query->where('OPERATION', $operation);
 				}
+
+				if (!$includeAccessState)
+				{
+					$query->whereNotIn('CHANGE_TYPE', self::accessStateTypes());
+				}
 			},
 		);
 	}
 
 	/**
-	 * When a change of access of the given scope was last published over each of the given objects.
+	 * When the journal last published the given kind of change for each object.
+	 *
+	 * Unlike {@see findLatestObjectRecordTimes()}, a newer record of another kind does not answer this
+	 * question. This is used for traces whose publication has its own meaning, such as a ready board
+	 * index: an ordinary object update cannot stand in for the missing indexUpdated record.
+	 *
+	 * @param int[] $resourceIds
+	 * @param string[] $resourceTypes
+	 * @return array<int, DateTime>
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function findLatestObjectRecordTimesByChangeType(
+		array $resourceIds,
+		array $resourceTypes,
+		DateTime $since,
+		ChangeType $changeType,
+	): array
+	{
+		return $this->latestTimesByResource(
+			$resourceIds,
+			$resourceTypes,
+			$since,
+			static function (Query $query) use ($changeType): void {
+				$codeAlias = 'sync_log_code_exists';
+				$query->whereExists(new SqlExpression(
+					'SELECT 1 FROM ?# ?# WHERE ?#.?# = ?#.?#',
+					SyncLogCodeTable::getTableName(),
+					$codeAlias,
+					$codeAlias,
+					'LOG_ID',
+					$query->getInitAlias(),
+					'ID',
+				));
+				$query->whereNotNull('OPERATION');
+				$query->where('CHANGE_TYPE', $changeType->value);
+			},
+		);
+	}
+
+	/**
+	 * When a change of access of any of the given scopes was last published over each of the given
+	 * objects.
 	 *
 	 * A change of access stores the object of its scope in RESOURCE_ID as well as in SCOPE_OBJECT_ID,
 	 * and only the first of the two is indexed - so that is the column asked here.
 	 *
 	 * @param int[] $scopeObjectIds
 	 * @param string[] $resourceTypes
+	 * @param string[] $accessScopes
 	 * @return array<int, DateTime> object of the scope => the moment of its newest such record
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -319,16 +375,21 @@ final class SyncLogRepository
 	public function findLatestAccessRecordTimes(
 		array $scopeObjectIds,
 		array $resourceTypes,
-		string $accessScope,
+		array $accessScopes,
 		DateTime $since,
 	): array
 	{
+		if ($accessScopes === [])
+		{
+			return [];
+		}
+
 		return $this->latestTimesByResource(
 			$scopeObjectIds,
 			$resourceTypes,
 			$since,
-			static function (Query $query) use ($accessScope): void {
-				$query->where('ACCESS_SCOPE', $accessScope);
+			static function (Query $query) use ($accessScopes): void {
+				$query->whereIn('ACCESS_SCOPE', array_values($accessScopes));
 			},
 		);
 	}
@@ -395,7 +456,7 @@ final class SyncLogRepository
 
 		$connection = Application::getConnection();
 		$connection->queryExecute(
-			(new SqlExpression('DELETE FROM ?# WHERE ?# IN (?@)', $tableName, $column, $ids))->compile()
+			(new SqlExpression('DELETE FROM ?# WHERE ?# IN (?@)', $tableName, $column, $ids))->compile(),
 		);
 
 		return $connection->getAffectedRowsCount();
@@ -448,5 +509,16 @@ final class SyncLogRepository
 		);
 
 		return array_values($codes);
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private static function accessStateTypes(): array
+	{
+		return array_values(array_map(
+			static fn (ChangeType $type): string => $type->value,
+			array_filter(ChangeType::cases(), static fn (ChangeType $type): bool => $type->isAccessState()),
+		));
 	}
 }

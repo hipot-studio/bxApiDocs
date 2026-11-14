@@ -5,6 +5,8 @@ namespace Bitrix\Im\V2\Message\Reaction;
 use Bitrix\Im\Model\ReactionTable;
 use Bitrix\Im\V2\Collection;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Common\MySqlIndexHint;
+use Bitrix\Im\V2\Common\TailPageSizeTrait;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
@@ -19,6 +21,9 @@ use Bitrix\Main\ORM\Query\Query;
 class ReactionCollection extends Collection implements RestConvertible, PopupDataAggregatable
 {
 	use ContextCustomer;
+	use TailPageSizeTrait;
+	private const MYSQL_TAIL_INDEX = 'IX_B_IM_REACTION_MESSAGE_ID_ID';
+	private const MYSQL_FILTERED_TAIL_INDEX = 'IX_B_IM_REACTION_1';
 
 	public static function getCollectionElementClass(): string
 	{
@@ -39,10 +44,7 @@ class ReactionCollection extends Collection implements RestConvertible, PopupDat
 			$reactionOrder['ID'] = $order['ID'];
 		}
 
-		$query = ReactionTable::query()
-			->setSelect(['ID', 'CHAT_ID', 'MESSAGE_ID', 'USER_ID', 'DATE_CREATE', 'REACTION'])
-			->setOrder($reactionOrder)
-		;
+		$query = ReactionTable::query()->setOrder($reactionOrder);
 
 		if (isset($limit))
 		{
@@ -50,6 +52,32 @@ class ReactionCollection extends Collection implements RestConvertible, PopupDat
 		}
 
 		static::processFilters($query, $filter, $reactionOrder);
+		if (
+			$query->getEntity()->getConnection()->getType() === 'mysql'
+			&& isset($filter['MESSAGE_ID'])
+			&& $limit !== null
+		)
+		{
+			$indexName = isset($filter['REACTION'])
+				? self::MYSQL_FILTERED_TAIL_INDEX
+				: self::MYSQL_TAIL_INDEX
+			;
+			$ids = MySqlIndexHint::fetchIds($query, $indexName);
+			if (empty($ids))
+			{
+				return new static();
+			}
+
+			$query = ReactionTable::query()
+				->setSelect(['ID', 'CHAT_ID', 'MESSAGE_ID', 'USER_ID', 'DATE_CREATE', 'REACTION'])
+				->whereIn('ID', $ids)
+				->setOrder($reactionOrder)
+			;
+
+			return (new static($query->fetchCollection()))->setTailPageSize(count($ids));
+		}
+
+		$query->setSelect(['ID', 'CHAT_ID', 'MESSAGE_ID', 'USER_ID', 'DATE_CREATE', 'REACTION']);
 
 		return new static($query->fetchCollection());
 	}

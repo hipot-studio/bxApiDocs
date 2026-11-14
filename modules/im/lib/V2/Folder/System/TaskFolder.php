@@ -35,7 +35,7 @@ final class TaskFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_TASKS_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return Features::isTasksRecentListAvailable();
 	}

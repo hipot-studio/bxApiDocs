@@ -17,6 +17,7 @@ use Bitrix\AI\Chatbot\Repository\ChatRepository;
 use Bitrix\AI\Chatbot\Repository\ChatbotRepository;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectNotFoundException;
@@ -55,17 +56,34 @@ class ChatService
 			{
 				throw new SystemException("Chat with ID:{$chatInitDto->chatId} not found.");
 			}
+
+			if ($chat->getAuthorId() !== $chatInitDto->userId)
+			{
+				throw new AccessDeniedException("This user can't access this chat.");
+			}
 		}
 		else
 		{
-			$chat = $this->chatRepository->findChat($chatbot->getId(), $chatInitDto->entityType, $chatInitDto->entityId);
+			$chat = $this->chatRepository->findChat($chatbot->getId(), $chatInitDto->entityType, $chatInitDto->entityId, $chatInitDto->userId);
 		}
 
 		// If chat does not exist, create it
 		if ($chat === null)
 		{
+			if ($this->chatRepository->chatExists($chatbot->getId(), $chatInitDto->entityType, $chatInitDto->entityId))
+			{
+				throw new AccessDeniedException("This user can't access this chat.");
+			}
+
 			$code = $chatInitDto->entityType . '_' . $chatInitDto->entityId;
-			$result = $this->chatRepository->createChat($code, $chatbot->getId(), $chatInitDto->userId);
+			try
+			{
+				$result = $this->chatRepository->createChat($code, $chatbot->getId(), $chatInitDto->userId);
+			}
+			catch (SqlQueryException)
+			{
+				throw new SystemException('Cannot create chat.');
+			}
 			if (!$result->isSuccess())
 			{
 				throw new SystemException('Cannot create chat.');

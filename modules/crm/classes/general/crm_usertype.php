@@ -1628,6 +1628,13 @@ class CCrmUserType
 				$arHeaders[$FIELD_NAME]['BaseType'] = 'date';
 			}
 
+			if ($userTypeID === 'datetime')
+			{
+				// As in main DateTimeType::isFieldWithoutTimeZone, only explicit 'N' disables time zones.
+				$useTimeZone = ($arUserField['SETTINGS']['USE_TIMEZONE'] ?? null) === 'N' ? 'N' : 'Y';
+				$arHeaders[$FIELD_NAME]['Settings'] = ['USE_TIMEZONE' => $useTimeZone];
+			}
+
 			if($userTypeID === 'boolean')
 			{
 				$arHeaders[$FIELD_NAME]['Type'] = $arHeaders[$FIELD_NAME]['BaseType'] = 'bool';

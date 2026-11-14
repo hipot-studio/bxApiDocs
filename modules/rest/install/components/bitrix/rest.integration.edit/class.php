@@ -493,11 +493,7 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engi
 		{
 			return [
 				'helperCode' => $this->getUnavailableHelperCode(
-					Access::getHelperCode(
-						Access::ACTION_INSTALL,
-						Access::ENTITY_TYPE_INTEGRATION,
-						$requestData['ID'],
-					),
+					Access::getHelperCode(Access::ACTION_INSTALL, Access::ENTITY_TYPE_INTEGRATION),
 				),
 			];
 		}

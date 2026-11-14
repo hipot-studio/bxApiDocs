@@ -12478,16 +12478,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment resetHighBorder()
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment unsetHighBorder()
 	 * @method \int fillHighBorder()
-	 * @method \string getAvailabilityType()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment setAvailabilityType(\string|\Bitrix\Main\DB\SqlExpression $availabilityType)
-	 * @method bool hasAvailabilityType()
-	 * @method bool isAvailabilityTypeFilled()
-	 * @method bool isAvailabilityTypeChanged()
-	 * @method \string remindActualAvailabilityType()
-	 * @method \string requireAvailabilityType()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment resetAvailabilityType()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment unsetAvailabilityType()
-	 * @method \string fillAvailabilityType()
 	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
 	 * @method bool hasCreatedAt()
@@ -12539,17 +12529,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
 	 * @method void removeAllClientTypes()
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment resetClientTypes()
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment unsetClientTypes()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection getAvailabilityData()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection requireAvailabilityData()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection fillAvailabilityData()
-	 * @method bool hasAvailabilityData()
-	 * @method bool isAvailabilityDataFilled()
-	 * @method bool isAvailabilityDataChanged()
-	 * @method void addToAvailabilityData(\Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability $copilotCallAssessmentAvailability)
-	 * @method void removeFromAvailabilityData(\Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability $copilotCallAssessmentAvailability)
-	 * @method void removeAllAvailabilityData()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment resetAvailabilityData()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment unsetAvailabilityData()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -12618,8 +12597,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
 	 * @method \int[] fillLowBorder()
 	 * @method \int[] getHighBorderList()
 	 * @method \int[] fillHighBorder()
-	 * @method \string[] getAvailabilityTypeList()
-	 * @method \string[] fillAvailabilityType()
 	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
 	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
 	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedAtList()
@@ -12631,9 +12608,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentClientType_Collection[] getClientTypesList()
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentClientType_Collection getClientTypesCollection()
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentClientType_Collection fillClientTypes()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection[] getAvailabilityDataList()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection getAvailabilityDataCollection()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection fillAvailabilityData()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -12842,194 +12816,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
 	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentClientType_Collection wakeUpCollection($rows)
 	 */
 	class EO_CopilotCallAssessmentClientType_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentAvailabilityTable:crm/lib/copilot/callassessment/entity/copilotcallassessmentavailabilitytable.php */
-namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
-	/**
-	 * EO_CopilotCallAssessmentAvailability
-	 * @see \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentAvailabilityTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getAssessmentId()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setAssessmentId(\int|\Bitrix\Main\DB\SqlExpression $assessmentId)
-	 * @method bool hasAssessmentId()
-	 * @method bool isAssessmentIdFilled()
-	 * @method bool isAssessmentIdChanged()
-	 * @method \int remindActualAssessmentId()
-	 * @method \int requireAssessmentId()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability resetAssessmentId()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unsetAssessmentId()
-	 * @method \int fillAssessmentId()
-	 * @method \Bitrix\Main\Type\DateTime getStartPoint()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setStartPoint(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $startPoint)
-	 * @method bool hasStartPoint()
-	 * @method bool isStartPointFilled()
-	 * @method bool isStartPointChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualStartPoint()
-	 * @method \Bitrix\Main\Type\DateTime requireStartPoint()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability resetStartPoint()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unsetStartPoint()
-	 * @method \Bitrix\Main\Type\DateTime fillStartPoint()
-	 * @method \Bitrix\Main\Type\DateTime getEndPoint()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setEndPoint(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $endPoint)
-	 * @method bool hasEndPoint()
-	 * @method bool isEndPointFilled()
-	 * @method bool isEndPointChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualEndPoint()
-	 * @method \Bitrix\Main\Type\DateTime requireEndPoint()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability resetEndPoint()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unsetEndPoint()
-	 * @method \Bitrix\Main\Type\DateTime fillEndPoint()
-	 * @method null|\string getWeekdayType()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setWeekdayType(null|\string|\Bitrix\Main\DB\SqlExpression $weekdayType)
-	 * @method bool hasWeekdayType()
-	 * @method bool isWeekdayTypeFilled()
-	 * @method bool isWeekdayTypeChanged()
-	 * @method null|\string remindActualWeekdayType()
-	 * @method null|\string requireWeekdayType()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability resetWeekdayType()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unsetWeekdayType()
-	 * @method null|\string fillWeekdayType()
-	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
-	 * @method bool hasCreatedAt()
-	 * @method bool isCreatedAtFilled()
-	 * @method bool isCreatedAtChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedAt()
-	 * @method \Bitrix\Main\Type\DateTime requireCreatedAt()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability resetCreatedAt()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unsetCreatedAt()
-	 * @method \Bitrix\Main\Type\DateTime fillCreatedAt()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment getAssessment()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment remindActualAssessment()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment requireAssessment()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability setAssessment(\Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment $object)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability resetAssessment()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unsetAssessment()
-	 * @method bool hasAssessment()
-	 * @method bool isAssessmentFilled()
-	 * @method bool isAssessmentChanged()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment fillAssessment()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability set($fieldName, $value)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability reset($fieldName)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability wakeUp($data)
-	 */
-	class EO_CopilotCallAssessmentAvailability {
-		/* @var \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentAvailabilityTable */
-		static public $dataClass = '\Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentAvailabilityTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
-	/**
-	 * EO_CopilotCallAssessmentAvailability_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getAssessmentIdList()
-	 * @method \int[] fillAssessmentId()
-	 * @method \Bitrix\Main\Type\DateTime[] getStartPointList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillStartPoint()
-	 * @method \Bitrix\Main\Type\DateTime[] getEndPointList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillEndPoint()
-	 * @method null|\string[] getWeekdayTypeList()
-	 * @method null|\string[] fillWeekdayType()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment[] getAssessmentList()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection getAssessmentCollection()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessment_Collection fillAssessment()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability $object)
-	 * @method bool has(\Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability getByPrimary($primary)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability[] getAll()
-	 * @method bool remove(\Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection merge(?\Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 */
-	class EO_CopilotCallAssessmentAvailability_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentAvailabilityTable */
-		static public $dataClass = '\Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentAvailabilityTable';
-	}
-}
-namespace Bitrix\Crm\Copilot\CallAssessment\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_CopilotCallAssessmentAvailability_Result exec()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability fetchObject()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection fetchCollection()
-	 */
-	class EO_CopilotCallAssessmentAvailability_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability fetchObject()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection fetchCollection()
-	 */
-	class EO_CopilotCallAssessmentAvailability_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability createObject($setDefaultValues = true)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection createCollection()
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability wakeUpObject($row)
-	 * @method \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessmentAvailability_Collection wakeUpCollection($rows)
-	 */
-	class EO_CopilotCallAssessmentAvailability_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentTable:crm/lib/copilot/aiqualityassessment/entity/aiqualityassessmenttable.php */
 namespace Bitrix\Crm\Copilot\AiQualityAssessment\Entity {

@@ -27,7 +27,7 @@ class FolderListOptions
 
 	/** @var \Bitrix\Disk\Storage */
 	protected $storage;
-	/** @var \CGridOptions  */
+	/** @var \Bitrix\Main\Grid\Options  */
 	private $gridOptions;
 
 	/**
@@ -180,7 +180,7 @@ class FolderListOptions
 	}
 
 	/**
-	 * Returns grid sorting options (@see \CGridOptions).
+	 * Returns grid sorting options (@see \Bitrix\Main\Grid\Options).
 	 * @return array
 	 */
 	public function getGridOptionsSorting()
@@ -320,7 +320,7 @@ class FolderListOptions
 	{
 		if($this->gridOptions === null)
 		{
-			$this->gridOptions = new \CGridOptions($this->getGridId());
+			$this->gridOptions = new \Bitrix\Main\Grid\Options($this->getGridId());
 		}
 		return $this->gridOptions;
 	}

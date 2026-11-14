@@ -482,7 +482,7 @@ class EntityPreset
 
 	public function getById($id)
 	{
-		$result = PresetTable::getByPrimary($id);
+		$result = PresetTable::getByPrimary($id, ['cache' => ['ttl' => 3600]]);
 		$row = $result->fetch();
 
 		return (is_array($row)? $row : null);
@@ -626,7 +626,9 @@ class EntityPreset
 				$fieldMap[$fieldInfo['FIELD_NAME']] = true;
 			}
 		}
-		FieldAttributeManager::deleteByScope("preset_$presetId", array_keys($fieldMap));
+		$scope = "preset_$presetId";
+		FieldAttributeManager::deleteByScope($scope, array_keys($fieldMap));
+		FieldAttributeManager::invalidateRuntimeCache(\CCrmOwnerType::Requisite, $scope);
 	}
 
 	public function settingsGetFields(array $settings)

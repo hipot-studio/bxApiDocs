@@ -193,7 +193,10 @@ class Auth
 						$tokenInfo = array('error' => 'authorization_error', 'error_description' => 'Unable to authorize user');
 						$error = true;
 					}
-					elseif(!\CRestUtil::checkAppAccess($tokenInfo['client_id'], ['ACCESS' => (string)$application->getAccess()]))
+					elseif(!\CRestUtil::checkAppAccess($tokenInfo['client_id'], [
+						'ID' => (int)$application->getId(),
+						'ACCESS' => (string)$application->getAccess(),
+					]))
 					{
 						$tokenInfo = array('error' => 'user_access_error', 'error_description' => 'The user does not have access to the application.');
 						$error = true;

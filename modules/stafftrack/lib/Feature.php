@@ -199,7 +199,7 @@ class Feature
 	 */
 	public static function isCheckInV2MessageAvailable(): bool
 	{
-		return Option::get(self::MODULE_ID, self::CHECK_IN_V2_MESSAGE_KEY, 'N') === 'Y'
+		return Option::get(self::MODULE_ID, self::CHECK_IN_V2_MESSAGE_KEY, 'Y') === 'Y'
 			&& Loader::includeModule('im')
 			&& \Bitrix\Im\V2\Application\Features::isMessageBuilderAvailable()
 		;

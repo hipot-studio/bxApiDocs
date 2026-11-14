@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Public\Command\CheckIn;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Type\Date;
 use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\StaffTrack\Public\Command\CheckInDto;
@@ -12,6 +13,9 @@ use Bitrix\StaffTrack\Internal\Repository\Mapper\CheckInMapper;
 use Bitrix\StaffTrack\Internal\Integration\Disk\FileResolver;
 use Bitrix\StaffTrack\Internal\Integration\Pull;
 use Bitrix\StaffTrack\Public\Provider\DepartmentProvider;
+use Bitrix\StaffTrack\Public\Services\DailyStatsUpdater;
+use Bitrix\StaffTrack\Public\Services\MapDataCache;
+use Bitrix\StaffTrack\Public\Services\PointAcceptanceService;
 use Bitrix\StaffTrack\Service\UserService;
 abstract class AbstractCommand
 {
@@ -106,10 +110,18 @@ abstract class AbstractCommand
 	{
 		return $this->headIdsByUser[$userId] ??= array_values(
 			array_filter(
-				$this->loadHeadIds($userId),
+				array_unique([...$this->loadHeadIds($userId), ...$this->loadPeerHeadIds($userId)]),
 				static fn (int $headId): bool => DepartmentProvider::canReadCheckInsOf($headId, $userId),
 			),
 		);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	protected function loadPeerHeadIds(int $userId): array
+	{
+		return DepartmentProvider::getPeerHeadIds($userId);
 	}
 
 	/**
@@ -136,6 +148,84 @@ abstract class AbstractCommand
 			$command,
 			$payload,
 		);
+	}
+
+	/**
+	 * Drops the cached map of the days this write reached that are closed to new points. The map keeps a day
+	 * only once nothing can be accepted into it any more, and one point still is - the LEAVE that closes a
+	 * route nobody closed - so without this the map of that day answers without it for the thirty days the
+	 * entry lives, while the list of the team beside it counts the point at once.
+	 *
+	 * Once per write and not once per point: a batch carries up to a hundred of them. And for the open days
+	 * of an ordinary batch - every batch but the rare one - the clock alone decides, so nothing is read and
+	 * no cache directory is walked: the map never cached those days to begin with.
+	 *
+	 * @param array<int, Date|string|null> $localDates days of the written points, as the daily stats named them
+	 */
+	protected function invalidateMapOfClosedDates(int $userId, array $localDates): void
+	{
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		$closedDates = [];
+		foreach ($localDates as $localDate)
+		{
+			$localDate = $localDate instanceof Date ? $localDate->format('Y-m-d') : (string)$localDate;
+
+			if ($localDate !== '' && PointAcceptanceService::isDateClosedToNewPoints($localDate))
+			{
+				$closedDates[$localDate] = true;
+			}
+		}
+
+		if (empty($closedDates))
+		{
+			return;
+		}
+
+		$this->invalidateMapOfEmployeeDates($userId, array_keys($closedDates));
+	}
+
+	/**
+	 * The days of the request that a day closed to new points can be reached through - the automatic LEAVE
+	 * that closes a route, the one point the acceptance lets past its lower bound. Every other point belongs
+	 * to a day the map does not cache at all, so an ordinary batch answers this with an empty list without
+	 * building a single date.
+	 *
+	 * Read off the request rather than off what the acceptance decided about it: a repeat of a batch whose
+	 * answer never reached the client is refused by age - the point it repeats now stands at the tail of the
+	 * segment it once closed - so nothing is written and nothing after the write has anything to say. The
+	 * cache left stale by the interrupted attempt is dropped by the repeat all the same.
+	 *
+	 * @param CheckInDto[] $checkInDtos
+	 * @return Date[]
+	 */
+	protected function localDatesOfPointsReachingAClosedDay(array $checkInDtos): array
+	{
+		$localDates = [];
+		foreach ($checkInDtos as $checkInDto)
+		{
+			$timestamp = $checkInDto->dateCreate?->getTimestamp();
+			if ($timestamp !== null && PointAcceptanceService::isRouteClosingPoint($checkInDto))
+			{
+				$localDates[] = DailyStatsUpdater::localDateOf($timestamp, (int)($checkInDto->userTimezone ?? 0));
+			}
+		}
+
+		return $localDates;
+	}
+
+	/**
+	 * The one place the drop leaves the command through: past it stand the department of the author and a
+	 * cache directory per viewer and day, which is what the ordinary write must never pay for.
+	 *
+	 * @param string[] $localDates
+	 */
+	protected function invalidateMapOfEmployeeDates(int $userId, array $localDates): void
+	{
+		MapDataCache::invalidateForEmployeeDates([$userId => $localDates]);
 	}
 
 	/**

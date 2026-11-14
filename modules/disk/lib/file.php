@@ -4,11 +4,26 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Document\Online\UserInfoToken;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
+use Bitrix\Disk\Internal\Service\Quota\PersonalQuotaService;
+use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
+use Bitrix\Disk\Internal\Service\Restrictions\ContentHeadReader;
+use Bitrix\Disk\Internal\Service\Restrictions\FormatPolicyService;
+use Bitrix\Disk\Internal\Service\Restrictions\SignatureDetector;
+use Bitrix\Disk\Internal\Service\Audit\AuditObjectEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
+use Bitrix\Disk\Internal\Service\Audit\AuditSnapshotBuilder;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionException;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionResult;
 use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
 use Bitrix\Disk\Internal\Service\Sync\Journal\TrackedSetCleanupPublisher;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\AttachedObjectTable;
 use Bitrix\Disk\Internals\EditSessionTable;
 use Bitrix\Disk\Internals\Error\Error;
@@ -30,6 +45,7 @@ use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
@@ -42,6 +58,11 @@ Loc::loadMessages(__FILE__);
 
 class File extends BaseObject
 {
+	public const FILE_OWNERSHIP_DATA_KEY = 'FILE_OWNERSHIP';
+	public const FILE_OWNERSHIP_BORROWED = 'borrowed';
+	public const FILE_OWNERSHIP_OWNED = 'owned';
+	public const DEFER_CREATED_AUDIT_DATA_KEY = 'DEFER_CREATED_AUDIT';
+
 	const ERROR_COULD_NOT_SAVE_FILE           = 'DISK_FILE_22002';
 	const ERROR_COULD_NOT_COPY_FILE           = 'DISK_FILE_22003';
 	const ERROR_COULD_NOT_RESTORE_FROM_OBJECT = 'DISK_FILE_22004';
@@ -52,6 +73,12 @@ class File extends BaseObject
 	const ERROR_INVALID_LOCK_TOKEN            = 'DISK_FILE_22009';
 	const ERROR_INVALID_USER_FOR_UNLOCK       = 'DISK_FILE_22010';
 	const ERROR_INVALID_FILE_ARRAY 		      = 'DISK_FILE_22011';
+	// Owner of the code of the personal quota refusal: the domain service and the transport map name it by this one.
+	const ERROR_PERSONAL_QUOTA_EXCEEDED       = 'DISK_FILE_22012';
+	// Owner of the code of the format refusal: the domain service and the transport map name it by this one.
+	const ERROR_FORMAT_RESTRICTED             = 'DISK_FILE_22013';
+	// Owner of the code of the refusal for content the spent read budget left unchecked.
+	const ERROR_FORMAT_NOT_VERIFIED           = 'DISK_FILE_22014';
 
 	const STATE_DO_NOTHING     = 2;
 	const STATE_DELETE_PROCESS = 3;
@@ -60,6 +87,7 @@ class File extends BaseObject
 
 	protected UnifiedLinkAccessService $unifiedLinkAccessService;
 	protected UnifiedLinkUrl $unifiedLinkUrl;
+	private bool $skipRecentlyUsed = false;
 
 	protected array $fileTypeFixes = [
 		TypeFile::UNKNOWN => [
@@ -97,10 +125,20 @@ class File extends BaseObject
 	protected $prevViewId;
 	/** @var View\Base */
 	protected $view;
+	/**
+	 * Tells the inner node of the running write operation that the format policy has already
+	 * been applied to the name, so that one operation asks the policy exactly once.
+	 */
+	private bool $formatPolicyChecked = false;
 
-	public function __construct()
+	/**
+	 * The attributes travel on to the model as they do for every other object: a file raised from an
+	 * array of them - the way the tests and the builders of in-memory objects raise one - keeps its name
+	 * and its content id instead of losing them on the way.
+	 */
+	public function __construct(array $attributes = [])
 	{
-		parent::__construct();
+		parent::__construct($attributes);
 
 		$serviceLocator = ServiceLocator::getInstance();
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
@@ -142,12 +180,39 @@ class File extends BaseObject
 	 * Adds row to entity table, fills error collection and builds model.
 	 * @param array           $data Data.
 	 * @param ErrorCollection $errorCollection Error collection.
+	 * @param array           $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
+	 *                                 The node marks them with what it has already judged, so a caller
+	 *                                 repeating the write pays for the content no second time.
 	 * @return \Bitrix\Disk\Internals\Model|static|null
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @internal
 	 */
-	public static function add(array $data, ErrorCollection $errorCollection)
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		array &$options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
+		$fileOwnership = $data[self::FILE_OWNERSHIP_DATA_KEY] ?? self::FILE_OWNERSHIP_BORROWED;
+		$publishCreated = !($data[self::DEFER_CREATED_AUDIT_DATA_KEY] ?? false);
+		unset($data[self::FILE_OWNERSHIP_DATA_KEY], $data[self::DEFER_CREATED_AUDIT_DATA_KEY]);
+
+		$name = (string)($data['NAME'] ?? '');
+		$actorId = self::resolveFormatPolicyActorId(
+			array_key_exists(WriteOperationContext::OPTION_KEY_POLICY_ACTOR_ID, $options)
+				? $options[WriteOperationContext::OPTION_KEY_POLICY_ACTOR_ID]
+				: ($data['CREATED_BY'] ?? null)
+		);
+
+		$formatPolicyError = self::findFormatPolicyError($name, $options, $actorId);
+		if ($formatPolicyError)
+		{
+			$errorCollection->add([$formatPolicyError]);
+
+			return null;
+		}
+
 		$parent = null;
 		if(isset($data['PARENT']) && $data['PARENT'] instanceof Folder)
 		{
@@ -155,47 +220,207 @@ class File extends BaseObject
 			unset($data['PARENT']);
 		}
 
+		// Bridge for the docked upload commit: DISABLE_AUTO_BIZPROC is only a
+		// transport for the flag down to the internal addVersion() call. It is not
+		// a b_disk_object field, so it must be stripped before parent::add().
+		$disableAutoBizProc = !empty($data['DISABLE_AUTO_BIZPROC']);
+		unset($data['DISABLE_AUTO_BIZPROC']);
+		// An upload-only flag, not a column: it must not reach the object insert.
+		$disableRecentlyUsed = !empty($data['DISABLE_RECENTLY_USED']);
+		unset($data['DISABLE_RECENTLY_USED']);
+
 		if (!isset($data['UNIQUE_CODE']))
 		{
 			$data['UNIQUE_CODE'] = (new UniqueCode())->generateForNewFile();
 		}
 
-		/** @var File $file */
-		$file = parent::add($data, $errorCollection);
-		if($file)
+		// The content is the only thing this node reaches the storage for, so it is looked at last of
+		// the checks and still before anything of the file is written down.
+		$contentHeadReader = empty($options[WriteOperationContext::OPTION_KEY_CONTENT_CHECK_REQUIRED])
+			? null
+			: new ContentHeadReader()
+		;
+		$contentHead = self::readStoredContentHead(
+			(int)($data['FILE_ID'] ?? 0),
+			$options,
+			$actorId,
+			$contentHeadReader,
+		);
+		if ($contentHead !== null)
 		{
-			if($parent !== null)
+			// The content has been looked at, and the caller is told so by the mark it gets back:
+			// nothing but a content really judged here may keep a later write away from the storage.
+			$options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED] = true;
+
+			$formatPolicyError = self::findFormatPolicyError($name, $options, $actorId, $contentHead);
+			if ($formatPolicyError)
 			{
-				$file->setAttributes(array('PARENT' => $parent));
+				$errorCollection->add([$formatPolicyError]);
+
+				return null;
+			}
+		}
+		elseif ($contentHeadReader?->wasLastReadSkippedForBudget())
+		{
+			$errorCollection->add([self::createFormatNotVerifiedError()]);
+
+			return null;
+		}
+
+		$callback = function (?AuditTransaction $transaction = null) use (
+			$data,
+			$parent,
+			$errorCollection,
+			$fileOwnership,
+			$publishCreated,
+			$disableRecentlyUsed,
+			$disableAutoBizProc,
+			$options,
+		) {
+			if ($transaction !== null && $fileOwnership === self::FILE_OWNERSHIP_OWNED)
+			{
+				$fileId = (int)($data['FILE_ID'] ?? 0);
+				if ($fileId > 0)
+				{
+					$transaction->addCompensation(static function () use ($fileId): void {
+						\CFile::Delete($fileId);
+					});
+				}
+			}
+
+			/** @var File|null $createdFile */
+			$createdFile = parent::add($data, $errorCollection);
+			if (!$createdFile)
+			{
+				return null;
+			}
+
+			if ($parent !== null)
+			{
+				$createdFile->setAttributes(array('PARENT' => $parent));
 			}
 
 			$versionData = array(
-				'ID' => $file->getFileId(),
-				'FILE_SIZE' => $file->getSize(),
+				'ID' => $createdFile->getFileId(),
+				'FILE_SIZE' => $createdFile->getSize(),
 			);
 
-			if(!empty($data['UPDATE_TIME']))
+			if (!empty($data['UPDATE_TIME']))
 			{
 				$versionData['UPDATE_TIME'] = $data['UPDATE_TIME'];
 			}
-			if(!empty($data['ETAG']))
+			if (!empty($data['ETAG']))
 			{
 				$versionData['ETAG'] = $data['ETAG'];
 			}
 
-			$version = $file->addVersion($versionData, $file->getCreatedBy());
-			if(!$version)
+			$createdFile->skipRecentlyUsed = $disableRecentlyUsed;
+			$createdFile->markFormatPolicyChecked();
+			try
 			{
-				$errorCollection->add($file->getErrors());
-				$file->delete(SystemUser::SYSTEM_USER_ID);
+				$version = $createdFile->addVersion(
+					$versionData,
+					$createdFile->getCreatedBy(),
+					options: $disableAutoBizProc ? ['disableAutoBizProc' => true] + $options : $options,
+					auditTransaction: $transaction,
+				);
+			}
+			finally
+			{
+				$createdFile->skipRecentlyUsed = false;
+			}
+			if (!$version)
+			{
+				$errorCollection->add($createdFile->getErrors());
+
 				return null;
 			}
 
-			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterAddFile", array($file));
-			$event->send();
+			if ($publishCreated)
+			{
+				$auditResult = (new AuditObjectEventProducer())->publishCreated(
+					$createdFile,
+					(int)$createdFile->getCreatedBy(),
+				);
+				if (!$createdFile->applyAuditResult($auditResult))
+				{
+					$errorCollection->add($createdFile->getErrors());
+
+					return null;
+				}
+			}
+
+			if ($transaction !== null)
+			{
+				$transaction->addAfterCommit(static function () use ($createdFile): void {
+					$event = new Event(Driver::INTERNAL_MODULE_ID, 'onAfterAddFile', [$createdFile]);
+					$event->send();
+				});
+			}
+
+			return $createdFile;
+		};
+
+		if ($auditTransaction !== null)
+		{
+			$file = $callback($auditTransaction);
+		}
+		elseif (AuditTransaction::isActive())
+		{
+			$file = AuditTransaction::run(static fn(AuditTransaction $owner) => $callback($owner));
+		}
+		else
+		{
+			$transaction = new AuditTransaction(Application::getConnection());
+			$result = $transaction->execute(
+				static function (AuditTransaction $transaction) use ($callback): AuditTransactionOutcome {
+					$file = $callback($transaction);
+
+					return $file instanceof self
+						? AuditTransactionOutcome::success($file)
+						: AuditTransactionOutcome::failure();
+				},
+			);
+			/** @var File|null $file */
+			$file = self::unwrapAuditTransactionResult($result);
+		}
+
+		if (!$file)
+		{
+			return null;
 		}
 
 		return $file;
+	}
+
+	private static function unwrapAuditTransactionResult(AuditTransactionResult $result): mixed
+	{
+		$callbackException = $result->getCallbackException();
+		if (
+			$callbackException !== null
+			&& $result->isRollbackConfirmed()
+			&& count($result->getCallbackExceptions()) === 1
+			&& $result->getCompensationExceptions() === []
+		)
+		{
+			throw $callbackException;
+		}
+
+		if (
+			$result->isRollbackConfirmed()
+			&& $result->getCallbackExceptions() === []
+			&& $result->getCompensationExceptions() === []
+		)
+		{
+			return $result->getOutcome()->getValue();
+		}
+
+		if ($result->isSuccess())
+		{
+			return $result->getOutcome()->getValue();
+		}
+
+		throw new AuditTransactionException($result);
 	}
 
 	/**
@@ -484,6 +709,12 @@ class File extends BaseObject
 
 	/**
 	 * Copies object to target folder.
+	 *
+	 * A copy is a file of its own, and it may land where the source never was - a shared folder, the
+	 * storage of a group, a collab. So the content answers for itself as it does on any other write: a
+	 * file stored before the policy may carry a format the policy names now, and the same bytes would
+	 * be refused if the user downloaded them and put them back.
+	 *
 	 * @param Folder $targetFolder Target folder.
 	 * @param int    $updatedBy Id of user.
 	 * @param bool   $generateUniqueName Generates unique name for object in directory.
@@ -491,61 +722,231 @@ class File extends BaseObject
 	 */
 	public function copyTo(Folder $targetFolder, $updatedBy, $generateUniqueName = false)
 	{
-		$this->errorCollection->clear();
+		return $this->copyWithOptions($targetFolder, $updatedBy, (bool)$generateUniqueName, []);
+	}
 
-		$forkFileId = \CFile::CloneFile($this->getFileId());
+	/**
+	 * Copies the file on behalf of no user: the copy keeps the author given, and the global rule of the
+	 * format policy judges it.
+	 *
+	 * @internal
+	 * @param int $authorId Author of the copy.
+	 * @return File|null
+	 */
+	public function copyToOnBehalfOfNoUser(Folder $targetFolder, int $authorId, bool $generateUniqueName = false)
+	{
+		return $this->copyWithOptions($targetFolder, $authorId, $generateUniqueName, [
+			WriteOperationContext::OPTION_KEY_POLICY_ACTOR_ID => null,
+		]);
+	}
+
+	/**
+	 * A copy carries stored content to a place of the one copying, so the content the read budget
+	 * leaves unchecked refuses it (@see WriteOperationContext::OPTION_KEY_CONTENT_CHECK_REQUIRED).
+	 *
+	 * @return File|null
+	 */
+	private function copyWithOptions(Folder $targetFolder, $updatedBy, bool $generateUniqueName, array $options)
+	{
+		$this->errorCollection->clear();
+		$options[WriteOperationContext::OPTION_KEY_CONTENT_CHECK_REQUIRED] = true;
+
+		if (AuditOperationContextStack::current() === null)
+		{
+			return AuditOperationContextStack::runWithContext(
+				AuditOperationContext::create(
+					actionKind: AuditOperationContext::ACTION_EXPLICIT_COPY,
+					selectedTargetIds: [(string)$this->getId()],
+				),
+				fn() => $this->copyWithOptions($targetFolder, $updatedBy, $generateUniqueName, $options),
+			);
+		}
+
+		$transaction = new AuditTransaction(Application::getConnection());
+		$result = $transaction->execute(
+			function (AuditTransaction $transaction) use ($targetFolder, $updatedBy, $generateUniqueName, $options) {
+				$file = $this->copyToInsideAuditTransaction(
+					$targetFolder,
+					$updatedBy,
+					$generateUniqueName,
+					$transaction,
+					true,
+					$options,
+				);
+
+				return $file instanceof self
+					? AuditTransactionOutcome::success($file)
+					: AuditTransactionOutcome::failure();
+			},
+		);
+
+		/** @var File|null $file */
+		$file = $this->unwrapAuditCommandResult($result);
+
+		return $file;
+	}
+
+	/**
+	 * A move between storages is done by copying the content over, and the copy is marked as a move:
+	 * the write node judges it by the policy of the one moving, the author of the copy. The move has
+	 * already judged the stored content (@see self::findFormatPolicyErrorForMove()), so the node does
+	 * not read it a second time.
+	 *
+	 * @param Folder $targetFolder Destination folder.
+	 * @param int    $movedBy User id of user, which moves file.
+	 * @param AuditTransaction $auditTransaction Transaction of the move the copy is made inside.
+	 * @return BaseObject|null
+	 */
+	protected function copyForMove(Folder $targetFolder, $movedBy, AuditTransaction $auditTransaction)
+	{
+		return $this->copyToInsideAuditTransaction($targetFolder, $movedBy, false, $auditTransaction, false, [
+			WriteOperationContext::OPTION_KEY => WriteOperationContext::StoredContentMove,
+			WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED => true,
+		]);
+	}
+
+	/**
+	 * Writes the content of this file into the target folder as a new file. The context of the write
+	 * comes from the caller through $options.
+	 */
+	protected function copyToInsideAuditTransaction(
+		Folder $targetFolder,
+		$updatedBy,
+		bool $generateUniqueName,
+		AuditTransaction $auditTransaction,
+		bool $publishRootAudit,
+		array $options = [],
+	): ?BaseObject
+	{
+		if ($this instanceof FileLink)
+		{
+			return parent::copyToInsideAuditTransaction(
+				$targetFolder,
+				$updatedBy,
+				$generateUniqueName,
+				$auditTransaction,
+				$publishRootAudit,
+				$options,
+			);
+		}
+
+		$forkFileId = $this->cloneFileForCopy($this->getFileId());
 		if (!$forkFileId)
 		{
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_FILE_MODEL_ERROR_COULD_NOT_COPY_FILE'), self::ERROR_COULD_NOT_COPY_FILE)));
 			return null;
 		}
+		$this->registerOwnedCopyFile($auditTransaction, $forkFileId);
 
+		// The read of the stored content is paid for only where it can change the verdict at all
+		// (@see self::isContentHeadNeeded()), so a write outside the policy reaches no storage.
 		$fileModel = $targetFolder->addFile([
 			'NAME' => $this->getName(),
 			'FILE_ID' => $forkFileId,
 			'ETAG' => $this->getEtag(),
 			'SIZE' => $this->getSize(),
 			'CREATED_BY' => $updatedBy,
-		], [], $generateUniqueName);
+		], [], $generateUniqueName, $options, $auditTransaction);
 		if (!$fileModel)
 		{
-			\CFile::Delete($forkFileId);
 			$this->errorCollection->add($targetFolder->getErrors());
 
 			return null;
 		}
 
-		$this->clonePreviewData($this->getFileId(), $forkFileId);
+		if (!$this->clonePreviewData($this->getFileId(), $forkFileId, $auditTransaction))
+		{
+			return null;
+		}
+
+		if ($publishRootAudit)
+		{
+			$auditResult = (new AuditObjectEventProducer())->publishCopied($this, $fileModel, (int)$updatedBy);
+			if (!$this->applyAuditResult($auditResult))
+			{
+				return null;
+			}
+		}
 
 		return $fileModel;
 	}
 
-	private function clonePreviewData(int $originalFileId, int $clonedFileId)
+	protected function cloneFileForCopy(int $fileId): ?int
+	{
+		return \CFile::CloneFile($fileId);
+	}
+
+	private function clonePreviewData(
+		int $originalFileId,
+		int $clonedFileId,
+		AuditTransaction $auditTransaction,
+	): bool
 	{
 		$previewManager = new Main\UI\Viewer\PreviewManager();
 		$originalPreviewFileData = $previewManager->getFilePreviewEntryByFileId($originalFileId);
 		if (empty($originalPreviewFileData['ID']))
 		{
-			return;
+			return true;
 		}
 
 		$forkedPreviewImageFileId = null;
 		$forkedPreviewFileId = null;
 		if (!empty($originalPreviewFileData['PREVIEW_IMAGE_ID']))
 		{
-			$forkedPreviewImageFileId = \CFile::CloneFile($originalPreviewFileData['PREVIEW_IMAGE_ID']);
+			$forkedPreviewImageFileId = $this->cloneFileForCopy((int)$originalPreviewFileData['PREVIEW_IMAGE_ID']);
+			if (!$forkedPreviewImageFileId)
+			{
+				$this->addCopyFileError();
+
+				return false;
+			}
+			$this->registerOwnedCopyFile($auditTransaction, $forkedPreviewImageFileId);
 		}
 		if (!empty($originalPreviewFileData['PREVIEW_ID']))
 		{
-			$forkedPreviewFileId = \CFile::CloneFile($originalPreviewFileData['PREVIEW_ID']);
+			$forkedPreviewFileId = $this->cloneFileForCopy((int)$originalPreviewFileData['PREVIEW_ID']);
+			if (!$forkedPreviewFileId)
+			{
+				$this->addCopyFileError();
+
+				return false;
+			}
+			$this->registerOwnedCopyFile($auditTransaction, $forkedPreviewFileId);
 		}
 
 		$resultPreview = $previewManager->attachPreviewToFileId($clonedFileId, $forkedPreviewFileId, $forkedPreviewImageFileId);
 		if (!$resultPreview->isSuccess())
 		{
-			\CFile::delete($forkedPreviewImageFileId);
-			\CFile::delete($forkedPreviewFileId);
+			$this->errorCollection->add($resultPreview->getErrors());
+
+			return false;
 		}
+
+		return true;
+	}
+
+	private function registerOwnedCopyFile(AuditTransaction $auditTransaction, int $fileId): void
+	{
+		$auditTransaction->addCompensation(static function () use ($fileId): void {
+			try
+			{
+				\CFile::Delete($fileId);
+			}
+			finally
+			{
+				\CFile::CleanCache($fileId);
+			}
+		});
+	}
+
+	private function addCopyFileError(): void
+	{
+		$this->errorCollection->add([
+			new Error(
+				Loc::getMessage('DISK_FILE_MODEL_ERROR_COULD_NOT_COPY_FILE'),
+				self::ERROR_COULD_NOT_COPY_FILE,
+			),
+		]);
 	}
 
 	/**
@@ -622,6 +1023,21 @@ class File extends BaseObject
 			return null;
 		}
 
+		$cleanupObject = $this->getRealObject();
+		$cleanupObjectId = (int)($cleanupObject?->getId() ?: $this->getId());
+		if (!(new MarkerService())->revokeBeforeUse(
+			$cleanupObjectId,
+			$cleanupObject?->getUploadCleanupMarkerPresenceHint(),
+		))
+		{
+			$this->errorCollection[] = new Error(
+				Loc::getMessage('DISK_FILE_MODEL_ERROR_EXCLUSIVE_LOCK'),
+				self::ERROR_EXCLUSIVE_LOCK,
+			);
+
+			return null;
+		}
+
 		$lock = ObjectLock::add(array_merge($data, array(
 			'TOKEN' => $token,
 			'OBJECT_ID' => $this->getRealObjectId(),
@@ -693,18 +1109,54 @@ class File extends BaseObject
 	}
 
 	/**
+	 * Puts the file back onto the content of one of its own versions, as the deletion of the head
+	 * version does. No new version is written and the content is already stored in this very file,
+	 * so the format policy does not judge it anew: saved versions are not rechecked.
+	 *
+	 * @internal
+	 * @param Version $version Version of this file whose content becomes the current one.
+	 * @param int $updatedBy Id of user.
+	 * @return bool
+	 */
+	public function switchToContentOfVersion(Version $version, $updatedBy): bool
+	{
+		$this->markFormatPolicyChecked();
+
+		return (bool)$this->updateContent(
+			[
+				'ID' => $version->getFileId(),
+				'FILE_SIZE' => $version->getSize(),
+			],
+			$updatedBy,
+			[WriteOperationContext::OPTION_KEY => WriteOperationContext::StoredContentMove],
+		);
+	}
+
+	/**
 	 * Updates file content.
 	 *
 	 * Runs index file, updates all FileLinks, sends notify to subscribers.
 	 *
 	 * @param array $file Structure like $_FILES.
 	 * @param int $updatedBy Id of user.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function updateContent(array $file, $updatedBy)
+	public function updateContent(
+		array $file,
+		$updatedBy,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->errorCollection->clear();
+		$oldSize = (int)$this->getSize();
+
+		if (!$this->checkFormatPolicy($options, self::resolveVersionPolicyActorId($updatedBy, $options), $file))
+		{
+			return false;
+		}
 
 		static::checkRequiredInputParams($file, array(
 			'ID', 'FILE_SIZE'
@@ -732,94 +1184,153 @@ class File extends BaseObject
 		);
 
 		$this->prevFileId = $this->fileId;
-		$success = $this->update($updateData);
+		$mutation = function () use ($updateData, $file, $updatedBy, $objectLock, $oldSize): bool {
+			$success = $this->update($updateData);
 
-		if(!$success)
+			if(!$success)
+			{
+				$this->prevFileId = null;
+				return false;
+			}
+
+			$this->changeParentUpdateTime(new DateTime(), $updatedBy);
+
+			if ($objectLock instanceof ObjectLock && Configuration::shouldAutoUnlockObjectOnSave())
+			{
+				$this->unlock($updatedBy);
+			}
+
+			$this->updateLinksAttributes(array(
+				'ETAG' => $this->getEtag(),
+				'GLOBAL_CONTENT_VERSION' => $this->getGlobalContentVersion(),
+				'SIZE' => $file['FILE_SIZE'],
+				'UPDATE_TIME' => $this->getUpdateTime(),
+				'SYNC_UPDATE_TIME' => $this->getSyncUpdateTime(),
+				'UPDATED_BY' => $updatedBy,
+			));
+			$this->updateRelated($updatedBy);
+
+			if (!$this->isFirstVersion())
+			{
+				$auditResult = (new AuditObjectEventProducer())->publishContentChanged(
+					$this,
+					(int)$this->getUpdatedBy(),
+					$oldSize,
+					(int)$this->getSize()
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return false;
+				}
+
+				// The first version is the content the file was created with, and the creation of the file is
+				// published on its own: the journal would otherwise take two records for every upload.
+				$this->publishToJournal(
+					ChangeType::ContentVersion,
+					$updatedBy,
+					['size', 'versionId', 'versionNumber', 'updatedAt', 'updatedBy'],
+				);
+			}
+
+			return true;
+		};
+
+		if ($auditTransaction !== null)
 		{
-			$this->prevFileId = null;
-			return false;
-		}
-
-		$this->changeParentUpdateTime(new DateTime(), $updatedBy);
-
-		if ($objectLock instanceof ObjectLock && Configuration::shouldAutoUnlockObjectOnSave())
-		{
-			$this->unlock($updatedBy);
-		}
-
-		$this->updateLinksAttributes(array(
-			'ETAG' => $this->getEtag(),
-			'GLOBAL_CONTENT_VERSION' => $this->getGlobalContentVersion(),
-			'SIZE' => $file['FILE_SIZE'],
-			'UPDATE_TIME' => $this->getUpdateTime(),
-			'SYNC_UPDATE_TIME' => $this->getSyncUpdateTime(),
-			'UPDATED_BY' => $updatedBy,
-		));
-		$this->updateRelated($updatedBy);
-
-		$driver = Driver::getInstance();
-		if ($this->getStorage()->isUseInternalRights())
-		{
-			$driver->getRecentlyUsedManager()->push(
-				$updatedBy,
-				$this
-			);
-		}
-
-		if ($this->isFirstVersion())
-		{
-			//initial full index
-			$driver->getIndexManager()->indexFile($this);
+			$success = (bool)$auditTransaction
+				->join(
+					static fn(AuditTransaction $transaction) => $mutation()
+						? AuditTransactionOutcome::success(true)
+						: AuditTransactionOutcome::failure(),
+				)
+				->getValue()
+			;
 		}
 		else
 		{
-			//just update content
-			$driver->getIndexManager()->updateFileContent($this);
+			$success = $this->runAuditCoveredMutation($mutation);
 		}
 
-		// The first version is the content the file was created with, and the creation of the file is
-		// published on its own: the journal would otherwise take two records for every upload.
-		if (!$this->isFirstVersion())
+		if(!$success)
 		{
-			$this->publishToJournal(
-				ChangeType::ContentVersion,
-				$updatedBy,
-				['size', 'versionId', 'versionNumber', 'updatedAt', 'updatedBy'],
-			);
+			return false;
 		}
 
-		$objectEvent = $this->makeObjectEvent(
-			'contentUpdated',
-			[
-				'object' => [
-					'id' => (int)$this->getId(),
-					'name' => $this->getName(),
-					'parentId' => (int)$this->getParentId(),
-					'updatedBy' => (int)$this->getUpdatedBy(),
-				],
-				'updatedBy' => [
-					'infoToken' => UserInfoToken::generateTimeLimitedToken($this->getUpdatedBy(), $this->getId()),
-				]
-			]
-		);
-		$objectEvent->sendToObjectChannel();
-
-		//todo little hack...We don't synchronize file in folder with uploaded files. And we have not to send notify by pull
-		if($this->parent === null || $this->parent && $this->parent->getCode() !== Folder::CODE_FOR_UPLOADED_FILES)
-		{
-			$driver->sendChangeStatusToSubscribers($this, 'quick');
-
-			$updatedBy = $this->getUpdatedBy();
-			if($updatedBy)
+		// The hook may run after the flag is reset, so the decision is taken here, not inside it.
+		$skipRecentlyUsed = $this->skipRecentlyUsed;
+		$afterCommit = function () use ($updatedBy, $skipRecentlyUsed): void {
+			$driver = Driver::getInstance();
+			if (!$skipRecentlyUsed && $this->getStorage()->isUseInternalRights())
 			{
-				$driver->sendEvent($updatedBy, 'live', array(
-					'objectId' => $this->getId(),
-					'action' => 'commit',
-					'contentVersion' => (int)$this->getGlobalContentVersion(),
-					'size' => (int)$this->getSize(),
-					'formatSize' => (string)CFile::formatSize($this->getSize()),
-				));
+				$driver->getRecentlyUsedManager()->push(
+					$updatedBy,
+					$this
+				);
 			}
+
+			if ($this->isFirstVersion())
+			{
+				//initial full index
+				$driver->getIndexManager()->indexFile($this);
+			}
+			else
+			{
+				//just update content
+				$driver->getIndexManager()->updateFileContent($this);
+			}
+
+			$driver->getIndexManager()->scheduleBoardIndex($this, (int)$this->getGlobalContentVersion());
+
+			$objectEvent = $this->makeObjectEvent(
+				'contentUpdated',
+				[
+					'object' => [
+						'id' => (int)$this->getId(),
+						'name' => $this->getName(),
+						'parentId' => (int)$this->getParentId(),
+						'updatedBy' => (int)$this->getUpdatedBy(),
+					],
+					'updatedBy' => [
+						'infoToken' => UserInfoToken::generateTimeLimitedToken($this->getUpdatedBy(), $this->getId()),
+					]
+				]
+			);
+			$objectEvent->sendToObjectChannel();
+
+			//todo little hack...We don't synchronize file in folder with uploaded files. And we have not to send notify by pull
+			if($this->parent === null || $this->parent && $this->parent->getCode() !== Folder::CODE_FOR_UPLOADED_FILES)
+			{
+				$driver->sendChangeStatusToSubscribers($this, 'quick');
+
+				$currentUpdatedBy = $this->getUpdatedBy();
+				if($currentUpdatedBy)
+				{
+					$driver->sendEvent($currentUpdatedBy, 'live', array(
+						'objectId' => $this->getId(),
+						'action' => 'commit',
+						'contentVersion' => (int)$this->getGlobalContentVersion(),
+						'size' => (int)$this->getSize(),
+						'formatSize' => (string)CFile::formatSize($this->getSize()),
+					));
+				}
+			}
+		};
+
+		if ($auditTransaction !== null)
+		{
+			$auditTransaction->addAfterCommit($afterCommit);
+		}
+		elseif (AuditTransaction::isActive())
+		{
+			AuditTransaction::run(static function (AuditTransaction $transaction) use ($afterCommit): bool {
+				$transaction->addAfterCommit($afterCommit);
+
+				return true;
+			});
+		}
+		else
+		{
+			$afterCommit();
 		}
 
 		return true;
@@ -833,14 +1344,86 @@ class File extends BaseObject
 	 * @param array $file Structure like $_FILES.
 	 * @param int $createdBy Id of user.
 	 * @param bool $disableJoin If set false the method attempts to join version with last version (@see \Bitrix\Disk\Configuration::getSecondsToJoinVersion()).
+	 * @param array $options Options of the write operation. Unknown keys flow down the write path untouched.
 	 * @return Version|null
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function addVersion(array $file, $createdBy, $disableJoin = false, array $options = [])
+	public function addVersion(
+		array $file,
+		$createdBy,
+		$disableJoin = false,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
+	{
+		if ($auditTransaction !== null)
+		{
+			return $auditTransaction
+				->join(function (AuditTransaction $transaction) use ($file, $createdBy, $disableJoin, $options) {
+					$version = $this->addVersionInsideTransaction(
+						$file,
+						$createdBy,
+						$disableJoin,
+						$options,
+						$transaction,
+					);
+
+					return $version instanceof Version
+						? AuditTransactionOutcome::success($version)
+						: AuditTransactionOutcome::failure();
+				})
+				->getValue()
+			;
+		}
+
+		if (AuditTransaction::isActive())
+		{
+			return AuditTransaction::run(
+				fn(AuditTransaction $owner) => $this->addVersionInsideTransaction(
+					$file,
+					$createdBy,
+					(bool)$disableJoin,
+					$options,
+					$owner,
+				),
+			);
+		}
+
+		$transaction = new AuditTransaction(Application::getConnection());
+		$result = $transaction->execute(
+			function (AuditTransaction $transaction) use ($file, $createdBy, $disableJoin, $options) {
+				$version = $this->addVersionInsideTransaction(
+					$file,
+					$createdBy,
+					$disableJoin,
+					$options,
+					$transaction,
+				);
+
+				return $version instanceof Version
+					? AuditTransactionOutcome::success($version)
+					: AuditTransactionOutcome::failure();
+			},
+		);
+
+		/** @var Version|null $version */
+		$version = self::unwrapAuditTransactionResult($result);
+
+		return $version;
+	}
+
+	private function addVersionInsideTransaction(
+		array $file,
+		$createdBy,
+		bool $disableJoin,
+		array $options,
+		?AuditTransaction $auditTransaction,
+	): ?Version
 	{
 		$this->errorCollection->clear();
 
 		$commentAttachedObjects = $options['commentAttachedObjects'] ?? true;
+		$disableAutoBizProc = !empty($options['disableAutoBizProc']);
 
 		if(Configuration::isEnabledStorageSizeRestriction())
 		{
@@ -863,56 +1446,707 @@ class File extends BaseObject
 			}
 		}
 
+		if (!$this->checkFormatPolicy($options, self::resolveVersionPolicyActorId($createdBy, $options), $file))
+		{
+			return null;
+		}
+
 		$needToJoin = !$disableJoin && $this->isNeedToJoinVersion($createdBy);
-		if(!$this->updateContent($file, $createdBy))
+		// The version the join rewrites is read once and serves both: the size the quota measures the
+		// write by, and the row the join itself writes. Nothing between the two touches that row.
+		$versionToJoin = $needToJoin ? $this->getLastVersion() : null;
+
+		// The node every write of content passes through, the creation of a file included: whatever
+		// the early points of the transports let through, the quota is answered for here. The order
+		// is the one of the upload path: a format nothing can save is named before a quota the user
+		// can free up.
+		if (!$this->checkPersonalQuota($file, $options, (int)$versionToJoin?->getSize()))
+		{
+			return null;
+		}
+
+		$this->markFormatPolicyChecked();
+		if(!$this->updateContent($file, $createdBy, $options, $auditTransaction))
 		{
 			return null;
 		}
 
 		if($needToJoin)
 		{
-			$lastVersion = $this->joinVersion();
+			$lastVersion = $this->joinVersion($versionToJoin, $auditTransaction);
 			if ($lastVersion)
 			{
-				$this->cleanVersionsOverLimitByTime($createdBy);
-				$this->tryToRunBizProcAfterEdit();
+				$afterCommit = function () use ($createdBy, $disableAutoBizProc): void {
+					$this->cleanVersionsOverLimitByTime($createdBy);
+					$this->tryToRunBizProcAfterEdit($disableAutoBizProc);
+				};
+				if ($auditTransaction !== null)
+				{
+					$auditTransaction->addAfterCommit($afterCommit);
+				}
+				else
+				{
+					$afterCommit();
+				}
 
 				return $lastVersion;
 			}
 		}
 
+		$extraVersionData = [];
+		if (isset($options['UPLOAD_INTENT_TOKEN']))
+		{
+			$extraVersionData['UPLOAD_INTENT_TOKEN'] = $options['UPLOAD_INTENT_TOKEN'];
+		}
+
 		$versionModel = Version::add(array_merge(array(
 			'OBJECT_ID' => $this->id,
+			'OBJECT' => $this,
 			'FILE_ID' => $this->fileId,
 			'NAME' => $this->name,
 			'CREATED_BY' => $createdBy,
-		), $this->getHistoricalData()), $this->errorCollection);
+		), $this->getHistoricalData(), $extraVersionData), $this->errorCollection);
 
 		if(!$versionModel)
 		{
 			return null;
 		}
 
-		$this->cleanVersionsOverLimitByCount($createdBy);
-		$this->cleanVersionsOverLimitByTime($createdBy);
-		if ($commentAttachedObjects)
-		{
-			$this->commentAttachedObjects($versionModel);
-		}
 		$this->resetHeadVersionToAttachedObject($versionModel);
 
-		if ($this->isFirstVersion())
+		$afterCommit = function () use ($createdBy, $commentAttachedObjects, $versionModel, $disableAutoBizProc): void {
+			$this->cleanVersionsOverLimitByCount($createdBy);
+			$this->cleanVersionsOverLimitByTime($createdBy);
+			if ($commentAttachedObjects)
+			{
+				$this->commentAttachedObjects($versionModel);
+			}
+
+			if ($this->isFirstVersion())
+			{
+				$this->tryToRunBizProcAfterCreate($disableAutoBizProc);
+			}
+			else
+			{
+				$this->tryToRunBizProcAfterEdit($disableAutoBizProc);
+			}
+
+			Application::getInstance()->getTaggedCache()->clearByTag("disk_file_{$this->id}");
+		};
+
+		if ($auditTransaction !== null)
 		{
-			$this->tryToRunBizProcAfterCreate();
+			$auditTransaction->addAfterCommit($afterCommit);
 		}
 		else
 		{
-			$this->tryToRunBizProcAfterEdit();
+			$afterCommit();
 		}
 
-		Application::getInstance()->getTaggedCache()->clearByTag("disk_file_{$this->id}");
-
 		return $versionModel;
+	}
+
+	/**
+	 * Applies the format policy to the name of this file and to the content being written.
+	 *
+	 * The mark left by the outer node of the same write operation is consumed here: an operation
+	 * asks the policy once, at the outermost node it passes through.
+	 *
+	 * @param array $options Options of the write operation.
+	 * @param int|null $actorId User performing the write, whose policy judges it.
+	 * @param array $file Structure like $_FILES of the content being written.
+	 * @return bool
+	 */
+	private function checkFormatPolicy(array $options, ?int $actorId, array $file = []): bool
+	{
+		if ($this->formatPolicyChecked)
+		{
+			$this->formatPolicyChecked = false;
+
+			return true;
+		}
+
+		$error = self::findFormatPolicyError($this->getName(), $options, $actorId);
+		if ($error === null)
+		{
+			// The content is the only thing this node reaches the storage for, so it is looked at
+			// after the name and still before anything of the file is written down.
+			$contentHead = self::readStoredContentHead((int)($file['ID'] ?? 0), $options, $actorId);
+			if ($contentHead !== null)
+			{
+				$error = self::findFormatPolicyError($this->getName(), $options, $actorId, $contentHead);
+			}
+		}
+
+		if ($error)
+		{
+			$this->errorCollection[] = $error;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Lets the inner node of the running write operation skip the policy: this node has just
+	 * applied it to the same name.
+	 */
+	private function markFormatPolicyChecked(): void
+	{
+		$this->formatPolicyChecked = true;
+	}
+
+	/**
+	 * Applies the format policy to an upload while its content is still at hand, before the file
+	 * layer stores it. The head read here saves the write node a read from the storage, and the
+	 * mark left in $options tells the node that the content has already been looked at.
+	 *
+	 * @internal
+	 * @param array $fileArray Structure like $_FILES.
+	 * @param string $name Name the file is written under.
+	 * @param int $actorId User performing the write, whose policy judges it.
+	 * @param array $options Options of the write operation.
+	 * @return Error|null
+	 */
+	public static function findFormatPolicyErrorForUpload(
+		array $fileArray,
+		string $name,
+		int $actorId,
+		array &$options,
+	): ?Error
+	{
+		$policyActorId = self::resolveFormatPolicyActorId($actorId);
+
+		$contentHead = self::readUploadedContentHead($fileArray, $options, $policyActorId);
+		if ($contentHead !== null)
+		{
+			$options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED] = true;
+		}
+
+		return self::findFormatPolicyError($name, $options, $policyActorId, $contentHead);
+	}
+
+	/**
+	 * Applies the format policy to this file as it is already stored: the name it is kept under and
+	 * the beginning of its content. A move and a restore carry stored content to a place of the one
+	 * performing them, so they are judged by the policy of that user before anything is written.
+	 * The content is read only when it can still change the verdict, within the read budget. Content
+	 * the spent budget of its kind of storage leaves unread is refused as not verified; content the
+	 * storage refuses to give or that cannot be read is left to the name.
+	 *
+	 * @internal
+	 * @param int $actorId User moving or restoring the file; none gets the global rule.
+	 * @param ContentHeadReader|null $contentHeadReader Reader of the operation over many files, whose
+	 * budget and rows of b_file the file shares; a file judged on its own gets a reader of its own.
+	 * @param bool|null $inCloud Whether the content lies in a cloud storage, when the operation knows it.
+	 * @return Error|null
+	 */
+	public function findFormatPolicyErrorForStored(
+		int $actorId,
+		?ContentHeadReader $contentHeadReader = null,
+		?bool $inCloud = null,
+	): ?Error
+	{
+		$policyActorId = self::resolveFormatPolicyActorId($actorId);
+		$options = [WriteOperationContext::OPTION_KEY => WriteOperationContext::StoredContentMove];
+		// a file in the trash can keeps a suffix after its extension
+		$name = $this->getNameWithoutTrashCanSuffix();
+
+		$error = self::findFormatPolicyError($name, $options, $policyActorId);
+		if ($error !== null)
+		{
+			return $error;
+		}
+
+		$contentHeadReader ??= new ContentHeadReader();
+		$contentHead = self::readStoredContentHead(
+			(int)$this->getFileId(),
+			$options,
+			$policyActorId,
+			$contentHeadReader,
+			$inCloud,
+		);
+		if ($contentHead === null)
+		{
+			return $contentHeadReader->wasLastReadSkippedForBudget() ? self::createFormatNotVerifiedError() : null;
+		}
+
+		return self::findFormatPolicyError($name, $options, $policyActorId, $contentHead);
+	}
+
+	/**
+	 * A link carries no content of its own, so a move of a link is not judged.
+	 */
+	protected function findFormatPolicyErrorForMove(int $movedBy): ?Error
+	{
+		if ($this->isLink())
+		{
+			return null;
+		}
+
+		return $this->findFormatPolicyErrorForStored($movedBy);
+	}
+
+	/**
+	 * Returns the refusal of the format policy for the name, or null when the write is allowed.
+	 * The refusal carries one code and one text, whichever way the format was recognized.
+	 *
+	 * @param string $name Name of the file being written.
+	 * @param array $options Options of the write operation.
+	 * @param int|null $actorId User performing the write, whose policy judges it.
+	 * @param string|null $contentHead Beginning of the content being written, when it is known.
+	 * @return Error|null
+	 */
+	private static function findFormatPolicyError(
+		string $name,
+		array $options,
+		?int $actorId,
+		?string $contentHead = null,
+	): ?Error
+	{
+		$result = self::getFormatPolicyService()->isAllowed(
+			$name,
+			WriteOperationContext::createFromOptions($options),
+			$actorId,
+			$contentHead,
+			self::resolveEditingSessionStartedAt($options),
+		);
+
+		if ($result->isSuccess())
+		{
+			return null;
+		}
+
+		return new Error(
+			Loc::getMessage('DISK_FILE_MODEL_ERROR_FORMAT_RESTRICTED'), self::ERROR_FORMAT_RESTRICTED
+		);
+	}
+
+	/**
+	 * The refusal of stored content the policy needs to look at and the spent read budget left unread.
+	 */
+	private static function createFormatNotVerifiedError(): Error
+	{
+		return new Error(
+			Loc::getMessage('DISK_FILE_MODEL_ERROR_FORMAT_NOT_VERIFIED'), self::ERROR_FORMAT_NOT_VERIFIED
+		);
+	}
+
+	/**
+	 * Returns the beginning of the content already stored by the file layer. The storage is read
+	 * only when the read can still change the verdict: content looked at before it was stored
+	 * leaves its mark in $options, and the policy itself says whether the check gets that far.
+	 *
+	 * @param int $fileId Id of the content in b_file.
+	 * @param array $options Options of the write operation.
+	 * @param int|null $actorId User performing the write.
+	 * @param ContentHeadReader|null $contentHeadReader Reader of the running operation, if it has one.
+	 * @param bool|null $inCloud Whether the content lies in a cloud storage, when the caller knows it.
+	 * @return string|null
+	 */
+	private static function readStoredContentHead(
+		int $fileId,
+		array $options,
+		?int $actorId,
+		?ContentHeadReader $contentHeadReader = null,
+		?bool $inCloud = null,
+	): ?string
+	{
+		if (!self::isContentHeadNeeded($options, $actorId))
+		{
+			return null;
+		}
+
+		return ($contentHeadReader ?? new ContentHeadReader())->readStoredHead($fileId, $inCloud);
+	}
+
+	/**
+	 * Returns the beginning of an upload lying outside the storage: the bytes are given as they
+	 * are, or read from the temporary file the upload arrived in.
+	 *
+	 * @param array $fileArray Structure like $_FILES.
+	 * @param array $options Options of the write operation.
+	 * @param int|null $actorId User performing the write.
+	 * @return string|null
+	 */
+	private static function readUploadedContentHead(array $fileArray, array $options, ?int $actorId): ?string
+	{
+		if (!self::isContentHeadNeeded($options, $actorId))
+		{
+			return null;
+		}
+
+		if (isset($fileArray['content']) && is_string($fileArray['content']))
+		{
+			$head = substr($fileArray['content'], 0, SignatureDetector::HEAD_LENGTH);
+
+			return $head === '' ? null : $head;
+		}
+
+		$path = $fileArray['tmp_name'] ?? null;
+
+		return is_string($path) ? (new ContentHeadReader())->readHeadFromPath($path) : null;
+	}
+
+	private static function isContentHeadNeeded(array $options, ?int $actorId): bool
+	{
+		if (!empty($options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED]))
+		{
+			return false;
+		}
+
+		return self::getFormatPolicyService()->needsContentHead(
+			WriteOperationContext::createFromOptions($options),
+			$actorId,
+			self::resolveEditingSessionStartedAt($options),
+		);
+	}
+
+	/**
+	 * The write is judged by the policy of the one it is written on behalf of; an author the write
+	 * does not name, like the system user, is judged by the global rule.
+	 */
+	private static function resolveFormatPolicyActorId(mixed $userId): ?int
+	{
+		return is_numeric($userId) && (int)$userId > 0 ? (int)$userId : null;
+	}
+
+	/**
+	 * A version written out of an editing session is judged by the policy of the one who opened the
+	 * session, whichever participant authored the last edit.
+	 */
+	private static function resolveVersionPolicyActorId(mixed $authorId, array $options): ?int
+	{
+		$sessionOwnerId = $options[WriteOperationContext::OPTION_KEY_EDITING_SESSION_OWNER_ID] ?? null;
+		if (
+			$sessionOwnerId !== null
+			&& WriteOperationContext::createFromOptions($options) === WriteOperationContext::EditingSession
+		)
+		{
+			return self::resolveFormatPolicyActorId($sessionOwnerId);
+		}
+
+		return self::resolveFormatPolicyActorId($authorId);
+	}
+
+	/**
+	 * @internal Also serves the checks of a folder whose files are moved or restored.
+	 */
+	public static function getFormatPolicyService(): FormatPolicyService
+	{
+		return ServiceLocator::getInstance()->get('disk.formatPolicyService');
+	}
+
+	private static function resolveEditingSessionStartedAt(array $options): ?int
+	{
+		$startedAt = $options[WriteOperationContext::OPTION_KEY_EDITING_SESSION_STARTED_AT] ?? null;
+
+		return is_numeric($startedAt) ? (int)$startedAt : null;
+	}
+
+	/**
+	 * Applies the personal quota to the content being written into the storage of this file.
+	 *
+	 * @param array $file Structure like $_FILES of the content being written.
+	 * @param array $options Options of the write operation.
+	 * @param int $replacedSize Size of the version this write rewrites, bytes.
+	 * @return bool
+	 */
+	private function checkPersonalQuota(array $file, array $options, int $replacedSize = 0): bool
+	{
+		$sizeToGain = (int)($file['FILE_SIZE'] ?? 0) - $replacedSize;
+		if ($sizeToGain <= 0)
+		{
+			return true;
+		}
+
+		$error = self::findPersonalQuotaErrorForSize($this->getStorage(), $sizeToGain, $options);
+		if ($error)
+		{
+			$this->errorCollection[] = $error;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Size the storage gets back when the write joins the last version: joining rewrites the row of
+	 * that version instead of adding one, so the counter moves by the difference of the two sizes.
+	 * A file with no version yet - the first write of a file being created - replaces nothing.
+	 *
+	 * @return int
+	 */
+	private function findSizeOfTheJoinedVersion(): int
+	{
+		return (int)$this->getLastVersion()?->getSize();
+	}
+
+	/**
+	 * Applies the personal quota to an upload by the size it declares, while the content is still
+	 * outside the storage. The write node answers for the quota all the same; this point spares the
+	 * portal the storing of content that is about to be refused - a cloud storage would take the
+	 * upload the whole way before the node deleted it.
+	 *
+	 * A size that cannot be told from the upload leaves the check to the write node.
+	 *
+	 * @internal
+	 * @param array $fileArray Structure like $_FILES.
+	 * @param Storage|null $storage Storage the content is written into.
+	 * @param array $options Options of the write operation.
+	 * @param int $replacedSize Size of the version the write rewrites, bytes.
+	 * @return Error|null
+	 */
+	public static function findPersonalQuotaErrorForUpload(
+		array $fileArray,
+		?Storage $storage,
+		array $options,
+		int $replacedSize = 0,
+	): ?Error
+	{
+		$fileSize = self::resolveUploadedFileSize($fileArray);
+		if ($fileSize === null)
+		{
+			return null;
+		}
+
+		$sizeToGain = $fileSize - $replacedSize;
+
+		return $sizeToGain <= 0 ? null : self::findPersonalQuotaErrorForSize($storage, $sizeToGain, $options);
+	}
+
+	/**
+	 * Applies the personal quota to an upload about to become the next version of this file, while
+	 * the content is still outside the storage. This is the one place the growth of the disk by a
+	 * version is told: a write that joins the last version rewrites its row, so the disk grows by
+	 * the difference of the two sizes, and a rewrite of the same size takes up nothing at all.
+	 *
+	 * The version is written into the real object of this file, so the disk judged here is the one
+	 * that object lies in and not the one a link to it lies in. The join is asked of the same object:
+	 * a write that disables the join is not one this answers for.
+	 *
+	 * Nothing is written and the errors of the object are left as they were.
+	 *
+	 * @internal
+	 * @param array $fileArray Structure like $_FILES.
+	 * @param int $createdBy Id of the user writing the version.
+	 * @param array $options Options of the write operation.
+	 * @return Error|null
+	 */
+	public function findPersonalQuotaErrorForVersionUpload(array $fileArray, $createdBy, array $options): ?Error
+	{
+		$realObject = $this->getRealObject();
+		$joinsTheLastVersion = $realObject !== null && $realObject->isNeedToJoinVersion($createdBy);
+
+		return self::findPersonalQuotaErrorForUpload(
+			$fileArray,
+			$realObject?->getStorage() ?? $this->getStorage(),
+			$options,
+			$joinsTheLastVersion ? $realObject->findSizeOfTheJoinedVersion() : 0,
+		);
+	}
+
+	/**
+	 * Returns the refusal of the personal quota for this write, or null when the write is allowed.
+	 *
+	 * The size is the one the write adds to the storage, so a caller answering for several files at
+	 * once - a group action of the user - asks about their sum and gets one refusal for the whole.
+	 *
+	 * @internal
+	 * @param Storage|null $storage Storage the content is written into.
+	 * @param int $fileSize Size being written, bytes.
+	 * @param array $options Options of the write operation.
+	 * @return Error|null
+	 */
+	public static function findPersonalQuotaErrorForSize(?Storage $storage, int $fileSize, array $options): ?Error
+	{
+		$result = self::getPersonalQuotaService()->canWriteToStorage(
+			$storage,
+			$fileSize,
+			WriteOperationContext::createFromOptions($options),
+		);
+
+		if ($result->isSuccess())
+		{
+			return null;
+		}
+
+		$refusalData = ($result->getErrors()[0] ?? null)?->getCustomData();
+
+		return new Error(
+			self::makePersonalQuotaMessage($storage, $refusalData),
+			self::ERROR_PERSONAL_QUOTA_EXCEEDED,
+		);
+	}
+
+	/**
+	 * The words the refusal carries. The employee the disk belongs to is told how much of it is
+	 * spent and what to free up; everyone else writing into a disk of somebody else - an upload into
+	 * a folder a colleague shared with them - is told who to ask, and nothing about the state of a
+	 * disk that is not theirs to know.
+	 *
+	 * @param Storage|null $storage Storage the content is written into.
+	 * @param array|null $refusalData Sizes the refusal was measured by.
+	 * @return string
+	 */
+	private static function makePersonalQuotaMessage(?Storage $storage, ?array $refusalData): string
+	{
+		if (!self::isStorageOfCurrentUser($storage))
+		{
+			return (string)Loc::getMessage('DISK_FILE_MODEL_ERROR_PERSONAL_QUOTA_EXCEEDED_FOREIGN');
+		}
+
+		return (string)Loc::getMessage('DISK_FILE_MODEL_ERROR_PERSONAL_QUOTA_EXCEEDED', [
+			'#USED#' => CFile::formatSize((int)($refusalData[PersonalQuotaService::REFUSAL_DATA_USED] ?? 0)),
+			'#LIMIT#' => CFile::formatSize((int)($refusalData[PersonalQuotaService::REFUSAL_DATA_LIMIT] ?? 0)),
+		]);
+	}
+
+	/**
+	 * Whether the disk being written into belongs to the employee behind the request. A refusal at
+	 * all means the storage is a personal one, so its entity is the employee the quota belongs to.
+	 *
+	 * A write nobody stands behind - an agent, a console run - is a stranger here as well.
+	 *
+	 * @param Storage|null $storage Storage the content is written into.
+	 * @return bool
+	 */
+	private static function isStorageOfCurrentUser(?Storage $storage): bool
+	{
+		$ownerId = (int)$storage?->getEntityId();
+
+		return $ownerId > 0 && $ownerId === (int)CurrentUser::get()->getId();
+	}
+
+	/**
+	 * Size an upload declares, or null when it declares none. The size is told from what the upload
+	 * carries with it - the key of the array, the temporary file or the bytes themselves - and never
+	 * from the permanent storage: at this point the content has not reached it.
+	 */
+	private static function resolveUploadedFileSize(array $fileArray): ?int
+	{
+		$declaredSize = $fileArray['size'] ?? null;
+		if (is_numeric($declaredSize))
+		{
+			return (int)$declaredSize;
+		}
+
+		if (isset($fileArray['content']) && is_string($fileArray['content']))
+		{
+			return strlen($fileArray['content']);
+		}
+
+		$path = $fileArray['tmp_name'] ?? null;
+		if (is_string($path) && is_file($path))
+		{
+			$size = filesize($path);
+
+			return $size === false ? null : $size;
+		}
+
+		return null;
+	}
+
+	private static function getPersonalQuotaService(): PersonalQuotaService
+	{
+		return ServiceLocator::getInstance()->get(PersonalQuotaService::class);
+	}
+
+	private static function getStorageUsageCounter(): StorageUsageCounter
+	{
+		return ServiceLocator::getInstance()->get(StorageUsageCounter::class);
+	}
+
+	/**
+	 * Moves the counter of the owner of the personal storage this file lies in by what a write past
+	 * the model of the version took away or added; a storage the quota says nothing about takes none.
+	 *
+	 * @param int $deltaBytes Movement of the source of truth, bytes.
+	 * @return void
+	 */
+	private function applyPersonalStorageUsageDelta(int $deltaBytes): void
+	{
+		if ($deltaBytes === 0)
+		{
+			return;
+		}
+
+		$ownerId = $this->findPersonalStorageOwnerId();
+		if ($ownerId !== null)
+		{
+			self::getStorageUsageCounter()->applyDelta($ownerId, $deltaBytes);
+		}
+	}
+
+	/**
+	 * Hands the volume of this file over from the personal disk it left to the one it landed in. The
+	 * content is not written anew by such a move, so no version row moves and nothing else counts it;
+	 * a storage the quota says nothing about has no owner and takes no delta.
+	 *
+	 * @param int|null $sourceOwnerId Owner of the personal storage the file left, read before the switch.
+	 * @param int $movedSize Volume of the version rows that went with it, bytes.
+	 * @return void
+	 */
+	private function moveUsageBetweenPersonalStorages(?int $sourceOwnerId, int $movedSize): void
+	{
+		if ($movedSize === 0)
+		{
+			return;
+		}
+
+		$usageCounter = self::getStorageUsageCounter();
+
+		if ($sourceOwnerId !== null)
+		{
+			$usageCounter->applyDelta($sourceOwnerId, -$movedSize);
+		}
+
+		$targetOwnerId = $this->findPersonalStorageOwnerId();
+		if ($targetOwnerId !== null)
+		{
+			$usageCounter->applyDelta($targetOwnerId, $movedSize);
+		}
+	}
+
+	/**
+	 * Volume this file takes up: the sizes of its version rows, which is what the used size of a
+	 * personal disk is counted over. A link keeps no version rows and takes up nothing.
+	 *
+	 * @return int
+	 */
+	private function countSizeOfVersions(): int
+	{
+		$row =
+			(new Query(VersionTable::getEntity()))
+				->registerRuntimeField('', new ExpressionField('TOTAL_SIZE', 'SUM(%s)', 'SIZE'))
+				->addSelect('TOTAL_SIZE')
+				->addFilter('=OBJECT_ID', $this->id)
+				->exec()
+				->fetch()
+		;
+
+		return (int)($row['TOTAL_SIZE'] ?? 0);
+	}
+
+	/**
+	 * Owner of the personal storage this file lies in, or null for everything the quota says nothing
+	 * about: a group storage, the common one, the storage of an application.
+	 *
+	 * @return int|null
+	 */
+	private function findPersonalStorageOwnerId(): ?int
+	{
+		$storage = $this->getStorage();
+		if (!($storage?->getProxyType() instanceof ProxyType\User))
+		{
+			return null;
+		}
+
+		$ownerId = (int)$storage->getEntityId();
+
+		return $ownerId > 0 ? $ownerId : null;
 	}
 
 	private function generateEtag()
@@ -920,8 +2154,15 @@ class File extends BaseObject
 		return md5(mt_rand() . mt_rand());
 	}
 
-	private function tryToRunBizProcAfterCreate()
+	private function tryToRunBizProcAfterCreate(bool $disableAutoBizProc = false)
 	{
+		if ($disableAutoBizProc)
+		{
+			// Docked commit path: the workflow is started by durable-committed
+			// side effects, not by the domain write. Single point of suppression.
+			return;
+		}
+
 		if (!Integration\BizProcManager::isAvailable())
 		{
 			return;
@@ -934,8 +2175,13 @@ class File extends BaseObject
 		}
 	}
 
-	private function tryToRunBizProcAfterEdit()
+	private function tryToRunBizProcAfterEdit(bool $disableAutoBizProc = false)
 	{
+		if ($disableAutoBizProc)
+		{
+			return;
+		}
+
 		if (!Integration\BizProcManager::isAvailable())
 		{
 			return;
@@ -1047,9 +2293,12 @@ class File extends BaseObject
 		}
 	}
 
-	private function joinVersion()
+	/**
+	 * @param Version|null $lastVersion Version the write rewrites, or null when the file carries none.
+	 * @return Version|null
+	 */
+	private function joinVersion(?Version $lastVersion, ?AuditTransaction $auditTransaction = null)
 	{
-		$lastVersion = $this->getLastVersion();
 		if (!$lastVersion)
 		{
 			return null;
@@ -1071,7 +2320,18 @@ class File extends BaseObject
 
 		if ($this->prevFileId && $this->prevFileId != $this->fileId)
 		{
-			CFile::delete($this->prevFileId);
+			$previousFileId = $this->prevFileId;
+			$deletePreviousContent = static function () use ($previousFileId): void {
+				CFile::delete($previousFileId);
+			};
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($deletePreviousContent);
+			}
+			else
+			{
+				$deletePreviousContent();
+			}
 		}
 
 		return $lastVersion;
@@ -1153,6 +2413,7 @@ class File extends BaseObject
 	 * @see \Bitrix\Disk\File::addVersion().
 	 * @param array $fileArray Structure like $_FILES.
 	 * @param int $createdBy Id of user.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return Version|null
 	 */
 	public function uploadVersion(array $fileArray, $createdBy, array $options = [])
@@ -1176,6 +2437,26 @@ class File extends BaseObject
 			return null;
 		}
 
+		$formatPolicyError = self::findFormatPolicyErrorForUpload(
+			$fileArray,
+			$this->getName(),
+			self::resolveVersionPolicyActorId($createdBy, $options) ?? 0,
+			$options,
+		);
+		if ($formatPolicyError)
+		{
+			$this->errorCollection->add([$formatPolicyError]);
+
+			return null;
+		}
+
+		$personalQuotaError = $this->findPersonalQuotaErrorForVersionUpload($fileArray, $createdBy, $options);
+		if ($personalQuotaError)
+		{
+			$this->errorCollection->add([$personalQuotaError]);
+
+			return null;
+		}
 
 		$fileId = CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);
 		if(!$fileId)
@@ -1296,8 +2577,13 @@ class File extends BaseObject
 		}
 
 
+		// A restore makes an old revision the current content of the file, so the write node judges
+		// that content as it judges any other: the bytes of a revision stored before the policy may
+		// carry a format the policy now names, and the name of the file promises nothing about them.
 		if($this->addVersion(\CFile::getFileArray($forkFileId), $createdBy, true) === null)
 		{
+			\CFile::delete($forkFileId);
+
 			return false;
 		}
 
@@ -1348,6 +2634,36 @@ class File extends BaseObject
 			return true;
 		}
 
+		$formatPolicyError = $this->findFormatPolicyErrorForMove((int)$movedBy);
+		if ($formatPolicyError)
+		{
+			$this->errorCollection[] = $formatPolicyError;
+
+			return false;
+		}
+
+		// This move rewrites the storage of the object instead of copying its content over, so the
+		// version rows leave one disk and land in the other whole. Both the quota of the destination
+		// and the counters of the two disks are answered for here: nothing below writes a version.
+		$movesToAnotherStorage = $folder->getRealObject()->getStorageId() != $this->storageId;
+		$movedSize = $movesToAnotherStorage ? $this->countSizeOfVersions() : 0;
+		$sourceOwnerId = $movesToAnotherStorage ? $this->findPersonalStorageOwnerId() : null;
+
+		if ($movedSize > 0)
+		{
+			$error = self::findPersonalQuotaErrorForSize(
+				$folder->getRealObject()->getStorage(),
+				$movedSize,
+				[WriteOperationContext::OPTION_KEY => WriteOperationContext::StoredContentMove],
+			);
+			if ($error)
+			{
+				$this->errorCollection[] = $error;
+
+				return false;
+			}
+		}
+
 		$originalName = $this->name;
 
 		$tmpName = $this->generateUniqueTmpName();
@@ -1363,7 +2679,11 @@ class File extends BaseObject
 		$tableClassName = self::getTableClassName();
 		$rightsCodesBeforeMove = Driver::getInstance()->getRightsManager()->captureCodesBeforeMove($this);
 
-		$moveResult = $tableClassName::move($this->id, $realFolderId);
+		$moveResult = $tableClassName::move(
+			$this->id,
+			$realFolderId,
+			$this->getRealObject()->getUploadCleanupMarkerPresenceHint(),
+		);
 		if (!$moveResult->isSuccess())
 		{
 			$this->errorCollection->addFromResult($moveResult);
@@ -1401,7 +2721,7 @@ class File extends BaseObject
 		$subscribersAfterMove = Driver::getInstance()->collectSubscribers($this);
 		Driver::getInstance()->sendChangeStatus($subscribersAfterMove);
 
-		if ($folder->getRealObject()->getStorageId() != $this->storageId)
+		if ($movesToAnotherStorage)
 		{
 			$changeStorageIdResult = $tableClassName::changeStorageId($this->id, $folder->getRealObject()->getStorageId());
 			if(!$changeStorageIdResult->isSuccess())
@@ -1412,6 +2732,8 @@ class File extends BaseObject
 
 			$this->storage = $folder->getRealObject()->getStorage();
 			$this->storageId = $folder->getRealObject()->getStorageId();
+
+			$this->moveUsageBetweenPersonalStorages($sourceOwnerId, $movedSize);
 		}
 
 		$success = $this->update([
@@ -1449,12 +2771,41 @@ class File extends BaseObject
 	 */
 	public function markDeleted($deletedBy)
 	{
+		return $this->markDeletedWithAuditTransaction($deletedBy);
+	}
+
+	protected function markDeletedInsideAuditTransaction(
+		$movedBy,
+		AuditTransaction $auditTransaction,
+	): bool
+	{
+		return $this->markDeletedWithAuditTransaction($movedBy, $auditTransaction);
+	}
+
+	private function markDeletedWithAuditTransaction(
+		$deletedBy,
+		?AuditTransaction $auditTransaction = null,
+	): bool
+	{
 		$alreadyDeleted = $this->isDeleted();
-		$status = $this->markDeletedInternal($deletedBy);
+		$status = $this->markDeletedInternal(
+			$deletedBy,
+			ObjectTable::DELETED_TYPE_ROOT,
+			$auditTransaction,
+		);
 		if ($status && !$alreadyDeleted)
 		{
-			$notifyManager = Driver::getInstance()->getDeletionNotifyManager();
-			$notifyManager->send();
+			$sendNotification = static function (): void {
+				Driver::getInstance()->getDeletionNotifyManager()->send();
+			};
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($sendNotification);
+			}
+			else
+			{
+				$sendNotification();
+			}
 		}
 
 		return $status;
@@ -1467,13 +2818,27 @@ class File extends BaseObject
 	 * @return bool
 	 * @internal
 	 */
-	public function markDeletedInternal($deletedBy, $deletedType = ObjectTable::DELETED_TYPE_ROOT)
+	public function markDeletedInternal(
+		$deletedBy,
+		$deletedType = ObjectTable::DELETED_TYPE_ROOT,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$alreadyDeleted = $this->isDeleted();
-		$success = parent::markDeletedInternal($deletedBy, $deletedType);
+		$success = parent::markDeletedInternal($deletedBy, $deletedType, $auditTransaction);
 		if ($success && !$alreadyDeleted)
 		{
-			Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
+			$markDeletedLog = function () use ($deletedBy): void {
+				Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
+			};
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($markDeletedLog);
+			}
+			else
+			{
+				$markDeletedLog();
+			}
 		}
 
 		return $success;
@@ -1489,6 +2854,14 @@ class File extends BaseObject
 		if (!$this->isDeleted())
 		{
 			return true;
+		}
+
+		$formatPolicyError = $this->findFormatPolicyErrorForStored((int)$restoredBy);
+		if ($formatPolicyError)
+		{
+			$this->errorCollection[] = $formatPolicyError;
+
+			return false;
 		}
 
 		$needRecalculate = $this->deletedType == ObjectTable::DELETED_TYPE_CHILD;
@@ -1542,7 +2915,9 @@ class File extends BaseObject
 			}
 		}
 
+		$rootSnapshot = (new AuditSnapshotBuilder())->buildObjectSnapshot($this);
 		$this->currentState = static::STATE_DELETE_PROCESS;
+		$versionFileIds = [];
 
 		// The audience is taken before the rights and the interaction set it is read from are torn down;
 		// the record itself is published once the row of the file is gone, so that a deletion that broke
@@ -1550,133 +2925,179 @@ class File extends BaseObject
 		$publishesTombstone = !$this->journalCascadeChild && !$this->isLink();
 		$tombstoneAudience = $publishesTombstone ? $this->captureTombstoneAudience() : null;
 
-		$success = EditSessionTable::deleteByFilter(array(
-			'OBJECT_ID' => $this->id,
-		));
+		$deleted = $this->runAuditCoveredMutation(function (AuditTransaction $transaction) use (
+			$deletedBy,
+			&$versionFileIds,
+			$rootSnapshot,
+			$publishesTombstone,
+			$tombstoneAudience,
+		): bool {
+			$success = EditSessionTable::deleteByFilter(array(
+				'OBJECT_ID' => $this->id,
+			));
 
-		if(!$success)
-		{
-			return false;
-		}
+			if(!$success)
+			{
+				return false;
+			}
 
-		Document\Models\DocumentSessionTable::deleteBatch([
-			'OBJECT_ID' => $this->id,
-		]);
+			$this->releaseEditSlotsOfObject($transaction);
 
-		// The rows of the interaction set are the only record of who held the file by an interaction and
-		// by no right of their own. A child of a cascade publishes no tombstone the holder could be
-		// addressed by: the record of the root stands for the whole subtree, and its root is a folder
-		// they never saw. The rows go here together with the record they are addressed from, so that a
-		// cascade that broke below leaves no record naming a holder the set still carries the file to.
-		if ($this->journalCascadeChild)
-		{
-			(new TrackedSetCleanupPublisher())->publishHoldersLosingTheObject((int)$this->id);
-
-			TrackedObjectTable::deleteBatch([
-				'REAL_OBJECT_ID' => $this->id,
+			Document\Models\DocumentSessionTable::deleteBatch([
+				'OBJECT_ID' => $this->id,
 			]);
-		}
 
-		$success = ExternalLinkTable::deleteByFilter(array(
-			'OBJECT_ID' => $this->id,
-		));
+			// The rows of the interaction set are the only record of who held the file by an interaction and
+			// by no right of their own. A child of a cascade publishes no tombstone the holder could be
+			// addressed by: the record of the root stands for the whole subtree, and its root is a folder
+			// they never saw. The rows go here together with the record they are addressed from, so that a
+			// cascade that broke below leaves no record naming a holder the set still carries the file to.
+			if ($this->journalCascadeChild)
+			{
+				(new TrackedSetCleanupPublisher())->publishHoldersLosingTheObject((int)$this->id);
 
-		if(!$success)
+				TrackedObjectTable::deleteBatch([
+					'REAL_OBJECT_ID' => $this->id,
+				]);
+			}
+
+			$success = ExternalLinkTable::deleteByFilter(array(
+				'OBJECT_ID' => $this->id,
+			));
+
+			if(!$success)
+			{
+				return false;
+			}
+
+			foreach($this->getSharingsAsReal() as $sharing)
+			{
+				$sharing->delete($deletedBy);
+			}
+
+			//with status unreplied, declined (not approved)
+			$success = SharingTable::deleteByFilter(array(
+				'REAL_OBJECT_ID' => $this->id,
+			));
+
+			if(!$success)
+			{
+				return false;
+			}
+
+			foreach($this->getAttachedObjects() as $attached)
+			{
+				$attached->delete();
+			}
+			unset($attached);
+
+			SimpleRightTable::deleteBatch(array('OBJECT_ID' => $this->id));
+
+			$success = RightTable::deleteByFilter(array(
+				'OBJECT_ID' => $this->id,
+			));
+
+			if(!$success)
+			{
+				return false;
+			}
+
+			$deletedVersionsSize = 0;
+			$versionQuery = Version::getList(array('filter' => array(
+				'OBJECT_ID' => $this->id,
+			)));
+			while($versionData = $versionQuery->fetch())
+			{
+				$version = Version::buildFromArray($versionData);
+				$versionFileIds[] = [
+					'fileId' => $version->getFileId(),
+					'viewId' => $version->getViewId(),
+				];
+				$deletedVersionsSize += (int)$version->getSize();
+			}
+			unset($version, $versionQuery);
+
+			$success = VersionTable::deleteByFilter(array(
+				'OBJECT_ID' => $this->id,
+			));
+
+			if(!$success)
+			{
+				return false;
+			}
+
+			// The rows went by the batch and past the model, so what they took away from the disk is
+			// counted here once, by the sizes read above; the transaction takes the delta back with them.
+			$this->applyPersonalStorageUsageDelta(-$deletedVersionsSize);
+
+			if($this->getLock())
+			{
+				$this->getLock()->delete($deletedBy);
+			}
+
+			//it's possible, that object was already deleted. And we don't have to add it to deleted log. It's unnecessary.
+			//we add only directly destroyed objects.
+			if(!$this->isDeleted())
+			{
+				Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
+			}
+
+			$deleteResult = FileTable::delete($this->id);
+			if(!$deleteResult->isSuccess())
+			{
+				return false;
+			}
+
+			if (!$this->journalCascadeChild)
+			{
+				// Taken here and not before the gates above: several of them still answer with false, and a
+				// deletion that broke halfway would take the file from the holders who see it by their
+				// interaction alone while the portal goes on holding it.
+				TrackedObjectTable::deleteBatch([
+					'REAL_OBJECT_ID' => $this->id,
+				]);
+			}
+
+			if ($publishesTombstone)
+			{
+				$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
+			}
+
+			$auditResult = (new AuditObjectEventProducer())->publishPermanentlyDeleted(
+				$this,
+				(int)$deletedBy,
+				'object',
+				$rootSnapshot,
+			);
+			if (!$auditResult->isSuccess())
+			{
+				$this->errorCollection->add($auditResult->getErrors());
+
+				return false;
+			}
+
+			return true;
+		});
+		if(!$deleted)
 		{
 			return false;
 		}
-
-		foreach($this->getSharingsAsReal() as $sharing)
-		{
-			$sharing->delete($deletedBy);
-		}
-
-		//with status unreplied, declined (not approved)
-		$success = SharingTable::deleteByFilter(array(
-			'REAL_OBJECT_ID' => $this->id,
-		));
-
-		if(!$success)
-		{
-			return false;
-		}
-
-		foreach($this->getAttachedObjects() as $attached)
-		{
-			$attached->delete();
-		}
-		unset($attached);
 
 		if(Integration\BizProcManager::isAvailable())
 		{
 			BizProcDocument::deleteWorkflowsFile($this->id);
 		}
 
-		SimpleRightTable::deleteBatch(array('OBJECT_ID' => $this->id));
-
-		$success = RightTable::deleteByFilter(array(
-			'OBJECT_ID' => $this->id,
-		));
-
-		if(!$success)
+		foreach ($versionFileIds as $versionFileId)
 		{
-			return false;
-		}
-
-		$versionQuery = Version::getList(array('filter' => array(
-			'OBJECT_ID' => $this->id,
-		)));
-		while($versionData = $versionQuery->fetch())
-		{
-			$version = Version::buildFromArray($versionData);
-			$version->setAttributes(array('OBJECT' => $this));
-			$version->delete($deletedBy);
-		}
-		unset($version, $versionQuery);
-
-		$success = VersionTable::deleteByFilter(array(
-			'OBJECT_ID' => $this->id,
-		));
-
-		if(!$success)
-		{
-			return false;
-		}
-
-		if($this->getLock())
-		{
-			$this->getLock()->delete($deletedBy);
-		}
-
-		//it's possible, that object was already deleted. And we don't have to add it to deleted log. It's unnecessary.
-		//we add only directly destroyed objects.
-		if(!$this->isDeleted())
-		{
-			Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
+			\CFile::delete($versionFileId['fileId']);
+			if ($versionFileId['viewId'])
+			{
+				\CFile::delete($versionFileId['viewId']);
+			}
 		}
 
 		\CFile::delete($this->fileId);
-		$deleteResult = FileTable::delete($this->id);
-		if(!$deleteResult->isSuccess())
-		{
-			return false;
-		}
-
-		if (!$this->journalCascadeChild)
-		{
-			// Taken here and not before the gates above: several of them still answer with false, and a
-			// deletion that broke halfway would take the file from the holders who see it by their
-			// interaction alone while the portal goes on holding it.
-			TrackedObjectTable::deleteBatch([
-				'REAL_OBJECT_ID' => $this->id,
-			]);
-		}
-
-		if ($publishesTombstone)
-		{
-			$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
-		}
-
 		Driver::getInstance()->getIndexManager()->dropIndex($this);
 
 		Application::getInstance()->getTaggedCache()->clearByTag("disk_file_{$this->id}");
@@ -1691,11 +3112,48 @@ class File extends BaseObject
 		}
 
 		$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterDeleteFile", array($this->getId(), $deletedBy, array(
-            'STORAGE_ID' => $this->getStorageId(),
-        )));
+			'STORAGE_ID' => $this->getStorageId(),
+		)));
 		$event->send();
 
 		return true;
+	}
+
+	/**
+	 * Gives the portal back the edit slots the object still holds in the restriction log.
+	 *
+	 * A row of the journal is reached only through the sessions of the object, so it has to go
+	 * before they do: once the session rows are gone nothing names it any more, and the slot stays
+	 * taken until the TTL of the row runs out - ten minutes for VibeOffice, four hours for
+	 * OnlyOffice. The portal lock of the journal is deliberately not taken: removing rows can only
+	 * free a slot, so it competes with no decision about one.
+	 *
+	 * A cleanup that failed leaves exactly what the deletion used to leave anyway, so the file
+	 * still goes; the count is then not published, for the reason
+	 * {@see \Bitrix\Disk\Document\Vibeoffice\TerminalSessionFinalizer} states - a made-up number
+	 * would tell the portal the limit is exhausted.
+	 */
+	protected function releaseEditSlotsOfObject(AuditTransaction $transaction): void
+	{
+		$restrictionManager = new Document\OnlyOffice\RestrictionManager();
+		$released = $restrictionManager->deleteUsageByObject((int)$this->id);
+		if (!$released->isSuccess())
+		{
+			return;
+		}
+
+		$data = $released->getData();
+		$availableCount = $data['availableCount'] ?? null;
+		if ((int)($data['deletedCount'] ?? 0) <= 0 || $availableCount === null)
+		{
+			return;
+		}
+
+		$transaction->addAfterCommit(
+			static function () use ($restrictionManager, $availableCount): void {
+				$restrictionManager->notifyRestrictionLogChanged((int)$availableCount);
+			},
+		);
 	}
 
 	/**
@@ -1800,7 +3258,13 @@ class File extends BaseObject
 
 	/**
 	 * @param array{id: int, type: string} $entity
-	 * @param array{allowEdit: bool, isEditable: bool, createdBy: int} $options
+	 * @param array{
+	 *     allowEdit: bool,
+	 *     isEditable: bool,
+	 *     createdBy: int,
+	 *     ownerParameters?: array<string, int|string|bool>|null,
+	 * } $options ownerParameters describe the owner for its connector and cannot be changed after creation;
+	 *     invalid ones leave the file unattached with the error AttachedObject::ERROR_OWNER_PARAMETERS_INVALID.
 	 * @return AttachedObject|null
 	 * @throws Main\NotImplementedException
 	 */
@@ -1818,7 +3282,8 @@ class File extends BaseObject
 			'IS_EDITABLE' => (int)$options['isEditable'],
 			'ALLOW_EDIT' => (int)$options['allowEdit'],
 			'CREATED_BY' => $options['createdBy'],
-		], $errorCollection);
+			'OWNER_PARAMETERS' => $options['ownerParameters'] ?? null,
+		], $errorCollection, $this->getUploadCleanupMarkerPresenceHint());
 
 		if (!$attachedObject)
 		{

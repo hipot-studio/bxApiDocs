@@ -26,6 +26,9 @@ final class HeaderCompositionDto
 	 *        external link itself for a page entered by one. Empty when the opening keeps no copying.
 	 * @param string $downloadUrl empty when the opening keeps no downloading
 	 * @param array<int, array{code: string, name: string, isDefault: bool}> $editors
+	 * @param array{code: string, message: string}|null $editRefusal why the portal keeps this viewing from
+	 *        turning into editing - a restricted format or an exhausted personal quota - so the header
+	 *        can say why there is no button to press; null when nothing of the kind stands in the way
 	 */
 	public function __construct(
 		public readonly array $elements,
@@ -41,6 +44,7 @@ final class HeaderCompositionDto
 		public readonly array $editors,
 		public readonly bool $presenceEnabled,
 		public readonly bool $boostContainerRequired,
+		public readonly ?array $editRefusal = null,
 	)
 	{
 	}
@@ -71,6 +75,7 @@ final class HeaderCompositionDto
 			'boost' => [
 				'containerRequired' => $this->boostContainerRequired,
 			],
+			'editRefusal' => $this->editRefusal,
 		];
 	}
 }

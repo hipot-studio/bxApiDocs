@@ -33,20 +33,41 @@ class ChatRepository
 	}
 
 	/**
-	 * Find chat by chatbot ID, entity type, and entity ID
+	 * Find chat by chatbot ID, entity type, entity ID, and author
 	 *
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function findChat(int $chatbotId, string $entityType, string $entityId): ?Chat
+	public function findChat(int $chatbotId, string $entityType, string $entityId, int $userId): ?Chat
 	{
 		$code = $entityType . '_' . $entityId;
 
 		return ChatTable::query()
 			->where('CHATBOT_ID', $chatbotId)
 			->where('CODE', $code)
+			->where('AUTHOR_ID', $userId)
 			->fetchObject()
+		;
+	}
+
+	/**
+	 * Check if a chat exists for the entity code regardless of author
+	 *
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function chatExists(int $chatbotId, string $entityType, string $entityId): bool
+	{
+		$code = $entityType . '_' . $entityId;
+
+		return ChatTable::query()
+			->setSelect(['ID'])
+			->where('CHATBOT_ID', $chatbotId)
+			->where('CODE', $code)
+			->setLimit(1)
+			->fetchObject() !== null
 		;
 	}
 

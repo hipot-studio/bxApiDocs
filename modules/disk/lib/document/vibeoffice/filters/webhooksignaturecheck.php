@@ -40,7 +40,7 @@ class WebhookSignatureCheck extends ActionFilter\Base
 	private const SIGNATURE_PREFIX = 'v1=';
 
 	/** Maximum allowed clock skew between the platform timestamp and now (seconds). */
-	private const MAX_SKEW = 300;
+	public const MAX_SKEW = 300;
 
 	private string $secret;
 

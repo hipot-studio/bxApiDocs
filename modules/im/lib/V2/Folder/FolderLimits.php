@@ -10,6 +10,7 @@ final class FolderLimits
 {
 	public const MAX_FOLDERS_PER_USER = 20;
 	public const MAX_CHATS_PER_FOLDER = 50;
+	public const MAX_PINNED_CHATS = 45;
 	public const MAX_TITLE_LENGTH = 30;
 
 	private function __construct()

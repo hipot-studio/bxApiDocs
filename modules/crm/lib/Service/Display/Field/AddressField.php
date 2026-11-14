@@ -14,6 +14,7 @@ class AddressField extends BaseSimpleField
 
 	protected function getFormattedValueForKanban($fieldValue, int $itemId, Options $displayOptions)
 	{
+		$displayOptions = clone $displayOptions;
 		$displayOptions->setShowOnlyText(true);
 
 		$this->prepareValueForKanban($fieldValue);

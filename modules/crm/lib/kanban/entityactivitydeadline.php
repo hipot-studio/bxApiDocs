@@ -73,45 +73,30 @@ class EntityActivityDeadline
 	}
 
 	/**
-	 * Independent safety net anchored on the raw, unconverted server clock.
-	 *
-	 * Both the calculated deadline and the DatePeriods stage windows go through
-	 * the same toUserTime()->getServerTime() round-trip, so a broken portal
-	 * timezone/work-time sync shifts them together and clampToStageWindow() alone
-	 * cannot detect a deadline that ended up in the past. The raw server clock
-	 * does not pass through that round-trip, so it stays a stable anchor.
-	 *
-	 * The floor triggers only when the deadline server-day is actually earlier
-	 * than the real today, i.e. exactly the overdue definition used by kanban
-	 * classification in ActivityTrait::hasOverdueActivities(). In that case the
-	 * date is lifted to today (PENDING) or tomorrow (future stages). Deadlines
-	 * that are already today or later are left untouched, so the legitimate
-	 * "today" result for the last day of the week is preserved.
-	 *
-	 * For portals where the user timezone differs a lot from the server one an
-	 * extra correction could still be desirable, but that is out of the ticket's
-	 * scope; the reported case has user timezone close to the server one.
+	 * Uses the independent server clock as an anchor, comparing calendar days
+	 * in user time just like ActivityTrait::hasOverdueActivities().
 	 */
 	private function applyServerFloor(string $statusTypeId, DateTime $deadline): DateTime
 	{
-		$todayServer = Date::createFromTimestamp($this->getServerNow()->getTimestamp());
+		$todayUser = Date::createFromTimestamp($this->getServerNow()->toUserTime()->getTimestamp());
 
 		$deadline = clone $deadline;
-		$deadlineDay = Date::createFromTimestamp($deadline->getTimestamp());
-		if ($deadlineDay->getTimestamp() >= $todayServer->getTimestamp())
+		$userDeadline = (clone $deadline)->toUserTime();
+		$deadlineDay = Date::createFromTimestamp($userDeadline->getTimestamp());
+		if ($deadlineDay->getTimestamp() >= $todayUser->getTimestamp())
 		{
 			return $deadline;
 		}
 
-		$floorDay = $todayServer;
+		$floorDay = $todayUser;
 		if ($statusTypeId !== EntityActivities::STAGE_PENDING)
 		{
 			$floorDay->add('+1 day');
 		}
 
-		$this->setDate($deadline, $floorDay);
+		$this->setDate($userDeadline, $floorDay);
 
-		return $deadline;
+		return \CCrmDateTimeHelper::getServerTime($userDeadline);
 	}
 
 	/**
@@ -197,9 +182,7 @@ class EntityActivityDeadline
 	}
 
 	/**
-	 * Raw server clock used solely as the floor anchor. Unlike getUserDateTime()
-	 * it does not go through the toUserTime()/getServerTime() conversion, so it is
-	 * not affected by a broken timezone sync.
+	 * Current server clock, independent of the injected calculation time.
 	 */
 	protected function getServerNow(): DateTime
 	{

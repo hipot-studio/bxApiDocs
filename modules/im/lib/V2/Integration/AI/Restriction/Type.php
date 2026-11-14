@@ -10,4 +10,5 @@ enum Type: string
 	case Transcription = 'transcription';
 	case TranscriptionEmotions = 'transcriptionEmotions';
 	case AutoTask = 'autoTask';
+	case VoiceWidget = 'voiceWidget';
 }

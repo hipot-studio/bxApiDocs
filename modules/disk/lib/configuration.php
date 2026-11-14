@@ -4,16 +4,23 @@
 namespace Bitrix\Disk;
 
 
-use Bitrix\Disk\Config\Feature\FileViewerFormatsFlag;
+use Bitrix\Disk\Config\Feature\DockedUploaderFlag;
+use Bitrix\Disk\Config\Feature\DockedUploaderPortalFlag;
+use Bitrix\Disk\Config\Feature\AuditLog;
+use Bitrix\Disk\Config\Feature\BoardIndex;
 use Bitrix\Disk\Document\BitrixHandler;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
+use Bitrix\Disk\Document\Vibeoffice;
+use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Enum\CustomServerTypes;
+use Bitrix\Disk\Internal\Enum\AuditRetentionPeriod;
 use Bitrix\Disk\Internal\Enum\ServersTypesEnum;
+use Bitrix\Disk\Internal\Service\Document\OfficeEngineRecognizer;
 use Bitrix\Disk\Internal\Service\MarkdownRenderService;
-use Bitrix\Main\Config\Feature;
 use Bitrix\Disk\Internal\Service\Sync\SyncFeatureOption;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Viewer\Transformation\Document;
@@ -30,10 +37,23 @@ final class Configuration
 	public const OPTION_ONLYOFFICE_SERVERS_TYPE = 'disk_onlyoffice_servers_type';
 	public const OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE = 'disk_onlyoffice_switch_servers_type_state';
 	public const OPTION_DEFAULT_VIEWER_CUSTOM_CONFIG_TYPE = 'default_viewer_service_custom_config_type';
+	public const OPTION_AUDIT_ENABLED = 'disk_audit_enabled';
+	public const OPTION_AUDIT_WAS_EVER_ENABLED = 'disk_audit_was_ever_enabled';
+	public const OPTION_AUDIT_RETENTION_PERIOD = 'disk_audit_retention_period';
 	public const OPTION_ONLYOFFICE_INTERRUPT_THRESHOLD = 'disk_onlyoffice_interrupt_threshold';
 	public const OPTION_ONLYOFFICE_INTERRUPT_AGENT_ENABLED = 'disk_onlyoffice_interrupt_agent_enabled';
 
 	public const DEFAULT_ONLYOFFICE_INTERRUPT_THRESHOLD = 900;
+
+	/**
+	 * Default per-file ceiling (bytes) of a docked upload (Q-6), matching the
+	 * ui.fileuploader default. Single source shared by the create pre-check
+	 * ({@see \Bitrix\Disk\Public\Command\DockedUpload\CreateQueueCommand}) and the
+	 * transport ceiling ({@see \Bitrix\Disk\Controller\DockedUploader\Transport::MAX_FILE_SIZE}).
+	 */
+	public const DOCKED_UPLOAD_MAX_FILE_SIZE = 256 * 1024 * 1024;
+
+	private static ?bool $isEnabledDocuments = null;
 
 	public static function isEnabledDefaultEditInUf()
 	{
@@ -57,36 +77,80 @@ final class Configuration
 
 	public static function isEnabledDocuments()
 	{
-		static $isAllow = null;
-		if($isAllow === null)
+		if(self::$isEnabledDocuments === null)
 		{
-			$isAllow = ('Y' == Option::get(Driver::INTERNAL_MODULE_ID, 'documents_enabled', 'N'));
+			self::$isEnabledDocuments = ('Y' == Option::get(Driver::INTERNAL_MODULE_ID, 'documents_enabled', 'N'));
 		}
 
-		return $isAllow;
+		return self::$isEnabledDocuments;
+	}
+
+	/**
+	 * Forgets the answer remembered by {@see self::isEnabledDocuments()}, so that the next call reads
+	 * the portal option anew. Needed by whoever changes the option within a running process.
+	 */
+	public static function resetEnabledDocuments(): void
+	{
+		self::$isEnabledDocuments = null;
 	}
 
 	public static function isEnabledMarkdownViewer(): bool
 	{
-		// The viewer renders markdown via Parsedown, which ships with the "ui" module. Without a
-		// working renderer it cannot work, so it is treated as unavailable even when the option is enabled.
-		return 'Y' === Option::get(Driver::INTERNAL_MODULE_ID, 'disk_enable_markdown_viewer', 'N')
-			&& MarkdownRenderService::isAvailable();
+		// The viewer requires Parsedown, which ships with the "ui" module.
+		return MarkdownRenderService::isAvailable();
 	}
 
 	public static function isUniversalFilePickerEnabled(): bool
 	{
-		return Option::get(Driver::INTERNAL_MODULE_ID, 'disk_enable_universal_file_picker', 'N') === 'Y';
-	}
-
-	public static function isEnabledFileViewerFormats(): bool
-	{
-		return Feature::isEnabled(FileViewerFormatsFlag::class);
+		// Note calls this public method; keep it permanently enabled for compatibility.
+		return true;
 	}
 
 	public static function isSyncRestEnabled(): bool
 	{
 		return (new SyncFeatureOption())->isEnabled();
+	}
+
+	public static function isAuditEnabled(): bool
+	{
+		return (Option::getRealValue(Driver::INTERNAL_MODULE_ID, self::OPTION_AUDIT_ENABLED, '') ?? 'N') === 'Y';
+	}
+
+	public static function getAuditRetentionPeriod(): AuditRetentionPeriod
+	{
+		return AuditRetentionPeriod::fromStored(
+			Option::getRealValue(Driver::INTERNAL_MODULE_ID, self::OPTION_AUDIT_RETENTION_PERIOD, ''),
+		);
+	}
+
+	public static function isAuditFeatureEnabled(): bool
+	{
+		return \Bitrix\Main\Config\Feature::isEnabled(AuditLog::class);
+	}
+
+	public static function wasAuditEverEnabled(): bool
+	{
+		return self::isAuditEnabled()
+			|| (Option::getRealValue(
+				Driver::INTERNAL_MODULE_ID,
+				self::OPTION_AUDIT_WAS_EVER_ENABLED,
+				'',
+			) ?? 'N') === 'Y';
+	}
+
+	public static function isBoardIndexEnabled(): bool
+	{
+		return Feature::isEnabled(BoardIndex::class);
+	}
+
+	/**
+	 * The destination picker is released on both platforms; the method stays public for its callers.
+	 *
+	 * @return bool
+	 */
+	public static function isDestinationPickerEnabled(): bool
+	{
+		return true;
 	}
 
 	/**
@@ -114,11 +178,9 @@ final class Configuration
 		return 2097152; // 2 MB
 	}
 
-	public static function isEnabledHtmlViewer(): bool
+	public static function isEnabledHtmlEditor(): bool
 	{
-		// Unlike the markdown viewer there is no renderer dependency: the html is served as-is,
-		// so the option alone decides whether the viewer is on.
-		return 'Y' === Option::get(Driver::INTERNAL_MODULE_ID, 'disk_enable_html_viewer', 'N');
+		return Feature::isEnabled(Public\Features\HtmlEditor::class);
 	}
 
 	/**
@@ -126,8 +188,7 @@ final class Configuration
 	 * Single source of truth for the html viewer size limit; checked only when the content is served.
 	 *
 	 * A non-positive option value would turn the viewer off for every file, including an empty one,
-	 * with a "too large" stub. Turning the viewer off is what disk_enable_html_viewer is for, so such
-	 * a value is read as "no limit set" and falls back to the default.
+	 * with a "too large" stub, so such a value is read as "no limit set" and falls back to the default.
 	 *
 	 * @return int
 	 */
@@ -179,6 +240,25 @@ final class Configuration
 			$isAllow = 'Y' == Option::get(Driver::INTERNAL_MODULE_ID, 'disk_restriction_storage_size_enabled', 'N');
 		}
 		return $isAllow;
+	}
+
+	/**
+	 * Kill switch for the docked uploader API surface (#11): the server-side gate of the
+	 * Queue/BizProc controllers. Off by default; the feature manager caches the value for
+	 * the whole hit and drops that cache whenever the flag is switched.
+	 */
+	public static function isEnabledDockedUploader(): bool
+	{
+		return Feature::isEnabled(DockedUploaderFlag::class);
+	}
+
+	/**
+	 * Whether the docked uploader entry point is mounted on the portal pages outside Disk.
+	 * Implies {@see self::isEnabledDockedUploader()}: the flag requires the first one.
+	 */
+	public static function isEnabledDockedUploaderOnPortal(): bool
+	{
+		return Feature::isEnabled(DockedUploaderPortalFlag::class);
 	}
 
 	public static function getVersionLimitPerFile()
@@ -312,12 +392,11 @@ final class Configuration
 
 	public static function canAutoConnectSharedObjects()
 	{
-		static $isAllow = null;
-		if($isAllow === null)
-		{
-			$isAllow = 'Y' == Option::get(Driver::INTERNAL_MODULE_ID, 'disk_allow_autoconnect_shared_objects', 'N');
-		}
-		return $isAllow;
+		return Option::get(
+			Driver::INTERNAL_MODULE_ID,
+			'disk_allow_autoconnect_shared_objects',
+			'N'
+		) == 'Y';
 	}
 
 	public static function isSuccessfullyConverted()
@@ -730,11 +809,18 @@ final class UserConfiguration
 	public static function getDocumentServiceCode()
 	{
 		global $USER;
-		static $service = null;
+		// Remembered per user: the current user may change within a process.
+		static $services = [];
 
-		if ($service !== null || !($USER instanceof \CUser) || !$USER->getId() )
+		if (!($USER instanceof \CUser) || !$USER->getId())
 		{
-			return $service;
+			return null;
+		}
+
+		$userId = (int)$USER->getId();
+		if (isset($services[$userId]))
+		{
+			return $services[$userId];
 		}
 
 		$userSettings = \CUserOptions::getOption(
@@ -764,30 +850,39 @@ final class UserConfiguration
 			self::setDocumentServiceOptions('', '', 'N', $timeWhenResetStart);
 		}
 
-		if ($primaryService === OnlyOfficeHandler::getCode() && OnlyOfficeHandler::isEnabled())
-		{
-			$service = OnlyOfficeHandler::getCode();
+		// The choice of a user is not bound to a file, while VibeOffice narrowed to the pilot projects opens
+		// only their files. Without OnlyOffice to open the rest the office editor is not offered as the choice,
+		// and the choice falls back to another service, as before VibeOffice.
+		$isOfficeEditorAvailable =
+			OnlyOfficeHandler::isEnabled()
+			|| (VibeofficeHandler::isEnabled() && Vibeoffice\Feature::isEnabledForContext(null))
+		;
+		$isPrimaryOfficeEditor = is_string($primaryService) && OfficeEngineRecognizer::isEntryCode($primaryService);
 
-			return $service;
+		if ($isPrimaryOfficeEditor && $isOfficeEditorAvailable)
+		{
+			$services[$userId] = OnlyOfficeHandler::getCode();
+
+			return $services[$userId];
 		}
-		if (!$primaryService && OnlyOfficeHandler::isEnabled())
+		if (!$primaryService && $isOfficeEditorAvailable)
 		{
 			$defaultHandlerForView = Driver::getInstance()->getDocumentHandlersManager()->getDefaultHandlerForView();
-			if ($defaultHandlerForView instanceof OnlyOfficeHandler)
+			if (OfficeEngineRecognizer::isOfficeEngine($defaultHandlerForView))
 			{
-				$service = OnlyOfficeHandler::getCode();
+				$services[$userId] = OnlyOfficeHandler::getCode();
 
-				return $service;
+				return $services[$userId];
 			}
 		}
-		if ($primaryService === OnlyOfficeHandler::getCode() && !OnlyOfficeHandler::isEnabled())
+		if ($isPrimaryOfficeEditor && !$isOfficeEditorAvailable)
 		{
 			$primaryService = '';
 		}
 
-		$service = $primaryService?: $defaultService;
+		$services[$userId] = $primaryService ?: $defaultService;
 
-		return $service;
+		return $services[$userId];
 	}
 
 	public static function isSetLocalDocumentService(): bool

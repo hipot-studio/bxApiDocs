@@ -10,6 +10,7 @@ use Bitrix\Crm\V2\Internal\Entity\Requisite\RequisiteWriteData;
 use Bitrix\Crm\V2\Internal\Entity\Requisite\RequisiteWriteTarget;
 use Bitrix\Crm\V2\Internal\Exception\Requisite\StorageRefusedException;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Authentication\Context;
 use Bitrix\Main\ORM\Data\Result;
 use Bitrix\Main\SystemException;
 
@@ -51,9 +52,17 @@ final class RequisiteWriteRepository
 	 * @throws SystemException the storage refused the row.
 	 * @throws ArgumentException a field the storage has no column for.
 	 */
-	public function insert(RequisiteWriteData $fields, array $userFieldValues = []): int
+	public function insert(
+		RequisiteWriteData $fields,
+		array $userFieldValues = [],
+		?Context $userFieldValidationContext = null,
+	): int
 	{
-		$result = RequisiteTable::add(self::toRow($fields, $userFieldValues));
+		$row = self::toRow($fields, $userFieldValues);
+		$result = RequisiteTable::add($userFieldValidationContext === null
+			? $row
+			: ['fields' => $row, 'auth_context' => $userFieldValidationContext]
+		);
 		if (!$result->isSuccess())
 		{
 			throw self::refusal('insert a requisite', $result);
@@ -84,7 +93,12 @@ final class RequisiteWriteRepository
 	 * @throws ArgumentException a non-positive identifier, an empty set of fields, or a field the
 	 *         storage has no column for.
 	 */
-	public function update(int $id, RequisiteWriteData $fields, array $userFieldValues = []): void
+	public function update(
+		int $id,
+		RequisiteWriteData $fields,
+		array $userFieldValues = [],
+		?Context $userFieldValidationContext = null,
+	): void
 	{
 		self::requireIdentifier($id);
 
@@ -96,7 +110,11 @@ final class RequisiteWriteRepository
 			throw new ArgumentException('A requisite update needs at least one field to write', 'fields');
 		}
 
-		$result = RequisiteTable::update($id, self::toRow($fields, $userFieldValues));
+		$row = self::toRow($fields, $userFieldValues);
+		$result = RequisiteTable::update($id, $userFieldValidationContext === null
+			? $row
+			: ['fields' => $row, 'auth_context' => $userFieldValidationContext]
+		);
 		if (!$result->isSuccess())
 		{
 			throw self::refusal('update a requisite', $result);

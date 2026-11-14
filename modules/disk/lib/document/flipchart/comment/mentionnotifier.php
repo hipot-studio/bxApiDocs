@@ -20,9 +20,9 @@ Loc::loadMessages(__FILE__);
  *
  * Only a registered user of the portal can be told: a guest has no portal identity, and the author
  * is not told about their own comment. The notification names the author and links the board on the
- * thread, but never carries the text of the comment: a mentioned user may have no access to the
- * board, and the link goes through the usual rights check of the portal. Nothing here changes the
- * outcome of the comment: a failure is written to the log and swallowed.
+ * comment thread, but never carries the text of the comment: a mentioned user may have no access to
+ * the board, and the link goes through the usual rights check of the portal.
+ * Nothing here changes the outcome of the comment: a failure is written to the log and swallowed.
  *
  * The protected methods are the seams to the portal: the messenger, the board and the delivery
  * itself. Tests stand them in; production keeps the defaults.
@@ -106,8 +106,8 @@ class MentionNotifier
 	}
 
 	/**
-	 * The texts are resolved per recipient in the language of each; the link carries the thread as
-	 * the element the board opens on.
+	 * The texts are resolved per recipient in the language of each; the link opens the board on the
+	 * comment thread.
 	 *
 	 * @param list<int> $recipients
 	 */
@@ -118,7 +118,7 @@ class MentionNotifier
 		array $recipients,
 	): NotifyThroughImSimpleSystemNotificationCommand
 	{
-		$boardUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoardElement($file, $threadId, true);
+		$boardUrl = Driver::getInstance()->getUrlManager()->getUrlForViewBoardComment($file, $threadId, true);
 		$replace = [
 			'#AUTHOR#' => self::escapeForMessage($authorName),
 			'#BOARD_LINK#' => '[url=' . $boardUrl . ']'

@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Message\Reaction;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\Engine\Response\Converter;
 
@@ -50,7 +51,7 @@ class PushService
 
 		if ($chat->getType() === Chat::IM_TYPE_COMMENT)
 		{
-			\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_'.$chat->getParentChatId(), $pull);
+			CommentTagPublisher::addToStack($chat, $pull);
 		}
 		else
 		{

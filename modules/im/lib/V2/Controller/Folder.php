@@ -11,12 +11,16 @@ use Bitrix\Im\V2\Folder\Detail\Enricher;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Error\IneligibleChatsException;
 use Bitrix\Im\V2\Folder\FolderChatService;
+use Bitrix\Im\V2\Folder\FolderCollection;
 use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Folder\FolderService;
 use Bitrix\Im\V2\Folder\Sort\FolderSortService;
+use Bitrix\Im\V2\Folder\Sort\SaveListFields;
 use Bitrix\Im\V2\Folder\Source\FolderSourceService;
 use Bitrix\Im\V2\Folder\Update\UpdateFields;
+use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityService;
+use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
@@ -180,6 +184,11 @@ class Folder extends BaseController
 	}
 
 	/**
+	 * Reordering alone, and a thin layer over the save of the whole screen: it normalizes the order
+	 * and calls the same implementation with both sets empty, so no second way to store the order
+	 * exists. The answer stays what it was - the released versions of the applications wait for
+	 * `{"result": true}` and for nothing else.
+	 *
 	 * @restMethod im.v2.Folder.sort
 	 */
 	public function sortAction(CurrentUser $user, FolderSortService $folderSortService, array $folderIds): ?array
@@ -195,6 +204,70 @@ class Folder extends BaseController
 		}
 
 		return ['result' => true];
+	}
+
+	/**
+	 * The order, the folders coming back to the navigation and the folders leaving it, applied as one
+	 * step (API-02): they are one screen, and a save that stored the order and refused the hiding
+	 * would leave the client showing a list nobody asked for.
+	 *
+	 * The answer is the whole folder list and not the folders the save touched: the clients apply it
+	 * as a snapshot of their collection, so a folder missing from it leaves the screen (DTO-03). The
+	 * new composition of the general list arrives inside the ordinary object of "All".
+	 *
+	 * The defaults of the two sets are load bearing, as they are in {@see updateSourcesAction}: the
+	 * form transport of the clients does not tell an empty array from a missing key, so a save that
+	 * only reorders reaches us without the parameters at all.
+	 *
+	 * @restMethod im.v2.Folder.saveList
+	 */
+	public function saveListAction(
+		CurrentUser $user,
+		FolderSortService $folderSortService,
+		array $folderIds,
+		array $showFolderIds = [],
+		array $hideFolderIds = [],
+	): ?array
+	{
+		$result = $folderSortService->saveFolderList(
+			(int)$user->getId(),
+			SaveListFields::fromArray([
+				'folderIds' => $folderIds,
+				'showFolderIds' => $showFolderIds,
+				'hideFolderIds' => $hideFolderIds,
+			]),
+		);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $this->toFolderListRestFormat($result->getFolders(), $result->getDialogIdMap());
+	}
+
+	/**
+	 * The answer is the whole folder list and not the folders the hide touched: the clients apply
+	 * it as a snapshot of their collection, so a folder missing from it leaves the screen (DTO-03).
+	 * The new composition of the general list arrives inside the ordinary object of "All".
+	 *
+	 * @restMethod im.v2.Folder.hide
+	 */
+	public function hideAction(
+		\Bitrix\Im\V2\Folder\Folder $folder,
+		FolderVisibilityService $folderVisibilityService,
+	): ?array
+	{
+		$result = $folderVisibilityService->hide($folder);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $this->toFolderListRestFormat($result->getFolders(), $result->getDialogIdMap());
 	}
 
 	/**
@@ -367,5 +440,18 @@ class Folder extends BaseController
 		}
 
 		return array_values($normalized);
+	}
+
+	/**
+	 * @param array<int, string>|null $dialogIdMap the resolution the operation built its pushes with
+	 */
+	private function toFolderListRestFormat(?FolderCollection $folders, ?array $dialogIdMap): ?array
+	{
+		if ($folders === null)
+		{
+			return null;
+		}
+
+		return (new RestAdapter($folders))->toRestFormat(['dialogIdMap' => $dialogIdMap]);
 	}
 }

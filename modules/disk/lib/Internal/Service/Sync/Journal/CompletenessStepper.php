@@ -13,6 +13,7 @@ use Bitrix\Disk\Internal\Service\Sync\Access\RightsAccessPublisher;
 use Bitrix\Disk\Internal\Service\Sync\SyncFeatureOption;
 use Bitrix\Disk\Internal\Service\Sync\SyncLimits;
 use Bitrix\Disk\Internals\DeletedLogV2Table;
+use Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable;
 use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\Rights\Table\RightSetupSessionTable;
@@ -36,7 +37,7 @@ use Psr\Log\LoggerInterface;
  * the operation it reported. Neither is visible to a client: what it holds simply stops matching the
  * portal, silently, until its cursor expires. This walk is what turns that silence into a record.
  *
- * Three traces are read, and they are read in the order of what cannot be recovered any other way.
+ * Four traces are read, and they are read in the order of what cannot be recovered any other way.
  *
  * The finished recalculations of rights come first. An edit of rights leaves no mark on the object and
  * no row in the log of deletions, so a record of it that was lost is lost for good - nothing else in
@@ -48,11 +49,14 @@ use Psr\Log\LoggerInterface;
  * ({@see \Bitrix\Disk\BaseObject::markDeletedInternal()}), so an object whose stamp is younger than
  * anything the journal holds about it is a change that went unreported.
  *
- * The log of deletions v2 comes last. It is never handed to a method of the contract - it is an
+ * The log of deletions v2 comes third. It is never handed to a method of the contract - it is an
  * internal trace and nothing more - and what it can answer is narrow, for the reason set out over
  * {@see catchUpDeletions()}.
  *
- * Two properties hold across all three.
+ * Ready board indexes come fourth. Their stamp belongs to the index row rather than to the object, so
+ * this source has its own cursor and only an indexUpdated record can cover it.
+ *
+ * Two properties hold across all four.
  *
  * A record is written only when the journal holds none, and that predicate is the whole of the
  * idempotency: a record the walk wrote is itself what stops the next tick from writing it again.
@@ -78,7 +82,7 @@ final class CompletenessStepper
 	public const DEFAULT_PORTION = 500;
 
 	/**
-	 * Where each of the three walks stands, as a keyset of the column it walks by and the identifier
+	 * Where each of the four walks stands, as a keyset of the column it walks by and the identifier
 	 * that breaks its ties.
 	 *
 	 * One stamp is carried by many objects - a move stamps a whole subtree with a single moment - so a
@@ -90,6 +94,8 @@ final class CompletenessStepper
 	public const OPTION_MARK_WATERMARK_ID = 'disk_sync_completeness_mark_id';
 	public const OPTION_DELETION_WATERMARK_AT = 'disk_sync_completeness_deletion_at';
 	public const OPTION_DELETION_WATERMARK_ID = 'disk_sync_completeness_deletion_id';
+	public const OPTION_INDEX_WATERMARK_AT = 'disk_sync_completeness_index_at';
+	public const OPTION_INDEX_WATERMARK_ID = 'disk_sync_completeness_index_id';
 
 	/**
 	 * How long one tick works before it leaves the rest to the next one. The same budget the two other
@@ -133,7 +139,7 @@ final class CompletenessStepper
 	private SyncLimits $limits;
 	private SyncLogRepository $journal;
 	private SyncRightsSnapshotRepository $rightsSnapshots;
-	private JournalWriter $writer;
+	private ObjectChangePublisherInterface $writer;
 	private RightsAccessPublisher $rights;
 	private SyncFeatureOption $feature;
 	private LoggerInterface $logger;
@@ -151,7 +157,7 @@ final class CompletenessStepper
 		?SyncLimits $limits = null,
 		?SyncLogRepository $journal = null,
 		?SyncRightsSnapshotRepository $rightsSnapshots = null,
-		?JournalWriter $writer = null,
+		?ObjectChangePublisherInterface $writer = null,
 		?RightsAccessPublisher $rights = null,
 		?SyncFeatureOption $feature = null,
 		?LoggerInterface $logger = null,
@@ -185,6 +191,7 @@ final class CompletenessStepper
 	 *     rights: int,
 	 *     marks: int,
 	 *     deletions: int,
+	 *     indexes: int,
 	 *     budgetSpent: bool,
 	 *     contended: bool,
 	 *     skipped: bool,
@@ -224,11 +231,12 @@ final class CompletenessStepper
 		try
 		{
 			// Each source takes at least one portion and then answers to the budget, so a tick spent on
-			// one of them still moves the other two. Their order is what a budget already spent decides:
+			// one of them still moves the other three. Their order is what a budget already spent decides:
 			// what the walk gets through first is what nothing else in the portal can recover.
 			$rights = $this->catchUpRecalculations($now, $upper, $deadline);
 			$marks = $this->catchUpChangedObjects($now, $upper, $deadline);
 			$deletions = $this->catchUpDeletions($now, $upper, $deadline);
+			$indexes = $this->catchUpReadyIndexes($now, $upper, $deadline);
 		}
 		finally
 		{
@@ -239,14 +247,15 @@ final class CompletenessStepper
 			rights: $rights,
 			marks: $marks,
 			deletions: $deletions,
+			indexes: $indexes,
 			budgetSpent: $deadline(),
 			lag: $this->lagSeconds($now),
 		);
 
 		$this->logger->debug(
 			'the reconciliation wrote {rights} records of a recalculation of rights, {marks} of a change'
-			. ' of an object and {deletions} of a deletion; the oldest window trails the portal by'
-			. ' {lagSeconds} seconds',
+			. ' of an object, {deletions} of a deletion and {indexes} of a ready index; the oldest trace'
+			. ' left unread has waited {lagSeconds} seconds',
 			$result,
 		);
 
@@ -281,10 +290,7 @@ final class CompletenessStepper
 		while (true)
 		{
 			$rows = self::keyset(
-				RightSetupSessionTable::query()
-					->setSelect(['ID', 'PARENT_ID', 'OBJECT_ID', 'CREATE_TIME'])
-					->where('STATUS', RightSetupSessionTable::STATUS_FINISHED)
-				,
+				self::finishedRecalculations()->setSelect(['ID', 'PARENT_ID', 'OBJECT_ID', 'CREATE_TIME']),
 				'CREATE_TIME',
 				$after,
 				$afterId,
@@ -319,6 +325,109 @@ final class CompletenessStepper
 	}
 
 	/**
+	 * Ready board indexes whose dedicated record never reached the journal.
+	 *
+	 * This walk is deliberately separate from object sync stamps. Publishing an index does not change
+	 * the object or its content version, and a newer record of another kind says nothing about whether
+	 * a client was told that the asynchronously built index became ready.
+	 *
+	 * @param callable(): bool $deadline
+	 */
+	private function catchUpReadyIndexes(int $now, DateTime $upper, callable $deadline): int
+	{
+		$portion = $this->portion();
+		$written = 0;
+		[$after, $afterId] = $this->watermark(
+			self::OPTION_INDEX_WATERMARK_AT,
+			self::OPTION_INDEX_WATERMARK_ID,
+			$now,
+		);
+
+		while (true)
+		{
+			$rows = self::keyset(
+				self::readyIndexes()->setSelect(['OBJECT_ID', 'UPDATE_TIME']),
+				'UPDATE_TIME',
+				$after,
+				$afterId,
+				$upper,
+				$portion,
+				'OBJECT_ID',
+			)->fetchAll();
+
+			if ($rows === [])
+			{
+				break;
+			}
+
+			$publication = $this->publishUnreportedReadyIndexes($rows);
+			$written += $publication['written'];
+			if (!$publication['complete'])
+			{
+				break;
+			}
+
+			$last = $rows[array_key_last($rows)];
+			$after = $last['UPDATE_TIME'];
+			$afterId = (int)$last['OBJECT_ID'];
+			$this->writeWatermark(
+				self::OPTION_INDEX_WATERMARK_AT,
+				self::OPTION_INDEX_WATERMARK_ID,
+				$after,
+				$afterId,
+			);
+
+			if (count($rows) < $portion || $deadline())
+			{
+				break;
+			}
+		}
+
+		return $written;
+	}
+
+	/**
+	 * @param array<int, array{OBJECT_ID: int|string, UPDATE_TIME: DateTime}> $rows
+	 * @return array{written: int, complete: bool}
+	 */
+	private function publishUnreportedReadyIndexes(array $rows): array
+	{
+		$ids = array_map(static fn (array $row): int => (int)$row['OBJECT_ID'], $rows);
+		$latest = $this->journal->findLatestObjectRecordTimesByChangeType(
+			$ids,
+			self::RESOURCE_TYPES,
+			self::earliestOf($rows, 'UPDATE_TIME'),
+			ChangeType::IndexUpdated,
+		);
+
+		$missing = [];
+		foreach ($rows as $row)
+		{
+			$id = (int)$row['OBJECT_ID'];
+			if (!self::isReadyIndexGenerationCovered($latest[$id] ?? null, $row['UPDATE_TIME']))
+			{
+				$missing[] = $id;
+			}
+		}
+
+		$written = 0;
+		$complete = true;
+		foreach (BaseObject::loadBatchById($missing) as $object)
+		{
+			if ($this->writer->publishObjectChange($object, ChangeType::IndexUpdated))
+			{
+				$written++;
+			}
+			else
+			{
+				$complete = false;
+			}
+		}
+
+		return ['written' => $written, 'complete' => $complete];
+	}
+
+	/**
 	 * @param array<int, array{ID: int|string, PARENT_ID: int|string|null, OBJECT_ID: int|string, CREATE_TIME: DateTime}> $rows
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -328,11 +437,19 @@ final class CompletenessStepper
 	{
 		$objectIds = array_map(static fn (array $row): int => (int)$row['OBJECT_ID'], $rows);
 		$born = self::creationTimesOf($objectIds);
+		$since = self::shiftedBack(self::earliestOf($rows, 'CREATE_TIME'));
+		// The writer publishes the boundary of a file as the file alone; one of a folder has to reach
+		// under it, so a record over the folder by itself does not stand for its recalculation.
 		$published = $this->journal->findLatestAccessRecordTimes(
 			$objectIds,
-			self::RESOURCE_TYPES,
-			ChangeRecord::SCOPE_SUBTREE,
-			self::shiftedBack(self::earliestOf($rows, 'CREATE_TIME')),
+			[ChangeRecord::RESOURCE_FILE],
+			[ChangeRecord::SCOPE_OBJECT, ChangeRecord::SCOPE_SUBTREE],
+			$since,
+		) + $this->journal->findLatestAccessRecordTimes(
+			$objectIds,
+			[ChangeRecord::RESOURCE_FOLDER],
+			[ChangeRecord::SCOPE_SUBTREE],
+			$since,
 		);
 
 		$missing = [];
@@ -489,7 +606,7 @@ final class CompletenessStepper
 		while (true)
 		{
 			$rows = self::keyset(
-				ObjectTable::query()->setSelect(['ID', 'SYNC_UPDATE_TIME']),
+				self::stampedObjects()->setSelect(['ID', 'SYNC_UPDATE_TIME']),
 				'SYNC_UPDATE_TIME',
 				$after,
 				$afterId,
@@ -535,10 +652,13 @@ final class CompletenessStepper
 		$ancestors = self::ancestorsOf($ids);
 		$realOf = self::realObjectsOf(self::flatten($ancestors));
 
+		// A change of the sharing or of the public access says nothing about the object itself, so it
+		// cannot stand in for an update the journal missed.
 		$latest = $this->journal->findLatestObjectRecordTimes(
 			array_values(array_unique($realOf)),
 			self::RESOURCE_TYPES,
 			self::shiftedBack(self::earliestOf($rows, 'SYNC_UPDATE_TIME')),
+			includeAccessState: false,
 		);
 
 		$unreported = [];
@@ -643,7 +763,7 @@ final class CompletenessStepper
 		while (true)
 		{
 			$rows = self::keyset(
-				DeletedLogV2Table::query()->setSelect(['ID', 'OBJECT_ID', 'STORAGE_ID', 'CREATE_TIME']),
+				self::loggedDeletions()->setSelect(['ID', 'OBJECT_ID', 'STORAGE_ID', 'CREATE_TIME']),
 				'CREATE_TIME',
 				$after,
 				$afterId,
@@ -821,8 +941,8 @@ final class CompletenessStepper
 		$moments = array_map(static fn (DateTime $at): int => $at->getTimestamp(), $unreported);
 		$told = $this->journal->findLatestAccessRecordTimes(
 			array_values($roots),
-			self::RESOURCE_TYPES,
-			ChangeRecord::SCOPE_SUBTREE,
+			[ChangeRecord::RESOURCE_FOLDER],
+			[ChangeRecord::SCOPE_SUBTREE],
 			DateTime::createFromTimestamp(min($moments) - SyncLimits::CLOCK_TOLERANCE_SECONDS),
 		);
 
@@ -857,6 +977,7 @@ final class CompletenessStepper
 		int $afterId,
 		DateTime $upper,
 		int $portion,
+		string $idColumn = 'ID',
 	): Query
 	{
 		return $query
@@ -866,10 +987,10 @@ final class CompletenessStepper
 				Query::filter()
 					->logic('or')
 					->where($column, '>', $after)
-					->where('ID', '>', $afterId)
+					->where($idColumn, '>', $afterId)
 				,
 			)
-			->setOrder([$column => 'ASC', 'ID' => 'ASC'])
+			->setOrder([$column => 'ASC', $idColumn => 'ASC'])
 			->setLimit($portion)
 		;
 	}
@@ -1039,6 +1160,15 @@ final class CompletenessStepper
 		return $recordAt->getTimestamp() >= $traceAt->getTimestamp() - SyncLimits::CLOCK_TOLERANCE_SECONDS;
 	}
 
+	/**
+	 * An indexUpdated record is published after the READY transition it reports. An older record belongs
+	 * to the previous generation even when it is within the clock tolerance used by the other traces.
+	 */
+	private static function isReadyIndexGenerationCovered(?DateTime $recordAt, DateTime $readyAt): bool
+	{
+		return $recordAt !== null && $recordAt->getTimestamp() >= $readyAt->getTimestamp();
+	}
+
 	private static function shiftedBack(DateTime $moment): DateTime
 	{
 		return DateTime::createFromTimestamp($moment->getTimestamp() - SyncLimits::CLOCK_TOLERANCE_SECONDS);
@@ -1121,19 +1251,106 @@ final class CompletenessStepper
 	}
 
 	/**
-	 * How far behind the portal the oldest of the three walks stands - the one number that says whether
-	 * the reconciliation is keeping up.
+	 * The lag without taking a tick: what a tick would report as `lagSeconds` before it reads anything.
+	 */
+	public function currentLagSeconds(): int
+	{
+		return $this->lagSeconds(($this->now)());
+	}
+
+	/**
+	 * How long the oldest trace none of the four walks has read yet has been waiting - the one number
+	 * that says whether the reconciliation is keeping up.
+	 *
+	 * Measured from the trace and not from the watermark. A walk moves its watermark only over the rows
+	 * it reads, so a quiet source - no board indexes without their feature, no recalculation of rights
+	 * for a day - leaves it standing where the last row was, or at the far end of the retention when
+	 * there has never been one. The walk is caught up all the same: there is nothing between it and the
+	 * end of its window. Only a trace waiting inside the window is a lag, and its age is the lag.
 	 */
 	private function lagSeconds(int $now): int
 	{
+		$upper = DateTime::createFromTimestamp($now - $this->limits->getSafeWindowSeconds());
 		$oldest = $now;
-		foreach (self::watermarkOptions() as [$atOption, $idOption])
+		foreach (self::walks() as [$query, $column, $idColumn, $atOption, $idOption])
 		{
-			[$at] = $this->watermark($atOption, $idOption, $now);
-			$oldest = min($oldest, $at->getTimestamp());
+			[$after, $afterId] = $this->watermark($atOption, $idOption, $now);
+			$next = self::keyset(
+				$query->setSelect([$column, $idColumn]),
+				$column,
+				$after,
+				$afterId,
+				$upper,
+				1,
+				$idColumn,
+			)->fetch();
+			if (is_array($next) && $next[$column] instanceof DateTime)
+			{
+				$oldest = min($oldest, $next[$column]->getTimestamp());
+			}
 		}
 
 		return max(0, $now - $oldest);
+	}
+
+	/**
+	 * The four walks as the lag reads them: the trace, the column it is walked by, the identifier that
+	 * breaks its ties and the two options of its watermark.
+	 *
+	 * @return array<int, array{Query, string, string, string, string}>
+	 */
+	private static function walks(): array
+	{
+		return [
+			[
+				self::finishedRecalculations(),
+				'CREATE_TIME',
+				'ID',
+				self::OPTION_RIGHTS_WATERMARK_AT,
+				self::OPTION_RIGHTS_WATERMARK_ID,
+			],
+			[
+				self::stampedObjects(),
+				'SYNC_UPDATE_TIME',
+				'ID',
+				self::OPTION_MARK_WATERMARK_AT,
+				self::OPTION_MARK_WATERMARK_ID,
+			],
+			[
+				self::loggedDeletions(),
+				'CREATE_TIME',
+				'ID',
+				self::OPTION_DELETION_WATERMARK_AT,
+				self::OPTION_DELETION_WATERMARK_ID,
+			],
+			[
+				self::readyIndexes(),
+				'UPDATE_TIME',
+				'OBJECT_ID',
+				self::OPTION_INDEX_WATERMARK_AT,
+				self::OPTION_INDEX_WATERMARK_ID,
+			],
+		];
+	}
+
+	private static function finishedRecalculations(): Query
+	{
+		return RightSetupSessionTable::query()->where('STATUS', RightSetupSessionTable::STATUS_FINISHED);
+	}
+
+	private static function stampedObjects(): Query
+	{
+		return ObjectTable::query();
+	}
+
+	private static function loggedDeletions(): Query
+	{
+		return DeletedLogV2Table::query();
+	}
+
+	private static function readyIndexes(): Query
+	{
+		return ObjectExtendedIndexTable::query()->where('STATUS', ObjectExtendedIndexTable::STATUS_BOARD_READY);
 	}
 
 	/**
@@ -1145,6 +1362,7 @@ final class CompletenessStepper
 			[self::OPTION_RIGHTS_WATERMARK_AT, self::OPTION_RIGHTS_WATERMARK_ID],
 			[self::OPTION_MARK_WATERMARK_AT, self::OPTION_MARK_WATERMARK_ID],
 			[self::OPTION_DELETION_WATERMARK_AT, self::OPTION_DELETION_WATERMARK_ID],
+			[self::OPTION_INDEX_WATERMARK_AT, self::OPTION_INDEX_WATERMARK_ID],
 		];
 	}
 
@@ -1169,6 +1387,7 @@ final class CompletenessStepper
 	 *     rights: int,
 	 *     marks: int,
 	 *     deletions: int,
+	 *     indexes: int,
 	 *     budgetSpent: bool,
 	 *     contended: bool,
 	 *     skipped: bool,
@@ -1179,6 +1398,7 @@ final class CompletenessStepper
 		int $rights = 0,
 		int $marks = 0,
 		int $deletions = 0,
+		int $indexes = 0,
 		bool $budgetSpent = false,
 		bool $contended = false,
 		bool $skipped = false,
@@ -1189,6 +1409,7 @@ final class CompletenessStepper
 			'rights' => $rights,
 			'marks' => $marks,
 			'deletions' => $deletions,
+			'indexes' => $indexes,
 			'budgetSpent' => $budgetSpent,
 			'contended' => $contended,
 			'skipped' => $skipped,

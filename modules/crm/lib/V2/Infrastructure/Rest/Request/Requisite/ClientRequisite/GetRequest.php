@@ -4,34 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Request\Requisite\ClientRequisite;
 
-use Bitrix\Main\HttpRequest;
-use Bitrix\Main\Validation\Rule\NotEmpty;
-use Bitrix\Main\Validation\Rule\PositiveNumber;
-use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
-use Bitrix\Rest\V3\Interaction\Request\Request;
-use Bitrix\Rest\V3\Structure\SelectStructure;
+use Bitrix\Crm\V2\Infrastructure\Rest\Request\Requisite\AbstractRequisitePairGetRequest;
 
 /**
- * The identifier is the one of the entity that owns the choice: the stored pair has no identifier of
- * its own.
+ * A read of the choice made among the requisites of the client of a CRM entity.
  */
-final class GetRequest extends Request
+final class GetRequest extends AbstractRequisitePairGetRequest
 {
-	#[NotEmpty]
-	#[PositiveNumber]
-	public int $id;
-
-	public ?SelectStructure $select = null;
-
-	public static function create(HttpRequest $httpRequest, string $dtoClass, array $options = []): self
-	{
-		/** @var self $request */
-		$request = parent::create($httpRequest, $dtoClass, $options);
-		if (!is_int($httpRequest->getJsonList()->getRaw('id')))
-		{
-			throw new InvalidRequestFieldTypeException('id', 'integer');
-		}
-
-		return $request;
-	}
 }

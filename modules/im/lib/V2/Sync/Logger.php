@@ -42,7 +42,14 @@ class Logger
 		return self::$instance;
 	}
 
-	public function add(Event $event, mixed $userId, ?Chat $chat = null): void
+	/**
+	 * @param bool $deferred When true (default), the rows are written by a background job at the end of
+	 *                       the hit, which is cheaper: the whole hit takes one upsert. When false, they
+	 *                       are written at once, for a caller whose event has no second chance - one
+	 *                       that moves a border the next pass selects by, and so looks done to a repeat
+	 *                       while a process dying before the job would leave the event untold.
+	 */
+	public function add(Event $event, mixed $userId, ?Chat $chat = null, bool $deferred = true): void
 	{
 		if (!SyncService::isEnable())
 		{
@@ -56,6 +63,16 @@ class Logger
 
 		$userId ??= $this->getContext()->getUserId();
 		$this->events[] = ['event' => $event, 'user' => $userId];
+
+		if (!$deferred)
+		{
+			// Everything gathered so far goes with it: the write is an upsert per event, and a row is
+			// no worse for being written early. A job already planned finds nothing left and does
+			// nothing.
+			$this->addDeferred();
+
+			return;
+		}
 
 		if (!$this->isAlreadyPlanned)
 		{
@@ -71,10 +88,17 @@ class Logger
 	 * @param Event $event    The event to record.
 	 * @param bool  $deferred When true (default), write is scheduled as a background job (safe for
 	 *                        kernel hook handlers). When false, write is immediate (for agent/cron callers).
+	 * @param Chat|null $chat The chat the event belongs to, when it belongs to one: a global row is read
+	 *                        by everyone, so it goes through the same chat filter as a personal one.
 	 */
-	public function addGlobal(Event $event, bool $deferred = true): void
+	public function addGlobal(Event $event, bool $deferred = true, ?Chat $chat = null): void
 	{
 		if (!SyncService::isEnable())
+		{
+			return;
+		}
+
+		if (!$this->needToLog($chat))
 		{
 			return;
 		}
@@ -91,6 +115,23 @@ class Logger
 		{
 			$this->writeGlobalEvent($event);
 		}
+	}
+
+	/**
+	 * Writes what has been collected so far instead of waiting for the background job of the hit. Meant
+	 * for walks whose number of rows is bounded by the size of a chat rather than by a limit of the
+	 * feature: reading such a walk by chunks bounds the query alone, while the buffer keeps the rows of
+	 * every chunk until the end of the hit. The already planned job stays planned and finds the buffer
+	 * empty, which costs nothing.
+	 */
+	public function flush(): void
+	{
+		if (empty($this->events))
+		{
+			return;
+		}
+
+		$this->addDeferred();
 	}
 
 	public function updateDateDelete(EO_Log_Collection $logs, ?DateTime $dateDelete = null): void
@@ -144,14 +185,52 @@ class Logger
 		}
 
 		$this->runClosureInEvents();
-		$groupedEvents = $this->getGroupedEvents();
 
-		foreach ($groupedEvents as ['event' => $event, 'user' => $userId])
+		foreach ($this->getMergeBatches($this->getGroupedEvents()) as $batch)
 		{
-			LogTable::multiplyMerge(...$this->getMultiplyMergeParam($event, $userId));
+			LogTable::multiplyMerge(...$batch);
 		}
 		$this->events = [];
 		$this->isAlreadyPlanned = false;
+		// The allowed users are gathered from the events just written, so they go with them: a hit that
+		// writes more than once (see the immediate branch of add()) would otherwise filter the users of
+		// every later write against the first batch and drop every one of them.
+		$this->allowedUsers = null;
+	}
+
+	/**
+	 * Rows that share the clause of the update go in one upsert. The journal is keyed by user, entity
+	 * type and entity, so the base matches and updates every row of a batch on its own and only the
+	 * update clause has to be common to them. Without this a walk that writes a row per owner of the
+	 * same record - a mark of a deleted message is one per owner, and each row is keyed by the mark -
+	 * costs one query per owner, because grouping by the key of the event finds nothing to group.
+	 *
+	 * @param array<array{event: Event, user: array}> $groupedEvents
+	 */
+	private function getMergeBatches(array $groupedEvents): array
+	{
+		$batches = [];
+
+		foreach ($groupedEvents as ['event' => $event, 'user' => $userId])
+		{
+			[$insertFields, $updateFields, $uniqueFields, $params] = $this->getMultiplyMergeParam($event, $userId);
+			$key = implode('|', [
+				$event->eventName,
+				$event->getDateCreate()->getTimestamp(),
+				$event->getDateDelete()?->getTimestamp() ?? '',
+			]);
+
+			if (isset($batches[$key]))
+			{
+				$batches[$key][0] = array_merge($batches[$key][0], $insertFields);
+			}
+			else
+			{
+				$batches[$key] = [$insertFields, $updateFields, $uniqueFields, $params];
+			}
+		}
+
+		return array_values($batches);
 	}
 
 	private function addGlobalDeferred(Event $event): void

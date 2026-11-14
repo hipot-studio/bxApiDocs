@@ -2,10 +2,13 @@
 
 namespace Bitrix\StaffTrack\Public\Provider;
 
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
 use Bitrix\StaffTrack\Dictionary\Option;
 use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Internal\Integration\HumanResources\Service\NodeSettingsService;
+use Bitrix\StaffTrack\Internal\Integration\Intranet\UserService;
 use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkDayService;
 use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkReportService;
 use Bitrix\StaffTrack\Provider\OptionProvider;
@@ -37,6 +40,58 @@ class CheckInSettingsProvider
 	public function isCheckInEnabled(): bool
 	{
 		return Feature::isCheckInEnabledBySettings();
+	}
+
+	/**
+	 * Every gate of the check-in at once for the user of the current request: the portal setting, the
+	 * region where geo features are allowed, the licence of the work time it hangs on, the type of the
+	 * user, the modules the mobile check-in is built from and the department rollout. Entry points
+	 * outside the domain ask this one question instead of assembling the gates themselves.
+	 *
+	 * The question is asked on every page of the portal, so the gates stand in order of price: the ones
+	 * answered from options and the licence first, then the loading of the three mobile modules, and the
+	 * rollout that walks the HR structure last.
+	 */
+	public function isCheckInAvailable(): bool
+	{
+		return $this->isCheckInEnabled()
+			&& $this->isGeoFeaturesAvailableByRegion()
+			&& $this->isTimemanAllowedByLicense()
+			&& $this->isAllowedForUserType()
+			&& Feature::isCheckInEnabled()
+			&& Feature::isCheckInRolloutEnabled($this->userId)
+		;
+	}
+
+	/**
+	 * The check-in marks the working time of an employee, so a guest of a chat and an external person -
+	 * extranet or collaber - are refused here and not by the interface: both clients read this very flag
+	 * as the verdict on the entry point. Stands ahead of the rollout, which walks the HR structure.
+	 */
+	protected function isAllowedForUserType(): bool
+	{
+		return !$this->isGuestSession() && $this->isIntranetUser($this->userId);
+	}
+
+	protected function isIntranetUser(int $userId): bool
+	{
+		return UserService::isIntranetUser($userId);
+	}
+
+	/**
+	 * A guest keeps an auth id of its own instead of a place in the company, so the session is asked the
+	 * same way the mobile login code asks it.
+	 */
+	protected function isGuestSession(): bool
+	{
+		global $USER;
+
+		if (!isset($USER) || !Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return $USER->GetParam('EXTERNAL_AUTH_ID') === UserGuest::AUTH_ID;
 	}
 
 	public function isTimemanAvailable(): bool
@@ -86,6 +141,11 @@ class CheckInSettingsProvider
 	 * by the very rules his own device polls the GPS by - the regional gate included. The form of the
 	 * session user stays as it is: the permission popup, the settings modal and the mark of a postponement
 	 * stand on it.
+	 *
+	 * Nothing in the module asks it: the plaque over the timeline of a day it was written for stands on the
+	 * rule of the mark of the presence list (AutoCheckInConsentRule), which counts the departments the employee
+	 * is a member of and not the ones he manages. It is kept on purpose: the facade is public, and the modules
+	 * that may call it are updated apart.
 	 */
 	public function isAutoCheckInEnabledInSettingsFor(int $userId): bool
 	{

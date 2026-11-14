@@ -12,6 +12,11 @@ use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Rest\RestException;
 use Bitrix\Crm\WebForm;
+use Bitrix\Crm\V2\Public\Command\LegalRegistry\FormSubmissionCommand;
+use Bitrix\Crm\V2\Public\Entity\LegalRegistry\RegistryResult;
+use Bitrix\Crm\V2\Public\Provider\LegalRegistry\PresentationProvider;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FeatureGate;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormSubmissionService;
 use Bitrix\Crm\WebForm\Telemetry\Recorder;
 use Bitrix\Crm\WebForm\Telemetry\RecorderInterface;
 use Bitrix\Crm\WebForm\Telemetry\SourceContextSigner;
@@ -68,9 +73,49 @@ class Rest
 		$form = null;
 		$telemetryContext = null;
 		$isValidationFailure = false;
+		$legalError = null;
+		$normalizedRequest = null;
 
 		try
 		{
+			if (array_key_exists('legalDocuments', $query))
+			{
+				try
+				{
+					$legal = self::decodeLegalPayload($query['legalDocuments']);
+					$normalizedRequest = self::normalizeLegalRequest($query);
+					$normalizedRequest['presentationTokenHash'] = hash('sha256', $legal['presentationToken']);
+					$hash = (new FormSubmissionService())->hashNormalizedRequest($normalizedRequest);
+				}
+				catch (\Throwable)
+				{
+					$legalError = new Main\Error('Invalid legal document submission.', 'INVALID_PAYLOAD');
+					self::printErrors([$legalError->getMessage()]);
+				}
+				$replay = (new FormSubmissionCommand(
+					(int)$formId, $legal['presentationToken'], $legal['attemptKey'], $legal['answers'], $hash,
+				))->replay();
+				if ($replay !== null)
+				{
+					if (!$replay->isSuccess())
+					{
+						$legalError = $replay->getErrors()[0];
+						self::printErrors($replay->getErrorMessages());
+					}
+					$result = WebForm\Fill::findLegalResult((int)$formId, $replay, $hash);
+					if ($result !== null)
+					{
+						return $result->getLegalReplayResponse();
+					}
+					if ($replay->getState() !== 'pending'
+						|| !WebForm\Internals\FormTable::getById((int)$formId)->fetch())
+					{
+						$legalError = new Main\Error('Legal document submission is pending.', 'INVALID_STATE');
+						self::printErrors([$legalError->getMessage()]);
+					}
+				}
+			}
+
 			if (!WebForm\Manager::isEmbeddingAvailable())
 			{
 				self::printErrors(["Form embedding feature disabled."]);
@@ -176,12 +221,21 @@ class Rest
 				$fill->setTelemetryContext($telemetryContext);
 			}
 
-			if ($signString)
+			if (array_key_exists('legalDocuments', $query))
+			{
+				$signString = $query['security_sign'] ?? null;
+			}
+			if ($signString !== null && $signString !== '')
 			{
 				$sign = new Sign();
 				if ($sign->unpack($signString))
 				{
 					$fill->setEntities($sign->getEntities());
+				}
+				elseif (array_key_exists('legalDocuments', $query))
+				{
+					$legalError = new Main\Error('Invalid recipient signature.', 'INVALID_PAYLOAD');
+					self::printErrors([$legalError->getMessage()]);
 				}
 			}
 
@@ -196,11 +250,61 @@ class Rest
 				self::printErrors($agreementsResult->getErrorMessages());
 			}
 
-			$result = $fill->save();
+			$legacyGuard = null;
+			try
+			{
+				if (!array_key_exists('legalDocuments', $query))
+				{
+					try
+					{
+						$legacyGuard = \Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormMutationGuard::acquire(
+							(int)$formId,
+						);
+					}
+					catch (\RuntimeException $error)
+					{
+						if ($error->getMessage() !== 'REVISION_CONFLICT') { throw $error; }
+						$legalError = new Main\Error('CRM form is busy.', 'INVALID_STATE');
+						self::printErrors([$legalError->getMessage()]);
+					}
+				}
+				$normalizedRequest ??= [];
+				$legalSubmission = self::prepareLegalSubmission(
+					$form, $query['legalDocuments'] ?? null, $normalizedRequest,
+				);
+				if ($legalSubmission !== null)
+				{
+					if (!$legalSubmission->isSuccess())
+					{
+						$isValidationFailure = true;
+						$legalError = $legalSubmission->getErrors()[0];
+						if ($telemetryContext !== null)
+						{
+							self::markTelemetryError($telemetryContext['attemptId'], $telemetryRecorder, 'validation');
+						}
+						self::printErrors($legalSubmission->getErrorMessages());
+					}
+					$payload = Main\Web\Json::decode($query['legalDocuments']);
+					$normalizedRequest['presentationTokenHash'] = hash('sha256', $payload['presentationToken']);
+					$normalizedRequestHash = (new FormSubmissionService())->hashNormalizedRequest($normalizedRequest);
+					$fill->setLegalSubmission($legalSubmission, $normalizedRequestHash);
+				}
+
+				$legacyGuard?->release();
+				$legacyGuard = null;
+				$result = $fill->save();
+			}
+			finally { $legacyGuard?->release(); }
+
 			if (!$result->getId())
 			{
 				$isValidationFailure = true;
 				self::printErrors($result->getErrors());
+			}
+
+			if ($result->isLegalReplay())
+			{
+				return $result->getLegalReplayResponse();
 			}
 
 			$gid = $result->getResultEntity()->getTrace()->getGid();
@@ -237,20 +341,173 @@ class Rest
 		}
 		catch (Throwable $exception)
 		{
+			if (array_key_exists('legalDocuments', $query) && $legalError === null)
+			{
+				$code = $exception->getMessage();
+				if (!in_array($code, ['INVALID_PAYLOAD', 'IDEMPOTENCY_CONFLICT', 'INVALID_STATE',
+					'STALE_PRESENTATION', 'POLICY_UNAVAILABLE', 'FEATURE_UNAVAILABLE'], true))
+				{
+					$code = 'STORAGE_ERROR';
+				}
+				$legalError = new Main\Error('Legal documents are unavailable.', $code);
+			}
 			if ($telemetryContext !== null && !$isValidationFailure)
 			{
 				self::markTelemetryError($telemetryContext['attemptId'], $telemetryRecorder);
 			}
 
-			return [
+			$response = [
 				'resultId' => null,
 				'pay' => false,
-				'message' => $form ? $form->getFailureText() : $exception->getMessage(),
+				'message' => $legalError !== null
+					? $legalError->getMessage()
+					: ($form ? $form->getFailureText() : $exception->getMessage()),
 				'gid' => null,
 				'redirect' => [],
 				'refill' => []
 			];
+			if ($legalError !== null)
+			{
+				$response['errors'] = self::legalErrors([$legalError]);
+			}
+
+			return $response;
 		}
+	}
+
+	/** Returns a fresh presentation without using the shared form configuration cache. */
+	public static function getLegalPresentation(array $query): array
+	{
+		$formId = $query['id'] ?? null;
+		$code = $query['sec'] ?? null;
+		if ((!is_int($formId) && (!is_string($formId) || preg_match('/^[1-9][0-9]*$/D', $formId) !== 1))
+			|| (int)$formId <= 0 || (int)$formId > 2147483647 || !is_string($code) || $code === '')
+		{
+			return ['resultId' => null, 'errors' => self::legalErrors([new Main\Error('', 'INVALID_PAYLOAD')])];
+		}
+		if (!WebForm\Manager::isEmbeddingAvailable())
+		{
+			return ['resultId' => null, 'errors' => self::legalErrors([new Main\Error('', 'FEATURE_UNAVAILABLE')])];
+		}
+		$result = (new PresentationProvider())->issueForPublicForm((int)$formId, [
+			'formId' => (int)$formId,
+			'securityCode' => $code,
+		]);
+		if (!$result->isSuccess())
+		{
+			return ['resultId' => null, 'errors' => self::legalErrors($result->getErrors())];
+		}
+
+		return $result->getPresentation()->toArray();
+	}
+
+	/** Prepares legal documents before the form may create or update CRM data. */
+	public static function prepareLegalSubmission(
+		WebForm\Form $form,
+		mixed $payload,
+		array $normalizedRequest,
+	): ?RegistryResult
+	{
+		$configured = (new Config($form))->hasLegalDocuments($payload === null);
+		if (!$configured && $payload === null)
+		{
+			return null;
+		}
+		try
+		{
+			if (!$configured)
+			{
+				throw new \InvalidArgumentException();
+			}
+			$legal = self::decodeLegalPayload($payload);
+			$availability = FeatureGate::requireEnabled();
+			if (!$availability->isSuccess())
+			{
+				return $availability;
+			}
+			$normalizedRequest['presentationTokenHash'] = hash('sha256', $legal['presentationToken']);
+			$hash = (new FormSubmissionService())->hashNormalizedRequest($normalizedRequest);
+
+			return (new FormSubmissionCommand(
+				(int)$form->getId(), $legal['presentationToken'], $legal['attemptKey'], $legal['answers'], $hash,
+			))->run();
+		}
+		catch (\Throwable)
+		{
+			return (new RegistryResult())->addError(new Main\Error('', 'INVALID_PAYLOAD'));
+		}
+	}
+
+	private static function decodeLegalPayload(mixed $payload): array
+	{
+		if (!is_string($payload) || strlen($payload) > 2097152)
+		{
+			throw new \InvalidArgumentException();
+		}
+		$legal = Main\Web\Json::decode($payload);
+		if (!is_array($legal) || count($legal) !== 3
+			|| array_diff(['presentationToken', 'attemptKey', 'answers'], array_keys($legal)) !== []
+			|| !is_string($legal['presentationToken']) || $legal['presentationToken'] === ''
+			|| !is_string($legal['attemptKey']) || trim($legal['attemptKey']) === ''
+			|| strlen($legal['attemptKey']) > 255 || !is_array($legal['answers'])
+			|| !array_is_list($legal['answers']) || count($legal['answers']) > 100)
+		{
+			throw new \InvalidArgumentException();
+		}
+		foreach ($legal['answers'] as $answer)
+		{
+			if (!is_array($answer) || count($answer) !== 3
+				|| array_diff(['documentId', 'versionId', 'accepted'], array_keys($answer)) !== []
+				|| !is_int($answer['documentId']) || $answer['documentId'] <= 0
+				|| !is_int($answer['versionId']) || $answer['versionId'] <= 0
+				|| !is_bool($answer['accepted']))
+			{
+				throw new \InvalidArgumentException();
+			}
+		}
+
+		return $legal;
+	}
+
+	private static function normalizeLegalRequest(array $query): array
+	{
+		$normalized = [
+			'formId' => (int)($query['id'] ?? 0),
+			'securityCode' => $query['sec'] ?? null,
+			'trace' => empty($query['trace']) ? null : $query['trace'],
+			'language' => $query['lang'] ?? '',
+			'securitySignHash' => '',
+		];
+		foreach (['values', 'properties', 'consents', 'explicitConsents', 'displayedSubmitAgreements'] as $key)
+		{
+			$value = $query[$key] ?? '';
+			if (!is_string($value))
+			{
+				throw new \InvalidArgumentException();
+			}
+			$normalized[$key] = $value === '' ? [] : Main\Web\Json::decode($value);
+			if (!is_array($normalized[$key]))
+			{
+				throw new \InvalidArgumentException();
+			}
+		}
+		$signString = $query['security_sign'] ?? '';
+		if (!is_string($signString))
+		{
+			throw new \InvalidArgumentException();
+		}
+		// Frozen replay binds the original signed bytes without rechecking their lifetime.
+		$normalized['securitySignHash'] = hash('sha256', $signString);
+
+		return $normalized;
+	}
+
+	private static function legalErrors(array $errors): array
+	{
+		return array_map(static fn(Main\Error $error): array => [
+			'code' => $error->getCode(),
+			'message' => $error->getMessage() ?: 'Legal documents are unavailable.',
+		], $errors);
 	}
 
 	private static function startTelemetry(
@@ -329,6 +586,11 @@ class Rest
 	 */
 	public static function getForm($query)
 	{
+		if (($query['legalDocumentsOnly'] ?? null) === 'Y')
+		{
+			return self::getLegalPresentation($query);
+		}
+
 		$formId = empty($query['id']) ? null : (int) $query['id'];
 		$securityCode = empty($query['sec']) ? null : $query['sec'];
 		$loaderOnly = !empty($query['loaderOnly']);

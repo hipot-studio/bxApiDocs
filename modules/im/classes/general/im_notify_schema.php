@@ -42,6 +42,13 @@ class CIMNotifySchema
 		$config = [
 			"im" => [
 				"NAME" => GetMessage('IM_NS_IM_MSGVER_1'),
+				"PRODUCT_SOURCE" => [
+					"ID" => "im",
+					"NAME" => GetMessage('IM_NS_PRODUCT_SOURCE_IM_NAME'),
+					"DESCRIPTION" => GetMessage('IM_NS_PRODUCT_SOURCE_IM_DESCRIPTION'),
+					"ICON" => ["TYPE" => "named", "VALUE" => "messages"],
+					"SORT" => 500,
+				],
 				"NOTIFY" => [
 					"message" => [
 						"NAME" => GetMessage('IM_NS_MESSAGE_NEW_MSGVER_2'),
@@ -78,6 +85,17 @@ class CIMNotifySchema
 						"MAIL" => 'N',
 					],
 				],
+			],
+			"call" => [
+				"NAME" => GetMessage('IM_NS_IM_MSGVER_1'),
+				"PRODUCT_SOURCE" => [
+					"ID" => "telephony",
+					"NAME" => GetMessage('IM_NS_PRODUCT_SOURCE_TELEPHONY_NAME'),
+					"DESCRIPTION" => GetMessage('IM_NS_PRODUCT_SOURCE_TELEPHONY_DESCRIPTION'),
+					"ICON" => ["TYPE" => "named", "VALUE" => "telephony"],
+					"SORT" => 1300,
+				],
+				"NOTIFY" => [],
 			],
 		];
 

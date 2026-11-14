@@ -18,7 +18,7 @@ class Call extends Base
 	 * Scope: crm
 	 * Parameter: activityId — ID of the call activity.
 	 *
-	 * Success:      result => ['transcription' => string]
+	 * Success:      transcription with optional segments and speakerSource
 	 * No data yet:  result => null  (no error)
 	 * Not found:    getNotFoundError
 	 * No access:    getAccessDeniedError (AI disabled or no read permission)
@@ -73,6 +73,16 @@ class Call extends Base
 			return null;
 		}
 
-		return $result->getPayload()->toArray();
+		$payload = $result->getPayload()->toArray();
+		$response = ['transcription' => $payload['transcription']];
+		foreach (['segments', 'speakerSource'] as $field)
+		{
+			if (isset($payload[$field]))
+			{
+				$response[$field] = $payload[$field];
+			}
+		}
+
+		return $response;
 	}
 }

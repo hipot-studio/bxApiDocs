@@ -5,13 +5,16 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart\Slider;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\BaasManager;
+use Bitrix\Intranet\PortalSettings;
 use Bitrix\Intranet\Settings\SettingsPermission;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 
 class GlobalFeatureReader
 {
-	private const AI_SETTINGS_URL = '/settings/configs/?analyticContext=widget_settings_settings&page=ai';
+	private const AI_SETTINGS_PAGE_QUERY = '?analyticContext=widget_settings_settings&page=ai';
+
+	private ?bool $scenarioSetupAvailable = null;
 
 	public function __construct(
 		private readonly AutomationScenarioRegistry $registry = new AutomationScenarioRegistry(),
@@ -24,12 +27,18 @@ class GlobalFeatureReader
 		return AIManager::isAiCallAutomaticProcessingAllowed() && BaasManager::hasPackage();
 	}
 
+	public function isScenarioSetupAvailable(): bool
+	{
+		return $this->scenarioSetupAvailable ??= $this->hasBaasPackage() || $this->isBaasMarketAvailable();
+	}
+
 	public function buildAvailability(
 		bool $aiReady,
 		bool $tuningEnabled,
 		array $engineValues,
 		bool $portalAutomationAllowed,
 		bool $canEditGlobalSettings = true,
+		bool $scenarioSetupAvailable = true,
 	): array
 	{
 		$configured = $this->isConfigured($engineValues);
@@ -58,7 +67,7 @@ class GlobalFeatureReader
 			'automationAllowed' => $portalAutomationAllowed,
 			'ready' => $aiReady && $tuningEnabled && $configured && $portalAutomationAllowed,
 			'reasonCode' => $reasonCode,
-			'action' => $this->buildAction($reasonCode, $canEditGlobalSettings),
+			'action' => $this->buildAction($reasonCode, $canEditGlobalSettings, $scenarioSetupAvailable),
 		];
 	}
 
@@ -68,15 +77,23 @@ class GlobalFeatureReader
 		$aiReady = $this->isAiReady();
 		$portalAutomationAllowed = $aiReady && $this->isPortalAutomationAllowed();
 		$canEditGlobalSettings = $this->canEditGlobalSettings();
+		$scenarioSetupAvailable = $this->isScenarioSetupAvailable();
 
 		return array_map(
-			function ($config) use ($manager, $aiReady, $canEditGlobalSettings, $portalAutomationAllowed) {
+			function ($config) use (
+				$manager,
+				$aiReady,
+				$canEditGlobalSettings,
+				$portalAutomationAllowed,
+				$scenarioSetupAvailable,
+			) {
 				return $this->buildAvailability(
 					$aiReady,
 					$this->readTuningEnabled($manager, $config['tuningCode'] ?? null),
 					$this->readEngineValues($manager, $config['engineCodes'] ?? []),
 					$portalAutomationAllowed,
 					$canEditGlobalSettings,
+					$scenarioSetupAvailable,
 				);
 			},
 			$this->registry->getGlobalConfigMap()
@@ -108,9 +125,28 @@ class GlobalFeatureReader
 		;
 	}
 
+	protected function hasBaasPackage(): bool
+	{
+		return BaasManager::hasPackage();
+	}
+
+	protected function isBaasMarketAvailable(): bool
+	{
+		return BaasManager::isAvailable();
+	}
+
 	protected function isAiReady(): bool
 	{
 		return AIManager::isAvailable() && AIManager::isAiCallProcessingEnabled();
+	}
+
+	protected function getSettingsPath(): string
+	{
+		// Box portals keep settings at /configs/, where /settings/configs/ falls through to the site map
+		return Loader::includeModule('intranet')
+			? PortalSettings::getInstance()->getSettingsUrl()
+			: '/settings/configs/'
+		;
 	}
 
 	protected function isTranscriptionEngineConfigured(): bool
@@ -156,17 +192,25 @@ class GlobalFeatureReader
 		return (bool)$manager->getItem($tuningCode)?->getValue();
 	}
 
-	private function buildAction(?string $reasonCode, bool $canEditGlobalSettings = true): array
+	private function buildAction(
+		?string $reasonCode,
+		bool $canEditGlobalSettings = true,
+		bool $scenarioSetupAvailable = true,
+	): array
 	{
 		return match ($reasonCode) {
-			'subscription_required' => [
-				'type' => 'infoHelper',
-				'code' => BaasManager::getEmptyPackagesSliderCode(),
-			],
+			'subscription_required' => $scenarioSetupAvailable
+				? [
+					'type' => 'infoHelper',
+					'code' => BaasManager::getEmptyPackagesSliderCode(),
+				]
+				: [
+					'type' => 'none',
+				],
 			'global_disabled', 'engine_not_configured' => $canEditGlobalSettings
 				? [
 					'type' => 'sidePanel',
-					'url' => self::AI_SETTINGS_URL,
+					'url' => $this->getSettingsPath() . self::AI_SETTINGS_PAGE_QUERY,
 				]
 				: [
 					'type' => 'accessDenied',

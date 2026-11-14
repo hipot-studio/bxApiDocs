@@ -32,15 +32,15 @@ final class ObjectSchema implements SettingSchemaInterface
 			throw new ArgumentException('Object schema must contain at least one field.');
 		}
 
-		$codes = [];
+		$ids = [];
 		foreach ($fields as $field)
 		{
-			if (isset($codes[$field->code]))
+			if (isset($ids[$field->id]))
 			{
-				throw new ArgumentException('Object schema field codes must be unique.');
+				throw new ArgumentException('Object schema field ids must be unique.');
 			}
 
-			$codes[$field->code] = true;
+			$ids[$field->id] = true;
 		}
 
 		$this->valueClass = $valueClass;
@@ -85,41 +85,41 @@ final class ObjectSchema implements SettingSchemaInterface
 			));
 		}
 
-		$fieldsByCode = [];
+		$fieldsById = [];
 		foreach ($this->fields as $field)
 		{
-			$fieldsByCode[$field->code] = $field;
+			$fieldsById[$field->id] = $field;
 		}
 
-		foreach ($value as $code => $_)
+		foreach ($value as $id => $_)
 		{
-			if (!isset($fieldsByCode[$code]))
+			if (!isset($fieldsById[$id]))
 			{
 				$result->addError(new SettingValidationError(
 					'Object contains an unknown field.',
 					SettingErrorCode::UNKNOWN_FIELD,
-					['path' => (string)$code],
+					['path' => (string)$id],
 				));
 			}
 		}
 
 		foreach ($this->fields as $field)
 		{
-			if (!array_key_exists($field->code, $value))
+			if (!array_key_exists($field->id, $value))
 			{
 				if ($field->required)
 				{
 					$result->addError(new SettingValidationError(
 						'Required object field is missing.',
 						SettingErrorCode::REQUIRED_FIELD_MISSING,
-						['path' => $field->code],
+						['path' => $field->id],
 					));
 				}
 
 				continue;
 			}
 
-			$validationResult = $field->schema->validate($value[$field->code]);
+			$validationResult = $field->schema->validate($value[$field->id]);
 			foreach ($validationResult->getErrors() as $error)
 			{
 				$customData = $error->getCustomData();
@@ -133,7 +133,7 @@ final class ObjectSchema implements SettingSchemaInterface
 				}
 
 				$path = $customData['path'] ?? null;
-				$customData['path'] = $field->code . ($path === null ? '' : '.' . $path);
+				$customData['path'] = $field->id . ($path === null ? '' : '.' . $path);
 
 				$result->addError(new SettingValidationError(
 					$error->getMessage(),

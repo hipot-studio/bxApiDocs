@@ -475,6 +475,10 @@ class MobilePush
 		{
 			$result['notify'] = $event['notify'];
 		}
+		if (($event['skipRecentUpdate'] ?? null) === true)
+		{
+			$result['skipRecentUpdate'] = true;
+		}
 
 		if (!empty($event['chat'][$event['chatId']]))
 		{

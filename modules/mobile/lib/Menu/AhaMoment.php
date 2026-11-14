@@ -6,6 +6,8 @@ use Bitrix\Mail\MailboxTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Mobile\Feature\MyCompanyFeature;
+use Bitrix\Mobile\Internal\Integration\Bitrix24\License;
+use Bitrix\Mobile\Internal\Integration\Main\EarliestUserRegistration;
 use Bitrix\Mobile\Internal\Onboarding\Checkers\PortalAgeChecker;
 use Bitrix\Mobile\Menu\MyCompany\MyCompanyProvider;
 use Bitrix\Mobile\Menu\Promo\EmployeeThreshold;
@@ -123,6 +125,11 @@ class AhaMoment
 
 	protected function getPortalCreatedAt(): ?DateTime
 	{
+		if (!(new License())->isCloud())
+		{
+			return (new EarliestUserRegistration())->get();
+		}
+
 		$portalAgeChecker = new PortalAgeChecker();
 		if (!$portalAgeChecker->isPortalDateKnown())
 		{

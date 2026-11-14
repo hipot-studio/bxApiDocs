@@ -2,11 +2,13 @@
 
 namespace Bitrix\Socialnetwork\Controller\Livefeed\BlogPost;
 
+use Bitrix\Blog\PostTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Socialnetwork\Controller\Base;
+use Bitrix\Socialnetwork\UserToGroupTable;
 
 class Important extends Base
 {
@@ -33,6 +35,26 @@ class Important extends Base
 		if ($postId <= 0)
 		{
 			$this->addError(new Error(Loc::getMessage('SONET_CONTROLLER_LIVEFEED_BLOGPOST_IMPORTANT_POST_ID_EMPTY'), 'SONET_CONTROLLER_LIVEFEED_BLOGPOST_IMPORTANT_POST_ID_EMPTY'));
+			return null;
+		}
+
+		$post = Loader::includeModule('blog')
+			? PostTable::query()
+				->setSelect(['ID', 'BLOG_ID', 'AUTHOR_ID'])
+				->where('ID', $postId)
+				->fetch()
+			: false;
+
+		if (
+			!$post
+			|| !\Bitrix\Socialnetwork\Livefeed\BlogPost::canRead(['POST' => $post])
+		)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('SONET_CONTROLLER_LIVEFEED_BLOGPOST_IMPORTANT_NO_READ_PERMS'),
+				'SONET_CONTROLLER_LIVEFEED_BLOGPOST_IMPORTANT_NO_READ_PERMS'
+			));
+
 			return null;
 		}
 
@@ -196,6 +218,86 @@ class Important extends Base
 							}
 						}
 					}
+				}
+			}
+		}
+
+		if (
+			Loader::includeModule('extranet')
+			&& !\CSocNetUser::isCurrentUserModuleAdmin()
+			&& !empty($result['items'])
+		)
+		{
+			$pageUserIds = array_values(array_unique(array_filter(array_map(
+				'intval',
+				array_column($result['items'], 'ID')
+			))));
+			$myGroupUserIds = [];
+			$intranetUserIds = [];
+			$isIntranetUser = \CExtranet::isIntranetUser();
+			if ($pageUserIds !== [])
+			{
+				$currentUserId = (int)$this->getCurrentUser()->getId();
+				if ($currentUserId > 0)
+				{
+					$currentUserGroups = UserToGroupTable::query()
+						->setSelect(['GROUP_ID'])
+						->where('USER_ID', $currentUserId)
+						->where('ROLE', '<=', UserToGroupTable::ROLE_USER)
+						->where('GROUP.ACTIVE', 'Y')
+						->where('GROUP.WorkgroupSite:GROUP.SITE_ID', \CExtranet::getExtranetSiteID());
+					$sharedUsers = UserToGroupTable::query()
+						->setSelect(['USER_ID'])
+						->whereIn('USER_ID', $pageUserIds)
+						->whereIn('GROUP_ID', $currentUserGroups)
+						->where('ROLE', '<=', UserToGroupTable::ROLE_USER)
+						->where('USER.ACTIVE', 'Y')
+						->setGroup(['USER_ID'])
+						->exec();
+					while ($sharedUser = $sharedUsers->fetch())
+					{
+						$myGroupUserIds[(int)$sharedUser['USER_ID']] = true;
+					}
+				}
+
+				if ($isIntranetUser)
+				{
+					$intranetUsers = \CUser::getList(
+						'ID',
+						'ASC',
+						['ID' => implode('|', $pageUserIds), '!UF_DEPARTMENT' => false],
+						['FIELDS' => ['ID'], 'SELECT' => ['UF_DEPARTMENT']]
+					);
+					while ($intranetUser = $intranetUsers->fetch())
+					{
+						$intranetUserIds[(int)$intranetUser['ID']] = true;
+					}
+				}
+			}
+
+			$hiddenUser = [
+				'ID' => 0,
+				'PHOTO' => '',
+				'PHOTO_SRC' => '',
+				'FULL_NAME' => Loc::getMessage('SONET_CONTROLLER_LIVEFEED_BLOGPOST_IMPORTANT_HIDDEN'),
+				'URL' => '',
+				'TYPE' => '',
+			];
+			foreach ($result['items'] as $key => $user)
+			{
+				if (
+					(
+						$isIntranetUser
+						&& !isset($intranetUserIds[(int)$user['ID']])
+						&& !isset($myGroupUserIds[(int)$user['ID']])
+					)
+					|| (
+						!$isIntranetUser
+						&& !isset($myGroupUserIds[(int)$user['ID']])
+					)
+				)
+				{
+					$result['items'][$key] = $hiddenUser;
 				}
 			}
 		}

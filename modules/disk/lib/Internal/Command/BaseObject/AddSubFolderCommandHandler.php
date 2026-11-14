@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Internal\Command\BaseObject;
 
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Disk\Ui\Text;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Result;
 
@@ -19,7 +20,9 @@ class AddSubFolderCommandHandler
 	{
 		$result = new Result();
 
-		if (empty($command->name))
+		$name = $command->autoCorrect ? Text::correctFolderName($command->name) : $command->name;
+
+		if (empty($name))
 		{
 			return $result->addError(new Error('Could not create folder. Name is empty.'));
 		}
@@ -43,7 +46,7 @@ class AddSubFolderCommandHandler
 
 		$subFolder = $command->folder->addSubFolder(
 			data: [
-				'NAME' => $command->name,
+				'NAME' => $name,
 				'CREATED_BY' => $command->createdBy,
 			],
 			generateUniqueName: $command->generateUniqueName,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\Sync\Journal;
 
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Repository\Sync\SyncLogRepository;
 use Bitrix\Disk\Internal\Service\Logger\LoggerFactory;
@@ -34,7 +35,7 @@ use Throwable;
  * cascades of unbounded length, and a transaction opened here would join one of them and hold its rows
  * for as long as it lasts.
  */
-final class JournalWriter
+final class JournalWriter implements ObjectChangePublisherInterface
 {
 	private const LOGGER_CHANNEL = 'sync';
 
@@ -65,6 +66,7 @@ final class JournalWriter
 	 *        object publishes nothing: the record of the root already tells the client that the subtree
 	 *        moved, and a folder of ten thousand children would otherwise write ten thousand rows that
 	 *        say the same thing.
+	 * @return bool whether the record reached the journal {@see publish()}
 	 */
 	public function publishObjectChange(
 		BaseObject $object,
@@ -72,11 +74,16 @@ final class JournalWriter
 		?int $authorId = null,
 		?array $changedFields = null,
 		bool $isCascadeRoot = true,
-	): void
+	): bool
 	{
+		if ($changeType === ChangeType::IndexUpdated && !Configuration::isBoardIndexEnabled())
+		{
+			return true;
+		}
+
 		if (!$isCascadeRoot)
 		{
-			return;
+			return true;
 		}
 
 		if (!$changeType->isPublishableByDomain())
@@ -86,10 +93,10 @@ final class JournalWriter
 				['changeType' => $changeType->value],
 			);
 
-			return;
+			return true;
 		}
 
-		$this->publish(function () use ($object, $changeType, $authorId, $changedFields): ChangeRecord {
+		return $this->publish(function () use ($object, $changeType, $authorId, $changedFields): ChangeRecord {
 			$realObjectId = (int)$object->getRealObjectId();
 
 			return ChangeRecord::objectChange(
@@ -99,6 +106,52 @@ final class JournalWriter
 				$this->audience->forRealObject($realObjectId),
 				$authorId,
 				$changedFields,
+			);
+		});
+	}
+
+	/**
+	 * The sharing or the public access of an object changed. The record is an ordinary update with a
+	 * card, addressed to the same audience as any change of the object, and one record on a folder
+	 * stands for everything under it.
+	 *
+	 * @param string[]|null $rightsCodes codes of the object read by the caller, as
+	 *        {@see AudienceResolver::rightsCodesOf()} returns them; the holders by interaction are added
+	 *        to them. An edit of rights passes the codes it read before the edit: read here, they would be
+	 *        those of a checkpoint the recalculation has not filled yet.
+	 * @return bool whether the record reached the journal {@see publish()}
+	 */
+	public function publishAccessState(
+		BaseObject $object,
+		ChangeType $changeType,
+		?int $authorId = null,
+		?array $rightsCodes = null,
+	): bool
+	{
+		if (!$changeType->isAccessState())
+		{
+			$this->logger->warning(
+				'a change type that is not a state of access was published as one: {changeType}',
+				['changeType' => $changeType->value],
+			);
+
+			return true;
+		}
+
+		return $this->publish(function () use ($object, $changeType, $authorId, $rightsCodes): ChangeRecord {
+			$realObjectId = (int)$object->getRealObjectId();
+			$audience = $rightsCodes === null
+				? $this->audience->forRealObject($realObjectId)
+				: $this->audience->forRightsCodes($realObjectId, $rightsCodes)
+			;
+
+			return ChangeRecord::accessStateChange(
+				$changeType,
+				self::resourceTypeOfModel($object),
+				$realObjectId,
+				$audience,
+				$object instanceof Folder,
+				$authorId,
 			);
 		});
 	}
@@ -270,6 +323,9 @@ final class JournalWriter
 	 * client is handed is an identifier together with the kind of what it names, so a record holding one
 	 * without the other is one nobody could be given.
 	 *
+	 * A file has no descendants, so a subtree rooted at a file is published as the file alone: the
+	 * callers name the scope of the edit they report, and only the writer reads the kind of its root.
+	 *
 	 * @param string $scope one of the scopes of {@see ChangeRecord}
 	 * @param string[] $codes the codes the change is published to. For an edit of the rights of an
 	 *        object these are the codes as they stood before it: the writer unites them with the ones
@@ -325,6 +381,12 @@ final class JournalWriter
 					);
 
 					return null;
+				}
+
+				if ($resourceType === ChangeRecord::RESOURCE_FILE)
+				{
+					$scope = $scope === ChangeRecord::SCOPE_SUBTREE ? ChangeRecord::SCOPE_OBJECT : $scope;
+					$affectsDescendants = false;
 				}
 
 				return ChangeRecord::accessChange(
@@ -421,6 +483,7 @@ final class JournalWriter
 				$record->authorId,
 				$record->changedFields,
 				$record->tombstoneReason?->value,
+				$record->affectsDescendants,
 			)
 		;
 

@@ -9,7 +9,12 @@ use Bitrix\Crm\Dto\Booking\Booking\BookingFields;
 use Bitrix\Crm\Dto\Booking\Booking\BookingStatusEnum;
 use Bitrix\Crm\Dto\Booking\Message\Message;
 use Bitrix\Crm\Integration\Booking\BookingProvider;
+use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Service\Context;
+use Bitrix\Crm\Service\Timeline\Navigation\CandidateExpression;
 use Bitrix\Crm\Timeline;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ActivityProviderTypeCatalogInterface;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ActivityProviderTypeDescriptor;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -42,6 +47,40 @@ class Booking extends Activity\Provider\Base
 	public static function getName(): string
 	{
 		return Loc::getMessage('CRM_ACTIVITY_PROVIDER_BOOKING_NAME');
+	}
+
+	public static function createTimelineTypeCatalog(): ActivityProviderTypeCatalogInterface
+	{
+		return new class() implements ActivityProviderTypeCatalogInterface
+		{
+			public function getTimelineTypeDescriptors(): array
+			{
+				$title = Loc::getMessage('CRM_ACTIVITY_PROVIDER_BOOKING_TIMELINE_TYPE_CATALOG_TITLE');
+				if (!is_string($title) || $title === '')
+				{
+					return [];
+				}
+
+				$expression = CandidateExpression::all(
+					CandidateExpression::eq('PROVIDER_ID', Booking::getId()),
+					CandidateExpression::eq('PROVIDER_TYPE_ID', 'BOOKING'),
+				);
+
+				return [new ActivityProviderTypeDescriptor(
+					'booking',
+					$title,
+					'o-meeting-point',
+					0,
+					$expression,
+					$expression,
+				)];
+			}
+
+			public function canExposeTimelineType(string $id, Context $context, ItemIdentifier $owner): bool
+			{
+				return $id === 'booking';
+			}
+		};
 	}
 
 	public static function getTypeName($providerTypeId = null, $direction = \CCrmActivityDirection::Undefined): string

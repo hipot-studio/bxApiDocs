@@ -149,6 +149,11 @@ final class Integration
 	 */
 	public function delete() : void
 	{
+		$this->deleteWithResult();
+	}
+
+	public function deleteWithResult(): Result
+	{
 		$links = AdsFormLinkTable::query()
 			->setSelect([
 				"ID",
@@ -160,7 +165,7 @@ final class Integration
 			->exec()
 			->fetchCollection()
 		;
-		$this->unlinkForms($links);
+		return $this->unlinkForms($links);
 	}
 	/**
 	 * Set data to form

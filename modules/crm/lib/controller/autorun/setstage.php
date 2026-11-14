@@ -81,7 +81,7 @@ final class SetStage extends Base
 
 		$operation = $factory->getUpdateOperation($item);
 
-		return (new TransactionWrapper($operation))->launch();
+		return $this->launchInTransactionWrapper(new TransactionWrapper($operation))->launch();
 	}
 
 	protected function sendAnalyticsData(PreparedData $data, array $response): void

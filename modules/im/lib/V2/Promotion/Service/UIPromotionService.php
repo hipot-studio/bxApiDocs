@@ -28,6 +28,12 @@ class UIPromotionService implements PromotionServiceInterface
 {
 	use SingletonTrait;
 
+	/**
+	 * Read outside the service as well: the startup data of the web messenger asks whether this very
+	 * promo is still unwatched (BRIEF, R-11).
+	 */
+	public const CHECK_IN_PROMO_ID = 'im:check-in-from-chat:28082026:all';
+
 	private const ONE_MONTH = 3600 * 24 * 30;
 	private const ENDLESS_LIFETIME = 0;
 	private const VOICE_MESSAGE_PROMO_CUTOFF_DATE_OPTION = 'voice_message_promo_cutoff_date';
@@ -317,6 +323,15 @@ class UIPromotionService implements PromotionServiceInterface
 				'LIFETIME' => self::ENDLESS_LIFETIME,
 			];
 		}
+
+		// The audience of this one is narrowed by the client: the hint greets the person who already
+		// knows the check-in, and the startup data brings that verdict ready-made (BRIEF, R-11).
+		$result[] = [
+			'ID' => self::CHECK_IN_PROMO_ID,
+			'USER_TYPE' => UserType::ALL->value,
+			'DEVICE_TYPE' => DeviceType::WEB->value,
+			'LIFETIME' => self::ENDLESS_LIFETIME,
+		];
 
 		$settings = Configuration::getValue('im');
 		if (isset($settings['promotion']) && is_array($settings['promotion']))

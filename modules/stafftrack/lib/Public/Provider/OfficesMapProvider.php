@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\StaffTrack\Public\Provider;
 
 use Bitrix\Location\Entity\Source;
+use Bitrix\Location\Infrastructure\SourceCodePicker;
 use Bitrix\Location\Infrastructure\UserLocation;
 use Bitrix\Location\Repository\SourceRepository;
 use Bitrix\Location\Source\Osm\OsmSource;
@@ -19,6 +20,21 @@ class OfficesMapProvider
 	public function isMapAvailable(): bool
 	{
 		return $this->getOsmToken() !== null;
+	}
+
+	/**
+	 * Reads the selected source by its code only, so no source is built and no gateway is asked.
+	 */
+	public function isPortalSourceOsm(): bool
+	{
+		try
+		{
+			return $this->getPortalSourceCode() === Source\Factory::OSM_SOURCE_CODE;
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
 	}
 
 	public function getMapParams(): array
@@ -48,6 +64,16 @@ class OfficesMapProvider
 		$source = $this->getSource();
 
 		return $source instanceof OsmSource ? $source->getOsmToken() : null;
+	}
+
+	protected function getPortalSourceCode(): ?string
+	{
+		if (!Loader::includeModule('location'))
+		{
+			return null;
+		}
+
+		return SourceCodePicker::getSourceCode();
 	}
 
 	protected function getSource(): ?Source

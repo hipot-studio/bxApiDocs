@@ -9,7 +9,9 @@ use Bitrix\Crm\V2\Internal\Model\LegalRegistry\VersionTable;
 use Bitrix\Crm\V2\Internal\Model\LegalRegistry\SourceTable;
 use Bitrix\Crm\V2\Internal\Model\LegalRegistry\UsageTable;
 use Bitrix\Crm\V2\Public\Entity\LegalRegistry\RegistryResult;
+use Bitrix\Crm\WebForm\Internals\FormTable;
 use Bitrix\Main\Application;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormMutationGuard;
 use Bitrix\Main\Type\DateTime;
 
 /** Internal persistence only; these rows require ACL and DTO mapping before public use. */
@@ -25,7 +27,7 @@ final class UsageRepository
 	private function ensure(int $formId, string $nameSnapshot, bool $retryDuplicate): RegistryResult
 	{
 		$duplicate = false;
-		$result = $this->transaction(function () use ($formId, $nameSnapshot, &$duplicate): RegistryResult {
+		$result = $this->transaction($formId, function () use ($formId, $nameSnapshot, &$duplicate): RegistryResult {
 			$source = self::currentRows(SourceTable::class, ['=FORM_ID' => $formId])[0] ?? false;
 			if ($source)
 			{
@@ -62,7 +64,10 @@ return self::error('STORAGE_ERROR'); }
 	{
 		if (!in_array($operation, ['bind', 'replace', 'unbind', 'closeSource'], true)) { return self::error('INVALID_PAYLOAD'); }
 
-		return $this->transaction(function () use ($formId, $operation, $documentId, $versionId, $checked, $required, $expectedSourceRevision, $formNameSnapshot): RegistryResult {
+		return $this->transaction($formId, function () use (
+			$formId, $operation, $documentId, $versionId, $checked, $required,
+			$expectedSourceRevision, $formNameSnapshot,
+		): RegistryResult {
 			$source = self::currentRows(SourceTable::class, ['=FORM_ID' => $formId])[0] ?? false;
 			if (!$source || !self::currentRow(SourceTable::class, (int)$source['ID'])) { return self::error('NOT_FOUND_OR_DENIED'); }
 			$source = self::currentRow(SourceTable::class, (int)$source['ID']);
@@ -103,19 +108,22 @@ return self::error('STORAGE_ERROR'); }
 			$saved = SourceTable::update((int)$source['ID'], $sourceChanges);
 
 			return $saved->isSuccess() ? new RegistryResult() : self::error('STORAGE_ERROR');
-		});
+		}, $operation !== 'closeSource');
 	}
 
-	private function transaction(callable $callback): RegistryResult
+	private function transaction(int $formId, callable $callback, bool $serialize = true): RegistryResult
 	{
 		$pool = Application::getInstance()->getConnectionPool();
 		$pool->useMasterOnly(true);
 		$connection = Application::getConnection();
 		$started = false;
+		$guard = null;
 		try
 		{
+			$guard = $serialize ? FormMutationGuard::acquire($formId) : null;
 			$connection->startTransaction();
 			$started = true;
+			self::currentRow(FormTable::class, $formId);
 			$result = $callback();
 			if (!$result->isSuccess())
 			{
@@ -129,7 +137,7 @@ return self::error('STORAGE_ERROR'); }
 
 			return $result;
 		}
-		catch (\Throwable)
+		catch (\Throwable $error)
 		{
 			if ($started)
 			{
@@ -137,11 +145,12 @@ return self::error('STORAGE_ERROR'); }
 				catch (\Throwable) { /* Return only the safe storage error. */ }
 			}
 
-			return self::error('STORAGE_ERROR');
+			return self::error($error->getMessage() === 'REVISION_CONFLICT' ? 'REVISION_CONFLICT' : 'STORAGE_ERROR');
 		}
 		finally
 		{
-			$pool->useMasterOnly(false);
+			try { $guard?->release(); }
+			finally { $pool->useMasterOnly(false); }
 		}
 	}
 

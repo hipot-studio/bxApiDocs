@@ -101,6 +101,26 @@ class EmployeeSetResolver
 	}
 
 	/**
+	 * The people of a set already parsed, in the same chunks as {@see self::resolve()} hands out, and
+	 * nobody is checked here: whom to keep is the business of the caller. The stream is lazy, so a
+	 * caller that stops reading it stops the walk as well.
+	 *
+	 * @param int[] $userIds
+	 * @param int[] $flatNodeIds nodes whose own members are taken, without the nested nodes
+	 * @param int[] $deepNodeIds nodes taken with every nested node
+	 * @return \Generator<int, int[]>
+	 */
+	public function stream(array $userIds, array $flatNodeIds, array $deepNodeIds): \Generator
+	{
+		return $this->streamEmployees(
+			IdNormalizer::normalize($userIds),
+			IdNormalizer::normalize($flatNodeIds),
+			IdNormalizer::normalize($deepNodeIds),
+			null,
+		);
+	}
+
+	/**
 	 * The root node of the structure of the portal, or nothing at all on a portal whose structure was
 	 * never converted.
 	 */
@@ -332,7 +352,7 @@ class EmployeeSetResolver
 			->setSelect(['ID'])
 			->whereIn('ID', $userIds)
 			->where('ACTIVE', 'Y')
-			->where('IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->fetchAll()
 		;
 

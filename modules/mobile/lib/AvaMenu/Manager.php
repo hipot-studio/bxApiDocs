@@ -13,13 +13,14 @@ use Bitrix\Mobile\AvaMenu\Items\SwitchAccount;
 use Bitrix\Mobile\AvaMenu\Items\Timeman;
 use Bitrix\Mobile\AvaMenu\Items\WhatsNew;
 use Bitrix\Mobile\Context;
+use Bitrix\Mobile\Tab\Preset\Service\ActiveTabProvider;
 
 class Manager
 {
 	protected Context $context;
 	protected array $menuItems;
 
-	public function __construct(Context $context)
+	public function __construct(Context $context, ActiveTabProvider $activeTabProvider)
 	{
 		$this->context = $context;
 
@@ -27,8 +28,8 @@ class Manager
 			new EmailConfirm($context),
 			new CheckIn($context),
 			new Timeman($context),
-			new Calendar($context),
-			new Signing($context),
+			new Calendar($context, $activeTabProvider),
+			new Signing($context, $activeTabProvider),
 			new Settings($context),
 			new WhatsNew($context),
 			new GoToWeb($context),

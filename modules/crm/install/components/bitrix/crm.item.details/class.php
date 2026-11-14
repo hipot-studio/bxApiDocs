@@ -85,12 +85,14 @@ class CrmItemDetailsComponent extends FactoryBased
 		return parent::saveAction($data);
 	}
 
-	protected function getSettingsToolbarButton(): SettingsButton
+	protected function getSettingsToolbarButton(): ?SettingsButton
 	{
 		$button = parent::getSettingsToolbarButton();
 
 		if ($this->isLockedAutomatedSolution())
 		{
+			// the lock refuses update and delete, so the menu is empty: the gear stays as the entry into the promo
+			$button ??= new SettingsButton();
 			$this->bindClickEventToLockedButton($button);
 		}
 

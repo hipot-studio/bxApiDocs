@@ -17,6 +17,7 @@ use Bitrix\StaffTrack\Internal\Service\Office\EmployeeListVisibility;
 use Bitrix\StaffTrack\Internal\Service\Office\OfficeSnapshotService;
 use Bitrix\StaffTrack\Internal\Service\Office\PresenceService;
 use Bitrix\StaffTrack\Item\EmployeeOfficeCard;
+use Bitrix\StaffTrack\Item\OfficeWorkingHours;
 
 class EmployeeOfficeProvider
 {
@@ -54,6 +55,7 @@ class EmployeeOfficeProvider
 				: $this->getStoredSnapshotUrl($officeId, $latitude, $longitude),
 			$this->getAddress($office),
 			$this->readPresence($viewerId, $employeeId, $officeId),
+			$this->getWorkingHours($office),
 		);
 	}
 
@@ -82,7 +84,7 @@ class EmployeeOfficeProvider
 		return (new OfficesAvailabilityProvider())->isAvailable();
 	}
 
-	protected function canViewEmployee(int $viewerId, int $employeeId): bool
+	public function canViewEmployee(int $viewerId, int $employeeId): bool
 	{
 		if ($viewerId <= 0 || $employeeId <= 0)
 		{
@@ -141,6 +143,17 @@ class EmployeeOfficeProvider
 		$address = trim((string)$office->getAddress());
 
 		return $address === '' ? null : $address;
+	}
+
+	protected function getWorkingHours(Office $office): ?OfficeWorkingHours
+	{
+		$from = $office->getWorkTimeFrom();
+		$to = $office->getWorkTimeTo();
+
+		return OfficeWorkingHours::fromMinutes(
+			$from === null ? null : (int)$from,
+			$to === null ? null : (int)$to,
+		);
 	}
 
 	protected function getSnapshotUrl(int $officeId, float $latitude, float $longitude): ?string

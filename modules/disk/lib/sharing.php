@@ -5,11 +5,15 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk\Controller\DocumentService;
 use Bitrix\Disk\Document\DocumentHandler;
-use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Collab\CollabService;
+use Bitrix\Disk\Internal\Service\Document\OfficeEngineRecognizer;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\SharingTable;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -157,7 +161,12 @@ final class Sharing extends Internals\Model
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public static function addToManyEntities(array $data, array $entitiesToTask, ErrorCollection $errorCollection)
+	public static function addToManyEntities(
+		array $data,
+		array $entitiesToTask,
+		ErrorCollection $errorCollection,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		self::checkRequiredInputParams($data, array('FROM_ENTITY', 'CREATED_BY'));
 
@@ -186,6 +195,16 @@ final class Sharing extends Internals\Model
 		$objectToSharing = $objectToSharing->getRealObject();
 		$data['REAL_OBJECT_ID'] = $objectToSharing->getId();
 		$data['REAL_STORAGE_ID'] = $objectToSharing->getStorageId();
+		$markerService = new MarkerService();
+		if (!$markerService->revokeBeforeUse(
+			(int)$objectToSharing->getId(),
+			$objectToSharing->getUploadCleanupMarkerPresenceHint(),
+		))
+		{
+			$errorCollection->addOne(new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+			return null;
+		}
 
 		$dataToInsert = $data;
 		unset($dataToInsert['REAL_OBJECT']);
@@ -221,7 +240,10 @@ final class Sharing extends Internals\Model
 				$dataToInsert['STATUS'] = SharingTable::STATUS_IS_APPROVED;
 			}
 
-			$sharingModel = parent::add($dataToInsert, $errorCollection);
+			$sharingModel = $markerService->runWithConfirmedRevokedMarker(
+				(int)$objectToSharing->getId(),
+				fn() => parent::add($dataToInsert, $errorCollection),
+			);
 			if(!$sharingModel)
 			{
 				continue;
@@ -245,7 +267,10 @@ final class Sharing extends Internals\Model
 
 					$dataToInsertChild['TO_ENTITY'] = self::CODE_USER . $userId;
 
-					$sharingModel = parent::add($dataToInsertChild, $errorCollection);
+					$sharingModel = $markerService->runWithConfirmedRevokedMarker(
+						(int)$objectToSharing->getId(),
+						fn() => parent::add($dataToInsertChild, $errorCollection),
+					);
 					if(!$sharingModel)
 					{
 						continue;
@@ -298,10 +323,26 @@ final class Sharing extends Internals\Model
 			}
 		}
 		unset($entity);
-		$rightManager->append($objectToSharing, $newRights);
+		$rightsWereAppended = $rightManager->append($objectToSharing, $newRights, $auditTransaction);
+		if (!$rightsWereAppended && $auditTransaction !== null)
+		{
+			$errorCollection->add($rightManager->getErrors());
 
-		self::processConnectAndNotify($successSharingByEntity, $objectToSharing);
-		self::cleanCache($successSharingByEntity);
+			return null;
+		}
+
+		$connectAndNotify = static function () use ($successSharingByEntity, $objectToSharing): void {
+			self::processConnectAndNotify($successSharingByEntity, $objectToSharing);
+			self::cleanCache($successSharingByEntity);
+		};
+		if ($auditTransaction !== null)
+		{
+			$auditTransaction->addAfterCommit($connectAndNotify);
+		}
+		else
+		{
+			$connectAndNotify();
+		}
 
 		return $successSharingByEntity;
 	}
@@ -606,7 +647,7 @@ final class Sharing extends Internals\Model
 	private static function generateLinkToViewDocument(Sharing $sharingModel, BaseObject $objectToSharing): ?string
 	{
 		$documentHandler = Driver::getInstance()->getDocumentHandlersManager()->getDefaultHandlerForView();
-		if (!($documentHandler instanceof OnlyOfficeHandler))
+		if (!OfficeEngineRecognizer::isOfficeEngine($documentHandler))
 		{
 			return null;
 		}
@@ -650,7 +691,6 @@ final class Sharing extends Internals\Model
 		$isBoard = !$isFolder && $objectToSharing->getRealObject()->getTypeFile() == TypeFile::FLIPCHART;
 		if(Configuration::canAutoconnectSharedObjects())
 		{
-			$urlManager = Driver::getInstance()->getUrlManager();
 			foreach($successSharingByEntity as $entity => $sharingModel)
 			{
 				/** @var \Bitrix\Disk\Sharing $sharingModel */
@@ -665,53 +705,22 @@ final class Sharing extends Internals\Model
 						continue;
 					}
 
-					if ($isBoard)
-					{
-						// $linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
-						$linkToViewDocument = self::getBoardLink($sharingModel->getLinkObject());
-					}
-					else
-					{
-						$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $objectToSharing);
-					}
-					$pathInListing = $urlManager::getUrlFocusController('showObjectInGrid', array(
-						'objectId' => $sharingModel->getLinkObjectId(),
-						'type' => $isFolder ? 'folder' : 'file',
-					));
-					$uriToDisconnect = $urlManager::getUrlFocusController('showObjectInGrid', array(
-						'objectId' => $sharingModel->getLinkObjectId(),
-						'type' => $isFolder ? 'folder' : 'file',
-						'cmd' => 'detach',
-					));
 					[$subTag, $tag] = $sharingModel->getNotifyTags();
-					$autoconnectFileMessage = $isBoard
-						? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_BOARD'
-						: 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE';
-					Driver::getInstance()->sendNotify(mb_substr($sharingModel->getToEntity(), 1), array(
-						'FROM_USER_ID' => $sharingModel->getCreatedBy(),
-						'NOTIFY_EVENT' => 'sharing_autoconnect',
-						'NOTIFY_TAG' => $tag,
-						'NOTIFY_SUB_TAG' => $subTag,
-						'NOTIFY_MESSAGE' => Loc::getMessage(
-							$isFolder
-									? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY'
-									: $autoconnectFileMessage,
-							[
-								'#NAME#' => '<a href="'.($linkToViewDocument ?: $pathInListing).'">'. ($isBoard ? $objectToSharing->getNameWithoutExtension() : $objectToSharing->getName()).'</a>',
-								'#DESCRIPTION#' => $sharingModel->getDescription(),
-								'#DISCONNECT_LINK#' => '<a href="'.$uriToDisconnect.'">'.Loc::getMessage('DISK_SHARING_MODEL_TEXT_DISCONNECT_LINK').'</a>',
-							],
+					Driver::getInstance()->sendNotify(
+						mb_substr($sharingModel->getToEntity(), 1),
+						[
+							'FROM_USER_ID' => $sharingModel->getCreatedBy(),
+							'NOTIFY_EVENT' => 'sharing_autoconnect',
+							'NOTIFY_TAG' => $tag,
+							'NOTIFY_SUB_TAG' => $subTag,
+						]
+						+ self::buildConnectNotifyMessages(
+							$sharingModel,
+							$objectToSharing,
+							(string)$sharingModel->getDescription(),
+							true,
 						),
-						'NOTIFY_MESSAGE_OUT' => strip_tags(
-							Loc::getMessage($isFolder? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : $autoconnectFileMessage,
-							[
-								'#NAME#' => '<a href="'.$pathInListing.'">'.$objectToSharing->getName().'</a>',
-								'#DESCRIPTION#' => $sharingModel->getDescription(),
-								'#DISCONNECT_LINK#' => '',
-							]
-						)),
-					))
-					;
+					);
 				}
 			}
 		}
@@ -1233,7 +1242,11 @@ final class Sharing extends Internals\Model
 	 * @param bool $withDeletingObject whether to delete objects, which were created by sharing models.
 	 * @return bool
 	 */
-	public function decline($declinedBy, $withDeletingObject = true)
+	public function decline(
+		$declinedBy,
+		$withDeletingObject = true,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->errorCollection->clear();
 
@@ -1258,19 +1271,30 @@ final class Sharing extends Internals\Model
 			}
 		}
 
-		$success = $this->update(array(
+		$declinedAttributes = array(
 			'LINK_OBJECT_ID' => null,
 			'LINK_STORAGE_ID' => null,
 			'STATUS' => SharingTable::STATUS_IS_DECLINED,
-		));
-		if(!$success)
+		);
+		if ($auditTransaction !== null)
+		{
+			SharingTable::updateBatch($declinedAttributes, ['ID' => $this->id]);
+			$this->setAttributes($declinedAttributes);
+		}
+		elseif (!$this->update($declinedAttributes))
 		{
 			return false;
 		}
 
 		foreach($this->getChildren() as $childSharing)
 		{
-			$childSharing->decline($declinedBy, $withDeletingObject);
+			$childDeclined = $childSharing->decline($declinedBy, $withDeletingObject, $auditTransaction);
+			if (!$childDeclined && $auditTransaction !== null)
+			{
+				$this->errorCollection->add($childSharing->getErrors());
+
+				return false;
+			}
 		}
 		unset($childSharing);
 
@@ -1282,12 +1306,30 @@ final class Sharing extends Internals\Model
 		if($this->isToUser() || $this->isToGroup() || $this->isToDepartmentParent())
 		{
 			$rightsManager = Driver::getInstance()->getRightsManager();
-			$rightsManager->deleteByDomain($this->getRealObject(), $rightsManager->getSharingDomain($this->id));
+			$rightsWereDeleted = $rightsManager->deleteByDomain(
+				$this->getRealObject(),
+				$rightsManager->getSharingDomain($this->id),
+				$auditTransaction,
+			);
+			if (!$rightsWereDeleted && $auditTransaction !== null)
+			{
+				$this->errorCollection->add($rightsManager->getErrors());
+
+				return false;
+			}
 
 			[, $tag] = $this->getNotifyTags();
 			if(Loader::includeModule('im'))
 			{
-				\CIMNotify::deleteByTag($tag);
+				$deleteNotification = static fn(): mixed => \CIMNotify::deleteByTag($tag);
+				if ($auditTransaction !== null)
+				{
+					$auditTransaction->addAfterCommit($deleteNotification);
+				}
+				else
+				{
+					$deleteNotification();
+				}
 			}
 		}
 
@@ -1330,14 +1372,26 @@ final class Sharing extends Internals\Model
 				)
 			);
 			[$subTag, $tag] = $this->getNotifyTags();
-			Driver::getInstance()->sendNotify($this->createdBy, array(
+			$createdBy = $this->createdBy;
+			$notification = array(
 				'FROM_USER_ID' => $declinedBy,
 				'NOTIFY_EVENT' => 'sharing_user_disconnect',
 				'NOTIFY_TAG' => $tag,
 	//			'NOTIFY_SUB_TAG' => $subTag,
 				'NOTIFY_MESSAGE' => $message,
 				'NOTIFY_MESSAGE_OUT' => strip_tags($message),
-			));
+			);
+			$sendNotification = static function () use ($createdBy, $notification): void {
+				Driver::getInstance()->sendNotify($createdBy, $notification);
+			};
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($sendNotification);
+			}
+			else
+			{
+				$sendNotification();
+			}
 		}
 
 		return true;
@@ -1364,7 +1418,11 @@ final class Sharing extends Internals\Model
 	 * @param bool $withDeletingObject whether to delete objects, which were created by sharing models.
 	 * @return bool
 	 */
-	public function delete($deletedBy, $withDeletingObject = true)
+	public function delete(
+		$deletedBy,
+		$withDeletingObject = true,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->errorCollection->clear();
 
@@ -1374,12 +1432,12 @@ final class Sharing extends Internals\Model
 		}
 		elseif($this->isApproved() || $this->isUnreplied())
 		{
-			if(!$this->decline($deletedBy, $withDeletingObject))
+			if(!$this->decline($deletedBy, $withDeletingObject, $auditTransaction))
 			{
 				return false;
 			}
 
-			return $this->delete($deletedBy, $withDeletingObject);
+			return $this->delete($deletedBy, $withDeletingObject, $auditTransaction);
 		}
 
 		return false;
@@ -1542,50 +1600,17 @@ final class Sharing extends Internals\Model
 
 		if($sharingModel->approve())
 		{
-			$fileLink = $sharingModel->getLinkObject();
-			$isFolder = $fileLink instanceof Folder;
-			$isBoard = !$isFolder && (int)$fileLink->getTypeFile() === TypeFile::FLIPCHART;
-
-			$autoconnectFileMessage = $isBoard
-				? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_BOARD'
-				: 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE';
-
-			$objectName = $isBoard
-				? $fileLink->getNameWithoutExtension()
-				: $fileLink->getName();
-
-			$urlManager = Driver::getInstance()->getUrlManager();
-
-			if ($isBoard)
-			{
-				//$linkToViewDocument = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($sharingModel->getLinkObjectId(), false, 'disk_page');
-				$linkToViewDocument = self::getBoardLink($fileLink);
-			}
-			else
-			{
-				$linkToViewDocument = self::generateLinkToViewDocument($sharingModel, $fileLink);
-			}
-			$pathInListing = $urlManager::getUrlFocusController('showObjectInGrid', array(
-				'objectId' => $sharingModel->getLinkObjectId(),
-				'type' => $isFolder ? 'folder' : 'file',
-			));
-			$message = Loc::getMessage(
-				$isFolder ? 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY' : $autoconnectFileMessage,
-				array(
-					'#NAME#' => '<a href="' . ($linkToViewDocument ?: $pathInListing) . '">' . $objectName . '</a>',
-					'#DESCRIPTION#' => '',
-					'#DISCONNECT_LINK#' => '',
-				)
-			);
 			[$subTag, $tag] = $sharingModel->getNotifyTags();
-			Driver::getInstance()->sendNotify(mb_substr($sharingModel->getToEntity(), 1), array(
-				'FROM_USER_ID' => $sharingModel->getCreatedBy(),
-				'NOTIFY_EVENT' => 'sharing_autoconnect',
-				'NOTIFY_TAG' => $tag,
-				'NOTIFY_SUB_TAG' => $subTag,
-				'NOTIFY_MESSAGE' => $message,
-				'NOTIFY_MESSAGE_OUT' => strip_tags($message),
-			));
+			Driver::getInstance()->sendNotify(
+				mb_substr($sharingModel->getToEntity(), 1),
+				[
+					'FROM_USER_ID' => $sharingModel->getCreatedBy(),
+					'NOTIFY_EVENT' => 'sharing_autoconnect',
+					'NOTIFY_TAG' => $tag,
+					'NOTIFY_SUB_TAG' => $subTag,
+				]
+				+ self::buildConnectNotifyMessages($sharingModel, $sharingModel->getLinkObject()),
+			);
 		}
 	}
 
@@ -1630,6 +1655,104 @@ final class Sharing extends Internals\Model
 		}
 
 		return $model;
+	}
+
+	/**
+	 * @return array{NOTIFY_MESSAGE: string, NOTIFY_MESSAGE_OUT: string}
+	 */
+	private static function buildConnectNotifyMessages(
+		Sharing $sharingModel,
+		BaseObject $object,
+		string $description = '',
+		bool $withDisconnectLink = false,
+	): array
+	{
+		$isFolder = $object instanceof Folder;
+		$isBoard = !$isFolder && (int)$object->getRealObject()->getTypeFile() === TypeFile::FLIPCHART;
+
+		$focusParams = [
+			'objectId' => $sharingModel->getLinkObjectId(),
+			'type' => $isFolder ? 'folder' : 'file',
+		];
+
+		$linkToView = $isBoard
+			? self::getBoardLink($sharingModel->getLinkObject())
+			: self::generateLinkToViewDocument($sharingModel, $object)
+		;
+		if (!$linkToView)
+		{
+			// "show" is handled only for files, for a folder it would turn into a click on the folder link
+			$linkToView = UrlManager::getUrlFocusController(
+				'showObjectInGrid',
+				$isFolder ? $focusParams : $focusParams + ['cmd' => 'show'],
+			);
+		}
+
+		$disconnectLink = '';
+		if ($withDisconnectLink)
+		{
+			$uriToDisconnect = UrlManager::getUrlFocusController('showObjectInGrid', $focusParams + ['cmd' => 'detach']);
+			$disconnectLink = '<a href="' . $uriToDisconnect . '">' . Loc::getMessage('DISK_SHARING_MODEL_TEXT_DISCONNECT_LINK') . '</a>';
+		}
+
+		$messageCode = match (true) {
+			$isFolder => 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY',
+			$isBoard => 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_BOARD',
+			default => 'DISK_SHARING_MODEL_AUTOCONNECT_NOTIFY_FILE',
+		};
+		$name = $isBoard ? $object->getNameWithoutExtension() : $object->getName();
+
+		$trustedHostUrl = self::getTrustedHostUrl();
+		$absoluteLinkToView = ($trustedHostUrl && str_starts_with($linkToView, '/'))
+			? $trustedHostUrl . $linkToView
+			: $linkToView
+		;
+
+		return [
+			'NOTIFY_MESSAGE' => Loc::getMessage($messageCode, [
+				'#NAME#' => '<a href="' . $linkToView . '">' . $name . '</a>',
+				'#DESCRIPTION#' => $description,
+				'#DISCONNECT_LINK#' => $disconnectLink,
+			]),
+			'NOTIFY_MESSAGE_OUT' => strip_tags(Loc::getMessage($messageCode, [
+				'#NAME#' => $name,
+				'#DESCRIPTION#' => $description,
+				'#DISCONNECT_LINK#' => '',
+			])) . "\n" . $absoluteLinkToView,
+		];
+	}
+
+	/**
+	 * Unlike UrlManager::getHostUrl() never falls back to the Host header of the request.
+	 */
+	private static function getTrustedHostUrl(): ?string
+	{
+		$host = (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME)
+			? SITE_SERVER_NAME
+			: Option::get('main', 'server_name')
+		;
+		if (!$host)
+		{
+			return null;
+		}
+
+		$protocol = \CMain::isHTTPS() ? 'https' : 'http';
+
+		$port = Context::getCurrent()->getServer()->getServerPort();
+		if ($port <> 80 && $port <> 443 && $port > 0 && mb_strpos($host, ':') === false)
+		{
+			$host .= ':' . $port;
+		}
+		elseif ($protocol === 'http' && $port == 80)
+		{
+			$host = str_replace(':80', '', $host);
+		}
+		elseif ($protocol === 'https' && $port == 443)
+		{
+			$host = str_replace(':443', '', $host);
+		}
+
+		return $protocol . '://' . $host;
 	}
 
 	private static function getBoardLink(File $file): string

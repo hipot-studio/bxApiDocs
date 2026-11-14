@@ -14,6 +14,7 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Kanban\Entity;
 use Bitrix\Crm\Multifield;
+use Bitrix\Crm\Search\SearchContentBuilder;
 use Bitrix\Crm\Search\SearchContentBuilderFactory;
 use Bitrix\Crm\Security\Controller\DynamicItem;
 use Bitrix\Crm\Service\Operation\Action;
@@ -1351,11 +1352,27 @@ abstract class Operation
 
 		\CCrmSearch::UpdateSearch($filter, \CCrmOwnerType::ResolveName($this->item->getEntityTypeId()), true);
 
-		$builder = SearchContentBuilderFactory::create($this->item->getEntityTypeId());
-		$builder->build(
-			$this->item->getId(),
-			['checkExist' => true],
-		);
+		$entityTypeId = $this->item->getEntityTypeId();
+		$entityId = $this->item->getId();
+		$indexer = Container::getInstance()->getDeferredSearchIndexer();
+		// The mark is sticky: a marked entity is built from its final state anyway, whatever this save changed.
+		if ($indexer->isMarked($entityTypeId, $entityId))
+		{
+			return;
+		}
+
+		$builder = SearchContentBuilderFactory::create($entityTypeId);
+		if (!$this->isSearchContentRebuildNeeded($builder))
+		{
+			return;
+		}
+
+		$indexer->mark($entityTypeId, $entityId);
+	}
+
+	protected function isSearchContentRebuildNeeded(SearchContentBuilder $builder): bool
+	{
+		return true;
 	}
 
 	protected function updateDuplicates(): void

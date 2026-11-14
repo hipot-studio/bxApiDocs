@@ -23,7 +23,7 @@ use CCrmOwnerType;
  */
 final class DaysBeforeCloseSetting extends AbstractSetting implements ResettableSettingInterface
 {
-	public const CODE = 'crm.quote.days_before_close';
+	public const ID = 'crm.quote.days_before_close';
 	private const MODULE_ID = 'crm';
 	private const OPTION_NAME = 'crm_quote_days_before_close';
 
@@ -31,18 +31,18 @@ final class DaysBeforeCloseSetting extends AbstractSetting implements Resettable
 	{
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new IntegerSchema(0, CloseDate::MAX_DAYS_BEFORE_CLOSE),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

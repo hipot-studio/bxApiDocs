@@ -33,6 +33,7 @@ final class ConnectionsPage extends AbstractPage
 			'bitrix:messageservice.connections',
 			parameters: [
 				'analytics' => $this->request->get('analytics'),
+				'tab' => $this->request->getQuery('tab'),
 			],
 		);
 	}

@@ -12,6 +12,7 @@ use Bitrix\Crm;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\DealCategory;
+use Bitrix\Crm\Component\EntityDetails\ClientTab\ClientTabBuilder;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
 use Bitrix\Crm\Component\EntityDetails\Traits;
 use Bitrix\Crm\Conversion\LeadConversionWizard;
@@ -979,6 +980,16 @@ class CCrmDealDetailsComponent
 						);
 					}
 				}
+			}
+
+			$clientTab = (new ClientTabBuilder())->build(
+				CCrmOwnerType::Deal,
+				$this->entityID,
+				$this->entityID <= 0 || $this->isCopyMode || $this->isExposeMode,
+			);
+			if ($clientTab !== null)
+			{
+				$this->arResult['TABS'] = ClientTabBuilder::insert($this->arResult['TABS'], $clientTab);
 			}
 		}
 		//endregion

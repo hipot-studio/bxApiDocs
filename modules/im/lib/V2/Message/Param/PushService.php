@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use CPullWatch;
 
 class PushService
@@ -15,7 +16,7 @@ class PushService
 	}
 
 
-	public function sendPull(Message $message, ?array $extraParams = null): void
+	public function sendPull(Message $message, ?array $extraParams = null, ?array $recipients = null): void
 	{
 		if (!$this->isPullEnable())
 		{
@@ -26,7 +27,7 @@ class PushService
 		$params = $message->getEnrichedParams();
 
 		$pullParams = $this->getPullFormatParams($message);
-		$users = $chat->getRelations()->getUserIds();
+		$users = $recipients ?? $chat->getRelations()->getUserIds();
 
 		if ($chat->getType() === IM_MESSAGE_PRIVATE)
 		{
@@ -39,7 +40,9 @@ class PushService
 
 			if ($chat->getEntityType() === 'LINES')
 			{
-				$users = $this->getRecipients($chat);
+				// An explicit recipient list narrows the audience, it never replaces the filter:
+				// the connector user of an open line stays out of the push either way.
+				$users = array_intersect($users, $this->getRecipients($chat));
 			}
 		}
 
@@ -48,7 +51,7 @@ class PushService
 
 		if ($chat->getType() === Chat::IM_TYPE_COMMENT)
 		{
-			CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $chat->getParentChatId(), $pullParams);
+			CommentTagPublisher::addToStack($chat, $pullParams);
 		}
 		else
 		{

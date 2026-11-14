@@ -41,18 +41,12 @@ class SharingConference
 			return $this->getConferenceChatIdByAlias($this->eventLink->getConferenceId());
 		}
 
-		$conference = $this->createConference();
+		$conference = $this->createAndRegisterConference(Analytics::MANAGER_STARTED);
 
 		if (!$conference)
 		{
 			return null;
 		}
-
-		Analytics::getInstance()->sendChatCreated($this->eventLink, Analytics::MANAGER_STARTED);
-
-		$this->eventLink->setConferenceId($conference->getData()['ALIAS_DATA']['ALIAS']);
-
-		(new EventLinkMapper())->update($this->eventLink);
 
 		return $conference->getData()['CHAT_ID'];
 	}
@@ -75,6 +69,18 @@ class SharingConference
 			return $this->getConferenceUrl($this->eventLink->getConferenceId());
 		}
 
+		$conference = $this->createAndRegisterConference(Analytics::CLIENT_STARTED);
+
+		if (!$conference)
+		{
+			return null;
+		}
+
+		return $this->getConferenceUrl($this->eventLink->getConferenceId());
+	}
+
+	private function createAndRegisterConference(string $analyticsStartedBy)
+	{
 		$conference = $this->createConference();
 
 		if (!$conference)
@@ -82,13 +88,13 @@ class SharingConference
 			return null;
 		}
 
-		Analytics::getInstance()->sendChatCreated($this->eventLink, Analytics::CLIENT_STARTED);
+		Analytics::getInstance()->sendChatCreated($this->eventLink, $analyticsStartedBy);
 
 		$this->eventLink->setConferenceId($conference->getData()['ALIAS_DATA']['ALIAS']);
 
 		(new EventLinkMapper())->update($this->eventLink);
 
-		return $this->getConferenceUrl($this->eventLink->getConferenceId());
+		return $conference;
 	}
 
 	private function createConference()

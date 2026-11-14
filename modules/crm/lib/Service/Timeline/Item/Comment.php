@@ -231,6 +231,7 @@ class Comment extends Configurable
 			])['COMMENT'] ?? '';
 			$content = htmlspecialcharsbx($content);
 			$block->setScopeWeb();
+			$block->setCopied(true);
 		}
 
 		return $block->setText($content);

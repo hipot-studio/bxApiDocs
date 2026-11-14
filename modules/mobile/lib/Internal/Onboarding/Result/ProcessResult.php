@@ -30,15 +30,33 @@ class ProcessResult extends Result
 		return $this->data['sent'] ?? 0;
 	}
 
-	public function setSkipped(int $skipped): self
+	/**
+	 * Users the pass sent nothing to. Derived rather than counted: a third number kept by
+	 * hand is a number that can disagree with the two it is made of.
+	 */
+	public function getSkipped(): int
 	{
-		$this->data['skipped'] = $skipped;
+		return $this->getProcessed() - $this->getSent();
+	}
+
+	/**
+	 * Counts one user the pass sent nothing to, under the code of the outcome
+	 * (OnboardingService::CODE_*): `skipped` says how many, these say why.
+	 */
+	public function addOutcome(string $code): self
+	{
+		$outcomes = $this->getOutcomes();
+		$outcomes[$code] = ($outcomes[$code] ?? 0) + 1;
+		$this->data['outcomes'] = $outcomes;
 
 		return $this;
 	}
 
-	public function getSkipped(): int
+	/**
+	 * @return array<string, int>
+	 */
+	public function getOutcomes(): array
 	{
-		return $this->data['skipped'] ?? 0;
+		return $this->data['outcomes'] ?? [];
 	}
 }

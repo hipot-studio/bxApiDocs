@@ -27,6 +27,27 @@ Loc::loadMessages(__FILE__);
  */
 class RequisiteTable extends Entity\DataManager
 {
+	protected static function checkUfFields($object, $ufdata, $result)
+	{
+		if (!($object->authContext instanceof RequisiteLegacyUserFieldValidationContext))
+		{
+			parent::checkUfFields($object, $ufdata, $result);
+			return;
+		}
+
+		$primary = false;
+		if ($object->sysGetState() !== Main\ORM\Objectify\State::RAW)
+		{
+			$primaryValues = $object->primary;
+			$primary = end($primaryValues);
+		}
+		$error = $object->authContext->validateUserFields(static::getUfId(), $primary, $ufdata);
+		if ($error !== null)
+		{
+			$result->addError(new Entity\EntityError($error));
+		}
+	}
+
 	public static function getUfId()
 	{
 		return 'CRM_REQUISITE';

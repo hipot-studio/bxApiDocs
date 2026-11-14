@@ -10,6 +10,13 @@ class NotifySchema
 	{
 		return [
 			"disk" => [
+				"PRODUCT_SOURCE" => [
+					"ID" => "disk",
+					"NAME" => Loc::getMessage('DISK_NOTIFY_SCHEMA_PRODUCT_SOURCE_NAME'),
+					"DESCRIPTION" => Loc::getMessage('DISK_NOTIFY_SCHEMA_PRODUCT_SOURCE_DESCRIPTION'),
+					"ICON" => ["TYPE" => "named", "VALUE" => "disk_shared"],
+					"SORT" => 400,
+				],
 				"NOTIFY" => [
 					"files" => [
 						"NAME" => Loc::getMessage('DISK_NOTIFY_SCHEMA_FILES_CATEGORY'),

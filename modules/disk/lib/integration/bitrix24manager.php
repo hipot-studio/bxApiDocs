@@ -100,6 +100,20 @@ class Bitrix24Manager
 		return true;
 	}
 
+	/**
+	 * Tells if the tariff map of the cloud knows the feature at all. Without the module there is
+	 * no map to know it by.
+	 */
+	public static function isFeatureChargeable(string $feature): bool
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			return Feature::isFeatureChargeable($feature);
+		}
+
+		return false;
+	}
+
 	public static function isFeatureTrialable($feature): bool
 	{
 		if (Loader::includeModule('bitrix24'))
@@ -181,6 +195,7 @@ class Bitrix24Manager
 			'disk_file_rights' => 'limit_office_disk_files_access_rights',
 			'disk_common_storage' => 'limit_company_common_disk',
 			'disk_import_cloud_files' => 'limit_office_cloud_storage',
+			'disk_restrictions' => 'limit_disk_restrictions',
 		];
 	}
 }

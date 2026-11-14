@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Public\Command\CheckIn;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Application;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Error;
 use Bitrix\Main\LoaderException;
@@ -41,6 +42,13 @@ class Add extends AbstractCommand
 	public const ERROR_ATTACHMENT_COUNT = 'STAFFTRACK_CHECK_IN_ATTACHMENT_COUNT_EXCEEDED';
 
 	private array $addDelta = [];
+
+	/**
+	 * The local day the point was written into, as the daily stats named it. A manual point and an ordinary
+	 * automatic one always name a day still open to new points, so this path drops no cache; the field is
+	 * kept for the one point the acceptance lets past its window, whichever path it arrives by.
+	 */
+	private ?Date $writtenLocalDate = null;
 
 	protected PointAcceptanceService $acceptanceService;
 
@@ -107,6 +115,15 @@ class Add extends AbstractCommand
 
 		try
 		{
+			// Once before the write and once after it, for the same reason as in the batch path: the drop
+			// after the commit is lost if the process is stopped between the two. Before the decision and
+			// not after it, because a point resent after such a stop is refused by age - it now stands at
+			// the tail of the segment it once closed - and this path answers a refusal without writing.
+			$this->invalidateMapOfClosedDates(
+				$this->checkInDto->userId,
+				$this->localDatesOfPointsReachingAClosedDay([$this->checkInDto]),
+			);
+
 			// The single point goes through the same acceptance decision as a batch except for the
 			// deduplication, which the single path has no retry to collapse. The decision is taken before
 			// any side effect of the write path: a point the server will not store must not upload files
@@ -155,6 +172,10 @@ class Add extends AbstractCommand
 		}
 
 		$this->applyOfficePresence();
+
+		// Before the push: a client told of the point asks the map for its day straight away, and a map
+		// answered from an entry this write has not dropped yet is the very staleness this closes.
+		$this->invalidateMapOfClosedDates($this->checkInDto->userId, [$this->writtenLocalDate]);
 
 		MessageService::saveLastSelectedDialogId($this->checkInDto->userId, $this->checkInDto->dialogIds ?? []);
 		if (
@@ -299,6 +320,11 @@ class Add extends AbstractCommand
 			$this->checkInDto->id = (int)$saveResult->getId();
 			$addState = $this->applyDailyStats($statsUpdater);
 			$connection->commitTransaction();
+
+			if ($addState['localDate'] instanceof Date)
+			{
+				$this->writtenLocalDate = $addState['localDate'];
+			}
 
 			if ($this->checkInDto->entityType === CheckInType::MANUAL->value)
 			{

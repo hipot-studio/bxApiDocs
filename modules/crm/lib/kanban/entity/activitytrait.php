@@ -158,8 +158,17 @@ trait ActivityTrait
 		{
 			if ($hasOnlyIncomingActivities)
 			{
+				$ceilDeadlineTime = true;
+				$userDeadline = (clone $deadline)->toUserTime();
+				if ($userDeadline->format('H') === '23')
+				{
+					$deadline = \CCrmDateTimeHelper::getServerTime($userDeadline->setTime(23, 59));
+					$ceilDeadlineTime = false;
+				}
+
 				$result = (new Entity\ToDo(new ItemIdentifier($ownerTypeId, $ownerId), new ToDo\ToDo()))
-					->createWithDefaultSubjectAndDescription($deadline);
+					->createWithDefaultSubjectAndDescription($deadline, $ceilDeadlineTime)
+				;
 			}
 			else
 			{

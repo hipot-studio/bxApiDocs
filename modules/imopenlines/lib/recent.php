@@ -24,6 +24,14 @@ use Bitrix\Main\DB\SqlExpression;
 
 class Recent
 {
+	/**
+	 * Default cap for getNonAnsweredLines() when a caller does not pass an explicit limit.
+	 * 100 is the counter overflow value ("100 as in chat"): the non-answered lines badge must not
+	 * exceed it. The only consumer (module im) calls this method without a limit, so this default
+	 * defines the final badge value.
+	 */
+	private const NON_ANSWERED_LINES_LIMIT = 100;
+
 	public static function setRecent(
 		$userId,
 		$chatId,
@@ -211,8 +219,9 @@ class Recent
 
 	/**
 	 * "Valid non-answered line" predicate for a b_imopenlines_recent row.
-	 * Shared by the counter (getNonAnsweredLines) and the NEW group of the list
-	 * (V2\Recent\Recent::getQuery) so they stay in sync.
+	 * Shared by the counter (getNonAnsweredLines), the NEW group of the list
+	 * (V2\Recent\Recent::getQuery) and the recent search
+	 * (Integrations\UI\EntitySelector\ChatProvider) so they stay in sync.
 	 *
 	 * A row is valid when:
 	 *  - the session exists and is not answered yet (SESSION.STATUS < STATUS_ANSWER) —
@@ -220,21 +229,24 @@ class Recent
 	 *  - the line is currently assigned/offered to an operator, i.e. not an "unassigned backlog"
 	 *    (SESSION_CHECK.UNDISTRIBUTED != 'Y'); a missing session_check row is treated as
 	 *    "distributed" so a legitimate new chat is not lost.
+	 *
+	 * $pathPrefix prepends a reference path when the predicate is applied to a query
+	 * that joins b_imopenlines_recent under an alias (e.g. 'RECENT_OL.').
 	 */
-	public static function getActiveLinesFilter(): \Bitrix\Main\ORM\Query\Filter\ConditionTree
+	public static function getActiveLinesFilter(string $pathPrefix = ''): \Bitrix\Main\ORM\Query\Filter\ConditionTree
 	{
 		return Query::filter()
-			->where('SESSION.STATUS', '<', Session::STATUS_ANSWER)
+			->where($pathPrefix . 'SESSION.STATUS', '<', Session::STATUS_ANSWER)
 			->where(
 				Query::filter()
 					->logic('or')
-					->whereNull('SESSION_CHECK.UNDISTRIBUTED')
-					->where('SESSION_CHECK.UNDISTRIBUTED', false)
+					->whereNull($pathPrefix . 'SESSION_CHECK.UNDISTRIBUTED')
+					->where($pathPrefix . 'SESSION_CHECK.UNDISTRIBUTED', false)
 			)
 		;
 	}
 
-	public static function getNonAnsweredLines(?int $userId = null): array
+	public static function getNonAnsweredLines(?int $userId = null, ?int $limit = null): array
 	{
 		$result = [];
 
@@ -244,10 +256,14 @@ class Recent
 			return $result;
 		}
 
+		$limit = ($limit !== null && $limit > 0) ? $limit : self::NON_ANSWERED_LINES_LIMIT;
+
 		$recentRows = RecentTable::query()
 			->setSelect(['CHAT_ID'])
 			->where('USER_ID', $userId)
 			->where(self::getActiveLinesFilter())
+			->setOrder(['CHAT_ID' => 'DESC'])
+			->setLimit($limit)
 			->fetchAll()
 		;
 

@@ -10,6 +10,7 @@ use Bitrix\Anonymizer\Public\Providers\FileProviderInterface;
 use Bitrix\Anonymizer\Public\Providers\Provider;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
 use Bitrix\Disk\SystemUser;
 use Bitrix\Disk\TypeFile;
 use Bitrix\DocumentGenerator;
@@ -250,12 +251,16 @@ final class DocxProvider extends Provider implements FileProviderInterface
 			? (int)$USER->GetID()
 			: SystemUser::SYSTEM_USER_ID;
 
-		$version = $this->diskFile->uploadVersion([
-			'name' => $this->diskFile->getName(),
-			'content' => $this->document->getContent(),
-			'type' => TypeFile::normalizeMimeType('', $this->diskFile->getName()),
-			'MODULE_ID' => Driver::INTERNAL_MODULE_ID,
-		], $updatedBy);
+		$version = $this->diskFile->uploadVersion(
+			[
+				'name' => $this->diskFile->getName(),
+				'content' => $this->document->getContent(),
+				'type' => TypeFile::normalizeMimeType('', $this->diskFile->getName()),
+				'MODULE_ID' => Driver::INTERNAL_MODULE_ID,
+			],
+			$updatedBy,
+			[WriteOperationContext::OPTION_KEY => WriteOperationContext::ProductGenerated],
+		);
 
 		if ($version === null)
 		{

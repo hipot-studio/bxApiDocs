@@ -19,7 +19,7 @@ use Bitrix\Main\Result;
  */
 final class AutocreationEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.conversion.autocreation.enabled';
+	public const ID = 'crm.conversion.autocreation.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly ConversionSettings $conversionSettings;
@@ -29,18 +29,20 @@ final class AutocreationEnabledSetting extends AbstractSetting
 		$this->conversionSettings = $conversionSettings ?? ConversionSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'conversion_enable_autocreate',
 		);
 	}
 

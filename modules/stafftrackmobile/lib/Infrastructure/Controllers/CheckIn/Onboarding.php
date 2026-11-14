@@ -18,6 +18,7 @@ final class Onboarding extends Base
 	private const STAGE_ONBOARDING = 'onboarding';
 	private const STAGE_AHA = 'aha';
 	private const STAGE_GEO_AHA = 'geo_aha';
+	private const STAGE_PRESENCE_AHA = 'presence_aha';
 
 	private const GEO_AHA_STEP_STATES = [
 		0 => CheckInOnboardingProvider::GEO_AHA_STATE_PENDING,
@@ -28,6 +29,7 @@ final class Onboarding extends Base
 		self::STAGE_ONBOARDING,
 		self::STAGE_AHA,
 		self::STAGE_GEO_AHA,
+		self::STAGE_PRESENCE_AHA,
 	];
 
 	/**
@@ -59,9 +61,20 @@ final class Onboarding extends Base
 	 * `isPlanningServiceEnabled` and `isWorkReportsEnabled` are always false: the AI reports slides are hidden
 	 * regardless of the planning service.
 	 * `canEnableFeatures` is false when there is nothing left to enable, which turns the tour into preview mode.
+	 * `shouldShowPresenceAha` belongs to the popup about the presence list, not to the tour: its audience is the
+	 * one of the list, narrower than `type` (a head of an empty department gets no list).
 	 *
 	 * @ajaxAction stafftrackmobile.v2.CheckIn.Onboarding.getConfig
-	 * @return array{type: string, isPlanningServiceEnabled: bool, isWorkReportsEnabled: bool, canEnableFeatures: bool, employeeAhaResumeIndex: int, employeeGeoAhaState: string|null, isGeoFeaturesAvailableByRegion: bool}
+	 * @return array{
+	 *     type: string,
+	 *     isPlanningServiceEnabled: bool,
+	 *     isWorkReportsEnabled: bool,
+	 *     canEnableFeatures: bool,
+	 *     employeeAhaResumeIndex: int,
+	 *     employeeGeoAhaState: string|null,
+	 *     isGeoFeaturesAvailableByRegion: bool,
+	 *     shouldShowPresenceAha: bool,
+	 * }
 	 */
 	#[CloseSession]
 	#[IntranetOnly]
@@ -83,6 +96,7 @@ final class Onboarding extends Base
 			'employeeAhaResumeIndex' => $onboardingProvider->getEmployeeAhaResumeIndex($userId),
 			'employeeGeoAhaState' => $onboardingProvider->getEmployeeGeoAhaState($userId),
 			'isGeoFeaturesAvailableByRegion' => Feature::isGeoFeaturesAvailableByRegion(),
+			'shouldShowPresenceAha' => $onboardingProvider->shouldShowPresenceAha($userId),
 		];
 	}
 
@@ -165,6 +179,10 @@ final class Onboarding extends Base
 			}
 
 			$provider->setEmployeeGeoAhaState($userId, $state);
+		}
+		elseif ($stage === self::STAGE_PRESENCE_AHA)
+		{
+			$provider->markPresenceAhaShown($userId);
 		}
 		else
 		{

@@ -36,7 +36,16 @@ if ($request->get('FILE_ID') && $request->get('SIGN'))
 	if ($diskFileId === $sign)
 	{
 		$file = \Bitrix\Disk\File::getById($diskFileId);
-		if ($file !== null)
+		if (
+			$file !== null
+			&& \Bitrix\Im\V2\Link\File\FileService::isBehindChatHistoryBorder($diskFileId, (int)$file->getParentId())
+		)
+		{
+			// The signature outlives the message: a file of a message cleared for everyone is gone for
+			// the holder of the link as well, ahead of the scheduled removal of the file itself.
+			$result->addError(new Error('File is no longer available'));
+		}
+		elseif ($file !== null)
 		{
 			$fileId = $file->getFileId();
 			\CFile::ViewByUser($fileId);

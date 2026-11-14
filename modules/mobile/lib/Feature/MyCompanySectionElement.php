@@ -22,7 +22,7 @@ trait MyCompanySectionElement
 	}
 
 	/**
-	 * The own option of the element, read through FeatureFlag::isOptionOn().
+	 * The own option of the element: only 'Y' is on; the element picks the default for no option at all.
 	 */
 	abstract protected function isOptionEnabled(): bool;
 }

@@ -131,9 +131,6 @@ class AppTable extends DataManager
 			(new StringField('APP_NAME'))
 				->configureSize(1000),
 
-			(new StringField('ACCESS'))
-				->configureSize(2000),
-
 			(new StringField('APPLICATION_TOKEN'))
 				->configureSize(50),
 

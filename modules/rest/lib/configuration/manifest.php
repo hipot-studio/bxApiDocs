@@ -158,13 +158,13 @@ class Manifest
 	public static function isEntityAvailable(string $entityCode, array $option, $uses = []): bool
 	{
 		$manifest = [];
-		if (!empty($option['IMPORT_MANIFEST']['USES']))
-		{
-			$manifest = $option['IMPORT_MANIFEST'];
-		}
-		elseif (!empty($option['MANIFEST']['USES']))
+		if (!empty($option['MANIFEST']['USES']))
 		{
 			$manifest = $option['MANIFEST'];
+		}
+		elseif (!empty($option['IMPORT_MANIFEST']['USES']))
+		{
+			$manifest = $option['IMPORT_MANIFEST'];
 		}
 
 		if (empty($manifest['USES']))

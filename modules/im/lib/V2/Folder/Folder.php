@@ -31,6 +31,18 @@ interface Folder extends AccessCheckable, RestEntity, ActiveRecord
 
 	public function displaysNestedInRoot(): bool;
 
+	/**
+	 * Whether this is the primary root folder of the portal - the one root folder that carries the
+	 * chat's overall pinned flag. Exactly one folder answers `true`, and which one it is depends on
+	 * the portal option behind {@see \Bitrix\Im\V2\Application\Features::isChatFolderAllAvailable}.
+	 *
+	 * Deliberately takes no user: the primary root folder is one per portal, while availability is
+	 * per user. Whether the folder is available to somebody stays with `isAvailable()`, and whether
+	 * it is shown stays with `isVisible()`; the per-user answer is resolved by
+	 * {@see \Bitrix\Im\V2\Folder\FolderProvider::getPrimaryRootForUser}.
+	 */
+	public function isPrimaryRoot(): bool;
+
 	public function getRecentParentScope(): ?int;
 
 	/**

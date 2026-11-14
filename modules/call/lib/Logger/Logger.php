@@ -97,7 +97,7 @@ class Logger extends FileLogger
 	/**
 	 * @inheritDoc
 	 */
-	public function log($level, string|\Stringable $message, array $context = []): void
+	public function log($level, $message, array $context = []): void
 	{
 		$context['sessionId'] = self::getSessionId();
 

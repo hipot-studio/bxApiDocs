@@ -212,6 +212,11 @@ class Recent
 	 * response is sent. Used on the startCall / decline hot path so clients
 	 * are not blocked by ~5 SQL + 2 JWT + file-cache writes per participant.
 	 *
+	 * Stays on the queue of the core and is not handed to
+	 * {@see \Bitrix\Call\Background\JobDispatcher}: a rebuild of a snapshot delivers nothing to
+	 * anybody, and every caller of this method is an action of an HTTP controller
+	 * {@see \Bitrix\Call\Controller\Call}, where deferring it is the whole point.
+	 *
 	 * @param int[] $userIds
 	 */
 	public static function scheduleUpdateUsersActiveCallsCache(array $userIds): void
@@ -241,6 +246,14 @@ class Recent
 	 *
 	 * Falls back to unconditional scheduling on file-cache deployments (no
 	 * shared KV available): correctness over storm-cost.
+	 *
+	 * Both jobs below stay on the queue of the core and are not handed to
+	 * {@see \Bitrix\Call\Background\JobDispatcher}: a rebuild of a snapshot delivers nothing to
+	 * anybody, and the one caller reachable from an agent - the finish handler
+	 * {@see \Bitrix\Call\EventHandler::onCallFinished()} - is already covered there, because the
+	 * pass of the cleanup agent rebuilds the cache of every call it finished itself
+	 * {@see self::finishOldCallsAgent()}. Coalescing by the KV stamp is the other reason: inline
+	 * the stamp would be read back in the same breath it was written and would coalesce nothing.
 	 */
 	public static function scheduleUpdateCallCache(int $callId): void
 	{
@@ -400,6 +413,13 @@ class Recent
 	 *
 	 * Falls back to an unconditional background job on file-cache deployments (no shared
 	 * KV): correctness over storm-cost.
+	 *
+	 * Both jobs below stay on the queue of the core and are not handed to
+	 * {@see \Bitrix\Call\Background\JobDispatcher}: the teardown delivers nothing to anybody, the
+	 * only caller is the repeat-finish action of an HTTP controller
+	 * {@see \Bitrix\Call\Controller\Call}, and the teardown a pass of an agent needs is the
+	 * inline one of {@see \Bitrix\Call\EventHandler::onCallFinished()}, not this recovery. Inline
+	 * the KV stamp would also coalesce nothing, being read back in the same breath it was written.
 	 */
 	public static function scheduleTerminateAllCallsInChat(int $chatId, ?int $excludeCallId = null): void
 	{

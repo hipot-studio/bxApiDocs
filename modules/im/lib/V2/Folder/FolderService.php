@@ -19,6 +19,7 @@ use Bitrix\Im\V2\Folder\Pull\FolderDelete;
 use Bitrix\Im\V2\Folder\Pull\FolderUpdate;
 use Bitrix\Im\V2\Folder\Update\UpdateFields;
 use Bitrix\Im\V2\Folder\Update\UpdateResult;
+use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityResolver;
 use Bitrix\Main\Validation\ValidationService;
 
 class FolderService
@@ -29,6 +30,7 @@ class FolderService
 		private readonly FolderCache $folderCache,
 		private readonly FolderProvider $folderProvider,
 		private readonly ValidationService $validationService,
+		private readonly FolderVisibilityResolver $visibilityResolver,
 	)
 	{
 	}
@@ -100,6 +102,7 @@ class FolderService
 		}
 
 		$this->folderCache->clearByUser($userId);
+		$this->visibilityResolver->attachContext([$createdFolder], $userId);
 
 		if (!empty($fields->chatIds))
 		{

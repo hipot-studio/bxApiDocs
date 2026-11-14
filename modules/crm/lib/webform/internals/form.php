@@ -42,6 +42,21 @@ class FormTable extends ORM\Data\DataManager
 {
 	const TYPE_DEFAULT = 0;
 	const TYPE_SMART_DOCUMENT = 1;
+	private static array $deferredExternalDeletes = [];
+
+	public static function beginDeferredExternalDelete(int $formId): void
+	{
+		self::$deferredExternalDeletes[$formId] = (self::$deferredExternalDeletes[$formId] ?? 0) + 1;
+	}
+
+	public static function endDeferredExternalDelete(int $formId): void
+	{
+		if (!isset(self::$deferredExternalDeletes[$formId])) { return; }
+		if (--self::$deferredExternalDeletes[$formId] === 0)
+		{
+			unset(self::$deferredExternalDeletes[$formId]);
+		}
+	}
 
 	public static function getTableName()
 	{
@@ -379,14 +394,17 @@ class FormTable extends ORM\Data\DataManager
 		$formId = $data['primary']['ID'];
 
 		// delete Ads links
-		AdsForm::unlinkForm($formId);
-		$landingRows = LandingTable::getList([
-			'select' => ['ID'],
-			'filter' => ['=FORM_ID' => $formId]
-		]);
-		foreach ($landingRows as $ladingRow)
+		if (!isset(self::$deferredExternalDeletes[(int)$formId]))
 		{
-			LandingTable::delete($ladingRow['ID']);
+			AdsForm::unlinkForm($formId);
+			$landingRows = LandingTable::getList([
+				'select' => ['ID'],
+				'filter' => ['=FORM_ID' => $formId]
+			]);
+			foreach ($landingRows as $ladingRow)
+			{
+				LandingTable::delete($ladingRow['ID']);
+			}
 		}
 
 		// delete fields
@@ -435,6 +453,9 @@ class FormTable extends ORM\Data\DataManager
 		{
 			ResultTable::delete($resultRow['ID']);
 		}
+
+		// delete position of the responsible queue
+		WebForm\ResponsibleQueue::remove($formId);
 
 		return $result;
 	}

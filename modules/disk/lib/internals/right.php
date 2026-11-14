@@ -2,7 +2,9 @@
 namespace Bitrix\Disk\Internals;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Query\Query;
 
 /**
  * Class RightTable
@@ -156,5 +158,31 @@ final class RightTable extends DataManager
 	public static function deleteBatch(array $filter)
 	{
 		parent::deleteBatch($filter);
+	}
+
+	/**
+	 * Deletes the rows the filter names by a single statement.
+	 *
+	 * Unlike {@see DataManager::deleteByFilter()}, which deletes the rows one by one, the statement either
+	 * takes every row away or none of them, so a failure never leaves a part of the rows deleted.
+	 *
+	 * @param array $filter Filter in the format of getList.
+	 * @internal
+	 * @return void
+	 * @throws ArgumentException
+	 */
+	public static function deleteByConditions(array $filter): void
+	{
+		$entity = self::getEntity();
+		$connection = $entity->getConnection();
+		$where = $filter ? Query::buildFilterSql($entity, $filter) : '';
+		if ($where === '')
+		{
+			throw new ArgumentException('Deleting rights by an empty filter is not allowed.', 'filter');
+		}
+
+		$table = $connection->getSqlHelper()->quote(self::getTableName());
+		$connection->queryExecute("DELETE FROM {$table} WHERE {$where}");
+		self::cleanCache();
 	}
 }

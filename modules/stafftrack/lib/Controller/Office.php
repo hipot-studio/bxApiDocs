@@ -10,13 +10,17 @@ use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\UI\PageNavigation;
 use Bitrix\StaffTrack\Controller\Trait\IntranetUserTrait;
+use Bitrix\StaffTrack\Dictionary\OfficeEmployeeErrorCode;
 use Bitrix\StaffTrack\Dictionary\OfficeErrorCode;
 use Bitrix\StaffTrack\Infrastructure\ActionFilters\OfficeUnavailableFilter;
 use Bitrix\StaffTrack\Internal\Service\Office\PhotoService;
+use Bitrix\StaffTrack\Internal\Service\Office\StaffPlanService;
 use Bitrix\StaffTrack\Public\Command;
 use Bitrix\StaffTrack\Public\Command\Office\OfficeDto;
 use Bitrix\StaffTrack\Public\Provider\OfficeProvider;
+use Bitrix\StaffTrack\Public\Provider\OfficeStaffPreviewProvider;
 
 /**
  * Every action that changes state is restricted to POST by an attribute rather than by an override of
@@ -35,6 +39,15 @@ class Office extends Controller
 	private const LEGACY_OFFICE_NOT_FOUND = 'OFFICE_NOT_FOUND';
 
 	private const EXTERNAL_USER = 'STAFFTRACK_OFFICE_EXTERNAL_USER';
+
+	/**
+	 * Every spelling a caller confirms the overlap of the zones in, lowercased. The payload of an action
+	 * travels as text and the engine casts no scalar parameter, so a `bool` would read the text `false`
+	 * of a client as consent. Consent is read off this list instead, and a value it has never heard of
+	 * is not consent: the check of the zones stays on unless the caller plainly took the overlap.
+	 */
+	private const GEO_OVERLAP_CONFIRMATIONS = ['y', '1', 'true'];
+	private const ADDRESS_EDITED_CONFIRMATIONS = ['y', '1', 'true'];
 
 	private int $userId;
 	private OfficeProvider $officeProvider;
@@ -64,7 +77,7 @@ class Office extends Controller
 		parent::init();
 
 		$this->userId = (int)CurrentUser::get()->getId();
-		$this->officeProvider = new OfficeProvider();
+		$this->officeProvider = $this->getOfficeProvider();
 		$this->photoService = new PhotoService();
 	}
 
@@ -86,7 +99,22 @@ class Office extends Controller
 					new CloseSession(),
 				],
 			],
+			'getPermissions' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
+			'searchEmployees' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
 		];
+	}
+
+	protected function getOfficeProvider(): OfficeProvider
+	{
+		return new OfficeProvider();
 	}
 
 	public function getAction(int $officeId): ?array
@@ -112,6 +140,18 @@ class Office extends Controller
 		];
 	}
 
+	public function getPermissionsAction(): ?array
+	{
+		if (!$this->isCallerIntranetUser())
+		{
+			return null;
+		}
+
+		return [
+			'canCreate' => $this->officeProvider->canCreateOffice($this->userId),
+		];
+	}
+
 	/**
 	 * The staff of an office page by page, apart from the card of it: the card is released without a
 	 * cursor, so what it carries is the first page to draw and this action is what a list is continued
@@ -123,8 +163,10 @@ class Office extends Controller
 	 * rows behind it, and judging by its length would call it the last one.
 	 *
 	 * @param int $afterUserId The cursor of the previous page; zero starts the list.
+	 * @param string $query Optional: narrows the staff by name. A query too short or too long once
+	 *                      normalized answers with an empty page standing at the cursor.
 	 */
-	public function listEmployeesAction(int $officeId, int $afterUserId = 0): ?array
+	public function listEmployeesAction(int $officeId, int $afterUserId = 0, string $query = ''): ?array
 	{
 		if (!$this->isCallerIntranetUser())
 		{
@@ -138,7 +180,7 @@ class Office extends Controller
 			return null;
 		}
 
-		$result = $this->officeProvider->getEmployeesPage($officeId, $this->userId, $afterUserId);
+		$result = $this->officeProvider->getEmployeesPage($officeId, $this->userId, $afterUserId, $query);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -155,18 +197,68 @@ class Office extends Controller
 		];
 	}
 
-	/**
-	 * @param string[] $photoTokens Optional: photos may be added to a saved card through addPhoto.
-	 */
-	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
-	public function addAction(OfficeDto $officeDto, array $photoTokens = []): ?array
+	public function searchEmployeesAction(string $query): ?array
 	{
 		if (!$this->isCallerIntranetUser())
 		{
 			return null;
 		}
 
-		$result = (new Command\Office\Add($this->userId))->execute($officeDto, $photoTokens);
+		return $this->officeProvider->searchEmployees($query, $this->userId)->toArray();
+	}
+
+	/**
+	 * The office is created whatever became of its photos, so what went wrong with them rides in the
+	 * successful answer beside the card: the surface has no channel for a warning, and a refusal would
+	 * send the client into a second attempt leaving two offices behind.
+	 *
+	 * The office may be created with its staff, and the session is let go for the same reason as in
+	 * addEmployeesAction(): expanding a department is heavy. The photos hung after the card only read the
+	 * session - the tokens of the uploader are signed with its identifier - and never write it.
+	 *
+	 * @param string[] $photoTokens Optional: photos may be added to a saved card through addPhoto.
+	 * @param string $confirmGeoOverlap The overlap of the zones was shown to the caller and taken by it,
+	 *                                  so it is not asked about a second time.
+	 * @param array $entities Optional codes of the entity selector: without them the office has no staff.
+	 * @param int[] $excludedUserIds Movers the caller took off the staff: they stay in their offices.
+	 * @param string $movesFingerprint The fingerprint of the moves last shown to the caller.
+	 */
+	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	#[CloseSessionAttribute]
+	public function addAction(
+		OfficeDto $officeDto,
+		array $photoTokens = [],
+		string $confirmGeoOverlap = 'N',
+		array $entities = [],
+		array $excludedUserIds = [],
+		string $movesFingerprint = '',
+		string $addressEdited = 'N',
+	): ?array
+	{
+		if (!$this->isCallerIntranetUser())
+		{
+			return null;
+		}
+
+		$staff = null;
+		if ($entities !== [])
+		{
+			$excludedUserIds = $this->readExcludedUserIds($excludedUserIds);
+			if ($excludedUserIds === null)
+			{
+				return null;
+			}
+
+			$staff = new Command\Office\OfficeStaffRequest($entities, $excludedUserIds, $movesFingerprint);
+		}
+
+		$result = (new Command\Office\Add($this->userId))->execute(
+			$officeDto,
+			$photoTokens,
+			$this->isGeoOverlapConfirmed($confirmGeoOverlap),
+			$staff,
+			$this->isAddressEdited($addressEdited),
+		);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -174,25 +266,96 @@ class Office extends Controller
 			return null;
 		}
 
-		return $this->buildOfficeResponse(
-			(int)$result->getData()['id'],
+		// the card is written and committed by the time the answer is assembled, so no shape of the data
+		// may cost the caller its answer: a missing identifier is refused as a card that is not there,
+		// and photos nobody complained about are an empty list
+		$data = $result->getData();
+
+		$response = $this->buildOfficeResponse(
+			(int)($data['id'] ?? 0),
 			Command\Office\AbstractCommand::ERROR_NOT_FOUND,
 		);
+		if ($response === null)
+		{
+			return null;
+		}
+
+		return [
+			'office' => $response['office'],
+			'assigned' => (int)($data['assigned'] ?? 0),
+			'photoErrors' => $this->describeErrors($data['photoErrors'] ?? []),
+		];
 	}
 
 	/**
+	 * The session is let go as in addAction(): removing photos does not write it either.
+	 *
+	 * @param string $version The version of the card the caller read and edited.
+	 * @param string $saveAttemptKey The key every request of one edit carries, checked by the command:
+	 *                               a repeat of an edit already saved answers with `alreadySaved`.
 	 * @param string[] $photoTokens Optional, and never a rewrite of the set: what is already hanging on
 	 *                              the office stays there.
+	 * @param array $removedPhotoIds Photos of the office to remove, by the identifiers the card carries.
+	 * @param string $confirmGeoOverlap Read as {@see self::addAction()} reads it.
+	 * @param array $entities Optional codes of the entity selector: the people and departments to add.
+	 * @param int[] $removedUserIds People to take off the office, stronger than a department adding them.
+	 * @param int[] $excludedUserIds Movers the caller took off the added: they stay in their offices.
+	 * @param string $movesFingerprint The fingerprint of the moves last shown to the caller.
 	 */
 	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
-	public function updateAction(OfficeDto $officeDto, array $photoTokens = []): ?array
+	#[CloseSessionAttribute]
+	public function updateAction(
+		OfficeDto $officeDto,
+		string $version,
+		string $saveAttemptKey,
+		array $photoTokens = [],
+		array $removedPhotoIds = [],
+		string $confirmGeoOverlap = 'N',
+		array $entities = [],
+		array $removedUserIds = [],
+		array $excludedUserIds = [],
+		string $movesFingerprint = '',
+		string $addressEdited = 'N',
+	): ?array
 	{
 		if (!$this->isCallerIntranetUser())
 		{
 			return null;
 		}
 
-		$result = (new Command\Office\Update($this->userId))->execute($officeDto, $photoTokens);
+		$staff = null;
+		if ($entities !== [] || $removedUserIds !== [])
+		{
+			$excludedUserIds = $this->readExcludedUserIds($excludedUserIds);
+			if ($excludedUserIds === null)
+			{
+				return null;
+			}
+
+			$removedUserIds = $this->readRemovedUserIds($removedUserIds);
+			if ($removedUserIds === null)
+			{
+				return null;
+			}
+
+			$staff = new Command\Office\OfficeStaffChange(
+				$entities,
+				$removedUserIds,
+				$excludedUserIds,
+				$movesFingerprint,
+			);
+		}
+
+		$result = (new Command\Office\Update($this->userId))->execute(
+			$officeDto,
+			$version,
+			$saveAttemptKey,
+			$photoTokens,
+			$removedPhotoIds,
+			$this->isGeoOverlapConfirmed($confirmGeoOverlap),
+			$staff,
+			$this->isAddressEdited($addressEdited),
+		);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -200,21 +363,40 @@ class Office extends Controller
 			return null;
 		}
 
-		return $this->buildOfficeResponse(
-			(int)$result->getData()['id'],
+		$data = $result->getData();
+
+		$response = $this->buildOfficeResponse(
+			(int)($data['id'] ?? 0),
 			Command\Office\AbstractCommand::ERROR_NOT_FOUND,
 		);
+		if ($response === null)
+		{
+			return null;
+		}
+
+		return [
+			'office' => $response['office'],
+			'photoErrors' => $this->describeErrors($data['photoErrors'] ?? []),
+			'alreadySaved' => (bool)($data['alreadySaved'] ?? false),
+		];
 	}
 
+	/**
+	 * The answer tells where the staff of the removed office went and how many working employees moved
+	 * there; the files the command named for the storage stay on the server.
+	 *
+	 * @param int $targetOfficeId Optional: the office the whole staff moves to; zero leaves the staff
+	 *                            without an office.
+	 */
 	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
-	public function deleteAction(int $id): ?array
+	public function deleteAction(int $id, int $targetOfficeId = 0): ?array
 	{
 		if (!$this->isCallerIntranetUser())
 		{
 			return null;
 		}
 
-		$officeDto = OfficeDto::createFromArray(['id' => $id]);
+		$officeDto = OfficeDto::createFromArray(['id' => $id, 'targetOfficeId' => $targetOfficeId]);
 
 		$result = (new Command\Office\Delete($this->userId))->execute($officeDto);
 		if (!$result->isSuccess())
@@ -224,7 +406,41 @@ class Office extends Controller
 			return null;
 		}
 
-		return [];
+		$data = $result->getData();
+
+		return [
+			'officeId' => $data['id'],
+			'targetOfficeId' => $data['targetOfficeId'],
+			'movedCount' => $data['movedCount'],
+		];
+	}
+
+	/**
+	 * A request of the caller to see the staff of an office. The answer is the card of the office as the
+	 * caller reads it now, with the request pending on it.
+	 */
+	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	public function requestAccessAction(int $officeId): ?array
+	{
+		if (!$this->isCallerIntranetUser())
+		{
+			return null;
+		}
+
+		$officeDto = OfficeDto::createFromArray(['id' => $officeId]);
+
+		$result = (new Command\Office\RequestAccess($this->userId))->execute($officeDto);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $this->buildOfficeResponse(
+			(int)($result->getData()['officeId'] ?? 0),
+			Command\Office\AbstractCommand::ERROR_NOT_FOUND,
+		);
 	}
 
 	/**
@@ -255,6 +471,115 @@ class Office extends Controller
 		$officeDto = OfficeDto::createFromArray(['id' => $officeId]);
 
 		$result = (new Command\Office\AddEmployees($this->userId))->execute($officeDto, $entities);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
+	}
+
+	/**
+	 * The staff a new office would get, shown before it is created, or the change of the staff of an
+	 * office shown before its edit is saved: POST because the codes may be many, and the session is let
+	 * go for the same reason as in addEmployeesAction().
+	 *
+	 * @param array $entities codes of the entity selector: a person, a node of the structure, a department
+	 * @param int[] $excludedUserIds Movers the caller took off the staff: only echoed back.
+	 * @param int $officeId The edited office, and the plan is relative to it; zero for a new office.
+	 * @param int[] $removedUserIds People the edit takes off the office; not read for a new office.
+	 */
+	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	#[CloseSessionAttribute]
+	public function previewEmployeesAction(
+		array $entities = [],
+		array $excludedUserIds = [],
+		int $officeId = 0,
+		array $removedUserIds = [],
+	): ?array
+	{
+		if (!$this->isCallerIntranetUser())
+		{
+			return null;
+		}
+
+		$excludedUserIds = $this->readExcludedUserIds($excludedUserIds);
+		if ($excludedUserIds === null)
+		{
+			return null;
+		}
+
+		$removedUserIds = $this->readRemovedUserIds($removedUserIds);
+		if ($removedUserIds === null)
+		{
+			return null;
+		}
+
+		$result = (new OfficeStaffPreviewProvider())->preview(
+			$this->userId,
+			$entities,
+			$excludedUserIds,
+			$officeId,
+			$removedUserIds,
+		);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
+	}
+
+	/**
+	 * The movers of the same staff page by page, in the shape a mobile StatefulList reads: the header of
+	 * the preview, the rows and `hasMore` side by side. The page comes as `nav=page-N-size-M` in the query
+	 * string and is bound by the engine; the `extra` the list sends along is not a parameter here.
+	 *
+	 * @param array $entities codes of the entity selector, as in previewEmployeesAction()
+	 * @param int[] $excludedUserIds Movers the caller took off the staff: only echoed back.
+	 * @param int $officeId The edited office, as in previewEmployeesAction().
+	 * @param int[] $removedUserIds People the edit takes off the office, as in previewEmployeesAction().
+	 */
+	#[HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	#[CloseSessionAttribute]
+	public function previewMoversAction(
+		PageNavigation $pageNavigation,
+		array $entities = [],
+		array $excludedUserIds = [],
+		int $officeId = 0,
+		array $removedUserIds = [],
+	): ?array
+	{
+		if (!$this->isCallerIntranetUser())
+		{
+			return null;
+		}
+
+		$excludedUserIds = $this->readExcludedUserIds($excludedUserIds);
+		if ($excludedUserIds === null)
+		{
+			return null;
+		}
+
+		$removedUserIds = $this->readRemovedUserIds($removedUserIds);
+		if ($removedUserIds === null)
+		{
+			return null;
+		}
+
+		$result = (new OfficeStaffPreviewProvider())->previewMovers(
+			$this->userId,
+			$entities,
+			$excludedUserIds,
+			$pageNavigation->getOffset(),
+			$pageNavigation->getLimit(),
+			$officeId,
+			$removedUserIds,
+		);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -355,6 +680,100 @@ class Office extends Controller
 		$this->addError(new Error('Access to the office directory denied', self::EXTERNAL_USER));
 
 		return false;
+	}
+
+	/**
+	 * @return int[]|null the normalised identifiers, or null once the refusal is added
+	 */
+	private function readExcludedUserIds(array $excludedUserIds): ?array
+	{
+		return $this->readLimitedUserIds(
+			$excludedUserIds,
+			new Error(
+				'Too many excluded employees',
+				OfficeEmployeeErrorCode::TOO_MANY,
+				['limit' => StaffPlanService::STAFF_LIMIT],
+			),
+		);
+	}
+
+	/**
+	 * @return int[]|null the normalised identifiers, or null once the refusal is added
+	 */
+	private function readRemovedUserIds(array $removedUserIds): ?array
+	{
+		return $this->readLimitedUserIds(
+			$removedUserIds,
+			new Error(
+				'Too many employees to take off',
+				OfficeEmployeeErrorCode::TOO_MANY_USER_IDS,
+				['limit' => StaffPlanService::STAFF_LIMIT],
+			),
+		);
+	}
+
+	/**
+	 * The raw list is counted before it is normalised, so an oversized one is refused without a walk.
+	 *
+	 * @return int[]|null the normalised identifiers, or null once the refusal is added
+	 */
+	private function readLimitedUserIds(array $userIds, Error $refusal): ?array
+	{
+		if (count($userIds) > StaffPlanService::STAFF_LIMIT)
+		{
+			$this->addError($refusal);
+
+			return null;
+		}
+
+		return $this->normalizeUserIds($userIds);
+	}
+
+	/**
+	 * @return int[] positive identifiers, each once
+	 */
+	private function normalizeUserIds(array $userIds): array
+	{
+		$normalized = [];
+
+		foreach ($userIds as $userId)
+		{
+			$userId = is_scalar($userId) ? (int)$userId : 0;
+			if ($userId > 0)
+			{
+				$normalized[$userId] = $userId;
+			}
+		}
+
+		return array_values($normalized);
+	}
+
+	private function isGeoOverlapConfirmed(string $confirmGeoOverlap): bool
+	{
+		return in_array(mb_strtolower($confirmGeoOverlap), self::GEO_OVERLAP_CONFIRMATIONS, true);
+	}
+
+	private function isAddressEdited(string $addressEdited): bool
+	{
+		return in_array(mb_strtolower($addressEdited), self::ADDRESS_EDITED_CONFIRMATIONS, true);
+	}
+
+	/**
+	 * Errors travelling inside data rather than in the errors of the answer are laid out by hand: the
+	 * envelope of the engine serialises the ones it carries itself and nothing else.
+	 *
+	 * @param Error[] $errors
+	 * @return array<int, array{code: string, message: string}>
+	 */
+	private function describeErrors(array $errors): array
+	{
+		return array_map(
+			static fn (Error $error): array => [
+				'code' => (string)$error->getCode(),
+				'message' => $error->getMessage(),
+			],
+			$errors,
+		);
 	}
 
 	/**

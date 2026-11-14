@@ -85,6 +85,19 @@ class CleaningManager
 		return $items;
 	}
 
+	/**
+	 * Removes the links of a deleted contact to its owners: leads, deals, companies, quotes and smart processes.
+	 * A part of the cleaning of the contact; is safe to run once more.
+	 */
+	public static function unbindContactFromOwners(int $contactId): void
+	{
+		\Bitrix\Crm\Binding\LeadContactTable::unbindAllLeads($contactId);
+		\Bitrix\Crm\Binding\DealContactTable::unbindAllDeals($contactId);
+		\Bitrix\Crm\Binding\ContactCompanyTable::unbindAllCompanies($contactId);
+		\Bitrix\Crm\Binding\QuoteContactTable::unbindAllQuotes($contactId);
+		\Bitrix\Crm\Binding\EntityContactTable::deleteByContact($contactId);
+	}
+
 	public static function getCleaner(int $entityTypeId, int $entityId): Cleaner
 	{
 		$options = new Cleaner\Options($entityTypeId, $entityId);
@@ -147,11 +160,7 @@ class CleaningManager
 					new class extends Cleaner\Job {
 						public function run(Options $options): Result
 						{
-							\Bitrix\Crm\Binding\LeadContactTable::unbindAllLeads($options->getEntityId());
-							\Bitrix\Crm\Binding\DealContactTable::unbindAllDeals($options->getEntityId());
-							\Bitrix\Crm\Binding\ContactCompanyTable::unbindAllCompanies($options->getEntityId());
-							\Bitrix\Crm\Binding\QuoteContactTable::unbindAllQuotes($options->getEntityId());
-							\Bitrix\Crm\Binding\EntityContactTable::deleteByContact($options->getEntityId());
+							CleaningManager::unbindContactFromOwners($options->getEntityId());
 
 							return new Result();
 						}

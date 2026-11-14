@@ -351,6 +351,10 @@ class CCrmPerms
 				//todo temporary decision while Deal Factory does not support work with items.
 				$categoryID = CCrmDeal::GetCategoryID($entityID);
 			}
+			elseif ($factory->isItemCategoryIdPreloaded($entityID))
+			{
+				$categoryID = $factory->getItemCategoryId($entityID) ?? -1;
+			}
 			else
 			{
 				$items = $factory->getItems([

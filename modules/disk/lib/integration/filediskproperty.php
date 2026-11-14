@@ -133,7 +133,7 @@ class FileDiskProperty
 					'IS_EDITABLE' => (int) $canUpdate,
 					'ALLOW_EDIT' => (int) $canUpdate,
 					'CREATED_BY' => $userId,
-				), $errorCollection);
+				), $errorCollection, $fileModel->getUploadCleanupMarkerPresenceHint());
 				if(!$attachedModel || $errorCollection->hasErrors())
 				{
 					continue;
@@ -262,7 +262,7 @@ class FileDiskProperty
 			'IS_EDITABLE' => (int)$canUpdate,
 			'ALLOW_EDIT' => (int) $canUpdate,
 			'CREATED_BY' => $userId,
-		), $errorCollection);
+		), $errorCollection, $fileModel->getUploadCleanupMarkerPresenceHint());
 		if(!$attachedModel || $errorCollection->hasErrors())
 		{
 			return null;

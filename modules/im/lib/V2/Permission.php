@@ -89,6 +89,8 @@ class Permission
 			Action::ChangeRight->value => Chat::ROLE_NONE,
 			Action::ChangeOwner->value => Chat::ROLE_NONE,
 			Action::ChangeManagers->value => Chat::ROLE_NONE,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_MEMBER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::General->value] = [
@@ -134,6 +136,8 @@ class Permission
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_MANAGER,
 			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
@@ -143,6 +147,8 @@ class Permission
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_MANAGER,
 			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
@@ -203,6 +209,8 @@ class Permission
 			Action::CreateChildChat->value => Chat::ROLE_MEMBER,
 			Action::AttachToParent->value => Chat::ROLE_NONE,
 			Action::DetachFromParent->value => Chat::ROLE_NONE,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Tasks->value] = [
@@ -245,6 +253,8 @@ class Permission
 			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
 			Action::AttachToParent->value => Chat::ROLE_OWNER,
 			Action::DetachFromParent->value => Chat::ROLE_OWNER,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_MANAGER,
 			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
@@ -260,6 +270,8 @@ class Permission
 			//   then AttachToParent can be re-allowed here (mantis 250071).
 			Action::AttachToParent->value => Chat::ROLE_NONE,
 			Action::DetachFromParent->value => Chat::ROLE_OWNER,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_MANAGER,
 			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
@@ -319,6 +331,8 @@ class Permission
 			Action::UpdateSharingLink->value => Chat::ROLE_NONE,
 			Action::ManageGuestLink->value => Chat::ROLE_NONE,
 			Action::OpenSidebarMenu->value => Chat::ROLE_MEMBER,
+			Action::DeleteHistoryForSelf->value => Chat::ROLE_NONE,
+			Action::DeleteHistoryForAll->value => Chat::ROLE_NONE,
 		];
 	}
 

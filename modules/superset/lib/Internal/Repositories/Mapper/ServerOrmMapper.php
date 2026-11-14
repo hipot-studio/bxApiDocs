@@ -20,7 +20,9 @@ final class ServerOrmMapper
 			->setStartJobId($ormServer->getStartJobId())
 			->setAccountId((int)$ormServer->getAccountId())
 			->setVersion($ormServer->getVersion())
+			->setGeneration($ormServer->getGeneration())
 			->setIsPortalIdVerified($ormServer->getIsPortalIdVerified() === 'Y')
+			->setProtocolRequired($ormServer->getProtocolRequired() === 'Y')
 			->setPortalId($ormServer->getPortalId())
 			->setPortalUrl($ormServer->getPortalUrl())
 			->setJwtSecret($ormServer->getJwtSecret())
@@ -35,6 +37,15 @@ final class ServerOrmMapper
 
 		$ormServer->setAccountId($server->getAccountId());
 		$ormServer->setIsPortalIdVerified($server->isPortalIdVerified() ? 'Y' : 'N');
+		// The policy is never switched off for a stored server: a stale snapshot must not roll back the flag.
+		if ($server->isProtocolRequired())
+		{
+			$ormServer->setProtocolRequired('Y');
+		}
+		elseif (!$server->getId())
+		{
+			$ormServer->setProtocolRequired('N');
+		}
 
 		$this->applyNullableString($ormServer, 'Host', $server->getHost());
 		$this->applyNullableString($ormServer, 'AccessPassword', $server->getAccessPassword());
@@ -46,6 +57,7 @@ final class ServerOrmMapper
 		$this->applyNullableString($ormServer, 'PortalId', $server->getPortalId());
 		$this->applyNullableString($ormServer, 'PortalUrl', $server->getPortalUrl() !== '' ? $server->getPortalUrl() : null);
 		$this->applyNullableString($ormServer, 'JwtSecret', $server->getJwtSecret());
+		$this->applyNullableString($ormServer, 'Generation', $server->getGeneration());
 		$this->applyNullableInteger($ormServer, 'Version', $server->getVersion());
 
 		if ($server->getDateStartAttempt() === null)

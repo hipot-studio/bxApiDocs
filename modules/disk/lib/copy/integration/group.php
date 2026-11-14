@@ -4,6 +4,7 @@ namespace Bitrix\Disk\Copy\Integration;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Main\Config\Option;
 use Bitrix\Socialnetwork\Copy\Integration\Feature;
 
@@ -44,6 +45,8 @@ class Group implements Feature
 			$rootFolder = $storage->getRootObject();
 			$targetRootFolder = $targetStorage->getRootObject();
 
+			$this->setRootRights($groupId, $copiedGroupId, $rootFolder, $targetRootFolder);
+
 			$mapFolderIds = [];
 			$this->copyFolders(
 				$groupId,
@@ -61,6 +64,7 @@ class Group implements Feature
 					"groupId" => $groupId,
 					"copiedGroupId" => $copiedGroupId,
 					"executiveUserId" => $this->executiveUserId,
+					'auditOperationId' => AuditOperationContextStack::createOperationId(),
 					"mapFolderIds" => $mapFolderIds
 				];
 				Option::set(
@@ -87,26 +91,11 @@ class Group implements Feature
 		Folder $folder,
 		Folder $targetFolder,
 		array &$mapFolderIds
-	)
+	): void
 	{
 		$mapFolderIds[$folder->getId()] = $targetFolder->getId();
 
-		$this->setFolderRights(
-			$groupId,
-			$copiedGroupId,
-			$folder,
-			$targetFolder
-		);
-
-		$children = $folder->getChildren(
-			$this->securityContext,
-			[
-				'select' => [
-					'*',
-					'HAS_SUBFOLDERS',
-				]
-			]
-		);
+		$children = $folder->getChildren($this->securityContext);
 		foreach ($children as $child)
 		{
 			if ($child instanceof Folder)
@@ -115,44 +104,59 @@ class Group implements Feature
 					[
 						'NAME' => $child->getName(),
 						'CREATED_BY' => $this->executiveUserId,
-					]
+					],
+					$this->prepareCopiedRights($groupId, $copiedGroupId, $child),
 				);
 				if ($newFolder)
 				{
-					$mapFolderIds[$child->getId()] = $newFolder->getId();
-
-					if ($child->getChildren($this->securityContext))
-					{
-						$this->copyFolders(
-							$groupId,
-							$copiedGroupId,
-							$child,
-							$newFolder,
-							$mapFolderIds
-						);
-					}
+					$this->copyFolders(
+						$groupId,
+						$copiedGroupId,
+						$child,
+						$newFolder,
+						$mapFolderIds,
+					);
 				}
 			}
 		}
 	}
 
-	private function setFolderRights(
+	/**
+	 * The root of the target storage already exists with the rights of the new group, so replacing them
+	 * takes a set(). Every folder below it is created by copyFolders() with its rights in hand, which is
+	 * why this is the only set() of the folder walk; the rights of files go through GroupStepper.
+	 */
+	private function setRootRights(
 		int $groupId,
 		int $copiedGroupId,
-		BaseObject $folder,
-		BaseObject $targetFolder
+		BaseObject $rootFolder,
+		BaseObject $targetRootFolder,
 	): void
 	{
-		$rightsManager = Driver::getInstance()->getRightsManager();
+		Driver::getInstance()->getRightsManager()->set(
+			$targetRootFolder,
+			$this->prepareCopiedRights($groupId, $copiedGroupId, $rootFolder),
+		);
+	}
 
-		$sourceRights = $rightsManager->getSpecificRights($folder);
+	private function prepareCopiedRights(
+		int $groupId,
+		int $copiedGroupId,
+		BaseObject $sourceFolder,
+	): array
+	{
+		$sourceRights = Driver::getInstance()->getRightsManager()->getSpecificRights($sourceFolder);
 
-		$targetRights = [];
-		foreach	($sourceRights as $right)
+		$copiedRights = [];
+		foreach ($sourceRights as $right)
 		{
-			unset($right['ID']);
+			// The object of the copy is not known to a right until it is set on one, and its own id belongs
+			// to the row of the source.
+			unset($right['ID'], $right['OBJECT_ID']);
 
-			$right['OBJECT_ID'] = $targetFolder->getId();
+			// A domain names the sharing of the source that made the rule, and the copy has no sharing of
+			// its own: kept here, the rule of the copy would answer for an object of the source project.
+			unset($right['DOMAIN']);
 
 			$right['ACCESS_CODE'] = $this->prepareAccessCodeByCopiedGroup(
 				$groupId,
@@ -160,10 +164,10 @@ class Group implements Feature
 				$right['ACCESS_CODE']
 			);
 
-			$targetRights[] = $right;
+			$copiedRights[] = $right;
 		}
 
-		$rightsManager->set($targetFolder, $targetRights);
+		return $copiedRights;
 	}
 
 	private function prepareAccessCodeByCopiedGroup(

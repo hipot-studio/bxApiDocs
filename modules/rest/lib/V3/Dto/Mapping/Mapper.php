@@ -79,7 +79,7 @@ abstract class Mapper
 	 */
 	protected function autoMapRelations(Dto $dto, array $rawItem, array $fields = [], array $nestedFields = []): void
 	{
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			$relation = $field->getRelation();
 			$propertyType = $field->getPropertyType();

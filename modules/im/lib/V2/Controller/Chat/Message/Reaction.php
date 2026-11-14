@@ -51,7 +51,13 @@ class Reaction extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Message.Reaction.tail
 	 */
-	public function tailAction(Message $message, array $filter = [], array $order = [], int $limit = 50): ?array
+	public function tailAction(
+		Message $message,
+		array $filter = [],
+		array $order = [],
+		int $limit = 50,
+		string $includeViewedCount = 'N',
+	): ?array
 	{
 		$reaction = $filter['reaction'] ?? null;
 		if ($reaction !== null)
@@ -77,7 +83,12 @@ class Reaction extends BaseController
 		$limit = $this->getLimit($limit);
 
 		$reactions = Message\Reaction\ReactionCollection::find($reactionFilter, $reactionOrder, $limit);
+		$rest = $this->toRestFormatWithPaginationData([$reactions], $limit, $reactions->getTailPageSize());
+		if ($this->convertCharToBool($includeViewedCount))
+		{
+			$rest['viewedCount'] = $message->getViewedCount();
+		}
 
-		return $this->toRestFormatWithPaginationData([$reactions], $limit, $reactions->count());
+		return $rest;
 	}
 }

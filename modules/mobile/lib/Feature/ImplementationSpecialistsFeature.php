@@ -15,7 +15,7 @@ final class ImplementationSpecialistsFeature extends FeatureFlag
 
 	protected function isOptionEnabled(): bool
 	{
-		return $this->isOptionOn('mobile', self::OPTION_CODE, false);
+		return Option::get('mobile', self::OPTION_CODE, 'Y') === 'Y';
 	}
 
 	public function enable(): void
@@ -25,6 +25,6 @@ final class ImplementationSpecialistsFeature extends FeatureFlag
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => self::OPTION_CODE]);
+		Option::set('mobile', self::OPTION_CODE, 'N');
 	}
 }

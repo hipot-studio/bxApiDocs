@@ -19,7 +19,9 @@ class CloudRecordAnalytics extends AbstractAnalytics
 	public function addDownload(Track $track, ?string $errorCode = null): self
 	{
 		// Both methods are called from background/agent contexts where addBackgroundJob/OnAfterEpilog
-		// is unreliable, so we send analytics synchronously rather than via async().
+		// is unreliable, so we send analytics synchronously rather than via async(). async() picks
+		// the same inline branch in a console process now {@see \Bitrix\Call\Background\JobDispatcher},
+		// and these two keep their own send: they work, and rewriting them would be diff for nothing.
 		if ($this->call === null)
 		{
 			Logger::getInstance()->warning(

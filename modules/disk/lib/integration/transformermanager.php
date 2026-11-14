@@ -2,7 +2,6 @@
 
 namespace Bitrix\Disk\Integration;
 
-use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\FileHelper;
@@ -148,11 +147,6 @@ class TransformerManager implements InterfaceCallback
 	public static function transformToView(File $file)
 	{
 		$fileExtension = mb_strtolower($file->getExtension());
-		if ($fileExtension === 'mkv' && !Configuration::isEnabledFileViewerFormats())
-		{
-			return false;
-		}
-
 		$view = $file->getView();
 
 		if(!Loader::includeModule('transformer'))

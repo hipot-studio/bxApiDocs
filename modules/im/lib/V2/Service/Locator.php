@@ -29,6 +29,11 @@ class Locator
 		return ServiceLocator::getInstance()->get('Im.AccessService');
 	}
 
+	public static function getVideoNoteDownloadPolicy(): VideoNoteDownloadPolicy
+	{
+		return ServiceLocator::getInstance()->get(VideoNoteDownloadPolicy::class);
+	}
+
 	public static function getGuestInviteSmsTransport(): GuestInviteSmsTransportInterface
 	{
 		return ServiceLocator::getInstance()->get('Im.GuestInviteSmsTransport');

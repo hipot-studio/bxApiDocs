@@ -10,6 +10,8 @@ use Bitrix\Crm\V2\Internal\Access\Settings\SettingAccessPolicyInterface;
 use Bitrix\Crm\V2\Internal\Entity\Settings\SettingRegistration;
 use Bitrix\Crm\V2\Internal\Exception\Settings\SettingNotFoundException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * @internal
@@ -37,7 +39,10 @@ final class SettingFactory implements SettingFactoryInterface
 					new AnyOfPolicy([
 						new Policy\SliderDisabledPolicy(),
 						new Policy\ReturnToOldDetailPageEnabledPolicy(),
-					]),
+					], new Error(
+						Loc::getMessage('CRM_SETTINGS_SLIDER_MODE_UNAVAILABLE'),
+						'CRM_SETTINGS_SLIDER_MODE_UNAVAILABLE',
+					)),
 				],
 			),
 			$this->registration(
@@ -139,6 +144,7 @@ final class SettingFactory implements SettingFactoryInterface
 				Setting\Copilot\AutomaticCallProcessingEnabledSetting::class,
 				'crm.copilot.call_processing.automatic.enabled',
 				[new Policy\AiCallProcessingEnabledPolicy()],
+				[new Policy\AiCallProcessingEnabledPolicy(), new Policy\PortalAdminPolicy()],
 			),
 			$this->registration(
 				Setting\Copilot\FillItemFromCallEnabledSetting::class,
@@ -354,7 +360,12 @@ final class SettingFactory implements SettingFactoryInterface
 				Setting\Format\SimpleTimeEnabledSetting::class,
 				'crm.format.simple_time.enabled',
 			),
-			$this->registration(Setting\Format\EntityAddressSetting::class, 'crm.format.entity_address'),
+			$this->registration(
+				Setting\Format\EntityAddressSetting::class,
+				'crm.format.entity_address',
+				[],
+				[new Policy\LocationModuleUnavailablePolicy()],
+			),
 			$this->registration(
 				Setting\DuplicateControl\LeadEnabledSetting::class,
 				'crm.duplicate_control.lead.enabled',
@@ -367,7 +378,11 @@ final class SettingFactory implements SettingFactoryInterface
 				Setting\DuplicateControl\CompanyEnabledSetting::class,
 				'crm.duplicate_control.company.enabled',
 			),
-			$this->registration(Setting\Status\DeprecatedEnabledSetting::class, 'crm.status.deprecated.enabled'),
+			$this->registration(
+				Setting\Status\DeprecatedEnabledSetting::class,
+				'crm.status.deprecated.enabled',
+				[new Policy\DeprecatedStatusesLegacyPortalPolicy()],
+			),
 			$this->registration(Setting\RecycleBin\LeadEnabledSetting::class, 'crm.recycle_bin.lead.enabled'),
 			$this->registration(
 				Setting\RecycleBin\ContactEnabledSetting::class,
@@ -412,7 +427,7 @@ final class SettingFactory implements SettingFactoryInterface
 	 */
 	private function registration(
 		string $settingClass,
-		string $code,
+		string $id,
 		array $readPolicies = [],
 		?array $writePolicies = null,
 	): SettingRegistration
@@ -421,7 +436,7 @@ final class SettingFactory implements SettingFactoryInterface
 
 		return new SettingRegistration(
 			settingClass: $settingClass,
-			code: $code,
+			id: $id,
 			readPolicies: [new Policy\CrmAdminPolicy(), ...$readPolicies],
 			writePolicies: [new Policy\CrmAdminPolicy(), ...$writePolicies],
 		);

@@ -15,7 +15,6 @@ use Bitrix\Crm\Service\Router\Page\AiReportDrawer\DrawerPage;
 
 class CrmAiReportDrawerWrapper extends \Bitrix\Crm\Component\Base
 {
-
 	public function executeComponent(): void
 	{
 		$this->init();
@@ -39,6 +38,15 @@ class CrmAiReportDrawerWrapper extends \Bitrix\Crm\Component\Base
 			],
 		];
 
+		if (($this->arParams['scenario'] ?? '') === DrawerPage::SCENARIO_CALL_ASSESSMENT)
+		{
+			$targetBlock = $this->request->get('targetBlock');
+			if (in_array($targetBlock, ['summary', 'transcription'], true))
+			{
+				$this->arResult['APP_PARAMS']['drawerRequest']['targetBlock'] = $targetBlock;
+			}
+		}
+
 		$this->includeComponentTemplate();
 	}
 
@@ -52,5 +60,4 @@ class CrmAiReportDrawerWrapper extends \Bitrix\Crm\Component\Base
 			default => null,
 		};
 	}
-
 }

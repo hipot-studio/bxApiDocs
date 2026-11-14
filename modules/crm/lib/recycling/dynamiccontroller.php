@@ -133,6 +133,11 @@ class DynamicController extends BaseController
 		}
 
 		$item = $this->getFactory()->getItem($entityId);
+		if (!$item)
+		{
+			throw new Main\ObjectNotFoundException("Could not find entity: #{$entityId}.");
+		}
+
 		$contacts = $item->getContactBindings();
 		if(!empty($contacts))
 		{

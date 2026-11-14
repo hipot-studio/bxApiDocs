@@ -13,6 +13,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\{FileTypeControl, RedirectToCorrectPrefix};
+use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\RestrictedFormatToViewRedirect;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\UnifiedLinkAccessLevelRouter;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\{RedirectToView, UrlGenerator};
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\FileTypes;
@@ -21,7 +22,6 @@ use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Public\Service\UnifiedLink;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\AttachedObject;
-use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Version;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessContext;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessTokenService;
@@ -50,6 +50,7 @@ class UnifiedLinkController extends Controller
 	private UnifiedLinkAccessLevelRouter $accessControlFilter;
 	private FileTypeControl $fileTypeFilter;
 	private RedirectToCorrectPrefix $redirectToCorrectPrefix;
+	private RestrictedFormatToViewRedirect $restrictedFormatFilter;
 	private readonly PublicDomainAccessTokenService $publicDomainAccessTokenService;
 	private readonly PublicDomainUrlResolver $publicDomainUrlResolver;
 	private ?string $publicDomainFallbackUrl = null;
@@ -65,6 +66,7 @@ class UnifiedLinkController extends Controller
 		$this->fileTypeFilter = new FileTypeControl($this);
 		$this->accessControlFilter = new UnifiedLinkAccessLevelRouter($this);
 		$this->redirectToCorrectPrefix = new RedirectToCorrectPrefix($this);
+		$this->restrictedFormatFilter = new RestrictedFormatToViewRedirect($this);
 		$this->publicDomainAccessTokenService = $publicDomainAccessTokenService ?? new PublicDomainAccessTokenService();
 		$this->publicDomainUrlResolver =
 			$publicDomainUrlResolver
@@ -80,6 +82,7 @@ class UnifiedLinkController extends Controller
 			new HttpMethod([HttpMethod::METHOD_GET]),
 			$this->redirectToCorrectPrefix,
 			$this->fileTypeFilter,
+			$this->restrictedFormatFilter,
 			$this->accessControlFilter,
 		];
 		if (!$this->isPublicDomainRequest())
@@ -90,12 +93,15 @@ class UnifiedLinkController extends Controller
 		return $filters;
 	}
 
+	// the access filter comes last on purpose: a denial or a redirect by rights must win over the
+	// redirect by format, and the last post filter to set the result is the one that answers
 	protected function getDefaultPostFilters(): array
 	{
 		return [
 			$this->requiredParameterFilter,
 			$this->redirectToCorrectPrefix,
 			$this->fileTypeFilter,
+			$this->restrictedFormatFilter,
 			$this->accessControlFilter,
 		];
 	}
@@ -304,7 +310,11 @@ class UnifiedLinkController extends Controller
 	)]
 	public function editAction(?UnifiedLinkRenderer $service): HttpResponse
 	{
-		return $this->createResponse($service, UnifiedLinkAccessLevel::Edit);
+		return $this->createResponse(
+			$service,
+			UnifiedLinkAccessLevel::Edit,
+			$this->getRequest()->getQuery('htmlEditorState') === 'session_busy',
+		);
 	}
 
 	/**
@@ -313,7 +323,11 @@ class UnifiedLinkController extends Controller
 	 * @return HttpResponse
 	 * @throws ArgumentTypeException
 	 */
-	private function createResponse(?UnifiedLinkRenderer $service, UnifiedLinkAccessLevel $accessLevel): HttpResponse
+	private function createResponse(
+		?UnifiedLinkRenderer $service,
+		UnifiedLinkAccessLevel $accessLevel,
+		bool $htmlSessionBusy = false,
+	): HttpResponse
 	{
 		if ($this->publicDomainFallbackUrl !== null)
 		{
@@ -339,13 +353,16 @@ class UnifiedLinkController extends Controller
 			;
 		}
 
-		$publicDomainRedirect = $this->createCanonicalToPublicRedirect($service);
+		$publicDomainRedirect = $accessLevel === UnifiedLinkAccessLevel::Read
+			? $this->createCanonicalToPublicRedirect($service)
+			: null
+		;
 		if ($publicDomainRedirect !== null)
 		{
 			return $publicDomainRedirect;
 		}
 
-		$result = $service->render($accessLevel);
+		$result = $service->render($accessLevel, $htmlSessionBusy);
 		$redirectUrl = $result->getRedirectUrl();
 
 		if(is_string($redirectUrl))
@@ -554,9 +571,7 @@ class UnifiedLinkController extends Controller
 		$revision = $version ?? $attachedObject?->getVersion();
 		if ($revision !== null)
 		{
-			return Configuration::isEnabledHtmlViewer()
-				&& HtmlViewerPolicy::isViewableExtension($revision->getExtension())
-			;
+			return HtmlViewerPolicy::isViewableExtension($revision->getExtension());
 		}
 
 		return HtmlViewerPolicy::isViewable($baseObject);

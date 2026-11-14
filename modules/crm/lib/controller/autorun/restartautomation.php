@@ -31,6 +31,15 @@ final class RestartAutomation extends Base
 		];
 	}
 
+	/**
+	 * The item processing starts robots and business processes, which the rollback of the transaction does not undo,
+	 * so a repeat after a transient SQL error could do it twice.
+	 */
+	protected function isRetryOnTransientSqlErrorEnabled(): bool
+	{
+		return false;
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		$result = new Result();

@@ -6,11 +6,13 @@ use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Exception\UnknownAggregateFunctionException;
 use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exception\Validation\DtoFieldRequiredAttributeException;
+use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
+use Bitrix\Rest\V3\Structure\ReferencesDtoFields;
 use Bitrix\Rest\V3\Structure\Structure;
 use Traversable;
 
-final class AggregationSelectStructure extends Structure implements \IteratorAggregate
+final class AggregationSelectStructure extends Structure implements \IteratorAggregate, ReferencesDtoFields
 {
 	/** @var SelectItem[] */
 	protected array $items;
@@ -47,12 +49,13 @@ final class AggregationSelectStructure extends Structure implements \IteratorAgg
 						$alias = $aggregation . '_' . $aggregationFieldName;
 					}
 
-					if (!isset($fields[$aggregationFieldName]))
+					$field = $fields->getMeta($aggregationFieldName);
+					if ($field === null)
 					{
 						throw new UnknownDtoPropertyException($dto->getShortName(), $aggregationFieldName);
 					}
 
-					if (!$fields[$aggregationFieldName]->isFilterable())
+					if (!$field->isFilterable())
 					{
 						throw new DtoFieldRequiredAttributeException($dto->getShortName(), $aggregationFieldName, Filterable::class);
 					}
@@ -73,6 +76,32 @@ final class AggregationSelectStructure extends Structure implements \IteratorAgg
 		}
 
 		return $structure;
+	}
+
+	/**
+	 * A string key names the field and its value is the alias, an integer key means the value is the field.
+	 *
+	 * @return list<string>
+	 * @throws InvalidRequestFieldTypeException
+	 */
+	public static function getReferencedFields(mixed $value): array
+	{
+		$fields = [];
+		foreach ((array)$value as $aggregationFields)
+		{
+			foreach ((array)$aggregationFields as $aggregationFieldName => $alias)
+			{
+				$fieldName = is_int($aggregationFieldName) ? $alias : $aggregationFieldName;
+				if (!is_scalar($fieldName))
+				{
+					throw new InvalidRequestFieldTypeException('select', 'string');
+				}
+
+				$fields[] = (string)$fieldName;
+			}
+		}
+
+		return array_values(array_unique($fields));
 	}
 
 	public function add(SelectItem $item): self

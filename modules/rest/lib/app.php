@@ -27,6 +27,7 @@ use Bitrix\Rest\Preset\EventController;
 use Bitrix\Rest\Public\Command\Application\DeactivateSystemUserCommand;
 use Bitrix\Rest\Public\Event\Application\AppUserReadyEvent;
 use Bitrix\Rest\Public\Provider\Application\HandlerHttpFactory;
+use Bitrix\Rest\Public\Service\AppSystemUserDecisionService;
 
 Loc::loadMessages(__FILE__);
 
@@ -52,7 +53,6 @@ Loc::loadMessages(__FILE__);
  * <li> SHARED_KEY string(32) optional
  * <li> CLIENT_SECRET string(100) optional
  * <li> APP_NAME string(1000) optional
- * <li> ACCESS string(2000) optional
  * </ul>
  *
  * @package Bitrix\Rest
@@ -316,13 +316,6 @@ class AppTable extends Internal\Model\AppTable
 		{
 			AccessCacheInvalidator::clear();
 		}
-		if (array_key_exists('ACCESS', $data['fields'] ?? []))
-		{
-			(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())
-				->syncApp((int)$data['primary']['ID'])
-			;
-		}
-
 		if(!static::$skipRemoteUpdate)
 		{
 			if(
@@ -370,11 +363,11 @@ class AppTable extends Internal\Model\AppTable
 	}
 
 	/**
-	 * Placement access cache keeps APP.ACCESS and APP.INSTALLED, and its candidate list depends on APP.ACTIVE.
+	 * Placement access cache keeps APP.INSTALLED, and its candidate list depends on APP.ACTIVE.
 	 */
 	private static function hasAccessCacheSensitiveChanges(array $fields): bool
 	{
-		foreach (['ACCESS', 'INSTALLED', 'ACTIVE'] as $field)
+		foreach (['INSTALLED', 'ACTIVE'] as $field)
 		{
 			if (array_key_exists($field, $fields))
 			{
@@ -434,6 +427,7 @@ class AppTable extends Internal\Model\AppTable
 		static::deleteAppBindings((int)$data['primary']['ID']);
 		AppLangTable::deleteByApp($data['primary']['ID']);
 		AppAttributeTable::deleteByAppId((int)$data['primary']['ID']);
+		\Bitrix\Rest\Internal\Model\AppAccessTable::deleteByAppId((int)$data['primary']['ID']);
 		(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())
 			->deleteCodesOfApp((int)$data['primary']['ID'])
 		;
@@ -534,7 +528,7 @@ class AppTable extends Internal\Model\AppTable
 				$appInfo['ACTIVE'] === self::ACTIVE
 				&& $appInfo['INSTALLED'] === self::INSTALLED
 				&& $appInfo['STATUS'] !== self::STATUS_LOCAL
-				&& Main\Config\Option::get('rest', 'allow_create_sys_user', 'N') === 'Y'
+				&& (new AppSystemUserDecisionService())->canCreateSystemUser((int)$appInfo['ID'])
 			)
 			{
 				$userId = (int)(\Bitrix\Rest\Marketplace\Application::getContextUserId() ?? CurrentUser::get()->getId());
@@ -938,10 +932,9 @@ class AppTable extends Internal\Model\AppTable
 		$appInfo = static::getByClientId($appId);
 		if($appInfo)
 		{
-			$rights = '';
+			$rightIdList = array();
 			if(is_array($newRights) && !empty($newRights))
 			{
-				$rightIdList = array();
 				foreach($newRights as $key => $rightsList)
 				{
 					foreach($rightsList as $rightId => $ar)
@@ -949,12 +942,14 @@ class AppTable extends Internal\Model\AppTable
 						$rightIdList[] = $rightId;
 					}
 				}
-				$rights = implode(",", $rightIdList);
 			}
 
-			static::update($appId, array(
-				'ACCESS' => $rights,
-			));
+			(new \Bitrix\Rest\Internal\Repository\Application\AppAccessRepository())
+				->replaceCodes((int)$appInfo['ID'], $rightIdList);
+
+			(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())
+				->syncApp((int)$appInfo['ID'])
+			;
 		}
 
 		AccessCacheInvalidator::clear();
@@ -1037,6 +1032,12 @@ class AppTable extends Internal\Model\AppTable
 
 			if (isset($appInfo) && is_array($appInfo))
 			{
+				$appInfo['ACCESS'] = implode(
+					',',
+					(new \Bitrix\Rest\Internal\Repository\Application\AppAccessRepository())
+						->getCodes((int)$appInfo['ID']),
+				);
+
 				static::$applicationCache[$appInfo['ID']] = $appInfo;
 				static::$applicationCache[$appInfo['CLIENT_ID']] = $appInfo;
 				static::$applicationCache[$appInfo['CODE']] = $appInfo;
@@ -1046,7 +1047,7 @@ class AppTable extends Internal\Model\AppTable
 		return static::$applicationCache[$clientId] ?? null;
 	}
 
-	protected static function clearClientCache(
+	public static function clearClientCache(
 		$key,
 		?string $clientId = null,
 		?string $code = null,
@@ -1061,6 +1062,7 @@ class AppTable extends Internal\Model\AppTable
 			{
 				unset(static::$applicationCache[$app['ID']]);
 				unset(static::$applicationCache[$app['CLIENT_ID']]);
+				unset(static::$applicationCache[$app['CODE']]);
 			}
 			else
 			{

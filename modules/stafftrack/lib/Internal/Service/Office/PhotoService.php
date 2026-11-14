@@ -57,6 +57,7 @@ class PhotoService
 
 	private const PREVIEW_WIDTH = 640;
 	private const PREVIEW_HEIGHT = 640;
+	private const AVATAR_SIZE = 100;
 
 	protected OfficeRepository $officeRepository;
 	protected OfficePhotoRepository $officePhotoRepository;
@@ -103,6 +104,32 @@ class PhotoService
 		}
 
 		return $photosByOffice;
+	}
+
+	/**
+	 * @param int[] $officeIds
+	 * @return array<int, string>
+	 */
+	public function getAvatarUrlsByOfficeIds(array $officeIds): array
+	{
+		$firstFileIds = [];
+		foreach ($this->officePhotoRepository->getListByOfficeIds($officeIds) as $row)
+		{
+			$firstFileIds[(int)$row->getOfficeId()] ??= (int)$row->getFileId();
+		}
+
+		$urls = $this->loadAvatarUrls(array_values(array_unique($firstFileIds)));
+
+		$avatarUrls = [];
+		foreach ($firstFileIds as $officeId => $fileId)
+		{
+			if (isset($urls[$fileId]))
+			{
+				$avatarUrls[$officeId] = $urls[$fileId];
+			}
+		}
+
+		return $avatarUrls;
 	}
 
 	/**
@@ -347,6 +374,32 @@ class PhotoService
 		}
 
 		return $links;
+	}
+
+	/**
+	 * @param int[] $fileIds
+	 * @return array<int, string>
+	 */
+	protected function loadAvatarUrls(array $fileIds): array
+	{
+		if ($fileIds === [] || !Loader::includeModule('disk'))
+		{
+			return [];
+		}
+
+		$urlManager = Driver::getInstance()->getUrlManager();
+
+		$urls = [];
+		/** @var File $file */
+		foreach (File::loadBatchById($fileIds) as $file)
+		{
+			$urls[(int)$file->getId()] = $urlManager->getUrlForShowFile($file, [
+				'width' => self::AVATAR_SIZE,
+				'height' => self::AVATAR_SIZE,
+			]);
+		}
+
+		return $urls;
 	}
 
 	private function getStorageFolder(): ?Folder

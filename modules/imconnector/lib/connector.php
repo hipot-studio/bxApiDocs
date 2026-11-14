@@ -1,9 +1,11 @@
 <?php
 namespace Bitrix\ImConnector;
 
+use Bitrix\ImConnector\Public\Features\YandexTravel;
 use Bitrix\ImConnector\Tools\Connectors\Messageservice;
 use Bitrix\ImOpenLines\LiveChatManager;
 use Bitrix\Main;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Data\Cache;
@@ -172,6 +174,10 @@ class Connector
 			$connectors[Library::ID_FBINSTAGRAMDIRECT_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FBINSTAGRAMDIRECT' . self::META_RU_SUFFIX);
 			$connectors[Library::ID_FBINSTAGRAM_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FBINSTAGRAM' . self::META_RU_SUFFIX);
 			$connectors[Library::ID_WAZZUP_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_WAZZUP');
+			if (Feature::isEnabled(YandexTravel::class))
+			{
+				$connectors[Library::ID_YANDEXTRAVEL_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_YANDEXTRAVEL');
+			}
 		}
 		else
 		{
@@ -318,11 +324,24 @@ class Connector
 
 
 	/**
+	 * Connectors whose outgoing messages carry a delivery status.
+	 *
+	 * Availability and the delivery-status contract are different things: a connector hidden from the
+	 * list of available ones may still serve connected lines, and their messages must keep their sending,
+	 * delivered and read marks. Yandex.Travel is listed by its rollout flag, so it is named here as well
+	 * — turning the flag off hides the tile, it does not take the marks away from the lines already on it.
+	 *
 	 * @return array
 	 */
 	public static function getListConnectorShowDeliveryStatus(): array
 	{
-		return array_keys(static::getListConnector());
+		$connectors = array_keys(static::getListConnector());
+		if (!in_array(Library::ID_YANDEXTRAVEL_CONNECTOR, $connectors, true))
+		{
+			$connectors[] = Library::ID_YANDEXTRAVEL_CONNECTOR;
+		}
+
+		return $connectors;
 	}
 
 	/**
@@ -336,6 +355,7 @@ class Connector
 		$components[Library::ID_LIVE_CHAT_CONNECTOR] = 'bitrix:imconnector.livechat';
 		$components[Library::ID_WHATSAPPBYTWILIO_CONNECTOR] = 'bitrix:imconnector.whatsappbytwilio';
 		$components[Library::ID_WAZZUP_CONNECTOR] = 'bitrix:imconnector.wazzup';
+		$components[Library::ID_YANDEXTRAVEL_CONNECTOR] = 'bitrix:imconnector.yandextravel';
 		$components[Library::ID_AVITO_CONNECTOR] = 'bitrix:imconnector.avito';
 		$components[Library::ID_VIBER_CONNECTOR] = 'bitrix:imconnector.viber';
 		$components[Library::ID_TELEGRAMBOT_CONNECTOR] = 'bitrix:imconnector.telegrambot';
@@ -946,6 +966,7 @@ class Connector
 			'msteams' => 'envelope',
 			'whatsappbytwilio' => 'whatsapp',
 			Library::ID_WAZZUP_CONNECTOR => 'wazzup',
+			Library::ID_YANDEXTRAVEL_CONNECTOR => 'yandextravel',
 			'avito' => 'avito',
 			'olx' => 'olx',
 			Library::ID_EDNA_WHATSAPP_CONNECTOR => 'edna',

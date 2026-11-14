@@ -7,6 +7,7 @@ use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Feature\TimelineCommentTextEditor;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Timeline\Comment\Authorship;
 use Bitrix\Crm\Timeline\Comment\EditorConfigProvider;
 use Bitrix\Crm\Timeline\Entity\TimelineBindingTable;
 use Bitrix\Crm\Timeline\Entity\TimelineTable;
@@ -68,6 +69,13 @@ class CommentEditor extends Base
 			if ($comment === null || $binding === null)
 			{
 				$this->addError(ErrorCode::getNotFoundError());
+
+				return null;
+			}
+
+			if (!(new Authorship())->isCurrentUserAuthor($commentId))
+			{
+				$this->addError(ErrorCode::getAccessDeniedError());
 
 				return null;
 			}

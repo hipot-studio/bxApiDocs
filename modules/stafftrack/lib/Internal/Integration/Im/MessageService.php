@@ -238,6 +238,7 @@ class MessageService
 		$defaultResult = [
 			'dialogId' => null,
 			'dialogName' => null,
+			'dialogAvatar' => null,
 		];
 
 		if (!self::isImModuleLoaded())
@@ -253,6 +254,12 @@ class MessageService
 		if (\Bitrix\Im\Common::isChatId($dialogId))
 		{
 			$dialogName = \Bitrix\Im\Dialog::getTitle($dialogId, $userId);
+			$dialogAvatar = '';
+			if ($dialogName !== null)
+			{
+				$chatId = (int)\Bitrix\Im\Dialog::getChatId($dialogId, $userId);
+				$dialogAvatar = \Bitrix\Im\V2\Chat::getInstance($chatId)->getAvatar();
+			}
 		}
 		else
 		{
@@ -262,13 +269,35 @@ class MessageService
 				return $defaultResult;
 			}
 
-			$dialogName = \Bitrix\Im\User::getInstance($dialogId)->getFullName(false);
+			$user = \Bitrix\Im\User::getInstance($dialogId);
+			$dialogName = $user->getFullName(false);
+			$dialogAvatar = $user->getAvatar();
 		}
 
 		return [
 			'dialogId' => $dialogId,
 			'dialogName' => $dialogName,
+			'dialogAvatar' => $dialogAvatar !== '' ? $dialogAvatar : null,
 		];
+	}
+
+	/**
+	 * Whether the person may write to this chat. The chat of a handoff intent is picked on the client and
+	 * its name is resolved back by the server, so membership is asked before the chat is stored.
+	 *
+	 * @param string|null $dialogId
+	 * @param int $userId
+	 * @return bool
+	 * @throws LoaderException
+	 */
+	public static function hasDialogAccess(?string $dialogId, int $userId): bool
+	{
+		if (empty($dialogId) || $userId <= 0 || !self::isImModuleLoaded())
+		{
+			return false;
+		}
+
+		return (bool)\Bitrix\Im\Dialog::hasAccess($dialogId, $userId);
 	}
 
 	/**

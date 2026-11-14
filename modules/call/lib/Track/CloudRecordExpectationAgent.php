@@ -366,7 +366,19 @@ class CloudRecordExpectationAgent
 		;
 		$context = (new Context())->setUser($call->getInitiatorId());
 
-		NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+		$sendResult = NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+		if (!$sendResult->isSuccess())
+		{
+			// The pass of the agent is not failed for this message: it has no contract of retries,
+			// and a pass that died here would leave the calls behind it unattended as well. The
+			// line is its only trace, and it names the call the message was about.
+			$logger->error(
+				"CloudRecordExpectationAgent::sendErrorToChat: Not sent. CallId: {$callId}."
+				. ' Errors: ' . implode('; ', $sendResult->getErrorMessages()) . '.'
+			);
+
+			return;
+		}
 
 		$log && $logger->info("CloudRecordExpectationAgent::sendErrorToChat: Sent. CallId: {$callId}");
 	}

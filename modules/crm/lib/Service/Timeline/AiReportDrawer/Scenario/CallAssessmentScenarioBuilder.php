@@ -2,10 +2,11 @@
 
 namespace Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario;
 
+use Bitrix\Crm\Activity\Provider\Call;
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentCriteriaController;
-use Bitrix\Crm\Copilot\CallAssessment\HintStateResolver;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\AiMessageProvider;
 use Bitrix\Crm\Integration\AI\JobRepository;
@@ -13,10 +14,13 @@ use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCallV2;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\PresentationResolver;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ActivityBadgeCleaner;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\CallRecordDataProvider;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\JobIdNormalizer;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\MessageProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SettingsProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SummaryDataProvider;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\TranscriptMarkupMapper;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
@@ -32,6 +36,7 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 	/** @var array<int, array<string, array{description: string}>> */
 	private array $assessmentCriteriaByNameCache = [];
 	private readonly CallRecordDataProvider $callRecordDataProvider;
+	private readonly ActivityBadgeCleaner $activityBadgeCleaner;
 
 	public function __construct(
 		private readonly PresentationResolver $presentationResolver,
@@ -39,9 +44,11 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		private readonly JobRepository $jobRepository,
 		private readonly SettingsProvider $settingsProvider,
 		?CallRecordDataProvider $callRecordDataProvider = null,
+		?ActivityBadgeCleaner $activityBadgeCleaner = null,
 	)
 	{
 		$this->callRecordDataProvider = $callRecordDataProvider ?? new CallRecordDataProvider();
+		$this->activityBadgeCleaner = $activityBadgeCleaner ?? new ActivityBadgeCleaner();
 	}
 
 	public function getCode(): ScenarioCode
@@ -52,38 +59,51 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 	public function build(ActivityContext $context): Result
 	{
 		$result = new Result();
+		if (($context->activity['PROVIDER_ID'] ?? null) !== Call::getId())
+		{
+			return $result->addError(ErrorCode::getNotFoundError());
+		}
+
 		$data = [
 			'aiDisclaimer' => AiMessageProvider::getAiDisclaimerData()['html'] ?? null,
 			'callRecord' => $this->callRecordDataProvider->load($context->activity),
 		];
 
 		$transcriptResult = $this->summaryDataProvider->loadTranscript($context->request->activityId);
-		if (!$transcriptResult->isSuccess())
-		{
-			return $result->addErrors($transcriptResult->getErrors());
-		}
-
-		$data['transcript'] = $transcriptResult->getData()['payload'] ?? null;
+		$data['transcript'] = $transcriptResult->isSuccess()
+			? ($transcriptResult->getData()['payload'] ?? null)
+			: null;
 		if (is_array($data['transcript']))
 		{
+			$data['transcript']['jobId'] = $transcriptResult->getData()['jobId'] ?? null;
 			$data['transcript']['createdAt'] = $transcriptResult->getData()['createdAt'] ?? null;
 			$data['transcript']['aiLanguage'] = $this->summaryDataProvider->getTranscriptAiLanguage(
 				$context->request->activityId,
 			);
 		}
 
-		// Summary is optional: legacy (v1) assessments and portals with summarization disabled have no job.
-		$summaryResult = $this->summaryDataProvider->loadSummary($context->request->activityId);
-		$data['summary'] = $summaryResult->isSuccess()
-			? ($summaryResult->getData()['payload'] ?? null)
-			: null
-		;
-		if (is_array($data['summary']))
+		$data['summaryHistory'] = array_values(array_filter(
+			$this->summaryDataProvider->loadSummaryHistory($context->request->activityId),
+			static fn(array $summary): bool => (int)($summary['originalJobId'] ?? $summary['jobId'] ?? 0) > 0
+				&& (string)($summary['summary'] ?? '') !== '',
+		));
+
+		$data['summary'] = null;
+		if ($data['summaryHistory'] === [])
 		{
-			$data['summary']['createdAt'] = $summaryResult->getData()['createdAt'] ?? null;
-			$data['summary']['aiLanguage'] = $this->summaryDataProvider->getSummaryAiLanguage(
-				$context->request->activityId,
-			);
+			// Summary is optional: legacy (v1) assessments and portals with summarization disabled have no job.
+			$summaryResult = $this->summaryDataProvider->loadSummary($context->request->activityId);
+			$data['summary'] = $summaryResult->isSuccess()
+				? ($summaryResult->getData()['payload'] ?? null)
+				: null;
+			if (is_array($data['summary']))
+			{
+				$data['summary']['jobId'] = $summaryResult->getData()['jobId'] ?? null;
+				$data['summary']['createdAt'] = $summaryResult->getData()['createdAt'] ?? null;
+				$data['summary']['aiLanguage'] = $this->summaryDataProvider->getSummaryAiLanguage(
+					$context->request->activityId,
+				);
+			}
 		}
 
 		$assessmentHistory = $this->loadAssessmentHistory($context->request->activityId);
@@ -91,8 +111,12 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 
 		$assessmentBlocks = $assessmentContent['assessmentBlocks'];
 		$blocks = array_merge($assessmentContent['blocks'], $this->prepareBlocks($data));
+		if ($assessmentBlocks === [] && $blocks === [])
+		{
+			return $result->addError(ErrorCode::getNotFoundError());
+		}
 
-		return $result->setData([
+		$result->setData([
 			'drawerData' => [
 				'title' => $this->prepareTitle($data),
 				'subtitle' => $this->presentationResolver->buildSubtitle($context),
@@ -109,6 +133,16 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 				'aiDisclaimer' => $data['aiDisclaimer'],
 			],
 		]);
+
+		if (
+			($context->activity['PROVIDER_ID'] ?? null) === Call::getId()
+			&& in_array($context->request->targetBlock, [self::SUMMARY_BLOCK_ID, self::TRANSCRIPTION_BLOCK_ID], true)
+		)
+		{
+			$this->activityBadgeCleaner->removeByOwner($context);
+		}
+
+		return $result;
 	}
 
 	private function prepareSettings(): array
@@ -124,7 +158,7 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 
 	private function prepareTitle(array $data): string
 	{
-		$theme = $data['summary']['data']['theme'] ?? null;
+		$theme = $data['summaryHistory'][0]['theme'] ?? $data['summary']['data']['theme'] ?? null;
 
 		return is_string($theme) ? $theme : '';
 	}
@@ -156,6 +190,17 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 				$callQuality,
 				$callScoringResultsByJobId[$jobId] ?? null,
 			);
+			$assessmentHistory[$index] = $callQuality;
+		}
+
+		$this->loadAssessmentCriteriaByHistory($assessmentHistory);
+
+		foreach ($assessmentHistory as $index => $callQuality)
+		{
+			if (!is_array($callQuality))
+			{
+				continue;
+			}
 
 			if ($this->isLegacyAssessment($callQuality))
 			{
@@ -199,11 +244,6 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		{
 			$controller = CopilotCallAssessmentController::getInstance();
 			$filter = ['=ID' => $assessmentSettingsId];
-			$additionalFilter = $controller->getCurrentAvailableAssessmentFilter();
-			if ($additionalFilter)
-			{
-				$filter[] = $additionalFilter;
-			}
 
 			$callAssessment = $controller->getList([
 				'filter' => $filter,
@@ -261,10 +301,12 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 
 	private function prepareAssessmentBlock(array $callQuality, int $index): array
 	{
+		$jobId = JobIdNormalizer::normalize($callQuality['JOB_ID'] ?? null);
 		$criteria = $this->prepareCriteria($callQuality);
 
 		return [
 			'blockId' => $this->makeAssessmentBlockId($callQuality, $index),
+			'jobId' => $jobId,
 			'assessmentSettingId' => (int)($callQuality['ASSESSMENT_SETTING_ID'] ?? 0) > 0
 				? (int)$callQuality['ASSESSMENT_SETTING_ID']
 				: null,
@@ -345,14 +387,14 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		$callQuality['RECOMMENDATIONS'] = $payload?->recommendations ?? '';
 		$callQuality['SUMMARY'] = AIManager::isCallScoringV2Enabled()
 			? (empty($criteriaScores) ? null : $criteriaScores)
-			: (!empty($criteriaScores) ? Json::encode($criteriaScores) : null)
-		;
+			: (!empty($criteriaScores) ? Json::encode($criteriaScores) : null);
 
 		return $callQuality;
 	}
 
 	private function prepareLegacyAssessmentBlock(array $callQuality, int $index): ?array
 	{
+		$jobId = JobIdNormalizer::normalize($callQuality['JOB_ID'] ?? null);
 		$legacyAssessmentText = (string)($callQuality['RECOMMENDATIONS'] ?? '');
 		if ($legacyAssessmentText === '')
 		{
@@ -361,6 +403,7 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 
 		return [
 			'blockId' => $this->makeLegacyAssessmentBlockId($callQuality, $index),
+			'jobId' => $jobId,
 			'blockType' => self::LEGACY_ASSESSMENT_BLOCK_ID,
 			'title' => MessageProvider::getLegacyAssessmentBlockTitle(),
 			'scriptName' => (string)($callQuality['TITLE'] ?? ''),
@@ -537,7 +580,7 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 			}
 		}
 
-		foreach ($this->loadAssessmentCriteriaByName($assessmentSettingsId) as $name => $criterionData)
+		foreach ($this->assessmentCriteriaByNameCache[$assessmentSettingsId] ?? [] as $name => $criterionData)
 		{
 			if (isset($result[$name]) && $result[$name] !== '')
 			{
@@ -555,24 +598,38 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		return mb_strtolower(trim($name));
 	}
 
-	private function loadAssessmentCriteriaByName(int $assessmentSettingsId): array
+	private function loadAssessmentCriteriaByHistory(array $assessmentHistory): void
 	{
-		if ($assessmentSettingsId <= 0)
+		$assessmentSettingsIds = [];
+		foreach ($assessmentHistory as $callQuality)
 		{
-			return [];
+			if (!is_array($callQuality) || $this->isLegacyAssessment($callQuality))
+			{
+				continue;
+			}
+
+			$id = (int)($callQuality['ASSESSMENT_SETTING_ID'] ?? 0);
+			if ($id > 0 && !array_key_exists($id, $this->assessmentCriteriaByNameCache))
+			{
+				$assessmentSettingsIds[$id] = $id;
+			}
 		}
 
-		if (array_key_exists($assessmentSettingsId, $this->assessmentCriteriaByNameCache))
+		if (empty($assessmentSettingsIds))
 		{
-			return $this->assessmentCriteriaByNameCache[$assessmentSettingsId];
+			return;
 		}
 
 		$rows = CopilotCallAssessmentCriteriaController::getInstance()->getList([
-			'select' => ['TITLE', 'DESCRIPTION'],
-			'filter' => ['=ASSESSMENT_ID' => $assessmentSettingsId],
+			'select' => ['ASSESSMENT_ID', 'TITLE', 'DESCRIPTION'],
+			'filter' => ['@ASSESSMENT_ID' => array_values($assessmentSettingsIds)],
 		]);
 
-		$result = [];
+		foreach ($assessmentSettingsIds as $id)
+		{
+			$this->assessmentCriteriaByNameCache[$id] = [];
+		}
+
 		foreach ($rows as $row)
 		{
 			$name = $this->normalizeCriterionName((string)($row['TITLE'] ?? ''));
@@ -581,14 +638,10 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 				continue;
 			}
 
-			$result[$name] = [
+			$this->assessmentCriteriaByNameCache[(int)$row['ASSESSMENT_ID']][$name] = [
 				'description' => (string)($row['DESCRIPTION'] ?? ''),
 			];
 		}
-
-		$this->assessmentCriteriaByNameCache[$assessmentSettingsId] = $result;
-
-		return $this->assessmentCriteriaByNameCache[$assessmentSettingsId];
 	}
 
 	private function extractCriterionField(mixed $criterion, string $field): mixed
@@ -610,11 +663,28 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 	{
 		$blocks = [];
 
+		foreach ($data['summaryHistory'] ?? [] as $index => $summary)
+		{
+			$jobId = $summary['originalJobId'] ?? $summary['jobId'];
+			$normalizedJobId = JobIdNormalizer::normalize($summary['jobId'] ?? null);
+			$blocks[] = [
+				'blockId' => $index === 0 ? self::SUMMARY_BLOCK_ID : self::SUMMARY_BLOCK_ID . '-' . $jobId,
+				'jobId' => $normalizedJobId,
+				'blockType' => self::SUMMARY_BLOCK_ID,
+				'title' => MessageProvider::getSummaryBlockTitle(),
+				'text' => $summary['summary'],
+				'createdAt' => is_numeric($summary['createdAt'] ?? null) ? (int)$summary['createdAt'] : null,
+				'aiLanguage' => is_scalar($summary['aiLanguage'] ?? null) ? (string)$summary['aiLanguage'] : null,
+				'minimized' => $index > 0,
+			];
+		}
+
 		$summary = $data['summary'] ?? null;
-		if (is_array($summary) && is_string($summary['summary'] ?? null) && $summary['summary'] !== '')
+		if ($blocks === [] && is_array($summary) && is_string($summary['summary'] ?? null) && $summary['summary'] !== '')
 		{
 			$blocks[] = [
 				'blockId' => self::SUMMARY_BLOCK_ID,
+				'jobId' => JobIdNormalizer::normalize($summary['jobId'] ?? null),
 				'blockType' => self::SUMMARY_BLOCK_ID,
 				'title' => MessageProvider::getSummaryBlockTitle(),
 				'text' => (string)$summary['summary'],
@@ -633,13 +703,15 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		{
 			$blocks[] = [
 				'blockId' => self::TRANSCRIPTION_BLOCK_ID,
+				'jobId' => JobIdNormalizer::normalize($transcript['jobId'] ?? null),
 				'blockType' => self::TRANSCRIPTION_BLOCK_ID,
 				'title' => MessageProvider::getTranscriptionBlockTitle(),
 				'text' => (string)$transcript['transcription'],
 				'createdAt' => is_numeric($transcript['createdAt'] ?? null) ? (int)$transcript['createdAt'] : null,
 				'aiLanguage' => (string)($transcript['aiLanguage'] ?? ''),
 				'minimized' => false,
-			];
+			]
+				+ TranscriptMarkupMapper::map($transcript);
 		}
 
 		return $blocks;
@@ -649,12 +721,14 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 	{
 		$anchors = [];
 		$legacyAssessmentBlockId = '';
+		$hasSummaryAnchor = false;
 
 		foreach ($blocks as $block)
 		{
 			if (($block['blockType'] ?? null) === self::LEGACY_ASSESSMENT_BLOCK_ID)
 			{
 				$legacyAssessmentBlockId = (string)($block['blockId'] ?? '');
+
 				break;
 			}
 		}
@@ -681,6 +755,15 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 			if (($block['blockType'] ?? null) === self::LEGACY_ASSESSMENT_BLOCK_ID)
 			{
 				continue;
+			}
+			if (($block['blockType'] ?? null) === self::SUMMARY_BLOCK_ID)
+			{
+				if ($hasSummaryAnchor)
+				{
+					continue;
+				}
+
+				$hasSummaryAnchor = true;
 			}
 
 			$anchors[] = [

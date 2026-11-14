@@ -81,6 +81,28 @@ class FolderCollection extends Collection implements RestConvertible
 		return $filtered;
 	}
 
+	/**
+	 * The primary root folder of this collection — see {@see Folder::isPrimaryRoot}. There is at most
+	 * one such folder, so the first match is the answer; `null` means the collection carries none,
+	 * which a caller must handle (a nested-chat scope, an unavailable folder filtered out earlier).
+	 *
+	 * Availability is not checked here: filter the collection through {@see self::onlyAvailable}
+	 * first, or ask {@see FolderProvider::getPrimaryRootForUser} for the per-user answer.
+	 */
+	public function getPrimaryRoot(): ?Folder
+	{
+		foreach ($this as $folder)
+		{
+			/** @var Folder $folder */
+			if ($folder->isPrimaryRoot())
+			{
+				return $folder;
+			}
+		}
+
+		return null;
+	}
+
 	public function countPersonal(): int
 	{
 		$count = 0;
@@ -110,13 +132,14 @@ class FolderCollection extends Collection implements RestConvertible
 		return $max;
 	}
 
+	/**
+	 * @param array $option supported keys:
+	 *  - 'dialogIdMap' array<int, string>|null a map {@see self::buildDialogIdMap} has already built for
+	 *    this collection, so a caller that pushed its folders one by one does not resolve it twice
+	 */
 	public function toRestFormat(array $option = []): array
 	{
-		$dialogIdMap = $this->resolveDialogIdMap();
-		if ($dialogIdMap !== null)
-		{
-			$option['dialogIdMap'] = $dialogIdMap;
-		}
+		$option['dialogIdMap'] ??= $this->buildDialogIdMap();
 
 		$result = [];
 
@@ -146,7 +169,7 @@ class FolderCollection extends Collection implements RestConvertible
 	 *
 	 * @return array<int, string>|null chatId => dialogId, or null when there is nothing to resolve
 	 */
-	private function resolveDialogIdMap(): ?array
+	public function buildDialogIdMap(): ?array
 	{
 		$allChatIds = [];
 		$userId = 0;

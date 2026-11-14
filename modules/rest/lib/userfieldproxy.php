@@ -493,7 +493,7 @@ abstract class UserFieldProxy
 			if(!$enum->SetEnumValues($ID, $fields['LIST']))
 			{
 				$exc = $APPLICATION->GetException();
-				$errors[] = $exc !== false ? $exc->GetString() : 'Fail to save enumumeration field values.';
+				$errors[] = $exc !== false ? $exc->GetString() : 'Fail to save enumeration field values.';
 			}
 		}
 
@@ -989,7 +989,7 @@ abstract class UserFieldProxy
 			{
 				$exc = $APPLICATION->GetException();
 				throw new RestException(
-					$exc !== false ? $exc->GetString() : 'Fail to save enumumeration field values.',
+					$exc !== false ? $exc->GetString() : 'Fail to save enumeration field values.',
 					RestException::ERROR_CORE
 				);
 			}

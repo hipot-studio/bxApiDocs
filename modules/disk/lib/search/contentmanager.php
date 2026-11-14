@@ -165,4 +165,15 @@ final class ContentManager
 
 		return $storedIndex['BODY'];
 	}
+
+	/**
+	 * Returns contents of files which were stored in search index.
+	 * @param File[] $files Files.
+	 *
+	 * @return array<int, string> File id => stored content. Files without stored content are omitted.
+	 */
+	public function getFilesContentFromIndex(array $files): array
+	{
+		return Driver::getInstance()->getIndexManager()->getStoredBodies($files);
+	}
 }

@@ -20,8 +20,10 @@ enum Option: string
 	case CHECKIN_ONBOARDING_EMPLOYEE_SHOWN = 'checkin_onboarding_employee_shown';
 	case CHECKIN_ONBOARDING_EMPLOYEE_AHA_RESUME = 'checkin_onboarding_employee_aha_resume';
 	case CHECKIN_ONBOARDING_EMPLOYEE_GEO_AHA_STATE = 'checkin_onboarding_employee_geo_aha_state';
+	case CHECKIN_PRESENCE_AHA_SHOWN = 'checkin_presence_aha_shown';
 	case CHECKIN_GEO_PERMISSION_STATE = 'checkin_geo_permission_state';
 	case CHECKIN_GEO_DECLINED_SCENARIOS = 'checkin_geo_declined_scenarios';
 	case CHECKIN_GEO_DECLINED_COUNT = 'checkin_geo_declined_count';
 	case CHECKIN_GEO_DECLINED_AT = 'checkin_geo_declined_at';
+	case CHECKIN_HANDOFF_INTENT = 'checkin_handoff_intent';
 }

@@ -11,13 +11,12 @@ final class PresetAssignmentService
 {
 	public function __construct(
 		private readonly PresetAccessPolicy $accessPolicy = new PresetAccessPolicy(),
-		private readonly MobileMenuCacheInvalidator $cacheInvalidator = new MobileMenuCacheInvalidator(),
 		private readonly PresetWriteTransaction $transaction = new PresetWriteTransaction(),
 	)
 	{
 	}
 
-	public function refreshByPresetId(int $presetId): void
+	public function refreshByPresetId(int $presetId): array
 	{
 		$targetsByAssignerId = [];
 		$result = PresetAssignmentTable::getList([
@@ -42,10 +41,10 @@ final class PresetAssignmentService
 
 		if (empty($targetsByAssignerId))
 		{
-			return;
+			return [];
 		}
 
-		$affectedUserIds = $this->transaction->run(function () use ($presetId, $targetsByAssignerId): array {
+		return $this->transaction->run(function () use ($presetId, $targetsByAssignerId): array {
 			$affectedUserIds = $this->deactivateActiveAssignments($presetId);
 			foreach ($targetsByAssignerId as $assignerId => $targets)
 			{
@@ -54,9 +53,6 @@ final class PresetAssignmentService
 			}
 
 			return $affectedUserIds;
-		});
-		$this->transaction->afterCommit(function () use ($affectedUserIds): void {
-			$this->cacheInvalidator->clearUsers($affectedUserIds);
 		});
 	}
 
@@ -92,12 +88,9 @@ final class PresetAssignmentService
 		return $maxVersion;
 	}
 
-	public function deactivateByPresetId(int $presetId): void
+	public function deactivateByPresetId(int $presetId): array
 	{
-		$affectedUserIds = $this->transaction->run(fn(): array => $this->deactivateActiveAssignments($presetId));
-		$this->transaction->afterCommit(function () use ($affectedUserIds): void {
-			$this->cacheInvalidator->clearUsers($affectedUserIds);
-		});
+		return $this->transaction->run(fn(): array => $this->deactivateActiveAssignments($presetId));
 	}
 
 	private function deactivateActiveAssignments(int $presetId): array
@@ -154,5 +147,4 @@ final class PresetAssignmentService
 
 		return array_values(array_unique($userIds));
 	}
-
 }

@@ -7,6 +7,7 @@ use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory;
 use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Recent\Internal\RecentItemCache;
 use Bitrix\Main\Type\DateTime;
 
@@ -64,6 +65,33 @@ class RecentUpdater
 		$this->cache->remove($forUserId, $chatId);
 	}
 
+	/**
+	 * Batch counterpart of {@see self::setPinned()}: one UPDATE over the recent rows of the user.
+	 *
+	 * @param int[] $chatIds
+	 */
+	public function setPinnedByChatIds(int $forUserId, array $chatIds, bool $pinned): void
+	{
+		$chatIds = Normalizer::toUniquePositiveIntegers($chatIds);
+		if ($forUserId <= 0 || $chatIds === [])
+		{
+			return;
+		}
+
+		RecentTable::updateByFilter(
+			[
+				'=USER_ID' => $forUserId,
+				'=ITEM_CID' => $chatIds,
+			],
+			[
+				'PINNED' => $pinned ? 'Y' : 'N',
+				'DATE_UPDATE' => new DateTime(),
+			],
+		);
+
+		$this->cache->remove($forUserId);
+	}
+
 	public function updateByTreeScope(int $forUserId, ChatTreeScope $scope): array
 	{
 		if (!$scope->isPossible())
@@ -94,17 +122,13 @@ class RecentUpdater
 		ChatTreeScope $scope,
 	): array
 	{
-		$query = RecentTable::query()
-			->setSelect(['ITEM_CID'])
-			->where('USER_ID', $forUserId)
-			->where('UNREAD', 'Y')
-		;
-
-		$this->treeFilterFactory->forTreeScope($scope)->apply($query);
-
-		$rows = $query->fetchAll();
-
-		return array_map('intval', array_column($rows, 'ITEM_CID'));
+		return $this->treeFilterFactory->forTreeScope($scope)->fetchChatIds(
+			static fn () => RecentTable::query()
+				->setSelect(['ITEM_CID'])
+				->where('USER_ID', $forUserId)
+				->where('UNREAD', 'Y'),
+			'ITEM_CID',
+		);
 	}
 
 	private function prepareBaseFilterAndFields(int $forUserId, ?bool $unread = null, ?int $markedId = null): array

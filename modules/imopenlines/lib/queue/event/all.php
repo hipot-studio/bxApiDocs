@@ -93,7 +93,7 @@ class All extends Queue
 	 * @param string $reasonReturn
 	 * @return void
 	 */
-	public function returnNotAcceptedSessionsToQueue($userId = 0, string $reasonReturn = ImOpenLines\Queue::REASON_DEFAULT): void
+	public function returnNotAcceptedSessionsToQueue(int $userId = 0, string $reasonReturn = ImOpenLines\Queue::REASON_DEFAULT): void
 	{
 		$sessionListManager = SessionTable::getList([
 			'select' => [

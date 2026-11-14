@@ -72,7 +72,7 @@ class Rights
 
 		foreach ($rights as $key => $scope)
 		{
-			$result[$key] = $scopeFactory->create($key, $scope)->toArray();
+			$result[$key] = $scopeFactory->create($key, $scope ?? $key)->toArray();
 		}
 
 		return $result;

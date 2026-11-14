@@ -26,4 +26,7 @@ enum GlobalSetting: string
 
 	/** @see EventHandler::SETTINGS_SUMMARIZE_ENABLED_CODE */
 	case Summarize = 'crm_copilot_summarize_enabled';
+
+	/** @see EventHandler::SETTINGS_CLIENT_SUMMARY_ENABLED_CODE */
+	case ClientSummary = 'crm_copilot_client_summary_enabled';
 }

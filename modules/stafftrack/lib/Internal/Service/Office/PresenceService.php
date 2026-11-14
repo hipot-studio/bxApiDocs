@@ -141,14 +141,22 @@ class PresenceService
 	 */
 	public function getStatuses(int $officeId, array $userIds, ?int $now = null): array
 	{
-		$rows = $this->presenceRepository->findByUserIds($userIds);
+		return $this->getStatusesInOffices(array_fill_keys(array_map('intval', $userIds), $officeId), $now);
+	}
+
+	/**
+	 * @param array<int, int> $officeIdByUserId
+	 * @return array<int, OfficePresence>
+	 */
+	public function getStatusesInOffices(array $officeIdByUserId, ?int $now = null): array
+	{
+		$rows = $this->presenceRepository->findByUserIds(array_keys($officeIdByUserId));
 		$serverNow = $now ?? time();
 
 		$statuses = [];
 
-		foreach ($userIds as $userId)
+		foreach ($officeIdByUserId as $userId => $officeId)
 		{
-			$userId = (int)$userId;
 			$statuses[$userId] = self::statusOf($rows[$userId] ?? null, $officeId, $serverNow);
 		}
 

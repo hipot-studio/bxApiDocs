@@ -206,8 +206,14 @@ class RecentConfigManager
 		$this->configByTypes[ExtendedType::GeneralChannel->value]
 			= (new RecentConfig(true, true))->setOwnSectionName('openChannel')
 		;
-		$this->configByTypes[ExtendedType::Calendar->value]
-			= (new RecentConfig(true, true))
+		// The meeting chat keeps its membership in the general section on top of the own one the
+		// "Meetings" folder is built on. The legacy list behind the web "Chats" tab selects by chat
+		// literal and reads no sections at all, so it shows the chat whatever this says, while the
+		// badge of that same tab counts by 'default': dropping the membership would leave the tab
+		// showing a chat its own counter does not count, which is worse than showing it twice.
+		// Moving that list onto the section path is a separate task.
+		$this->configByTypes[ExtendedType::Calendar->value] =
+			new RecentConfig(true, true)
 		;
 		$this->configByTypes[ExtendedType::System->value] =
 			new RecentConfig(false, false)

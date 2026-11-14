@@ -497,6 +497,7 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 				if($field['MULTIPLE'] === 'Y')
 				{
 					$result[$code]['PROVIDER'] = DataProvider\ArrayDataProvider::class;
+					$result[$code]['ITEM_IDS'] = 'getUserFieldItemIds';
 					$result[$code]['OPTIONS'] = [
 						'ITEM_PROVIDER' => User::class,
 						'ITEM_NAME' => 'ITEM',
@@ -575,6 +576,7 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 					if($field['MULTIPLE'] === 'Y')
 					{
 						$result[$code]['PROVIDER'] = DataProvider\ArrayDataProvider::class;
+						$result[$code]['ITEM_IDS'] = 'getUserFieldItemIds';
 						$result[$code]['OPTIONS'] = [
 							'ITEM_PROVIDER' => $provider,
 							'ITEM_NAME' => 'ITEM',
@@ -623,6 +625,55 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 						]
 					];
 				}
+			}
+		}
+
+		return $result;
+	}
+
+	public function getUserFieldItemIds($placeholder = null): ?array
+	{
+		if (!is_string($placeholder) || !isset($this->fields[$placeholder]))
+		{
+			return null;
+		}
+
+		$field = $this->userFieldDescriptions[$placeholder] ?? null;
+		if (
+			!is_array($field)
+			|| ($field['MULTIPLE'] ?? null) !== 'Y'
+			|| !in_array($field['USER_TYPE_ID'] ?? null, ['crm', 'employee'], true)
+			|| ($this->fields[$placeholder]['PROVIDER'] ?? null) !== DataProvider\ArrayDataProvider::class
+		)
+		{
+			return null;
+		}
+
+		$value = $field['VALUE'] ?? null;
+		if (!is_array($value) || $value === [])
+		{
+			return null;
+		}
+
+		$itemProvider = $this->fields[$placeholder]['OPTIONS']['ITEM_PROVIDER'] ?? null;
+		if (!is_string($itemProvider) || !DataProviderManager::checkProviderName($itemProvider))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($value as $item)
+		{
+			if ($field['USER_TYPE_ID'] === 'crm' && !is_numeric($item))
+			{
+				$parts = explode('_', $item);
+				$item = $parts[1] ?? null;
+			}
+
+			$itemId = (int)($item ?? 0);
+			if ($itemId > 0)
+			{
+				$result[] = $itemId;
 			}
 		}
 

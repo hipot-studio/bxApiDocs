@@ -219,8 +219,25 @@ class CCrmTimelineComponent extends CBitrixComponent
 
 		$this->prepareScheduleItems();
 		$this->prepareHistoryFilter();
-		$this->prepareHistoryItems();
-		$this->prepareHistoryFixedItems();
+		$timelineNavigationAvailable = (new Crm\Service\Timeline\Navigation\Availability())->isAvailable(
+			$this->entityTypeID,
+			$this->entityID,
+		);
+		$this->arResult['TIMELINE_NAVIGATION'] = [
+			'available' => $timelineNavigationAvailable,
+			'owner' => [
+				'entityTypeId' => $this->entityTypeID,
+				'entityId' => $this->entityID,
+				'categoryId' => (int)($this->extras['CATEGORY_ID'] ?? 0),
+			],
+			'scopeId' => $this->historyFilterID,
+			'native' => (new Crm\Service\Timeline\Navigation\NativeFilterAdapter())->export(
+				$this->historyFilter,
+				(string)($this->historyFilter['FIND'] ?? ''),
+			),
+		];
+		$this->prepareHistoryItems(useNavigationProjection: $timelineNavigationAvailable);
+		$this->prepareHistoryFixedItems(useNavigationProjection: $timelineNavigationAvailable);
 
 		$this->prepareAutomationTourData();
 		$this->prepareChatData();
@@ -394,19 +411,23 @@ class CCrmTimelineComponent extends CBitrixComponent
 		$this->arResult['SCHEDULE_ITEMS'] = $this->getRepository()->getScheduledItems()->getItems();
 	}
 
-	public function prepareHistoryItems($offsetTime = null, $offsetID = 0)
+	public function prepareHistoryItems($offsetTime = null, $offsetID = 0, bool $useNavigationProjection = false)
 	{
 		$filter = $this->historyFilter;
 		$entityFilter = $this->getHistoryFilter();
 		$entityFilter->prepareListFilterParams($filter);
 
-		$result = $this->getRepository()->getHistoryItemsPage(
-			(new Crm\Service\Timeline\Repository\Query())
+		$query = (new Crm\Service\Timeline\Repository\Query())
 				->setOffsetId((int)$offsetID)
 				->setOffsetTime($offsetTime ? DateTime::createFromUserTime($offsetTime) : null)
 				->setFilter($filter)
 				->setLimit(10)
-		);
+		;
+		$repository = $this->getRepository();
+		$result = $useNavigationProjection
+			? $repository->getNavigationCandidatesPage($query)
+			: $repository->getHistoryItemsPage($query)
+		;
 
 		$this->arResult['HISTORY_ITEMS'] = $result->getItems();
 
@@ -415,13 +436,17 @@ class CCrmTimelineComponent extends CBitrixComponent
 			'OFFSET_ID' => $result->getOffsetId(),
 		];
 	}
-	public function prepareHistoryFixedItems()
+	public function prepareHistoryFixedItems(bool $useNavigationProjection = false)
 	{
-		$result = $this->getRepository()->getHistoryItemsPage(
-			(new Crm\Service\Timeline\Repository\Query())
+		$query = (new Crm\Service\Timeline\Repository\Query())
 				->setSearchForFixedItems(true)
 				->setLimit(HistoryItem::MAX_PINNED_ITEMS_COUNT)
-		);
+		;
+		$repository = $this->getRepository();
+		$result = $useNavigationProjection
+			? $repository->getNavigationCandidatesPage($query)
+			: $repository->getHistoryItemsPage($query)
+		;
 
 		$this->arResult['FIXED_ITEMS'] = $result->getItems();
 	}

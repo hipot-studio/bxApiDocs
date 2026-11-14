@@ -9,6 +9,7 @@ use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\LayoutSettings;
+use Bitrix\Crm\V2\Internal\Service\AiSummary\ClientSummaryVisibility;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -93,6 +94,7 @@ class CrmCardShowComponent extends CBitrixComponent
 		}
 
 		$this->arResult['isEnableCopilotReplacement'] = $this->isEnableCopilotReplacement();
+		$this->arResult['isEnableClientSummaryTab'] = $this->isClientSummaryTabAvailable();
 
 		$this->includeComponentTemplate();
 
@@ -182,6 +184,34 @@ class CrmCardShowComponent extends CBitrixComponent
 			&& AIManager::isAiCallProcessingEnabled()
 			&& AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)
 			&& Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canRead()
+		;
+	}
+
+	/**
+	 * TPL-01: whether the template connects the extension of the tab of the client summary.
+	 *
+	 * The mode of the dialer is learned by the one thing the card has for it - the flag of the copilot
+	 * replacement, which the telephony sends and its controller casts to bool before the component
+	 * reads it. Beside it the tab has a parameter of its own, so a call of the card made where no
+	 * window of a call exists turns the tab off without touching the neighbouring feature.
+	 *
+	 * Past the two parameters the one measure of the feature is asked, the same one the controller of
+	 * the tab asks: the grant of the user and the switch of the summary an admin flips on the settings
+	 * page of the CoPilot in CRM. A portal with the summary turned off gets no tab at all - a tab that
+	 * can only answer a refusal is worse than no tab, and the neighbouring switch of the call
+	 * assessment above says the same thing for the card of the copilot.
+	 *
+	 * The right to read the client of the call is not asked here: the card does not know that client,
+	 * it is resolved by the identifier of the call in the controller of the tab.
+	 */
+	protected function isClientSummaryTabAvailable(): bool
+	{
+		return
+			($this->arParams['isEnableClientSummaryTab'] ?? true) === true
+			&& ($this->arParams['isEnableCopilotReplacement'] ?? true) === true
+			&& (new ClientSummaryVisibility())->isAvailableFor(
+				Container::getInstance()->getContext()->getUserId()
+			)
 		;
 	}
 

@@ -11,6 +11,7 @@ use Bitrix\Rest\Internal\Model\AppStatus;
 use Bitrix\Rest\Public;
 use Bitrix\Rest\Public\Provider\ApplicationProvider;
 use Bitrix\Rest\Public\Provider\Dto\ApplicationData;
+use Bitrix\Rest\Public\Service\AppSystemUserDecisionService;
 use Bitrix\Rest;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
@@ -582,40 +583,33 @@ class CRestUtil
 
 	public static function checkAppAccess($appId, $appInfo = null)
 	{
+		static $cache = [];
 		global $USER;
 
-		static $cache = [];
-
-		$userId = (isset($USER) && ($USER instanceof CUser) && $USER->IsAuthorized() ? $USER->GetID() : 0);
+		$userId = isset($USER) && $USER instanceof CUser && $USER->IsAuthorized()
+			? (int)$USER->GetID()
+			: 0
+		;
 		$accessRights = $appInfo['ACCESS'] ?? null;
-		$cacheKey = $appId . '_' . $userId . '_' . md5(serialize($accessRights));
+		$cacheKey = (string)$appId . '_' . $userId . '_' . md5(serialize($accessRights));
 
 		if (isset($cache[$cacheKey]))
 		{
 			return $cache[$cacheKey];
 		}
 
-		$hasAccess = false;
-
-		if($appInfo === null)
+		if ($appInfo === null)
 		{
 			$appInfo = \Bitrix\Rest\AppTable::getByClientId($appId);
 		}
 
-		if($appInfo)
+		if ($appInfo)
 		{
-			if(!empty($appInfo["ACCESS"]))
-			{
-				$rights = explode(",", $appInfo["ACCESS"]);
-				$hasAccess = $USER->CanAccess($rights);
-			}
-			else
-			{
-				$hasAccess = true;
-			}
+			$accessCodes = array_values(array_filter(explode(',', (string)($appInfo['ACCESS'] ?? ''))));
+			$hasAccess = \Bitrix\Rest\Internal\Access\LegacyAppAccessChecker::canCurrentUserAccessCodes($accessCodes)
+			;
 		}
-
-		if(!$hasAccess)
+		else
 		{
 			$hasAccess = \CRestUtil::isAdmin();
 		}
@@ -716,6 +710,7 @@ class CRestUtil
 		\Bitrix\Rest\EventTable::deleteByApp($appId);
 		\Bitrix\Rest\EventOfflineTable::deleteByApp($appId);
 		\Bitrix\Rest\PlacementTable::deleteByApp($appId);
+		\Bitrix\Rest\AppLangTable::deleteByApp($appId);
 
 		if($bClean)
 		{
@@ -829,7 +824,6 @@ class CRestUtil
 					if($existingApp !== null)
 					{
 						$addResult = \Bitrix\Rest\AppTable::update($existingApp->getId(), $appFieldsToSave);
-						\Bitrix\Rest\AppLangTable::deleteByApp($existingApp->getId());
 					}
 					else
 					{
@@ -837,7 +831,18 @@ class CRestUtil
 					}
 
 					$appId = $addResult->isSuccess() ? (int)$addResult->getId() : 0;
-					if ($appId > 0 && $requiresFinalization)
+					if ($appId > 0)
+					{
+						try
+						{
+							(new AppSystemUserDecisionService())->saveInstallDecision($appId, $existingApp, false);
+						}
+						catch (Main\Repository\Exception\PersistenceException $exception)
+						{
+							Main\Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+						}
+					}
+					if ($appId > 0 && $addResult->isSuccess() && $requiresFinalization)
 					{
 						$addResult = (new \Bitrix\Rest\Internal\Service\Application\ApplicationInstallationFinalizer())
 							->finalize($appId, true)
@@ -850,7 +855,12 @@ class CRestUtil
 
 					if($addResult->isSuccess())
 					{
-						if(is_array($appDetailInfo['MENU_TITLE']))
+						if ($existingApp !== null)
+						{
+							\Bitrix\Rest\AppLangTable::deleteByApp($appId);
+						}
+
+						if (isset($appDetailInfo['MENU_TITLE']) && is_array($appDetailInfo['MENU_TITLE']))
 						{
 							foreach($appDetailInfo['MENU_TITLE'] as $lang => $langName)
 							{

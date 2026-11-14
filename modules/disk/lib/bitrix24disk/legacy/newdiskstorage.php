@@ -19,7 +19,6 @@ use Bitrix\Disk\Ui;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data;
-use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\DateTime;
@@ -29,6 +28,7 @@ class NewDiskStorage extends DiskStorage
 {
 	const MAX_COUNT_LINKS_FOR_CYCLE = 5;
 	const SNAPSHOT_PAGE_SIZE        = 200;
+	private const SNAPSHOT_CANDIDATES_BATCH_SIZE = 500;
 
 	const LOCK_PREFIX_IN_SELECT = 'LOCK_';
 
@@ -199,17 +199,12 @@ class NewDiskStorage extends DiskStorage
 		if(!$this->checkOpportunityToSkipRights())
 		{
 			$securityContext = $this->storage->getSecurityContext($this->userId);
-			$query
-				->addFilter('=RIGHTS_CHECK', true)
-				->registerRuntimeField(
-					'RIGHTS_CHECK',
-					new ExpressionField(
-						'RIGHTS_CHECK',
-						'CASE WHEN ' . $securityContext->getSqlExpressionForList('%1$s', '%2$s') . ' THEN 1 ELSE 0 END',
-						array('ID', 'CREATED_BY')
-					)
-				)
-			;
+			// Parenthesised on the spot: whereExpr() drops the string into the boolean tree of the query as
+			// is, and an OR inside an unwrapped expression would make the rights check optional.
+			$query->whereExpr(
+				'(' . $securityContext->getSqlExpressionForList('%1$s', '%2$s') . ')',
+				['ID', 'CREATED_BY']
+			);
 		}
 
 		if($cursor > 0)
@@ -559,26 +554,11 @@ class NewDiskStorage extends DiskStorage
 		$expectedFirstId = empty($dataByStep['lid'])? null : $dataByStep['lid'];
 		$securityContext = $this->storage->getSecurityContext($this->userId);
 
-		$query = new Internals\Entity\Query(ObjectTable::getEntity());
-		$query
-			->setSelect(['ID'])
-			->addFilter('PATH_CHILD.PARENT_ID', $link->realObjectId)
-			->addFilter('DELETED_TYPE', ObjectTable::DELETED_TYPE_NONE)
-			->addFilter('=RIGHTS_CHECK', true)
-			->registerRuntimeField(
-				'RIGHTS_CHECK',
-				new ExpressionField(
-					'RIGHTS_CHECK',
-					'CASE WHEN ' . $securityContext->getSqlExpressionForList('%1$s', '%2$s') . ' THEN 1 ELSE 0 END',
-					array('ID', 'CREATED_BY')
-				)
-			)
-			->addOrder('SYNC_UPDATE_TIME')
-			->addOrder('ID')
-//			->addOrder('PATH_CHILD.OBJECT_ID')
-			->setLimit($pageSize + 1)
-		;
+		// One and the same value stands in the closure filter and in the rights expression: the candidates
+		// of the query lie inside this subtree, and a divergence of the two is the breach of that boundary.
+		$rootObjectId = (int)$link->realObjectId;
 
+		// Resolved before the query is built: the rights expression is given the same cut.
 		$cursor = $pageState->getCursor();
 		if (
 			!$cursor &&
@@ -591,27 +571,23 @@ class NewDiskStorage extends DiskStorage
 		{
 			$cursor = $internalVersion;
 		}
+		$changedSince = $cursor > 0 ? DateTime::createFromTimestamp($cursor) : null;
+		// Without a cursor every row of the subtree is a candidate, and the epoch says exactly that.
+		$candidatesChangedSince = $changedSince ?? DateTime::createFromTimestamp(0);
 
-		if($cursor > 0)
-		{
-			$query->addFilter('>=SYNC_UPDATE_TIME', DateTime::createFromTimestamp($cursor));
-		}
+		$offset = $cursor ? (int)$pageState->getOffset() : 0;
 
-		$offset = $pageState->getOffset();
-		if ($cursor && $offset)
+		$visibleIds = $this->selectVisibleIdsFromLink(
+			$rootObjectId,
+			$securityContext->getSqlExpressionForSubtreeList('%1$s', '%2$s', $rootObjectId, $candidatesChangedSince),
+			$changedSince,
+			$offset + $pageSize + 1,
+		);
+		//we want to skip values which were on previous page.
+		$objectIds = array_slice($visibleIds, $offset, $pageSize + 1);
+		if ($objectIds && $expectedFirstId !== null && $objectIds[0] != $expectedFirstId)
 		{
-			//we want to skip values which were on previous page.
-			$query->setOffset($offset);
-		}
-
-		$objectIds = [];
-		foreach ($query->exec() as $item)
-		{
-			$objectIds[] = $item['ID'];
-			if ($expectedFirstId !== null && $item['ID'] != $expectedFirstId)
-			{
-				throw new UnexpectedNextIdException("{$expectedFirstId} vs {$item['ID']}");
-			}
+			throw new UnexpectedNextIdException("{$expectedFirstId} vs {$objectIds[0]}");
 		}
 
 		$fetchedItems = [];
@@ -708,6 +684,93 @@ class NewDiskStorage extends DiskStorage
 				))
 			;
 		}
+	}
+
+	/**
+	 * Selects ids of the subtree the user can see, in the order of the snapshot.
+	 * The rights are checked only for a batch of candidates selected by the subtree and the time of sync:
+	 * after a long pause most of the changed objects may be foreign to the user, and checking the rights
+	 * for every one of them made the query very slow.
+	 *
+	 * @param int $rootObjectId
+	 * @param string $rightsExpression
+	 * @param DateTime|null $changedSince
+	 * @param int $limit
+	 * @return int[]
+	 */
+	private function selectVisibleIdsFromLink(int $rootObjectId, string $rightsExpression, ?DateTime $changedSince, int $limit): array
+	{
+		$visibleIds = [];
+		$lastCandidate = null;
+		do
+		{
+			$candidateQuery = new Internals\Entity\Query(ObjectTable::getEntity());
+			$candidateQuery
+				->setSelect(['ID', 'SYNC_UPDATE_TIME'])
+				->addFilter('PATH_CHILD.PARENT_ID', $rootObjectId)
+				->addFilter('DELETED_TYPE', ObjectTable::DELETED_TYPE_NONE)
+				->addOrder('SYNC_UPDATE_TIME')
+				->addOrder('ID')
+				->setLimit(self::SNAPSHOT_CANDIDATES_BATCH_SIZE)
+			;
+			if ($changedSince !== null)
+			{
+				$candidateQuery->addFilter('>=SYNC_UPDATE_TIME', $changedSince);
+			}
+			if ($lastCandidate !== null)
+			{
+				$candidateQuery->addFilter(null, $this->buildFilterAfterCandidate($lastCandidate));
+			}
+
+			$candidates = $candidateQuery->exec()->fetchAll();
+			if (!$candidates)
+			{
+				break;
+			}
+			$lastCandidate = end($candidates);
+
+			$query = new Internals\Entity\Query(ObjectTable::getEntity());
+			$query
+				->setSelect(['ID'])
+				->addFilter('PATH_CHILD.PARENT_ID', $rootObjectId)
+				->addFilter('DELETED_TYPE', ObjectTable::DELETED_TYPE_NONE)
+				->addFilter('@ID', array_column($candidates, 'ID'))
+				// Parenthesised on the spot: whereExpr() drops the string into the boolean tree of the query as
+				// is, and an OR inside an unwrapped expression would make the rights check optional.
+				->whereExpr('(' . $rightsExpression . ')', ['ID', 'CREATED_BY'])
+				->addOrder('SYNC_UPDATE_TIME')
+				->addOrder('ID')
+			;
+			foreach ($query->exec() as $item)
+			{
+				$visibleIds[] = (int)$item['ID'];
+			}
+		}
+		while (count($candidates) === self::SNAPSHOT_CANDIDATES_BATCH_SIZE && count($visibleIds) < $limit);
+
+		return array_slice($visibleIds, 0, $limit);
+	}
+
+	/**
+	 * Filter of the rows standing after the candidate in the order by SYNC_UPDATE_TIME, ID.
+	 */
+	private function buildFilterAfterCandidate(array $candidate): array
+	{
+		if ($candidate['SYNC_UPDATE_TIME'] === null)
+		{
+			//null goes first in the ascending order.
+			return [
+				'LOGIC' => 'OR',
+				'!=SYNC_UPDATE_TIME' => null,
+				['=SYNC_UPDATE_TIME' => null, '>ID' => $candidate['ID']],
+			];
+		}
+
+		return [
+			'LOGIC' => 'OR',
+			'>SYNC_UPDATE_TIME' => $candidate['SYNC_UPDATE_TIME'],
+			['=SYNC_UPDATE_TIME' => $candidate['SYNC_UPDATE_TIME'], '>ID' => $candidate['ID']],
+		];
 	}
 
 	/**
@@ -1111,15 +1174,25 @@ class NewDiskStorage extends DiskStorage
 		$deletedTypeNone = ObjectTable::DELETED_TYPE_NONE;
 		$typeFolder = ObjectTable::TYPE_FOLDER;
 		$securityContext = $this->storage->getSecurityContext($this->userId);
-		$rightExists = $securityContext->getSqlExpressionForList('object.ID', 'object.CREATED_BY');
-		$storageId = $this->getStorageIdByRealObjectId($link->realObjectId);
+		// The candidates are bounded by the closure subtree of the link, and the conditions on the storage,
+		// the deletion mark and the type only narrow them down - the subtree form is allowed here.
+		$rootObjectId = (int)$link->realObjectId;
+		// The tree is built with no cursor at all, so the bound declared to the cutoff is the epoch: every
+		// row of the subtree is a candidate here, and that is exactly what the cutoff has to weigh.
+		$rightExists = $securityContext->getSqlExpressionForSubtreeList(
+			'object.ID',
+			'object.CREATED_BY',
+			$rootObjectId,
+			DateTime::createFromTimestamp(0),
+		);
+		$storageId = $this->getStorageIdByRealObjectId($rootObjectId);
 
 		$sqlQuery = "
 			SELECT object.ID, object.NAME, object.REAL_OBJECT_ID, object.PARENT_ID, object.CREATE_TIME, object.SYNC_UPDATE_TIME
 			FROM b_disk_object object
 			INNER JOIN b_disk_object_path path ON path.OBJECT_ID = object.ID
-			WHERE 
-				path.PARENT_ID = {$link->realObjectId} AND 
+			WHERE
+				path.PARENT_ID = {$rootObjectId} AND
 				object.STORAGE_ID = {$storageId} AND 
 				object.DELETED_TYPE = {$deletedTypeNone} AND 
 				object.TYPE = {$typeFolder} AND ({$rightExists})

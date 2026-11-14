@@ -68,6 +68,12 @@ final class ChangeDto extends Dto
 	 */
 	public readonly string $operation;
 
+	/**
+	 * Only with a change of the sharing or of the public access: true on a folder, whose record stands
+	 * for everything under it, and false on a file.
+	 */
+	public readonly bool $affectsDescendants;
+
 	/** Only with a tombstone. What the client does is the same either way; support needs the reason. */
 	public readonly TombstoneReason $tombstoneReason;
 
@@ -96,6 +102,7 @@ final class ChangeDto extends Dto
 		?int $authorId = null,
 		?array $changedFields = null,
 		?ObjectCardDto $card = null,
+		?bool $affectsDescendants = null,
 	): self
 	{
 		self::assertUpdateType($type);
@@ -105,6 +112,11 @@ final class ChangeDto extends Dto
 		$change->resourceType = $resourceType;
 		$change->resourceId = $resourceId;
 		$change->operation = ChangeRecord::OPERATION_UPDATE;
+		if ($affectsDescendants !== null && $type->isAccessState())
+		{
+			$change->affectsDescendants = $affectsDescendants;
+		}
+
 		if ($authorId !== null)
 		{
 			$change->authorId = $authorId;

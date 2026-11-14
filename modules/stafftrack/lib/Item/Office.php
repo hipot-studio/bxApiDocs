@@ -8,6 +8,10 @@ use Bitrix\StaffTrack\Item\Collection\OfficePhotoCollection;
 
 class Office implements Arrayable
 {
+	/**
+	 * @param ?string $accessRequestStatus Where the viewer's request to see the staff stands -
+	 *     'none', 'pending' or 'rejected' - on a card whose staff is closed to them; null otherwise.
+	 */
 	public function __construct(
 		public int $id,
 		public string $title,
@@ -19,6 +23,9 @@ class Office implements Arrayable
 		public OfficeEmployeeCollection $employees,
 		public bool $canEdit,
 		public ?OfficeWorkingHours $workingHours = null,
+		public string $version = '',
+		public bool $canDelete = false,
+		public ?string $accessRequestStatus = null,
 	) {}
 
 	public function toArray(): array
@@ -34,6 +41,9 @@ class Office implements Arrayable
 			'isEmployeeListAvailable' => $this->isEmployeeListAvailable,
 			'employees' => $this->employees->toArray(),
 			'canEdit' => $this->canEdit,
+			'canDelete' => $this->canDelete,
+			'version' => $this->version,
+			'accessRequestStatus' => $this->accessRequestStatus,
 		];
 	}
 }

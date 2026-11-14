@@ -77,7 +77,11 @@ class Company extends Service\Factory
 			Container::getInstance()->getContactBroker(),
 		);
 
-		$implementation->configureUpdatingRefIdInBoundEntity(ContactTable::getEntity(), 'COMPANY_ID');
+		$implementation
+			->configureUpdatingRefIdInBoundEntity(ContactTable::getEntity(), 'COMPANY_ID')
+			// IS_PRIMARY in b_crm_contact_company marks the primary company of a contact
+			->configurePrimaryFlagOnBoundSide()
+		;
 
 		$item->addImplementation($implementation);
 	}

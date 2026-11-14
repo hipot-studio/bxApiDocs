@@ -11,6 +11,7 @@ use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\Calendar;
 use Bitrix\Crm\ItemIdentifier;
@@ -717,6 +718,7 @@ class ToDo extends Activity
 				$editableDescriptionBlock->setCopilotSettings([
 					'moduleId' => 'crm',
 					'contextId' => 'crm_timeline_todo_editor_update_item_' . $this->getActivityId(),
+					'feature' => CopilotFeatureCode::TIMELINE_TODO_EDITOR_UPDATE_ITEM,
 					'category' => 'crm_activity',
 					'autoHide' => true,
 				]);

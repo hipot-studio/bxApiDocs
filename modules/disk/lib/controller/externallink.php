@@ -38,7 +38,10 @@ final class ExternalLink extends Engine\Controller
 
 			if ($externalLink->getObject()->canUpdate($securityContext))
 			{
-				$externalLink->changeAccessRight(Disk\ExternalLink::ACCESS_RIGHT_EDIT);
+				if (!$externalLink->changeAccessRight(Disk\ExternalLink::ACCESS_RIGHT_EDIT))
+				{
+					$this->addErrors($externalLink->getErrors());
+				}
 			}
 		}
 	}
@@ -47,13 +50,19 @@ final class ExternalLink extends Engine\Controller
 	{
 		if ($externalLink->availableEdit())
 		{
-			$externalLink->changeAccessRight(Disk\ExternalLink::ACCESS_RIGHT_VIEW);
+			if (!$externalLink->changeAccessRight(Disk\ExternalLink::ACCESS_RIGHT_VIEW))
+			{
+				$this->addErrors($externalLink->getErrors());
+			}
 		}
 	}
 
 	public function setPasswordAction(Disk\ExternalLink $externalLink, $newPassword): void
 	{
-		$externalLink->changePassword($newPassword);
+		if (!$externalLink->changePassword($newPassword))
+		{
+			$this->addErrors($externalLink->getErrors());
+		}
 	}
 
 	public function setDeathTimeAction(Disk\ExternalLink $externalLink, $deathTime): array
@@ -61,7 +70,10 @@ final class ExternalLink extends Engine\Controller
 		$deathTime = (int)$deathTime;
 		$deathTime = DateTime::createFromTimestamp($deathTime);
 
-		$externalLink->changeDeathTime($deathTime);
+		if (!$externalLink->changeDeathTime($deathTime))
+		{
+			$this->addErrors($externalLink->getErrors());
+		}
 
 		return [
 			'externalLink' => [
@@ -75,11 +87,17 @@ final class ExternalLink extends Engine\Controller
 
 	public function revokeDeathTimeAction(Disk\ExternalLink $externalLink): void
 	{
-		$externalLink->revokeDeathTime();
+		if (!$externalLink->revokeDeathTime())
+		{
+			$this->addErrors($externalLink->getErrors());
+		}
 	}
 
 	public function revokePasswordAction(Disk\ExternalLink $externalLink): void
 	{
-		$externalLink->revokePassword();
+		if (!$externalLink->revokePassword())
+		{
+			$this->addErrors($externalLink->getErrors());
+		}
 	}
 }

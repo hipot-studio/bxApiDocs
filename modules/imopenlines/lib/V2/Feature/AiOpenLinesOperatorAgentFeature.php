@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\ConstantConfig
 use Bitrix\Bizproc\Internal\Integration\Rag\Service\RagService;
 use Bitrix\Crm\Integration\AiAssistant\ToolSets\OpenLineToolSet;
 use Bitrix\ImBot\Bot\OpenLinesBizprocBot;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -39,24 +40,25 @@ final class AiOpenLinesOperatorAgentFeature
 		$outlineEnumReflection = new \ReflectionEnum(Outline::class);
 		$ragService = class_exists(RagService::class) ? ServiceLocator::getInstance()->get(RagService::class) : null;
 
-		return (
+		return
 			class_exists(ConstantConfiguration::class)
 			&& class_exists(OpenLinesBizprocBot::class)
 			&& class_exists(OpenLineToolSet::class)
 			&& method_exists(CBPAiAssistantAgentActivity::class, 'collectCustomContext')
 			&& $outlineEnumReflection->hasCase('OPEN_CHANNELS_CROSS')
-			&& ($ragService?->isAvailable() ?? false)
-		);
+			&& ($ragService?->isAvailable() ?? false);
 	}
 
 	public function isFeatureEnabled(): bool
 	{
-		return Option::get(self::MODULE_ID, self::OPTION_NAME, 'N') === 'Y';
+		return
+			Feature::isEnabled(AiOpenLinesOperatorAgentFlag::class)
+			|| Option::get(self::MODULE_ID, self::OPTION_NAME, 'N') === 'Y';
 	}
 
 	public function enableFeature(): void
 	{
-		Option::set(self::MODULE_ID, self::OPTION_NAME, 'Y');
+		Feature::enable(AiOpenLinesOperatorAgentFlag::class);
 	}
 
 	public function disableFeature(): void
@@ -64,5 +66,6 @@ final class AiOpenLinesOperatorAgentFeature
 		Option::delete(self::MODULE_ID, [
 			'name' => self::OPTION_NAME,
 		]);
+		Feature::disable(AiOpenLinesOperatorAgentFlag::class);
 	}
 }

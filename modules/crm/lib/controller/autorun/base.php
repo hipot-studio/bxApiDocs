@@ -12,21 +12,34 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\ListEntity;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Crm\Service\Router;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\LocalStorage\SessionLocalStorage;
 use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\StringHelper;
 use Bitrix\Main\Type\Collection;
 
 abstract class Base extends \Bitrix\Crm\Controller\Base
 {
 	private const STEP_LIMIT = 10;
+
+	/** MySQL errors that ask to retry the transaction: a changed table definition and a deadlock. */
+	private const RETRYABLE_SQL_ERROR_CODES = [1412, 1213];
+
+	/**
+	 * The message of a plain SystemException that carries an SQL error: the recycle bin catches the SqlQueryException
+	 * and the recycle bin controllers of crm throw its message again, the database message after this prefix.
+	 */
+	private const SQL_ERROR_MESSAGE_PATTERN = '/^Mysql query error: (\(\d+\).*)$/s';
 
 	private Connection $connection;
 	private Router $router;
@@ -35,6 +48,9 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 	private SessionLocalStorage $progressStorage;
 	protected Progress $progress;
 	private PreparedData $data;
+
+	/** The wrapper the current attempt of an item launched its operation in, see launchInTransactionWrapper() */
+	private ?TransactionWrapper $itemTransactionWrapper = null;
 
 	final protected function getDefaultPreFilters(): array
 	{
@@ -354,15 +370,37 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 			$filter['>ID'] = $this->progress->lastId;
 		}
 
-		if ($this->isUseOrmApproach($factory))
-		{
-			return $this->getItemsToProcessViaOrm($factory, $filter);
-		}
-
-		return $this->getItemsToProcessViaListEntity($factory, $filter);
+		return $this->getItems($factory, $filter, self::STEP_LIMIT);
 	}
 
-	private function getItemsToProcessViaOrm(Factory $factory, array $filter): array
+	/**
+	 * Reads the item anew the same way the items of the step are read: with the filter of the batch,
+	 * the permission check and the select of the action.
+	 */
+	private function readItemAnew(Factory $factory, int $itemId): ?Item
+	{
+		$filter = $this->data->filter->filter;
+		$filter['=ID'] = $itemId;
+
+		$items = $this->getItems($factory, $filter, 1);
+
+		return $items[0] ?? null;
+	}
+
+	/**
+	 * @return Item[]
+	 */
+	private function getItems(Factory $factory, array $filter, int $limit): array
+	{
+		if ($this->isUseOrmApproach($factory))
+		{
+			return $this->getItemsToProcessViaOrm($factory, $filter, $limit);
+		}
+
+		return $this->getItemsToProcessViaListEntity($factory, $filter, $limit);
+	}
+
+	private function getItemsToProcessViaOrm(Factory $factory, array $filter, int $limit): array
 	{
 		$parameters = ['filter' => $filter];
 		GridFilterApplier::getDefault()->apply($parameters, $factory->getEntityTypeId());
@@ -375,14 +413,14 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				'order' => [
 					'ID' => 'ASC',
 				],
-				'limit' => self::STEP_LIMIT,
+				'limit' => $limit,
 			],
 			null,
 			UserPermissions::OPERATION_READ,
 		);
 	}
 
-	private function getItemsToProcessViaListEntity(Factory $factory, array $filter): array
+	private function getItemsToProcessViaListEntity(Factory $factory, array $filter, int $limit): array
 	{
 		$parameters = ['filter' => $filter];
 		GridFilterApplier::getDefault()->apply($parameters, $factory->getEntityTypeId());
@@ -393,7 +431,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 			'order' => [
 				'ID' => 'ASC',
 			],
-			'limit' => self::STEP_LIMIT,
+			'limit' => $limit,
 			'offset' => 0,
 		]);
 
@@ -432,38 +470,26 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 		foreach ($itemsToProcess as $item)
 		{
+			// an attempt may change the id of the object: the ORM leaves a deleted item with the id 0
+			$itemId = $item->getId();
+
 			$this->progress->processedCount++;
-			$this->progress->lastId = $item->getId();
+			$this->progress->lastId = $itemId;
 
 			if (!in_array($item, $itemsThatShouldBeProcessed, true))
 			{
 				continue;
 			}
 
-			if ($this->isWrapItemProcessingInTransaction())
-			{
-				$this->connection->startTransaction();
-			}
-
-			$result = $this->processItem($factory, $item, $this->data);
+			$result = $this->processItemWithRetry($factory, $item, $itemId);
 
 			if ($result->isSuccess())
 			{
-				$this->progress->addSuccessId($item->getId());
+				$this->progress->addSuccessId($itemId);
 			}
-
-			if ($result->isSuccess() && $this->isWrapItemProcessingInTransaction())
+			else
 			{
-				$this->connection->commitTransaction();
-			}
-			elseif (!$result->isSuccess())
-			{
-				if ($this->isWrapItemProcessingInTransaction())
-				{
-					$this->connection->rollbackTransaction();
-				}
-
-				$this->progress->addErrorId($item->getId());
+				$this->progress->addErrorId($itemId);
 
 				foreach ($result->getErrors() as $error)
 				{
@@ -474,7 +500,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 							[
 								'info' => [
 									'title' => $item->getHeading(),
-									'showUrl' => $this->router->getItemDetailUrl($item->getEntityTypeId(), $item->getId()),
+									'showUrl' => $this->router->getItemDetailUrl($item->getEntityTypeId(), $itemId),
 								],
 							],
 						)
@@ -482,6 +508,209 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				}
 			}
 		}
+	}
+
+	/**
+	 * Processes the item. An SQL error MySQL asks to retry the transaction for (a changed table definition,
+	 * a deadlock) makes the item read anew and processed once more, unless the action turns the repeat off.
+	 * An item read anew that is already in the target state of the action is not processed again and counts
+	 * as a success. Any other SQL error, an error of the repeat or an item gone by the repeat makes the item
+	 * failed, without the text of the exception.
+	 *
+	 * An SQL error comes as an SqlQueryException or as a SystemException of exactly that class whose message is
+	 * the one of an SqlQueryException ("Mysql query error: (<code>) ..."): this is how the recycle bin controllers
+	 * of crm pass on the SQL error the recycle bin caught. Both are handled alike, whichever of the attempts threw
+	 * which; any other exception goes up to the caller.
+	 *
+	 * An SQL error that came after the TransactionWrapper of the attempt had committed the operation
+	 * (from business processes or robots run after the commit) is only logged: the work is done, so the item
+	 * is not repeated and counts as a success.
+	 *
+	 * @param int $itemId the id of the item taken before the first attempt: an attempt may change the id of
+	 * the object (the ORM leaves a deleted item with the id 0), so the item is read anew and logged by this id.
+	 */
+	private function processItemWithRetry(Factory $factory, Item $item, int $itemId): Result
+	{
+		try
+		{
+			return $this->processItemInTransaction($factory, $item);
+		}
+		catch (SystemException $exception)
+		{
+			$databaseMessage = $this->getSqlErrorDatabaseMessage($exception);
+			if ($databaseMessage === null)
+			{
+				throw $exception;
+			}
+
+			$this->logItemProcessingException($item->getEntityTypeId(), $itemId, $databaseMessage);
+
+			if ($this->isItemProcessingCommitted())
+			{
+				return new Result();
+			}
+
+			if (!$this->isRetryOnTransientSqlErrorEnabled() || !$this->isRetryableSqlError($databaseMessage))
+			{
+				return $this->getItemProcessingFailedResult();
+			}
+		}
+
+		try
+		{
+			$itemReadAnew = $this->readItemAnew($factory, $itemId);
+			if (!$itemReadAnew)
+			{
+				return $this->getItemProcessingFailedResult();
+			}
+
+			if ($this->isItemShouldBeSkipped($factory, $itemReadAnew, $this->data))
+			{
+				return new Result();
+			}
+
+			return $this->processItemInTransaction($factory, $itemReadAnew);
+		}
+		catch (SystemException $exception)
+		{
+			$databaseMessage = $this->getSqlErrorDatabaseMessage($exception);
+			if ($databaseMessage === null)
+			{
+				throw $exception;
+			}
+
+			$this->logItemProcessingException($item->getEntityTypeId(), $itemId, $databaseMessage);
+
+			if ($this->isItemProcessingCommitted())
+			{
+				return new Result();
+			}
+
+			return $this->getItemProcessingFailedResult();
+		}
+	}
+
+	/**
+	 * Remembers the wrapper an heir launches the operation of an item in, so that an SQL error after its commit
+	 * is not taken for an error inside the transaction. The heir launches the returned wrapper itself.
+	 */
+	protected function launchInTransactionWrapper(TransactionWrapper $wrapper): TransactionWrapper
+	{
+		$this->itemTransactionWrapper = $wrapper;
+
+		return $wrapper;
+	}
+
+	/**
+	 * Whether the wrapper of the current attempt committed the operation for real. Inside the transaction
+	 * of Base its commit is a nested one and the rollback of Base undoes it.
+	 */
+	private function isItemProcessingCommitted(): bool
+	{
+		return
+			!$this->isWrapItemProcessingInTransaction()
+			&& $this->itemTransactionWrapper?->isCommitted()
+		;
+	}
+
+	private function processItemInTransaction(Factory $factory, Item $item): Result
+	{
+		$this->itemTransactionWrapper = null;
+
+		if (!$this->isWrapItemProcessingInTransaction())
+		{
+			return $this->processItem($factory, $item, $this->data);
+		}
+
+		$this->connection->startTransaction();
+
+		try
+		{
+			$result = $this->processItem($factory, $item, $this->data);
+		}
+		catch (\Throwable $throwable)
+		{
+			$this->rollbackTransactionSafely();
+
+			throw $throwable;
+		}
+
+		if ($result->isSuccess())
+		{
+			$this->connection->commitTransaction();
+		}
+		else
+		{
+			$this->rollbackTransactionSafely();
+		}
+
+		return $result;
+	}
+
+	private function rollbackTransactionSafely(): void
+	{
+		try
+		{
+			$this->connection->rollbackTransaction();
+		}
+		catch (TransactionException)
+		{
+			// MySQL rolls back to a savepoint and reports nested rollback as an exception.
+		}
+	}
+
+	/**
+	 * The database message of an SQL error the item failed with, or null if the exception is not an SQL error:
+	 * an SqlQueryException gives it as is, a SystemException of exactly that class has it in its message after
+	 * the prefix of an SqlQueryException. An heir of SystemException is never taken for an SQL error by its text.
+	 */
+	private function getSqlErrorDatabaseMessage(SystemException $exception): ?string
+	{
+		if ($exception instanceof SqlQueryException)
+		{
+			return (string)$exception->getDatabaseMessage();
+		}
+
+		if (
+			get_class($exception) === SystemException::class
+			&& preg_match(self::SQL_ERROR_MESSAGE_PATTERN, $exception->getMessage(), $matches) === 1
+		)
+		{
+			return $matches[1];
+		}
+
+		return null;
+	}
+
+	private function isRetryableSqlError(string $databaseMessage): bool
+	{
+		foreach (self::RETRYABLE_SQL_ERROR_CODES as $code)
+		{
+			if (str_starts_with($databaseMessage, "({$code})"))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function getItemProcessingFailedResult(): Result
+	{
+		return (new Result())->addError(ErrorCode::getGeneralError());
+	}
+
+	private function logItemProcessingException(int $entityTypeId, int $itemId, string $databaseMessage): void
+	{
+		Container::getInstance()->getLogger('Default')->error(
+			'Group action {action}: item {entityTypeId}:{itemId} failed with an SQL error: {databaseMessage}',
+			[
+				'action' => static::class,
+				'entityTypeId' => $entityTypeId,
+				'itemId' => $itemId,
+				'databaseMessage' => $databaseMessage,
+			],
+		);
 	}
 
 	/**
@@ -506,7 +735,11 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 	 * it.
 	 *
 	 * Note that this method should not check permissions or data correctness.
-	 * Its designed only for performance optimization to skip unneeded work
+	 * Its designed to skip unneeded work. It also guards against repeating an operation that is already
+	 * committed: after an SQL error MySQL asks to retry the transaction for (1412, 1213) the item is read
+	 * anew and checked here, and the item that is already in the target state is not processed again.
+	 * The error could come after the commit, from robots or business processes, so an heir whose action
+	 * has a recognizable target state should implement this method.
 	 *
 	 */
 	protected function isItemShouldBeSkipped(Factory $factory, Item $item, PreparedData $data): bool
@@ -524,6 +757,21 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 	 * @return bool
 	 */
 	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * Returns true if an item may be read anew and processed once more after an SQL error MySQL asks to retry
+	 * the transaction for (1412 "Table definition has changed", 1213 "Deadlock found").
+	 *
+	 * Return `false` if the work of `$this->processItem` inside the transaction has side effects the rollback
+	 * does not undo: sending messages, starting robots or business processes. Then such an error makes the item
+	 * failed without a repeat, as any other SQL error does.
+	 *
+	 * @return bool
+	 */
+	protected function isRetryOnTransientSqlErrorEnabled(): bool
 	{
 		return true;
 	}

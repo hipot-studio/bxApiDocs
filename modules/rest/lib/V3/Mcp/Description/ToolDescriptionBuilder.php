@@ -52,6 +52,12 @@ final class ToolDescriptionBuilder
 
 		if ($description === '')
 		{
+			$this->tracedLogger?->warning(sprintf(
+				'REST MCP: route "%s" is not exported, its final tool description is empty:'
+				. ' check descriptionOverride and descriptionAdditions of its McpTool attribute.',
+				$methodDescription->actionUri,
+			));
+
 			return null;
 		}
 

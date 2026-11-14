@@ -13,30 +13,29 @@ final class MyCompanyFeature extends FeatureFlag
 	private const OPTION_CODE = 'feature_my_company_enabled';
 	public const LAUNCH_CUTOFF_OPTION_CODE = 'my_company_launch_cutoff_date';
 	public const LAUNCH_CUTOFF_DATE_FORMAT = 'Y-m-d';
+	public const DEFAULT_LAUNCH_CUTOFF_DATE = '2026-10-19';
 
 	public function isEnabled(): bool
 	{
-		return $this->isOptionOn('mobile', self::OPTION_CODE, false);
+		return Option::get('mobile', self::OPTION_CODE, 'Y') === 'Y';
 	}
 
 	public function enable(): void
 	{
-		if ($this->getLaunchCutoffDateValue() === '')
-		{
-			$this->setLaunchCutoffDate((new \DateTimeImmutable())->format(self::LAUNCH_CUTOFF_DATE_FORMAT));
-		}
-
-		Option::set('mobile', self::OPTION_CODE, true);
+		Option::set('mobile', self::OPTION_CODE, 'Y');
 	}
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => self::OPTION_CODE]);
+		Option::set('mobile', self::OPTION_CODE, 'N');
 	}
 
 	public function getLaunchCutoffDateValue(): string
 	{
-		return (string)Option::getRealValue('mobile', self::LAUNCH_CUTOFF_OPTION_CODE, '');
+		return (string)(
+			Option::getRealValue('mobile', self::LAUNCH_CUTOFF_OPTION_CODE, '')
+			?? self::DEFAULT_LAUNCH_CUTOFF_DATE
+		);
 	}
 
 	public function setLaunchCutoffDate(string $value): bool

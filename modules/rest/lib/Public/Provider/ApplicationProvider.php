@@ -12,8 +12,10 @@ use Bitrix\Rest\Exceptions\InvalidOperationException;
 use Bitrix\Rest\Exceptions\ObjectNotFoundException;
 use Bitrix\Rest\Marketplace\Immune;
 use Bitrix\Rest\Internal\Access\AppAccessChecker;
+use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Entity\Application\AppCollection;
 use Bitrix\Rest\Internal\Entity\Application\App;
+use Bitrix\Rest\Internal\Repository\Application\AppAccessFilter;
 use Bitrix\Rest\Internal\Entity\Application\AppOrigin;
 use Bitrix\Rest\Internal\Repository\Application\AppFilter;
 use Bitrix\Rest\Internal\Repository\Application\AppPager;
@@ -119,6 +121,8 @@ class ApplicationProvider
 			->attributes($attributes)
 			->where($gridParams->getFilter())
 		;
+
+		$filter->accessFilter($this->buildAccessFilter($userId));
 
 		$select = (new AppSelect())
 			->attributes($applicationSelect->hasAttributes())
@@ -284,6 +288,18 @@ class ApplicationProvider
 	private function getAccessChecker(int $userId): AppAccessChecker
 	{
 		return new AppAccessChecker($userId);
+	}
+
+	private function buildAccessFilter(int $userId): ?AppAccessFilter
+	{
+		$userModel = RestUserModel::createFromId($userId);
+
+		if ($userModel->isAdmin())
+		{
+			return null;
+		}
+
+		return new AppAccessFilter($userId, $userModel->getAccessCodes());
 	}
 
 	private function getRepo(): Repository\Application\AppRepository

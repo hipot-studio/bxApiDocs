@@ -3,7 +3,9 @@
 namespace Bitrix\CalendarMobile\Controller;
 
 use Bitrix\Calendar\Controller\CalendarEntryAjax;
+use Bitrix\Calendar\Controller\Filter\RestrictExternalUser;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver;
 use Bitrix\Calendar\Ui\CalendarFilter;
 use Bitrix\Calendar\Ui\CountersManager;
 use Bitrix\Calendar\UserSettings;
@@ -12,13 +14,18 @@ use Bitrix\CalendarMobile\Integration;
 use Bitrix\CalendarMobile\Provider\BaseInfoProvider;
 use Bitrix\CalendarMobile\Provider\EditFormProvider;
 use Bitrix\CalendarMobile\Provider\ViewFormProvider;
+use Bitrix\Forum\Comments\CalendarEntity;
+use Bitrix\Forum\MessageTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Mobile\Dto\InvalidDtoException;
@@ -57,6 +64,12 @@ class Event extends Controller
 					new CloseSession(),
 				],
 			],
+			'getEventByMessageId' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+					new CloseSession(),
+				],
+			],
 			'getEditFormConfig' => [
 				'+prefilters' => [
 					new CloseSession(),
@@ -65,6 +78,13 @@ class Event extends Controller
 			'getIcsLink' => [
 				'+prefilters' => [
 					new CloseSession(),
+				],
+			],
+			'getEventGuestLink' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+					new CloseSession(),
+					new RestrictExternalUser(),
 				],
 			],
 		];
@@ -393,6 +413,86 @@ class Event extends Controller
 	}
 
 	/**
+	 * @param int $messageId
+	 *
+	 * @return array
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getEventByMessageIdAction(int $messageId): array
+	{
+		$forumId = (int)(\CCalendar::GetSettings()['forum_id'] ?? 0);
+		if ($messageId <= 0 || $forumId <= 0 || !Loader::includeModule('forum'))
+		{
+			return $this->returnEventNotFound();
+		}
+
+		$message = MessageTable::query()
+			->setSelect(['TOPIC_XML_ID' => 'TOPIC.XML_ID'])
+			->where('ID', $messageId)
+			->where('FORUM_ID', $forumId)
+			->where('TOPIC.FORUM_ID', $forumId)
+			->setLimit(1)
+			->fetch()
+		;
+		$topicXmlId = is_array($message) ? (string)($message['TOPIC_XML_ID'] ?? '') : '';
+		// topic xml id is written by \CCalendarEvent::GetEventCommentXmlId as <prefix><eventId>[_<eventDate>]
+		$xmlIdPattern = '/^' . preg_quote(CalendarEntity::XML_ID_PREFIX, '/') . '([1-9][0-9]*)(?:_(.+))?$/D';
+		if (!preg_match($xmlIdPattern, $topicXmlId, $matches))
+		{
+			return $this->returnEventNotFound();
+		}
+
+		$eventId = (int)$matches[1];
+		if ((string)$eventId !== $matches[1])
+		{
+			return $this->returnEventNotFound();
+		}
+
+		$eventDate = $matches[2] ?? null;
+		if ($eventDate !== null && \CCalendarEvent::ExtractDateFromCommentXmlId($topicXmlId) !== $eventDate)
+		{
+			return $this->returnEventNotFound();
+		}
+
+		// The lookup parameters and the two checks below repeat \CCalendarEvent::getEventForDetailsInterface()
+		// on purpose: same GetList shape, same ACTION_EVENT_VIEW_FULL decision. That method is not called
+		// because it also assembles the card payload this action drops - attendee list, attendee count and
+		// display names - so any change of its access rules has to be mirrored here.
+		// fetchAttendees has to stay on: GetList grants a meeting attendee access to the host entry by its
+		// attendee list, and canViewEventDetails then decides on the very entry that lookup returned.
+		$event = \CCalendarEvent::getEventForViewInterface($eventId, [
+			'userId' => $this->userId,
+			'eventDate' => $eventDate,
+			'fetchAttendees' => true,
+			'attendeeUserIds' => [$this->userId],
+			'getUserfields' => false,
+			'skipCache' => true,
+		]);
+		if (
+			!is_array($event)
+			|| (int)($event['ID'] ?? 0) <= 0
+			|| !\CCalendarEvent::canViewEventDetails($event, $this->userId)
+			|| ($eventDate !== null && \CCalendarEvent::GetEventCommentXmlId($event) !== $topicXmlId)
+		)
+		{
+			return $this->returnEventNotFound();
+		}
+
+		$result = [
+			'eventId' => $eventId,
+		];
+		if ($eventDate !== null)
+		{
+			$result['eventDate'] = $eventDate;
+		}
+
+		return $result;
+	}
+
+	/**
 	 * @param int $eventId
 	 * @param int $parentId
 	 *
@@ -462,6 +562,53 @@ class Event extends Controller
 		return $result->getData();
 	}
 
+	/**
+	 * Returns the guest invite link for the event.
+	 *
+	 * Creates the meeting chat if it does not yet exist. Delegates to calendar
+	 * GuestLinkResolver::getOrCreate and maps resolver error codes to
+	 * localised Error objects.
+	 *
+	 * @param int $eventId
+	 * @return array { url: string } on success
+	 * @throws LoaderException
+	 */
+	public function getEventGuestLinkAction(int $eventId): array
+	{
+		$guestLinkService = new Integration\Calendar\GuestLinkService($this->userId);
+		$result = $guestLinkService->getOrCreateGuestLink($eventId);
+
+		if (!$result->isSuccess())
+		{
+			foreach ($result->getErrors() as $error)
+			{
+				// Do not let this user-facing action leak whether a private event exists:
+				// a hidden event (NO_RIGHTS) and one that is missing or of an excluded
+				// type (EVENT_NOT_SAVED) must be indistinguishable to the client.
+				$code = $error->getCode();
+				if ($code === GuestLinkResolver::ERROR_EVENT_NOT_SAVED)
+				{
+					$code = GuestLinkResolver::ERROR_NO_RIGHTS;
+				}
+				$messageKey = 'CALENDARMOBILE_EVENT_GUEST_LINK_ERROR_' . $code;
+				$message = Loc::getMessage($messageKey);
+				if ($message === null)
+				{
+					$message = $error->getMessage();
+				}
+				$this->addError(new Error($message, $code));
+			}
+
+			return [];
+		}
+
+		$data = $result->getData();
+
+		return [
+			'url' => $data['url'],
+		];
+	}
+
 	public function saveHiddenSectionsAction(int $ownerId, string $calType, array $sections = []): void
 	{
 		$optionName = $this->userId === $ownerId && $calType === Dictionary::CALENDAR_TYPE['user']
@@ -490,5 +637,12 @@ class Event extends Controller
 			'userId' => $this->userId,
 			'setDefaultLimit' => false,
 		]);
+	}
+
+	private function returnEventNotFound(): array
+	{
+		$this->addError(new Error('Event not found', 'EVENT_NOT_FOUND'));
+
+		return [];
 	}
 }

@@ -6,16 +6,17 @@ use Bitrix\Main\Validation\Group\ValidationGroup;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoValidatorHelper;
-use Bitrix\Rest\V3\Dto\PropertyHelper;
 use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exception\Validation\DtoValidationException;
 use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 
-final class FieldsStructure extends Structure
+final class FieldsStructure extends Structure implements ReferencesDtoFields
 {
 	use UserFieldsTrait;
+
+	private const SCALAR_TYPES = ['bool' => true, 'int' => true, 'float' => true, 'string' => true];
 
 	protected string $dtoClass;
 
@@ -57,6 +58,16 @@ final class FieldsStructure extends Structure
 		}
 
 		return $structure;
+	}
+
+	/**
+	 * Nested DTO and collection values are covered by their top level key.
+	 *
+	 * @return list<string>
+	 */
+	public static function getReferencedFields(mixed $value): array
+	{
+		return array_map('strval', array_keys((array)$value));
 	}
 
 	public function getItems(): array
@@ -131,9 +142,8 @@ final class FieldsStructure extends Structure
 			//  - non-nullable + null → fall through; the Dto branch will hit
 			//    the existing `is_array` guard and surface
 			//    InvalidRequestFieldTypeException with the proper field name,
-			//    while the scalar/collection branches let PHP's TypeError
-			//    rethrow as InvalidRequestFieldTypeException via the catch
-			//    block at the bottom.
+			//    as do the scalar type check and the TypeError catch block
+			//    at the bottom.
 			if ($value === null && $field->isNullable())
 			{
 				$dto->{$propertyName} = null;
@@ -143,11 +153,9 @@ final class FieldsStructure extends Structure
 
 			if (TypeHelper::isDto($propertyType))
 			{
-				$subDto = Structure::getDto($propertyType);
-				if ($subDto === null)
+				if (Structure::getDto($propertyType) === null)
 				{
-					$subDto = $propertyType::create();
-					Structure::addDto($dto);
+					Structure::addDto($propertyType::create());
 				}
 
 				if (!is_array($value))
@@ -155,7 +163,8 @@ final class FieldsStructure extends Structure
 					throw new InvalidRequestFieldTypeException($qualifiedName, $propertyType);
 				}
 
-				$this->fillDto($subDto, $value, $propertyName);
+				$subDto = $propertyType::create();
+				$this->fillDto($subDto, $value, $qualifiedName);
 				$dto->{$propertyName} = $subDto;
 
 				continue;
@@ -187,7 +196,7 @@ final class FieldsStructure extends Structure
 						foreach ($value as $itemIndex => $itemValue)
 						{
 							$subDto = $elementType::create();
-							$this->fillDto($subDto, $itemValue, $propertyName . '.' . $itemIndex);
+							$this->fillDto($subDto, $itemValue, $qualifiedName . '.' . $itemIndex);
 							$collection->add($subDto);
 						}
 					}
@@ -196,27 +205,32 @@ final class FieldsStructure extends Structure
 				continue;
 			}
 
-			// The assignment below runs in weak typing mode, so PHP casts the incoming
-			// value to the property type BEFORE FieldTypeValidator ever sees it, and no
-			// TypeError is raised for the catch block to translate. For bool that cast
-			// inverts meaning instead of failing: every non-empty string but "0" becomes
-			// true, so a client sending "N" switches the flag ON and gets a 200 back.
-			// Reject the incompatible value here, where the original type is still known.
-			// Integer 0/1 stays accepted: in a JSON body it is the one non-boolean shape
-			// whose intent is unambiguous, and clients already write flags that way.
-			if ($propertyType === 'bool' && !is_bool($value) && $value !== 0 && $value !== 1)
+			// Top-level values are already converted in create(); nested ones arrive raw.
+			if ($parentField !== null)
 			{
-				throw new InvalidRequestFieldTypeException($qualifiedName, 'bool');
+				$value = FieldsConverter::convertValueByDtoField($field, $value);
+			}
+
+			// Weak typing would silently cast the value on assignment, so check the original type first.
+			// Dynamic enum values are checked after the provider conversion: "5" is already 5 here, true is not.
+			if (
+				isset(self::SCALAR_TYPES[$propertyType])
+				&& !FieldsValidator::validateTypeAndValue($propertyType, $value)
+			)
+			{
+				throw new InvalidRequestFieldTypeException(
+					$qualifiedName,
+					$field->getDynamicEnumProvider() ?? $propertyType,
+				);
 			}
 
 			try
 			{
 				$dto->{$propertyName} = $value;
 			}
-			catch (\TypeError $exception)
+			catch (\TypeError)
 			{
-				$property = PropertyHelper::getProperty($dto, $propertyName);
-				throw new InvalidRequestFieldTypeException($propertyName, $property->getType()?->getName());
+				throw new InvalidRequestFieldTypeException($qualifiedName, $field->getPropertyType());
 			}
 		}
 	}

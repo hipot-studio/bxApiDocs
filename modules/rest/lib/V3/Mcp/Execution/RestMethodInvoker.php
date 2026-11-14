@@ -3,12 +3,13 @@
 namespace Bitrix\Rest\V3\Mcp\Execution;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
+use Bitrix\AiAssistant\Exceptions\ValidationException;
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\ControllerBuilder;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Error;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Rest\Engine\RestManager;
 use Bitrix\Rest\V3\Controller\RestController;
@@ -21,6 +22,7 @@ use Bitrix\Rest\V3\Interaction\Request\OffsetPaginatedListRequest;
 use Bitrix\Rest\V3\Interaction\Request\TailRequest;
 use Bitrix\Rest\V3\Interaction\Response\Response;
 use Bitrix\Rest\V3\Mcp\Access\FieldRestrictionChecker;
+use Bitrix\Rest\V3\Mcp\Access\ResponseFieldFilter;
 use Bitrix\Rest\V3\Mcp\Access\RouteAvailabilityChecker;
 use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\SchemaManager;
@@ -32,12 +34,10 @@ final class RestMethodInvoker
 	private const MCP_READ_PAGE_SIZE_CEILING = 20;
 	private const MCP_READ_OFFSET_CEILING = 1000;
 
-	// the only envelope keys carrying entity data: GetResponse::$item and ListResponse::$items
-	private const ENTITY_PAYLOAD_KEYS = ['item', 'items'];
-
 	public function __construct(
 		private readonly ?FieldRestrictionChecker $fieldRestrictionChecker = null,
 		private readonly ?RouteAvailabilityChecker $routeAvailabilityChecker = null,
+		private readonly ?ResponseFieldFilter $responseFieldFilter = null,
 	)
 	{
 	}
@@ -51,6 +51,8 @@ final class RestMethodInvoker
 
 		return $this->withAuthorizedUser($userId, function () use ($methodDescription, $payload, $userId): array {
 			$this->ensureGeneratedDtoClassLoaded($methodDescription);
+			$responseFieldFilter = $this->getResponseFieldFilter();
+			$deniedFields = $responseFieldFilter->resolveDeniedFields($methodDescription);
 			$payload = $this->applyReadDefaultsIfNeeded($methodDescription, $payload);
 			$server = $this->buildInternalRestServerForUser($methodDescription, $payload, $userId);
 			$controller = $this->buildRestController($methodDescription, $server, $payload);
@@ -70,8 +72,7 @@ final class RestMethodInvoker
 
 			if ($controller->hasErrors())
 			{
-				$firstError = $controller->getErrors()[0] ?? null;
-				throw new McpException($firstError?->getMessage() ?? 'REST V3 controller returned an error.');
+				throw $this->createControllerException($controller->getErrors()[0] ?? null);
 			}
 
 			if (!$response instanceof Response)
@@ -79,8 +80,56 @@ final class RestMethodInvoker
 				throw new McpException('REST V3 controller must return a Response instance.');
 			}
 
-			return $this->applyFieldRestrictionsToResult($methodDescription, $response->toArray());
+			return $responseFieldFilter->filter($response, $deniedFields);
 		});
+	}
+
+	/**
+	 * The REST V3 answer names the violated fields only in its validation items, the message itself is generic.
+	 */
+	private function createControllerException(?Error $error): McpException|ValidationException
+	{
+		if ($error === null)
+		{
+			return new McpException('REST V3 controller returned an error.');
+		}
+
+		$customData = $error->getCustomData();
+		$validationItems = is_array($customData)
+			&& is_string($customData['code'] ?? null)
+			&& str_starts_with($customData['code'], 'BITRIX_REST_V3_EXCEPTION_VALIDATION_')
+			&& is_array($customData['validation'] ?? null)
+			? $customData['validation']
+			: []
+		;
+
+		$details = [];
+		foreach ($validationItems as $item)
+		{
+			if (!is_array($item))
+			{
+				continue;
+			}
+
+			$message = trim((string)($item['message'] ?? ''));
+			if ($message === '')
+			{
+				continue;
+			}
+
+			$field = (string)($item['field'] ?? '');
+			$details[] = $field === '' ? $message : "{$field}: {$message}";
+		}
+
+		if ($details === [])
+		{
+			return new McpException($error->getMessage());
+		}
+
+		// the items follow the response language of the bridge, so the summary is taken from the same output
+		$summary = trim((string)($customData['message'] ?? '')) ?: $error->getMessage();
+
+		return new ValidationException(rtrim($summary, '.') . ': ' . implode('; ', $details));
 	}
 
 	private function ensureGeneratedDtoClassLoaded(MethodDescription $methodDescription): void
@@ -215,10 +264,46 @@ final class RestMethodInvoker
 		return [
 			'logic' => 'and',
 			'conditions' => [
-				...$this->splitFilterIntoConditions($fixedFilter),
+				...$this->splitFixedFilterIntoConditions($fixedFilter),
 				...$this->splitFilterIntoConditions($argumentFilter),
 			],
 		];
+	}
+
+	/**
+	 * A fixed AND group is unwrapped into the merged group: nested, it would hide its conditions from
+	 * getSimpleFilterConditions() and #[FilterRequired], which see them over the regular transport. Any other
+	 * fixed group cannot be unwrapped without changing its meaning, so the route is refused instead.
+	 *
+	 * @return array[]
+	 */
+	private function splitFixedFilterIntoConditions(array $fixedFilter): array
+	{
+		$isGroup =
+			isset($fixedFilter['logic'])
+			|| isset($fixedFilter['negative'])
+			|| isset($fixedFilter['conditions'])
+			|| (isset($fixedFilter['type']) && $fixedFilter['type'] !== 'condition')
+		;
+		if (!$isGroup)
+		{
+			return $this->splitFilterIntoConditions($fixedFilter);
+		}
+
+		$isAndGroup =
+			($fixedFilter['type'] ?? 'filter') === 'filter'
+			&& ($fixedFilter['logic'] ?? 'and') === 'and'
+			&& ($fixedFilter['negative'] ?? false) === false
+			&& is_array($fixedFilter['conditions'] ?? null)
+		;
+		if (!$isAndGroup)
+		{
+			throw new McpException(
+				'The fixed filter of this tool is a group that cannot be combined with the tool filter.',
+			);
+		}
+
+		return array_values($fixedFilter['conditions']);
 	}
 
 	/**
@@ -245,74 +330,6 @@ final class RestMethodInvoker
 			? array_values($filter)
 			: [$filter]
 		;
-	}
-
-	/**
-	 * The published schema and the argument check keep restricted fields out of the request, but a response
-	 * may still carry them: the default select covers read requests only, and a manual add or update returns
-	 * the whole entity. This is the single point where the restriction cannot be bypassed by the request shape.
-	 */
-	private function applyFieldRestrictionsToResult(MethodDescription $methodDescription, array $result): array
-	{
-		$mcpTool = $methodDescription->mcpTool;
-		if ($mcpTool === null || !$mcpTool->hasFieldRestrictions())
-		{
-			return $result;
-		}
-
-		$deniedFields = [];
-		foreach ([...$this->getDtoFieldNames($methodDescription), ...$mcpTool->hiddenFields] as $fieldName)
-		{
-			if (!$mcpTool->isFieldAllowed($fieldName))
-			{
-				$deniedFields[$fieldName] = true;
-			}
-		}
-
-		return $deniedFields === [] ? $result : $this->removeDeniedFieldsFromPayload($result, $deniedFields);
-	}
-
-	/**
-	 * Only the entity payload of the envelope is walked. An envelope key is not a field of the entity, so an
-	 * entity field named like one of them must not take the envelope down with it: without this split a tool
-	 * hiding "id" turns the AddResponse of a created record into an empty array.
-	 *
-	 * @param array<string, true> $deniedFields
-	 */
-	private function removeDeniedFieldsFromPayload(array $response, array $deniedFields): array
-	{
-		foreach (self::ENTITY_PAYLOAD_KEYS as $payloadKey)
-		{
-			if (isset($response[$payloadKey]) && is_array($response[$payloadKey]))
-			{
-				$response[$payloadKey] = $this->removeDeniedFields($response[$payloadKey], $deniedFields);
-			}
-		}
-
-		return $response;
-	}
-
-	/**
-	 * @param array<string, true> $deniedFields
-	 */
-	private function removeDeniedFields(array $data, array $deniedFields): array
-	{
-		foreach ($data as $key => $value)
-		{
-			if (is_string($key) && isset($deniedFields[$key]))
-			{
-				unset($data[$key]);
-
-				continue;
-			}
-
-			if (is_array($value))
-			{
-				$data[$key] = $this->removeDeniedFields($value, $deniedFields);
-			}
-		}
-
-		return $data;
 	}
 
 	private function applyReadDefaultsIfNeeded(MethodDescription $methodDescription, array $payload): array
@@ -542,7 +559,7 @@ final class RestMethodInvoker
 
 		$dto = $dtoClass::create();
 		$fieldNames = [];
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			$fieldNames[] = $field->getPropertyName();
 		}
@@ -556,7 +573,7 @@ final class RestMethodInvoker
 		array $payload,
 	): RestController
 	{
-		$httpRequest = new HttpRequest(
+		$httpRequest = new InProcessHttpRequest(
 			Context::getCurrent()->getServer(),
 			[],
 			[],
@@ -614,6 +631,11 @@ final class RestMethodInvoker
 		return $this->routeAvailabilityChecker ?? new RouteAvailabilityChecker();
 	}
 
+	private function getResponseFieldFilter(): ResponseFieldFilter
+	{
+		return $this->responseFieldFilter ?? new ResponseFieldFilter();
+	}
+
 	private function buildInternalRestServerForUser(
 		MethodDescription $methodDescription,
 		array $payload,
@@ -626,18 +648,6 @@ final class RestMethodInvoker
 			'RESPONSE_LANGUAGE' => 'en',
 		];
 
-		return new class($params, $userId) extends \CRestApiServer {
-			public function __construct(array $params, int $userId)
-			{
-				// an internal server must not replace the singleton of the request that opened it
-				$outerInstance = self::$instance;
-				parent::__construct($params);
-				self::$instance = $outerInstance;
-
-				$this->auth = ['user_id' => $userId];
-				$this->authType = 'mcp';
-				$this->authData = ['user_id' => $userId, 'scope' => '', 'auth_type' => 'mcp'];
-			}
-		};
+		return \CRestApiServer::createForInternalCall($params, $userId, 'mcp');
 	}
 }

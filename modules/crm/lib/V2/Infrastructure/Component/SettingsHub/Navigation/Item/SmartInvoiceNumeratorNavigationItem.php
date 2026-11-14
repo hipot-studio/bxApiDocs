@@ -3,9 +3,14 @@
 namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
 use Bitrix\Crm\Service\Router;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class SmartInvoiceNumeratorNavigationItem implements SettingsHubUrlNavigationItem
 {
@@ -29,19 +34,23 @@ final class SmartInvoiceNumeratorNavigationItem implements SettingsHubUrlNavigat
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return true;
+		return $permissions->isCrmAdmin() && $this->isSmartInvoiceEnabled;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		if (!$permissions->isCrmAdmin() || !$this->isSmartInvoiceEnabled)
+		$url = $this->url();
+		if ($url === null || $url->getUri() === '')
 		{
-			return false;
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_NAVIGATION_SMART_INVOICE_NUMERATOR_URL'),
+					'CRM_SETTINGS_HUB_NAVIGATION_SMART_INVOICE_NUMERATOR_URL',
+				),
+			);
 		}
 
-		$url = $this->url();
-
-		return $url !== null && $url->getUri() !== '';
+		return new Result();
 	}
 
 	public function url(): ?Uri

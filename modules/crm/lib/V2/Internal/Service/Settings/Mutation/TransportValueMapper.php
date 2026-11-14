@@ -16,11 +16,11 @@ use Bitrix\Main\Result;
 
 final class TransportValueMapper
 {
-	public function map(SettingSchemaInterface $schema, string $settingCode, mixed $value): Result
+	public function map(SettingSchemaInterface $schema, string $settingId, mixed $value): Result
 	{
 		if ($schema instanceof ObjectSchema)
 		{
-			return $this->mapObject($schema, $settingCode, $value);
+			return $this->mapObject($schema, $settingId, $value);
 		}
 
 		$result = $schema->validate($value);
@@ -34,7 +34,7 @@ final class TransportValueMapper
 		return $result;
 	}
 
-	private function mapObject(ObjectSchema $schema, string $settingCode, mixed $value): Result
+	private function mapObject(ObjectSchema $schema, string $settingId, mixed $value): Result
 	{
 		$result = new Result();
 		if (!is_array($value) || ($value !== [] && array_is_list($value)))
@@ -47,21 +47,21 @@ final class TransportValueMapper
 			);
 		}
 
-		$fieldsByCode = [];
+		$fieldsById = [];
 		foreach ($schema->getFields() as $field)
 		{
-			$fieldsByCode[$field->code] = $field;
+			$fieldsById[$field->id] = $field;
 		}
 
-		foreach ($value as $code => $_)
+		foreach ($value as $id => $_)
 		{
-			if (!isset($fieldsByCode[$code]))
+			if (!isset($fieldsById[$id]))
 			{
 				$result->addError(
 					new SettingValidationError(
 						'Object contains an unknown field.',
 						SettingErrorCode::UNKNOWN_FIELD,
-						['path' => (string)$code],
+						['path' => (string)$id],
 					),
 				);
 			}
@@ -69,13 +69,13 @@ final class TransportValueMapper
 
 		foreach ($schema->getFields() as $field)
 		{
-			if (!array_key_exists($field->code, $value))
+			if (!array_key_exists($field->id, $value))
 			{
 				$result->addError(
 					new SettingValidationError(
 						'Required object field is missing.',
 						SettingErrorCode::REQUIRED_FIELD_MISSING,
-						['path' => $field->code],
+						['path' => $field->id],
 					),
 				);
 			}
@@ -89,7 +89,7 @@ final class TransportValueMapper
 		$mappedFields = [];
 		foreach ($schema->getFields() as $field)
 		{
-			$fieldResult = $this->map($field->schema, $settingCode, $value[$field->code]);
+			$fieldResult = $this->map($field->schema, $settingId, $value[$field->id]);
 			if (!$fieldResult->isSuccess())
 			{
 				$this->addFieldErrors($result, $field, $fieldResult);
@@ -97,7 +97,7 @@ final class TransportValueMapper
 				continue;
 			}
 
-			$mappedFields[$field->code] = $fieldResult->getData()['value'];
+			$mappedFields[$field->id] = $fieldResult->getData()['value'];
 		}
 
 		if (!$result->isSuccess())
@@ -105,7 +105,7 @@ final class TransportValueMapper
 			return $result;
 		}
 
-		$mappedValue = $this->createObjectValue($settingCode, $mappedFields, $result);
+		$mappedValue = $this->createObjectValue($settingId, $mappedFields, $result);
 		if (!$result->isSuccess())
 		{
 			return $result;
@@ -137,7 +137,7 @@ final class TransportValueMapper
 			}
 
 			$path = $customData['path'] ?? null;
-			$customData['path'] = $field->code . ($path === null ? '' : '.' . $path);
+			$customData['path'] = $field->id . ($path === null ? '' : '.' . $path);
 			$result->addError(
 				new SettingValidationError(
 					$error->getMessage(),
@@ -151,9 +151,9 @@ final class TransportValueMapper
 	/**
 	 * @param array<string, mixed> $fields
 	 */
-	private function createObjectValue(string $settingCode, array $fields, Result $result): mixed
+	private function createObjectValue(string $settingId, array $fields, Result $result): mixed
 	{
-		if ($settingCode !== CallToSetting::CODE)
+		if ($settingId !== CallToSetting::ID)
 		{
 			$result->addError(
 				new Error(

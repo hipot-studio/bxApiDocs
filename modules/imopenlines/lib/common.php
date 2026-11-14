@@ -228,6 +228,10 @@ class Common
 	}
 
 	/**
+	 * Stores the client's answer to the personal data agreement message.
+	 * Raising the flag is refused for an agreement that is not available: the client was never shown it,
+	 * and Consent would reject such an agreement anyway.
+	 *
 	 * @param $params
 	 * @return bool
 	 */
@@ -244,7 +248,12 @@ class Common
 			return false;
 		}
 
-		$params['FLAG'] = $params['FLAG'] == 'N'? 'N': 'Y';
+		$params['FLAG'] = ($params['FLAG'] ?? '') == 'N'? 'N': 'Y';
+
+		if ($params['FLAG'] === 'Y' && !self::isAgreementAvailable($params['AGREEMENT_ID']))
+		{
+			return false;
+		}
 
 		\Bitrix\Imopenlines\Model\UserRelationTable::update($params['USER_CODE'], Array('AGREES' => $params['FLAG']));
 
@@ -262,22 +271,56 @@ class Common
 	}
 
 	/**
+	 * Tells whether the agreement can be shown to a client: it is selected, still exists and is active.
+	 *
+	 * @param int $agreementId
+	 * @return bool
+	 */
+	public static function isAgreementAvailable(int $agreementId): bool
+	{
+		return self::getAvailableAgreement($agreementId) !== null;
+	}
+
+	/**
+	 * @param int $agreementId
+	 * @return array|null Agreement row with the fields of the public link, null when it is not available.
+	 */
+	private static function getAvailableAgreement(int $agreementId): ?array
+	{
+		if ($agreementId <= 0)
+		{
+			return null;
+		}
+
+		$agreement = Main\UserConsent\Internals\AgreementTable::getRow([
+			'select' => ['ID', 'SECURITY_CODE'],
+			'filter' => [
+				'=ID' => $agreementId,
+				'=ACTIVE' => Main\UserConsent\Agreement::ACTIVE,
+			],
+		]);
+
+		return $agreement ?: null;
+	}
+
+	/**
 	 * @param int $agreementId
 	 * @param string $languageId
 	 * @param bool $iframe
-	 * @return string
+	 * @return string Empty when the agreement cannot be shown to a client.
 	 */
 	public static function getAgreementLink($agreementId, $languageId = null, $iframe = false): string
 	{
-		$agreementId = (int)$agreementId;
-
-		$ag = new \Bitrix\Main\UserConsent\Agreement($agreementId);
-		$data = $ag->getData();
+		$agreement = self::getAvailableAgreement((int)$agreementId);
+		if ($agreement === null)
+		{
+			return '';
+		}
 
 		return
 			self::getServerAddress()
-			. '/pub/imol.php?id='.$agreementId
-			. '&sec='.$data['SECURITY_CODE']
+			. '/pub/imol.php?id='.$agreement['ID']
+			. '&sec='.$agreement['SECURITY_CODE']
 			. ($iframe ? '&iframe=Y': '')
 			. ($languageId ? '&user_lang='.$languageId: '')
 		;

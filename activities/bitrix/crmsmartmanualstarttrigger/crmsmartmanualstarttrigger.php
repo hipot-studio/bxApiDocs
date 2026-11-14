@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Public\Activity\Configurator;
 use Bitrix\Bizproc\Public\Entity\Trigger\Section;
 use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventOutputsTrait;
 use Bitrix\Crm\Integration\BizProc\Trigger\CategoryProperty;
+use Bitrix\Crm\Integration\BizProc\Trigger\TestRunDocument;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 
@@ -154,6 +155,11 @@ class CBPCrmSmartManualStartTrigger extends \CBPManualStartTrigger
 			'Type' => FieldType::DOCUMENT,
 			'Default' => $documentType,
 		];
+	}
+
+	public static function getTestRunDocumentDeclaration(array $documentType): ?array
+	{
+		return TestRunDocument::getDeclarationForDocumentType($documentType);
 	}
 
 	public static function getPropertiesDialogValues(

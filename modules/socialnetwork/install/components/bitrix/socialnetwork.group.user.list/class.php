@@ -1681,10 +1681,20 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 
 	public function disconnectDepartmentAction(array $fields = []): ?array
 	{
+		$groupId = (int)($this->arParams['GROUP_ID'] ?? 0);
+		if (!Helper\Workgroup\Access::canModify(['groupId' => $groupId]))
+		{
+			$this->errorCollection->setError(
+				new Error(Loc::getMessage('SOCIALNETWORK_GROUP_USER_LIST_ERROR_NO_GROUP_PERMS'))
+			);
+
+			return null;
+		}
+
 		try
 		{
 			$result = Helper\Workgroup::disconnectDepartment([
-				'groupId' => (int)($this->arParams['GROUP_ID'] ?? 0),
+				'groupId' => $groupId,
 				'departmentId' => (int)($fields['id'] ?? 0),
 			]);
 		}

@@ -2,16 +2,22 @@
 
 namespace Bitrix\Call\Integration;
 
+use Bitrix\Call\Background\JobDispatcher;
 use Bitrix\Call\Call;
 use Bitrix\Call\CallUser;
+use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Settings;
+use Bitrix\Call\Signaling;
 use Bitrix\Im\Common;
 use Bitrix\Im\Dialog;
+use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Chat\NullChat;
-use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\UserTable;
 
 \Bitrix\Main\Loader::includeModule('im');
@@ -24,8 +30,11 @@ class Chat extends AbstractEntity
 	protected $chatId;
 	public $chatFields;
 	protected $chatUsers = [];
+	protected array $pendingMissedCallPushes = [];
 
 	const MUTE_MESSAGE = true;
+
+	private const REAL_USER_COUNT = 'REAL_USER_COUNT';
 
 	public function __construct(Call $call, $entityId)
 	{
@@ -51,28 +60,105 @@ class Chat extends AbstractEntity
 		{
 			$this->chatFields = $this->getChatFields($chat);
 		}
-		$users = $chat->getRelationProvider()->getAllMemberIds();
-		$users[$call->getInitiatorId()] = $call->getInitiatorId();
-		if (!empty($users))
-		{
-			$activeRealUsers = UserTable::getList([
-				'select' => ['ID'],
-				'filter' => [
-					'ID' => $users,
-					'=ACTIVE' => 'Y',
-					[
-						'LOGIC' => 'OR',
-						'=IS_REAL_USER' => 'Y',
-						'=EXTERNAL_AUTH_ID' => [
-							\Bitrix\Call\Rest\Auth::AUTH_TYPE,
-							\Bitrix\Im\V2\Entity\User\UserGuest::AUTH_ID,
-						],
-					]
-				]
-			])->fetchAll();
-			$this->chatUsers = array_column($activeRealUsers, 'ID');
-		}
+		$this->chatUsers = self::getRealUserIdsInChat($chatId, $call->getInitiatorId());
 		$this->chatId = $chatId;
+	}
+
+	/**
+	 * The single owner of "who counts as a participant of a call in this chat": the members of the
+	 * chat plus the initiator, forced into the composition because an open chat lets one start a
+	 * call without being a member of it.
+	 *
+	 * @return list<numeric-string>
+	 */
+	public static function getRealUserIdsInChat(int $chatId, int $forcedUserId): array
+	{
+		$memberIds = \Bitrix\Im\V2\Chat::getInstance($chatId)->getRelationProvider()->getAllMemberIds();
+		$memberIds[$forcedUserId] = $forcedUserId;
+
+		return self::getActiveRealUserIds($memberIds);
+	}
+
+	/**
+	 * The size of the composition, counted by the database: a caller that needs the number only
+	 * must not pay for reading the whole membership, so nothing is materialized. Unlike the list
+	 * projection, this one reads the raw non-hidden relations of the chat, not the membership
+	 * Im\V2\Chat exposes after filtering by access to the parent chat.
+	 * The forced user is answered for apart, in the second branch of the same statement, because
+	 * they may have no relation to the chat at all; the aggregate leaves them out, so a member is
+	 * never counted twice.
+	 */
+	public static function getRealUserCountInChat(int $chatId, int $forcedUserId): int
+	{
+		$counts = self::queryRealMemberCount($chatId, $forcedUserId)
+			->unionAll(self::queryRealUserCount($forcedUserId))
+			->fetchAll()
+		;
+
+		return (int)array_sum(array_column($counts, self::REAL_USER_COUNT));
+	}
+
+	/**
+	 * The id projection of the participant condition.
+	 *
+	 * @param array<int|numeric-string> $userIds
+	 * @return list<numeric-string>
+	 */
+	public static function getActiveRealUserIds(array $userIds): array
+	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$activeRealUsers = UserTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $userIds)
+			->where(self::getActiveRealUserFilter())
+			->fetchAll()
+		;
+
+		return array_column($activeRealUsers, 'ID');
+	}
+
+	private static function queryRealMemberCount(int $chatId, int $excludedUserId): Query
+	{
+		return RelationTable::query()
+			->where('CHAT_ID', $chatId)
+			->where('IS_HIDDEN', false)
+			->whereNot('USER_ID', $excludedUserId)
+			->where(self::getActiveRealUserFilter('USER.'))
+			->addSelect(new ExpressionField(self::REAL_USER_COUNT, 'COUNT(DISTINCT %s)', 'USER_ID'))
+		;
+	}
+
+	private static function queryRealUserCount(int $userId): Query
+	{
+		return UserTable::query()
+			->where('ID', $userId)
+			->where(self::getActiveRealUserFilter())
+			->addSelect(new ExpressionField(self::REAL_USER_COUNT, 'COUNT(%s)', 'ID'))
+		;
+	}
+
+	/**
+	 * The single owner of the participant condition: bots and the other external account types are
+	 * left out, except the two the call authorizes itself. Every projection reads it through the
+	 * prefix of the entity its query starts from, so the condition itself exists once.
+	 */
+	private static function getActiveRealUserFilter(string $fieldPrefix = ''): ConditionTree
+	{
+		return Query::filter()
+			->where($fieldPrefix . 'ACTIVE', true)
+			->where(Query::filter()
+				->logic(ConditionTree::LOGIC_OR)
+				->where($fieldPrefix . 'IS_REAL_USER', true)
+				->whereIn($fieldPrefix . 'EXTERNAL_AUTH_ID', [
+					\Bitrix\Call\Rest\Auth::AUTH_TYPE,
+					\Bitrix\Im\V2\Entity\User\UserGuest::AUTH_ID,
+				])
+			)
+		;
 	}
 
 	/**
@@ -138,30 +224,6 @@ class Chat extends AbstractEntity
 		if (Common::isChatId($this->entityId))
 		{
 			return Dialog::hasAccess($this->entityId, $userId);
-		}
-
-		if (
-			!\Bitrix\Main\ModuleManager::isModuleInstalled('intranet')
-			&& \Bitrix\Main\Loader::includeModule('socialnetwork')
-		)
-		{
-			if (
-				\CIMSettings::GetPrivacy(\CIMSettings::PRIVACY_CALL) == \CIMSettings::PRIVACY_RESULT_CONTACT
-				&& \CSocNetUser::IsFriendsAllowed()
-				&& !\CSocNetUserRelations::IsFriends($this->entityId, $userId)
-			)
-			{
-				return false;
-			}
-
-			if (
-				\CIMSettings::GetPrivacy(\CIMSettings::PRIVACY_CALL, $this->entityId) === \CIMSettings::PRIVACY_RESULT_CONTACT
-				&& \CSocNetUser::IsFriendsAllowed()
-				&& !\CSocNetUserRelations::IsFriends($this->entityId, $userId)
-			)
-			{
-				return false;
-			}
 		}
 
 		return true;
@@ -478,7 +540,64 @@ class Chat extends AbstractEntity
 			if ($message)
 			{
 				$componentParams['MESSAGE_TEXT'] = $message;
-				$this->sendMessage($message, $mute, $skipCounterInc, $componentParams);
+				$messageId = $this->sendMessage($message, $mute, $skipCounterInc, $componentParams);
+
+				// Same sender resolution as FROM_USER_ID in sendMessage().
+				$fromUserId = isset($componentParams['INITIATOR_ID'])
+					? (int)$componentParams['INITIATOR_ID']
+					: (int)$initiatorId
+				;
+
+				// Pushes are only collected here and sent on call:onCallFinished:
+				// at this point the callee is still CALLING and the missed call
+				// is not counted yet, so a push sent now would take a stale badge
+				// in the synchronous pull mode.
+				if (
+					in_array($componentParams['MESSAGE_TYPE'], ['MISSED', 'CANCELLED'], true)
+					&& !empty($userIds[0])
+					&& $messageId
+				)
+				{
+					$this->pendingMissedCallPushes[] = [
+						'recipientId' => (int)$userIds[0],
+						'fromUserId' => $fromUserId,
+						'messageId' => (int)$messageId,
+					];
+				}
+				elseif (
+					$componentParams['MESSAGE_TYPE'] === 'FINISH'
+					&& $this->call->getType() === Call::TYPE_INSTANT
+					&& $messageId
+				)
+				{
+					// Instant call finished without the MISSED/CANCELLED message (group chat,
+					// or a private chat served by a non-plain call): the chat gets only the muted
+					// FINISH message, so the missed-call notification is the only way for Android
+					// to keep the icon badge after the incoming-call one is revoked.
+					// Recipients mirror the finish-time "missed" call log mapping:
+					// users still ringing or unavailable when the call ended.
+					$missedUserIds = array_values(array_filter($userIds, function ($userId) {
+						$userState = $this->call->getUser($userId)?->getState();
+
+						return $userState === CallUser::STATE_CALLING || $userState === CallUser::STATE_UNAVAILABLE;
+					}));
+
+					if ($missedUserIds && $this->isPrivateChat())
+					{
+						$this->pendingMissedCallPushes[] = [
+							'recipientId' => (int)$missedUserIds[0],
+							'fromUserId' => $fromUserId,
+							'messageId' => (int)$messageId,
+						];
+					}
+					elseif ($missedUserIds)
+					{
+						$this->pendingMissedCallPushes[] = [
+							'recipientIds' => $missedUserIds,
+							'messageId' => (int)$messageId,
+						];
+					}
+				}
 			}
 		}
 	}
@@ -504,9 +623,13 @@ class Chat extends AbstractEntity
 		$this->sendMessage($message, self::MUTE_MESSAGE, true, $componentParams);
 	}
 
+	/**
+	 * Work without an outcome: sendMessage() below answers with an id or false, and nobody reads
+	 * what this send ended with.
+	 */
 	public function sendMessageDeferred($message, $muted = false, $skipCounterInc = false, $componentParams = [])
 	{
-		Application::getInstance()->addBackgroundJob([$this, 'sendMessage'], [$message, $muted, $skipCounterInc, $componentParams]);
+		JobDispatcher::getInstance()->enqueue([$this, 'sendMessage'], [$message, $muted, $skipCounterInc, $componentParams]);
 	}
 
 	public function isBroadcast()
@@ -516,6 +639,11 @@ class Chat extends AbstractEntity
 			&& $this->chatFields['entity_data_1'] === 'BROADCAST';
 	}
 
+	/**
+	 * Sends a service message to the chat.
+	 *
+	 * @return int|false Id of the added message or false on failure.
+	 */
 	public function sendMessage($message, $muted = false, $skipCounterInc = false, $componentParams = [])
 	{
 		$initiator = $this->getCall()->getInitiatorId();
@@ -531,7 +659,7 @@ class Chat extends AbstractEntity
 			$chatId = \Bitrix\Im\Dialog::getChatId($this->getEntityId());
 		}
 
-		\CIMMessenger::add([
+		return \CIMMessenger::add([
 			'WAIT_FULL_EXECUTION' => 'N',
 			'TO_CHAT_ID' => $chatId,
 			'MESSAGE_TYPE' => $this->isPrivateChat() ? IM_MESSAGE_PRIVATE : IM_MESSAGE_CHAT,
@@ -545,6 +673,263 @@ class Chat extends AbstractEntity
 				'COMPONENT_PARAMS' => $componentParams,
 			]
 		]);
+	}
+
+	/**
+	 * Sends the missed-call pushes collected in onStateChange().
+	 * Called on call:onCallFinished: by that moment Call::finish() has moved
+	 * the callees out of CALLING and the missed-call counter is updated,
+	 * so the badge computed at send time is correct even when the pull module
+	 * sends pushes synchronously (BX_CHECK_AGENT_START without BX_WITH_ON_AFTER_EPILOG).
+	 */
+	public function sendPendingMissedCallPushes(): void
+	{
+		$pendingPushes = $this->pendingMissedCallPushes;
+		$this->pendingMissedCallPushes = [];
+
+		foreach ($pendingPushes as $pendingPush)
+		{
+			if (isset($pendingPush['recipientIds']))
+			{
+				$this->sendMissedCallGroupPush($pendingPush['recipientIds'], $pendingPush['messageId']);
+			}
+			else
+			{
+				$this->sendMissedCallPush($pendingPush['recipientId'], $pendingPush['fromUserId'], $pendingPush['messageId']);
+			}
+		}
+	}
+
+	/**
+	 * Sends a visible missed-call mobile push to the callee.
+	 * Apple devices are filtered out: they handle missed calls natively via CallKit.
+	 * Any push failure must not break the call finish flow.
+	 */
+	protected function sendMissedCallPush(int $recipientId, int $fromUserId, int $messageId): void
+	{
+		if ($recipientId <= 0 || !\Bitrix\Main\Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		try
+		{
+			$fromUser = \Bitrix\Im\User::getInstance($fromUserId);
+			$avatarUrl = (string)$fromUser->getAvatar();
+			if ($avatarUrl !== '' && mb_strpos($avatarUrl, 'http') !== 0)
+			{
+				$avatarUrl = Common::getPublicDomain() . $avatarUrl;
+			}
+
+			// Resolve the phrase in the language of the only push recipient,
+			// it may differ from the language of the current request context.
+			$recipientLang = \Bitrix\Im\V2\Entity\User\User::getInstance($recipientId)->getLanguageId() ?: null;
+
+			\Bitrix\Pull\Push::add(
+				[$recipientId],
+				self::buildMissedCallPushPayload(
+					$fromUserId,
+					$messageId,
+					(string)$fromUser->getFullName(false),
+					$avatarUrl,
+					$this->resolveMissedCallPushText($recipientLang)
+				)
+			);
+		}
+		catch (\Throwable $e)
+		{
+			// Push delivery is best-effort: a failure must not break the call finish flow.
+			Logger::getInstance()->warning(
+				"Chat::sendMissedCallPush: missed call push send failed: {$e->getMessage()} (code: {$e->getCode()})."
+				. " RecipientId: {$recipientId}"
+			);
+		}
+	}
+
+	/**
+	 * Sends the visible missed-call mobile push to the group chat members
+	 * who did not answer the call. The notification is styled as a regular
+	 * group chat message push, so it opens the chat and is revoked by reading it.
+	 * Apple devices are filtered out: they handle missed calls natively via CallKit.
+	 * Any push failure must not break the call finish flow.
+	 */
+	protected function sendMissedCallGroupPush(array $recipientIds, int $messageId): void
+	{
+		if (empty($recipientIds) || !\Bitrix\Main\Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		try
+		{
+			// Same title and avatar processing as the regular group message push:
+			// the pull-format title is html-encoded, the avatar may be a blank placeholder.
+			$chatTitle = mb_substr(\htmlspecialcharsback((string)($this->chatFields['name'] ?? '')), 0, 32);
+			$chatType = (string)($this->chatFields['type'] ?? 'chat');
+			$chatTypeLetter = (string)($this->chatFields['message_type'] ?? IM_MESSAGE_CHAT);
+
+			$avatarUrl = (string)($this->chatFields['avatar'] ?? '');
+			if ($avatarUrl === '/bitrix/js/im/images/blank.gif')
+			{
+				$avatarUrl = '';
+			}
+			elseif ($avatarUrl !== '' && mb_strpos($avatarUrl, 'http') !== 0)
+			{
+				$avatarUrl = Common::getPublicDomain() . $avatarUrl;
+			}
+
+			// Resolve the phrase per recipient language: members of a group chat
+			// may use different interface languages. Languages are loaded in bulk:
+			// a per-recipient user instance would cost a separate query per recipient.
+			$recipientIds = array_values(array_unique(array_map('intval', $recipientIds)));
+			$recipientLanguages = array_fill_keys($recipientIds, '');
+			foreach (array_chunk($recipientIds, 300) as $recipientIdChunk)
+			{
+				$userResult = UserTable::query()
+					->setSelect(['ID', 'LANGUAGE_ID'])
+					->whereIn('ID', $recipientIdChunk)
+					->exec()
+				;
+				while ($user = $userResult->fetch())
+				{
+					$recipientLanguages[(int)$user['ID']] = (string)($user['LANGUAGE_ID'] ?? '');
+				}
+			}
+
+			$recipientsByLang = [];
+			foreach ($recipientLanguages as $recipientId => $recipientLang)
+			{
+				$recipientsByLang[$recipientLang][] = $recipientId;
+			}
+
+			foreach ($recipientsByLang as $lang => $langRecipientIds)
+			{
+				\Bitrix\Pull\Push::add(
+					$langRecipientIds,
+					self::buildMissedCallGroupPushPayload(
+						(int)$this->chatId,
+						$chatType,
+						$chatTypeLetter,
+						$messageId,
+						$chatTitle,
+						$avatarUrl,
+						$this->resolveMissedCallPushText($lang !== '' ? $lang : null)
+					)
+				);
+			}
+		}
+		catch (\Throwable $e)
+		{
+			// Push delivery is best-effort: a failure must not break the call finish flow.
+			Logger::getInstance()->warning(
+				"Chat::sendMissedCallGroupPush: missed call push send failed: {$e->getMessage()} (code: {$e->getCode()})."
+				. " ChatId: {$this->chatId}"
+			);
+		}
+	}
+
+	/**
+	 * Resolves the missed-call push text in the recipient language with a fallback
+	 * to the current context language, so the push never goes out empty.
+	 */
+	protected function resolveMissedCallPushText(?string $languageId): string
+	{
+		$pushText = (string)Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_MISSED_PUSH', null, $languageId);
+		if ($pushText === '')
+		{
+			// The phrase has no translation for the recipient language yet:
+			// fall back to the current context language instead of an empty push text.
+			$pushText = (string)Loc::getMessage('IM_CALL_INTEGRATION_CHAT_CALL_MISSED_PUSH');
+		}
+
+		return $pushText;
+	}
+
+	/**
+	 * Builds the payload for the missed-call mobile push.
+	 * Pure function of its arguments: no I/O, safe to unit test.
+	 * The push text is resolved by the caller in the recipient language.
+	 * The badge key is omitted on purpose: \CPushManager::prepareSend fills it
+	 * from the mobile counter aggregator.
+	 */
+	public static function buildMissedCallPushPayload(int $fromUserId, int $messageId, string $senderName, string $avatarUrl, string $pushText): array
+	{
+		return [
+			'module_id' => 'im',
+			'push' => [
+				'type' => 'message',
+				'tag' => 'IM_MESS_' . $fromUserId,
+				'sub_tag' => 'IM_MESS',
+				'app_id' => 'Bitrix24',
+				'message' => $pushText,
+				'send_immediately' => 'Y',
+				'advanced_params' => [
+					'group' => 'im_message',
+					'avatarUrl' => $avatarUrl,
+					'senderName' => $senderName,
+					'senderMessage' => $pushText,
+					'filterCallback' => [Signaling::class, 'filterPushesForApple'],
+				],
+				'params' => [
+					'TAG' => 'IM_MESS_' . $fromUserId,
+					'CATEGORY' => 'ANSWER',
+					'URL' => SITE_DIR . 'mobile/ajax.php?mobile_action=im_answer',
+					'PARAMS' => [
+						'RECIPIENT_ID' => $fromUserId,
+						'MESSAGE_ID' => $messageId,
+					],
+				],
+			],
+		];
+	}
+
+	/**
+	 * Builds the payload for the missed-call mobile push in a group chat.
+	 * Pure function of its arguments: no I/O, safe to unit test.
+	 * Mirrors the regular group message push (tag IM_CHAT_{chatId}, chat identity
+	 * in the notification header), so tapping it opens the chat and reading
+	 * the chat revokes the notification. The push text is resolved by the caller
+	 * in the recipient language. The badge key is omitted on purpose:
+	 * \CPushManager::prepareSend fills it from the mobile counter aggregator.
+	 */
+	public static function buildMissedCallGroupPushPayload(
+		int $chatId,
+		string $chatType,
+		string $chatTypeLetter,
+		int $messageId,
+		string $chatTitle,
+		string $avatarUrl,
+		string $pushText
+	): array
+	{
+		return [
+			'module_id' => 'im',
+			'push' => [
+				'type' => $chatType === 'open' ? 'openChat' : $chatType,
+				'tag' => 'IM_CHAT_' . $chatId,
+				'sub_tag' => 'IM_MESS',
+				'app_id' => 'Bitrix24',
+				'message' => $pushText,
+				'send_immediately' => 'Y',
+				'advanced_params' => [
+					'group' => 'im_message',
+					'avatarUrl' => $avatarUrl,
+					'senderName' => $chatTitle,
+					'senderMessage' => $pushText,
+					'filterCallback' => [Signaling::class, 'filterPushesForApple'],
+				],
+				'params' => [
+					'TAG' => 'IM_CHAT_' . $chatId,
+					'CHAT_TYPE' => $chatTypeLetter,
+					'CATEGORY' => 'ANSWER',
+					'URL' => SITE_DIR . 'mobile/ajax.php?mobile_action=im_answer',
+					'PARAMS' => [
+						'RECIPIENT_ID' => 'chat' . $chatId,
+						'MESSAGE_ID' => $messageId,
+					],
+				],
+			],
+		];
 	}
 
 	public function toArray($initiatorId = 0)

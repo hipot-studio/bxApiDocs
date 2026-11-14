@@ -34,15 +34,7 @@ class CallTable extends DataManager
 {
 	public static function getTableName(): string
 	{
-		//todo remove migration option check
-		static $tableName = null;
-		if ($tableName === null)
-		{
-			$tableName = \Bitrix\Main\Config\Option::get('call', 'call_db_migrated', 0) >= 5
-				? 'b_call_session'
-				: 'b_im_call';
-		}
-		return $tableName;
+		return 'b_call_session';
 	}
 
 	public static function getMap(): array
@@ -104,6 +96,15 @@ class CallTable extends DataManager
 				->configureValues('N', 'Y')
 				->configureDefaultValue('N'),
 
+			// A user destroyed the recording of this call {@see \Bitrix\Call\Call::isRecordDestroyed()}.
+			// Nullable for the rows of the calls that predate the column: the update leaves those
+			// empty rather than calling them alive, and empty is read as no deletion. Every row
+			// made since carries the default below.
+			(new BooleanField('RECORD_DESTROYED'))
+				->configureValues('N', 'Y')
+				->configureNullable()
+				->configureDefaultValue('N'),
+
 			(new Reference('CALL_USER',CallUserTable::class,
 				Join::on('this.ID', 'ref.CALL_ID')))
 				->configureJoinType(Join::TYPE_INNER),
@@ -114,14 +115,16 @@ class CallTable extends DataManager
 	 * Updates call state in the database. Returns true if state was changed by the update and false otherwise.
 	 * @param int $id Id of the call.
 	 * @param string $newState New call state
+	 * @param string|null $fromState Change the state only if the call is currently in this state.
 	 * @return bool
 	 */
-	public static function updateState(int $id, string $newState) : bool
+	public static function updateState(int $id, string $newState, ?string $fromState = null) : bool
 	{
 		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
 		$tableName = static::getTableName();
 		$newState = $sqlHelper->forSql($newState);
+		$fromStateCondition = $fromState === null ? '' : "AND STATE = '" . $sqlHelper->forSql($fromState) . "'";
 
 		$update = "STATE = '$newState'";
 		if($newState === Call::STATE_FINISHED)
@@ -137,6 +140,7 @@ class CallTable extends DataManager
 			WHERE
 				ID = $id
 				AND STATE != '$newState'
+				$fromStateCondition
 		";
 
 		$connection->query($query);

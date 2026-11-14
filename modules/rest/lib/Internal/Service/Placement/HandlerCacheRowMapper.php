@@ -28,7 +28,7 @@ final class HandlerCacheRowMapper
 			'ID' => (int)$handler['ID'],
 			'APP_ID' => $handler['APP_ID'],
 			'INSTALLED' => $handler['INSTALLED'],
-			'APP_ACCESS' => $handler['APP_ACCESS'],
+			'APP_ACCESS' => '',
 		];
 	}
 
@@ -65,7 +65,7 @@ final class HandlerCacheRowMapper
 				? AppTable::ACTIVE
 				: AppTable::INACTIVE,
 			'INSTALLED' => $isEmbedding ? AppTable::INSTALLED : $handler['INSTALLED'],
-			'APP_ACCESS' => $isEmbedding ? '' : $handler['APP_ACCESS'],
+			'APP_ACCESS' => '',
 		];
 	}
 
@@ -89,7 +89,7 @@ final class HandlerCacheRowMapper
 			'OPTIONS' => $handler->getOptions(),
 			'INSTALLED' => $isEmbedding ? AppTable::INSTALLED : $app?->getInstalled(),
 			'APP_NAME' => $isEmbedding ? '' : $app?->getAppName(),
-			'APP_ACCESS' => $isEmbedding ? '' : $app?->getAccess(),
+			'APP_ACCESS' => '',
 			'LANG_ALL' => [],
 		];
 

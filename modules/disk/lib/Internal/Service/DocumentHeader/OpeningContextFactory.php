@@ -4,15 +4,19 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\DocumentHeader;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\Models;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\HtmlEditor\SourceResolver;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Error;
 
 /**
  * Builds the context of an opening: from the session of a document for the shells of the editors, and
@@ -84,6 +88,44 @@ class OpeningContextFactory
 			downloadUrl: $downloadUrl,
 			accessLevel: $accessLevel ?? $this->getUnifiedLinkAccessService()->check($file, userId: $userId),
 			offersObjectSharing: true,
+			allowsEditing: true,
+		));
+	}
+
+	public function fromHtmlEditorFile(File $file, int $userId, string $downloadUrl): OpeningContext
+	{
+		return $this->describeOrRefuse($file, fn(): OpeningContext => $this->describeViewing(
+			file: $file,
+			userId: $userId,
+			downloadUrl: $downloadUrl,
+			accessLevel: $this->getUnifiedLinkAccessService()->check($file, userId: $userId),
+			offersObjectSharing: true,
+			isViewMode: false,
+		));
+	}
+
+	public function fromHtmlEditorAttachedObject(
+		AttachedObject $attached,
+		int $userId,
+		string $downloadUrl,
+	): ?OpeningContext
+	{
+		$file = $attached->getFile();
+		if (!$file instanceof File)
+		{
+			return null;
+		}
+
+		return $this->describeOrRefuse($file, fn(): OpeningContext => $this->describeViewing(
+			file: $file,
+			userId: $userId,
+			downloadUrl: $downloadUrl,
+			accessLevel: $this->getUnifiedLinkAccessService()->check($file, $attached, $userId),
+			offersObjectSharing: false,
+			name: (string)$attached->getName(),
+			versionId: (int)$attached->getVersionId() ?: null,
+			attachedObject: $attached,
+			isViewMode: false,
 		));
 	}
 
@@ -147,12 +189,13 @@ class OpeningContextFactory
 			name: (string)$attachedObject->getName(),
 			versionId: (int)$attachedObject->getVersionId() ?: null,
 			attachedObject: $attachedObject,
+			allowsEditing: !$attachedObject->isSpecificVersion(),
 		));
 	}
 
 	/**
-	 * The public page of a file, served to whoever holds the link - an anonymous visitor included. The
-	 * link is the whole right of such a visitor, and everything needing a portal stays refused.
+	 * The public page of a file, served to whoever holds the link - an anonymous visitor included. An
+	 * authenticated visitor may open the access popup; an anonymous visitor is told nothing of the portal.
 	 */
 	public function fromExternalLink(
 		File $file,
@@ -162,22 +205,33 @@ class OpeningContextFactory
 		string $downloadUrl,
 	): OpeningContext
 	{
-		return $this->describeOrRefuse($file, fn(): OpeningContext => $this->describeViewing(
-			file: $file,
-			userId: $userId,
-			downloadUrl: $downloadUrl,
-			accessLevel: $this->getUnifiedLinkAccessService()->check(
+		return $this->describeOrRefuse($file, function () use (
+			$file,
+			$externalLink,
+			$pinnedVersion,
+			$userId,
+			$downloadUrl,
+		): OpeningContext {
+			$accessLevel = $this->getUnifiedLinkAccessService()->check(
 				$file,
 				userId: $userId,
 				externalLink: $externalLink,
 				version: $pinnedVersion,
-			),
-			offersObjectSharing: false,
-			accessType: OpeningContext::ACCESS_TYPE_EXTERNAL,
-			name: (string)($pinnedVersion?->getName() ?? $file->getName()),
-			versionId: $pinnedVersion === null ? null : (int)$pinnedVersion->getId(),
-			externalLink: $externalLink,
-		));
+			);
+
+			return $this->describeViewing(
+				file: $file,
+				userId: $userId,
+				downloadUrl: $downloadUrl,
+				accessLevel: $accessLevel,
+				offersObjectSharing: $userId > 0,
+				accessType: OpeningContext::ACCESS_TYPE_EXTERNAL,
+				name: (string)($pinnedVersion?->getName() ?? $file->getName()),
+				versionId: $pinnedVersion === null ? null : (int)$pinnedVersion->getId(),
+				externalLink: $externalLink,
+				hasPublicLinkAccess: $accessLevel->canRead(),
+			);
+		});
 	}
 
 	/**
@@ -202,11 +256,8 @@ class OpeningContextFactory
 	}
 
 	/**
-	 * An opening of the html viewer, whichever of the four entries it came from: read-only, served by no
-	 * engine, never a board and drawing the content itself.
-	 *
-	 * The transition to editing and the rename are refused: both are given a session of a document
-	 * {@see RenameService::rename()}, and this surface holds none.
+	 * An HTML opening served without a document engine or session. Viewing may offer the transition
+	 * to editing; renaming remains unavailable because it requires a document session.
 	 */
 	private function describeViewing(
 		File $file,
@@ -219,6 +270,9 @@ class OpeningContextFactory
 		?int $versionId = null,
 		?AttachedObject $attachedObject = null,
 		?ExternalLink $externalLink = null,
+		bool $hasPublicLinkAccess = false,
+		bool $allowsEditing = false,
+		bool $isViewMode = true,
 	): OpeningContext
 	{
 		// The storage is asked for the rights of the object only where the surface offers them at all.
@@ -230,10 +284,17 @@ class OpeningContextFactory
 		return new OpeningContext(
 			file: $file,
 			accessType: $accessType,
-			isViewMode: true,
+			isViewMode: $isViewMode,
 			isBoard: false,
 			canRead: $accessLevel->canRead(),
-			canEdit: false,
+			canEdit: $allowsEditing && $accessLevel->canEdit()
+				&& (
+					!HtmlViewerPolicy::isViewableFile($file)
+					|| (
+						Configuration::isEnabledHtmlEditor()
+						&& (new SourceResolver())->resolve($file, $userId, (int)$attachedObject?->getId() ?: null)->isSuccess()
+					)
+				),
 			canRename: false,
 			canShare: $securityContext !== null && $file->canShare($securityContext),
 			canChangeRights: $securityContext !== null && $file->canChangeRights($securityContext),
@@ -244,6 +305,7 @@ class OpeningContextFactory
 			externalLink: $externalLink,
 			name: $name,
 			downloadUrl: $downloadUrl,
+			hasPublicLinkAccess: $hasPublicLinkAccess,
 		);
 	}
 
@@ -330,6 +392,13 @@ class OpeningContextFactory
 			$attachedObject,
 			$hasUnifiedLinkProof,
 		);
+		$hasPublicLinkAccess = $this->hasPublicLinkAccess(
+			$documentSession,
+			$file,
+			$userId,
+			$accessType,
+			$externalLink,
+		);
 		$editorService = $documentSession->getService();
 
 		return new OpeningContext(
@@ -337,7 +406,7 @@ class OpeningContextFactory
 			accessType: $accessType,
 			isViewMode: $documentSession->isView(),
 			isBoard: $editorService === Models\DocumentService::FlipChart,
-			canRead: $rights->canRead(),
+			canRead: $rights->canRead() || $hasPublicLinkAccess,
 			canEdit: fn(): bool => $this->canOpenForEditing(
 				$userId,
 				$securityContext,
@@ -354,7 +423,42 @@ class OpeningContextFactory
 			attachedObject: $attachedObject,
 			externalLink: $externalLink,
 			downloadUrl: $downloadUrl,
+			hasPublicLinkAccess: $hasPublicLinkAccess,
+			// The verdict of the session is kept per reader and reused by the shell, so the description
+			// pays for it at most once more - and only when the header asks about the transition.
+			editRefusal: static fn(): ?Error => $documentSession->findEditingRefusal(),
 		);
+	}
+
+	private function hasPublicLinkAccess(
+		Models\DocumentSession $documentSession,
+		File $file,
+		int $userId,
+		string $accessType,
+		?ExternalLink $externalLink,
+	): bool
+	{
+		if (
+			$accessType !== OpeningContext::ACCESS_TYPE_UNIFIED
+			|| $externalLink === null
+		)
+		{
+			return false;
+		}
+
+		$isVersion = $documentSession->isVersion();
+		$version = $isVersion ? $documentSession->getVersion() : null;
+		if ($isVersion && $version === null)
+		{
+			return false;
+		}
+
+		return $this->getUnifiedLinkAccessService()->check(
+			$file,
+			userId: $userId,
+			externalLink: $externalLink,
+			version: $version,
+		)->canRead();
 	}
 
 	/**

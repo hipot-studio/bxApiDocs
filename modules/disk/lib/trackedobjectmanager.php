@@ -16,6 +16,9 @@ final class TrackedObjectManager
 	protected ErrorCollection $errorCollection;
 	protected array $dataToInsert = [];
 	private ?JournalWriter $journalWriter = null;
+	private bool $finalizeScheduled = false;
+	private bool $finalizing = false;
+	private array $processedBeforeFailure = [];
 
 	/**
 	 * Constructor RecentlyUsedManager.
@@ -23,31 +26,127 @@ final class TrackedObjectManager
 	public function __construct()
 	{
 		$this->errorCollection = new ErrorCollection();
-		Application::getInstance()->addBackgroundJob([$this, 'finalize']);
+		$this->scheduleFinalize();
 	}
 
 	public function finalize(): void
 	{
-		$rightsManager = Driver::getInstance()->getRightsManager();
-		foreach ($this->dataToInsert as $item)
+		if ($this->finalizing)
 		{
-			[
-				'userId' => $userId,
-				'object' => $object,
-				'attachedObject' => $attachedObject,
-				'canRead' => $canRead,
-			] = $item;
-
-			if (!($object instanceof File))
+			return;
+		}
+		$this->finalizeScheduled = false;
+		$this->finalizing = true;
+		$rightsManager = Driver::getInstance()->getRightsManager();
+		$collabUsersByStorage = [];
+		$processed = $this->processedBeforeFailure;
+		$this->processedBeforeFailure = [];
+		$items = [];
+		$nextItem = 0;
+		try
+		{
+			// A write callback may add another intention; the same job consumes it without scheduling itself.
+			while ($this->dataToInsert !== [])
 			{
-				continue;
-			}
-
-			if ($canRead || $rightsManager->hasSimpleRight($userId, $object->getId()))
-			{
-				$this->processPush($userId, $object, $attachedObject);
+				$items = $this->dataToInsert;
+				$this->dataToInsert = [];
+				$nextItem = 0;
+				foreach ($items as $index => $item)
+				{
+					$nextItem = $index + 1;
+					[
+						'userId' => $userId,
+						'object' => $object,
+						'attachedObject' => $attachedObject,
+						'canRead' => $canRead,
+					] = $item;
+					if (!($object instanceof File))
+					{
+						continue;
+					}
+					$userIds = [$userId];
+					if ($attachedObject === null)
+					{
+						$storageId = (int)$object->getStorageId();
+						$collabUsersByStorage[$storageId] ??= $this->getCollabUserIds($object);
+						$userIds = array_merge($userIds, $collabUsersByStorage[$storageId]);
+					}
+					foreach (array_unique($userIds) as $recipientId)
+					{
+						if (!$canRead && !$rightsManager->hasSimpleRight($recipientId, $object->getId()))
+						{
+							continue;
+						}
+						$key = $recipientId . ':' . $object->getId();
+						$attachedId = $attachedObject?->getId();
+						if (
+							array_key_exists($key, $processed)
+							&& ($attachedId === null || $processed[$key] === $attachedId)
+						)
+						{
+							continue;
+						}
+						if ($this->processPush($recipientId, $object, $attachedObject))
+						{
+							// A file refresh retains the attached context; another attachment replaces it.
+							$processed[$key] = $attachedId ?? ($processed[$key] ?? null);
+						}
+					}
+				}
 			}
 		}
+		catch (\Throwable $exception)
+		{
+			// The failed item may already have written data. Continue only unstarted and newly added intentions.
+			$this->dataToInsert = array_merge(array_slice($items, $nextItem), $this->dataToInsert);
+			if ($this->dataToInsert !== [])
+			{
+				$this->processedBeforeFailure = $processed;
+			}
+			throw $exception;
+		}
+		finally
+		{
+			$this->finalizing = false;
+			if ($this->dataToInsert !== [])
+			{
+				$this->scheduleFinalize();
+			}
+		}
+	}
+
+	private function scheduleFinalize(): void
+	{
+		if (!$this->finalizeScheduled && !$this->finalizing)
+		{
+			$this->finalizeScheduled = true;
+			Application::getInstance()->addBackgroundJob([$this, 'finalize']);
+		}
+	}
+
+	/** Collab recipients are resolved after the response, only for unattached file intentions. */
+	private function getCollabUserIds(File $object): array
+	{
+		$storage = $object->getStorage();
+		if (!$storage instanceof Storage)
+		{
+			return [];
+		}
+		$collabService = new Disk\Integration\Collab\CollabService();
+		$collab = $collabService->getCollabByStorage($storage);
+		$userIds = [];
+		if ($collab)
+		{
+			foreach ($collab->getUserMemberIds() as $memberId)
+			{
+				if ($collabService->isCollaberUserById($memberId))
+				{
+					$userIds[] = (int)$memberId;
+				}
+			}
+		}
+
+		return array_unique($userIds);
 	}
 
 	/**
@@ -64,32 +163,13 @@ final class TrackedObjectManager
 			return;
 		}
 
-		$userIds = [(int)$userId];
-
-		//experiemental logic to add each file in collab group to every member without any interaction
-		$collabService = new Disk\Integration\Collab\CollabService();
-		$collab = $collabService->getCollabByStorage($object->getStorage());
-		if ($collab)
-		{
-			foreach ($collab->getUserMemberIds() as $memberId)
-			{
-				if ($collabService->isCollaberUserById($memberId))
-				{
-					$userIds[] = (int)$memberId;
-				}
-			}
-		}
-
-		$userIds = array_unique($userIds);
-		foreach ($userIds as $userId)
-		{
-			$this->dataToInsert[] = [
-				'userId' => $userId,
-				'object' => $object,
-				'attachedObject' => null,
-				'canRead' => $canRead,
-			];
-		}
+		$this->dataToInsert[] = [
+			'userId' => (int)$userId,
+			'object' => $object,
+			'attachedObject' => null,
+			'canRead' => $canRead,
+		];
+		$this->scheduleFinalize();
 	}
 
 	public function pushAttachedObject($user, AttachedObject $attachedObject, bool $canRead = null): void
@@ -106,6 +186,7 @@ final class TrackedObjectManager
 			'attachedObject' => $attachedObject,
 			'canRead' => $canRead,
 		];
+		$this->scheduleFinalize();
 	}
 
 	protected function processPush($user, File $object, AttachedObject $attachedObject = null): bool
@@ -125,20 +206,54 @@ final class TrackedObjectManager
 
 		if ($alreadyExists && !empty($alreadyExists['ID']))
 		{
-			$this->refresh($object, $userId);
+			if ($attachedObject === null)
+			{
+				$this->refresh($object, $userId);
+			}
+			else
+			{
+				Disk\Internals\TrackedObjectTable::updateBatch(
+					[
+						'ATTACHED_OBJECT_ID' => $attachedObject->getId(),
+						'UPDATE_TIME' => new DateTime(),
+					],
+					[
+						'USER_ID' => $userId,
+						'REAL_OBJECT_ID' => $object->getRealObjectId(),
+					],
+				);
+			}
 		}
 		else
 		{
+			$realObject = $object->getRealObject();
+			$realObjectId = (int)($realObject?->getId() ?: $object->getRealObjectId());
+			$markerService = new Disk\Internal\Service\UploadCleanup\MarkerService();
+			if (!$markerService->revokeBeforeUse(
+				$realObjectId,
+				$realObject?->getUploadCleanupMarkerPresenceHint(),
+			))
+			{
+				return false;
+			}
+
 			$addResult = null;
 			try
 			{
-				$addResult = Disk\Internals\TrackedObjectTable::add([
-					'USER_ID' => $userId,
-					'OBJECT_ID' => $object->getId(),
-					'REAL_OBJECT_ID' => $object->getRealObjectId(),
-					'ATTACHED_OBJECT_ID' => $attachedObject?->getId(),
-					'TYPE_FILE' => $object->getTypeFile(),
-				]);
+				$addResult = $markerService->runWithConfirmedRevokedMarker(
+					$realObjectId,
+					static fn() => Disk\Internals\TrackedObjectTable::add([
+						'USER_ID' => $userId,
+						'OBJECT_ID' => $object->getId(),
+						'REAL_OBJECT_ID' => $realObjectId,
+						'ATTACHED_OBJECT_ID' => $attachedObject?->getId(),
+						'TYPE_FILE' => $object->getTypeFile(),
+					]),
+				);
+				if (!$addResult->isSuccess())
+				{
+					return false;
+				}
 			}
 			catch (DuplicateEntryException)
 			{

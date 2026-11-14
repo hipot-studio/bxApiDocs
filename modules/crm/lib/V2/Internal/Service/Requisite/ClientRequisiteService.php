@@ -4,209 +4,95 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Service\Requisite;
 
-use Bitrix\Crm\BankDetailTable;
 use Bitrix\Crm\RequisiteTable;
 use Bitrix\Crm\V2\Internal\Access\Requisite\EntityLinkAccess;
-use Bitrix\Crm\V2\Internal\Repository\Requisite\EntityLinkRepository;
 use Bitrix\Crm\V2\Public\Entity\Requisite\ClientRequisite;
 use Bitrix\Crm\V2\Public\Entity\Requisite\ClientRequisiteError;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\OwnerType;
-use Bitrix\Crm\V2\Public\Provider\Item\AccessMode;
-use Bitrix\Crm\V2\Public\Provider\Item\ItemProvider;
 use Bitrix\Main;
-use Bitrix\Main\Result;
+use Bitrix\Main\Error;
 
 /**
- * Reading and setting the requisite of the client chosen in a CRM entity.
+ * Reading and setting the requisite of the client chosen in a CRM entity, on the scenario of
+ * {@see AbstractOwnerRequisitePairService}.
  *
- * The subject of every permission check is the user given to the constructor and nobody else: the
- * scenario never asks who the current user is.
+ * The party the pair belongs to is the client the entity names: a requisite has to be one of that
+ * client's, and the user has to be allowed to read the client itself.
  *
- * Both halves keep the same shape. The entity that owns the choice is checked first - the type has
- * to be one the link serves, the entity has to exist, and the user has to be allowed to read it for
- * a read and to change it for a write. All three answer {@see ClientRequisiteError::OWNER_NOT_FOUND},
- * so a user who may not see an entity cannot tell it apart from one that is not there. The pair
- * itself is checked next, against the client the entity names: a requisite has to be one of that
- * client's, and a bank requisite one of that requisite's.
+ * A read answers an empty pair rather than a refusal when the client is out of reach, a refusal there
+ * would say that a client is named at all.
  *
- * A read never refuses over the pair. An entity with no row at all, an entity whose row names no
- * requisite, and an entity whose client the user may not read all answer with an empty pair - a
- * refusal in the last case would say that a client is there.
- *
- * Both identifiers arrive normalised as non-negative integers: the request layer turns a missing
- * value and `null` into zero, and the scenario does not tell the two apart. A negative identifier
- * breaks that contract instead of asking for a refusal, and {@see EntityLinkRepository::setClientPair()}
- * throws on it.
- *
- * {@see EntityLinkConsistencyChecker} belongs to the legacy write path and is not called here: it
- * throws refusals with numeric codes of its own, while the checks above are the whole rule of this
- * scenario and every refusal of it is a {@see ClientRequisiteError}.
+ * @extends AbstractOwnerRequisitePairService<ClientRequisite>
  *
  * @internal
  */
-final class ClientRequisiteService
+final class ClientRequisiteService extends AbstractOwnerRequisitePairService
 {
 	/** Result data key of both {@see self::get()} and {@see self::set()}. */
 	public const DATA_CLIENT_REQUISITE = 'clientRequisite';
 
-	private readonly EntityLinkService $linkService;
-
-	private readonly EntityLinkRepository $linkRepository;
-
-	private readonly EntityClientSellerResolver $clientSellerResolver;
-
-	private readonly EntityLinkAccess $access;
-
-	public function __construct(
-		private readonly int $userId,
-		?EntityLinkService $linkService = null,
-		?EntityLinkRepository $linkRepository = null,
-		?EntityClientSellerResolver $clientSellerResolver = null,
-		?EntityLinkAccess $access = null,
-	)
+	protected function resultDataKey(): string
 	{
-		$this->linkService = $linkService ?? EntityLinkService::getInstance();
-		$this->linkRepository = $linkRepository ?? new EntityLinkRepository();
-		$this->clientSellerResolver = $clientSellerResolver ?? new EntityClientSellerResolver();
-		$this->access = $access ?? new EntityLinkAccess($userId);
+		return self::DATA_CLIENT_REQUISITE;
 	}
 
-	/** @return Result data: {@see self::DATA_CLIENT_REQUISITE} => {@see ClientRequisite} */
-	public function get(EntityType $ownerType, int $ownerId): Result
+	protected function requisiteIdColumn(): string
 	{
-		if (!$this->isApplicableType($ownerType))
-		{
-			return self::fail(ClientRequisiteError::OWNER_NOT_FOUND);
-		}
+		return 'REQUISITE_ID';
+	}
 
-		if (!$this->ownerExists($ownerType, $ownerId))
-		{
-			return self::fail(ClientRequisiteError::OWNER_NOT_FOUND);
-		}
-
-		if (!$this->access->canReadOwnerEntity($ownerType->getId(), $ownerId))
-		{
-			return self::fail(ClientRequisiteError::OWNER_NOT_FOUND);
-		}
-
-		$row = $this->readClientPair($ownerType, $ownerId);
-		$requisiteId = (int)($row['REQUISITE_ID'] ?? 0);
-		if ($requisiteId <= 0)
-		{
-			return self::success(new ClientRequisite());
-		}
-
-		$client = $this->resolveClient($ownerType, $ownerId);
-
-		if (!self::ownerHasClient($client))
-		{
-			return self::success(new ClientRequisite());
-		}
-
-		if (!$this->canReadClient($client))
-		{
-			return self::success(new ClientRequisite());
-		}
-
-		return self::success(self::createPair($requisiteId, (int)($row['BANK_DETAIL_ID'] ?? 0)));
+	protected function bankRequisiteIdColumn(): string
+	{
+		return 'BANK_DETAIL_ID';
 	}
 
 	/**
-	 * @param int $requisiteId zero clears both client references and leaves the row in place
-	 * @return Result data: {@see self::DATA_CLIENT_REQUISITE} => {@see ClientRequisite} as written
 	 * @throws Main\ArgumentException on a negative identifier
 	 * @throws Main\DB\SqlQueryException
 	 */
-	public function set(EntityType $ownerType, int $ownerId, int $requisiteId, int $bankRequisiteId): Result
+	protected function writePair(
+		EntityType $ownerType,
+		int $ownerId,
+		int $requisiteId,
+		int $bankRequisiteId,
+	): void
 	{
-		if (!$this->isApplicableType($ownerType))
-		{
-			return self::fail(ClientRequisiteError::OWNER_NOT_FOUND);
-		}
+		$this->linkRepository->setClientPair($ownerType->getId(), $ownerId, $requisiteId, $bankRequisiteId);
+	}
 
-		if (!$this->ownerExists($ownerType, $ownerId))
-		{
-			return self::fail(ClientRequisiteError::OWNER_NOT_FOUND);
-		}
+	protected function newPair(?int $requisiteId, ?int $bankRequisiteId): ClientRequisite
+	{
+		return new ClientRequisite($requisiteId, $bankRequisiteId);
+	}
 
-		if (!$this->access->canUpdateOwnerEntity($ownerType->getId(), $ownerId))
-		{
-			return self::fail(ClientRequisiteError::OWNER_NOT_FOUND);
-		}
+	protected function ownerNotFoundError(): Error
+	{
+		return ClientRequisiteError::OWNER_NOT_FOUND->toError();
+	}
 
+	protected function requisiteNotAllowedError(): Error
+	{
+		return ClientRequisiteError::REQUISITE_NOT_ALLOWED->toError();
+	}
+
+	protected function bankRequisiteNotAllowedError(): Error
+	{
+		return ClientRequisiteError::BANK_REQUISITE_NOT_ALLOWED->toError();
+	}
+
+	protected function isRequisiteAllowed(EntityType $ownerType, int $ownerId, int $requisiteId): bool
+	{
 		$client = $this->resolveClient($ownerType, $ownerId);
 
-		if ($requisiteId > 0)
-		{
-			if (!self::ownerHasClient($client))
-			{
-				return self::fail(ClientRequisiteError::REQUISITE_NOT_ALLOWED);
-			}
-
-			if (!$this->canReadClient($client))
-			{
-				return self::fail(ClientRequisiteError::REQUISITE_NOT_ALLOWED);
-			}
-
-			if (!$this->requisiteBelongsToClient($requisiteId, $client))
-			{
-				return self::fail(ClientRequisiteError::REQUISITE_NOT_ALLOWED);
-			}
-		}
-
-		if ($bankRequisiteId > 0)
-		{
-			if ($requisiteId <= 0)
-			{
-				return self::fail(ClientRequisiteError::BANK_REQUISITE_NOT_ALLOWED);
-			}
-
-			if (!$this->bankRequisiteBelongsToRequisite($bankRequisiteId, $requisiteId))
-			{
-				return self::fail(ClientRequisiteError::BANK_REQUISITE_NOT_ALLOWED);
-			}
-		}
-
-		$this->linkRepository->setClientPair($ownerType->getId(), $ownerId, $requisiteId, $bankRequisiteId);
-
-		// the repository writes the row past the service, and the read cache of the service caches the
-		// absence of a row as well: a write left untold would stay invisible for the rest of the request
-		$this->linkService->clearReadCache();
-
-		// the written pair is answered as it stands: the right on the owner and the reach of the
-		// client are settled above, and reading them a second time would only disagree with that
-		return self::success($requisiteId > 0 ? self::createPair($requisiteId, $bankRequisiteId) : new ClientRequisite());
-	}
-
-	private function isApplicableType(EntityType $ownerType): bool
-	{
-		return isset($this->linkService->getAvailableEntityTypeIds()[$ownerType->getId()]);
-	}
-
-	/**
-	 * Existence of the owner as the Item layer sees it. {@see AccessMode::Restricted} is what keeps
-	 * it apart from the permission check that follows: a missing item comes back as `null`, an
-	 * unreadable one as a data-less stub.
-	 */
-	private function ownerExists(EntityType $ownerType, int $ownerId): bool
-	{
-		return $ownerId > 0
-			&& ItemProvider::forEntityType($ownerType)
-				->withAccessCheck($this->userId, AccessMode::Restricted)
-				->getById($ownerId, ['id']) !== null
+		return $this->canReadClient($client)
+			&& $this->requisiteBelongsToClient($requisiteId, $client)
 		;
 	}
 
-	/**
-	 * The stored pair of the entity. An absent row reads as `null`, on the first read and on every
-	 * one after it, and means an empty pair here.
-	 *
-	 * @return array<string, mixed>
-	 */
-	private function readClientPair(EntityType $ownerType, int $ownerId): array
+	protected function isStoredPairVisible(EntityType $ownerType, int $ownerId): bool
 	{
-		return $this->linkService->getByEntity($ownerType->getId(), $ownerId) ?? [];
+		return $this->canReadClient($this->resolveClient($ownerType, $ownerId));
 	}
 
 	/**
@@ -264,35 +150,5 @@ final class ClientRequisiteService
 			&& (int)$row['ENTITY_TYPE_ID'] === $client['typeId']
 			&& (int)$row['ENTITY_ID'] === $client['id']
 		;
-	}
-
-	private function bankRequisiteBelongsToRequisite(int $bankRequisiteId, int $requisiteId): bool
-	{
-		$row = BankDetailTable::query()
-			->setSelect(['ENTITY_TYPE_ID', 'ENTITY_ID'])
-			->where('ID', $bankRequisiteId)
-			->setLimit(1)
-			->fetch()
-		;
-
-		return is_array($row)
-			&& (int)$row['ENTITY_TYPE_ID'] === OwnerType::REQUISITE
-			&& (int)$row['ENTITY_ID'] === $requisiteId
-		;
-	}
-
-	private static function createPair(int $requisiteId, int $bankRequisiteId): ClientRequisite
-	{
-		return new ClientRequisite($requisiteId, $bankRequisiteId > 0 ? $bankRequisiteId : null);
-	}
-
-	private static function success(ClientRequisite $pair): Result
-	{
-		return (new Result())->setData([self::DATA_CLIENT_REQUISITE => $pair]);
-	}
-
-	private static function fail(ClientRequisiteError $error): Result
-	{
-		return (new Result())->addError($error->toError());
 	}
 }

@@ -4,6 +4,7 @@ namespace Bitrix\Call;
 
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Config\Feature as FeatureFlag;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Security\Cipher;
@@ -11,10 +12,14 @@ use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\CallAIBaasService;
+use Bitrix\Call\Promotion\ReactionsOnboardingPromo;
+use Bitrix\Call\Public\Features;
+use Bitrix\Call\Reaction\ReactionCatalog;
 
 class Settings
 {
 	public const CALL_CLOUD_RECORDING_ENABLE = 'call_cloud_recording';
+	private const BASE_TURN_SERVER_CREDENTIAL = 'bitrix';
 
 	private static ?bool $cisRegion = null;
 
@@ -28,8 +33,8 @@ class Settings
 		return array_merge([
 			'useCustomTurnServer' => self::isSelfTurnServerEnabled(),
 			'turnServer' => self::getTurnServer(),
-			'turnServerLogin' => Option::get('call', 'turn_server_login', ''),
-			'turnServerPassword' => Option::get('call', 'turn_server_password', ''),
+			'turnServerLogin' => self::getTurnServerLogin(),
+			'turnServerPassword' => self::getTurnServerPassword(),
 			'callLogService' => self::getLogService(),
 			'sfuServerEnabled' => self::isCallServerEnabled(),
 			'bitrixCallsEnabled' => self::isCallServerEnabled(),
@@ -46,7 +51,11 @@ class Settings
 			'callInvitePeriod' => static::getCallInvitePeriod(),
 			'gridViewEnabled' => static::isGridViewEnabled(),
 			'finishForAllEnabled' => static::isFinishForAllEnabled(),
+			'reactions' => array_merge(self::getReactionSettings(), [
+				'maxOnScreen' => self::getMobileReactionMaxOnScreen(),
+			]),
 			'autoBalanceEnabled' => static::isAutoBalanceEnabled(),
+			'isAudioLossResilienceEnabled' => static::isAudioLossResilienceEnabled(),
 			'nqeDowngradeWindowSec' => static::getNqeDowngradeWindowSec(),
 			'nqeUpgradeWindowSec' => static::getNqeUpgradeWindowSec(),
 			'nqeWarmupSec' => static::getNqeWarmupSec(),
@@ -65,6 +74,7 @@ class Settings
 			'isLargeMobileCallEnabled' => static::isLargeMobileCallEnabled(),
 			'viewToggleEnabled' => static::isViewToggleEnabled(),
 			'getBigRoomChats' => static::getBigRoomChats(),
+			'callQosEnabled' => static::isQoSEnabledForMobile(),
 			'ai' => [
 				'serviceEnabled' => static::isAIServiceEnabled(),
 				'settingsEnabled' => CallAISettings::isEnableBySettings(),
@@ -153,19 +163,65 @@ class Settings
 	}
 
 	/**
-	 * Whether the portal is configured to use its own TURN server instead of the default Bitrix one.
+	 * Whether the portal uses its own TURN server instead of the default Bitrix one.
+	 * A saved configuration that fails validation is treated as disabled.
 	 *
 	 * @return bool
 	 */
 	public static function isSelfTurnServerEnabled(): bool
 	{
-		static $cached = null;
-		if ($cached === null)
+		return
+			Option::get('call', 'turn_server_self') === 'Y'
+			&& self::isTurnServerConfigValid(
+				trim((string)Option::get('call', 'turn_server')),
+				(string)Option::get('call', 'turn_server_login'),
+				(string)Option::get('call', 'turn_server_password'),
+			)
+		;
+	}
+
+	/**
+	 * Checks a custom TURN server address: a host name, IPv4 or bracketed IPv6 address with an optional port.
+	 * Clients add the stun: and turn: schemes themselves, so the address must not contain them.
+	 *
+	 * @param string $address
+	 * @return bool
+	 */
+	public static function isTurnServerAddressValid(string $address): bool
+	{
+		$label = '[a-z0-9](?:[a-z0-9-]*[a-z0-9])?';
+		$pattern = '/^(?:\[([0-9a-f:.]+)\]|' . $label . '(?:\.' . $label . ')*)(?::(\d{1,5}))?$/iD';
+		if (!preg_match($pattern, $address, $matches))
 		{
-			$cached = Option::get('call', 'turn_server_self') === 'Y';
+			return false;
 		}
 
-		return $cached;
+		$ipv6 = $matches[1] ?? '';
+		if ($ipv6 !== '' && filter_var($ipv6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)
+		{
+			return false;
+		}
+
+		$port = $matches[2] ?? '';
+
+		return $port === '' || ((int)$port >= 1 && (int)$port <= 65535);
+	}
+
+	/**
+	 * Checks a custom TURN server configuration: a valid address and non-empty credentials.
+	 *
+	 * @param string $address
+	 * @param string $login
+	 * @param string $password
+	 * @return bool
+	 */
+	public static function isTurnServerConfigValid(string $address, string $login, string $password): bool
+	{
+		return
+			self::isTurnServerAddressValid($address)
+			&& trim($login) !== ''
+			&& trim($password) !== ''
+		;
 	}
 
 	/**
@@ -389,7 +445,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if ((bool)Option::get('call', 'plain_call_follow_up_enabled', false))
+			if (FeatureFlag::isEnabled(Features\PlainCallFollowUpFlag::class))
 			{
 				$cached = true;
 			}
@@ -412,7 +468,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if ((bool)Option::get('call', 'plain_call_cloud_recording_enabled', false))
+			if (FeatureFlag::isEnabled(Features\PlainCallCloudRecordingFlag::class))
 			{
 				$cached = true;
 			}
@@ -458,7 +514,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if ((bool)Option::get('call', 'grid_view_enabled', false))
+			if (FeatureFlag::isEnabled(Features\GridViewFlag::class))
 			{
 				$cached = true;
 			}
@@ -481,7 +537,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if ((bool)Option::get('call', 'finish_for_all_enabled', false))
+			if (FeatureFlag::isEnabled(Features\FinishForAllFlag::class))
 			{
 				$cached = true;
 			}
@@ -495,37 +551,128 @@ class Settings
 	}
 
 	/**
+	 * Whether call reactions are enabled (portal-wide or per-user).
+	 *
+	 * Gates showing the picker and sending a reaction; receiving is never gated by this flag.
+	 *
+	 * @return bool
+	 */
+	public static function isCallReactionsEnabled(): bool
+	{
+		if (FeatureFlag::isEnabled(Features\ReactionsFlag::class))
+		{
+			return true;
+		}
+
+		// Personal values are stored as strings too; (bool)'N' would be true.
+		$truthy = ['Y', '1', 1, true];
+
+		return in_array(\CUserOptions::GetOption('call', 'call_reactions_enabled', false), $truthy, true);
+	}
+
+	/**
+	 * Returns the minimal interval (ms) between two reactions sent by the same user.
+	 *
+	 * @return int
+	 */
+	public static function getReactionThrottleMs(): int
+	{
+		return (int)Option::get('call', 'call_reactions_send_throttle_ms', 600);
+	}
+
+	/**
+	 * Returns how long (ms) a reaction stays on the screen while floating up.
+	 *
+	 * @return int
+	 */
+	public static function getReactionFloatDurationMs(): int
+	{
+		return (int)Option::get('call', 'call_reactions_float_duration_ms', 4000);
+	}
+
+	/**
+	 * Returns the maximum number of reactions animated on the screen at the same time.
+	 *
+	 * @return int
+	 */
+	public static function getReactionMaxOnScreen(): int
+	{
+		return (int)Option::get('call', 'call_reactions_max_on_screen', 20);
+	}
+
+	/**
+	 * Returns the on-screen reaction limit used by the mobile client.
+	 *
+	 * Mobile keeps a separate, lower limit on purpose: it renders only the few newest pills, the older ones are
+	 * already fully transparent, so the shared limit would hold invisible slots and delay the queued reactions.
+	 *
+	 * @return int
+	 */
+	public static function getMobileReactionMaxOnScreen(): int
+	{
+		return (int)Option::get('call', 'call_reactions_mobile_max_on_screen', 6);
+	}
+
+	/**
+	 * Returns the size of the pending reaction queue; everything above it is dropped.
+	 *
+	 * @return int
+	 */
+	public static function getReactionMaxQueue(): int
+	{
+		return (int)Option::get('call', 'call_reactions_max_queue', 100);
+	}
+
+	/**
+	 * Reaction settings shared by the web bootstrap and the mobile options.
+	 *
+	 * @return array
+	 */
+	public static function getReactionSettings(): array
+	{
+		return [
+			'enabled' => self::isCallReactionsEnabled(),
+			'sendThrottleMs' => self::getReactionThrottleMs(),
+			'floatDurationMs' => self::getReactionFloatDurationMs(),
+			'maxOnScreen' => self::getReactionMaxOnScreen(),
+			'maxQueue' => self::getReactionMaxQueue(),
+			'seed' => ReactionCatalog::SEED,
+			// Only tells the client it may show the hint: the show is taken by
+			// call.Reaction.claimOnboarding, so delivering the flag does not spend the onboarding.
+			'onboardingAvailable' => ReactionsOnboardingPromo::needToShow(),
+		];
+	}
+
+	/**
 	 * Whether manual view toggling is available in the mobile call interface.
 	 *
 	 * Portal-level kill-switch / staged rollout only: no per-user fallback.
-	 * Boolean option, off by default: enable with
-	 * Option::set('call', 'view_toggle_enabled', true); disable by setting it
-	 * falsy or deleting it.
+	 * Off by default: toggled by the ViewToggleFlag feature flag.
 	 *
 	 * @return bool
 	 */
 	public static function isViewToggleEnabled(): bool
 	{
-		return (bool)Option::get('call', 'view_toggle_enabled', false);
+		return FeatureFlag::isEnabled(Features\ViewToggleFlag::class);
 	}
 
 	/**
-	 * Whether a guest (a user without a portal account) may start a call.
+	 * Whether a guest (a user without a portal account) may start a call. Always: a guest starts a call in
+	 * a chat of their own like anyone else, and the chats a guest may ring are held by GuestCallPolicy.
 	 *
-	 * Portal-level switch, off by default: enable with
-	 * Option::set('call', 'guest_outgoing_call_enabled', 'Y'); disable with 'N' or by deleting
-	 * the option. Guests answer calls regardless of this option - it only governs starting one.
+	 * Kept as a method rather than inlined: im and the mobile clients read the answer as a feature flag of
+	 * the portal, and im of earlier versions calls it directly. Turning guests off altogether is the job of
+	 * the im setting of chats with guests.
 	 *
-	 * The value is read for what it says rather than cast to bool: 'N' is the usual way of writing
-	 * "off" for a portal switch, and (bool)'N' is true.
+	 * @deprecated The answer is constant. Still called by im (Features::isGuestOutgoingCallAvailable) and sent to
+	 * the mobile clients as guestOutgoingCallEnabled (OnBuildEnvVariable, read by the callmobile call list);
+	 * remove once the installed versions of im and the mobile modules no longer read it.
 	 *
 	 * @return bool
 	 */
 	public static function isGuestOutgoingCallEnabled(): bool
 	{
-		$value = Option::get('call', 'guest_outgoing_call_enabled', 'N');
-
-		return in_array($value, ['Y', '1', 'true'], true);
+		return true;
 	}
 
 	/**
@@ -535,9 +682,9 @@ class Settings
 	 * provider, a bare user id always goes to Plain ({@see \Bitrix\Call\Controller\Call::startCallAction}
 	 * for the JWT end of it). Only under the JWT scheme does that start arrive at the webhook, which lets a
 	 * guest through; the classic scheme sends it to CallManager::create, where a bare user id is refused for
-	 * a guest whatever the switch above says - resolving it would create a private chat with an employee.
+	 * a guest - resolving it would create a private chat with an employee.
 	 *
-	 * So the answer for a 1-1 target is the answer above narrowed by the scheme, and it is computed here
+	 * So the answer for a 1-1 target is the scheme itself, and it is computed here
 	 * rather than reassembled on every client: three screens ask this question and would each have to know
 	 * which scheme serves which shape.
 	 *
@@ -545,7 +692,7 @@ class Settings
 	 */
 	public static function isGuestOutgoingPrivateCallEnabled(): bool
 	{
-		return self::isGuestOutgoingCallEnabled() && self::isPlainCallsUseNewScheme();
+		return self::isPlainCallsUseNewScheme();
 	}
 
 	public static function isLargeMobileCallEnabled(): bool
@@ -553,7 +700,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if ((bool)Option::get('call', 'large_mobile_call_enabled', false))
+			if (FeatureFlag::isEnabled(Features\LargeMobileCallFlag::class))
 			{
 				$cached = true;
 			}
@@ -627,7 +774,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if (Option::get('call', 'call_disable_camera_new_joined_users_enabled', false))
+			if (FeatureFlag::isEnabled(Features\DisableCameraForNewJoinersFlag::class))
 			{
 				$cached = true;
 			}
@@ -650,7 +797,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if (Option::get('call', 'push_to_talk_web_enabled', false))
+			if (FeatureFlag::isEnabled(Features\WebPushToTalkFlag::class))
 			{
 				$cached = true;
 			}
@@ -735,7 +882,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if (Option::get('call', 'call_stream_quality_enabled', false))
+			if (FeatureFlag::isEnabled(Features\StreamQualityFlag::class))
 			{
 				$cached = true;
 			}
@@ -743,6 +890,87 @@ class Settings
 			{
 				$cached = (bool)\CUserOptions::GetOption('call', 'call_stream_quality_enabled', false);
 			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Whether the QoS (Quality of Service) indicator feature is enabled on the portal.
+	 * Portal level is the QosFlag feature flag, with the personal `call_qos_enabled` option on top.
+	 * This is the global master switch; the mobile client is gated additionally by
+	 * isQoSEnabledForMobile().
+	 *
+	 * @return bool
+	 */
+	public static function isQoSEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			if (FeatureFlag::isEnabled(Features\QosFlag::class))
+			{
+				$cached = true;
+			}
+			else
+			{
+				// Personal values are stored as strings too; (bool)'N' would be true.
+				$truthy = ['Y', '1', 1, true];
+				$cached = in_array(\CUserOptions::GetOption('call', 'call_qos_enabled', 'N'), $truthy, true);
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Whether audio loss resilience is enabled.
+	 *
+	 * @return bool
+	 */
+	public static function isAudioLossResilienceEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			// Enabled by default: the module option must be explicitly set to 'N' to turn the feature off.
+			if (Option::get('call', 'call_audio_loss_resilience_enabled', 'Y') === 'Y')
+			{
+				$cached = true;
+			}
+			else
+			{
+				$cached = (\CUserOptions::GetOption('call', 'call_audio_loss_resilience_enabled', 'N') === 'Y');
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Whether the QoS indicator is enabled for the mobile client.
+	 *
+	 * Mobile has its own portal-level kill-switch (MobileQosFlag) so QoS can be held back on
+	 * mobile independently of web until the native app catches up. Enablement requires BOTH
+	 * isQoSEnabled() (with its personal level) AND the mobile flag. The mobile flag is portal level
+	 * only (no per-user override); off by default (opt-in) — mobile QoS
+	 * stays off even when web QoS is on until it is explicitly enabled.
+	 *
+	 * Exposed to the mobile client via getMobileOptions() as `callQosEnabled`.
+	 *
+	 * @return bool
+	 */
+	public static function isQoSEnabledForMobile(): bool
+	{
+		if (!static::isQoSEnabled())
+		{
+			return false;
+		}
+
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = FeatureFlag::isEnabled(Features\MobileQosFlag::class);
 		}
 
 		return $cached;
@@ -758,7 +986,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if (Option::get('call', 'call_auto_balance_enabled', false))
+			if (FeatureFlag::isEnabled(Features\AutoBalanceFlag::class))
 			{
 				$cached = true;
 			}
@@ -770,6 +998,42 @@ class Settings
 
 		return $cached;
 	}
+
+	//region 1-1 media server switch (Follow-Up)
+
+	/**
+	 * Get the SDP-answer wait timeout (ms) used when publishing/switching to the media server.
+	 *
+	 * @return int
+	 */
+	public static function getMediaSwitchAnswerTimeoutMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'call_media_switch_answer_timeout_ms', 10000);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get the overall deadline (ms) for a successful switch to the media server.
+	 *
+	 * @return int
+	 */
+	public static function getMediaSwitchDeadlineMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'call_media_switch_deadline_ms', 15000);
+		}
+
+		return $cached;
+	}
+
+	//endregion
 
 	/**
 	 * Get downgrade window in seconds.
@@ -1035,6 +1299,111 @@ class Settings
 
 	//endregion
 
+	//region Web background
+
+	/**
+	 * Whether the virtual background is enabled in web calls.
+	 *
+	 * @return bool
+	 */
+	public static function isWebBackgroundEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = FeatureFlag::isEnabled(Features\WebBackgroundFlag::class);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Returns the minimum number of CPU cores required for the web background.
+	 *
+	 * @return int
+	 */
+	public static function getWebBackgroundMinCores(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'call_web_background_min_cores', 4);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Returns the minimum device memory in gigabytes required for the web background.
+	 *
+	 * @return int
+	 */
+	public static function getWebBackgroundMinMemoryGb(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'call_web_background_min_memory_gb', 4);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Returns the list of WebGL renderer markers the web background is not allowed on.
+	 *
+	 * @return string[]
+	 */
+	public static function getWebBackgroundRendererDenylist(): array
+	{
+		static $renderers = null;
+		if ($renderers === null)
+		{
+			$renderers = [];
+			$option = Option::get('call', 'call_web_background_renderer_denylist', 'swiftshader,llvmpipe,basic render');
+			if (!empty($option))
+			{
+				$renderers = array_values(array_filter(array_map('trim', explode(',', $option)), 'strlen'));
+			}
+		}
+
+		return $renderers;
+	}
+
+	/**
+	 * Returns the number of frames measured by the client performance probe.
+	 *
+	 * @return int
+	 */
+	public static function getWebBackgroundProbeFrames(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'call_web_background_probe_frames', 25);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Returns the per-frame processing time in milliseconds the probe is allowed to reach.
+	 *
+	 * @return int
+	 */
+	public static function getWebBackgroundProbeThresholdMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'call_web_background_probe_threshold_ms', 40);
+		}
+
+		return $cached;
+	}
+
+	//endregion
+
 	/**
 	 * Whether call metrics collection is enabled.
 	 *
@@ -1091,7 +1460,7 @@ class Settings
 		static $cached = null;
 		if ($cached === null)
 		{
-			if (Option::get('call', 'call_cloud_record', false))
+			if (FeatureFlag::isEnabled(Features\CloudRecordFlag::class))
 			{
 				$cached = true;
 			}
@@ -1414,24 +1783,51 @@ class Settings
 	 */
 	public static function getTurnServer(): string
 	{
-		static $cached = null;
-		if ($cached === null)
+		if (self::isSelfTurnServerEnabled())
 		{
-			if (Settings::isSelfTurnServerEnabled())
-			{
-				$cached = (string)Option::get('call', 'turn_server');
-			}
-			elseif (\Bitrix\Main\Application::getInstance()->getLicense()->isCis())
-			{
-				$cached = 'turn.bitrix24.tech';
-			}
-			else
-			{
-				$cached = 'turn.calls.bitrix24.com';
-			}
+			return trim((string)Option::get('call', 'turn_server'));
 		}
 
-		return $cached;
+		return self::isCisRegion() ? 'turn.bitrix24.tech' : 'turn.calls.bitrix24.com';
+	}
+
+	/**
+	 * TURN login for clients: the custom one, the base server one when the saved custom server is invalid,
+	 * or the default one when the custom server is off.
+	 *
+	 * @return string
+	 */
+	public static function getTurnServerLogin(): string
+	{
+		return self::getTurnServerCredential('turn_server_login');
+	}
+
+	/**
+	 * TURN password for clients: the custom one, the base server one when the saved custom server is invalid,
+	 * or the default one when the custom server is off.
+	 *
+	 * @return string
+	 */
+	public static function getTurnServerPassword(): string
+	{
+		return self::getTurnServerCredential('turn_server_password');
+	}
+
+	private static function getTurnServerCredential(string $optionName): string
+	{
+		if (self::isSelfTurnServerEnabled())
+		{
+			return (string)Option::get('call', $optionName);
+		}
+
+		if (Option::get('call', 'turn_server_self') === 'Y')
+		{
+			// Clients fall back to the base server here, so they need its credentials rather than the defaults
+			// a portal may override in bitrix/php_interface/call_options.php
+			return self::BASE_TURN_SERVER_CREDENTIAL;
+		}
+
+		return (string)(Option::getDefaults('call')[$optionName] ?? '');
 	}
 
 	public static function getSyncCallInvitePeriod(): int
@@ -1445,12 +1841,22 @@ class Settings
 	 */
 	public static function isSyncPresetEnabled(): bool
 	{
-		if (Option::get('call', 'call_sync_preset_enabled', false))
+		if (FeatureFlag::isEnabled(Features\SyncPresetFlag::class))
 		{
 			return true;
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_sync_preset_enabled', false);
+	}
+
+	/**
+	 * Sync preset feature is enabled for the whole portal, the personal option is not considered.
+	 * A choice applied to every user of the portal must not depend on the personal option of one of them.
+	 * @return bool
+	 */
+	public static function isSyncPresetEnabledForPortal(): bool
+	{
+		return FeatureFlag::isEnabled(Features\SyncPresetFlag::class);
 	}
 
 	/**
@@ -1483,6 +1889,21 @@ class Settings
 		}
 
 		return $cached;
+	}
+
+	/**
+	 * The main call button of the header of a group chat starts a call of Sync through the web SDK of syncconnector,
+	 * and its menu offers no call of this module. A private chat keeps the calls of this module.
+	 *
+	 * Off by default: enable with Feature::enable(SyncPrimaryCallFlag::class), or for chosen users with an allow rule.
+	 * Refused outright without syncconnector: the button starts the call through its web SDK.
+	 * Independent of sync_call_enabled, whose menu item is left out while this one is on.
+	 *
+	 * @return bool
+	 */
+	public static function isSyncPrimaryCallEnabled(): bool
+	{
+		return Loader::includeModule('syncconnector') && FeatureFlag::isEnabled(Features\SyncPrimaryCallFlag::class);
 	}
 
 	/**
@@ -1536,5 +1957,4 @@ class Settings
 
 		return \Bitrix\Intranet\UI\LeftMenu\Preset\Manager::getPreset()->getCode();
 	}
-
 }

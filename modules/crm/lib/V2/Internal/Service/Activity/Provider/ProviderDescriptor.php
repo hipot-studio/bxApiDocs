@@ -95,6 +95,7 @@ final class ProviderDescriptor
 		private readonly bool $providesLegacyInstance = false,
 		private readonly TimelineCapabilitySet $timelineCapabilities = new TimelineCapabilitySet(),
 		private readonly bool $isMembershipOnly = false,
+		private readonly Closure|ActivityProviderTypeCatalogInterface|null $timelineTypeCatalog = null,
 	)
 	{
 		if ($this->id === '')
@@ -207,6 +208,20 @@ final class ProviderDescriptor
 	public function getTimelineCapabilities(): TimelineCapabilitySet
 	{
 		return $this->timelineCapabilities;
+	}
+
+	public function getTimelineTypeCatalog(): ?ActivityProviderTypeCatalogInterface
+	{
+		$catalog = $this->timelineTypeCatalog instanceof Closure
+			? ($this->timelineTypeCatalog)()
+			: $this->timelineTypeCatalog
+		;
+		if ($catalog !== null && !$catalog instanceof ActivityProviderTypeCatalogInterface)
+		{
+			throw new ArgumentException("The timeline type catalog of '{$this->id}' is invalid");
+		}
+
+		return $catalog;
 	}
 
 	/**

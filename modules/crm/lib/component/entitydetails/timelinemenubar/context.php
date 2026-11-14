@@ -8,6 +8,7 @@ class Context
 {
 	private string $region;
 	private bool $isReadonly = false;
+	private bool $isCommentTextEditorEnabled = false;
 
 	protected string $guid = 'timeline';
 
@@ -68,6 +69,18 @@ class Context
 	public function setIsReadonly(bool $isReadonly): self
 	{
 		$this->isReadonly = $isReadonly;
+
+		return $this;
+	}
+
+	public function isCommentTextEditorEnabled(): bool
+	{
+		return $this->isCommentTextEditorEnabled;
+	}
+
+	public function setIsCommentTextEditorEnabled(bool $isEnabled): self
+	{
+		$this->isCommentTextEditorEnabled = $isEnabled;
 
 		return $this;
 	}

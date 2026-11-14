@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class RequiredUserFieldCheckEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.rest.required_user_field_check.enabled';
+	public const ID = 'crm.rest.required_user_field_check.enabled';
 
 	private readonly RestSettings $restSettings;
 
@@ -26,18 +26,20 @@ final class RequiredUserFieldCheckEnabledSetting extends AbstractSetting
 		$this->restSettings = $restSettings ?? RestSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'rest_enable_req_uf_check',
 		);
 	}
 

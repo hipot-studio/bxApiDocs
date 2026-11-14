@@ -165,6 +165,7 @@ class InvoiceSettings
 	 */
 	protected static function includeModuleFile()
 	{
+		Container::getInstance()->getLocalization()->loadMessages();
 		if(self::$messagesLoaded)
 		{
 			return;

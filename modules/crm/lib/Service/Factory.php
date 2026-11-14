@@ -39,7 +39,9 @@ use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Objectify\EntityObject;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\UserField;
 use CCrmOwnerType;
@@ -65,7 +67,10 @@ abstract class Factory
 	protected $userType;
 	protected $editorAdapter;
 	protected $isParentFieldsAdded = false;
+	protected $isUtmFieldsAdded = false;
 	protected $itemsCategoryCache = [];
+	/** @var array<int, bool> the preloaded items => whether the cache held their category before the preload */
+	private array $preloadedItemCategoryIds = [];
 	private array $itemsStageCache = [];
 
 	protected $itemClassName = Item::class;
@@ -317,11 +322,14 @@ abstract class Factory
 
 		if (ParentFieldManager::isParentFieldName($entityFieldName))
 		{
+			$parentEntityTypeId = ParentFieldManager::getEntityTypeIdFromFieldName($entityFieldName);
+			if ($parentEntityTypeId === $this->getEntityTypeId())
+			{
+				return false;
+			}
+
 			return Container::getInstance()->getRelationManager()->getRelation(
-				new RelationIdentifier(
-					ParentFieldManager::getEntityTypeIdFromFieldName($entityFieldName),
-					$this->getEntityTypeId(),
-				)
+				new RelationIdentifier($parentEntityTypeId, $this->getEntityTypeId())
 			) !== null;
 		}
 
@@ -791,6 +799,7 @@ abstract class Factory
 	): int
 	{
 		$this->addParentFieldsReferences();
+		$this->addUtmFieldsReferences();
 		$params = $this->replaceCommonFieldNames(['filter' => $filter]);
 		$filter = $params['filter'] ?? [];
 
@@ -823,6 +832,7 @@ abstract class Factory
 	protected function prepareGetListParameters(array $parameters): array
 	{
 		$this->addParentFieldsReferences();
+		$this->addUtmFieldsReferences();
 
 		$rawSelect = empty($parameters['select']) ? ['*'] : $parameters['select'];
 		$parameters['select'] = $this->prepareSelect($rawSelect);
@@ -843,6 +853,36 @@ abstract class Factory
 				static::getDataClass()::getEntity(),
 				$this->getEntityTypeId()
 			);
+		}
+	}
+
+	/**
+	 * Adds references to UtmTable for entities, that do not declare them in their map (e.g. dynamic types).
+	 */
+	protected function addUtmFieldsReferences(): void
+	{
+		if ($this->isUtmFieldsAdded || !$this->isCrmTrackingEnabled())
+		{
+			return;
+		}
+
+		$this->isUtmFieldsAdded = true;
+
+		$entity = $this->getDataClass()::getEntity();
+		foreach (UtmTable::getCodeList() as $fieldName)
+		{
+			if ($entity->hasField($fieldName))
+			{
+				continue;
+			}
+
+			$entity->addField(new Reference(
+				$fieldName,
+				UtmTable::class,
+				Join::on('this.ID', 'ref.ENTITY_ID')
+					->where('ref.ENTITY_TYPE_ID', $this->getEntityTypeId())
+					->where('ref.CODE', $fieldName)
+			));
 		}
 	}
 
@@ -905,6 +945,8 @@ abstract class Factory
 	private function prepareFilter(array $filter, bool $isInternal = false): array
 	{
 		$processed = [];
+		$emptySetConditions = [];
+		$sqlWhere = new \CSQLWhere();
 
 		foreach ($filter as $key => $value)
 		{
@@ -931,12 +973,70 @@ abstract class Factory
 				{
 					$key = str_replace(Item::FIELD_NAME_OBSERVERS, Item::FIELD_NAME_OBSERVERS . '.USER_ID', $key);
 				}
+				elseif ($this->isUtmReferenceFilterKey($key))
+				{
+					$key .= '.VALUE';
+				}
+			}
+
+			$emptySetCondition = is_string($key) ? $this->getEmptySetCondition($sqlWhere, $key, $value) : null;
+			if ($emptySetCondition !== null)
+			{
+				$emptySetConditions[] = $emptySetCondition;
+
+				continue;
 			}
 
 			$processed[$key] = $value;
 		}
 
+		// appended after all keys are processed, so that explicit numeric subfilters are never overwritten
+		foreach ($emptySetConditions as $condition)
+		{
+			$processed[] = $condition;
+		}
+
 		return $processed;
+	}
+
+	/**
+	 * UTM fields are declared as strings in the fields info, but in ORM they are references to UtmTable
+	 */
+	private function isUtmReferenceFilterKey(string $key): bool
+	{
+		$fieldName = preg_replace('/^\W+/', '', $key);
+		if (!in_array($fieldName, UtmTable::getCodeList(), true))
+		{
+			return false;
+		}
+
+		$entity = $this->getDataClass()::getEntity();
+
+		return $entity->hasField($fieldName) && $entity->getField($fieldName) instanceof Reference;
+	}
+
+	/**
+	 * '@FIELD' => [] would be compiled to 'FIELD IN ()', which is an SQL syntax error.
+	 * An empty set under '@' matches nothing, under '!@' it does not restrict anything.
+	 */
+	private function getEmptySetCondition(\CSQLWhere $sqlWhere, string $key, mixed $value): ?array
+	{
+		if ($value !== [])
+		{
+			return null;
+		}
+
+		$operation = $sqlWhere->MakeOperation($key)['OPERATION'];
+		if ($operation === 'IN')
+		{
+			return ['=' . Item::FIELD_NAME_ID => []];
+		}
+		if ($operation === 'NIN')
+		{
+			return ['!=' . Item::FIELD_NAME_ID => []];
+		}
+
+		return null;
 	}
 
 	/**
@@ -2318,9 +2418,88 @@ abstract class Factory
 		return $this->getCategory($categoryId);
 	}
 
+	/**
+	 * Reads the categories of these items in one query into the cache that getItemCategoryId() answers from.
+	 * An item without a row is cached as having no category, as getItemCategoryId() caches it.
+	 *
+	 * The items stay preloaded until releasePreloadedItemCategoryIds(): only for them may a caller that otherwise
+	 * reads the category from the row take it from the cache (isItemCategoryIdPreloaded()). An item cached by a
+	 * single read before is read again, so a preloaded category is never older than the preload.
+	 *
+	 * @param int[] $ids
+	 * @return void
+	 */
+	public function preloadItemCategoryIds(array $ids): void
+	{
+		if (!$this->isCategoriesSupported())
+		{
+			return;
+		}
+
+		$notPreloadedIds = [];
+		foreach ($ids as $id)
+		{
+			$id = (int)$id;
+			if ($id > 0 && !array_key_exists($id, $this->preloadedItemCategoryIds))
+			{
+				$notPreloadedIds[$id] = $id;
+			}
+		}
+		if (empty($notPreloadedIds))
+		{
+			return;
+		}
+
+		foreach ($notPreloadedIds as $id)
+		{
+			$this->preloadedItemCategoryIds[$id] = array_key_exists($id, $this->itemsCategoryCache);
+			$this->itemsCategoryCache[$id] = null;
+		}
+
+		$idFieldName = $this->getEntityFieldNameByMap(Item::FIELD_NAME_ID);
+		$categoryFieldName = $this->getEntityFieldNameByMap(Item::FIELD_NAME_CATEGORY_ID);
+		$rows = $this->getDataClass()::getList([
+			'select' => [$idFieldName, $categoryFieldName],
+			'filter' => [
+				'@' . $idFieldName => array_values($notPreloadedIds),
+			],
+		]);
+		while ($row = $rows->fetch())
+		{
+			$categoryId = $row[$categoryFieldName] ?? null;
+			$this->itemsCategoryCache[(int)$row[$idFieldName]] = is_null($categoryId) ? null : (int)$categoryId;
+		}
+	}
+
+	/**
+	 * Whether the category of the item was preloaded (preloadItemCategoryIds()) and is not released yet.
+	 */
+	public function isItemCategoryIdPreloaded(int $id): bool
+	{
+		return array_key_exists($id, $this->preloadedItemCategoryIds);
+	}
+
+	/**
+	 * Ends what preloadItemCategoryIds() started: no item is preloaded any more, and the categories the preload
+	 * added to the cache are dropped from it. A category the cache held before the preload is kept.
+	 *
+	 * @param int[]|null $ids only these items, the others stay preloaded; null for all of them
+	 */
+	public function releasePreloadedItemCategoryIds(?array $ids = null): void
+	{
+		foreach ($ids ?? array_keys($this->preloadedItemCategoryIds) as $id)
+		{
+			if (!($this->preloadedItemCategoryIds[$id] ?? true))
+			{
+				unset($this->itemsCategoryCache[$id]);
+			}
+			unset($this->preloadedItemCategoryIds[$id]);
+		}
+	}
+
 	public function clearItemCategoryCache(int $id): void
 	{
-		unset($this->itemsCategoryCache[$id]);
+		unset($this->itemsCategoryCache[$id], $this->preloadedItemCategoryIds[$id]);
 	}
 
 	final public function getItemStageId(int $id): ?string

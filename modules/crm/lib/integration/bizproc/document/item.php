@@ -177,6 +177,14 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 
 	public static function CreateDocument($parentDocumentId, $fields)
 	{
+		return self::addItem($parentDocumentId, $fields, false);
+	}
+
+	/**
+	 * @return int|string|false the id of the added item or the message of the refusal
+	 */
+	private static function addItem($parentDocumentId, $fields, bool $checkAccess)
+	{
 		$entityTypeId = static::GetDocumentInfo($parentDocumentId)['TYPE_ID'];
 
 		$factory = Container::getInstance()->getFactory($entityTypeId);
@@ -185,14 +193,41 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		$fieldsCaster = new Crm\Automation\Fields\ItemFieldsCaster($newItem, static::getEntityFields($entityTypeId));
 		$compatibleFields = $fieldsCaster->externalize($fields);
 
-		$userId = $compatibleFields[Crm\Item::FIELD_NAME_CREATED_BY] ?? 0;
+		$userId = $compatibleFields[$factory->getEntityFieldNameByMap(Crm\Item::FIELD_NAME_CREATED_BY)] ?? 0;
 		$newItem->setFromCompatibleData($compatibleFields);
 		$addOperation = $factory->getAddOperation($newItem, static::getContext($userId));
 
-		$result = static::launchOperation($addOperation);
+		$result = $checkAccess ? $addOperation->checkAccess() : new Result();
+		if ($checkAccess && $result->isSuccess())
+		{
+			$result = $addOperation->processFieldsWithPermissions();
+		}
+		if ($result->isSuccess())
+		{
+			$result = static::launchOperation($addOperation);
+		}
 		$errorMessages = $result->getErrorMessages();
 
 		return $result->isSuccess() ? $result->getId() : end($errorMessages);
+	}
+
+	/**
+	 * @throws \Exception the item was not added
+	 */
+	public static function createTestDocument(string $documentType, array $fields, int $createdById): string
+	{
+		$entityTypeId = static::GetDocumentInfo($documentType)['TYPE_ID'];
+		$createdByFieldId = Container::getInstance()->getFactory($entityTypeId)
+			?->getEntityFieldNameByMap(Crm\Item::FIELD_NAME_CREATED_BY)
+		;
+
+		$id = self::addItem($documentType, [...$fields, $createdByFieldId => 'user_' . $createdById], true);
+		if (!is_int($id))
+		{
+			throw new \Exception((string)$id);
+		}
+
+		return \CCrmOwnerType::ResolveName($entityTypeId) . '_' . $id;
 	}
 
 	public static function UpdateDocument($documentId, $fields, $modifiedBy = null)

@@ -45,17 +45,26 @@ final class DefaultFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_DEFAULT_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return true;
 	}
 
 	/**
 	 * Mirror of {@see AllFolder}: "All" takes over the navigation entry, so exactly one of the two
-	 * is visible at a time. Availability stays unconditional on purpose - the folder must keep
+	 * is shown at a time. Availability stays unconditional on purpose - the folder must keep
 	 * reaching the client, which hides it by this flag rather than by the code 'default'.
 	 */
-	public function isVisible(): bool
+	public function isHiddenBySystem(): bool
+	{
+		return Features::isChatFolderAllAvailable();
+	}
+
+	/**
+	 * Mirror of {@see AllFolder::isPrimaryRoot}: with "All" off this folder holds the root
+	 * navigation entry, so its pin set is the one carrying the chat's overall pinned flag.
+	 */
+	public function isPrimaryRoot(): bool
 	{
 		return !Features::isChatFolderAllAvailable();
 	}

@@ -8,6 +8,7 @@ use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\CallList\Group\CreateCallL
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\AssignChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\ConvertChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\CreateTaskChildAction;
+use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\DeleteChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\ExcludeChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\MergeChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\ObserversChildAction;
@@ -17,6 +18,7 @@ use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\SetCategoryChil
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\SetExportChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\SetOpenedChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\SetStageChildAction;
+use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\WhatsAppMessageChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Sender\Group\AddItemsToSegmentChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Sender\Group\AddLetterChildAction;
 use Bitrix\Crm\Exclusion;
@@ -30,6 +32,26 @@ final class ItemGroupAction extends BaseItemGroupAction
 {
 	protected function prepareChildItems(): array
 	{
+		$clientTab = $this->gridSettings->getClientTab();
+		if ($clientTab === null)
+		{
+			return $this->getStandardActions();
+		}
+
+		// all rows of the tab are hidden: nothing but unbinding (a button of the panel) and deletion can be applied
+		$actions = $clientTab->canReadChildType === false ? [] : $this->getStandardActions();
+
+		// the separate button of the tab panel is "Unbind", deletion goes to the dropdown with the same rights
+		if ($this->canDeleteItemsInCategory())
+		{
+			$actions[] = new DeleteChildAction($this->factory->getEntityTypeId(), $this->getGridId());
+		}
+
+		return $actions;
+	}
+
+	private function getStandardActions(): array
+	{
 		$actions = [];
 
 		if ($this->canUpdateItemsInCategory())
@@ -42,6 +64,12 @@ final class ItemGroupAction extends BaseItemGroupAction
 			if ($setCategoryAction !== null)
 			{
 				$actions[] = $setCategoryAction;
+			}
+
+			$whatsAppMessageAction = $this->getWhatsAppMessageAction();
+			if ($whatsAppMessageAction !== null)
+			{
+				$actions[] = $whatsAppMessageAction;
 			}
 		}
 
@@ -138,6 +166,12 @@ final class ItemGroupAction extends BaseItemGroupAction
 			$actions[] = new CreateCallListChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
+		$whatsAppMessageAction = $this->getWhatsAppMessageAction();
+		if ($whatsAppMessageAction !== null)
+		{
+			$actions[] = $whatsAppMessageAction;
+		}
+
 		$actions[] = new SetOpenedChildAction($this->factory->getEntityTypeId(), $gridId);
 
 		if (SetExportChildAction::isEntityTypeSupported($this->factory->getEntityTypeId()))
@@ -151,6 +185,21 @@ final class ItemGroupAction extends BaseItemGroupAction
 		}
 
 		return $actions;
+	}
+
+	private function getWhatsAppMessageAction(): ?WhatsAppMessageChildAction
+	{
+		$entityTypeId = $this->factory->getEntityTypeId();
+		if (!WhatsAppMessageChildAction::isAvailable($entityTypeId, $this->gridSettings))
+		{
+			return null;
+		}
+
+		return new WhatsAppMessageChildAction(
+			$entityTypeId,
+			$this->gridSettings->getCategoryId(),
+			$this->getGridId(),
+		);
 	}
 
 	private function getSetCategoryAction(): ?SetCategoryChildAction

@@ -58,13 +58,6 @@ final class SnapshotService
 	 */
 	public const FRESH_WINDOW_DAYS = 30;
 
-	/**
-	 * The sections whose assembly is expensive enough to halve the page. Places cost a walk of the
-	 * closure table and a search for links whose result is not bounded by the size of the page at
-	 * all - it grows with the number of people a file is shared with.
-	 */
-	private const HEAVY_SECTIONS = [SectionsStructure::SECTION_LOCATION];
-
 	private const SECONDS_IN_DAY = 86400;
 
 	private SyncSessionRepository $sessions;
@@ -480,23 +473,10 @@ final class SnapshotService
 	 */
 	private function resolveLimit(int $requested, SectionsStructure $sections): int
 	{
-		$ceiling = $this->hasHeavySection($sections)
+		$ceiling = $sections->hasHeavySection()
 			? $this->limits->getPageSizeMaxHeavy()
 			: $this->limits->getPageSizeMax();
 
 		return max(1, min($requested, $ceiling));
-	}
-
-	private function hasHeavySection(SectionsStructure $sections): bool
-	{
-		foreach (self::HEAVY_SECTIONS as $section)
-		{
-			if ($sections->has($section))
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 }

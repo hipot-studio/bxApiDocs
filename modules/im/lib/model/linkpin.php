@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Im\Model;
 
+use Bitrix\Im\V2\Common\DeleteTrait;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
@@ -41,6 +42,7 @@ use Bitrix\Main\UserTable;
 class LinkPinTable extends DataManager
 {
 	use DeleteByFilterTrait;
+	use DeleteTrait;
 
 	/**
 	 * Returns DB table name for entity.

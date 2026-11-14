@@ -14,6 +14,7 @@ use Bitrix\Call\Call\Registry;
 use Bitrix\Call\Error;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\ChatMessage;
+use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAIService;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Model\CallAITaskTable;
@@ -34,9 +35,14 @@ class TaskAI extends Engine\Controller
 	public function configureActions(): array
 	{
 		return [
+			// Added to the default prefilters, not put in their place: an own 'prefilters' list
+			// replaces them, and with it the Csrf filter, which the core then puts back only for a
+			// request that already is a POST. The restart restores AI_ANALYZE, asks the service for
+			// the files of the call and starts a paid analysis, so it stays out of reach of a
+			// cross-site navigation (@see \Bitrix\Main\Engine\Controller::getDefaultPreFilters()).
 			'restart' => [
-				'prefilters' => [
-					new Engine\ActionFilter\HttpMethod([Engine\ActionFilter\HttpMethod::METHOD_GET, Engine\ActionFilter\HttpMethod::METHOD_POST])
+				'+prefilters' => [
+					new Engine\ActionFilter\HttpMethod([Engine\ActionFilter\HttpMethod::METHOD_POST]),
 				],
 			],
 		];
@@ -55,18 +61,44 @@ class TaskAI extends Engine\Controller
 			return null;
 		}
 
+		// A caller with no portal user behind it has nothing to check access against; one that has
+		// is answered by checkCallAccess(), which puts its own refusal into the collection. Saying
+		// it twice would send the REST caller two errors of one code for one refusal.
 		$currentUserId = $this->getCurrentUser()?->getId();
-		if (!$currentUserId || !$this->checkCallAccess($currentUserId, $call))
+		if (!$currentUserId)
 		{
-			$this->addError(new Error("access_denied", "You do not have access to this call"));
+			$this->addError(new Error('access_denied', 'You do not have access to this call'));
+
 			return null;
 		}
 
-		$result = CallAIService::getInstance()->restartCallAiTask($callId);
-		if ($result->isSuccess())
+		if (!$this->checkCallAccess($currentUserId, $call))
+		{
+			return null;
+		}
+
+		$result = CallAIService::getInstance()->retryCallAiTask($call);
+		if (!$result->isSuccess())
+		{
+			return $this->reportRestartFailure(
+				$call,
+				$result->getError(),
+				(bool)($result->getData()[CallAIService::RESTART_LAUNCHED] ?? false),
+			);
+		}
+
+		// Status comes from CallAIService::restartCallAiTask(), which derives it from the launch and
+		// pending state of the call. A launch that left no queued task carries no status at all: the
+		// service cannot tell a refused launch from a started one, and this action must not guess.
+		$status = $result->getData()['status'] ?? null;
+		if ($status === null)
+		{
+			return [];
+		}
+
+		if ($status === CallAIService::RESTART_STATUS_STARTED)
 		{
 			$chat = Chat::getInstance($call->getChatId());
-
 			if (
 				!NotifyService::getInstance()->isMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START)
 				&& NotifyService::getInstance()->findMessage($chat->getId(), $callId, NotifyService::MESSAGE_TYPE_AI_START, 1) === null
@@ -85,19 +117,52 @@ class TaskAI extends Engine\Controller
 						->enableSkipUrlIndex()
 					;
 					$context = (new Context())->setUser($call->getInitiatorId());
-					NotifyService::getInstance()
-						->sendMessageDeferred($chat, $message, $sendingConfig, $context)
-						->setMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START)
-					;
+					NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+					NotifyService::getInstance()->setMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START);
 				}
 			}
 		}
-		else
+
+		return ['status' => $status];
+	}
+
+	/**
+	 * The failure travels in the payload alone: the REST bridge reads the controller's error
+	 * collection only for a null result, while a non-empty one would turn the AJAX envelope into
+	 * `status: error` and hide this payload from the caller's success branch.
+	 */
+	private function reportRestartFailure(Call $call, ?\Bitrix\Main\Error $error, bool $anythingLaunched): array
+	{
+		NotifyService::getInstance()->sendTaskFailedMessage($error, $call, -1);
+
+		$failureDetail = [
+			'code' => $error?->getCode(),
+			'message' => $error?->getMessage(),
+		];
+
+		// A queued task reports back on its own, so a batch that got one into the queue did not
+		// start nothing: only no status at all stays true once that result arrives.
+		if ($anythingLaunched)
 		{
-			NotifyService::getInstance()->sendTaskFailedMessage($result->getError(), $call, -1);
+			return ['error' => $failureDetail];
 		}
 
-		return [];
+		// A destroyed recording answers with the same status as a missing one: both name a retry
+		// that has no file to work from, and neither is a launch that failed. The retry refuses a
+		// destroyed record before it asks the service at all
+		// {@see CallAIService::retryCallAiTask()}.
+		$recordingIsGone = in_array(
+			$error?->getCode(),
+			[CallAIError::TRACK_PACK_NOT_FOUND_ERROR, CallAIService::ERROR_RECORD_DESTROYED],
+			true,
+		);
+
+		$status = $recordingIsGone
+			? CallAIService::RESTART_STATUS_RECORDING_MISSING
+			: CallAIService::RESTART_STATUS_LAUNCH_FAILED
+		;
+
+		return ['status' => $status, 'error' => $failureDetail];
 	}
 
 	/**

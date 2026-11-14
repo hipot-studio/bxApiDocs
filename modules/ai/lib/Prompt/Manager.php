@@ -12,6 +12,8 @@ use Bitrix\Main\Type\Collection as TypeCollection;
 
 class Manager
 {
+	private const DELETE_QUERY_CHUNK_SIZE = 1000;
+
 	/**
 	 * Returns Prompt Item by code.
 	 *
@@ -127,17 +129,57 @@ class Manager
 
 	public static function deleteByFilter(array $filterToDelete): bool
 	{
-		$result = true;
-
 		$prompts = PromptTable::query()
 			->setSelect(['ID'])
 			->setFilter($filterToDelete)
 		;
+
+		$promptIdsToDelete = [];
+		$parentIds = [];
 		foreach ($prompts->fetchAll() as $prompt)
 		{
-			$result = self::deleteByFilter(['PARENT_ID' => $prompt['ID']])
-				&& PromptTable::delete($prompt['ID'])->isSuccess()
-				&& $result;
+			$promptId = (int)$prompt['ID'];
+			if ($promptId <= 0 || isset($promptIdsToDelete[$promptId]))
+			{
+				continue;
+			}
+
+			$promptIdsToDelete[$promptId] = true;
+			$parentIds[] = $promptId;
+		}
+
+		while ($parentIds !== [])
+		{
+			$nextParentIds = [];
+			foreach (array_chunk($parentIds, self::DELETE_QUERY_CHUNK_SIZE) as $parentIdChunk)
+			{
+				$children = PromptTable::query()
+					->setSelect(['ID'])
+					->whereIn('PARENT_ID', $parentIdChunk)
+					->fetchAll()
+				;
+
+				foreach ($children as $child)
+				{
+					$childId = (int)$child['ID'];
+					if ($childId <= 0 || isset($promptIdsToDelete[$childId]))
+					{
+						continue;
+					}
+
+					$promptIdsToDelete[$childId] = true;
+					$nextParentIds[] = $childId;
+				}
+			}
+
+			$parentIds = $nextParentIds;
+		}
+
+		$result = true;
+		$promptIds = array_keys($promptIdsToDelete);
+		for ($index = count($promptIds) - 1; $index >= 0; $index--)
+		{
+			$result = PromptTable::delete($promptIds[$index])->isSuccess() && $result;
 		}
 
 		return $result;

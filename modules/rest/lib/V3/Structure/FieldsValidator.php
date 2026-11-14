@@ -8,11 +8,20 @@ use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumDefinition;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumType;
+use Bitrix\Rest\V3\Dto\Meta\FieldMetaInterface;
 use Bitrix\Rest\V3\Dto\TypeHelper;
 
 class FieldsValidator
 {
 	public static function validateDtoFieldValue(DtoField $field, mixed $value): bool
+	{
+		return self::validateFieldMetaValue($field, $value);
+	}
+
+	/**
+	 * @internal
+	 */
+	public static function validateFieldMetaValue(FieldMetaInterface $field, mixed $value): bool
 	{
 		if ($field->getDynamicEnumProvider() !== null)
 		{
@@ -45,7 +54,7 @@ class FieldsValidator
 		return match ($type)
 		{
 			'int' => is_int($value),
-			'float' => is_float($value),
+			'float' => is_float($value) || is_int($value),
 			'string' => is_string($value),
 			'bool' => is_bool($value),
 			'array' => is_array($value),

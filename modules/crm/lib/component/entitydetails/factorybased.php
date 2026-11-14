@@ -7,6 +7,7 @@ use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Component\EntityDetails;
+use Bitrix\Crm\Component\EntityDetails\ClientTab\ClientTabBuilder;
 use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 use Bitrix\Crm\Controller\Entity;
 use Bitrix\Crm\Controller\ErrorCode;
@@ -892,6 +893,19 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			}
 		}
 
+		if ($this->factory->isClientEnabled())
+		{
+			$clientTab = (new ClientTabBuilder())->build(
+				$this->getEntityTypeID(),
+				(int)$this->getEntityID(),
+				$this->item->isNew() || $this->isCopyMode(),
+			);
+			if ($clientTab !== null)
+			{
+				$tabs = ClientTabBuilder::insert($tabs, $clientTab);
+			}
+		}
+
 		$relationManager = Container::getInstance()->getRelationManager();
 		$relationTabs = $relationManager->getRelationTabsForDynamicChildren(
 			$this->getEntityTypeID(),
@@ -1072,7 +1086,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				);
 			}
 
-			$buttons[ButtonLocation::RIGHT][] = $this->getSettingsToolbarButton();
+			$settingsButton = $this->getSettingsToolbarButton();
+			if ($settingsButton !== null)
+			{
+				$buttons[ButtonLocation::RIGHT][] = $settingsButton;
+			}
 
 			if($this->isDocumentButtonAvailable())
 			{
@@ -1099,7 +1117,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		]);
 	}
 
-	protected function getSettingsToolbarButton(): Buttons\SettingsButton
+	protected function getSettingsToolbarButton(): ?Buttons\SettingsButton
 	{
 		$items = [];
 
@@ -1108,7 +1126,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$this->item->getId(),
 		);
 		$userPermissions = Container::getInstance()->getUserPermissions();
-		if ($itemCopyUrl && $userPermissions->item()->canUpdateItem($this->item))
+		if ($itemCopyUrl && $userPermissions->item()->canCopyItem($this->item))
 		{
 			$analyticsEventBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\CopyOpenEvent::createDefault($this->getEntityTypeID())
 				->setSubSection(\Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS)
@@ -1131,6 +1149,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				'text' => $this->getDeleteMessage(),
 				'onclick' => new Buttons\JsEvent('BX.Crm.ItemDetailsComponent:onClickDelete'),
 			];
+		}
+
+		if (empty($items))
+		{
+			return null;
 		}
 
 		return new Buttons\SettingsButton([
@@ -1569,6 +1592,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		}
 
 		$processedData = $this->processItemFieldValues($data);
+		if ($this->getErrors())
+		{
+			return null;
+		}
+
 		foreach($processedData as $name => $value)
 		{
 			try
@@ -2527,7 +2555,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	/**
 	 * In copy mode returns original item being copied
 	 */
-	private function getCopiedItemFrom(): ?Item
+	protected function getCopiedItemFrom(): ?Item
 	{
 		if ($this->copiedItemFrom)
 		{

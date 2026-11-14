@@ -10,6 +10,7 @@ use Bitrix\ImOpenLines\Debug;
 use Bitrix\ImOpenLines\Common;
 use Bitrix\ImOpenLines\Config;
 use Bitrix\ImOpenLines\Session;
+use Bitrix\ImOpenLines\Connector;
 use Bitrix\ImOpenLines\Log\ExecLog;
 use Bitrix\ImOpenLines\AutomaticAction;
 use Bitrix\ImOpenLines\Model\SessionTable;
@@ -25,6 +26,8 @@ use Bitrix\Main\Type\DateTime;
 
 use Bitrix\Pull;
 
+use Psr\Log\LoggerInterface;
+
 /**
  * Class Agent
  * @package Bitrix\ImOpenLines\Session
@@ -35,6 +38,16 @@ class Agent
 	const TYPE_AGENT_CRON_OL = 'cronol';
 	const TYPE_AGENT_B24 = 'b24';
 	const TYPE_AGENT_CRON = 'cron';
+
+	private const REPLACEMENT_USER_CODE_LOGGER_ID = 'imopenlines.session.replacement_user_code';
+
+	private const
+		DISTRUST_REASON_SEGMENT_COUNT = 'segment_count',
+		DISTRUST_REASON_EMPTY_SEGMENT = 'empty_segment',
+		DISTRUST_REASON_UNKNOWN_CONNECTOR = 'unknown_connector',
+		DISTRUST_REASON_CONFIG_ID = 'config_id',
+		DISTRUST_REASON_CONNECTOR_USER_ID = 'connector_user_id'
+	;
 
 	/**
 	 * Returns the type of the agent run.
@@ -478,6 +491,158 @@ class Agent
 	}
 
 	/**
+	 * For a session row the owner of the code is the row itself.
+	 *
+	 * @param array $session
+	 * @return string|null Reason code the row is not trusted for, null when it is.
+	 */
+	private static function getSessionUserCodeDistrustReason(array $session): ?string
+	{
+		return self::getUserCodeDistrustReason(
+			(string)($session['USER_CODE'] ?? ''),
+			(int)($session['USER_ID'] ?? 0)
+		);
+	}
+
+	/**
+	 * A user code comes from an external connector, so the replacement rebuilds only a code it can
+	 * still recognise: four known segments, the last of which belongs to the owner of the code.
+	 *
+	 * @param string $userCode
+	 * @param int $ownerUserId
+	 * @return string|null Reason code the value is not trusted for, null when it is.
+	 */
+	private static function getUserCodeDistrustReason(string $userCode, int $ownerUserId): ?string
+	{
+		if (count(explode('|', $userCode)) !== 4)
+		{
+			return self::DISTRUST_REASON_SEGMENT_COUNT;
+		}
+
+		$parsedUserCode = Session\Common::parseUserCode($userCode);
+
+		foreach ($parsedUserCode as $segment)
+		{
+			if ((string)$segment === '')
+			{
+				return self::DISTRUST_REASON_EMPTY_SEGMENT;
+			}
+		}
+
+		$knownConnectorIds = self::getKnownConnectorIdMap();
+
+		if (!isset($knownConnectorIds[$parsedUserCode['CONNECTOR_ID']]))
+		{
+			return self::DISTRUST_REASON_UNKNOWN_CONNECTOR;
+		}
+
+		if (
+			!self::isUnsignedInteger($parsedUserCode['CONFIG_ID'])
+			|| (int)$parsedUserCode['CONFIG_ID'] <= 0
+		)
+		{
+			return self::DISTRUST_REASON_CONFIG_ID;
+		}
+
+		if (!self::isUnsignedInteger($parsedUserCode['CONNECTOR_USER_ID']))
+		{
+			return self::DISTRUST_REASON_CONNECTOR_USER_ID;
+		}
+
+		$connectorUserId = (int)$parsedUserCode['CONNECTOR_USER_ID'];
+
+		if ($connectorUserId !== $ownerUserId && $connectorUserId !== 0)
+		{
+			return self::DISTRUST_REASON_CONNECTOR_USER_ID;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Connector ids a session user code may legitimately carry, as an `id => true` map.
+	 *
+	 * The portal list is filtered by license region, while a historical session keeps the connector
+	 * it came from, so the regionally limited ids are added back; that also admits the first-party
+	 * `wazzup` and `max` beyond their own conditions.
+	 *
+	 * @return array<string, true>
+	 */
+	private static function getKnownConnectorIdMap(): array
+	{
+		static $connectorIdMap = null;
+
+		if ($connectorIdMap === null)
+		{
+			$connectorIdMap = [Connector::TYPE_LIVECHAT => true];
+
+			if (Loader::includeModule('imconnector'))
+			{
+				$connectorIdMap += array_fill_keys(
+					array_keys(\Bitrix\ImConnector\Connector::getListConnectorReal()),
+					true
+				);
+				$connectorIdMap += array_fill_keys(
+					array_keys(\Bitrix\ImConnector\Library::CONNECTOR_PER_REGION_LIMITATION),
+					true
+				);
+			}
+		}
+
+		return $connectorIdMap;
+	}
+
+	/**
+	 * @param string $value
+	 * @return bool
+	 */
+	private static function isUnsignedInteger(string $value): bool
+	{
+		return preg_match('/^[0-9]+$/D', $value) === 1;
+	}
+
+	/**
+	 * Debug writes only under IMOPENLINES_FULL_DEBUG, while a skipped row must stay findable on an
+	 * ordinary portal. Only identifiers and a reason code travel: the user code itself is the
+	 * tainted value the check has just rejected.
+	 * The registry check is bypassed on purpose, so the record needs no option enabled; without a
+	 * sink configured through .settings.php the factory falls back to the portal log file.
+	 * Diagnostics must never break the agent, hence the guard.
+	 *
+	 * @param string $message
+	 * @param array $context
+	 * @return void
+	 */
+	private static function logReplacementUserCodeSkip(string $message, array $context): void
+	{
+		try
+		{
+			static::createReplacementUserCodeLogger()?->warning(
+				'{date} - {host}' . PHP_EOL . $message . PHP_EOL . '{delimiter}' . PHP_EOL,
+				$context
+			);
+		}
+		catch (\Throwable)
+		{
+		}
+	}
+
+	/**
+	 * Called through static:: so an heir replaces the sink without touching .settings.php. The
+	 * logger is built anew for every record instead of being kept in the class: a skip happens only
+	 * on a distrusted row, and a cached instance would belong to the class that logged first.
+	 *
+	 * @return LoggerInterface|null
+	 */
+	protected static function createReplacementUserCodeLogger(): ?LoggerInterface
+	{
+		return (new Main\Diag\LoggerFactory())->createById(
+			self::REPLACEMENT_USER_CODE_LOGGER_ID,
+			isCheckEnabledFromRegistry: false,
+		);
+	}
+
+	/**
 	 * @param int $replaceId
 	 * @param int $searchId
 	 * @return string
@@ -489,12 +654,33 @@ class Agent
 		$newUserCode = [];
 
 		$sessionRaw = SessionTable::getList([
-			'select' => ['ID', 'USER_CODE', 'CHAT_ID'],
+			'select' => ['ID', 'USER_CODE', 'CHAT_ID', 'USER_ID'],
 			'filter' => ['USER_ID' => $searchId],
 		]);
 
 		while ($sessionRow = $sessionRaw->fetch())
 		{
+			$distrustReason = self::getSessionUserCodeDistrustReason($sessionRow);
+
+			if ($distrustReason !== null)
+			{
+				Debug::addAgent(
+					'replacementUserAgent: session skipped, user code is not trusted',
+					['SESSION_ID' => (int)$sessionRow['ID'], 'REASON' => $distrustReason]
+				);
+				self::logReplacementUserCodeSkip(
+					'Open line session skipped by the user code replacement: reason {reason},'
+					. ' session {openLineSessionId}, merged user {searchUserId}',
+					[
+						'reason' => $distrustReason,
+						'openLineSessionId' => (int)$sessionRow['ID'],
+						'searchUserId' => $searchId,
+					]
+				);
+
+				continue;
+			}
+
 			if (empty($newUserCode[$sessionRow['USER_CODE']]))
 			{
 				$newUserCode[$sessionRow['USER_CODE']] = self::convertUserCode($sessionRow['USER_CODE'], $replaceId);
@@ -528,13 +714,30 @@ class Agent
 					$chatImol = new Chat($chatId);
 					if ($chatImol->isDataLoaded())
 					{
-						$entityId = $chatImol->getData('ENTITY_ID');
+						// the entity id is a second copy of the session user code, equally tainted
+						$entityId = (string)$chatImol->getData('ENTITY_ID');
+						$entityDistrustReason = self::getUserCodeDistrustReason($entityId, $searchId);
 
-						if(empty($newUserCode[$entityId]))
+						if ($entityDistrustReason === null)
 						{
-							$newUserCode[$entityId] = self::convertUserCode($entityId, $replaceId);
+							if (empty($newUserCode[$entityId]))
+							{
+								$newUserCode[$entityId] = self::convertUserCode($entityId, $replaceId);
+							}
+							$chatImol->updateChatLineData($newUserCode[$entityId]);
 						}
-						$chatImol->updateChatLineData($newUserCode[$entityId]);
+						else
+						{
+							self::logReplacementUserCodeSkip(
+								'Open line chat entity id skipped by the user code replacement:'
+								. ' reason {reason}, chat {chatId}, merged user {searchUserId}',
+								[
+									'reason' => $entityDistrustReason,
+									'chatId' => (int)$chatId,
+									'searchUserId' => $searchId,
+								]
+							);
+						}
 					}
 				}
 			}
@@ -572,6 +775,9 @@ class Agent
 									'USER_CODE' => $newUserCode[$userCode],
 									'USER_ID' => $replaceId,
 									'CHAT_ID' => $resultUserRelation['CHAT_ID'],
+									// replacing the user keeps the dialog, so the agreement already
+									// presented to the client must not be forgotten and shown again
+									'SHOWN_AGREEMENT_ID' => $resultUserRelation['SHOWN_AGREEMENT_ID'],
 								]
 							);
 						}

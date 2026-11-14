@@ -33,6 +33,14 @@ class PinMessages implements Entity
 		return $this->pins;
 	}
 
+	public function excludePinIds(array $excludedIds): void
+	{
+		foreach ($excludedIds as $id)
+		{
+			unset($this->pinIds[$id]);
+		}
+	}
+
 	public static function getRestEntityName(): string
 	{
 		return 'pinSync';

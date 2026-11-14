@@ -54,4 +54,13 @@ final class CapabilitiesDto extends Dto
 	public array $cardSections;
 
 	public bool $changeNotificationSupported;
+
+	/**
+	 * Whether the portal opens manual links right now: of regular objects and folders, and of boards,
+	 * which have a policy of their own. The public access of a card describes the link and not this
+	 * policy, so a client applies it itself; a change of the policy gives no record in the journal.
+	 *
+	 * @var array{manualLinks: bool, boardLinks: bool}
+	 */
+	public array $publicLinkPolicy;
 }

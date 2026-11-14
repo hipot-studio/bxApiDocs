@@ -123,7 +123,7 @@ class IcsManager
 
 	public function prepareEventDescription(Event $event, array $params): string
 	{
-		$languageId = \CCalendar::getUserLanguageId($event->getOwner()?->getId());
+		$languageId = $this->resolveUserLanguageId($event->getOwner()?->getId());
 		$eventDescription = '';
 
 		if (
@@ -158,6 +158,16 @@ class IcsManager
 			$eventDescription .= Loc::getMessage('EC_CONFERENCE_LINK') . $params['conferenceUrl'];
 		}
 
+		if (!empty($params['guestLinkUrl']))
+		{
+			if (!empty($eventDescription))
+			{
+				$eventDescription .= '\\n\\n';
+			}
+
+			$eventDescription .= Loc::getMessage('EC_GUEST_LINK', ['#LINK#' => $params['guestLinkUrl']]);
+		}
+
 		if (!empty($event->getDescription()))
 		{
 			if (!empty($eventDescription))
@@ -169,6 +179,11 @@ class IcsManager
 		}
 
 		return $eventDescription;
+	}
+
+	protected function resolveUserLanguageId(?int $userId): string
+	{
+		return \CCalendar::getUserLanguageId($userId);
 	}
 
 	private function formatAttendeesDescription(array $codes, ?int $parentId, string $languageId): string

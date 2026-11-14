@@ -3,12 +3,17 @@
 namespace Bitrix\Im\V2\Integration\AI;
 
 use Bitrix\AI\Engine;
+use Bitrix\AI\Prompt;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Defaults;
 use Bitrix\AI\Tuning\Manager;
+use Bitrix\Im\Public\Features\BitrixGptVoiceWidget;
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Duplicate\DuplicateCheckCreator;
 use Bitrix\Im\V2\Integration\AI\Restriction\Type;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
@@ -24,19 +29,24 @@ class Restriction
 	private const DEFAULT_TRANSCRIPTION_ENABLED = true;
 	private const DEFAULT_TRANSCRIPTION_EMOTIONS_ENABLED = true;
 	private const DEFAULT_AUTO_TASK_CREATION_ENABLED = true;
+	private const DEFAULT_BITRIXGPT_VOICE_WIDGET_ENABLED = true;
 	private const SETTING_COPILOT_CHAT = 'im_allow_chat_answer_generate';
+	private const SETTING_BITRIXGPT_VOICE_WIDGET = 'im_allow_bitrixgpt_voice_widget';
 	private const SETTING_TRANSCRIPTION = 'im_allow_file_transcription_generate';
 	private const SETTING_AUTO_TASK_CREATION = 'im_allow_auto_task_creation_after_transcription';
 	private const SETTING_TRANSCRIPTION_EMOTIONS = 'im_allow_file_transcription_emotions_generate';
+	private const OPTION_TASK_DEDUP = 'ai_task_dedup_enabled';
 	private const PORTAL_ZONE_BLACKLIST = ['cn'];
 	private const EMOTION_TRANSCRIPTION_PORTAL_ZONES_WHITE_LIST = ['ru', 'by'];
 	private const TRANSCRIPTION_QUALITY = 'transcribe_chat_voice_messages'; /** @see Quality::QUALITIES */
 
 	private static ?bool $isCopilotActive = null;
+	private static ?bool $isBitrixGptVoiceWidgetActive = null;
 	private static ?bool $isTranscriptionActive = null;
 	private static ?bool $isTranscriptionEmotionsActive = null;
 	private static ?bool $isAutoTaskActive = null;
 	private static ?bool $isAiTaskCreationActive = null;
+	private static ?bool $isAiTaskDedupActive = null;
 	private static ?bool $isAvailable = null;
 
 	public function isCopilotActive(): bool
@@ -44,6 +54,13 @@ class Restriction
 		self::$isCopilotActive ??= $this->isActiveInternal(Type::Copilot);
 
 		return self::$isCopilotActive;
+	}
+
+	public function isBitrixGptVoiceWidgetActive(): bool
+	{
+		self::$isBitrixGptVoiceWidgetActive ??= $this->isActiveInternal(Type::VoiceWidget);
+
+		return self::$isBitrixGptVoiceWidgetActive;
 	}
 
 	public function isTranscriptionActive(): bool
@@ -76,6 +93,17 @@ class Restriction
 		self::$isTranscriptionEmotionsActive ??= $this->isActiveInternal(Type::TranscriptionEmotions);
 
 		return self::$isTranscriptionEmotionsActive;
+	}
+
+	/**
+	 * Duplicate check of the task about to be created. Its own kill switch: the check sits on top
+	 * of the finished auto task creation and has to be switchable off without switching that off.
+	 */
+	public function isAiTaskDedupActive(): bool
+	{
+		self::$isAiTaskDedupActive ??= $this->isAiTaskDedupActiveInternal();
+
+		return self::$isAiTaskDedupActive;
 	}
 
 	public function isAvailable(): bool
@@ -140,6 +168,23 @@ class Restriction
 				);
 
 				$itemRelations[self::SETTING_COPILOT_CHAT] = [self::SETTING_COPILOT_CHAT_PROVIDER];
+			}
+
+			if (self::isBitrixGptVoiceWidgetFeatureEnabled())
+			{
+				$items[self::SETTING_BITRIXGPT_VOICE_WIDGET] = [
+					'group' => 'im_copilot_chat',
+					'title' => Loc::getMessage('IM_RESTRICTION_BITRIXGPT_VOICE_WIDGET_TITLE'),
+					'header' => Loc::getMessage(
+						'IM_RESTRICTION_BITRIXGPT_VOICE_WIDGET_HEADER',
+						['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+					),
+					'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
+					'default' => self::DEFAULT_BITRIXGPT_VOICE_WIDGET_ENABLED,
+					'sort' => 130,
+				];
+
+				$itemRelations[self::SETTING_COPILOT_CHAT][] = self::SETTING_BITRIXGPT_VOICE_WIDGET;
 			}
 
 			$items[self::SETTING_TRANSCRIPTION] = [
@@ -211,6 +256,36 @@ class Restriction
 		return $result;
 	}
 
+	/**
+	 * Off until a portal is opted in: the check is rolled out to a limited set of portals first,
+	 * their counters are read, and only then it goes wider.
+	 *
+	 * Being opted in is not enough on its own. The verdict prompt arrives at portals on its own
+	 * schedule, and an unknown prompt code is sent to the model as the query text itself
+	 * (@see \Bitrix\AI\Payload\Prompt::getData()), so without this check a portal would pay for a
+	 * meaningless request and hold the task back for a round of the queue - while the whole point
+	 * of the check is that the worst case equals the behaviour without it.
+	 */
+	private function isAiTaskDedupActiveInternal(): bool
+	{
+		if (!Loader::includeModule('ai') || !$this->isAvailable())
+		{
+			return false;
+		}
+
+		if (empty(Engine::getListAvailable(self::AI_TEXT_CATEGORY)))
+		{
+			return false;
+		}
+
+		if (Option::get('im', self::OPTION_TASK_DEDUP, 'N') !== 'Y')
+		{
+			return false;
+		}
+
+		return Prompt\Manager::getByCode(DuplicateCheckCreator::PROMPT_CODE) !== null;
+	}
+
 	private function isActiveInternal(Type $type): bool
 	{
 		if (
@@ -223,7 +298,7 @@ class Restriction
 
 		$aiCategory = match ($type)
 		{
-			Type::Copilot, Type::AutoTask => self::AI_TEXT_CATEGORY,
+			Type::Copilot, Type::AutoTask, Type::VoiceWidget => self::AI_TEXT_CATEGORY,
 			Type::Transcription, Type::TranscriptionEmotions => self::AI_AUDIO_CATEGORY,
 		};
 
@@ -239,6 +314,7 @@ class Restriction
 			Type::Transcription => $this->isTranscriptionOptionEnabled(),
 			Type::AutoTask => $this->isAiAutoTaskCreationOptionEnabled(),
 			Type::TranscriptionEmotions => $this->isTranscriptionEmotionsOptionEnabled(),
+			Type::VoiceWidget => $this->isBitrixGptVoiceWidgetOptionEnabled(),
 		};
 	}
 
@@ -252,6 +328,21 @@ class Restriction
 		$settings = Manager::getTuningStorage();
 
 		return (bool)($settings[self::SETTING_COPILOT_CHAT] ?? self::DEFAULT_COPILOT_ENABLED);
+	}
+
+	private function isBitrixGptVoiceWidgetOptionEnabled(): bool
+	{
+		if (
+			!self::isBitrixGptVoiceWidgetFeatureEnabled()
+			|| !$this->isCopilotActive()
+		)
+		{
+			return false;
+		}
+
+		$settings = Manager::getTuningStorage();
+
+		return (bool)($settings[self::SETTING_BITRIXGPT_VOICE_WIDGET] ?? self::DEFAULT_BITRIXGPT_VOICE_WIDGET_ENABLED);
 	}
 
 	private function isTranscriptionOptionEnabled(): bool
@@ -307,6 +398,11 @@ class Restriction
 		$portalZone = Application::getInstance()->getLicense()->getRegion() ?? 'ru';
 
 		return !in_array($portalZone, self::PORTAL_ZONE_BLACKLIST, true);
+	}
+
+	private static function isBitrixGptVoiceWidgetFeatureEnabled(): bool
+	{
+		return Feature::isEnabled(BitrixGptVoiceWidget::class);
 	}
 
 	private static function isEmotionTranscriptionAllowedInPortalZone(): bool

@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Bitrix\AI\Validator;
 
@@ -13,11 +15,11 @@ use Bitrix\Main\Localization\Loc;
 class RoleValidator
 {
 	public function __construct(
-		protected RoleService     $roleService,
+		protected RoleService $roleService,
 		protected ShareRepository $shareRepository,
-		protected ShareService    $shareService,
-		protected OwnerService    $ownerService,
-		protected FavoriteService    $favoriteService,
+		protected ShareService $shareService,
+		protected OwnerService $ownerService,
+		protected FavoriteService $favoriteService,
 	)
 	{
 	}
@@ -152,6 +154,38 @@ class RoleValidator
 		}
 
 		return $roleIds;
+	}
+
+	/**
+	 * @throws ValidateException
+	 */
+	public function checkRoleAuthor(int $roleId, string $fieldName, int $userId): void
+	{
+		$this->checkRolesAuthor([$roleId], $fieldName, $userId);
+	}
+
+	/**
+	 * @param int[] $roleIds
+	 * @throws ValidateException
+	 */
+	public function checkRolesAuthor(array $roleIds, string $fieldName, int $userId): void
+	{
+		if (empty($roleIds))
+		{
+			throw new ValidateException($fieldName, 'roles not found');
+		}
+
+		$this->checkUserId($userId);
+
+		$authorIds = $this->roleService->getAuthorIdsByRoleIds($roleIds);
+
+		foreach ($roleIds as $roleId)
+		{
+			if (($authorIds[$roleId] ?? 0) !== $userId)
+			{
+				throw new ValidateException($fieldName, 'user is not the author of this role');
+			}
+		}
 	}
 
 	public function accessOnRoles(array $roleIds, string $fieldName, int $userId): array

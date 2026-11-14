@@ -18,6 +18,7 @@ use Bitrix\Mobile\Feature\TariffMenuFeature;
 use Bitrix\Mobile\Feature\TariffMenuPurchaseCtaFeature;
 use Bitrix\Mobile\Feature\WhatsNewFeature;
 use Bitrix\Mobile\Public\Features\BitrixAnswersPersistentScreenFeature;
+use Bitrix\Mobile\Public\Features\BitrixGptVoiceFeature;
 use Bitrix\Mobile\Public\Features\ManagedTabPresetsFeature;
 use Bitrix\Mobile\Public\Features\TextEditorFeature;
 use Bitrix\TasksMobile\Feature\ChecklistOnCompleteFeature;
@@ -44,6 +45,7 @@ final class FeatureFlag extends JsonController
 	public function getFeatureFlagsAction(): array
 	{
 		return [
+			'BitrixGptVoiceFeature' => Feature::isEnabled(BitrixGptVoiceFeature::class),
 			'ChecklistOnCompleteFeature' => Loader::includeModule('tasksmobile')
 				&& MobileFeature::isEnabled(ChecklistOnCompleteFeature::class),
 			'ProjectsV2Feature' => Option::get('socialnetwork', 'new_projects', 'N') === 'Y',

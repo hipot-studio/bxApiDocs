@@ -6,8 +6,8 @@ namespace Bitrix\Im\V2\Folder\System;
 use Bitrix\Im\V2\Application\Features;
 
 /**
- * "Chats" source of the composite {@see AllFolder}. Root-scoped, hidden from the
- * tab bar - exists so "All" can reference it by code and clients keep it out of
+ * "Chats" source of the composite {@see AllFolder}. Root-scoped and hidden by the
+ * system - exists so "All" can reference it by code and clients keep it out of
  * the navigation until it becomes the primary "Chats" entry.
  */
 final class ChatFolder extends SystemFolder
@@ -35,7 +35,7 @@ final class ChatFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_CHAT';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return Features::isChatFolderAllAvailable();
 	}
@@ -49,8 +49,8 @@ final class ChatFolder extends SystemFolder
 		return false;
 	}
 
-	public function isVisible(): bool
+	public function isHiddenBySystem(): bool
 	{
-		return false;
+		return true;
 	}
 }

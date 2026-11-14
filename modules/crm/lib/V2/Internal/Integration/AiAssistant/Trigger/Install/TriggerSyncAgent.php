@@ -16,6 +16,9 @@ use Bitrix\AiAssistant\Trigger\TriggerRegistry;
 use Bitrix\Crm\Agent\AgentBase;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\V2\Internal\Integration\AiAssistant\Trigger\Action\CrmSetupOnboardingAction;
+use Bitrix\Crm\V2\Internal\Integration\AiAssistant\Trigger\Action\Summary\AbstractClientSummaryAction;
+use Bitrix\Crm\V2\Internal\Integration\AiAssistant\Trigger\Action\Summary\CompanySummaryAction;
+use Bitrix\Crm\V2\Internal\Integration\AiAssistant\Trigger\Action\Summary\ContactSummaryAction;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -28,6 +31,10 @@ use Psr\Log\LoggerInterface;
  * The registry is the source of truth, the database is its projection. The agent stays in the
  * schedule while at least one trigger is not synchronized yet: the engine may be unavailable on
  * a fresh portal, and the registration lock may be held by a concurrent hit.
+ *
+ * The projection goes one way: a declared trigger is created and updated, while a trigger dropped from
+ * the registry keeps its row in the database and has to be removed by hand - the engine offers nothing
+ * to withdraw a registration with.
  *
  * The engine does not expose priority, urlMatchType and the set of modules back, so a change of
  * those is announced by REGISTRY_VERSION instead of being detected by comparison.
@@ -55,7 +62,7 @@ final class TriggerSyncAgent extends AgentBase
 	 * so the new version has to be shipped together with a new updater that declares the agent again.
 	 * Declaring it again is safe, CAgent::AddAgent inserts the row only when it is missing.
 	 */
-	private const REGISTRY_VERSION = 1;
+	private const REGISTRY_VERSION = 2;
 	private const REGISTRY_VERSION_OPTION = 'aiassistant_trigger_registry_version';
 
 	/**
@@ -121,6 +128,14 @@ final class TriggerSyncAgent extends AgentBase
 	{
 		return [
 			static fn(int $isActive): TriggerRegistration => self::createCrmSetupOnboardingRegistration($isActive),
+			static fn(int $isActive): TriggerRegistration => self::createClientSummaryRegistration(
+				ContactSummaryAction::class,
+				$isActive,
+			),
+			static fn(int $isActive): TriggerRegistration => self::createClientSummaryRegistration(
+				CompanySummaryAction::class,
+				$isActive,
+			),
 		];
 	}
 
@@ -137,6 +152,26 @@ final class TriggerSyncAgent extends AgentBase
 			userLockTime: 120,
 			restartRule: RestartRuleEnum::NextDay,
 			restartTimeValue: 3,
+			isActive: $isActive,
+		);
+	}
+
+	/**
+	 * The summary chat is opened by a button of the entity card, so everything that shapes the
+	 * automatic display is left out: the user lock, the restart rule and the priority of the
+	 * display queue have nothing to arbitrate here.
+	 *
+	 * @param class-string<AbstractClientSummaryAction> $className
+	 */
+	private static function createClientSummaryRegistration(string $className, int $isActive): TriggerRegistration
+	{
+		return new TriggerRegistration(
+			className: $className,
+			moduleName: 'crm',
+			modulesForStart: [new ModuleTriggerDto(ModulesEnum::Crm)],
+			accessCodes: ['UA'],
+			enableUserLock: false,
+			restartRule: null,
 			isActive: $isActive,
 		);
 	}

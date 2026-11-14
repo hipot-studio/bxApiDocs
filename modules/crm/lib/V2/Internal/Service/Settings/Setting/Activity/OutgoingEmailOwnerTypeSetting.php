@@ -18,7 +18,7 @@ use Bitrix\Main\Result;
  */
 final class OutgoingEmailOwnerTypeSetting extends AbstractSetting
 {
-	public const CODE = 'crm.activity.outgoing_email_owner_type';
+	public const ID = 'crm.activity.outgoing_email_owner_type';
 
 	private readonly ActivitySettings $activitySettings;
 
@@ -27,9 +27,9 @@ final class OutgoingEmailOwnerTypeSetting extends AbstractSetting
 		$this->activitySettings = $activitySettings ?? ActivitySettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -41,10 +41,12 @@ final class OutgoingEmailOwnerTypeSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'activity_outgoing_email_owner_type',
 		);
 	}
 

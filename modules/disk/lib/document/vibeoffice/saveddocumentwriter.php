@@ -94,13 +94,20 @@ final class SavedDocumentWriter implements SavedDocumentWriterInterface
 			{
 				return $this->failure('The saved document exceeds the file size limit.', 'vibeoffice_file_too_large');
 			}
-			$array['name'] = $file->getName();
+			$documentName = $file->getName();
+			$extension = $file->getExtension();
+			$stagingName = 'vibeoffice-saved';
+			if ($extension !== '' && strlen($extension) <= 255 - strlen($stagingName) - 1)
+			{
+				$stagingName .= '.' . $extension;
+			}
+			$array['name'] = strlen($documentName) > 255 ? $stagingName : $documentName;
 			$array['MODULE_ID'] = Driver::INTERNAL_MODULE_ID;
 			if (in_array($array['type'] ?? null, ['application/encrypted', 'application/zip'], true))
 			{
 				$array['type'] = MimeType::getByFileExtension($file->getExtension());
 			}
-			$array['type'] = TypeFile::normalizeMimeType($array['type'], $array['name']);
+			$array['type'] = TypeFile::normalizeMimeType($array['type'], $documentName);
 			$fileId = (int)\CFile::SaveFile($array, Driver::INTERNAL_MODULE_ID, true, true);
 			$staged = $fileId > 0 ? \CFile::GetFileArray($fileId) : false;
 			if (!$staged)

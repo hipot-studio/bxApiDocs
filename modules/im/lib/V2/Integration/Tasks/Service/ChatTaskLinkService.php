@@ -25,6 +25,7 @@ class ChatTaskLinkService
 		int $userId,
 		TaskType $taskType = TaskType::Task,
 		bool $isPartial = false,
+		bool $withTerminalStatus = true,
 	): void
 	{
 		$chatId = $message->getChatId();
@@ -40,7 +41,10 @@ class ChatTaskLinkService
 			return;
 		}
 
-		(new AutoTaskStatus($message, $userId, Status::TaskCreationCompleted, true, $isPartial))->send();
+		if ($withTerminalStatus)
+		{
+			(new AutoTaskStatus($message, $userId, Status::TaskCreationCompleted, true, $isPartial))->send();
+		}
 
 		Application::getInstance()->addBackgroundJob(
 			static function() use ($chatId, $messageId, $taskId, $userId, $taskType)

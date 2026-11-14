@@ -17,6 +17,13 @@ class Signaling
 	public const MODE_WEB = 'web';
 	public const MODE_MOBILE = 'mobile';
 
+	/**
+	 * `$inviteSenderId` of an invite nobody made: the client must not match it against any
+	 * user. Distinct from `null`, which means "the sender is also the one who rang".
+	 * @see self::sendCallInviteToUser()
+	 */
+	public const INVITE_SENDER_UNKNOWN = 0;
+
 	private const LARGE_CHAT_NOTIFICATION_THRESHOLD = 20; /** @var Call @see call/install/js/call/core/src/controller.js:110 */
 
 	/**
@@ -46,6 +53,8 @@ class Signaling
 
 		$associatedEntity = $this->call->getAssociatedEntity();
 		$isBroadcast = ($associatedEntity instanceof Chat) && $associatedEntity->isBroadcast();
+		$inviteId = \Bitrix\Main\Security\Random::getString(16);
+		$inviteTimestamp = microtime(true);
 
 		$config = [
 			'call' => $this->call->toArray(($senderId == $toUserId ? $toUserId : 0)),
@@ -58,6 +67,8 @@ class Signaling
 			'video' => $video,
 			'logToken' => $this->call->getLogToken($toUserId),
 			'isRepeated' => $isRepeated,
+			'inviteId' => $inviteId,
+			'inviteTimestamp' => $inviteTimestamp,
 		];
 		$connectionData = $this->call->getConnectionData($toUserId);
 		if ($connectionData !== null)
@@ -85,7 +96,18 @@ class Signaling
 	/**
 	 * @param int[]|null $usersInOtherCalls
 	 */
-	public function sendInvite(int $senderId, array $toUserIds, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false, ?array $usersInOtherCalls = null, ?int $ttl = null)
+	public function sendInvite(
+		int $senderId,
+		array $toUserIds,
+		$isLegacyMobile,
+		bool $video = false,
+		bool $sendPush = true,
+		bool $isRepeated = false,
+		?array $usersInOtherCalls = null,
+		?int $ttl = null,
+		bool $isManualInvite = false,
+		?string $inviteGenerationId = null,
+	)
 	{
 		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
 		if ($toUserIds === [])
@@ -111,6 +133,8 @@ class Signaling
 		// Multi-recipient batch falls back to userId=0, matching prior behavior where
 		// the per-user variant was only emitted when count($toUserIds) === 1.
 		$callPayload = $this->call->toArray(count($toUserIds) === 1 ? $toUserIds[0] : 0);
+		$inviteId = \Bitrix\Main\Security\Random::getString(16);
+		$inviteTimestamp = microtime(true);
 
 		$sharedParams = [
 			'call' => $callPayload,
@@ -122,6 +146,10 @@ class Signaling
 			'isLegacyMobile' => $isLegacyMobile,
 			'video' => $video,
 			'callId' => $this->call->getId(),
+			'isManualInvite' => $isManualInvite,
+			'inviteId' => $inviteId,
+			'inviteTimestamp' => $inviteTimestamp,
+			...($inviteGenerationId !== null ? ['inviteGenerationId' => $inviteGenerationId] : []),
 		];
 
 		// Per-recipient overrides merged by pull JSON-RPC server before delivery.
@@ -447,7 +475,7 @@ class Signaling
 
 	protected function acquireFinishRecoveryKey(): bool
 	{
-		return Idempotence::addKey(
+		return !$this->shouldSuppressFinish(
 			'call_finish_recovery_' . $this->call->getId(),
 			self::FINISH_RECOVERY_TTL,
 		);
@@ -511,7 +539,7 @@ class Signaling
 		if ($isBroadcast && !$skipSuppression)
 		{
 			$key = 'call_finish_broadcast_' . $this->call->getId();
-			if (!Idempotence::addKey($key, self::FINISH_BROADCAST_TTL))
+			if ($this->shouldSuppressFinish($key, self::FINISH_BROADCAST_TTL))
 			{
 				// Already broadcast within the suppression window — drop the fan-out.
 				return false;
@@ -531,6 +559,25 @@ class Signaling
 		];
 
 		return $this->send('Call::finish', $users, [], $push, 3600);
+	}
+
+	/**
+	 * A rejected claim alone is not proof of a duplicate: an unavailable KV store
+	 * rejects every claim, which would silently drop every finish broadcast.
+	 */
+	private function shouldSuppressFinish(string $key, int $ttl): bool
+	{
+		return !$this->claimFinishKey($key, $ttl) && $this->isFinishKeyHeld($key, $ttl);
+	}
+
+	protected function claimFinishKey(string $key, int $ttl): bool
+	{
+		return Idempotence::addKey($key, $ttl);
+	}
+
+	protected function isFinishKeyHeld(string $key, int $ttl): bool
+	{
+		return Idempotence::hasKey($key, $ttl);
 	}
 
 	public function sendLogToken(int $toUserId,): void
@@ -769,6 +816,8 @@ class Signaling
 		array $usersInOtherCalls = [],
 		bool $isRepeated = false,
 		?int $ttl = null,
+		bool $isManualInvite = false,
+		?string $inviteGenerationId = null,
 	): void
 	{
 		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
@@ -793,6 +842,8 @@ class Signaling
 			$sendMobile = ($sendMode === self::MODE_MOBILE || $sendMode === self::MODE_ALL)
 				&& $sendPush
 				&& !$isBroadcast;
+			$inviteId = \Bitrix\Main\Security\Random::getString(16);
+			$inviteTimestamp = microtime(true);
 
 			if ($sendWeb && Loader::includeModule('pull'))
 			{
@@ -830,6 +881,11 @@ class Signaling
 					'video' => $video,
 					'callId' => $this->call->getId(),
 					'isRepeated' => $isRepeated,
+					'isManualInvite' => $isManualInvite,
+					'inviteId' => $inviteId,
+					'inviteTimestamp' => $inviteTimestamp,
+					...($inviteGenerationId !== null ? ['inviteGenerationId' => $inviteGenerationId] : []),
+					'inviteSenderId' => $senderId,
 				];
 
 				Pull\Event::add($recipients, [
@@ -959,6 +1015,11 @@ class Signaling
 		];
 	}
 
+	/**
+	 * @param int|null $inviteSenderId Who rang, as opposed to $senderId which also authors the mobile push.
+	 *        Defaults to $senderId; paths that have no real actor pass {@see self::INVITE_SENDER_UNKNOWN}
+	 *        (see {@see EventHandler::inviteUsersToCall()}).
+	 */
 	public function sendCallInviteToUser(
 		int $senderId,
 		int $toUserId,
@@ -969,6 +1030,7 @@ class Signaling
 		?array $usersInOtherCalls = null,
 		?int $ttl = null,
 		bool $manualInvite = false,
+		?int $inviteSenderId = null,
 	): void
 	{
 		if ($this->inviteContext !== null)
@@ -999,6 +1061,8 @@ class Signaling
 		);
 		$isAlreadyInCall = $flags['isAlreadyInCall'];
 		$activeCallPlatform = $flags['activeCallPlatform'];
+		$inviteId = \Bitrix\Main\Security\Random::getString(16);
+		$inviteTimestamp = microtime(true);
 
 		$config = [
 			'callToken' => $callToken,
@@ -1009,6 +1073,12 @@ class Signaling
 			'logToken' => $this->call->getLogToken($toUserId),
 			'isAlreadyInCall' => $isAlreadyInCall,
 			'activeCallPlatform' => $activeCallPlatform,
+			'inviteId' => $inviteId,
+			'inviteTimestamp' => $inviteTimestamp,
+			// Not named `senderId`: callmobile reads that key in its JWT branch as the call
+			// creator (extensions/call/calls/engine/extension.js), and reusing it would
+			// silently change the meaning of `initiatorId` on the mobile call object.
+			'inviteSenderId' => $inviteSenderId ?? $senderId,
 		];
 
 		$push = null;
@@ -1418,6 +1488,7 @@ class Signaling
 
 		Pull\Push::add($users, [
 			'module_id' => 'call',
+			'event_type' => 'Call::incoming',
 			'push' => $push,
 			'expiry' => $ttl
 		]);

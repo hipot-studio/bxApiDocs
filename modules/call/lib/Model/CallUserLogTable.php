@@ -43,6 +43,9 @@ class CallUserLogTable extends DataManager
 	public const SOURCE_TYPE_CALL = 'call';
 	public const SOURCE_TYPE_VOXIMPLANT = 'voximplant';
 
+	public const DIRECTION_INCOMING = 'incoming';
+	public const DIRECTION_OUTGOING = 'outgoing';
+
 	protected static function getMergeStrategy(): AddStrategy
 	{
 		return new Merge(
@@ -84,6 +87,10 @@ class CallUserLogTable extends DataManager
 					return new DateTime();
 				}),
 
+			(new StringField('DIRECTION'))
+				->configureSize(16)
+				->configureNullable(),
+
 			// Relations
 			(new Reference(
 				'USER',
@@ -93,7 +100,7 @@ class CallUserLogTable extends DataManager
 
 			(new Reference(
 				'IM_CALL',
-				\Bitrix\Im\Model\CallTable::class,
+				CallTable::class,
 				Join::on('this.SOURCE_CALL_ID', 'ref.ID')
 					->where('this.SOURCE_TYPE', self::SOURCE_TYPE_CALL)
 			)),
@@ -142,11 +149,36 @@ class CallUserLogTable extends DataManager
 		);
 	}
 
+	/**
+	 * The owner goes into the row twice, and the two are written together or not at all: the column is what the
+	 * reader filters by, the term of OwnerTerm is what makes the owner a condition of the fulltext pass.
+	 *
+	 * The term is handed over raw, next to the rest of the content: the builder transforms everything it is given
+	 * at once, so a term transformed beforehand would be transformed a second time. It rides the same call rather
+	 * than one of its own because the builder measures whatever one call is given against the threshold of the
+	 * portal and drops it whole, and a short term alone would go missing on a portal that raised that threshold. A
+	 * row whose call left nothing to index is the one place the term travels alone.
+	 *
+	 * An index that names no owner writes neither, as the rows written before the column: the search reads such a
+	 * row as not filled, and the pass that fills those rows fills it from its journal row
+	 * ({@see \Bitrix\Call\Update\CallUserLogOwnerBackfill}).
+	 */
 	private static function prepareParamsForIndex(\Bitrix\Call\Internals\CallLogIndex $index): array
 	{
+		$content = self::generateSearchContent($index);
+		$ownerId = $index->getOwnerId();
+		if ($ownerId !== null)
+		{
+			$ownerTerm = \Bitrix\Call\Internals\OwnerTerm::raw($ownerId);
+			$content = $content === '' ? $ownerTerm : $content . ' ' . $ownerTerm;
+		}
+
 		return [
 			'USERLOG_ID' => $index->getCallLogId(),
-			'SEARCH_CONTENT' => \Bitrix\Main\Search\MapBuilder::create()->addText(self::generateSearchContent($index))->build(),
+			'USER_ID' => $ownerId,
+			'SEARCH_CONTENT' => \Bitrix\Main\Search\MapBuilder::create()
+				->addText($content)
+				->build(),
 			'SEARCH_TITLE' => \Bitrix\Main\Search\MapBuilder::create()->addText(self::generateSearchTitle($index))->build(),
 		];
 	}

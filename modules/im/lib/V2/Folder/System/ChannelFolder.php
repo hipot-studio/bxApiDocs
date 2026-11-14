@@ -6,8 +6,8 @@ namespace Bitrix\Im\V2\Folder\System;
 use Bitrix\Im\V2\Application\Features;
 
 /**
- * "My channels" source of the composite {@see AllFolder}. Root-scoped, hidden
- * from the tab bar - referenced by "All" through its code.
+ * "My channels" source of the composite {@see AllFolder}. Root-scoped and hidden
+ * by the system - referenced by "All" through its code.
  */
 final class ChannelFolder extends SystemFolder
 {
@@ -30,7 +30,7 @@ final class ChannelFolder extends SystemFolder
 	}
 
 	/**
-	 * Reads the same as IM_FOLDER_SYSTEM_OPEN_CHANNEL on purpose: this folder is invisible
+	 * Reads the same as IM_FOLDER_SYSTEM_OPEN_CHANNEL on purpose: the system hides this folder
 	 * and the two never meet on a user surface - the open-channel showcase is another folder.
 	 */
 	public function getTitleLangKey(): string
@@ -43,7 +43,7 @@ final class ChannelFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_CHANNEL_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return Features::isChatFolderAllAvailable();
 	}
@@ -57,8 +57,8 @@ final class ChannelFolder extends SystemFolder
 		return false;
 	}
 
-	public function isVisible(): bool
+	public function isHiddenBySystem(): bool
 	{
-		return false;
+		return true;
 	}
 }

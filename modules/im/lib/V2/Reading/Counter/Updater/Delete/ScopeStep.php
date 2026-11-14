@@ -46,6 +46,15 @@ class ScopeStep
 		return new AudienceStep($this);
 	}
 
+	public function byChatToMessage(int $chatId, int $toMessageId): AudienceStep
+	{
+		$this->resetSelection();
+		$this->chatIds = [$chatId];
+		$this->toMessageId = $toMessageId;
+
+		return new AudienceStep($this);
+	}
+
 	public function byChats(array $chatIds): AudienceStep
 	{
 		$this->resetSelection();

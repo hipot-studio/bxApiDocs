@@ -31,6 +31,7 @@ final class Scenario
 	public const REPEAT_SALE_SCREENING_SCENARIO = 'repeat_sale_screening';
 	public const CONFIRM_FIELDS_SCENARIO = 'confirm_fields';
 	public const ANALYZE_COMMUNICATION_SCENARIO = 'analyze_communication';
+	public const CLIENT_SUMMARY_SCENARIO = 'client_summary';
 
 	// slider codes
 	public const FULL_OFF_SLIDER_CODE = 'limit_copilot_off';

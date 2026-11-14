@@ -13,6 +13,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Disk\Public\Service\Restrictions\WriteErrorTransportMap;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Version;
@@ -322,39 +323,19 @@ class LocalDocumentController extends Internals\Controller
 			}
 			else
 			{
-				$this->errorCollection->add(
-					[
-						new Error(
-							Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_CREATE_FILE'),
-							self::ERROR_COULD_NOT_CREATE_FILE
-						)
-					]
-				);
-				$this->errorCollection->add($createBoardResult->getErrors());
+				$this->addErrorsOfRefusedCreation($createBoardResult->getErrors());
 				$this->sendJsonErrorResponse();
 			}
 		}
-		elseif ($type === 'xlsx')
-		{
-			$newFile = $folder->uploadFile(\CFile::makeFileArray($fileData->getSrc()), [
-				'NAME' => $fileData->getName(),
-				'CREATED_BY' => $this->getUser()->getId(),
-			], [], true);
-		}
 		else
 		{
-			$newFile = $folder->addBlankFile(array(
-				'NAME' => $fileData->getName(),
-				'CREATED_BY' => $this->getUser()->getId(),
-				'MIME_TYPE' => $fileData->getMimeType(),
-			), array(), true);
+			$newFile = $this->createBlankFile($folder, $fileData, $type, (int)$this->getUser()->getId());
 		}
 
 
 		if(!$newFile)
 		{
-			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_CREATE_FILE'), self::ERROR_COULD_NOT_CREATE_FILE)));
-			$this->errorCollection->add($folder->getErrors());
+			$this->addErrorsOfRefusedCreation($folder->getErrors());
 			$this->sendJsonErrorResponse();
 		}
 
@@ -395,5 +376,51 @@ class LocalDocumentController extends Internals\Controller
 			'link' => (string)$editUrl,
 			'openUrl' => $openUrl,
 		));
+	}
+
+	/**
+	 * Writes the blank document the user asked for into the folder.
+	 *
+	 * The document is added to the Disk by the user, so it is written like anything else they add:
+	 * the write path declares no context of its own and a format the portal restricts is refused
+	 * here, in the "Add" menu, the same way it is refused on upload.
+	 *
+	 * @param Folder $folder Folder the document is written into.
+	 * @param BlankFileData $fileData Name, type and source of the blank document.
+	 * @param string $type Type of the document asked for.
+	 * @param int $createdBy Id of the user the document is written on behalf of.
+	 * @return File|null
+	 */
+	protected function createBlankFile(Folder $folder, BlankFileData $fileData, string $type, int $createdBy): ?File
+	{
+		return $folder->uploadFile(\CFile::makeFileArray($fileData->getSrc()), [
+			'NAME' => $fileData->getName(),
+			'CREATED_BY' => $createdBy,
+		], [], true);
+	}
+
+	/**
+	 * Puts the errors of a refused creation into the answer. The interface shows the first error of
+	 * the answer, so a refusal the module names - a format the portal restricts, among them - is
+	 * answered by itself; anything else a write may fail on is no text for the user and keeps the
+	 * general message of the action ahead of it.
+	 *
+	 * The heir answers the write it makes of its own - the fork of an attachment into the personal
+	 * storage of the user - the same way, so the answer is built here rather than in each of them.
+	 *
+	 * @param \Bitrix\Main\Error[] $writeErrors Errors the write was refused with.
+	 * @return void
+	 */
+	protected function addErrorsOfRefusedCreation(array $writeErrors): void
+	{
+		if (WriteErrorTransportMap::findMappedRefusalCode($writeErrors) === null)
+		{
+			$this->errorCollection->addOne(new Error(
+				Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_CREATE_FILE'),
+				self::ERROR_COULD_NOT_CREATE_FILE
+			));
+		}
+
+		$this->errorCollection->add($writeErrors);
 	}
 }

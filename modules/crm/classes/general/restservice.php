@@ -19,7 +19,9 @@ use Bitrix\Crm\Integration\DiskManager;
 use Bitrix\Crm\Integration\Rest\AppPlacement;
 use Bitrix\Crm\Integration\StorageFileType;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Requisite;
+use Bitrix\Crm\Reservation;
 use Bitrix\Crm\Rest;
 use Bitrix\Crm\Security\EntityAuthorization;
 use Bitrix\Crm\Service;
@@ -1345,6 +1347,13 @@ class CCrmRestEventDispatcher
 
 abstract class CCrmRestProxyBase implements ICrmRestProxy
 {
+	/** The list backend of the proxy has no nested filter. */
+	protected const FILTER_NESTING_NONE = 'none';
+	/** CSqlUtil::PrepareWhere (CCrmEntityListBuilder) reads a nested filter from a key prefixed with "__INNER_FILTER". */
+	protected const FILTER_NESTING_INNER_FILTER = 'innerFilter';
+	/** An ORM filter (DataManager::getList) reads a nested filter from an array under a numeric key. */
+	protected const FILTER_NESTING_SUBFILTER = 'subFilter';
+
 	private $currentUser = null;
 	private $webdavSettings = null;
 	private $webdavIBlock = null;
@@ -3341,6 +3350,7 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 			return;
 		}
 
+		$filterNesting = $this->getFilterNesting();
 		foreach($filter as $k => $v)
 		{
 			$operationInfo =  CSqlUtil::GetFilterOperation($k);
@@ -3371,23 +3381,144 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 				unset($filter[$k]);
 				continue;
 			}
+
+			$isNested = false;
+			$isChanged = false;
+			$fullTextOperation = self::prepareFullTextFilterOperation($operation, $fieldName, $info);
+			if ($fullTextOperation !== null)
+			{
+				$fullTextKey = $fullTextOperation . $fieldName;
+				if (!array_key_exists($fullTextKey, $filter))
+				{
+					unset($filter[$k]);
+					$k = $fullTextKey;
+					$isChanged = true;
+				}
+				elseif ($filterNesting !== self::FILTER_NESTING_NONE)
+				{
+					// The key is taken by another condition: both are kept and joined by AND.
+					unset($filter[$k]);
+					$k = $fullTextKey;
+					$isNested = true;
+				}
+				// Otherwise the operation is kept, the list backend of the proxy cannot hold both conditions.
+			}
+
 			if (in_array($operation, ['<', '>', '>=', '<=']) && $fieldType === 'integer')
 			{
-				$filter[$k] = (int)$v;
+				$v = (int)$v;
+				$isChanged = true;
 			}
 
 			if($fieldType === 'datetime')
 			{
-				$filter[$k] = CRestUtil::unConvertDateTime($v, true);
+				$v = CRestUtil::unConvertDateTime($v, true);
+				$isChanged = true;
+			}
+			elseif($fieldName === LastCommunicationTable::getLastStateFieldName())
+			{
+				$v = self::internalizeLastCommunicationTimeFilterValue($v);
+				$isChanged = true;
 			}
 			elseif($fieldType === 'date')
 			{
-				$filter[$k] = CRestUtil::unConvertDate($v);
+				$v = CRestUtil::unConvertDate($v);
+				$isChanged = true;
+			}
+
+			if ($isNested)
+			{
+				self::addNestedFilterCondition($filter, $filterNesting, $k, $v);
+			}
+			elseif ($isChanged)
+			{
+				$filter[$k] = $v;
 			}
 		}
 
 		CCrmEntityHelper::PrepareMultiFieldFilter($filter, array(), '=%', true);
 	}
+
+	/**
+	 * The form of a nested filter understood by the list backend of the proxy. It is used to keep
+	 * a filter condition whose key is already taken by another condition.
+	 *
+	 * @return string One of the FILTER_NESTING_* constants.
+	 */
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_NONE;
+	}
+
+	private static function addNestedFilterCondition(array &$filter, string $filterNesting, string $key, $value): void
+	{
+		$condition = ['LOGIC' => 'AND', $key => $value];
+		if ($filterNesting === self::FILTER_NESTING_INNER_FILTER)
+		{
+			$index = 0;
+			while (array_key_exists('__INNER_FILTER_REST_' . $index, $filter))
+			{
+				$index++;
+			}
+			$filter['__INNER_FILTER_REST_' . $index] = $condition;
+		}
+		else
+		{
+			$filter[] = $condition;
+		}
+	}
+
+	/**
+	 * The full text operations "*" and "*=" require a FULLTEXT index, which exists for SEARCH_CONTENT only.
+	 * For any other field a string is searched by words with LIKE ("*%"), the rest is compared for equality.
+	 *
+	 * @return string|null The new operation with its modifiers ("!", "+"), or null if the operation is kept.
+	 */
+	private static function prepareFullTextFilterOperation(string $operation, string $fieldName, array $fieldInfo): ?string
+	{
+		if ($fieldName === 'SEARCH_CONTENT')
+		{
+			return null;
+		}
+
+		$modifiers = '';
+		$coreOperation = $operation;
+		while ($coreOperation !== '' && ($coreOperation[0] === '!' || $coreOperation[0] === '+'))
+		{
+			$modifiers .= $coreOperation[0];
+			$coreOperation = substr($coreOperation, 1);
+		}
+
+		if ($coreOperation !== '*' && $coreOperation !== '*=')
+		{
+			return null;
+		}
+
+		$stringTypes = ['string', 'text', 'string_formatted'];
+		$isString = in_array($fieldInfo['TYPE'] ?? '', $stringTypes, true);
+
+		return $modifiers . ($isString ? '*%' : '=');
+	}
+
+	/**
+	 * LAST_COMMUNICATION_TIME is described for REST as a string to keep its output format.
+	 * A filter value in the site format goes as before, any other value is read as a REST date.
+	 */
+	private static function internalizeLastCommunicationTimeFilterValue($value)
+	{
+		if (is_array($value))
+		{
+			return array_map(static fn($item) => self::internalizeLastCommunicationTimeFilterValue($item), $value);
+		}
+
+		if ($value === null || $value === '' || (is_string($value) && CheckDateTime($value)))
+		{
+			return $value;
+		}
+
+		return CRestUtil::unConvertDateTime($value, true);
+	}
+
 	protected static function isAssociativeArray($ary)
 	{
 		if(!is_array($ary))
@@ -4087,6 +4218,11 @@ class CCrmCatalogRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmProduct::CheckReadPermission(0))
@@ -6151,6 +6287,11 @@ class CCrmLeadRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmLead::CheckReadPermission(0))
@@ -6570,6 +6711,11 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmDeal::CheckReadPermission(0))
@@ -6775,6 +6921,7 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 
 		$rows = array_values($rows);
 		$actualRows = array();
+		$requestedReserveRows = [];
 		for($i = 0, $qty = count($rows); $i < $qty; $i++)
 		{
 			$row = $rows[$i];
@@ -6783,6 +6930,8 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 				continue;
 			}
 
+			// prepareForSave drops the reserve fields and ID, the store check needs them as requested
+			$requestedReserveFields = array_intersect_key($row, array_flip(['ID', 'STORE_ID', 'RESERVE_QUANTITY']));
 			$proxy->prepareForSave($row);
 			if(isset($row['OWNER_TYPE']))
 			{
@@ -6795,6 +6944,7 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 			}
 
 			$actualRows[] = $row;
+			$requestedReserveRows[] = $requestedReserveFields + $row;
 		}
 
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
@@ -6809,6 +6959,18 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 			throw new RestException($checkCatalogRightsResult->getError()->getMessage());
 		}
 
+		if (CCrmSaleHelper::isProcessInventoryManagement())
+		{
+			$checkStoresResult = (new Reservation\Validator\ExistingStore())->validateRows(
+				$requestedReserveRows,
+				$this->getStoredProductRowsById($ID),
+			);
+			if (!$checkStoresResult->isSuccess())
+			{
+				throw new RestException($checkStoresResult->getError()->getMessage());
+			}
+		}
+
 		$result = CCrmDeal::SaveProductRows($ID, $actualRows, true, true, true);
 		if(!$result)
 		{
@@ -6820,6 +6982,24 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 		}
 		return $result;
 	}
+
+	/**
+	 * Stored rows of the deal with their crm reserves. The keys are not row positions,
+	 * so the validator matches them to the incoming rows by ID only.
+	 *
+	 * @return array<string, array>
+	 */
+	private function getStoredProductRowsById(int $dealId): array
+	{
+		$storedRows = [];
+		foreach (CCrmDeal::LoadProductRows($dealId) as $row)
+		{
+			$storedRows['ID' . $row['ID']] = $row;
+		}
+
+		return $storedRows;
+	}
+
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)
 	{
 		$name = mb_strtoupper($name);
@@ -6963,6 +7143,11 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 		}
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmDeal::CheckReadPermission(0))
@@ -7289,6 +7474,11 @@ class CCrmDealRecurringRestProxy extends CCrmRestProxyBase
 		$result['PARAMS'] = $restParamsMapper->getFormattedMap();
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmDeal::CheckReadPermission(0))
@@ -7795,6 +7985,11 @@ class CCrmInvoiceRecurringRestProxy extends CCrmRestProxyBase
 		$result['PARAMS'] = $restParamsMapper->getFormattedMap();
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmInvoice::CheckReadPermission(0))
@@ -8338,6 +8533,11 @@ class CCrmCompanyRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmCompany::CheckReadPermission(0))
@@ -8649,6 +8849,11 @@ class CCrmContactRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmContact::CheckReadPermission(0))
@@ -10114,6 +10319,11 @@ class CCrmActivityRestProxy extends CCrmRestProxyBase
 		$errors[] = 'Activity is not found.';
 		return null;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if (!is_array($order))
@@ -12370,6 +12580,11 @@ class CCrmQuoteRestProxy extends CCrmRestProxyBase
 
 		return $result;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_INNER_FILTER;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
 		if(!CCrmQuote::CheckReadPermission(0))
@@ -12775,6 +12990,11 @@ class CCrmRequisitePresetRestProxy extends CCrmRestProxyBase
 		}
 
 		return $r;
+	}
+
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
 	}
 
 	public function getList($order, $filter, $select, $start)
@@ -13564,6 +13784,11 @@ class CCrmRequisiteRestProxy extends CCrmRestProxyBase
 		return $r;
 	}
 
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
+	}
+
 	public function getList($order, $filter, $select, $start)
 	{
 		$entity = self::getEntity();
@@ -13896,6 +14121,11 @@ class CCrmRequisiteBankDetailRestProxy extends CCrmRestProxyBase
 
 		return $r;
 	}
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
+	}
+
 	public function getList($order, $filter, $select, $start)
 	{
 		$entity = self::getEntity();
@@ -14091,6 +14321,11 @@ class CCrmRequisiteLinkRestProxy extends CCrmRestProxyBase
 		}
 
 		return true;
+	}
+
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
 	}
 
 	public function getList($order, $filter, $select, $start)
@@ -14361,6 +14596,11 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 
 		return $dbResult;
 
+	}
+
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
 	}
 
 	public function getList($order, $filter, $select, $start)
@@ -14789,6 +15029,11 @@ class CCrmExternalChannelConnectorRestProxy  extends CCrmRestProxyBase
 			$this->FIELDS_INFO = Rest\CCrmExternalChannelConnector::getFieldsInfo();
 		}
 		return $this->FIELDS_INFO;
+	}
+
+	protected function getFilterNesting(): string
+	{
+		return self::FILTER_NESTING_SUBFILTER;
 	}
 
 	public function getList($order, $filter, $select, $start)

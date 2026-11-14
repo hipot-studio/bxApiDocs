@@ -34,4 +34,14 @@ class Distance
 
 		return self::EARTH_RADIUS_METERS * sqrt($dx * $dx + $dy * $dy);
 	}
+
+	/**
+	 * The degrees of latitude the given distance amounts to along the meridian - the inverse of what
+	 * {@see inMeters} counts for a step due north or south. A band of latitude cut by this answer cannot
+	 * leave out a point the same arithmetic places within $meters.
+	 */
+	public static function latitudeDegreesFor(int $meters): float
+	{
+		return rad2deg($meters / self::EARTH_RADIUS_METERS);
+	}
 }

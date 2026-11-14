@@ -7,6 +7,9 @@
  */
 namespace Bitrix\Crm\WebForm;
 
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry;
+use Bitrix\Crm\V2\Public\Entity\LegalRegistry\RegistryResult;
+
 use Bitrix\Crm\Entity\Identificator;
 use Bitrix\Crm\FileUploader\SiteFormFileUploaderController;
 
@@ -38,6 +41,8 @@ class Fill
 	protected $isFieldCheckingEnabled = true;
 	/** @var SubmissionPolicy|null $agreementPolicy Acceptance policy of the saved form. */
 	private ?SubmissionPolicy $agreementPolicy = null;
+	private ?RegistryResult $legalSubmission = null;
+	private ?string $legalRequestHash = null;
 	/** @var array Telemetry context. */
 	protected $telemetryContext = [];
 
@@ -148,6 +153,43 @@ class Fill
 		return $this;
 	}
 
+	public function setLegalSubmission(
+		RegistryResult $prepared,
+		string $normalizedRequestHash,
+	): self
+	{
+		if (!$prepared->isSuccess() || $prepared->getSubmissionId() === null
+			|| preg_match('/^[a-f0-9]{64}$/D', $normalizedRequestHash) !== 1)
+		{
+			throw new \InvalidArgumentException('INVALID_PAYLOAD');
+		}
+		$this->legalSubmission = $prepared;
+		$this->legalRequestHash = $normalizedRequestHash;
+
+		return $this;
+	}
+
+	public static function findLegalResult(
+		int $formId,
+		RegistryResult $prepared,
+		string $normalizedRequestHash,
+	): ?Result
+	{
+		if (!$prepared->isSuccess() || $prepared->getSubmissionId() === null)
+		{
+			throw new \InvalidArgumentException('INVALID_PAYLOAD');
+		}
+		$receipt = (new LegalRegistry\FormSubmissionService())->committedOutcome(
+			$formId, $prepared->getSubmissionId(), $normalizedRequestHash,
+		);
+		if ($receipt === null) { return null; }
+		(new LegalRegistry\FormSubmissionRecovery())->complete(
+			$prepared->getSubmissionId(), $normalizedRequestHash,
+		);
+
+		return Result::fromLegalReceipt($receipt);
+	}
+
 	/*
 	 * Save form fill.
 	 *
@@ -157,6 +199,22 @@ class Fill
 	 */
 	public function save()
 	{
+		if ($this->legalSubmission !== null)
+		{
+			try
+			{
+				$replay = self::findLegalResult((int)$this->form->getId(), $this->legalSubmission, $this->legalRequestHash);
+				if ($replay !== null) { return $replay; }
+			}
+			catch (\Throwable $error)
+			{
+				$code = in_array($error->getMessage(), [
+					'INVALID_PAYLOAD', 'INVALID_STATE', 'IDEMPOTENCY_CONFLICT', 'POLICY_UNAVAILABLE',
+					'FEATURE_UNAVAILABLE', 'NOT_FOUND_OR_DENIED',
+				], true) ? $error->getMessage() : 'STORAGE_ERROR';
+				return self::createRefusedResult([$code]);
+			}
+		}
 		$acceptedAgreementIds = [];
 		if ($this->isFieldCheckingEnabled)
 		{
@@ -183,6 +241,9 @@ class Fill
 					'TRACE' => $this->trace
 				],
 				'TELEMETRY_CONTEXT' => $this->telemetryContext,
+				...($this->legalSubmission === null ? [] : ['LEGAL_SUBMISSION' => [
+					'submissionId' => $this->legalSubmission->getSubmissionId(), 'requestHash' => $this->legalRequestHash,
+				]]),
 			]
 		);
 	}

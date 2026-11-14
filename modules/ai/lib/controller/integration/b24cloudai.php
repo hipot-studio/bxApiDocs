@@ -10,7 +10,6 @@ use Bitrix\AI\QueueJob;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\JsonPayload;
 use Bitrix\Main\Security\Cipher;
@@ -49,9 +48,7 @@ class B24CloudAi extends Controller
 
 	protected function getDefaultPreFilters(): array
 	{
-		return [
-			new ActionFilter\Authentication(),
-		];
+		return parent::getDefaultPreFilters();
 	}
 
 	private function getDefaultCloudPreFilters(): array

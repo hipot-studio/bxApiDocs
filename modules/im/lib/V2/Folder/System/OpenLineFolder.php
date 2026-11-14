@@ -45,13 +45,18 @@ final class OpenLineFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_OPENLINES_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function canBeHiddenWithoutSource(): bool
 	{
-		if (!Loader::includeModule('imopenlines'))
-		{
-			return false;
-		}
+		return true;
+	}
 
+	public function isAvailableOnPortal(): bool
+	{
+		return Loader::includeModule('imopenlines');
+	}
+
+	protected function isAvailableForUser(int $userId): bool
+	{
 		try
 		{
 			$userType = User::getInstance($userId)->getType();

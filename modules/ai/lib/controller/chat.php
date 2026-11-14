@@ -21,6 +21,7 @@ use Bitrix\Main\Validation\Engine\AutoWire\ValidationParameter;
 
 class Chat extends Controller
 {
+	private const ERROR_EMPTY_MESSAGE_CONTENT = 'AI_CHAT_MESSAGE_CONTENT_REQUIRED';
 
 	public function configureActions(): array
 	{
@@ -109,11 +110,19 @@ class Chat extends Controller
 	 */
 	public function sendMessageAction(ChatService $chatService, int $chatId, array $messageData): ?array
 	{
+		$content = $messageData['content'] ?? null;
+		if (!is_string($content) || $content === '')
+		{
+			$this->addError(new Error('Message content is required.', self::ERROR_EMPTY_MESSAGE_CONTENT));
+
+			return null;
+		}
+
 		if (!empty($messageData['messageId']) && isset($messageData['buttonId']))
 		{
 			$command = $chatService->getCommandData($chatId, (int)$messageData['messageId'], (int)$messageData['buttonId']);
 			$message = new Message\ButtonClickedMessage(
-				$messageData['content'],
+				$content,
 				(int)$messageData['messageId'],
 				(int)$messageData['buttonId'],
 				$command
@@ -121,7 +130,7 @@ class Chat extends Controller
 		}
 		else
 		{
-			$message = new Message\DefaultMessage($messageData['content']);
+			$message = new Message\DefaultMessage($content);
 		}
 
 		try

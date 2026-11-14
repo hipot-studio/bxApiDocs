@@ -171,6 +171,7 @@ class FilesUpdater
 
 		$droppedFileIds = array_values(array_diff($this->previousFileIds, $this->requestedFileIds));
 		$this->droppedFilesService->handle($this->message, $droppedFileIds);
+		$this->addedFilesPreparer->commit();
 
 		$this->expectedStep = self::STEP_FINISHED;
 

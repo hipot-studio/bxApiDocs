@@ -26,6 +26,9 @@ use Bitrix\Report\VisualConstructor\Views\JsComponent\AmChart\MultiDirectional;
  */
 class EventHandler
 {
+	/** @var bool True while default board templates are being assembled. */
+	private static bool $collectingDefaultBoards = false;
+
 	/**
 	 * @return BaseReport[]
 	 */
@@ -65,9 +68,43 @@ class EventHandler
 		return 'open_lines_report_base_board';
 	}
 	/**
+	 * Tells whether default board templates are being assembled right now.
+	 *
+	 * The report module sends the collect event to every module before it filters
+	 * boards by key, so open lines report handlers are instantiated even when a user
+	 * opens a board of another module. Such assembly serves no data to the user and
+	 * must not be blocked by the open lines statistics permission.
+	 *
+	 * @return bool
+	 */
+	public static function isCollectingDefaultBoards(): bool
+	{
+		return self::$collectingDefaultBoards;
+	}
+
+	/**
 	 * @return Dashboard[]
 	 */
 	public static function onDefaultBoardsCollect()
+	{
+		// restore the previous value instead of resetting: a nested collect must not
+		// re-enable the check for the rest of the outer assembly
+		$wasCollecting = self::$collectingDefaultBoards;
+		self::$collectingDefaultBoards = true;
+		try
+		{
+			return self::buildDefaultBoards();
+		}
+		finally
+		{
+			self::$collectingDefaultBoards = $wasCollecting;
+		}
+	}
+
+	/**
+	 * @return Dashboard[]
+	 */
+	private static function buildDefaultBoards()
 	{
 		$board = new Dashboard();
 		$board->setVersion('v3');

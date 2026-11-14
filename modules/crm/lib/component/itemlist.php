@@ -34,6 +34,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Buttons\Button;
@@ -402,7 +403,10 @@ abstract class ItemList extends Base
 				$settingsItems[] = [
 					'text' => $text,
 					'href' => $link,
-					'onclick' => new Buttons\JsHandler('BX.Crm.Page.openSlider("' . $link . '");'),
+					'onclick' => new Buttons\JsCode(
+						'BX.Crm.Router.Instance.closeToolbarSettingsMenuRecursively(...arguments);'
+						. 'BX.Crm.Page.openSlider("' . $link . '");'
+					),
 				];
 			}
 		}
@@ -953,6 +957,23 @@ abstract class ItemList extends Base
 			'dataset' => $disabledButtonDataset,
 			'className' => $disabledButtonClass,
 		];
+
+		$createByForm = new Service\StartCatalog\CreateByForm();
+		if (!$isDisabled && $createByForm->isEnabled($this->entityTypeId))
+		{
+			// the address of the card stays on the button: it is what a new tab and a browser without
+			// javascript fall back to
+			$btnParameters['dataset'] = array_merge(
+				$btnParameters['dataset'],
+				$createByForm->getOpenDataset(
+					$this->entityTypeId,
+					['categoryId' => $forcedCategoryId ?? $this->getCategoryId()],
+				),
+			);
+
+			Extension::load([Service\StartCatalog\CreateByForm::JS_EXTENSION]);
+		}
+
 		$event = new \Bitrix\Main\Event(
 			'crm',
 			'onGetComponentItemListAddBtnParameters',

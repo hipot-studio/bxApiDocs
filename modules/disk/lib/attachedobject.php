@@ -5,6 +5,9 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Integration\TransformerManager;
+use Bitrix\Disk\Internal\Service\AttachedObject\OwnerParametersCodec;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
+use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\AttachedObjectTable;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\TrackedObjectTable;
@@ -18,6 +21,8 @@ use Bitrix\Main\Type\DateTime;
 
 final class AttachedObject extends Internals\Model
 {
+	public const ERROR_OWNER_PARAMETERS_INVALID = 'DISK_AO_OWNER_PARAMETERS_INVALID';
+
 	/** @var int */
 	protected $objectId;
 	/** @var File */
@@ -46,6 +51,10 @@ final class AttachedObject extends Internals\Model
 	protected $createUser;
 	/** @var Connector */
 	protected $connector;
+	/** @var string|null Canonical JSON as stored in the table. */
+	protected $ownerParameters;
+	private ?string $decodedOwnerParametersSource = null;
+	private ?array $decodedOwnerParameters = null;
 
 	protected $operableEntity = [];
 
@@ -217,17 +226,42 @@ final class AttachedObject extends Internals\Model
 
 	/**
 	 * Adds row to entity table, fills error collection and builds model.
-	 * @param array           $data Data.
+	 * @param array           $data Data. OWNER_PARAMETERS is a map of owner parameters (or null for none),
+	 *                              it is stored in its canonical form in the same INSERT.
 	 * @param ErrorCollection $errorCollection Error collection.
 	 * @return \Bitrix\Disk\Internals\Model|static|null
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @internal
 	 */
-	public static function add(array $data, ErrorCollection $errorCollection)
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		?bool $hasUploadCleanupMarker = null,
+	)
 	{
 		self::checkRequiredInputParams($data, [
 			'OBJECT_ID', 'ENTITY_ID', 'ENTITY_TYPE', 'MODULE_ID',
 		]);
+
+		if (isset($data['OWNER_PARAMETERS']))
+		{
+			$data['OWNER_PARAMETERS'] = self::encodeOwnerParameters($data['OWNER_PARAMETERS'], $errorCollection);
+			if ($data['OWNER_PARAMETERS'] === null)
+			{
+				return null;
+			}
+		}
+		else
+		{
+			unset($data['OWNER_PARAMETERS']);
+		}
+
+		if (!(new MarkerService())->revokeBeforeUse((int)$data['OBJECT_ID'], $hasUploadCleanupMarker))
+		{
+			$errorCollection->addOne(new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+			return null;
+		}
 
 		$model = parent::add($data, $errorCollection);
 		if($model && $model->getCreatedBy())
@@ -256,6 +290,61 @@ final class AttachedObject extends Internals\Model
 		}
 
 		return $model;
+	}
+
+	/**
+	 * Returns owner parameters given when the attachment was created.
+	 * The value comes with the loaded row: no query is made here.
+	 * @return array<string, int|string|bool>|null Null for an attachment without parameters
+	 * and for a stored value that does not decode to a map.
+	 */
+	public function getOwnerParameters(): ?array
+	{
+		if ($this->ownerParameters === null)
+		{
+			return null;
+		}
+
+		if ($this->decodedOwnerParametersSource !== $this->ownerParameters)
+		{
+			$this->decodedOwnerParameters = (new OwnerParametersCodec())->decode($this->ownerParameters);
+			$this->decodedOwnerParametersSource = $this->ownerParameters;
+		}
+
+		return $this->decodedOwnerParameters;
+	}
+
+	/**
+	 * Whether the attachment has a stored value of owner parameters, even one that does not decode.
+	 */
+	public function hasOwnerParameters(): bool
+	{
+		return $this->ownerParameters !== null;
+	}
+
+	private static function encodeOwnerParameters(mixed $ownerParameters, ErrorCollection $errorCollection): ?string
+	{
+		if (!is_array($ownerParameters))
+		{
+			$errorCollection->addOne(
+				new Error('Owner parameters must be a map.', self::ERROR_OWNER_PARAMETERS_INVALID),
+			);
+
+			return null;
+		}
+
+		$encodeResult = (new OwnerParametersCodec())->encode($ownerParameters);
+		if (!$encodeResult->isSuccess())
+		{
+			foreach ($encodeResult->getErrors() as $error)
+			{
+				$errorCollection->addOne(new Error($error->getMessage(), self::ERROR_OWNER_PARAMETERS_INVALID));
+			}
+
+			return null;
+		}
+
+		return $encodeResult->getData()['value'];
 	}
 
 	/**
@@ -551,6 +640,7 @@ final class AttachedObject extends Internals\Model
 			'ENTITY_ID',
 			'CREATE_TIME',
 			'CREATED_BY',
+			'OWNER_PARAMETERS',
 		])))->send();
 
 		return $success;
@@ -605,6 +695,7 @@ final class AttachedObject extends Internals\Model
 			'ENTITY_ID' => 'entityId',
 			'CREATE_TIME' => 'createTime',
 			'CREATED_BY' => 'createdBy',
+			'OWNER_PARAMETERS' => 'ownerParameters',
 		];
 	}
 

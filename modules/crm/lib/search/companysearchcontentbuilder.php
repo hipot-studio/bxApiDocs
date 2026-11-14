@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Search;
 
 use Bitrix\Crm\CompanyTable;
 use Bitrix\Crm\Entity\Index;
+use Bitrix\Crm\Item;
 use CCrmCompany;
 use CCrmOwnerType;
 
@@ -14,9 +15,26 @@ final class CompanySearchContentBuilder extends SearchContentBuilder
 	protected string $entityIndexTable = 'b_crm_company_index';
 	protected string $entityIndexTablePrimaryColumn = 'COMPANY_ID';
 
+	private const INDEXED_FIELDS = [
+		Item::FIELD_NAME_TITLE,
+		Item::FIELD_NAME_ASSIGNED,
+		Item\Company::FIELD_NAME_INDUSTRY,
+		Item::FIELD_NAME_COMMENTS,
+	];
+
 	public function getEntityTypeId(): int
 	{
 		return CCrmOwnerType::Company;
+	}
+
+	public function getSearchSelectFields(): ?array
+	{
+		return [Item::FIELD_NAME_ID, ...self::INDEXED_FIELDS];
+	}
+
+	protected function getIndexedItemFieldNames(): ?array
+	{
+		return [...self::INDEXED_FIELDS, Item::FIELD_NAME_FM];
 	}
 
 	public function convertEntityFilterValues(array &$filter): void

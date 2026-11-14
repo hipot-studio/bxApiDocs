@@ -118,10 +118,6 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				// If the section was deleted on the vendor side
 				$this->disableDeletedSectionConnection($sectionConnection);
 			}
-			catch (SynchronizerException $e)
-			{
-				throw $e;
-			}
 			catch (ApiException|DtoValidationException|Exception $e)
 			{
 				throw new SynchronizerException(
@@ -163,10 +159,6 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		try
 		{
 			$this->importProcessor->import($sectionConnection, $events);
-		}
-		catch (SynchronizerException $e)
-		{
-			throw $e;
 		}
 		catch (SystemException $e)
 		{

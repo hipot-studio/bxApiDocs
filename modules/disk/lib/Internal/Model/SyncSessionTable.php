@@ -96,6 +96,11 @@ class SyncSessionTable extends DataManager
 			 * merges by, and the checkpoints inside each as what narrows the walk to their subtrees.
 			 */
 			new TextField('CHECKPOINTS_BY_STORAGE'),
+			/**
+			 * Stamped by the database and thinned out, so it may lag behind the real last read by the
+			 * interval of the thinning ({@see \Bitrix\Disk\Internal\Repository\Sync\SyncSessionRepository::touchLastRead()}).
+			 */
+			new DatetimeField('LAST_READ_AT'),
 		];
 	}
 }

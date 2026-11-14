@@ -180,6 +180,63 @@ final class CallList
 	}
 
 	/**
+	 * The batch form of canReadByOwner(): the call lists of these rows the user may read by their owner, the
+	 * delegation of all of them read by one query.
+	 *
+	 * @param array<array<string, mixed>> $rows the rows of the call lists, ID and CREATED_BY_ID of each
+	 * @return int[] the ids of the call lists the user may read by their owner
+	 */
+	public static function filterReadableByOwner(array $rows, int $userId): array
+	{
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		$isAdmin = Container::getInstance()->getUserPermissions($userId)->isAdmin();
+		$readable = [];
+		$authors = [];
+		foreach ($rows as $row)
+		{
+			$listId = (int)($row['ID'] ?? 0);
+			$createdById = (int)($row['CREATED_BY_ID'] ?? 0);
+			if ($listId <= 0)
+			{
+				continue;
+			}
+
+			if ($isAdmin || $createdById === $userId)
+			{
+				$readable[$listId] = $listId;
+			}
+			elseif ($createdById > 0)
+			{
+				$authors[$listId] = $createdById;
+			}
+		}
+
+		if (!empty($authors))
+		{
+			$cursor = ActivityTable::getList([
+				'select' => ['ASSOCIATED_ENTITY_ID', 'AUTHOR_ID'],
+				'filter' => self::getDelegationFilter($userId) + [
+					'@ASSOCIATED_ENTITY_ID' => array_keys($authors),
+				],
+			]);
+			while ($activity = $cursor->fetch())
+			{
+				$listId = (int)$activity['ASSOCIATED_ENTITY_ID'];
+				if (isset($authors[$listId]) && $authors[$listId] === (int)$activity['AUTHOR_ID'])
+				{
+					$readable[$listId] = $listId;
+				}
+			}
+		}
+
+		return array_values($readable);
+	}
+
+	/**
 	 * A user is a delegated owner of the call list if they are RESPONSIBLE_ID of an activity that
 	 * carries the list (PROVIDER_ID = CALL_LIST, ASSOCIATED_ENTITY_ID = list id) and whose AUTHOR_ID
 	 * equals the list's creator. AUTHOR_ID is set by the server, is read-only in REST and is reset by
@@ -195,14 +252,23 @@ final class CallList
 
 		return ActivityTable::getRow([
 			'select' => ['ID'],
-			'filter' => [
-				'=TYPE_ID' => \CCrmActivityType::Provider,
-				'=PROVIDER_ID' => CallListActivityProvider::PROVIDER_ID,
+			'filter' => self::getDelegationFilter($userId) + [
 				'=ASSOCIATED_ENTITY_ID' => $listId,
-				'=RESPONSIBLE_ID' => $userId,
 				'=AUTHOR_ID' => $createdById,
 			],
 		]) !== null;
+	}
+
+	/**
+	 * The activities of call lists the user is responsible for: what makes a delegated owner, see isDelegatedOwner().
+	 */
+	private static function getDelegationFilter(int $userId): array
+	{
+		return [
+			'=TYPE_ID' => \CCrmActivityType::Provider,
+			'=PROVIDER_ID' => CallListActivityProvider::PROVIDER_ID,
+			'=RESPONSIBLE_ID' => $userId,
+		];
 	}
 
 	/**

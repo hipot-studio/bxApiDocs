@@ -13,11 +13,11 @@ use Bitrix\Crm\V2\Internal\Service\Settings\AbstractSetting;
  */
 final class CallAssessmentEnabledSetting extends AbstractTuningBooleanSetting
 {
-	public const CODE = 'crm.copilot.call_assessment.enabled';
+	public const ID = 'crm.copilot.call_assessment.enabled';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	protected function getGlobalSetting(): GlobalSetting

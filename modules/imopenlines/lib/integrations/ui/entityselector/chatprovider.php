@@ -8,12 +8,16 @@ use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\ImOpenLines\Model\ChatIndexTable;
+use Bitrix\ImOpenLines\Model\SessionTable;
+use Bitrix\ImOpenLines\Recent;
+use Bitrix\ImOpenLines\Session;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Filter\Helper;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\Content;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\UI\EntitySelector\BaseProvider;
@@ -133,12 +137,6 @@ class ChatProvider extends BaseProvider
 		;
 		if (isset($this->preparedSearchString))
 		{
-			$condition = (new ConditionTree())
-				->logic(ConditionTree::LOGIC_OR)
-				->where('RECENT.USER_ID', User::getCurrent()->getId())
-				->where('RECENT_OL.USER_ID', User::getCurrent()->getId())
-			;
-
 			$query
 				->registerRuntimeField(new ExpressionField(
 						'RECENT_DATE_UPDATE_ORDER',
@@ -155,7 +153,6 @@ class ChatProvider extends BaseProvider
 					)
 				)
 				->whereMatch('OL_INDEX.SEARCH_TITLE', $this->preparedSearchString)
-				->where($condition)
 				->setOrder(['RECENT_DATE_UPDATE_ORDER' => 'ASC'])
 			;
 		}
@@ -168,6 +165,8 @@ class ChatProvider extends BaseProvider
 			return [];
 		}
 
+		$this->applyRecentVisibilityFilter($query);
+
 		$raw = $query->fetchAll();
 
 		foreach ($raw as $row)
@@ -176,6 +175,46 @@ class ChatProvider extends BaseProvider
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Restricts the query to chats visible in the operator recent list:
+	 * an active assigned line or a chat with a still open session the operator has a relation to.
+	 * A session in the closing mode (waiting for the client vote) is already closed for the operator,
+	 * so STATUS_WAIT_CLIENT is the lower border of the invisible statuses.
+	 */
+	private function applyRecentVisibilityFilter(Query $query): void
+	{
+		$userId = User::getCurrent()->getId();
+
+		ChatTable::withRelation($query, $userId);
+
+		$query->registerRuntimeField(
+			new Reference(
+				'RECENT_SESSION',
+				SessionTable::class,
+				Join::on('this.RECENT.ITEM_OLID', 'ref.ID'),
+				['join_type' => Join::TYPE_LEFT]
+			)
+		);
+
+		$activeLineCondition = (new ConditionTree())
+			->where('RECENT_OL.USER_ID', $userId)
+			->where(Recent::getActiveLinesFilter('RECENT_OL.'))
+		;
+
+		$acceptedChatCondition = (new ConditionTree())
+			->where('RECENT.USER_ID', $userId)
+			->whereNotNull('RELATION.ID')
+			->where('RECENT_SESSION.STATUS', '<', Session::STATUS_WAIT_CLIENT)
+		;
+
+		$query->where(
+			(new ConditionTree())
+				->logic(ConditionTree::LOGIC_OR)
+				->where($activeLineCondition)
+				->where($acceptedChatCondition)
+		);
 	}
 
 	private function getBlankItems(array $ids, array $datesUpdate = []): array

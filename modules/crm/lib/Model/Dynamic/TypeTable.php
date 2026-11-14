@@ -275,6 +275,23 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->addSaveDataModifier(static fn(?string $value): ?string => $value === null ? null : Emoji::encode($value))
 			->addFetchDataModifier(static fn(?string $value): ?string => $value === null ? null : Emoji::decode($value))
 		;
+		$fieldsMap[] = (new ORM\Fields\BooleanField('IS_START_CATALOG_ENABLED'))
+			->configureStorageValues('N', 'Y')
+			->configureDefaultValue('N')
+			->configureRequired()
+			->configureTitle(Loc::getMessage('CRM_TYPE_TYPE_IS_START_CATALOG_ENABLED_TITLE'))
+		;
+		$fieldsMap[] = (new ORM\Fields\IntegerField('START_CATALOG_FORM_ID'))
+			->configureNullable()
+			->configureDefaultValue(null)
+			->configureTitle(Loc::getMessage('CRM_TYPE_START_CATALOG_FORM_ID_TITLE'))
+		;
+		$fieldsMap[] = (new ORM\Fields\BooleanField('IS_CREATE_BY_FORM_ENABLED'))
+			->configureStorageValues('N', 'Y')
+			->configureDefaultValue('N')
+			->configureRequired()
+			->configureTitle(Loc::getMessage('CRM_TYPE_TYPE_IS_CREATE_BY_FORM_ENABLED_TITLE'))
+		;
 
 		return $fieldsMap;
 	}
@@ -1269,6 +1286,18 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			'IS_SET_OPEN_PERMISSIONS' => [
 				'TYPE' => Field::TYPE_BOOLEAN,
 				'TITLE' => Loc::getMessage('CRM_TYPE_TYPE_IS_SET_OPEN_PERMISSIONS_TITLE'),
+			],
+			'IS_START_CATALOG_ENABLED' => [
+				'TYPE' => Field::TYPE_BOOLEAN,
+				'TITLE' => Loc::getMessage('CRM_TYPE_TYPE_IS_START_CATALOG_ENABLED_TITLE'),
+			],
+			'START_CATALOG_FORM_ID' => [
+				'TYPE' => Field::TYPE_INTEGER,
+				'TITLE' => Loc::getMessage('CRM_TYPE_START_CATALOG_FORM_ID_TITLE'),
+			],
+			'IS_CREATE_BY_FORM_ENABLED' => [
+				'TYPE' => Field::TYPE_BOOLEAN,
+				'TITLE' => Loc::getMessage('CRM_TYPE_TYPE_IS_CREATE_BY_FORM_ENABLED_TITLE'),
 			],
 			'CREATED_TIME' => [
 				'TYPE' => Field::TYPE_DATETIME,

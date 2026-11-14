@@ -18,6 +18,7 @@ final class LegacyTabPresetCompatibilityService
 	public function __construct(
 		private readonly ActiveTabProvider $activeTabProvider,
 		private readonly Context $context,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly UserPresetStateService $stateService = new UserPresetStateService(),
 		?TabPresetStateWriter $stateWriter = null,
 		?\Closure $legacySnapshotManagerFactory = null,
@@ -52,9 +53,16 @@ final class LegacyTabPresetCompatibilityService
 		}
 	}
 
-	public static function forContext(Context $context): self
+	public static function forContext(Context $context, MobileMenuCacheInvalidator $cacheInvalidator): self
 	{
-		return new self(ActiveTabProvider::forContext($context), $context);
+		return new self(
+			activeTabProvider: ActiveTabProvider::forContext(
+				context: $context,
+				cacheInvalidator: $cacheInvalidator,
+			),
+			context: $context,
+			cacheInvalidator: $cacheInvalidator,
+		);
 	}
 
 	public function getManager(): Manager
@@ -184,6 +192,7 @@ final class LegacyTabPresetCompatibilityService
 			manager: $this->getManager(),
 			userId: (int)$this->context->userId,
 			siteId: (string)$this->context->siteId,
+			cacheInvalidator: $this->cacheInvalidator,
 			stateService: $this->stateService,
 		);
 	}

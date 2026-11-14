@@ -17,6 +17,7 @@ use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Crm\Relation\Registrar;
 use Bitrix\Crm\Relation\RelationManager;
 use Bitrix\Crm\RepeatSale\AvailabilityChecker;
+use Bitrix\Crm\Search\DeferredSearchIndexer;
 use Bitrix\Crm\Service\Communication\Search\Ranking\RankingFactory;
 use Bitrix\Crm\Service\Factory\Dynamic;
 use Bitrix\Crm\Service\Integration\Sign\Kanban\PullService;
@@ -781,6 +782,11 @@ class Container
 	public function getLastActivity(): LastActivity
 	{
 		return ServiceLocator::getInstance()->get('crm.service.lastActivity');
+	}
+
+	public function getDeferredSearchIndexer(): DeferredSearchIndexer
+	{
+		return ServiceLocator::getInstance()->get('crm.service.deferredSearchIndexer');
 	}
 
 	/**

@@ -92,6 +92,20 @@ class PushSender
 		);
 	}
 
+	public static function sendShared(PushCommand $command, array $params): void
+	{
+		if (!static::isAvailable())
+		{
+			return;
+		}
+
+		\CPullStack::AddShared([
+			'module_id' => self::MODULE_NAME,
+			'command' => $command->value,
+			'params' => $params,
+		]);
+	}
+
 	public static function isAvailable(): bool
 	{
 		return Loader::includeModule('pull');

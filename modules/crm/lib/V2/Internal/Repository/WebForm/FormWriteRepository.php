@@ -19,6 +19,7 @@ use Bitrix\Crm\V2\Internal\Repository\WebForm\Section\PresetFieldSectionWriter;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\Section\ResponsibleSectionWriter;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\Section\WebFormSectionWriter;
 use Bitrix\Crm\WebForm\Internals\FormTable;
+use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\TransactionException;
@@ -200,7 +201,7 @@ final class FormWriteRepository
 	 * Creates a default CRM form out of the change set. The id of the created form is in the result
 	 * data even when a section written after the row fails.
 	 */
-	public function add(WebFormChangeSet $changeSet): Result
+	public function add(WebFormChangeSet $changeSet, bool $deferIntegrations = false): Result
 	{
 		$result = new Result();
 		$columns = self::getTouchedColumns($changeSet, 0);
@@ -227,7 +228,7 @@ final class FormWriteRepository
 		$formId = (int)$addResult->getId();
 		$result->setData([self::DATA_FORM_ID => $formId]);
 
-		return $this->writeSections($formId, $changeSet, $result);
+		return $this->writeSections($formId, $changeSet, $result, $deferIntegrations);
 	}
 
 	/**
@@ -238,6 +239,7 @@ final class FormWriteRepository
 		int $formId,
 		WebFormChangeSet $changeSet,
 		?DateTime $expectedModifiedTime = null,
+		bool $deferIntegrations = false,
 	): Result
 	{
 		$result = new Result();
@@ -261,31 +263,27 @@ final class FormWriteRepository
 		$settingsWrites = FormSettingsColumn::writes($changeSet);
 		$this->assertTouchedSectionWritersAreAvailable($changeSet);
 
-		self::reserveNextModifiedTime($formId, $expectedModifiedTime);
-
 		if ($settingsWrites !== [])
 		{
-			// The column is read after the version is reserved and written by the update of the row
-			// below, so the sub keys of the write travel in the same statement as every other
-			// column. What the legacy editor stores in between is lost - the window is narrowed by
-			// this order and not closed by it, because the write holds no transaction.
-			$columns[FormSettingsColumn::COLUMN] = self::mergeSettings(
-				self::readSettingsColumn($formId),
-				$settingsWrites,
-			);
+			$updateResult = self::updateWithSettingsLock($formId, $columns, $settingsWrites,
+				$expectedModifiedTime);
 		}
-
-		if ($columns !== [])
+		else
 		{
-			$columns['DATE_MODIFY'] = new SqlExpression('?#', 'DATE_MODIFY');
-			$updateResult = FormTable::update($formId, $columns);
-			if (!$updateResult->isSuccess())
+			self::reserveNextModifiedTime($formId, $expectedModifiedTime);
+			$updateResult = null;
+			if ($columns !== [])
 			{
-				return $result->addErrors($updateResult->getErrors());
+				$columns['DATE_MODIFY'] = new SqlExpression('?#', 'DATE_MODIFY');
+				$updateResult = FormTable::update($formId, $columns);
 			}
 		}
+		if ($updateResult !== null && !$updateResult->isSuccess())
+		{
+			return $result->addErrors($updateResult->getErrors());
+		}
 
-		return $this->writeSections($formId, $changeSet, $result);
+		return $this->writeSections($formId, $changeSet, $result, $deferIntegrations);
 	}
 
 	/**
@@ -424,15 +422,8 @@ final class FormWriteRepository
 			return $result;
 		}
 
-		self::reserveNextModifiedTime($formId, $expectedModifiedTime);
-
-		$updateResult = FormTable::update($formId, [
-			FormSettingsColumn::COLUMN => self::mergeSettings(
-				FormSettingsColumn::withDefaultViews(self::readSettingsColumn($formId)),
-				self::viewWrites($changeSet),
-			),
-			'DATE_MODIFY' => new SqlExpression('?#', 'DATE_MODIFY'),
-		]);
+		$updateResult = self::updateWithSettingsLock($formId, [], self::viewWrites($changeSet),
+			$expectedModifiedTime, true);
 		if (!$updateResult->isSuccess())
 		{
 			return $result->addErrors($updateResult->getErrors());
@@ -681,10 +672,78 @@ final class FormWriteRepository
 		return is_array($row) ? ($row[FormSettingsColumn::COLUMN] ?? null) : null;
 	}
 
-	private function writeSections(int $formId, WebFormChangeSet $changeSet, Result $result): Result
+	private static function updateWithSettingsLock(int $formId, array $columns, array $settingsWrites,
+		?DateTime $expectedModifiedTime, bool $withDefaultViews = false): \Bitrix\Main\ORM\Data\UpdateResult
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = Application::getConnection();
+		$started = false;
+		try
+		{
+			$connection->startTransaction();
+			$started = true;
+			$query = new class(FormTable::getEntity()) extends Query {
+				protected function query($sql)
+				{
+					$result = $this->entity->getConnection()->query($sql . ' FOR UPDATE');
+					$result->setReplacedAliases($this->replaced_aliases);
+					if ($this->isFetchModificationRequired())
+					{
+						$result->addFetchDataModifier([$this, 'fetchDataModificationCallback']);
+					}
+					return $result;
+				}
+			};
+			$current = $query->setSelect([FormSettingsColumn::COLUMN])
+				->setFilter(['=ID' => $formId])->fetch();
+			if (!$current) { throw new FormNotFoundException(); }
+			self::reserveNextModifiedTime($formId, $expectedModifiedTime);
+			$stored = $current[FormSettingsColumn::COLUMN] ?? null;
+			$columns[FormSettingsColumn::COLUMN] = self::mergeSettings(
+				$withDefaultViews ? FormSettingsColumn::withDefaultViews($stored) : $stored,
+				$settingsWrites);
+			$columns['DATE_MODIFY'] = new SqlExpression('?#', 'DATE_MODIFY');
+			$updated = FormTable::update($formId, $columns);
+			if ($updated->isSuccess()) { $connection->commitTransaction(); }
+			else { self::rollbackSettingsUpdate(); }
+			$started = false;
+
+			return $updated;
+		}
+		catch (\Throwable $exception)
+		{
+			if ($started) { try { self::rollbackSettingsUpdate(); } catch (\Throwable) {} }
+			throw $exception;
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
+	private static function rollbackSettingsUpdate(): void
+	{
+		try { Application::getConnection()->rollbackTransaction(); }
+		catch (TransactionException $exception)
+		{
+			if ($exception->getMessage() !== 'Nested rollbacks are unsupported.') { throw $exception; }
+		}
+	}
+
+	public function writeDeferredIntegrations(int $formId, WebFormChangeSet $changeSet): Result
+	{
+		if (!$changeSet->touches(WebForm::SECTION_INTEGRATIONS)) { return new Result(); }
+
+		return $this->sectionWritersByName[WebForm::SECTION_INTEGRATIONS]->write($formId, $changeSet);
+	}
+
+	private function writeSections(int $formId, WebFormChangeSet $changeSet, Result $result,
+		bool $deferIntegrations = false): Result
 	{
 		foreach (self::SECTION_WRITE_ORDER as $sectionName)
 		{
+			if ($deferIntegrations && $sectionName === WebForm::SECTION_INTEGRATIONS) { continue; }
 			if (!$changeSet->touches($sectionName))
 			{
 				continue;

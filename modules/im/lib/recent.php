@@ -14,6 +14,7 @@ use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
+use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Entity\User\NullUser;
 use Bitrix\Im\V2\Entity\User\User;
@@ -51,8 +52,7 @@ Loc::loadMessages(__FILE__);
 
 class Recent
 {
-	private const PINNED_CHATS_LIMIT = 45;
-	private const MAX_RAISE_DEPTH = 2;
+	public const MAX_RAISE_DEPTH = 2;
 
 	static private bool $limitError = false;
 
@@ -1739,8 +1739,9 @@ class Recent
 
 		$service = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Folder\Pin\PinService::class);
 
-		// folderId=null → legacy global path inside Pin\PinService:
-		// PINNED='Y'/'N' + shadow fan-out across matching folders + single chatPin pull.
+		// No folder is named here, so PinService resolves the write scope itself: the primary root
+		// folder of the user, or no folder at all for a nested chat. The legacy global path
+		// (PINNED='Y'/'N' + shadow fan-out) is reached only with folder-scoped pins switched off.
 		$result = $pin
 			? $service->pinChat((int)$userId, $chat, null)
 			: $service->unpinChat((int)$userId, $chat, null);
@@ -1895,7 +1896,7 @@ class Recent
 
 	public static function getPinLimit(): int
 	{
-		return self::PINNED_CHATS_LIMIT ?? 25;
+		return FolderLimits::MAX_PINNED_CHATS;
 	}
 
 	public static function updatePinSortCost(int $userId): void

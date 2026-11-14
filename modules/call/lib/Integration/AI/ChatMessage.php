@@ -131,7 +131,24 @@ class ChatMessage extends CallChatMessage
 		return $errorMessage;
 	}
 
-	public static function generateOverviewMessage(int $callId, OutcomeCollection $outcomeCollection, Chat $chat): ?Message
+	/**
+	 * @param string|null $attemptId the task the results of this message came from - the marker
+	 *        the message carries {@see CallAIService::completeAnalysis()}. Two handlers of one
+	 *        attempt hold different tasks, so this is a name and never a key: what tells one
+	 *        attempt from the next for the guards of the send is $attemptKey.
+	 * @param string|null $attemptKey the attempt itself, as the send claimed it
+	 *        {@see EventService::sendAnalysisResultMessage()}. Written into the message so the
+	 *        lookup that backstops the claim finds the message by the very value it claims with;
+	 *        the marker is what it falls back to, for the callers that claim nothing of their own
+	 *        (the dev pages).
+	 */
+	public static function generateOverviewMessage(
+		int $callId,
+		OutcomeCollection $outcomeCollection,
+		Chat $chat,
+		?string $attemptId = null,
+		?string $attemptKey = null,
+	): ?Message
 	{
 		// Pick the latest outcome with content per type
 		$overview = null;
@@ -161,6 +178,8 @@ class ChatMessage extends CallChatMessage
 		{
 			return null;
 		}
+
+		$attemptId ??= CallAIService::getInstance()->getCurrentAnalysisAttemptId($callId);
 
 		$hostUrl = UrlManager::getInstance()->getHostUrl();
 
@@ -316,7 +335,9 @@ class ChatMessage extends CallChatMessage
 			$insightTexts = [];
 			if ($insights->getVersion() > 1)
 			{
-				$transcription = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
+				// The latest contentful transcription, not the latest one: an empty repeated run
+				// stores a result of the type on top and would leave the speakers unnamed.
+				$transcription = $outcomeCollection->getLatestContentfulByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
 				$speakerList = $transcription instanceof Transcription
 					? $transcription->prepareSpeakersList(0)
 					: [];
@@ -370,8 +391,6 @@ class ChatMessage extends CallChatMessage
 			}
 		}
 
-		$transcribeOutcomeId = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)->getId();
-
 		$link = Library::getCallSliderUrl($callId);
 		$attach->AddMessage('[br]'. static::getMessage('CALL_NOTIFY_COPILOT_DETAIL', ['#CALL_DETAIL#' => $link]). '[br]');
 
@@ -386,7 +405,8 @@ class ChatMessage extends CallChatMessage
 		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_OVERVIEW,
 			'CALL_ID' => $callId,
-			'OUTCOME_ID' => $transcribeOutcomeId,
+			'ATTEMPT_ID' => $attemptId,
+			'ATTEMPT_KEY' => $attemptKey ?? $attemptId,
 		]);
 
 		return $message;

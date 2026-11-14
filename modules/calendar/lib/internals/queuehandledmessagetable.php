@@ -8,6 +8,7 @@ use Bitrix\Main\Entity\IntegerField;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Entity\StringField;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\SystemException;
@@ -30,6 +31,8 @@ use Bitrix\Main\SystemException;
  */
 class QueueHandledMessageTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	/**
 	 * @return string
 	 */

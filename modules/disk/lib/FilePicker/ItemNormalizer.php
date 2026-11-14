@@ -8,30 +8,32 @@ use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\Storage\AvailableStorageService;
+use Bitrix\Disk\Internal\Service\Storage\StorageType;
 use Bitrix\Disk\ProxyType;
 use Bitrix\Disk\Storage;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Socialnetwork\Item\Workgroup\Type;
-use Bitrix\Socialnetwork\Provider\GroupProvider;
 
 Loc::loadMessages(__FILE__);
 
 final class ItemNormalizer
 {
 	public const IM_STORAGE_PROXY_TYPE = 'Bitrix\\Im\\Disk\\ProxyType\\Im';
+	private const IM_STORAGE_TYPE = 'im';
 
-	private array $storageTypeCache = [];
-	private readonly \Closure $projectStorageChecker;
+	private readonly AvailableStorageService $availableStorageService;
 
 	public function __construct(
 		private readonly FileTypeClassifier $fileTypeClassifier = new FileTypeClassifier(),
 		private readonly ViewerSupport $viewerSupport = new ViewerSupport(),
 		?\Closure $projectStorageChecker = null,
+		?AvailableStorageService $availableStorageService = null,
 	)
 	{
-		$this->projectStorageChecker = $projectStorageChecker ?? $this->isProjectStorage(...);
+		$this->availableStorageService = $availableStorageService
+			?? new AvailableStorageService($projectStorageChecker)
+		;
 	}
 
 	/**
@@ -233,7 +235,10 @@ final class ItemNormalizer
 			&& (int)$storage->getEntityId() === $currentUserId
 		)
 		{
-			return $this->normalizeStorageTitle((string)$proxyType->getTitleForCurrentUser(), 'user');
+			return $this->normalizeStorageTitle(
+				(string)$proxyType->getTitleForCurrentUser(),
+				StorageType::User->value,
+			);
 		}
 
 		return $this->normalizeFolderName($folder->getName());
@@ -285,50 +290,18 @@ final class ItemNormalizer
 		return ['type' => 'image', 'url' => $url];
 	}
 
+	// A chat storage is named here rather than by the shared service: resolveType() there builds
+	// the proxy object, and building it loads the im module. A chat is never a source of its own
+	// — it shows up only as the origin of a file in Recent — so the shared vocabulary of storage
+	// types is left as it is and this one name is resolved locally.
 	private function resolveStorageType(Storage $storage): ?string
 	{
-		$storageId = (int)$storage->getId();
-		if (array_key_exists($storageId, $this->storageTypeCache))
-		{
-			return $this->storageTypeCache[$storageId];
-		}
 		if ($storage->getEntityType() === self::IM_STORAGE_PROXY_TYPE)
 		{
-			$this->storageTypeCache[$storageId] = 'im';
-
-			return 'im';
+			return self::IM_STORAGE_TYPE;
 		}
 
-		$proxyType = $storage->getProxyType();
-		$type = match (true)
-		{
-			$proxyType instanceof ProxyType\User => 'user',
-			$proxyType instanceof ProxyType\Common => 'common',
-			$proxyType instanceof ProxyType\Group && $proxyType->isCollab() => 'collab',
-			$proxyType instanceof ProxyType\Group && ($this->projectStorageChecker)($storage) => 'project',
-			$proxyType instanceof ProxyType\Group => 'group',
-			default => null,
-		};
-
-		$this->storageTypeCache[$storageId] = $type;
-
-		return $type;
-	}
-
-	private function isProjectStorage(Storage $storage): bool
-	{
-		$groupId = (int)$storage->getEntityId();
-		if ($groupId <= 0 || !Loader::includeModule('socialnetwork'))
-		{
-			return false;
-		}
-
-		// scrum groups are projects for the picker: they are stored with PROJECT = Y
-		return \in_array(
-			GroupProvider::getInstance()->getGroupType($groupId),
-			[Type::Project, Type::Scrum],
-			true,
-		);
+		return $this->availableStorageService->resolveType($storage)?->value;
 	}
 
 	private function formatDateTime(?DateTime $dateTime): ?string

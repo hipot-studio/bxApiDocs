@@ -2,10 +2,12 @@
 
 namespace Bitrix\Crm\Service\Operation\Action;
 
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Recycling\ControllerManager;
 use Bitrix\Crm\Service\Operation\Action;
 use Bitrix\Main\Error;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 
@@ -27,12 +29,19 @@ class MoveToBin extends Action
 
 		$data = $item->getCompatibleData(Values::ALL, true);
 
-		$recyclingController->moveToBin(
-			$item->getId(),
-			[
-				'FIELDS' => $data,
-			]
-		);
+		try
+		{
+			$recyclingController->moveToBin(
+				$item->getId(),
+				[
+					'FIELDS' => $data,
+				]
+			);
+		}
+		catch (ObjectNotFoundException)
+		{
+			$result->addError(ErrorCode::getNotFoundError());
+		}
 
 		return $result;
 	}

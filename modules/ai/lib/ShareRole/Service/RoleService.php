@@ -320,6 +320,15 @@ class RoleService
 		return $result;
 	}
 
+	/**
+	 * @param int[] $roleIds
+	 * @return array<int, int> role id => author id
+	 */
+	public function getAuthorIdsByRoleIds(array $roleIds): array
+	{
+		return $this->roleRepository->getAuthorIdsByRoleIds($roleIds);
+	}
+
 	public function addTranslateNames(int $roleId, array $names, bool $needDeleteOld = false): void
 	{
 		if ($needDeleteOld)

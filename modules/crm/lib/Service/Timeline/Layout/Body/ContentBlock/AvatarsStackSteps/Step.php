@@ -116,7 +116,13 @@ final class Step extends \Bitrix\Crm\Service\Timeline\Layout\Base
 		$images = [];
 		foreach ($this->avatars as $avatar)
 		{
-			$images[] = ['type' => 'user', 'data' => ['src' => $avatar['src'], 'userId' => (int)$avatar['id']]];
+			$data = ['src' => $avatar['src'], 'userId' => (int)$avatar['id']];
+			if (!empty($avatar['badge']) && is_array($avatar['badge']))
+			{
+				$data['badge'] = $avatar['badge'];
+			}
+
+			$images[] = ['type' => 'user', 'data' => $data];
 		}
 
 		return $images;

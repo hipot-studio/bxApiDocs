@@ -19,8 +19,10 @@ use Bitrix\Rest\V3\Attribute\Required;
 use Bitrix\Rest\V3\Attribute\Sortable;
 use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\CacheManager;
-use Bitrix\Rest\V3\Dto\Attribute\TypeAlias;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
+use Bitrix\Rest\V3\Dto\Meta\ClassMeta;
+use Bitrix\Rest\V3\Dto\Meta\FieldsMeta;
+use Bitrix\Rest\V3\Dto\Meta\FieldsMetaRegistry;
 use Bitrix\Main\SystemException;
 
 abstract class Dto implements Arrayable
@@ -34,14 +36,9 @@ abstract class Dto implements Arrayable
 
 	public function __construct()
 	{
-		$selfReflection = (new \ReflectionClass($this));
-		$attributes = [];
-		foreach ($selfReflection->getAttributes() as $attribute)
-		{
-			$attributes[$attribute->getName()] = $attribute->newInstance();
-		}
-		$this->attributes = $attributes;
-		$this->shortName = $selfReflection->getShortName();
+		$classMeta = ClassMeta::of(static::class);
+		$this->attributes = $classMeta->attributes;
+		$this->shortName = $classMeta->shortName;
 		$this->fields = $this->initFields();
 	}
 
@@ -57,8 +54,6 @@ abstract class Dto implements Arrayable
 
 	protected function initFields(): DtoFieldsCollection
 	{
-		$fields = new DtoFieldsCollection();
-
 		$cacheKey = $this->getCacheKey();
 		$fieldsArray = CacheManager::get($cacheKey);
 		if ($fieldsArray === null)
@@ -73,52 +68,39 @@ abstract class Dto implements Arrayable
 
 			foreach ($dtoFields as $field)
 			{
-				$fields->add($field);
 				$fieldsCacheData[] = $field->toArray();
 			}
 
 			CacheManager::set($cacheKey, $fieldsCacheData);
-		}
-		else
-		{
-			foreach ($fieldsArray as $fieldArray)
-			{
-				$dtoField = DtoField::fromArray($fieldArray);
-				$fields->add($dtoField);
-			}
+
+			// the description of a miss or of a disabled cache belongs to this instance only
+			return DtoFieldsCollection::fromMeta(FieldsMeta::fromCacheArray($fieldsCacheData ?? []));
 		}
 
-		return $fields;
+		return DtoFieldsCollection::fromMeta(FieldsMetaRegistry::get($cacheKey, $fieldsArray));
 	}
 
 	public function __set(string $name, $value): void
 	{
-		if ($this->fields[$name])
-		{
-			$this->fields[$name]->setValue($value);
-		}
+		$this->fields->setFieldValue($name, $value);
 	}
 
 	public function __get(string $name)
 	{
-		if ($this->fields[$name])
-		{
-			return $this->fields[$name]->getValue();
-		}
-
-		return null;
+		return $this->fields->getFieldValue($name);
 	}
 
 	public function toArray(bool $rawData = false): array
 	{
 		$values = [];
+		$classMeta = ClassMeta::of(static::class);
+		$fields = $this->fields;
 
-		/** @var DtoField $field */
-		foreach ($this->fields as $field)
+		foreach ($fields->getMetaList() as $position => $field)
 		{
 			if ($field->getType() === DtoField::DTO_FIELD_TYPE_PROPERTY)
 			{
-				$property = PropertyHelper::getProperty($this, $field->getPropertyName());
+				$property = $classMeta->getProperty($field->getPropertyName());
 				if ($property === null)
 				{
 					continue;
@@ -126,16 +108,16 @@ abstract class Dto implements Arrayable
 
 				if ($property->isInitialized($this))
 				{
-					$field->setValue($this->{$field->getPropertyName()});
+					$fields->setValueAt($position, $this->{$field->getPropertyName()});
 				}
 			}
 
-			if ($field->isInitialized())
+			if ($fields->isValueSetAt($position))
 			{
 				if ($field->isMultiple())
 				{
 					$fieldValue = [];
-					$fieldValues = $field->getValue();
+					$fieldValues = $fields->getValueAt($position);
 					// Preserve null for multiple fields
 					if ($fieldValues === null)
 					{
@@ -171,15 +153,15 @@ abstract class Dto implements Arrayable
 				{
 					if (TypeHelper::isDto($field->getPropertyType()))
 					{
-						$values[$field->getPropertyName()] = $field->getValue()?->toArray($rawData);
+						$values[$field->getPropertyName()] = $fields->getValueAt($position)?->toArray($rawData);
 					}
 					elseif (TypeHelper::isBackedEnum($field->getPropertyType()))
 					{
-						$values[$field->getPropertyName()] = $field->getValue()?->value;
+						$values[$field->getPropertyName()] = $fields->getValueAt($position)?->value;
 					}
 					else
 					{
-						$values[$field->getPropertyName()] = $field->getValue();
+						$values[$field->getPropertyName()] = $fields->getValueAt($position);
 					}
 				}
 			}
@@ -367,29 +349,13 @@ abstract class Dto implements Arrayable
 
 	public function getTypeName(): string
 	{
-		$reflection = new \ReflectionClass($this);
-		$namespace = $reflection->getNamespaceName();
-		$namespaceParts = array_filter(explode('\\', $namespace), static fn(string $part): bool => $part !== '');
-
-		if (empty($namespaceParts))
+		$classMeta = ClassMeta::of(static::class);
+		// the short name is read on every call: a subclass may override getShortName()
+		if ($classMeta->typeNamePrefix === null)
 		{
 			return strtolower($this->getShortName());
 		}
 
-		$selectedParts = array_slice($namespaceParts, 0, 2);
-
-		if (isset($this->attributes[TypeAlias::class]))
-		{
-			$selectedParts[] = $this->attributes[TypeAlias::class]->alias;
-		}
-		else
-		{
-			$selectedParts[] = $this->getShortName();
-		}
-
-
-		$selectedParts = array_map('strtolower', $selectedParts);
-
-		return implode('.', $selectedParts);
+		return $classMeta->typeNamePrefix . '.' . strtolower($classMeta->typeAlias ?? $this->getShortName());
 	}
 }

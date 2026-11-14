@@ -7,6 +7,7 @@ use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\DocumentEditorUser;
+use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
@@ -16,9 +17,12 @@ use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessContext;
 use Bitrix\Disk\Internal\Service\UnifiedLink\BaseObjectResolver;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\AutomaticEditModeCapable;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\EditTransitionAware;
+use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\FolderListHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HandlerOperationResult;
+use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlFileHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableHandlerFactory;
+use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\OnlyOfficeHtmlRenderableHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\OpeningNoticeCodeAware;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\VibeofficeHtmlRenderableHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
@@ -139,12 +143,24 @@ class UnifiedLinkRenderer
 		return BaseObjectResolver::resolveVersion($this->baseObject, $this->version);
 	}
 
-	public function render(?UnifiedLinkAccessLevel $accessLevel = null): RenderResult
+	public function render(
+		?UnifiedLinkAccessLevel $accessLevel = null,
+		bool $htmlSessionBusy = false,
+	): RenderResult
 	{
 		$baseAccessLevel = $this->baseAccessLevelForRender($accessLevel);
 		$shouldRenderExternal = $this->shouldRenderExternal();
 
-		if ($baseAccessLevel === UnifiedLinkAccessLevel::Denied && !$shouldRenderExternal)
+		if (
+			(
+				$baseAccessLevel === UnifiedLinkAccessLevel::Denied
+				|| (
+					$accessLevel === UnifiedLinkAccessLevel::Edit
+					&& $this->getAccessLevel() === UnifiedLinkAccessLevel::Denied
+				)
+			)
+			&& !$shouldRenderExternal
+		)
 		{
 			return new RenderResult(self::renderAccessDeniedPageForBaseObject($this->resolveBaseObject()), 403);
 		}
@@ -173,6 +189,29 @@ class UnifiedLinkRenderer
 			return new RenderResult(self::renderAccessDeniedPageForBaseObject($this->resolveBaseObject()), 403);
 		}
 
+		if (
+			$htmlSessionBusy
+			&& $handler instanceof HtmlFileHandler
+			&& $renderAccessLevel === UnifiedLinkAccessLevel::Edit
+			&& !$shouldRenderExternal
+			&& $this->publicDomainAccessContext === null
+			&& $this->shouldUseInternalPortalFlow()
+			&& !$this->opensHistoricalRevision()
+			&& Configuration::isEnabledHtmlEditor()
+		)
+		{
+			$file = $this->resolveBaseObject()->getRealObject();
+			$viewUrl = Driver::getInstance()->getUrlManager()->getUnifiedLink($file, [
+				'attachedId' => $this->resolveAttachedObject()?->getId(),
+			]);
+			$content = self::renderAccessDeniedPage([
+				'STATE' => ErrorPageState::HtmlSessionBusy->value,
+				'VIEW_URL' => $viewUrl,
+			]);
+
+			return new RenderResult($content, 200);
+		}
+
 		$this->applyEditTransition($handler, $renderAccessLevel);
 
 		$result = match ($renderAccessLevel)
@@ -183,6 +222,18 @@ class UnifiedLinkRenderer
 
 		if (!$result->isSuccess())
 		{
+			if (
+				$renderAccessLevel === UnifiedLinkAccessLevel::Edit
+				&& $result->getErrorCollection()->getErrorByCode(FolderListHandler::ERROR_EDIT_NOT_SUPPORTED)
+			)
+			{
+				$content = self::renderAccessDeniedPage([
+					'STATE' => $this->resolveEditNotSupportedState()->value,
+				]);
+
+				return new RenderResult($content, 200);
+			}
+
 			$content = $this->renderServerErrorPage($result);
 
 			return new RenderResult($content, 500);
@@ -292,6 +343,29 @@ class UnifiedLinkRenderer
 		return 'Server error occurred. Please try again later.';
 	}
 
+	private function resolveEditNotSupportedState(): ErrorPageState
+	{
+		$baseObject = $this->resolveBaseObject();
+		if (!$baseObject instanceof File || (int)$baseObject->getTypeFile() !== TypeFile::DOCUMENT)
+		{
+			return ErrorPageState::EditFormatNotSupported;
+		}
+
+		$contentType = $baseObject->getFile()['CONTENT_TYPE'] ?? '';
+		if ($contentType === 'text/plain')
+		{
+			return ErrorPageState::EditFormatNotSupported;
+		}
+
+		$revision = $this->resolveVersion() ?? $this->resolveAttachedObject()?->getVersion();
+		$extension = $revision?->getExtension() ?? $baseObject->getExtension();
+
+		return DocumentHandler::isEditable($extension)
+			? ErrorPageState::EditNotSupported
+			: ErrorPageState::EditFormatNotSupported
+		;
+	}
+
 	protected function baseAccessLevelForRender(?UnifiedLinkAccessLevel $accessLevel): UnifiedLinkAccessLevel
 	{
 		$baseObject = $this->resolveBaseObject();
@@ -326,7 +400,10 @@ class UnifiedLinkRenderer
 
 		if (
 			$renderAccessLevel !== UnifiedLinkAccessLevel::Edit
-			|| !($handler instanceof VibeofficeHtmlRenderableHandler)
+			|| !(
+				$handler instanceof OnlyOfficeHtmlRenderableHandler
+				|| $handler instanceof VibeofficeHtmlRenderableHandler
+			)
 			|| !$this->isObjectLockEnabled()
 		)
 		{

@@ -14,6 +14,7 @@ class QueueRegistry
 		'EventsWithEntityAttendeesFind' => 6,
 		'EventAttendeesUpdate' => 7,
 		'SendingEmailNotification' => 8,
+		'RevokeGuestLink' => 9,
 		'Example' => 99999,
 	];
 

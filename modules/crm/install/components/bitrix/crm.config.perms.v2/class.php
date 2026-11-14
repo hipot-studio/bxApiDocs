@@ -506,7 +506,7 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 			$sectionMenu['CHILDREN'][] = [
 				'NAME' => $model->name() . ' ' . $model->description(),
 				'ATTRIBUTES' => [
-					'onclick' => "ConfigPerms.AccessRights.scrollToSection('{$model->code()}');",
+					'onclick' => "ConfigPerms.AccessRights?.scrollToSection('{$model->code()}');",
 					'title' => htmlspecialcharsbx($model->name() . ' ' . $model->description()),
 				],
 				'CAN_BE_ACTIVE' => false,

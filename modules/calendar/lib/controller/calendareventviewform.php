@@ -4,10 +4,12 @@ namespace Bitrix\Calendar\Controller;
 
 use Bitrix\Calendar\Integration\AI;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
+use Bitrix\Calendar\Internal\GuestLink;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
 use Bitrix\Calendar\View\EventViewData;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\Component;
 use Bitrix\Main\Error;
@@ -109,6 +111,21 @@ class CalendarEventViewForm extends Controller
 		{
 			return $this->getRestrictedViewParams($responseParams, $isCollabUser);
 		}
+
+		// The guest link applies to any saved non-excluded event: let the resolver
+		// decide eligibility (it runs the excluded-type + view-rights checks itself).
+		/** @var GuestLink\GuestLinkResolver $guestLinkResolver */
+		$guestLinkResolver = ServiceLocator::getInstance()->get(GuestLink\GuestLinkResolver::class);
+		// Resolve on the canonical organizer event: an attendee copy carries the
+		// organizer's PARENT_ID, so passing it avoids loading the child copy only
+		// to re-load the parent inside the resolver.
+		$canonicalEntryId = (int)($entry['PARENT_ID'] ?? 0) ?: $entryId;
+		$guestLinkResult = $guestLinkResolver->resolveExisting($canonicalEntryId, $userId);
+		$guestLinkData = $guestLinkResult->isSuccess()
+			? $guestLinkResult->getData()
+			: ['available' => false, 'url' => null];
+		$responseParams['guestLinkAvailable'] = (bool)($guestLinkData['available'] ?? false);
+		$responseParams['guestLinkUrl'] = $guestLinkData['url'] ?? null;
 
 		$params = array_merge([
 			'event' => $entry,

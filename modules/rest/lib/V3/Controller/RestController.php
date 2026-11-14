@@ -2,6 +2,7 @@
 
 namespace Bitrix\Rest\V3\Controller;
 
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\Parameter;
@@ -130,7 +131,11 @@ abstract class RestController extends Controller
 					}
 
 					// create request
-					return $className::create($this->getRequest(), $dtoType, ['scope' => $this->processedScope]);
+					return $className::create(
+						$this->getRequest(),
+						$dtoType,
+						['scope' => $this->processedScope, 'action' => $this->methodDescription?->method],
+					);
 				},
 			),
 		];
@@ -147,6 +152,11 @@ abstract class RestController extends Controller
 
 		if ($response instanceof ResponseWithRelations)
 		{
+			if (isset($this->processedScope))
+			{
+				$response->setGrantContext($this->processedScope, $this->resolveDtoType());
+			}
+
 			$args = $action->getArguments();
 			$request = null;
 			if (isset($args['request']) && $args['request'] instanceof Request)
@@ -178,6 +188,23 @@ abstract class RestController extends Controller
 		}
 
 		return $response;
+	}
+
+	/**
+	 * DTO class of the resource, resolved in the same order as for the autowired request.
+	 */
+	private function resolveDtoType(): ?string
+	{
+		$attributes = (new \ReflectionClass($this))->getAttributes(DtoType::class);
+		if (!empty($attributes))
+		{
+			/** @var DtoType $dtoTypeAttribute */
+			$dtoTypeAttribute = $attributes[0]->newInstance();
+
+			return $dtoTypeAttribute->type;
+		}
+
+		return $this->dtoClass;
 	}
 
 	private function updateRequestRelationFilters(Request $request, Response $response): void
@@ -236,6 +263,10 @@ abstract class RestController extends Controller
 		if ($throwable instanceof BinderArgumentException)
 		{
 			$throwable = $this->convertBinderArgumentException($throwable);
+		}
+		elseif ($throwable instanceof SqlQueryException)
+		{
+			throw $throwable;
 		}
 		elseif (!is_subclass_of($throwable, RestException::class))
 		{

@@ -68,6 +68,7 @@ class UpdateOperation extends AbstractOperation
 			ID: $id,
 			arFields: $fields,
 			bSync: $sync,
+			tagNames: $this->command->getTagNames(),
 		) !== false;
 	}
 }

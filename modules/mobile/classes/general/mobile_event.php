@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -8,6 +9,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Menu\Analytics;
 use Bitrix\Mobile\Tab\Preset\Service\ActiveTabProvider;
+use Bitrix\Mobile\Tab\Preset\Service\MobileMenuCacheInvalidator;
 use Bitrix\MobileApp\Janative\Entity\Component;
 use Bitrix\MobileApp\Janative\Entity\Extension;
 
@@ -194,7 +196,11 @@ class CMobileEvent
 		}
 
 		$context = $eventProvider instanceof Context ? $eventProvider : new Context();
-		$activeTabProvider = ActiveTabProvider::forContext($context);
+		$cacheInvalidator = ServiceLocator::getInstance()->get(MobileMenuCacheInvalidator::class);
+		$activeTabProvider = ActiveTabProvider::forContext(
+			context: $context,
+			cacheInvalidator: $cacheInvalidator,
+		);
 		$manager = $activeTabProvider->getManager();
 		$activeTabs = self::getActiveTabs($activeTabProvider);
 		$active = array_keys($activeTabs);

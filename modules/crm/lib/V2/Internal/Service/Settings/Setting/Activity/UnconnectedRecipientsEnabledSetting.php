@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class UnconnectedRecipientsEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.activity.unconnected_recipients.enabled';
+	public const ID = 'crm.activity.unconnected_recipients.enabled';
 
 	private readonly ActivitySettings $activitySettings;
 
@@ -26,18 +26,20 @@ final class UnconnectedRecipientsEnabledSetting extends AbstractSetting
 		$this->activitySettings = $activitySettings ?? ActivitySettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'activity_enable_unconnected_recipients',
 		);
 	}
 

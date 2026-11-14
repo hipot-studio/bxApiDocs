@@ -29,4 +29,9 @@ final class ActivityV2 extends AbstractCrmFlag
 	{
 		return Activities::getInstance();
 	}
+
+	public function enabledByDefault(): bool
+	{
+		return true;
+	}
 }

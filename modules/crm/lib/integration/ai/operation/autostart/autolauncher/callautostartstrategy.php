@@ -844,7 +844,6 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 		$callAssessmentItem = ItemFactory::getByActivityId(
 			$activityId,
 			requireScoringCriteria: AIManager::isCallScoringV2Enabled(),
-			requireCurrentAvailability: AIManager::isCallScoringV2Enabled(),
 		);
 		$checkerResult = CallAssessmentItemChecker::getInstance()->setItem($callAssessmentItem)->run();
 		if (!$checkerResult->isSuccess())

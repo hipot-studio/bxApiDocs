@@ -149,13 +149,42 @@ class WorkDayService extends BaseService
 		bool $withPauses = true
 	): array
 	{
+		[$windowStart, $windowEnd] = self::getDayWindow($timestamp, $timezoneOffset);
+
+		return self::getDayOfWindow($userId, $windowStart, $windowEnd, $withBounds, $withPauses);
+	}
+
+	/**
+	 * The same reading of a window the caller has counted itself: the day of an employee whose clocks are
+	 * changed on a date the clocks of the server are not is an hour longer or shorter than the day of the
+	 * server, and no moment and offset of getDayWindow() give it back. The day is being lived through while
+	 * now is inside the window - for a window of getDayWindow() the very same as now falling on its date.
+	 *
+	 * @param int $windowStart the first moment of the day, in server time
+	 * @param int $windowEnd the first moment of the next day, excluded
+	 * @return array{
+	 *     start: ?int,
+	 *     end: ?int,
+	 *     closed: bool,
+	 *     closedAtUnrestricted: ?int,
+	 *     pauses: array<int, array{from: int, to: ?int}>,
+	 * }
+	 */
+	public static function getDayOfWindow(
+		int $userId,
+		int $windowStart,
+		int $windowEnd,
+		bool $withBounds = true,
+		bool $withPauses = true,
+	): array
+	{
 		if (!static::isAvailable())
 		{
 			return ['start' => null, 'end' => null, 'closed' => false, 'closedAtUnrestricted' => null, 'pauses' => []];
 		}
 
-		[$windowStart, $windowEnd] = self::getDayWindow($timestamp, $timezoneOffset);
-		$isBeingLivedThrough = self::isDayBeingLivedThrough($timestamp, $timezoneOffset);
+		$now = time();
+		$isBeingLivedThrough = $now >= $windowStart && $now < $windowEnd;
 
 		// The record open right now is the last shift of the day and says nothing about the ones before it,
 		// so everything but the closing of a day still being lived through is read off the whole window - and

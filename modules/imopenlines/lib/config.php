@@ -60,6 +60,9 @@ class Config
 
 	const CONFIG_CACHE_TIME = 86400;
 
+	/** Selection parameters getList() supports when the ACCESS_FILTER option is set. */
+	public const ACCESS_FILTER_SUPPORTED_PARAMS = ['select', 'filter', 'order', 'limit', 'offset'];
+
 	private $error = null;
 	private $userId = 0;
 
@@ -966,12 +969,113 @@ class Config
 	}
 
 	/**
+	 * Keeps in the record only an avatar id the editor of this line may point to: a fresh upload of
+	 * this editor or the avatar already bound to this line. A rejected id falls back to the avatar
+	 * of the given state of the line, so the refusal neither stores the file nor drops the current
+	 * avatar of the line.
+	 *
+	 * The state is given and not read here: the comparison that deletes the replaced file judges by
+	 * the same state, and of two readings the refusal could store the older avatar and delete the
+	 * newer file - the one a request running in parallel has just saved.
+	 */
+	private function sanitizeDefaultOperatorAvatar(array $params, int $configId, array $currentData): array
+	{
+		if (
+			!isset($params['DEFAULT_OPERATOR_DATA'])
+			|| !is_array($params['DEFAULT_OPERATOR_DATA'])
+			|| !isset($params['DEFAULT_OPERATOR_DATA']['AVATAR_ID'])
+		)
+		{
+			return $params;
+		}
+
+		$avatarId = is_scalar($params['DEFAULT_OPERATOR_DATA']['AVATAR_ID'])
+			? (int)$params['DEFAULT_OPERATOR_DATA']['AVATAR_ID']
+			: 0
+		;
+
+		if ($avatarId > 0 && !QueueAvatar::claimForBinding($avatarId, $configId))
+		{
+			$avatarId = (int)($currentData['AVATAR_ID'] ?? 0);
+			$params['DEFAULT_OPERATOR_DATA']['AVATAR'] = $avatarId > 0
+				? (string)($currentData['AVATAR'] ?? '')
+				: ''
+			;
+		}
+
+		$params['DEFAULT_OPERATOR_DATA']['AVATAR_ID'] = $avatarId;
+
+		return $params;
+	}
+
+	/**
+	 * The warning message carries a link to the agreement text, so the flag is meaningless without a
+	 * usable agreement. Only a caller that writes the agreement settings is checked; the half of the
+	 * pair it left out is taken from the stored line. A write that does not touch the pair at all
+	 * belongs to another setting and must not be rejected because of the agreement.
+	 */
+	private function hasUnavailableAgreementMessage(array $fields, array $config = []): bool
+	{
+		if (!isset($fields['AGREEMENT_MESSAGE']) && !isset($fields['AGREEMENT_ID']))
+		{
+			return false;
+		}
+
+		$isMessageEnabled = ($fields['AGREEMENT_MESSAGE'] ?? $config['AGREEMENT_MESSAGE'] ?? 'N') === 'Y';
+		$agreementId = (int)($fields['AGREEMENT_ID'] ?? $config['AGREEMENT_ID'] ?? 0);
+
+		return $isMessageEnabled && !Common::isAgreementAvailable($agreementId);
+	}
+
+	/**
 	 * @param array $params
 	 * @return array|bool|int
 	 */
 	public function create($params = [])
 	{
+		$claimsOfEarlierSaves = QueueAvatar::claimsOfEarlierSaves();
+
+		try
+		{
+			return $this->createLine($params, $claimsOfEarlierSaves);
+		}
+		catch (\Throwable $exception)
+		{
+			// see update(): the line is not created, so the upload of its avatar goes back
+			QueueAvatar::releaseUnwrittenClaims();
+
+			throw $exception;
+		}
+	}
+
+	/**
+	 * @param array<int, true> $claimsOfEarlierSaves
+	 *
+	 * @return array|bool|int
+	 */
+	private function createLine($params, array $claimsOfEarlierSaves)
+	{
+		if (is_array($params))
+		{
+			// the line being created holds no avatar yet, so a rejected id falls back to none
+			$params = $this->sanitizeDefaultOperatorAvatar($params, 0, []);
+		}
+
 		$fields = $this->prepareFields($params);
+
+		if ($this->hasUnavailableAgreementMessage($fields))
+		{
+			// the line is not created, so the upload of its avatar goes back to the editor
+			QueueAvatar::releaseUnwrittenClaims();
+
+			$this->error = new BasicError(
+				__METHOD__,
+				'IMOL_ERROR_AGREEMENT_NOT_SELECTED',
+				Loc::getMessage('IMOL_ERROR_AGREEMENT_NOT_SELECTED')
+			);
+
+			return false;
+		}
 
 		if ($this->userId)
 		{
@@ -981,6 +1085,9 @@ class Config
 		$result = Model\ConfigTable::add($fields);
 		if(!$result->isSuccess())
 		{
+			// the line was not created, so the upload of its avatar goes back to the editor
+			QueueAvatar::releaseUnwrittenClaims();
+
 			$this->error = new BasicError(__METHOD__, 'ADD_ERROR', Loc::getMessage('IMOL_ADD_ERROR'));
 			return false;
 		}
@@ -1032,6 +1139,9 @@ class Config
 		$event = new Main\Event('imopenlines', self::EVENT_IMOPENLINE_CREATE, $eventData);
 		$event->send();
 
+		// the line is created, so the upload of its avatar is not this request's to give back any more
+		QueueAvatar::keepWrittenClaims($claimsOfEarlierSaves);
+
 		return $configId;
 	}
 
@@ -1042,13 +1152,45 @@ class Config
 	 */
 	public function update($configId, array $params = []): Result
 	{
+		$claimsOfEarlierSaves = QueueAvatar::claimsOfEarlierSaves();
+
+		try
+		{
+			return $this->updateLine($configId, $params, $claimsOfEarlierSaves);
+		}
+		catch (\Throwable $exception)
+		{
+			// nothing of this save is written, so the upload of the avatar goes back to the editor:
+			// a file left as taken over by a save that never happened is refused by both rules and
+			// undeletable from the form of the line
+			QueueAvatar::releaseUnwrittenClaims();
+
+			throw $exception;
+		}
+	}
+
+	/**
+	 * @param array<int, true> $claimsOfEarlierSaves
+	 */
+	private function updateLine($configId, array $params, array $claimsOfEarlierSaves): Result
+	{
 		$result = new Result();
+
+		// the one state of the line this update judges by: the avatar a refusal falls back to and the
+		// avatar the file of which is deleted once the record points elsewhere must be the same one
+		$config = Model\ConfigTable::getById($configId)->fetch();
+
+		$params = $this->sanitizeDefaultOperatorAvatar(
+			$params,
+			(int)$configId,
+			is_array($config) && is_array($config['DEFAULT_OPERATOR_DATA'] ?? null)
+				? $config['DEFAULT_OPERATOR_DATA']
+				: []
+		);
 
 		$fields = $this->prepareFields($params, self::MODE_UPDATE);
 
-		$orm = Model\ConfigTable::getById($configId);
-
-		if ($config = $orm->fetch())
+		if ($config)
 		{
 			if (isset($params['QUEUE']))
 			{
@@ -1081,6 +1223,16 @@ class Config
 						['queue' => $params['QUEUE']]
 					));
 				}
+			}
+
+			if ($this->hasUnavailableAgreementMessage($fields, $config))
+			{
+				$result->addError(new Error(
+					Loc::getMessage('IMOL_ERROR_AGREEMENT_NOT_SELECTED'),
+					'IMOL_ERROR_AGREEMENT_NOT_SELECTED',
+					__METHOD__,
+					['idLine' => $configId]
+				));
 			}
 
 			if($result->isSuccess())
@@ -1279,6 +1431,17 @@ class Config
 			));
 		}
 
+		// every refusal of this save - an invalid queue, a line that is not there, a failed write -
+		// leaves the record of the avatar unwritten, so the upload goes back to the editor
+		if ($result->isSuccess())
+		{
+			QueueAvatar::keepWrittenClaims($claimsOfEarlierSaves);
+		}
+		else
+		{
+			QueueAvatar::releaseUnwrittenClaims();
+		}
+
 		return $result;
 	}
 
@@ -1412,12 +1575,13 @@ class Config
 
 	private static function canDoOperation($configId, $entity, $action, $userId = null)
 	{
-		if (isset(self::$cacheOperation[$configId][$entity][$action]))
+		$userId = $userId ?? Security\Helper::getCurrentUserId();
+
+		if (isset(self::$cacheOperation[$userId][$configId][$entity][$action]))
 		{
-			return self::$cacheOperation[$configId][$entity][$action];
+			return self::$cacheOperation[$userId][$configId][$entity][$action];
 		}
 
-		$userId = $userId ?? Security\Helper::getCurrentUserId();
 		if (isset(self::$cachePermission[$userId][$entity][$action]))
 		{
 			$allowedUserIds = self::$cachePermission[$userId][$entity][$action];
@@ -1435,25 +1599,23 @@ class Config
 
 		if (!is_array($allowedUserIds))
 		{
-			self::$cacheOperation[$configId][$entity][$action] = true;
+			self::$cacheOperation[$userId][$configId][$entity][$action] = true;
 			return true;
 		}
 		elseif (empty($allowedUserIds))
 		{
-			self::$cacheOperation[$configId][$entity][$action] = false;
+			self::$cacheOperation[$userId][$configId][$entity][$action] = false;
 			return false;
 		}
 
 		$canEdit = false;
 		$orm = Model\QueueTable::getList([
+			'select' => ['ID'],
 			'filter' => [
 				'=USER_ID' => $allowedUserIds,
 				'=CONFIG_ID' => $configId
 			],
-			'order' => [
-				'SORT' => 'ASC',
-				'ID' => 'ASC'
-			]
+			'limit' => 1
 		]);
 		if ($row = $orm->fetch())
 		{
@@ -1464,13 +1626,13 @@ class Config
 			$configManager = new self();
 			$config = $configManager->get($configId, false);
 
-			if ($config['MODIFY_USER_ID'] == $userId)
+			if (is_array($config) && $config['MODIFY_USER_ID'] == $userId)
 			{
 				$canEdit = true;
 			}
 		}
 
-		self::$cacheOperation[$configId][$entity][$action] = $canEdit;
+		self::$cacheOperation[$userId][$configId][$entity][$action] = $canEdit;
 
 		return $canEdit;
 	}
@@ -1926,6 +2088,19 @@ class Config
 		return $result;
 	}
 
+	/**
+	 * Returns the lines the selection parameters match.
+	 *
+	 * The ACCESS_FILTER option carries an access condition of the Main\ORM\Query\Filter\ConditionTree
+	 * type. It is added to the client filter and never replaces it: the result keeps the lines both
+	 * conditions match. Only product code sets the option, it is never read from client input. Once it
+	 * is set, the selection goes through Model\ConfigTable::query() and supports the selection
+	 * parameters of self::ACCESS_FILTER_SUPPORTED_PARAMS alone.
+	 *
+	 * @param array $params Selection parameters of Model\ConfigTable.
+	 * @param array $options QUEUE, CONFIG_QUEUE, CHECK_PERMISSION, ACCESS_FILTER.
+	 * @throws Main\ArgumentException
+	 */
 	public function getList(array $params, $options = [])
 	{
 		if(
@@ -1987,8 +2162,23 @@ class Config
 		}
 
 
+		$accessFilter = $options['ACCESS_FILTER'] ?? null;
+		if (
+			array_key_exists('ACCESS_FILTER', $options)
+			&& !($accessFilter instanceof Main\ORM\Query\Filter\ConditionTree)
+		)
+		{
+			// a wrong type must not silently drop the access condition
+			throw new Main\ArgumentException(
+				'ACCESS_FILTER accepts an instance of ' . Main\ORM\Query\Filter\ConditionTree::class . ' alone'
+			);
+		}
+
 		$configs = [];
-		$orm = Model\ConfigTable::getList($params);
+		$orm = $accessFilter instanceof Main\ORM\Query\Filter\ConditionTree
+			? self::queryWithAccessFilter($params, $accessFilter)
+			: Model\ConfigTable::getList($params)
+		;
 		while ($config = $orm->fetch())
 		{
 			if (
@@ -2055,6 +2245,59 @@ class Config
 		}
 
 		return $configs;
+	}
+
+	/**
+	 * Selects the lines the access condition allows.
+	 *
+	 * Query::buildWhere() joins the array filter and the condition tree with AND but parenthesizes
+	 * neither, so a client filter with LOGIC => OR would bind the access condition to its last
+	 * disjunct alone. An array filter is therefore nested into a block of its own: the ORM wraps a
+	 * nested block in parentheses, which keeps the access condition applied to the whole filter.
+	 *
+	 * @param array $params Selection parameters the admission layer of the REST method allows.
+	 * @param Main\ORM\Query\Filter\ConditionTree $accessFilter Condition built by Security\LineScope.
+	 * @throws Main\ArgumentException
+	 */
+	private static function queryWithAccessFilter(
+		array $params,
+		Main\ORM\Query\Filter\ConditionTree $accessFilter
+	): Main\ORM\Query\Result
+	{
+		$unsupported = array_diff(array_keys($params), self::ACCESS_FILTER_SUPPORTED_PARAMS);
+		if (!empty($unsupported))
+		{
+			throw new Main\ArgumentException(
+				'ACCESS_FILTER supports no selection parameter besides '
+				. implode(', ', self::ACCESS_FILTER_SUPPORTED_PARAMS) . ': '
+				. implode(', ', $unsupported)
+			);
+		}
+
+		$query = Model\ConfigTable::query();
+		$query->setSelect($params['select'] ?? ['*']);
+
+		if (isset($params['filter']))
+		{
+			$params['filter'] instanceof Main\ORM\Query\Filter\ConditionTree
+				? $query->where($params['filter'])
+				: $query->setFilter(empty($params['filter']) ? [] : [$params['filter']])
+			;
+		}
+		if (isset($params['order']))
+		{
+			$query->setOrder($params['order']);
+		}
+		if (isset($params['limit']))
+		{
+			$query->setLimit($params['limit']);
+		}
+		if (isset($params['offset']))
+		{
+			$query->setOffset($params['offset']);
+		}
+
+		return $query->where($accessFilter)->exec();
 	}
 
 	/**

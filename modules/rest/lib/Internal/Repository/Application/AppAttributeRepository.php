@@ -8,6 +8,7 @@ use Bitrix\Main\Entity\EntityInterface;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\Repository\RepositoryInterface;
 use Bitrix\Rest\Internal\Entity\Application\AppAttribute;
+use Bitrix\Rest\Internal\Entity\Application\AppAttributeCode;
 use Bitrix\Rest\Internal\Model\AppAttributeTable;
 use Bitrix\Rest\Internal\Repository\Mapper\AppMapper;
 
@@ -115,6 +116,30 @@ class AppAttributeRepository implements RepositoryInterface
 		}
 
 		return $this->mapper->convertAttributeFromOrm($ormModel);
+	}
+
+	public function saveSystemValue(int $appId, AppAttributeCode $code, string $value): void
+	{
+		try
+		{
+			$result = AppAttributeTable::addMerge([
+				'APP_ID' => $appId,
+				'TYPE' => AppAttribute::TYPE_SYSTEM,
+				'CODE' => $code->value,
+				'VALUE' => $value,
+			]);
+		}
+		catch (\Exception $e)
+		{
+			throw new PersistenceException($e->getMessage(), previous: $e);
+		}
+
+		if (!$result->isSuccess())
+		{
+			throw new PersistenceException(
+				'Unable to save app attribute: ' . implode(', ', $result->getErrorMessages()),
+			);
+		}
 	}
 
 	public function deleteByAppId(int $appId): void

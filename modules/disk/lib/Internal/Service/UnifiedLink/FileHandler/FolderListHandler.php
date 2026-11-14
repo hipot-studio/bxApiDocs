@@ -15,6 +15,8 @@ use Bitrix\Main\ErrorCollection;
 
 readonly class FolderListHandler implements HtmlRenderableHandler
 {
+	public const ERROR_EDIT_NOT_SUPPORTED = 'DISK_UNIFIED_LINK_EDIT_NOT_SUPPORTED';
+
 	/**
 	 * @param UnifiedLinkAccessService $accessService
 	 * @param UnifiedLinkUrl $unifiedLinkUrl
@@ -88,7 +90,7 @@ readonly class FolderListHandler implements HtmlRenderableHandler
 
 	public function edit(): HandlerOperationResult
 	{
-		$error = new Error('not supported');
+		$error = new Error('not supported', self::ERROR_EDIT_NOT_SUPPORTED);
 		$errorCollection = new ErrorCollection([$error]);
 
 		return HandlerOperationResult::createError($errorCollection);

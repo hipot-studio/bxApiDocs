@@ -17,24 +17,26 @@ use Bitrix\Main\Result;
  */
 final class LeadEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.duplicate_control.lead.enabled';
+	public const ID = 'crm.duplicate_control.lead.enabled';
 
 	public function __construct(private readonly ?DuplicateControl $duplicateControl = null)
 	{
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'dup_ctrl',
 		);
 	}
 

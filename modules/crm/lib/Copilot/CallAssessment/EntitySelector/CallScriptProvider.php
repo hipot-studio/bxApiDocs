@@ -66,11 +66,6 @@ final class CallScriptProvider extends BaseProvider
 		$filter['IS_ENABLED'] = 'Y';
 
 		$controller = CopilotCallAssessmentController::getInstance();
-		$additionalFilter = $controller->getCurrentAvailableAssessmentFilter();
-		if ($additionalFilter)
-		{
-			$filter[] = $additionalFilter;
-		}
 
 		$collection = $controller->getList([
 			'select' => ['*', 'CLIENT_TYPES'],
@@ -121,12 +116,7 @@ final class CallScriptProvider extends BaseProvider
 			'@ID' => $ids,
 			'IS_ENABLED' => 'Y',
 		];
-		$additionalFilter = $controller->getCurrentAvailableAssessmentFilter();
-		if ($additionalFilter)
-		{
-			$filter[] = $additionalFilter;
-		}
-		
+
 		$collection = $controller->getList([
 			'select' => ['*', 'CLIENT_TYPES'],
 			'filter' => $filter,
@@ -142,11 +132,6 @@ final class CallScriptProvider extends BaseProvider
 			'%TITLE' => $searchQuery->getQuery(),
 			'IS_ENABLED' => 'Y',
 		];
-		$additionalFilter = $controller->getCurrentAvailableAssessmentFilter();
-		if ($additionalFilter)
-		{
-			$filter[] = $additionalFilter;
-		}
 
 		$collection = $controller->getList([
 			'filter' => $filter,

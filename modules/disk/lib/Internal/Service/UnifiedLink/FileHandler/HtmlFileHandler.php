@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\DocumentSource;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\HtmlEditorPageService;
 use Bitrix\Disk\Internal\Service\HtmlViewerPageService;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
@@ -21,6 +23,7 @@ use Bitrix\Main\SystemException;
 class HtmlFileHandler implements HtmlRenderableHandler
 {
 	private HtmlViewerPageService $pageService;
+	private HtmlEditorPageService $editorPageService;
 	private ExceptionHandler $exceptionHandler;
 
 	/**
@@ -33,6 +36,7 @@ class HtmlFileHandler implements HtmlRenderableHandler
 	)
 	{
 		$this->pageService = ServiceLocator::getInstance()->get(HtmlViewerPageService::class);
+		$this->editorPageService = ServiceLocator::getInstance()->get(HtmlEditorPageService::class);
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
 	}
 
@@ -49,12 +53,32 @@ class HtmlFileHandler implements HtmlRenderableHandler
 	}
 
 	/**
-	 * Html is read-only, so a reader whose unified link access level is Edit gets the same page
-	 * instead of an error.
+	 * A portal with the editor disabled keeps the read-only behavior of its html links.
 	 */
 	public function edit(): HandlerOperationResult
 	{
-		return $this->view();
+		if (!Configuration::isEnabledHtmlEditor())
+		{
+			return $this->view();
+		}
+
+		$attachedObject = $this->documentSource->getAttachedObject();
+		$result = $attachedObject !== null
+			? $this->editorPageService->buildParamsByAttachedObject($attachedObject)
+			: $this->editorPageService->buildParamsByFile($this->documentSource->getFile())
+		;
+		if (!$result->isSuccess())
+		{
+			return HandlerOperationResult::createError($result->getErrorCollection());
+		}
+
+		$content = $this->editorPageService->renderPage($result->getData());
+		if ($content === '')
+		{
+			return $this->createErrorResult('empty render of html editor page');
+		}
+
+		return HandlerOperationResult::createSuccess($content);
 	}
 
 	/**

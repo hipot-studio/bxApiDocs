@@ -67,12 +67,26 @@ class FieldTypeValidator extends DtoFieldValidator
 			return true;
 		}
 
-		return match (strtolower($type))
+		$type = strtolower($type);
+
+		// User field values arrive here as raw JSON literals (Dto::__set skips the typed property),
+		// so scalars share the rule of the filter and the fields structure.
+		$scalarType = match ($type)
 		{
-			'int', 'integer' => is_int($value),
-			'float', 'double' => is_float($value),
-			'string' => is_string($value),
-			'bool', 'boolean' => is_bool($value),
+			'int', 'integer' => 'int',
+			'float', 'double' => 'float',
+			'string' => 'string',
+			'bool', 'boolean' => 'bool',
+			default => null,
+		};
+
+		if ($scalarType !== null)
+		{
+			return FieldsValidator::validateTypeAndValue($scalarType, $value);
+		}
+
+		return match ($type)
+		{
 			'array' => is_array($value),
 			'object' => is_object($value),
 			'null' => is_null($value),

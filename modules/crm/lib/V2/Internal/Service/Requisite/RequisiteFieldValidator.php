@@ -196,7 +196,7 @@ final class RequisiteFieldValidator
 			}
 		}
 
-		return array_merge($errors, self::missingErrors($this->requiredFields($presetId), $fields, $isAdd));
+		return array_merge($errors, self::missingErrors($this->requiredFields($preset), $fields, $isAdd));
 	}
 
 	/**
@@ -251,21 +251,24 @@ final class RequisiteFieldValidator
 	 *
 	 * @throws SystemException
 	 */
-	private function requiredFields(int $presetId): array
+	private function requiredFields(Preset $preset): array
 	{
 		$columns = FieldAttributeManager::getRequiredFields(
 			OwnerType::REQUISITE,
 			0,
 			[],
 			FieldOrigin::SYSTEM,
-			['PRESET_ID' => $presetId],
+			['PRESET_ID' => $preset->id],
 		);
 
 		$fields = [];
 		foreach ($columns as $column)
 		{
 			$field = RequisiteColumnMap::findFieldByColumn((string)$column);
-			if ($field !== null)
+			if (
+				$field !== null
+				&& (!RequisiteColumnMap::isFieldOfPreset($field) || $preset->hasField($field))
+			)
 			{
 				$fields[] = $field;
 			}

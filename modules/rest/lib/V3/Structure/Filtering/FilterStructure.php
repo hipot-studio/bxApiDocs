@@ -9,9 +9,10 @@ use Bitrix\Rest\V3\Exception\UnknownFilterOperatorException;
 use Bitrix\Rest\V3\Exception\Validation\DtoFieldRequiredAttributeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Structure\FieldsConverter;
+use Bitrix\Rest\V3\Structure\ReferencesDtoFields;
 use Bitrix\Rest\V3\Structure\Structure;
 
-final class FilterStructure extends Structure
+final class FilterStructure extends Structure implements ReferencesDtoFields
 {
 	/** @var Condition[]|static[] */
 	protected array $conditions = [];
@@ -34,6 +35,177 @@ final class FilterStructure extends Structure
 		$dto = self::getDto($dtoClass);
 
 		return self::fillStructure($value, $dto);
+	}
+
+	/**
+	 * Walks the raw filter the way fillStructure() and Condition::__construct() read it.
+	 *
+	 * @return list<string>
+	 * @throws InvalidFilterException
+	 */
+	public static function getReferencedFields(mixed $value): array
+	{
+		$fields = [];
+		self::collectNodeFields((array)$value, $fields);
+
+		return array_values(array_unique($fields));
+	}
+
+	/**
+	 * @param list<string> $fields
+	 * @throws InvalidFilterException
+	 */
+	private static function collectNodeFields(mixed $node, array &$fields): void
+	{
+		if (!is_array($node))
+		{
+			throw new InvalidFilterException($node);
+		}
+
+		if (!self::isGroupNode($node))
+		{
+			self::collectSimpleConditionFields($node, $fields);
+
+			return;
+		}
+
+		if (!isset($node['conditions']) || !is_array($node['conditions']))
+		{
+			throw new InvalidFilterException($node);
+		}
+
+		foreach ($node['conditions'] as $conditionItem)
+		{
+			if (!is_array($conditionItem) || !self::isGroupNode($conditionItem))
+			{
+				self::collectNodeFields($conditionItem, $fields);
+
+				continue;
+			}
+
+			match ($conditionItem['type'] ?? null)
+			{
+				'filter' => self::collectNodeFields($conditionItem, $fields),
+				'condition' => self::collectStaticConditionFields($conditionItem, $fields),
+				default => throw new InvalidFilterException($conditionItem),
+			};
+		}
+	}
+
+	private static function isGroupNode(array $node): bool
+	{
+		return isset($node['type']) || isset($node['logic']) || isset($node['conditions']) || isset($node['negative']);
+	}
+
+	/**
+	 * @param list<string> $fields
+	 * @throws InvalidFilterException
+	 */
+	private static function collectSimpleConditionFields(array $node, array &$fields): void
+	{
+		if (empty($node))
+		{
+			return;
+		}
+
+		if (is_array($node[0] ?? null) && !isset($node[0]['expression']))
+		{
+			foreach ($node as $item)
+			{
+				self::collectNodeFields($item, $fields);
+			}
+
+			return;
+		}
+
+		$count = count($node);
+		if (!array_key_exists(0, $node) || ($count !== 2 && $count !== 3))
+		{
+			throw new InvalidFilterException($node);
+		}
+
+		self::collectLeftOperandFields($node[0], $fields);
+		self::collectRightOperandFields($count === 3 ? ($node[2] ?? null) : ($node[1] ?? null), $fields);
+	}
+
+	/**
+	 * @param list<string> $fields
+	 * @throws InvalidFilterException
+	 */
+	private static function collectStaticConditionFields(array $conditionItem, array &$fields): void
+	{
+		self::collectLeftOperandFields($conditionItem['leftOperand'] ?? null, $fields);
+		self::collectRightOperandFields($conditionItem['rightOperand'] ?? null, $fields);
+	}
+
+	/**
+	 * @param list<string> $fields
+	 * @throws InvalidFilterException
+	 */
+	private static function collectLeftOperandFields(mixed $operand, array &$fields): void
+	{
+		if (is_string($operand))
+		{
+			$fields[] = $operand;
+
+			return;
+		}
+
+		if (is_array($operand) && isset($operand['expression']))
+		{
+			self::collectExpressionFields($operand, $fields);
+
+			return;
+		}
+
+		if (is_scalar($operand))
+		{
+			// FilterValidator looks such an operand up among the DTO fields as a key
+			$fields[] = (string)$operand;
+
+			return;
+		}
+
+		throw new InvalidFilterException(['leftOperand' => $operand]);
+	}
+
+	/**
+	 * A value becomes a column only through an expression, anything else is kept as a plain value.
+	 *
+	 * @param list<string> $fields
+	 * @throws InvalidFilterException
+	 */
+	private static function collectRightOperandFields(mixed $operand, array &$fields): void
+	{
+		if (is_array($operand) && isset($operand['expression']))
+		{
+			self::collectExpressionFields($operand, $fields);
+		}
+	}
+
+	/**
+	 * Expressions\Factory casts parameters to an array and passes them to the expression as column names.
+	 *
+	 * @param list<string> $fields
+	 * @throws InvalidFilterException
+	 */
+	private static function collectExpressionFields(array $operand, array &$fields): void
+	{
+		$parameters = (array)($operand['parameters'] ?? null);
+		if ($parameters === [])
+		{
+			throw new InvalidFilterException($operand);
+		}
+
+		foreach ($parameters as $parameter)
+		{
+			if (!is_string($parameter) || $parameter === '')
+			{
+				throw new InvalidFilterException($operand);
+			}
+
+			$fields[] = $parameter;
+		}
 	}
 
 	/**
@@ -453,16 +625,14 @@ final class FilterStructure extends Structure
 	{
 		$operator = $operator instanceof Operator ? $operator : FilterValidator::validateOperator($operator);
 
-		$field = is_scalar($fieldName) && isset($dto->getFields()[$fieldName])
-			? $dto->getFields()[$fieldName]
-			: null;
+		$field = is_scalar($fieldName) ? $dto->getFields()->getMeta($fieldName) : null;
 
 		if (is_array($value))
 		{
 			foreach ($value as &$valueItem)
 			{
 				$valueItem = $field !== null
-					? FieldsConverter::convertValueByDtoField($field, $valueItem)
+					? FieldsConverter::convertValueByFieldMeta($field, $valueItem)
 					: FieldsConverter::convertValueByType(null, $valueItem);
 			}
 			unset($valueItem);
@@ -470,7 +640,7 @@ final class FilterStructure extends Structure
 		else
 		{
 			$value = $field !== null
-				? FieldsConverter::convertValueByDtoField($field, $value)
+				? FieldsConverter::convertValueByFieldMeta($field, $value)
 				: FieldsConverter::convertValueByType(null, $value);
 		}
 
@@ -486,8 +656,12 @@ final class FilterStructure extends Structure
 	 */
 	private static function createStaticCondition(array $conditionItem, Dto $dto): Condition
 	{
-		FilterValidator::validateOperator($conditionItem['operator']);
-		$newItem = new Condition($conditionItem['leftOperand'], $conditionItem['operator'], $conditionItem['rightOperand']);
+		$newItem = self::createConditionWithOperatorAndValue(
+			$dto,
+			$conditionItem['leftOperand'] ?? null,
+			$conditionItem['operator'] ?? null,
+			$conditionItem['rightOperand'] ?? null,
+		);
 		FilterValidator::validateOperands($newItem, $dto);
 
 		return $newItem;

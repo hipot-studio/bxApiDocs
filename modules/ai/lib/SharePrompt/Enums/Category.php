@@ -25,4 +25,6 @@ enum Category: string
 	case LIST = 'list';
 	case PRODUCT_DESCRIPTION = 'product_description';
 	case TASKS_RESULTS = 'tasks_results';
+	case NOTE = 'note';
+	case READONLY_NOTE = 'readonly_note';
 }

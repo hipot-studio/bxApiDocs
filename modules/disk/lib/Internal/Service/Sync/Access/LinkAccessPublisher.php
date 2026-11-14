@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Internal\Service\Sync\Access;
 
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkLiveness;
 use Bitrix\Disk\Internal\Service\Logger\LoggerFactory;
 use Bitrix\Disk\Internal\Service\Sync\Journal\AudienceResolver;
 use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeRecord;
@@ -191,12 +192,12 @@ final class LinkAccessPublisher
 	}
 
 	/**
-	 * Whether a death time still leaves the link granting reading, as the confirmation of sources
-	 * decides it: an empty death time or one that is still ahead.
+	 * Whether a death time still leaves the link granting reading, by the same rule the confirmation of
+	 * sources uses ({@see ExternalLinkLiveness}).
 	 */
 	private static function isLifetimeAhead(?DateTime $deathTime): bool
 	{
-		return $deathTime === null || $deathTime->getTimestamp() > time();
+		return ExternalLinkLiveness::isAlive($deathTime);
 	}
 
 	private function publishBoundaryMoved(int $objectId, string $source): void

@@ -17,11 +17,12 @@ class Error
 	 * @param $chatId
 	 * @param $message
 	 * @param string $messageExternalError
+	 * @param int $replyId Id of the message the error is about, to quote it with a reply block.
 	 * @return bool|int
 	 */
-	public static function addErrorNotSendChat($chatId, $message, string $messageExternalError = '')
+	public static function addErrorNotSendChat($chatId, $message, string $messageExternalError = '', int $replyId = 0)
 	{
-		return self::sendError($chatId, $message, $messageExternalError);
+		return self::sendError($chatId, $message, $messageExternalError, $replyId);
 	}
 
 	/**
@@ -39,9 +40,10 @@ class Error
 	 * @param $chatId
 	 * @param $message
 	 * @param string $messageExternalError
+	 * @param int $replyId Id of the message the error is about, to quote it with a reply block.
 	 * @return bool|int
 	 */
-	protected static function sendError($chatId, $message, string $messageExternalError = '')
+	protected static function sendError($chatId, $message, string $messageExternalError = '', int $replyId = 0)
 	{
 		if(!empty($messageExternalError))
 		{
@@ -51,12 +53,21 @@ class Error
 			$message .= "\n------------------------------------------------------";
 		}
 
-		return Im::addMessage([
+		$fields = [
 			'TO_CHAT_ID' => $chatId,
 			'MESSAGE' => $message,
 			'SYSTEM' => 'Y',
 			'URL_PREVIEW' => 'N',
 			'NO_SESSION_OL' => 'Y',
-		]);
+		];
+
+		// A quote of the message the error is about: it is not always the last one in the dialog, and
+		// naming it inside the text reads worse than the messenger's own reply block.
+		if ($replyId > 0)
+		{
+			$fields['PARAMS'] = ['REPLY_ID' => $replyId];
+		}
+
+		return Im::addMessage($fields);
 	}
 }

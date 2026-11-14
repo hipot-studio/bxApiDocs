@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\Sync\Journal;
 
 use Bitrix\Disk\Access\AccessCodeEnum;
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\AccessScopeDto;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\ChangeDto;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\ObjectCardDto;
@@ -75,12 +76,6 @@ final class JournalReader
 	 * the user has all lost sight of would be walked to the end of the journal by a single request.
 	 */
 	private const MAX_PAGE_READS = 5;
-
-	/**
-	 * The sections whose assembly is expensive enough to halve the page, as
-	 * {@see SyncLimits::getPageSizeMaxHeavy()} is published for.
-	 */
-	private const HEAVY_SECTIONS = [SectionsStructure::SECTION_LOCATION];
 
 	/** How many identifiers, or codes, one statement carries in a list. */
 	private const IDS_PER_QUERY = 300;
@@ -205,6 +200,14 @@ final class JournalReader
 		?array &$visibleStorageIds,
 	): array
 	{
+		if (!Configuration::isBoardIndexEnabled())
+		{
+			$rows = array_filter(
+				$rows,
+				static fn (array $row): bool => $row['CHANGE_TYPE'] !== ChangeType::IndexUpdated->value,
+			);
+		}
+
 		$realObjectIds = [];
 		foreach ($rows as $row)
 		{
@@ -299,6 +302,7 @@ final class JournalReader
 				'TOMBSTONE_REASON',
 				'ACCESS_SCOPE',
 				'SCOPE_OBJECT_ID',
+				'AFFECTS_DESCENDANTS',
 			])
 			->whereIn('ID', $found)
 			->setOrder(['ID' => 'ASC'])
@@ -560,6 +564,7 @@ final class JournalReader
 			self::optionalInt($row['AUTHOR_ID']),
 			self::decodeChangedFields($row['CHANGED_FIELDS']),
 			$card,
+			$changeType->isAccessState() ? (bool)$row['AFFECTS_DESCENDANTS'] : null,
 		);
 	}
 
@@ -717,25 +722,12 @@ final class JournalReader
 	 */
 	private function resolveLimit(int $requested, SectionsStructure $sections): int
 	{
-		$ceiling = $this->hasHeavySection($sections)
+		$ceiling = $sections->hasHeavySection()
 			? $this->limits->getPageSizeMaxHeavy()
 			: $this->limits->getPageSizeMax()
 		;
 
 		return max(1, min($requested, $ceiling));
-	}
-
-	private function hasHeavySection(SectionsStructure $sections): bool
-	{
-		foreach (self::HEAVY_SECTIONS as $section)
-		{
-			if ($sections->has($section))
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**

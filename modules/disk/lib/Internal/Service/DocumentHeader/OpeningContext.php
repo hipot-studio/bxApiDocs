@@ -7,6 +7,7 @@ use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
+use Bitrix\Main\Error;
 
 /**
  * A concrete opening of an object, described the way the header of that opening asks about it (ALG-01).
@@ -22,10 +23,15 @@ final class OpeningContext
 	public const ACCESS_TYPE_EXTERNAL = 'external';
 
 	private ?bool $resolvedCanEdit = null;
+	private bool $isEditRefusalResolved = false;
+	private ?Error $resolvedEditRefusal = null;
 
 	/**
 	 * @param string $accessType one of self::ACCESS_TYPE_*
 	 * @param bool|\Closure(): bool $canEdit an answer, or the way to reach it on the first question
+	 * @param \Closure(): ?Error $editRefusal the way to learn why the portal itself keeps the opening
+	 *        from editing - a restricted format, an exhausted personal quota; null for a surface no
+	 *        editing engine serves, which is refused nothing of the kind
 	 */
 	public function __construct(
 		private readonly ?File $file,
@@ -45,6 +51,8 @@ final class OpeningContext
 		private readonly ?ExternalLink $externalLink = null,
 		private readonly ?string $name = null,
 		private readonly string $downloadUrl = '',
+		private readonly ?\Closure $editRefusal = null,
+		private readonly bool $hasPublicLinkAccess = false,
 	)
 	{
 	}
@@ -88,6 +96,12 @@ final class OpeningContext
 		return $this->externalLink;
 	}
 
+	/** Whether the concrete public link of this opening grants reading on its own. */
+	public function hasPublicLinkAccess(): bool
+	{
+		return $this->hasPublicLinkAccess;
+	}
+
 	public function accessType(): string
 	{
 		return $this->accessType;
@@ -120,6 +134,23 @@ final class OpeningContext
 			? $this->canEdit
 			: ($this->canEdit)()
 		;
+	}
+
+	/**
+	 * Why the portal keeps this opening from turning into editing, or null while nothing does. Asked
+	 * apart from the rights: a visitor may hold every right and still be left to viewing by the
+	 * format of the document or by the disk it would be written into. Reached at most once - the
+	 * quota part of the answer costs a read of the counter of the owner of the disk.
+	 */
+	public function editRefusal(): ?Error
+	{
+		if (!$this->isEditRefusalResolved)
+		{
+			$this->resolvedEditRefusal = $this->editRefusal === null ? null : ($this->editRefusal)();
+			$this->isEditRefusalResolved = true;
+		}
+
+		return $this->resolvedEditRefusal;
 	}
 
 	/** The right on the object itself, which the rename of the header asks for (API-03). */

@@ -7,6 +7,7 @@ use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tour\Onboarding\DealCard;
@@ -108,6 +109,7 @@ class ToDo extends Item
 		return [
 			'moduleId' => 'crm',
 			'contextId' => 'crm_timeline_todo_editor_add_item_' . CurrentUser::get()->getId(),
+			'feature' => CopilotFeatureCode::TIMELINE_TODO_EDITOR_ADD_ITEM,
 			'category' => 'crm_activity',
 			'autoHide' => true,
 			'responseFormat' => 'html',

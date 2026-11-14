@@ -24,7 +24,9 @@ use Bitrix\Main\ORM\Query\Filter\ConditionTree;
  * WHAT THE STORAGE BOUNDARY DOES NOT DO. It publishes no event, runs no side effect, opens no
  * transaction and validates nothing beyond its own preconditions: the order "write, read back, then the
  * effects" belongs to the pipeline. Two columns are not its business either - `SEARCH_CONTENT` belongs to
- * the search content builder and `STORAGE_ELEMENT_IDS` to the repository of the storage elements.
+ * the search content builder and `STORAGE_ELEMENT_IDS` to the repository of the storage elements; the
+ * stored state reads the latter along with the row ({@see self::STATE_STORAGE_ELEMENT_IDS}), it never
+ * writes it.
  *
  * @internal
  */
@@ -39,6 +41,9 @@ interface ActivityRepositoryInterface
 	/** The storage columns of the stored state that the model does not hold. */
 	public const STATE_TRANSIT = 'transit';
 
+	/** The ids of the files the stored row lists in `STORAGE_ELEMENT_IDS`, as integers. */
+	public const STATE_STORAGE_ELEMENT_IDS = 'storageElementIds';
+
 	/**
 	 * The whole stored state of the activity - the model, the serialized fields and the storage columns
 	 * neither of them owns - or null when there is no row with that id.
@@ -46,12 +51,14 @@ interface ActivityRepositoryInterface
 	 * WHY THE THREE TOGETHER. The pipelines of an update and of a delete need a state, not a model: the
 	 * provider of an update is resolved from the legacy type of the stored row, the wrapper of a legacy
 	 * provider projects all three parts back into the field array it hands over, and a state assembled out
-	 * of three separate reads would be three rows as they stood at three moments. The columns of the search
-	 * content and of the storage elements are not part of it - they belong to their own writers, exactly as
-	 * they do on the way back.
+	 * of three separate reads would be three rows as they stood at three moments. The column of the search
+	 * content is not part of it - it belongs to its own writer. The list of the files is, read-only and off
+	 * the same row: the hooks of a legacy provider are handed the files an activity had before an update
+	 * (crm_activity.php:1216-1221), and a read of their own for that would be a query per update. Their
+	 * writer is still the repository of the storage elements.
 	 *
-	 * @return array{activity: Activity, payload: ProviderPayload, transit: StorageFieldTransit}|null keyed by
-	 *         the three `STATE_*` constants.
+	 * @return array{activity: Activity, payload: ProviderPayload, transit: StorageFieldTransit,
+	 *         storageElementIds: int[]}|null keyed by the four `STATE_*` constants.
 	 */
 	public function getStateById(int $id): ?array;
 

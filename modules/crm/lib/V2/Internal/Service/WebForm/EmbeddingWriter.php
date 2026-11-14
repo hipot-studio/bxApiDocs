@@ -22,6 +22,7 @@ use Bitrix\Crm\V2\Internal\Integration\Bitrix24\WebFormWriteRestriction;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\EmbeddingRepository;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\FormRepository;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\FormWriteRepository;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
@@ -331,9 +332,18 @@ final class EmbeddingWriter
 			return;
 		}
 
-		if (!($this->scriptBuilder)($formId))
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
 		{
-			throw new FormSideEffectException(FormScriptBuilder::OPERATION);
+			if (!($this->scriptBuilder)($formId))
+			{
+				throw new FormSideEffectException(FormScriptBuilder::OPERATION);
+			}
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
 		}
 	}
 }

@@ -98,6 +98,8 @@ class CCalendarSceleton
 
 		CUtil::InitJSCore(array('event_calendar'));
 
+		Loc::loadLanguageFile(__DIR__ . '/calendar.php');
+		$config['saveErrorMessage'] = Loc::getMessage('EC_JS_EV_SAVE_ERR');
 		$config['weekStart'] = CCalendar::GetWeekStart();
 		$config['weekDays'] = self::GetWeekDaysEx($config['weekStart']);
 		$config['days'] = self::GetWeekDays();

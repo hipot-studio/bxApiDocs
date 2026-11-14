@@ -79,6 +79,10 @@ class CBPIMNotifyActivity extends \CBPActivity implements IBPConfigurableActivit
 		return $text;
 	}
 
+	/**
+	 * Whether the node can run at all. The sender is not compared with anybody: it is commonly an expression,
+	 * a group or a department, and whom it names is settled when the process runs.
+	 */
 	public static function ValidateProperties($arTestProperties = [], \CBPWorkflowTemplateUser $user = null)
 	{
 		$arErrors = [];
@@ -105,16 +109,6 @@ class CBPIMNotifyActivity extends \CBPActivity implements IBPConfigurableActivit
 				"code" => "NotExist",
 				"parameter" => "MessageText",
 				"message" => Loc::getMessage("BPIMNA_EMPTY_MESSAGE"),
-			];
-		}
-
-		$from = array_key_exists("MessageUserFrom", $arTestProperties) ? $arTestProperties["MessageUserFrom"] : null;
-		if ($user && $from !== $user->getBizprocId() && !$user->isAdmin())
-		{
-			$arErrors[] = [
-				"code" => "NotExist",
-				"parameter" => "MessageUserFrom",
-				"message" => Loc::getMessage("BPIMNA_EMPTY_FROM"),
 			];
 		}
 

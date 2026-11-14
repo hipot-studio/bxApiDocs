@@ -11,19 +11,20 @@ use Bitrix\Mobile\Config\Feature;
 use Bitrix\Mobile\Feature\MenuFeature;
 use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Tab\Preset\Service\LegacyTabPresetCompatibilityService;
+use Bitrix\Mobile\Tab\Preset\Service\MobileMenuCacheInvalidator;
 
 class Tabs extends \Bitrix\Main\Engine\Controller
 {
-	public function setConfigAction(array $config = [])
+	public function setConfigAction(MobileMenuCacheInvalidator $cacheInvalidator, array $config = [])
 	{
-		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context());
+		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context(), $cacheInvalidator);
 
 		return $tabPresetService->setConfig($config);
 	}
 
-	public function getDataAction()
+	public function getDataAction(MobileMenuCacheInvalidator $cacheInvalidator)
 	{
-		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context());
+		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context(), $cacheInvalidator);
 		$manager = $tabPresetService->getManager();
 		$resolvedState = $tabPresetService->getResolvedState();
 		$result = [
@@ -89,18 +90,18 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 	 * @throws ArgumentNullException
 	 * @throws ArgumentOutOfRangeException
 	 */
-	public function getCurrentPresetNameAction(): ?string
+	public function getCurrentPresetNameAction(MobileMenuCacheInvalidator $cacheInvalidator): ?string
 	{
-		return LegacyTabPresetCompatibilityService::forContext(new Context())->getCurrentPresetName();
+		return LegacyTabPresetCompatibilityService::forContext(new Context(), $cacheInvalidator)->getCurrentPresetName();
 	}
 
 	/**
 	 * @throws ArgumentNullException
 	 * @throws ArgumentOutOfRangeException
 	 */
-	public function getCurrentPresetItemsAction(): array
+	public function getCurrentPresetItemsAction(MobileMenuCacheInvalidator $cacheInvalidator): array
 	{
-		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context());
+		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context(), $cacheInvalidator);
 		$manager = $tabPresetService->getManager();
 		$activeTabs = $tabPresetService->getActiveTabs();
 
@@ -124,9 +125,9 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 		return $result;
 	}
 
-	public function setPresetAction($name): ?array
+	public function setPresetAction($name, MobileMenuCacheInvalidator $cacheInvalidator): ?array
 	{
-		$result = LegacyTabPresetCompatibilityService::forContext(new Context())->setPreset($name);
+		$result = LegacyTabPresetCompatibilityService::forContext(new Context(), $cacheInvalidator)->setPreset($name);
 
 		if ($result === null)
 		{

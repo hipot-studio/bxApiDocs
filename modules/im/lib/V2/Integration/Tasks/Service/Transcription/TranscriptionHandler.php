@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\Tasks\Service\Transcription;
 
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Duplicate\DuplicateCheckService;
 use Bitrix\Im\V2\Integration\AI\TaskCreation\Status;
 use Bitrix\Im\V2\Integration\AI\Transcription\LaunchType;
 use Bitrix\Im\V2\Message;
@@ -18,6 +19,8 @@ class TranscriptionHandler
 	public function __construct(
 		private readonly TranscribedTaskHandler $taskHandler,
 		private readonly TranscribedResultHandler $resultHandler,
+		private readonly TaskDataExtractor $taskDataExtractor = new TaskDataExtractor(),
+		private readonly DuplicateCheckService $duplicateCheckService = new DuplicateCheckService(),
 	)
 	{
 	}
@@ -26,11 +29,23 @@ class TranscriptionHandler
 		array $data,
 		Message $message,
 		int $initiatorId,
-		LaunchType $launchType = LaunchType::Auto
+		LaunchType $launchType = LaunchType::Auto,
+		string $sourceText = '',
 	): bool
 	{
 		$verdict = EntityType::tryFrom($data[self::TYPE_FIELD] ?? '');
 		$taskData = is_array($data[self::TASK_DATA_FIELD] ?? null) ? $data[self::TASK_DATA_FIELD] : [];
+
+		if ($launchType === LaunchType::Auto && $verdict === EntityType::Task)
+		{
+			return $this->processTasks(
+				$this->taskDataExtractor->extract($data),
+				$message,
+				$initiatorId,
+				false,
+				$sourceText,
+			);
+		}
 
 		if ($verdict === EntityType::Task && !empty($taskData))
 		{
@@ -45,7 +60,7 @@ class TranscriptionHandler
 				$taskData = TranscribedTaskHandler::withoutSingleItemCheckLists($taskData);
 			}
 
-			return $this->processTask($taskData, $message, $initiatorId, false);
+			return $this->processTasks([$taskData], $message, $initiatorId, false, $sourceText);
 		}
 
 		// the "result" entity stays an outcome of the single-message flow in both launch modes
@@ -59,7 +74,7 @@ class TranscriptionHandler
 		$taskData = TranscribedTaskHandler::buildFallbackTaskData($taskData);
 		$taskData = TranscribedTaskHandler::withoutSingleItemCheckLists($taskData);
 
-		return $this->processTask($taskData, $message, $initiatorId, true);
+		return $this->processTasks([$taskData], $message, $initiatorId, true, $sourceText);
 	}
 
 	private function processWithoutTaskData(
@@ -80,30 +95,59 @@ class TranscriptionHandler
 		return $verdict === EntityType::Unknown;
 	}
 
-	private function processTask(
-		array $taskData,
+	private function processTasks(
+		array $tasksData,
 		Message $message,
 		int $initiatorId,
-		bool $builtWithoutVerdict
+		bool $builtWithoutVerdict,
+		string $sourceText,
 	): bool
 	{
-		(new AutoTaskStatus($message, $initiatorId, Status::TaskCreationStarted, true))->send();
-
-		$created = $this->taskHandler->handle(
-			$taskData,
-			$message,
-			$initiatorId,
-			builtWithoutVerdict: $builtWithoutVerdict,
-		);
-		if (!$created)
+		if ($tasksData === [])
 		{
-			// the delegate can fail without a terminal status (tasks module off, mapper null or
-			// a SystemException in add); without this the initiator panel hangs forever. On success
-			// TaskCreationCompleted is sent from ChatTaskLinkService, so there is no double terminal
 			(new AutoTaskStatus($message, $initiatorId, Status::NotFound))->send();
+
+			return false;
 		}
 
-		return $created;
+		(new AutoTaskStatus($message, $initiatorId, Status::TaskCreationStarted, true))->send();
+
+		$createdCount = 0;
+		$deferredCount = 0;
+		foreach ($tasksData as $taskData)
+		{
+			$outcome = $this->taskHandler->handle(
+				$taskData,
+				$message,
+				$initiatorId,
+				builtWithoutVerdict: $builtWithoutVerdict,
+				withTerminalStatus: false,
+				sourceText: $sourceText,
+			);
+
+			match ($outcome)
+			{
+				TaskCreationOutcome::Created => $createdCount++,
+				TaskCreationOutcome::Deferred => $deferredCount++,
+				TaskCreationOutcome::Failed => null,
+			};
+		}
+
+		if ($deferredCount > 0)
+		{
+			$this->duplicateCheckService->finalizeBatch($message, $initiatorId, $createdCount);
+
+			return true;
+		}
+
+		(new AutoTaskStatus(
+			$message,
+			$initiatorId,
+			$createdCount > 0 ? Status::TaskCreationCompleted : Status::NotFound,
+			true,
+		))->send();
+
+		return $createdCount > 0;
 	}
 
 	private function processResult(array $data, Message $message, int $initiatorId): bool

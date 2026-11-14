@@ -69,6 +69,12 @@ class CheckInDailyStatsTable extends DataManager
 					'default_value' => 0,
 				],
 			),
+			new IntegerField(
+				'MANUAL_CNT',
+				[
+					'nullable' => true,
+				],
+			),
 		];
 	}
 }

@@ -66,7 +66,12 @@ final class ConfigBuilder
 			->setDocumentSession($documentSession)
 		;
 
-		if ($this->documentSession->getType() === DocumentSession::TYPE_EDIT)
+		// A session opened while editing was still open keeps its edit type, so the mode is decided
+		// anew: a document closed to editing since then opens in view mode instead of the editor.
+		if (
+			$this->documentSession->getType() === DocumentSession::TYPE_EDIT
+			&& $this->documentSession->findEditingRefusal() === null
+		)
 		{
 			$this->setMode(self::MODE_EDIT);
 		}

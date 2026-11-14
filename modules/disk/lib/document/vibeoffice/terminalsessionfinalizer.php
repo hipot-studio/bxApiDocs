@@ -7,50 +7,29 @@ namespace Bitrix\Disk\Document\Vibeoffice;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
-use Bitrix\Disk\Document\Models\RestrictionLogTable;
-use Bitrix\Disk\Document\OnlyOffice\RestrictionManager;
 use Bitrix\Main\Application;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Closure;
 use Throwable;
 
 final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterface
 {
-	private const OPERATION_FINALIZE_DOCUMENT = 'vibeoffice_finalize_document';
-	private const OPERATION_FINALIZE_DRAIN_SESSION = 'vibeoffice_finalize_drain_session';
-	private const OPERATION_FINALIZE_DRAIN_DOCUMENT = 'vibeoffice_finalize_drain_document';
-	private const NOTIFICATION_ERROR_CODE = 'restriction_notification_failed';
-
-	private RestrictionManager $restrictionManager;
-	private Closure $publicationHandler;
-	private Closure $diagnosticHandler;
 	private DocumentStateRepository $repository;
 	private ?string $lockedHostDocKey = null;
-	private bool $restrictionLocked = false;
-	private int $deletedRestrictionCount = 0;
 
 	/**
-	 * @param callable(int): void|null $publicationHandler Internal after-commit seam for tests.
-	 * @param callable(string): void|null $diagnosticHandler Internal diagnostic seam for tests.
+	 * Whether the finalization running right now also takes the local row of the session with it.
+	 *
+	 * Internal state rather than a parameter of {@see self::finalizeSessions()}: the contract of
+	 * {@see TerminalSessionFinalizerInterface} is what the webhook and the drain call, and a
+	 * parameter none of them can pass would be silently dropped by any decorator of theirs.
 	 */
-	public function __construct(
-		?RestrictionManager $restrictionManager = null,
-		?callable $publicationHandler = null,
-		?callable $diagnosticHandler = null,
-		?DocumentStateRepository $repository = null,
-	)
+	private bool $removeFinalizedLocalSessions = false;
+
+	public function __construct(?DocumentStateRepository $repository = null)
 	{
-		$this->restrictionManager = $restrictionManager ?? new RestrictionManager();
 		$this->repository = $repository ?? new DocumentStateRepository();
-		$this->publicationHandler = Closure::fromCallable(
-			$publicationHandler
-			?? fn(int $availableCount) => $this->restrictionManager->notifyRestrictionLogChanged($availableCount)
-		);
-		$this->diagnosticHandler = Closure::fromCallable(
-			$diagnosticHandler
-			?? static fn(string $message) => \AddMessage2Log($message, 'disk')
-		);
 	}
 
 	public function withDocumentTransaction(string $hostDocKey, callable $mutation): Result
@@ -59,7 +38,6 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 		{
 			return (new Result())->addError(new Error('Finalization is already running.', 'vibeoffice_finalize_nested'));
 		}
-		$this->deletedRestrictionCount = 0;
 		try
 		{
 			$result = $this->repository->withLockedDocument(
@@ -70,33 +48,12 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 					return $mutation($state);
 				},
 			);
-			if ($result->isSuccess() && $this->deletedRestrictionCount > 0)
-			{
-				try
-				{
-					$availableCount = $this->restrictionManager->getAvailableDocumentSessionCount();
-				}
-				catch (Throwable)
-				{
-					$availableCount = null;
-				}
-				$this->publishAfterCommit((new Result())->setData([
-					'deletedCount' => $this->deletedRestrictionCount,
-					'availableCount' => $availableCount,
-				]), 'vibeoffice_finalize_sessions', $hostDocKey);
-			}
 
 			return $result;
 		}
 		finally
 		{
 			$this->lockedHostDocKey = null;
-			$this->deletedRestrictionCount = 0;
-			if ($this->restrictionLocked)
-			{
-				$this->restrictionManager->unlock();
-				$this->restrictionLocked = false;
-			}
 		}
 	}
 
@@ -109,18 +66,10 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 		$sessionIds = array_values(array_unique(array_filter($sessionIds, static fn($id): bool => is_int($id) && $id > 0)));
 		if ($sessionIds === [])
 		{
-			return (new Result())->setData(['sessionIds' => [], 'deletedCount' => 0]);
+			return (new Result())->setData(['sessionIds' => []]);
 		}
-		if (!$this->restrictionLocked)
-		{
-			if (!$this->restrictionManager->lock())
-			{
-				return (new Result())->addError(new Error('Could not lock document restrictions.', 'lock_timeout'));
-			}
-			$this->restrictionLocked = true;
-		}
+
 		$registry = new SessionRegistry($this->repository);
-		$hashes = [];
 		$finalized = [];
 		foreach (array_chunk($sessionIds, 300) as $chunk)
 		{
@@ -143,38 +92,70 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 					}
 					$finalized[] = $id;
 				}
-				$hashes[$session->getExternalHash()] = true;
-			}
-		}
-
-		$deleted = 0;
-		foreach (array_keys($hashes) as $hash)
-		{
-			if ($this->hasActiveSessions($hash) || $registry->hasLiveSessionsForHash($hash))
-			{
-				continue;
-			}
-			$rows = RestrictionLogTable::query()->setSelect(['ID'])->where('EXTERNAL_HASH', $hash)->exec();
-			while ($row = $rows->fetch())
-			{
-				$delete = RestrictionLogTable::delete((int)$row['ID']);
-				if (!$delete->isSuccess())
+				if ($this->removeFinalizedLocalSessions)
 				{
-					return (new Result())->addErrors($delete->getErrors());
+					$delete = DocumentSessionTable::delete($id);
+					if (!$delete->isSuccess())
+					{
+						return (new Result())->addErrors($delete->getErrors());
+					}
 				}
-				$deleted++;
 			}
 		}
-		$this->deletedRestrictionCount += $deleted;
 
-		return (new Result())->setData(['sessionIds' => $finalized, 'deletedCount' => $deleted]);
+		return (new Result())->setData(['sessionIds' => $finalized]);
+	}
+
+	/** Release a refused attempt only when the platform has no live session for it. */
+	public function releaseRefusedEditSession(DocumentSession $session, bool $removeLocalSession = false): Result
+	{
+		if (!$session->isEdit()
+			|| $session->getService() !== DocumentService::Vibeoffice || !$session->getId())
+		{
+			return new Result();
+		}
+
+		$hostDocKey = HostDocumentKey::resolve($session);
+		if ($this->repository->getByKey($hostDocKey))
+		{
+			$this->removeFinalizedLocalSessions = $removeLocalSession;
+			try
+			{
+				$result = $this->withDocumentTransaction(
+					$hostDocKey,
+					fn(): Result => $this->finalizeSessions([(int)$session->getId()]),
+				);
+			}
+			finally
+			{
+				$this->removeFinalizedLocalSessions = false;
+			}
+		}
+		elseif ((new SessionRegistry($this->repository))->hasLiveSessions((int)$session->getId()))
+		{
+			return new Result();
+		}
+		else
+		{
+			$result = $this->finalizeDrainSession($session);
+		}
+
+		if (!$result->isSuccess())
+		{
+			(new LoggerFactory())
+				->createById('disk.vibeoffice.open', isCheckEnabledFromRegistry: false)
+				?->error('Could not release refused edit session {sessionId}.', [
+					'sessionId' => (int)$session->getId(),
+				])
+			;
+		}
+
+		return $result;
 	}
 
 	public function finalizeDocument(string $externalHash): Result
 	{
 		return $this->finalize(
-			$externalHash,
-			self::OPERATION_FINALIZE_DOCUMENT,
 			function () use ($externalHash): Result {
 				$rows = DocumentSessionTable::query()->setSelect(['*'])
 					->where('EXTERNAL_HASH', $externalHash)
@@ -193,50 +174,22 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 						return (new Result())->addErrors($update->getErrors());
 					}
 				}
-				if ($this->hasActiveSessions($externalHash))
-				{
-					return (new Result())->setData(['deletedCount' => 0]);
-				}
-
-				return $this->restrictionManager->deleteByExternalHash($externalHash);
+				return new Result();
 			},
 		);
 	}
 
-	private function hasActiveSessions(string $externalHash): bool
-	{
-		return (bool)DocumentSessionTable::query()->setSelect(['ID'])
-			->where('EXTERNAL_HASH', $externalHash)->where('STATUS', DocumentSessionTable::STATUS_ACTIVE)
-			->setLimit(1)->fetch();
-	}
-
 	public function finalizeDrainSession(DocumentSession $session): Result
 	{
-		$externalHash = $session->getExternalHash();
-
 		return $this->finalize(
-			$externalHash,
-			self::OPERATION_FINALIZE_DRAIN_SESSION,
-			function () use ($session, $externalHash): Result {
+			function () use ($session): Result {
 				$deleteResult = DocumentSessionTable::delete((int)$session->getId());
 				if (!$deleteResult->isSuccess())
 				{
 					return (new Result())->addErrors($deleteResult->getErrors());
 				}
 
-				$activeSession = DocumentSessionTable::getRow([
-					'select' => ['ID'],
-					'filter' => [
-						'=EXTERNAL_HASH' => $externalHash,
-						'=STATUS' => DocumentSessionTable::STATUS_ACTIVE,
-					],
-				]);
-				if ($activeSession !== null)
-				{
-					return (new Result())->setData(['deletedCount' => 0]);
-				}
-
-				return $this->restrictionManager->deleteByExternalHash($externalHash);
+				return new Result();
 			},
 		);
 	}
@@ -244,8 +197,6 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 	public function finalizeDrainDocument(string $externalHash): Result
 	{
 		return $this->finalize(
-			$externalHash,
-			self::OPERATION_FINALIZE_DRAIN_DOCUMENT,
 			function () use ($externalHash): Result {
 				$rows = DocumentSessionTable::query()
 					->setSelect(['ID'])
@@ -263,7 +214,7 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 					}
 				}
 
-				return $this->restrictionManager->deleteByExternalHash($externalHash);
+				return new Result();
 			},
 		);
 	}
@@ -271,16 +222,9 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 	/**
 	 * @param callable(): Result $mutation
 	 */
-	private function finalize(string $externalHash, string $operation, callable $mutation): Result
+	private function finalize(callable $mutation): Result
 	{
 		$result = new Result();
-		if (!$this->restrictionManager->lock())
-		{
-			return $result->addError(new Error(
-				'Could not acquire the document restriction lock.',
-				'lock_timeout',
-			));
-		}
 
 		$connection = Application::getConnection();
 		$transactionStarted = false;
@@ -302,8 +246,6 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 			$connection->commitTransaction();
 			$transactionStarted = false;
 
-			$this->publishAfterCommit($mutationResult, $operation, $externalHash);
-
 			return $mutationResult;
 		}
 		catch (Throwable $exception)
@@ -318,47 +260,6 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 				'terminal_session_finalize_failed',
 			));
 		}
-		finally
-		{
-			$this->restrictionManager->unlock();
-		}
 	}
 
-	private function publishAfterCommit(Result $result, string $operation, string $externalHash): void
-	{
-		$data = $result->getData();
-		if ((int)($data['deletedCount'] ?? 0) <= 0)
-		{
-			return;
-		}
-
-		$availableCount = $data['availableCount'] ?? null;
-		if ($availableCount === null)
-		{
-			// The count is unknown (the limit source is temporarily unavailable). Publishing a
-			// made-up number would tell the portal the limit is exhausted, so the cleanup stays
-			// committed and the next successful publication refreshes the count.
-			return;
-		}
-
-		try
-		{
-			($this->publicationHandler)((int)$availableCount);
-		}
-		catch (Throwable $exception)
-		{
-			$message = self::NOTIFICATION_ERROR_CODE
-				. ": operation={$operation}; EXTERNAL_HASH={$externalHash}; {$exception->getMessage()}"
-			;
-
-			try
-			{
-				($this->diagnosticHandler)($message);
-			}
-			catch (Throwable)
-			{
-				// The committed cleanup must stay successful even when diagnostics are unavailable.
-			}
-		}
-	}
 }

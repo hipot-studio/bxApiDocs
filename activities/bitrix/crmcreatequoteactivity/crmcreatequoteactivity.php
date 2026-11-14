@@ -18,9 +18,14 @@ class CBPCrmCreateQuoteActivity extends CBPCreateDocumentActivity
 {
 	protected function getCreatedDocumentType(): array
 	{
+		return static::resolveCreatedDocumentType() ?? [];
+	}
+
+	protected static function resolveCreatedDocumentType(): ?array
+	{
 		if (!Loader::includeModule('crm'))
 		{
-			return [];
+			return null;
 		}
 
 		return CCrmBizProcHelper::ResolveDocumentType(CCrmOwnerType::Quote);

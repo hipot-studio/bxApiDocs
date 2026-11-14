@@ -6,7 +6,7 @@ use Bitrix\Main\Localization\LocalizableMessage;
 use Bitrix\Rest\V3\Documentation\Attributes\Hidden;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
-use Bitrix\Rest\V3\Dto\DtoField;
+use Bitrix\Rest\V3\Dto\Meta\FieldMetaInterface;
 use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Schema\MethodDescription;
@@ -16,6 +16,10 @@ use ReflectionProperty;
 
 final class ToolSchemaBuilder
 {
+	public function __construct(private readonly ?AggregateSelectResolver $aggregateSelectResolver = null)
+	{
+	}
+
 	public function build(MethodDescription $methodDescription): array
 	{
 		$controllerReflection = $this->getControllerReflection($methodDescription->controllerFqcn);
@@ -83,6 +87,7 @@ final class ToolSchemaBuilder
 	{
 		$dto = $this->getDto($methodDescription);
 		$availableFieldNames = $this->getAvailableFieldNames($dto, $methodDescription);
+		$isAggregateSelect = $this->getAggregateSelectResolver()->isAggregateSelect($methodDescription);
 
 		$requestReflection = new ReflectionClass($requestClass);
 		foreach ($requestReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property)
@@ -101,17 +106,19 @@ final class ToolSchemaBuilder
 			$propertyName = $property->getName();
 			$properties[$propertyName] = match ($propertyName)
 			{
-				'select' => $this->buildSelectSchema($availableFieldNames),
+				'select' => $isAggregateSelect
+					? $this->buildAggregateSchema($availableFieldNames)
+					: $this->buildSelectSchema($availableFieldNames),
 				'filter' => $this->buildFilterSchema(),
 				'order' => $this->buildOrderSchema($availableFieldNames),
 				'pagination' => $this->buildPaginationSchema(),
 				'cursor' => $this->buildCursorSchema($availableFieldNames),
-				'aggregate' => $this->buildAggregateSchema($availableFieldNames),
 				'fields' => $this->buildFieldsSchema($dto, $methodDescription),
 				default => $this->getPrimitiveSchema($propertyType->getName()),
 			};
 
-			if (!$property->hasDefaultValue())
+			// mirrors Request::create(): a nullable property may be omitted even without a default
+			if (!$property->hasDefaultValue() && !$propertyType->allowsNull())
 			{
 				$required[] = $propertyName;
 			}
@@ -210,6 +217,8 @@ final class ToolSchemaBuilder
 				'sum' => ['type' => 'array', 'items' => $items],
 				'countDistinct' => ['type' => 'array', 'items' => $items],
 			],
+			// a flat field list or an unknown function is rejected by the validator before the call
+			'additionalProperties' => false,
 		];
 	}
 
@@ -222,7 +231,7 @@ final class ToolSchemaBuilder
 
 		$properties = [];
 		$required = [];
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			if (!$this->isFieldAvailable($field, $methodDescription))
 			{
@@ -278,7 +287,7 @@ final class ToolSchemaBuilder
 		};
 	}
 
-	private function getFieldSchema(DtoField $field): array
+	private function getFieldSchema(FieldMetaInterface $field): array
 	{
 		$isDtoCollectionField = $this->isDtoCollectionField($field);
 		if ($isDtoCollectionField)
@@ -333,7 +342,7 @@ final class ToolSchemaBuilder
 		};
 	}
 
-	private function getFieldDescription(DtoField $field): ?string
+	private function getFieldDescription(FieldMetaInterface $field): ?string
 	{
 		$description = $this->localizeFieldText($field->getDescription());
 		if ($description !== '')
@@ -360,7 +369,7 @@ final class ToolSchemaBuilder
 		return trim((string)$text);
 	}
 
-	private function isDtoCollectionField(DtoField $field): bool
+	private function isDtoCollectionField(FieldMetaInterface $field): bool
 	{
 		if (!$this->isDtoType($field->getElementType()))
 		{
@@ -400,7 +409,7 @@ final class ToolSchemaBuilder
 		}
 
 		$fieldNames = [];
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			if ($this->isFieldAvailable($field, $methodDescription))
 			{
@@ -411,11 +420,16 @@ final class ToolSchemaBuilder
 		return $fieldNames;
 	}
 
-	private function isFieldAvailable(DtoField $field, MethodDescription $methodDescription): bool
+	private function isFieldAvailable(FieldMetaInterface $field, MethodDescription $methodDescription): bool
 	{
 		$mcpTool = $methodDescription->mcpTool;
 
 		return $mcpTool === null || $mcpTool->isFieldAllowed($field->getPropertyName());
+	}
+
+	private function getAggregateSelectResolver(): AggregateSelectResolver
+	{
+		return $this->aggregateSelectResolver ?? new AggregateSelectResolver();
 	}
 
 	private function getControllerReflection(?string $controllerFqcn): ?ReflectionClass

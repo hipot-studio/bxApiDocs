@@ -12,6 +12,7 @@ use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\DataProvider\User;
 use Bitrix\DocumentGenerator\DataProviderManager;
 use Bitrix\DocumentGenerator\Dictionary;
+use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\BasketItem;
@@ -73,6 +74,7 @@ class Order extends ProductsDataProvider
 			];
 			if (!$this->isLightMode())
 			{
+				Loc::loadMessages(Path::combine(__DIR__, 'deal.php'));
 				$this->fields['CONTACTS'] = [
 					'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_CONTACTS_TITLE'),
 					'PROVIDER' => ArrayDataProvider::class,

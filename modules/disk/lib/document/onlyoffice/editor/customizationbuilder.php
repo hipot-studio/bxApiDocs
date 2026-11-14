@@ -3,6 +3,7 @@
 namespace Bitrix\Disk\Document\OnlyOffice\Editor;
 
 
+use Bitrix\Disk\Internal\Service\Bitrix24SiteUrlResolver;
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
@@ -63,7 +64,7 @@ final class CustomizationBuilder
 			'logo' => [
 				'image' => $this->buildUrlToImage('disk_doceditor_logo.png?1'),
 				'imageEmbedded' => $this->buildUrlToImage('disk_doceditor_logo_embed.png?1'),
-				'url' => 'https://bitrix24.com',
+				'url' => Bitrix24SiteUrlResolver::create()->getUrl(),
 			],
 			'review' => [
 				'reviewDisplay' => self::REVIEW_DISPLAY_MARKUP,

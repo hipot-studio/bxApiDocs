@@ -406,25 +406,38 @@ class Auth
 	private static function checkQueryMethod($whiteListMethods)
 	{
 		$whiteListMethods = array_map('mb_strtolower', $whiteListMethods);
-		if (\CRestServer::instance()->getMethod() == 'batch')
+		if (mb_strtolower(\CRestServer::instance()->getMethod()) === 'batch')
 		{
-			$result = false;
-			foreach (\CRestServer::instance()->getQuery()['cmd'] as $method)
+			$query = array_change_key_case(\CRestServer::instance()->getQuery(), CASE_UPPER);
+			$commands = $query['CMD'] ?? null;
+			if (!is_array($commands) || $commands === [])
 			{
-				$method = mb_substr($method, 0, mb_strrpos($method, '?'));
-				$result = in_array(mb_strtolower($method), $whiteListMethods);
-				if (!$result)
+				return false;
+			}
+
+			foreach (array_slice($commands, 0, \CRestUtil::BATCH_MAX_LENGTH) as $command)
+			{
+				if (!is_string($command))
 				{
-					break;
+					return false;
+				}
+
+				$method = parse_url($command, PHP_URL_PATH);
+				if (
+					!is_string($method)
+					|| $method === ''
+					|| !in_array(mb_strtolower($method), $whiteListMethods, true)
+				)
+				{
+					return false;
 				}
 			}
-		}
-		else
-		{
-			$method = mb_strtolower(\CRestServer::instance()->getMethod());
-			$result = in_array($method, $whiteListMethods);
+
+			return true;
 		}
 
-		return $result;
+		$method = mb_strtolower(\CRestServer::instance()->getMethod());
+
+		return in_array($method, $whiteListMethods, true);
 	}
 }

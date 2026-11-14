@@ -18,21 +18,23 @@ use Bitrix\Main\Result;
  */
 final class CallCreatesCalendarEventEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.activity.call_creates_calendar_event.enabled';
+	public const ID = 'crm.activity.call_creates_calendar_event.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'is_create_calendar_event_for_call',
 		);
 	}
 

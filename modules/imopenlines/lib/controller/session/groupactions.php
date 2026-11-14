@@ -17,9 +17,12 @@ class GroupActions extends Controller
 
 	protected function getDefaultPreFilters(): array
 	{
-		return [
-			new Filter\AccessCheck(),
-		];
+		return array_merge(
+			parent::getDefaultPreFilters(),
+			[
+				new Filter\AccessCheck(),
+			]
+		);
 	}
 
 	/**

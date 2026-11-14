@@ -110,7 +110,7 @@ class QuickReplyService
 		return $result;
 	}
 
-	public function saveFromMessage(int $chatId, int $messageId, int $userId): Result
+	public function saveFromMessage(int $chatId, int $messageId, int $userId, int $lineId = 0): Result
 	{
 		$result = new Result();
 
@@ -120,7 +120,7 @@ class QuickReplyService
 		}
 
 		$operator = new Operator($chatId, $userId);
-		$operatorResult = $operator->saveToQuickAnswers($messageId);
+		$operatorResult = $operator->saveToQuickAnswers($messageId, $lineId);
 
 		if (!$operatorResult)
 		{
@@ -137,7 +137,7 @@ class QuickReplyService
 			return $result;
 		}
 
-		$result->setData(['result' => true]);
+		$result->setData(['id' => $operatorResult]);
 
 		return $result;
 	}

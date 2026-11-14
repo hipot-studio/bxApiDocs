@@ -5,12 +5,10 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
-use Bitrix\Disk\Configuration;
-use Bitrix\Disk\Document\DocumentResolveContext;
 use Bitrix\Disk\Document\DocumentSource;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
+use Bitrix\Disk\Document\Vibeoffice\OpenRoutePolicy;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
-use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
@@ -94,6 +92,20 @@ readonly class HtmlRenderableHandlerFactory
 			return new HtmlFileHandler($documentSource, $accessLevel);
 		}
 
+		$selectedVersion = $version ?? $attachedObject?->getVersion();
+		if (
+			OpenRoutePolicy::isAdditionalOfficeSource($file, $selectedVersion)
+			&& ($file->getFile()['CONTENT_TYPE'] ?? '') === 'text/plain'
+		)
+		{
+			return new FolderListHandler($this->accessService, $this->unifiedLinkUrl, $file, $currentUser);
+		}
+
+		if (DocumentViewPolicy::isAdditionalVibeofficeSource($file, $selectedVersion))
+		{
+			return $this->getDocumentHandler($file, $documentSource, $currentUser, $analytics, $deferred);
+		}
+
 		return match ($typeFile)
 		{
 			TypeFile::DOCUMENT, TypeFile::PDF => $this->getDocumentHandler(
@@ -154,11 +166,6 @@ readonly class HtmlRenderableHandlerFactory
 	 */
 	private function isHtmlViewerTarget(File $file, ?AttachedObject $attachedObject, ?Version $version): bool
 	{
-		if (!Configuration::isEnabledHtmlViewer())
-		{
-			return false;
-		}
-
 		$revision = $version ?? $attachedObject?->getVersion();
 
 		return $revision === null
@@ -176,23 +183,20 @@ readonly class HtmlRenderableHandlerFactory
 	): HtmlRenderableHandler
 	{
 		$contentType = $file->getFile()['CONTENT_TYPE'] ?? '';
+		$extension = $documentSource->getVersion()?->getExtension()
+			?? $documentSource->getAttachedObject()?->getVersion()?->getExtension()
+			?? $file->getExtension();
 
-		if ($contentType === 'text/plain' || $file->getExtension() === 'txt')
+		if ($contentType === 'text/plain' || mb_strtolower($extension) === 'txt')
 		{
 			return new FolderListHandler($this->accessService, $this->unifiedLinkUrl, $file, $currentUser);
 		}
 
-		$driver = Driver::getInstance();
-		$handlersManager = $driver->getDocumentHandlersManager();
-		$defaultDocumentHandler = DocumentViewPolicy::getDefaultHandlerForView();
 		$attachedObjectId = $documentSource->getAttachedObject()?->getId();
 
-		$documentHandler = $handlersManager->resolveEffectiveHandler(
-			$defaultDocumentHandler::getCode(),
-			DocumentResolveContext::forObject(
-				(int)$file->getId(),
-				$attachedObjectId !== null ? (int)$attachedObjectId : null,
-			),
+		$documentHandler = DocumentViewPolicy::getEffectiveHandlerForView(
+			$file,
+			$attachedObjectId !== null ? (int)$attachedObjectId : null,
 		);
 
 		if (!$documentHandler)

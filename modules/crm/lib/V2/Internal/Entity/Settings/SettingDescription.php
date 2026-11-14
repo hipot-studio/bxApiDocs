@@ -18,16 +18,18 @@ final class SettingDescription
 	 * @throws ArgumentException
 	 */
 	public function __construct(
-		public readonly string $code,
+		public readonly string $id,
 		public readonly string $title,
 		/** @var SettingSchemaInterface<TValue> */
 		public readonly SettingSchemaInterface $schema,
-		public readonly ?string $hint = null,
+		public readonly ?string $description = null,
+		public readonly ?string $note = null,
+		public readonly ?string $optionKey = null,
 	)
 	{
-		if ($this->code === '')
+		if ($this->id === '')
 		{
-			throw new ArgumentException('Code must not be empty', 'code');
+			throw new ArgumentException('Id must not be empty', 'id');
 		}
 
 		if ($this->title === '')

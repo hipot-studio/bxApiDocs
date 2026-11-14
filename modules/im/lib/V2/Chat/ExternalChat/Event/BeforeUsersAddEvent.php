@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Chat\ExternalChat\Event;
 
 use Bitrix\Im\V2\Chat\ExternalChat;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 
 class BeforeUsersAddEvent extends ChatEvent implements InitiatedByUserInterface
@@ -42,5 +43,21 @@ class BeforeUsersAddEvent extends ChatEvent implements InitiatedByUserInterface
 	public function getNewAddUsersConfig(): ?AddUsersConfig
 	{
 		return $this->getParameterFromResult('config');
+	}
+
+	/**
+	 * Users being added whom the handler asks to join muted; null when the handler says nothing.
+	 *
+	 * @return int[]|null
+	 */
+	public function getNotifyBlockUserIds(): ?array
+	{
+		$userIds = $this->getParameterFromResult('notifyBlock');
+		if (!is_array($userIds))
+		{
+			return null;
+		}
+
+		return Normalizer::toUniquePositiveIntegers($userIds);
 	}
 }

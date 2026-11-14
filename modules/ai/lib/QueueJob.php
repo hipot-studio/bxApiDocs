@@ -528,10 +528,25 @@ final class QueueJob
 			$cacheManager->store($rawResult);
 		}
 
+		$analyticData = $this->engine->getAnalyticData();
+		$status = null;
+		if (Analytics::isVoiceWidgetAudio($this->engine, $analyticData))
+		{
+			try
+			{
+				$status = Analytics::getVoiceWidgetResultStatus($this->engine->getResultFromRaw($rawResult)->getPrettifiedData());
+			}
+			catch (\Throwable)
+			{
+				$status = Analytics::VOICE_WIDGET_STATUS_ERROR_B24;
+			}
+		}
+
 		Analytics::engineGenerateResultEvent(
 			'generate',
 			$this->engine,
-			$this->engine->getAnalyticData()
+			$analyticData,
+			$status
 		);
 
 		try
@@ -638,6 +653,14 @@ final class QueueJob
 		{
 			$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_OTHER'),'AI_ENGINE_ERROR_OTHER');
 		}
+
+		Analytics::sendVoiceWidgetAudioError(
+			$this->engine,
+			$this->engine->getAnalyticData(),
+			$this->error->getCode() === 'AI_ENGINE_ERROR_PROVIDER'
+				? Analytics::VOICE_WIDGET_STATUS_ERROR_PROVIDER
+				: Analytics::VOICE_WIDGET_STATUS_ERROR_B24,
+		);
 
 		$this->sendBackendEvent(new Result(null, null), self::EVENT_FAIL);
 		$this->sendFrontendEvent(new Result(null, null), self::EVENT_FAIL);

@@ -4,12 +4,14 @@ namespace Bitrix\Call\Controller;
 
 use Bitrix\Call\Controller\ActionFilter\DenyGuest;
 use Bitrix\Call\Controller\ActionFilter\SameOrigin;
+use Bitrix\Call\Logger\Logger;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Call\Service\CallLogService;
+use Bitrix\Call\Service\Exception\InvalidFilterValueException;
 
 /**
  * @internal
@@ -55,12 +57,22 @@ class CallLog extends Controller
 	 *
 	 * @restMethod call.CallLog.list
 	 *
-	 * @param array $filter Filter parameters (STATUS, TYPE)
+	 * @param array $filter Filter parameters (STATUS, TYPE, EXCLUDE_STATUS, SEARCH). STATUS takes a status of the
+	 * journal or a list of them, EXCLUDE_STATUS one status whose rows are subtracted from the answer; a value
+	 * outside the dictionary of statuses is answered with INVALID_FILTER_VALUE.
 	 * @param int $lastId Last ID for pagination
 	 * @param int $count Number of records to return (default 50, max 100)
+	 * @param string|null $lastStatusTime statusTime of the row $lastId stands at, verbatim as this method
+	 * handed it over (DateTime::ATOM). Works only together with $lastId, because the journal is paged by
+	 * the pair; on its own it is ignored.
 	 * @return array|null
 	 */
-	public function listAction(array $filter = [], int $lastId = 0, int $count = self::DEFAULT_LIMIT): ?array
+	public function listAction(
+		array $filter = [],
+		int $lastId = 0,
+		int $count = self::DEFAULT_LIMIT,
+		?string $lastStatusTime = null
+	): ?array
 	{
 		$userId = $this->getCurrentUser()->getId();
 		if (!$userId)
@@ -80,20 +92,106 @@ class CallLog extends Controller
 			// (see CallLogService::getPage) - the clients page by the size of the answer.
 			// The drop is guest-only on purpose - for everyone else an entry without data is what the journal
 			// has always shown, and changing that belongs to its own task.
-			$calls = $this->service->getPage($userId, $filter, $lastId, $count);
+			$calls = $this->service->getPage($userId, $filter, $lastId, $count, $lastStatusTime);
 
-			// Get missed counter
-			$missedCounter = $this->service->getMissedCounter($userId);
+			$missedCounter = $this->getMissedCounterForResponse($userId, $filter, $lastId);
 			return [
 				'calls' => $calls,
 				'missedCounter' => $missedCounter
 			];
+		}
+		catch (InvalidFilterValueException $e)
+		{
+			$this->addError(new Error('Invalid filter value', 'INVALID_FILTER_VALUE'));
+			return null;
 		}
 		catch (\Exception $e)
 		{
 			$this->addError(new Error('Internal error', 'INTERNAL_ERROR'));
 			return null;
 		}
+	}
+
+	/**
+	 * Counter for the answer of the list: the first page without a search publishes it, any other request
+	 * takes it from the cache (@see CallLogService::getMissedCounterForPage()).
+	 *
+	 * A failed publication is caught here rather than by the catch around the action: the page itself was read
+	 * without a problem, and a refused side effect must not replace it with an error. The number is then
+	 * recounted rather than taken from the cache, which the publication may have left empty or failed to reach.
+	 */
+	private function getMissedCounterForResponse(int $userId, array $filter, int $lastId): int
+	{
+		try
+		{
+			return $this->service->getMissedCounterForPage($userId, $filter, $lastId);
+		}
+		catch (\Throwable $exception)
+		{
+			Logger::getInstance()->error(
+				"Failed to get the missed counter of user {$userId} for the list: {$exception->getMessage()}",
+			);
+		}
+
+		return $this->service->getMissedCounter($userId);
+	}
+
+	/**
+	 * Everyone who joined the call, for the participants layer of the journal row.
+	 *
+	 * No DenyGuest filter here: the page of the journal is open to a guest and so is the roster behind it,
+	 * bounded by the journal row of the caller and, for a guest, by the chats they are still in (@see
+	 * CallLogService::getParticipantsForUser()). Neither HttpMethod nor SameOrigin is set either: those
+	 * guard markAllAsSeen because it writes, and this action changes nothing.
+	 *
+	 * @restMethod call.CallLog.getParticipants
+	 *
+	 * @param int $sourceCallId Id of the call SESSION - the value the journal row carries under the same
+	 *                          name. The id of the journal ROW, which deleteAction() calls callId, points
+	 *                          at another thing entirely and must not be sent here.
+	 * @return array|null
+	 */
+	public function getParticipantsAction(int $sourceCallId = 0): ?array
+	{
+		$userId = $this->getCurrentUser()->getId();
+		if (!$userId)
+		{
+			$this->addError(new Error('User not authorized', 'USER_NOT_AUTHORIZED'));
+
+			return null;
+		}
+
+		if ($sourceCallId <= 0)
+		{
+			$this->addError(new Error('Invalid call ID', 'INVALID_CALL_ID'));
+
+			return null;
+		}
+
+		try
+		{
+			// A call nobody may see and a call that is not there answer alike: two errors would make the
+			// action a way of asking whether a call with such an id exists at all.
+			$participants = $this->service->getParticipantsForUser($userId, $sourceCallId);
+		}
+		catch (\Exception $e)
+		{
+			Logger::getInstance()->error(
+				"Failed to read participants of call {$sourceCallId} for user {$userId}: {$e->getMessage()}",
+			);
+			$this->addError(new Error('Internal error', 'INTERNAL_ERROR'));
+
+			return null;
+		}
+
+		if ($participants === null)
+		{
+			$this->addError(new Error('Call not found', 'CALL_NOT_FOUND'));
+
+			return null;
+		}
+
+		return ['participants' => $participants];
 	}
 
 	/**
@@ -177,7 +275,9 @@ class CallLog extends Controller
 		try
 		{
 			$deleted = $this->service->deleteEntry($userId, $callId);
-			$newCounter = $this->service->getMissedCounter($userId);
+			// A removed row has been published by deleteEntry(), which leaves the cache warm; its other exits
+			// leave the cache cold, and the read then counts the number itself.
+			$newCounter = $this->service->getCachedMissedCounter($userId);
 
 			return [
 				'deleted' => $deleted,

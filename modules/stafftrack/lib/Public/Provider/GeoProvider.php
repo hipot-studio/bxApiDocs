@@ -120,7 +120,7 @@ class GeoProvider
 		return $this->getSnapshotService()->getFilePath($fileId);
 	}
 
-	private static function buildSnapshotHash(string $sourceCode, float $latitude, float $longitude): string
+	public static function buildSnapshotHash(string $sourceCode, float $latitude, float $longitude): string
 	{
 		return sha1(implode(';', [
 			$sourceCode,

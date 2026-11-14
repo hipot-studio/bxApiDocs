@@ -2,6 +2,7 @@
 
 namespace Bitrix\StaffTrack\Public\Command\Office;
 
+use Bitrix\StaffTrack\Dictionary\OfficeErrorCode;
 use Bitrix\StaffTrack\Dictionary\OfficeGeoRadius;
 use Bitrix\StaffTrack\Internals\AbstractDto;
 use Bitrix\StaffTrack\Internals\Attribute\Enum;
@@ -28,6 +29,7 @@ use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
  * @method self setAddress(?string $address)
  * @method self setWorkTimeFrom(?int $workTimeFrom)
  * @method self setWorkTimeTo(?int $workTimeTo)
+ * @method self setTargetOfficeId(int $targetOfficeId)
  */
 final class OfficeDto extends AbstractDto
 {
@@ -50,6 +52,7 @@ final class OfficeDto extends AbstractDto
 		'address' => self::ERROR_INVALID_ADDRESS,
 		'workTimeFrom' => self::ERROR_INVALID_WORK_TIME,
 		'workTimeTo' => self::ERROR_INVALID_WORK_TIME,
+		'targetOfficeId' => OfficeErrorCode::INVALID_TRANSFER_TARGET,
 	];
 
 	#[Primary]
@@ -85,6 +88,13 @@ final class OfficeDto extends AbstractDto
 	public ?int $workTimeTo = null;
 
 	/**
+	 * Not a field of the card: the office the whole staff of a removed one goes to. Zero leaves the staff
+	 * without an office, and a creation or an edit passes it at its default.
+	 */
+	#[Min(0)]
+	public int $targetOfficeId = 0;
+
+	/**
 	 * @throws InvalidDtoException
 	 */
 	public function validateAdd(): void
@@ -116,6 +126,12 @@ final class OfficeDto extends AbstractDto
 	public function validateDelete(): void
 	{
 		$this->validatePrimary();
+		$this->validateProperty('targetOfficeId');
+
+		if ($this->targetOfficeId === $this->id)
+		{
+			throw new InvalidDtoException(OfficeErrorCode::INVALID_TRANSFER_TARGET);
+		}
 	}
 
 	/**

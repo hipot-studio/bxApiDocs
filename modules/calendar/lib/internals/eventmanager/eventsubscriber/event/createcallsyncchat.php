@@ -4,29 +4,23 @@ namespace Bitrix\Calendar\Internals\EventManager\EventSubscriber\Event;
 
 use Bitrix\Calendar\Application\Command\CreateEventCommand;
 use Bitrix\Calendar\Application\Command\UpdateEventCommand;
-use Bitrix\Calendar\Core\Event\Event as CalendarEvent;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Event\Event\AfterCalendarEventCreated;
 use Bitrix\Calendar\Event\Event\AfterCalendarEventEdited;
+use Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver;
+use Bitrix\Calendar\Internal\GuestLink\LegacyDescriptionLink;
 use Bitrix\Calendar\Internals\EventManager\EventSubscriber\EventSubscriberInterface;
 use Bitrix\Calendar\Internals\EventManager\EventSubscriber\EventSubscriberResponseTrait;
-use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Guest\GuestLinkService;
-use Bitrix\Im\V2\SharingLink\GuestChatLink;
-use Bitrix\Intranet\Secretary;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Localization\Loc;
 
 final class CreateCallSyncChat implements EventSubscriberInterface
 {
 	use EventSubscriberResponseTrait;
 	use CalendarEventSubscriberTrait;
-
-	private const GUEST_LINK_URL_MARKER = '#cal-sync-guest';
 
 	public function __invoke(Event $event): EventResult
 	{
@@ -43,10 +37,22 @@ final class CreateCallSyncChat implements EventSubscriberInterface
 			return $this->makeUndefinedResponse();
 		}
 
-		$meetingDescription = $calendarEvent->getMeetingDescription();
-		if ($meetingDescription === null)
+		if ($calendarEvent->getMeetingDescription() === null)
 		{
 			return $this->makeUndefinedResponse();
+		}
+
+		$eventId = (int)$calendarEvent->getId();
+		$organizerId = $calendarEvent->getEventHost()?->getId() ?? $command->getUserId();
+
+		// Strip any legacy marked link from DESCRIPTION on every save (strip-on-save).
+		// Runs before the attendee guards below so a legacy link is removed even when
+		// the meeting no longer has external/collab guests (the chat-ensure path does).
+		// Cheap precheck on the in-memory description skips the extra getById()+regex
+		// for the common case (no legacy marker) - only marked events pay for the strip.
+		if (LegacyDescriptionLink::isPresentIn((string)$calendarEvent->getDescription()))
+		{
+			$this->stripGuestLinkFromDescription($eventId, $organizerId);
 		}
 
 		$attendeeCodes = $calendarEvent->getAttendeesCollection()?->getAttendeesCodes() ?? [];
@@ -62,34 +68,20 @@ final class CreateCallSyncChat implements EventSubscriberInterface
 			return $this->makeSuccessResponse();
 		}
 
-		$organizerId = $calendarEvent->getEventHost()?->getId() ?? $command->getUserId();
-		$chatId = (int)($meetingDescription->getFields()['CHAT_ID'] ?? 0);
-
-		if (!empty($chatId) && !Chat::getInstance($chatId)->isExist())
-		{
-			$chatId = 0;
-		}
-
-		if (empty($chatId))
-		{
-			$chatId = Secretary::createCalendarChat(
-				[
-					'ID' => $calendarEvent->getId(),
-					'TITLE' => $calendarEvent->getName() ?? '',
-					'DATE_FROM' => $command->getDateFrom(),
-					'DT_SKIP_TIME' => $command->isSkipTime() ? 'Y' : 'N',
-					'USER_IDS' => $attendeeIds,
-					'MEETING' => $meetingDescription->getFields(),
-					'CREATED_BY' => $organizerId,
-				],
-				$organizerId,
-			);
-		}
-
-		if ($chatId > 0)
-		{
-			$this->appendGuestLinkToDescription($calendarEvent->getId(), $chatId, $organizerId);
-		}
+		// Ensure the meeting chat exists (pre-feature behavior: unconditional,
+		// no guest-link feature gate). The guest link itself is not created here -
+		// it is resolved on demand (e.g. while building the invitation email).
+		/** @var GuestLinkResolver $resolver */
+		$resolver = ServiceLocator::getInstance()->get(GuestLinkResolver::class);
+		// $eventId may be an attendee child copy; the resolver normalizes it to the
+		// canonical PARENT_ID (getEvent()) so the chat/CHAT_ID always land on the
+		// organizer's parent event - the same event web/mobile/email read the link
+		// from. Pass the already-hydrated event only when it is itself canonical (no
+		// PARENT_ID or self-referential) to skip the extra mapper load; attendee
+		// copies are left for the resolver to load and normalize.
+		$parentId = (int)($calendarEvent->getParentId() ?? 0);
+		$canonicalEvent = ($parentId === 0 || $parentId === $eventId) ? $calendarEvent : null;
+		$resolver->ensureChat($eventId, $organizerId, $canonicalEvent);
 
 		return $this->makeSuccessResponse();
 	}
@@ -124,31 +116,11 @@ final class CreateCallSyncChat implements EventSubscriberInterface
 		return $hasExternalUser;
 	}
 
-	private function appendGuestLinkToDescription(int $eventId, int $chatId, int $organizerId): void
+	private function stripGuestLinkFromDescription(int $eventId, int $organizerId): void
 	{
-		$chat = Chat::getInstance($chatId);
-		if (!$chat->isExist())
-		{
-			return;
-		}
-
-		$linkResult = GuestLinkService::getInstance()->getOrCreateLink(
-			chat: $chat,
-			authorId: $organizerId
-		);
-
-		if (!$linkResult->isSuccess())
-		{
-			return;
-		}
-
-		/** @var GuestChatLink $guestChatLink */
-		$guestChatLink = $linkResult->getResult();
-
 		/** @var Factory $mapperFactory */
 		$mapperFactory = ServiceLocator::getInstance()->get('calendar.service.mappers.factory');
 
-		/** @var CalendarEvent|null $calendarEvent */
 		$calendarEvent = $mapperFactory->getEvent()->getById($eventId);
 		if (!$calendarEvent)
 		{
@@ -156,19 +128,14 @@ final class CreateCallSyncChat implements EventSubscriberInterface
 		}
 
 		$currentDescription = (string)$calendarEvent->getDescription();
+		$cleanedDescription = LegacyDescriptionLink::cutFrom($currentDescription);
 
-		$cleanedDescription = $this->cutGuestLinkFromDescription($currentDescription);
-		$newDescription = $this->addGuestLinkToDescription(
-			$guestChatLink->getInviteUrl(),
-			$cleanedDescription,
-		);
-
-		if ($newDescription === $currentDescription)
+		if ($cleanedDescription === $currentDescription)
 		{
 			return;
 		}
 
-		$calendarEvent->setDescription($newDescription);
+		$calendarEvent->setDescription($cleanedDescription);
 
 		$mapperFactory->getEvent()->update($calendarEvent, [
 			'userId' => $organizerId,
@@ -176,49 +143,5 @@ final class CreateCallSyncChat implements EventSubscriberInterface
 			'sendInvitations' => false,
 			'sendEditNotification' => false,
 		]);
-	}
-
-	private function cutGuestLinkFromDescription(string $description): string
-	{
-		if ($description === '')
-		{
-			return '';
-		}
-
-		$marker = preg_quote(self::GUEST_LINK_URL_MARKER, '|');
-		$pattern = '|^[^\r\n]*\[URL=[^]]*' . $marker . '[^]]*].+?\[/URL][\r\n]*|ims';
-		$cleaned = preg_replace($pattern, '', $description);
-		if ($cleaned === null)
-		{
-			return $description;
-		}
-
-		return ltrim($cleaned);
-	}
-
-	private function addGuestLinkToDescription(string $url, string $description): string
-	{
-		$markedUrl = $url . self::GUEST_LINK_URL_MARKER;
-
-		$linkText = (string)Loc::getMessage(
-			'CALENDAR_CALL_SYNC_GUEST_LINK_HINT',
-			[
-				'#MARKED_URL#' => $markedUrl,
-				'#URL#' => $url
-			],
-		);
-
-		if ($linkText === '')
-		{
-			return $description;
-		}
-
-		$description = trim($description);
-		if ($description !== '')
-		{
-			return $linkText . "\r\n\r\n" . $description;
-		}
-
-		return $linkText;
 	}
 }

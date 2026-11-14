@@ -10,6 +10,7 @@ CModule::IncludeModule("crm");
 use Bitrix\Crm\Component\EntityDetails\Traits\EditorInitialMode;
 use Bitrix\Crm\Relation\RelationManager;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\StartCatalog\CreateByForm;
 use Bitrix\Main;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -274,6 +275,13 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 						$this->getPermittedToCreateCategoriesData($parts['entityTypeId']);
 					$this->arResult['ENTITY_CATEGORIES_ENABLED'][$entityName] =
 						$this->isCategoriesEnabled($parts['entityTypeId']);
+
+					$createByForm = (new CreateByForm())->getOpenParameters((int)$parts['entityTypeId']);
+					$this->arResult['ENTITY_CREATE_BY_FORM'][$entityName] = $createByForm;
+					if ($createByForm !== null)
+					{
+						Main\UI\Extension::load([CreateByForm::JS_EXTENSION]);
+					}
 				}
 			}
 		}
@@ -514,6 +522,9 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 
 	private function prepareEntityCreateUrls(): void
 	{
+		// the smart processes of the relation tabs fill it in: an item of such a type may be created
+		// by its CRM form instead of the large card
+		$this->arResult['ENTITY_CREATE_BY_FORM'] = [];
 		$this->arResult['ENTITY_CREATE_URLS'] = [
 			\CCrmOwnerType::DealName =>
 				\CCrmOwnerType::GetEntityEditPath(\CCrmOwnerType::Deal, 0, false),

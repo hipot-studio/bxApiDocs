@@ -16,6 +16,14 @@ final class Feature
 		return Option::get(Driver::INTERNAL_MODULE_ID, 'disk_vibeoffice_enabled', 'N') === 'Y';
 	}
 
+	public static function servesPortalEditing(): bool
+	{
+		return
+			VibeofficeHandler::isEnabled()
+			&& !Driver::getInstance()->getDocumentHandlersManager()->isClientServerSelected()
+		;
+	}
+
 	public static function isEnabledForContext(?DocumentResolveContext $context): bool
 	{
 		return FeaturePolicy::isEnabled(

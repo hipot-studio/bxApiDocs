@@ -12,7 +12,7 @@ use Bitrix\Main\ArgumentOutOfRangeException;
  * The two shapes of a record are kept apart here rather than at the insert. A change of an object
  * carries an operation, a resource and the fields it touched; a change of access carries no operation
  * at all and instead carries the scope of the boundary that moved and whether it reaches the
- * descendants of that scope. Building a record through one of the three constructors below is what
+ * descendants of that scope. Building a record through one of the constructors below is what
  * makes a shape that mixes the two - a tombstone without a reason, a scope without an object, a scope
  * naming an object of no known kind - impossible rather than merely unlikely.
  *
@@ -81,6 +81,41 @@ final readonly class ChangeRecord
 			resourceId: $resourceId,
 			authorId: $authorId,
 			changedFields: $changedFields,
+		);
+	}
+
+	/**
+	 * A change of the sharing or of the public access of an object: an ordinary update with a card on
+	 * reading, which additionally says whether it reaches the descendants of the object. It has no scope,
+	 * so it is not a change of access in the sense of {@see isAccessChange()}.
+	 *
+	 * @param string[] $accessCodes
+	 * @throws ArgumentOutOfRangeException
+	 */
+	public static function accessStateChange(
+		ChangeType $changeType,
+		string $resourceType,
+		int $resourceId,
+		array $accessCodes,
+		bool $affectsDescendants,
+		?int $authorId = null,
+	): self
+	{
+		if (!$changeType->isAccessState())
+		{
+			throw new ArgumentOutOfRangeException('changeType');
+		}
+
+		self::assertResourceType($resourceType);
+
+		return new self(
+			changeType: $changeType,
+			accessCodes: $accessCodes,
+			operation: self::OPERATION_UPDATE,
+			resourceType: $resourceType,
+			resourceId: $resourceId,
+			authorId: $authorId,
+			affectsDescendants: $affectsDescendants,
 		);
 	}
 

@@ -19,7 +19,7 @@ use Bitrix\Main\Result;
  */
 final class CompletedActivityProviderCodesSetting extends AbstractSetting
 {
-	public const CODE = 'crm.lead.conversion.completed_activity_provider_codes';
+	public const ID = 'crm.lead.conversion.completed_activity_provider_codes';
 
 	private readonly LeadSettings $leadSettings;
 
@@ -28,9 +28,9 @@ final class CompletedActivityProviderCodesSetting extends AbstractSetting
 		$this->leadSettings = $leadSettings ?? LeadSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -42,10 +42,12 @@ final class CompletedActivityProviderCodesSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new MultiSelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'lead_act_completion_cfg',
 		);
 	}
 

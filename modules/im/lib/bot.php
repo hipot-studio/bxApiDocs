@@ -198,6 +198,19 @@ class Bot
 			return false;
 		}
 
+		// CUser::Add() may return the id of a previous insert in the same connection when its own insert fails,
+		// so the account must be confirmed by login before it is written to the bot registry.
+		if (!self::isBotUserCreated((int)$botId, (string)$botFields['LOGIN']))
+		{
+			$systemException = new Main\SystemException(
+				'Im\Bot: bot user was not created, registration aborted'
+				. ' (botId: ' . $botId . ', module: ' . $moduleId . ', code: ' . $code . ')'
+			);
+			Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
+
+			return false;
+		}
+
 		$result = BotTable::add(Array(
 			'BOT_ID' => $botId,
 			'CODE' => $code? $code: $botId,
@@ -279,6 +292,92 @@ class Bot
 	}
 
 	/**
+	 * Checks that the given id points to the bot account created within the current registration.
+	 */
+	protected static function isBotUserCreated(int $botId, string $login): bool
+	{
+		if ($botId <= 0 || $login === '')
+		{
+			return false;
+		}
+
+		$user = Main\UserTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=ID' => $botId,
+				'=LOGIN' => $login,
+				'=EXTERNAL_AUTH_ID' => self::EXTERNAL_AUTH_ID,
+			],
+		]);
+
+		return $user !== null;
+	}
+
+	/**
+	 * Checks that the user account belongs to a bot.
+	 */
+	public static function isBotUser(int $botId): bool
+	{
+		if ($botId <= 0)
+		{
+			return false;
+		}
+
+		$user = Main\UserTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=ID' => $botId,
+				'=EXTERNAL_AUTH_ID' => self::EXTERNAL_AUTH_ID,
+			],
+		]);
+
+		return $user !== null;
+	}
+
+	/**
+	 * Removes the commands the given module bound to the id, leaving the commands of every other
+	 * module alone. Used when the id turns out to belong to a live account: the removal may clean
+	 * up after the module that asked for it and nothing beyond that.
+	 */
+	protected static function dropCommandsOfModule(int $botId, string $moduleId): void
+	{
+		if ($botId <= 0 || $moduleId === '')
+		{
+			return;
+		}
+
+		$orm = \Bitrix\Im\Model\CommandTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=BOT_ID' => $botId, '=MODULE_ID' => $moduleId],
+		]);
+		while ($row = $orm->fetch())
+		{
+			\Bitrix\Im\Command::unRegister(['COMMAND_ID' => $row['ID'], 'BOT_ID' => $botId, 'FORCE' => 'Y']);
+		}
+	}
+
+	/**
+	 * Removes the app bindings the given module bound to the id, leaving the apps of every other
+	 * module alone. Counterpart of {@see dropCommandsOfModule()} for the app surface.
+	 */
+	protected static function dropAppsOfModule(int $botId, string $moduleId): void
+	{
+		if ($botId <= 0 || $moduleId === '')
+		{
+			return;
+		}
+
+		$orm = \Bitrix\Im\Model\AppTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=BOT_ID' => $botId, '=MODULE_ID' => $moduleId],
+		]);
+		while ($row = $orm->fetch())
+		{
+			\Bitrix\Im\App::unRegister(['ID' => $row['ID'], 'FORCE' => 'Y']);
+		}
+	}
+
+	/**
 	 * @param array $bot
 	 * @return bool
 	 */
@@ -307,6 +406,28 @@ class Bot
 		if ($appId != '' && $botData->getAppId() != $appId)
 		{
 			return false;
+		}
+
+		if (!self::isBotUser($botId))
+		{
+			// The id points at an account that is not a bot, so removal may touch nothing beyond what
+			// this registration itself put there: the delete events carry the profile out to subscribed
+			// apps, and the event log, the commands and apps of every other module and the notification
+			// all act on a live person.
+			$registrationModuleId = (string)$botData->getModuleId();
+			$registrationAppId = (string)$botData->getAppId();
+
+			BotTable::delete($botId);
+			self::dropCommandsOfModule($botId, $registrationModuleId);
+			self::dropAppsOfModule($botId, $registrationModuleId);
+			if ($registrationAppId !== '')
+			{
+				\Bitrix\Im\RestBot::unbindRestEvents($botId, $registrationAppId);
+			}
+			self::clearCache();
+			\Bitrix\Main\Application::getInstance()->getTaggedCache()->clearByTag("IM_CONTACT_LIST");
+
+			return true;
 		}
 
 		$deletedBot = $botData->toArray();

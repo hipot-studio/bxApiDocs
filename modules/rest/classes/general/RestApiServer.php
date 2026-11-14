@@ -1,6 +1,8 @@
 <?php
 
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ControllerBuilder;
 use Bitrix\Main\Engine\CurrentUser;
@@ -9,7 +11,6 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\SystemException;
-use Bitrix\Rest\Engine\Access\LoadLimiter;
 use Bitrix\Rest\Engine\RestManager;
 use Bitrix\Rest\Event\Session;
 use Bitrix\Rest\RestException as LegacyRestException;
@@ -31,6 +32,7 @@ use Bitrix\Rest\V3\Exception\RateLimitException;
 use Bitrix\Rest\V3\Exception\RelationMethodNotFoundException;
 use Bitrix\Rest\V3\Exception\RestException as V3RestException;
 use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
+use Bitrix\Rest\V3\Interaction\Request\BatchReferenceCaster;
 use Bitrix\Rest\V3\Interaction\Request\BatchRequest;
 use Bitrix\Rest\V3\Interaction\Request\ServerRequest;
 use Bitrix\Rest\V3\Interaction\Response\BatchResponse;
@@ -57,6 +59,7 @@ class CRestApiServer extends CRestServer
 	 */
 	protected array $availableScopes;
 	private ?array $requestAccess = null;
+	private ?string $requestMethod = null;
 
 	protected SchemaManager $schemaManager;
 
@@ -79,6 +82,31 @@ class CRestApiServer extends CRestServer
 
 		$routes = $this->schemaManager->getRouteAliases();
 		$this->method = $routes[$this->method] ?? $this->method;
+	}
+
+	/**
+	 * A server for a call made in process on behalf of the user, e.g. by the MCP bridge.
+	 * It does not replace the singleton of the request that opened it.
+	 *
+	 * @throws AccessDeniedException
+	 */
+	public static function createForInternalCall(array $params, int $userId, string $authType): static
+	{
+		$outerInstance = self::$instance;
+		try
+		{
+			$server = new static($params);
+		}
+		finally
+		{
+			self::$instance = $outerInstance;
+		}
+
+		$server->auth = ['user_id' => $userId];
+		$server->authType = $authType;
+		$server->authData = ['user_id' => $userId, 'scope' => '', 'auth_type' => $authType];
+
+		return $server;
 	}
 
 	/**
@@ -230,13 +258,7 @@ class CRestApiServer extends CRestServer
 	 */
 	protected function processServerRequestCall(ServerRequest $request): mixed
 	{
-		$entityId = $this->getClientId() ?: $this->getPasswordId();
-
-		if (LoadLimiter::is($this->getAuthType(), $entityId, $request->getMethod()))
-		{
-			throw new RateLimitException();
-		}
-
+		$this->requestMethod = $request->getMethod();
 		$this->timeProcessStart = microtime(true);
 
 		if (ModuleManager::isModuleInstalled('bitrix24') && function_exists('getrusage'))
@@ -244,25 +266,27 @@ class CRestApiServer extends CRestServer
 			$this->usage = getrusage();
 		}
 
-		LoadLimiter::registerStarting(
-			$this->getAuthType(),
-			$entityId,
-			$request->getMethod(),
-		);
-
 		$currentUser = CurrentUser::get();
 
-		$response = $this->processRequest($request, $currentUser);
+		try
+		{
+			$response = $this->getLimiterChain()->run(fn() => $this->processRequest($request, $currentUser));
+		}
+		catch (SqlQueryException $e)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($e);
 
-		LoadLimiter::registerEnding(
-			$this->getAuthType(),
-			$entityId,
-			$request->getMethod(),
-		);
+			throw $e;
+		}
 
 		$this->timeProcessFinish = microtime(true);
 
 		return $this->processResponse($response);
+	}
+
+	protected function getLoadLimiterMethod(): ?string
+	{
+		return $this->requestMethod ?? $this->method;
 	}
 
 	/**
@@ -309,7 +333,7 @@ class CRestApiServer extends CRestServer
 		foreach ($batchRequest->getItems() as $index => $item)
 		{
 			$context = $batchResponse->getContext();
-			$httpJsonData = $this->prepareJsonData($context, $item->getQuery());
+			$httpJsonData = $this->prepareJsonData($context, $item->getQuery(), $methods[$index]->dtoFqcn);
 			$itemHttpRequest = new \Bitrix\Main\HttpRequest(\Bitrix\Main\Context::getCurrent()->getServer(), [], [], [], [], $httpJsonData);
 			$itemServerRequest = new ServerRequest($item->getMethod(), $request->getQuery(), $itemHttpRequest);
 			$itemServerRequest = $this->getRequestByMethodDescription($itemServerRequest, $methods[$index]);
@@ -325,7 +349,7 @@ class CRestApiServer extends CRestServer
 		return $batchResponse;
 	}
 
-	protected function prepareJsonData(array $context, array $queryParams): array
+	protected function prepareJsonData(array $context, array $queryParams, ?string $dtoClass = null): array
 	{
 		$getValueByPath = function ($path, $context)
 		{
@@ -348,12 +372,21 @@ class CRestApiServer extends CRestServer
 			return $current;
 		};
 
-		$replaceRef = function ($value) use ($context, $getValueByPath, &$replaceRef)
+		$referencePaths = [];
+
+		$replaceRef = function ($value, array $path = []) use (
+			$context,
+			$getValueByPath,
+			&$replaceRef,
+			&$referencePaths,
+		)
 		{
 			if (is_array($value))
 			{
 				if (isset($value['$ref']))
 				{
+					$referencePaths[] = $path;
+
 					return $getValueByPath($value['$ref'], $context);
 				}
 
@@ -391,6 +424,7 @@ class CRestApiServer extends CRestServer
 							}
 							$result[] = $item[$field];
 						}
+						$referencePaths[] = $path;
 
 						return $result;
 					}
@@ -399,13 +433,26 @@ class CRestApiServer extends CRestServer
 				}
 
 				// Рекурсивная обработка вложенных массивов
-				return array_map($replaceRef, $value);
+				$result = [];
+				foreach ($value as $key => $item)
+				{
+					$result[$key] = $replaceRef($item, [...$path, $key]);
+				}
+
+				return $result;
 			}
 
 			return $value;
 		};
 
-		return $replaceRef($queryParams);
+		$result = $replaceRef($queryParams);
+
+		if ($dtoClass !== null && $referencePaths !== [])
+		{
+			$result = (new BatchReferenceCaster($dtoClass))->cast($result, $referencePaths);
+		}
+
+		return $result;
 	}
 
 	/**
@@ -459,8 +506,14 @@ class CRestApiServer extends CRestServer
 
 		$sourceParameters = array_merge($request->getQuery(), ($methodDescription->queryParams !== null ? $methodDescription->queryParams : []));
 		$manager->registerAutoWirings($autoWirings);
-		$response = $controller->run($methodDescription->method, [$sourceParameters, ['__restServer' => $this]]);
-		$manager->unRegisterAutoWirings($autoWirings);
+		try
+		{
+			$response = $controller->run($methodDescription->method, [$sourceParameters, ['__restServer' => $this]]);
+		}
+		finally
+		{
+			$manager->unRegisterAutoWirings($autoWirings);
+		}
 
 		if ($controller->hasErrors())
 		{

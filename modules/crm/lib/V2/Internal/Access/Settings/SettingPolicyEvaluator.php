@@ -7,7 +7,8 @@ namespace Bitrix\Crm\V2\Internal\Access\Settings;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Internal\Service\Settings\SettingInterface;
 use Bitrix\Main\ArgumentException;
-use Throwable;
+use Bitrix\Main\Result;
+use LogicException;
 
 /**
  * @internal
@@ -22,7 +23,7 @@ final class SettingPolicyEvaluator
 		array $policies,
 		SettingInterface $setting,
 		UserPermissions $permissions,
-	): bool
+	): Result
 	{
 		if ($policies === [])
 		{
@@ -31,19 +32,29 @@ final class SettingPolicyEvaluator
 
 		foreach ($policies as $policy)
 		{
-			try
+			$result = $policy->check($setting, $permissions);
+			if (!$result->isSuccess())
 			{
-				if (!$policy->isAllowed($setting, $permissions))
-				{
-					return false;
-				}
-			}
-			catch (Throwable)
-			{
-				return false;
+				self::assertDenial($result);
+
+				return $result;
 			}
 		}
 
-		return true;
+		return new Result();
+	}
+
+	public static function assertDenial(Result $result): void
+	{
+		$errors = $result->getErrors();
+		if (
+			$result->isSuccess()
+			|| count($errors) !== 1
+			|| trim($errors[0]->getMessage()) === ''
+			|| trim((string)$errors[0]->getCode()) === ''
+		)
+		{
+			throw new LogicException('A setting policy denial must have exactly one error with a message and code.');
+		}
 	}
 }

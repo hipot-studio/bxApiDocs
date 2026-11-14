@@ -71,8 +71,6 @@ final class Application extends RestController
 					limit: $request->pagination?->getLimit() ?? 20,
 					offset: $request->pagination?->getOffset() ?? 0,
 				),
-//				filter: $request->filter,
-//				sort: null,
 				select: new ApplicationSelect($request->select?->getList() ?? []),
 			),
 			attributes: $request->attributes,

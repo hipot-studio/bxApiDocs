@@ -7,6 +7,7 @@ namespace Bitrix\Crm\V2\Internal\Service\Settings;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Internal\Entity\Settings\SettingRegistration;
 use Bitrix\Crm\V2\Internal\Exception\Settings\SettingNotFoundException;
+use Bitrix\Main\Result;
 
 /**
  * @internal
@@ -25,14 +26,16 @@ interface SettingRegistryInterface
 	/**
 	 * @throws SettingNotFoundException
 	 */
-	public function getRegistrationByCode(string $code): SettingRegistration;
+	public function getRegistrationById(string $id): SettingRegistration;
 
 	/** @return list<SettingRegistration> */
 	public function getReadableRegistrations(UserPermissions $permissions): array;
 
 	public function canRead(SettingRegistration $registration, UserPermissions $permissions): bool;
+	public function checkReadAccess(SettingRegistration $registration, UserPermissions $permissions): Result;
 
 	public function canWrite(SettingRegistration $registration, UserPermissions $permissions): bool;
+	public function checkWriteAccess(SettingRegistration $registration, UserPermissions $permissions): Result;
 
 	/**
 	 * @template TSetting of SettingInterface
@@ -45,7 +48,7 @@ interface SettingRegistryInterface
 	/**
 	 * @throws SettingNotFoundException
 	 */
-	public function getByCode(string $code): SettingInterface;
+	public function getById(string $id): SettingInterface;
 
 	/**
 	 * @template TValue

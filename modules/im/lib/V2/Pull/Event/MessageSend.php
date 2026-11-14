@@ -3,12 +3,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Pull\Event;
 
+use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Pull\Dto\Diff;
 use Bitrix\Im\V2\Pull\EventType;
 use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
+use Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerReader;
 
 class MessageSend extends BaseMessageEvent
 {
@@ -16,6 +19,11 @@ class MessageSend extends BaseMessageEvent
 
 	protected SendingConfig $sendingConfig;
 	protected UsersCounterMap $counters;
+
+	private ?CollabPreviewSourcePointerReader $collabPreviewSourcePointerReader = null;
+
+	/** @var int[]|null */
+	private ?array $collabPreviewSourceCandidateUserIds = null;
 
 	public function __construct(Message $message, SendingConfig $config, UsersCounterMap $counters)
 	{
@@ -69,6 +77,10 @@ class MessageSend extends BaseMessageEvent
 		else
 		{
 			$diffParams['counter'] = $this->getCounter($userId);
+			if ($this->shouldSkipRecentUpdate($userId))
+			{
+				$diffParams['skipRecentUpdate'] = true;
+			}
 		}
 
 		$diffParams['dialogId'] = $this->chat->getDialogId($userId);
@@ -98,6 +110,75 @@ class MessageSend extends BaseMessageEvent
 		}
 
 		return true;
+	}
+
+	private function shouldSkipRecentUpdate(int $userId): bool
+	{
+		if (!$this->canSkipRecentUpdate())
+		{
+			return false;
+		}
+
+		$relation = $this->chat->getRelationByUserId($userId);
+		if ($relation === null || $relation->getNotifyBlock() !== true)
+		{
+			return false;
+		}
+
+		$pointer = $this->getCollabPreviewSourcePointerReader()->read()[$userId] ?? null;
+		if ($pointer === null)
+		{
+			return false;
+		}
+
+		return $pointer['sourceChatId'] > 0 && $pointer['messageId'] > 0;
+	}
+
+	private function canSkipRecentUpdate(): bool
+	{
+		return Features::isCollabPreviewSourceEnabled()
+			&& $this->chat instanceof CollabChat
+			&& !$this->chat->hasParent()
+		;
+	}
+
+	private function getCollabPreviewSourcePointerReader(): CollabPreviewSourcePointerReader
+	{
+		$this->collabPreviewSourcePointerReader ??= new CollabPreviewSourcePointerReader(
+			(int)$this->chat->getId(),
+			$this->getCollabPreviewSourceCandidateUserIds(),
+		);
+
+		return $this->collabPreviewSourcePointerReader;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getCollabPreviewSourceCandidateUserIds(): array
+	{
+		if ($this->collabPreviewSourceCandidateUserIds !== null)
+		{
+			return $this->collabPreviewSourceCandidateUserIds;
+		}
+
+		$this->collabPreviewSourceCandidateUserIds = [];
+		foreach ($this->getRecipients() as $userId)
+		{
+			$userId = (int)$userId;
+			if (!$this->shouldRecentAddToUser($userId))
+			{
+				continue;
+			}
+
+			$relation = $this->chat->getRelationByUserId($userId);
+			if ($relation !== null && $relation->getNotifyBlock() === true)
+			{
+				$this->collabPreviewSourceCandidateUserIds[$userId] = $userId;
+			}
+		}
+
+		return array_values($this->collabPreviewSourceCandidateUserIds);
 	}
 
 	private function getCounter(int $userId): int

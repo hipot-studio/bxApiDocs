@@ -6,6 +6,7 @@ namespace Bitrix\Rest\Internal\Repository\Application;
 
 use Bitrix\Main\Entity\EntityInterface;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Repository\Exception\PersistenceException;
@@ -16,6 +17,7 @@ use Bitrix\Rest\Internal\Entity\Application\AppCollection;
 use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Entity\Application\AppLangCollection;
 use Bitrix\Rest\Internal\Entity\Application\AppOrigin;
+use Bitrix\Rest\Internal\Model\AppAccessTable;
 use Bitrix\Rest\Internal\Model\AppAttributeTable;
 use Bitrix\Rest\Internal\Model\AppFreeWhitelistTable;
 use Bitrix\Rest\Internal\Model\AppLangTable;
@@ -24,13 +26,41 @@ use Bitrix\Rest\EO_App_Collection;
 use Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection;
 use Bitrix\Rest\Internal\Model\EO_AppLang_Collection;
 use Bitrix\Rest\Internal\Repository\Mapper\AppMapper;
+use Bitrix\Rest\Internal\Service\Embedding\EmbeddingAccessSynchronizer;
 
 class AppRepository implements RepositoryInterface
 {
 	public function __construct(
 		private readonly AppMapper $mapper = new AppMapper(),
+		private readonly AppAccessRepository $accessRepository = new AppAccessRepository(),
 	)
 	{
+	}
+
+	public function findMenuApplications(bool $mobile, int $appId = 0): EO_App_Collection
+	{
+		$query = AppTable::query()
+			->setSelect([
+				'ID',
+				'CODE',
+				'CLIENT_ID',
+				'MENU_NAME' => 'LANG.MENU_NAME',
+				'MENU_NAME_DEFAULT' => 'LANG_DEFAULT.MENU_NAME',
+				'MENU_NAME_LICENSE' => 'LANG_LICENSE.MENU_NAME',
+			])
+			->where('ACTIVE', AppTable::ACTIVE)
+			->setOrder(['ID' => 'ASC'])
+		;
+		if ($mobile)
+		{
+			$query->where('MOBILE', AppTable::ACTIVE);
+		}
+		if ($appId > 0)
+		{
+			$query->where('ID', $appId);
+		}
+
+		return $query->fetchCollection();
 	}
 
 	public function getById(mixed $id): ?App
@@ -46,6 +76,7 @@ class AppRepository implements RepositoryInterface
 			$ormModel,
 			$this->createAttributeLoader(),
 			$this->createLangLoader(),
+			$this->accessRepository->getByAppIds([(int)$ormModel->getId()]),
 		);
 	}
 
@@ -67,6 +98,7 @@ class AppRepository implements RepositoryInterface
 			$ormModel,
 			$this->createAttributeLoader(),
 			$this->createLangLoader(),
+			$this->accessRepository->getByAppIds([(int)$ormModel->getId()]),
 		);
 	}
 
@@ -101,6 +133,7 @@ class AppRepository implements RepositoryInterface
 			$ormModel,
 			$this->createAttributeLoader(),
 			$this->createLangLoader(),
+			$this->accessRepository->getByAppIds([(int)$ormModel->getId()]),
 		);
 	}
 
@@ -163,7 +196,7 @@ class AppRepository implements RepositoryInterface
 		return AppRowCache::remember(
 			$ormField,
 			$value,
-			static function () use ($ormField, $value): ?array {
+			function () use ($ormField, $value): ?array {
 				$row = AppTable::query()
 					->setSelect(['*'])
 					->where($ormField, $value)
@@ -172,7 +205,14 @@ class AppRepository implements RepositoryInterface
 					->fetch()
 				;
 
-				return $row === false ? null : $row;
+				if ($row === false)
+				{
+					return null;
+				}
+
+				$row['ACCESS'] = implode(',', $this->accessRepository->getCodes((int)$row['ID']));
+
+				return $row;
 			},
 		);
 	}
@@ -184,6 +224,10 @@ class AppRepository implements RepositoryInterface
 	 */
 	public function save(EntityInterface $entity): void
 	{
+		$isNew = $entity->getId() === null;
+		$shouldSaveAccess = $isNew || $entity->isAccessChanged();
+		$shouldSyncEmbeddingAccess = $isNew || $entity->isEmbeddingAccessChanged();
+
 		try
 		{
 			$result = $this->mapper->convertToOrm($entity)->save();
@@ -206,6 +250,16 @@ class AppRepository implements RepositoryInterface
 		$this->saveAttributes($entity);
 		$this->saveExternalAttributes($entity);
 		$this->saveLangs($entity);
+		if ($shouldSaveAccess)
+		{
+			$this->saveAccess($entity);
+		}
+		if ($shouldSyncEmbeddingAccess)
+		{
+			(new EmbeddingAccessSynchronizer($this))->syncApp((int)$entity->getId());
+		}
+
+		$entity->markAccessChangesSaved();
 	}
 
 	/**
@@ -213,9 +267,6 @@ class AppRepository implements RepositoryInterface
 	 */
 	public function delete(mixed $id): void
 	{
-		AppLangTable::deleteByAppId((int)$id);
-		AppAttributeTable::deleteByAppId((int)$id);
-
 		try
 		{
 			$result = AppTable::delete($id);
@@ -258,10 +309,13 @@ class AppRepository implements RepositoryInterface
 		$ormCollection = $query->fetchCollection();
 		$appIds = $ormCollection->getIdList();
 
+		$access = $this->accessRepository->getByAppIds($appIds);
+
 		return $this->mapper->convertCollectionFromOrm(
 			$ormCollection,
 			$this->resolveAttributesArg($select, $appIds),
 			$this->resolveLangsArg($select, $appIds),
+			$access,
 		);
 	}
 
@@ -510,6 +564,21 @@ class AppRepository implements RepositoryInterface
 			$query->where($filter->getWhere());
 		}
 
+		if ($filter->getAccessFilter() !== null)
+		{
+			$query->registerRuntimeField(
+				new Reference(
+					'ACCESS_OWNER',
+					AppAttributeTable::class,
+					Join::on('this.ID', 'ref.APP_ID')
+						->where('ref.TYPE', AppAttribute::TYPE_SYSTEM)
+						->where('ref.CODE', AppAttributeCode::OwnerUserId->value),
+					Join::TYPE_LEFT,
+				)
+			);
+			$query->where($this->buildAccessCondition($filter->getAccessFilter()));
+		}
+
 		$ids = $filter->getIds();
 		if ($ids !== null)
 		{
@@ -524,6 +593,34 @@ class AppRepository implements RepositoryInterface
 		}
 
 		return $query;
+	}
+
+	private function buildAccessCondition(AppAccessFilter $accessFilter): ConditionTree
+	{
+		$userId = $accessFilter->getUserId();
+		$codes = $accessFilter->getAccessCodes();
+
+		$condition = Query::filter()->logic('or');
+
+		if (!empty($codes))
+		{
+			$condition->whereIn(
+				'ID',
+				AppAccessTable::query()
+					->setSelect(['APP_ID'])
+					->whereIn('ACCESS_CODE', $codes)
+			);
+		}
+
+		$condition->where('ACCESS_OWNER.VALUE', (string)$userId);
+
+		$condition->where(
+			Query::filter()
+				->whereNotIn('ID', AppAccessTable::query()->setSelect(['APP_ID']))
+				->whereNull('ACCESS_OWNER.ID')
+		);
+
+		return $condition;
 	}
 
 	/**
@@ -669,6 +766,31 @@ class AppRepository implements RepositoryInterface
 		foreach ($existingLangs as $orphan)
 		{
 			AppLangTable::delete($orphan->getId());
+		}
+	}
+
+	/**
+	 * @throws PersistenceException
+	 */
+	private function saveAccess(App $entity): void
+	{
+		$appId = $entity->getId();
+
+		if ($appId === null)
+		{
+			return;
+		}
+
+		$access = $entity->getAccess();
+		$codes = ($access === null || $access === '') ? [] : explode(',', $access);
+
+		try
+		{
+			$this->accessRepository->replaceCodes($appId, $codes);
+		}
+		catch (\Exception $e)
+		{
+			throw new PersistenceException('Unable to save app access codes', previous: $e);
 		}
 	}
 }

@@ -8,6 +8,8 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Mobile\Context;
+use Bitrix\Mobile\Tab\Preset\Service\AssignmentNotificationService;
+use Bitrix\Mobile\Tab\Preset\Service\MobileMenuCacheInvalidator;
 use Bitrix\Mobile\Feature\SecuritySettingsFeature;
 use Bitrix\Mobile\Feature\WhatsNewFeature;
 use Bitrix\Mobile\Menu\MenuList;
@@ -67,7 +69,7 @@ class Menu extends Controller
 	/*
 	 * @restMethod mobile.Menu.getMenu
 	 */
-	public function getMenuAction(bool $forceRefresh = false): array
+	public function getMenuAction(MobileMenuCacheInvalidator $cacheInvalidator, bool $forceRefresh = false): array
 	{
 		if (!Loader::includeModule('mobileapp'))
 		{
@@ -92,6 +94,7 @@ class Menu extends Controller
 			'userId' => $userId,
 			'extranet' => $user->isExtranet,
 			'isCollaber' => $user->isCollaber,
+			'isGuest' => $user->isGuest,
 		]);
 		$cache = new MenuListCache($context->userId);
 
@@ -108,6 +111,7 @@ class Menu extends Controller
 			'currentShift' => $this->getCurrentShift($user),
 			'portal' => $this->getPortal($user, $canUseMyCompany),
 			'supportBanners' => $this->getSupportBanners(),
+			'assignmentNotification' => (new AssignmentNotificationService($context, $cacheInvalidator))->getNotification(),
 			'ahaMoment' => $this->getAhaMoment($user, $canInvite),
 			'currentTheme' => (new ThemeProvider($userId))->getCurrentTheme(),
 			'isNewCheckInEnabled' => $checkInData['isNewCheckInEnabled'],
@@ -419,7 +423,7 @@ class Menu extends Controller
 		return $this->myCompanySections[$user->id] ??= new MyCompanyProvider($user);
 	}
 
-	public function getInitialMenuDataAction(): array
+	public function getInitialMenuDataAction(MobileMenuCacheInvalidator $cacheInvalidator): array
 	{
 		if (!Loader::includeModule('mobileapp'))
 		{
@@ -441,6 +445,7 @@ class Menu extends Controller
 			'userId' => $userId,
 			'extranet' => $user->isExtranet,
 			'isCollaber' => $user->isCollaber,
+			'isGuest' => $user->isGuest,
 		]);
 
 		$cache = new MenuListCache($context->userId);
@@ -450,6 +455,7 @@ class Menu extends Controller
 				'canInvite' => $this->canInvite($user),
 				'canUseTimeMan' => $this->canUseTimeMan($context),
 			],
+			'assignmentNotification' => (new AssignmentNotificationService($context, $cacheInvalidator))->getNotification(),
 			'ahaMoment' => (new AhaMoment())->getAvatarAhaMoment($userId),
 			'menuList' => $user->isGuest ? [] : (new MenuList($context, $cache))->build(false),
 		];

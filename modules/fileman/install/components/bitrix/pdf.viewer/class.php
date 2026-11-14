@@ -1,7 +1,12 @@
 <?php
-use Bitrix\Main\Localization\Loc;
 
-if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\UI\Extension;
+
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
 
 Loc::loadMessages(__FILE__);
 
@@ -10,11 +15,12 @@ class CDiskPdfComponent extends \CBitrixComponent
 	const DEFAULT_WIDTH = 900;
 	const DEFAULT_HEIGHT = 600;
 
-	public function executeComponent()
+	public function executeComponent(): void
 	{
 		if(empty($this->arParams['PATH']))
 		{
 			ShowError('Path is empty');
+
 			return;
 		}
 
@@ -71,12 +77,8 @@ class CDiskPdfComponent extends \CBitrixComponent
 			$this->arResult['PRINT'] = true;
 		}
 
-		$this->arResult['CSS_FILES'] = array(CUtil::GetAdditionalFileURL($this->__path.'/pdfjs/viewer.css'),);
-		$this->arResult['JS_FILES'] = array(
-			CUtil::GetAdditionalFileURL($this->__path.'/pdfjs/pdf.js'),
-			CUtil::GetAdditionalFileURL($this->__path.'/pdfjs/l10n.js'),
-			CUtil::GetAdditionalFileURL($this->__path.'/pdfjs/pdf_viewer.js')
-		);
+		$this->arResult['ASSETS'] = Extension::getAssets('fileman.pdf-viewer');
+
 		CJSCore::Init();
 		$coreScripts = CJSCore::GetCoreConfig();
 		if(!is_array($coreScripts['js']))
@@ -85,15 +87,15 @@ class CDiskPdfComponent extends \CBitrixComponent
 		}
 		foreach($coreScripts['js'] as $script)
 		{
-			$this->arResult['JS_FILES'][] = CUtil::GetAdditionalFileURL($script);
+			$this->arResult['ASSETS']['js'][] = CUtil::GetAdditionalFileURL($script);
 		}
-		$this->arResult['LOCALE_FILES'] = $this->__path.'/pdfjs/locale/locale.properties';
-		$this->arResult['PATH_TO_WORKER'] = CUtil::GetAdditionalFileURL($this->__path.'/pdfjs/pdf.worker.js');
+
+		$this->arResult['LOCALE_FILES'] = $this->__path.'/pdfjs/locale/locale.json';
 
 		$this->includeComponentTemplate();
 	}
 
-	public function getComponentId ()
+	public function getComponentId(): string
 	{
 		return mb_substr(md5(serialize($this->arParams)), 10).$this->randString();
 	}

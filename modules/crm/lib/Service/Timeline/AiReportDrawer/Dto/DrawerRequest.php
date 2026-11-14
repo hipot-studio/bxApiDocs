@@ -10,6 +10,7 @@ final readonly class DrawerRequest
 		public int $ownerId,
 		public ?int $jobId = null,
 		public ?int $assessmentSettingsId = null,
+		public ?string $targetBlock = null,
 	)
 	{
 	}

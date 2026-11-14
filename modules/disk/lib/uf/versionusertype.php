@@ -117,7 +117,11 @@ final class VersionUserType
 			{
 				$alreadyExistsValues = array($userField['VALUE']);
 			}
-			AttachedObject::detachByFilter(array('ID' => $alreadyExistsValues));
+			$userFieldManager->detachOwnAttachedObjects(
+				$alreadyExistsValues,
+				$userField['ENTITY_ID'],
+				(int)($userField['ENTITY_VALUE_ID'] ?? 0),
+			);
 			return $value;
 		}
 
@@ -170,7 +174,7 @@ final class VersionUserType
 				'IS_EDITABLE' => (int)$canUpdate,
 				'ALLOW_EDIT' => (int)$allowEdit,
 				'CREATED_BY' => $userId === false? self::getActivityUserId() : $userId,
-			), $errorCollection);
+			), $errorCollection, $file->getUploadCleanupMarkerPresenceHint());
 			if(!$attachedModel || $errorCollection->hasErrors())
 			{
 				$errorCollection->add(array(new Error(Loc::getMessage('DISK_VERSION_USER_TYPE_ERROR_COULD_NOT_FIND_ATTACHED_OBJECT'), self::ERROR_COULD_NOT_FIND_ATTACHED_OBJECT)));
@@ -265,6 +269,24 @@ final class VersionUserType
 				$errors[] = array(
 					"id" => $userField["FIELD_NAME"],
 					"text" => Loc::getMessage('DISK_VERSION_USER_TYPE_ERROR_COULD_NOT_FIND_FILE'),
+				);
+
+				return $errors;
+			}
+
+			if (
+				!UserFieldManager::hasAttachedObjectIdInValue($userField['VALUE'] ?? null, $realValue)
+				&& !$userFieldManager->canUseAttachedObject(
+					$attachedModel,
+					$userField['ENTITY_ID'],
+					(int)($userField['ENTITY_VALUE_ID'] ?? 0),
+					UserFieldManager::resolveCheckingUserId($userId),
+				)
+			)
+			{
+				$errors[] = array(
+					"id" => $userField["FIELD_NAME"],
+					"text" => Loc::getMessage('DISK_VERSION_USER_TYPE_ERROR_BAD_RIGHTS'),
 				);
 
 				return $errors;

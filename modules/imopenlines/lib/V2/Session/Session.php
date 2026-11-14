@@ -17,6 +17,7 @@ use Bitrix\Im\V2\Rest\PopupDataItem;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\Rest;
+use Bitrix\ImOpenLines\Session as LegacySession;
 use Bitrix\ImOpenLines\SilentMode\PersonalSilentMode;
 use Bitrix\ImOpenLines\V2\Status\StatusGroup;
 use Bitrix\Main\Loader;
@@ -138,6 +139,16 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 	public function isClosed(): bool
 	{
 		return $this->closed;
+	}
+
+	/**
+	 * The dialog is over for the operator: it is either really closed or waits for the client vote.
+	 * In the closing mode the session itself is not closed yet, but it is already dropped from the
+	 * operator recent list, so the operator console must treat it as finished.
+	 */
+	public function isClosedForOperator(): bool
+	{
+		return $this->isClosed() || (int)$this->getStatus() >= LegacySession::STATUS_WAIT_CLIENT;
 	}
 
 	public function setIsClosed(?bool $isClosed): self
@@ -973,6 +984,7 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 			'pinned' => $this->getPinMode(),
 			'silentMode' => $this->getSilentMode(),
 			'isClosed' => $this->isClosed(),
+			'isClosedForOperator' => $this->isClosedForOperator(),
 		];
 
 		return $rest;

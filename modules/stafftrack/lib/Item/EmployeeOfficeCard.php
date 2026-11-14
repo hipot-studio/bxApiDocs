@@ -15,6 +15,7 @@ final class EmployeeOfficeCard implements Arrayable
 		public ?string $snapshotUrl = null,
 		public ?string $address = null,
 		public ?OfficePresence $presence = null,
+		public ?OfficeWorkingHours $workingHours = null,
 	) {}
 
 	public static function available(
@@ -23,6 +24,7 @@ final class EmployeeOfficeCard implements Arrayable
 		?string $snapshotUrl,
 		?string $address = null,
 		?OfficePresence $presence = null,
+		?OfficeWorkingHours $workingHours = null,
 	): self
 	{
 		return new self(
@@ -32,6 +34,7 @@ final class EmployeeOfficeCard implements Arrayable
 			$snapshotUrl,
 			$address,
 			$presence,
+			$workingHours,
 		);
 	}
 
@@ -54,6 +57,7 @@ final class EmployeeOfficeCard implements Arrayable
 			'snapshotUrl' => $this->snapshotUrl,
 			'address' => $this->address,
 			'presence' => $this->presence?->value,
+			'workingHours' => $this->workingHours?->toArray(),
 		];
 	}
 }

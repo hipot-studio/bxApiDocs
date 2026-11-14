@@ -144,21 +144,15 @@ final class ChangesListMethodProvider extends SyncMethodProvider
 								'description' =>
 									'How many records of the page are asked for, ' . $limits->getPageSizeMax()
 									. ' by default. A value above the ceiling is refused rather than trimmed. '
-									. 'A page that asks for a heavy section is served at most '
-									. $limits->getPageSizeMaxHeavy() . ' records - a shorter page, not a '
-									. 'refusal. Both ceilings are published by disk.sync.capabilities.get.'
+									. SnapshotListMethodProvider::describeHeavyCeiling('records')
 								,
 							],
 							self::PARAMETER_SECTIONS => [
 								'type' => 'array',
 								'items' => ['type' => 'string', 'enum' => SectionsStructure::getDeclaredSections()],
-								'description' =>
-									'The sections of a card to fill on the records that carry one. '
-									. 'Everything this portal serves when the parameter is absent. A section '
-									. 'the portal declares but does not fill is refused when asked for rather '
-									. 'than answered empty, and so is a parameter the schema does not declare '
-									. 'at all.'
-								,
+								'description' => SnapshotListMethodProvider::describeSectionsParameter(
+									'The sections of a card to fill on the records that carry one.'
+								),
 							],
 						],
 					],
@@ -198,6 +192,26 @@ final class ChangesListMethodProvider extends SyncMethodProvider
 			to be dropped, a change of access says a boundary of visibility moved and names the scope to
 			look at again.
 
+			A record about a folder stands for everything under it. A move, a trashing, a restoring and
+			the deletion of a folder go down its whole subtree and give one record, on the folder: the
+			objects under it are given no records of their own, and what follows for them the client
+			works out on its own tree. A place lies under the folder when the folder is among
+			`places[].path` or is `places[].parentFolderId` - on the tree as it stands now, not on paths
+			kept from before a folder above was moved. A tombstone of a folder takes away, with all of
+			its places and without a request, every object that had a place under it reached through
+			folders alone (`reachedByLink` false). A place under it reached through a link of the
+			reader is dropped and the object is asked about by disk.sync.state.check: it may be a folder
+			of someone else whose link lay inside the deleted one, and that folder lives on. The objects
+			with no place or with a cut path are asked about the same way. A trashing and a restoring of
+			a folder change `trashed` and `trashedWithAncestor` of the places under it with no record of
+			their own: a trashing marks every such place as trashed with an ancestor, those already in
+			the trash on their own included; a restoring clears both, except on an object that stays in
+			the trash on its own - `trashed` true, `trashedWithAncestor` false - and under it. The
+			tombstone of a folder goes to the readers of the folder. Whoever held a file under it by an
+			interaction alone gets a tombstone of that file; whoever saw an object under it by an access
+			of their own and does not read the folder may get no record at all, and learns of it by
+			disk.sync.state.check.
+
 			`cursor` belongs to the pair of a user and an application, and not to the user alone. A
 			cursor handed to another application of the same user is refused with CURSOR_INVALID, the
 			same code as a cursor of another user or a damaged one. The cursor outlives the session it
@@ -235,6 +249,29 @@ final class ChangesListMethodProvider extends SyncMethodProvider
 			cannot stop the journal of a client for good. The identifier is part of the warning, because
 			that is what lets a client read the object back - by disk.sync.state.check, which is the
 			only way a warned record is ever recovered: the journal does not offer it again.
-			TEXT;
+
+			Six types report a change of the sharing or of the public access of an object:
+			sharingCreated, sharingUpdated and sharingDeleted, publicAccessEnabled, publicAccessUpdated
+			and publicAccessDisabled. Each is an ordinary update with the card of the object and one
+			more field, `affectsDescendants`: true on a folder, whose one record stands for everything
+			under it, and false on a file. The objects under a folder are not given records of their
+			own. The type names the operation - over the explicit rights of the object, or over its own
+			manual external link - and not the state it led to; the state is read from the card. So
+			a lifetime moved into the past, or given back to a link that had run out, is
+			publicAccessUpdated although the object stops or starts being public, and the deletion of
+			the own link of an object inside a public folder is publicAccessDisabled while the card
+			says the object is still public by inheritance. The card carries `access` only when the
+			request asked for it; a client that did not ask learns the state with disk.sync.state.check
+			and that section.
+
+			One operation may give such a record and a change of access together. The change of access
+			goes to those whose visibility may have moved and sends them to reconcile; the record with
+			the card goes to the readers of the object and is applied. The order of the two is not
+			guaranteed. The record of a sharing is addressed to the readers of the object before the
+			edit: a new recipient learns of the object from the change of access and the reconciliation
+			after it, and a user the object was taken from gets the change of access alone. A change on
+			a folder the caller does not read reaches nobody who reads only an object under it.
+			TEXT
+			. "\n\n" . SnapshotListMethodProvider::describeAccessSection();
 	}
 }

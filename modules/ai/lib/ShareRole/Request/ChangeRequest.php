@@ -22,12 +22,9 @@ class ChangeRequest extends CreateRequest
 		$dto->roleId = $this->roleValidator->getRoleIdNotSystemByCode($dto->roleCode, 'roleCode');
 
 		$this->roleValidator->hasRoleIdInShare($dto->roleId, 'roleCode');
-		$this->roleValidator->accessOnRole($dto->roleId, 'roleCode', (int)$this->currentUser?->getId());
+		$this->roleValidator->accessOnRole($dto->roleId, 'roleCode', $dto->userCreatorId);
+		$this->roleValidator->checkRoleAuthor($dto->roleId, 'roleCode', $dto->userCreatorId);
 
 		return $dto;
-	}
-
-	protected function checkCreator()
-	{
 	}
 }

@@ -8,14 +8,28 @@ use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Settings\Crm;
 use Bitrix\Crm\V2\Internal\Access\Settings\SettingAccessPolicyInterface;
 use Bitrix\Crm\V2\Internal\Service\Settings\SettingInterface;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 
 /**
  * @internal
  */
 final class UniversalActivityScenarioDisabledPolicy implements SettingAccessPolicyInterface
 {
-	public function isAllowed(SettingInterface $setting, UserPermissions $permissions): bool
+	public function check(SettingInterface $setting, UserPermissions $permissions): Result
 	{
-		return !Crm::isUniversalActivityScenarioEnabled();
+		$allowed = !Crm::isUniversalActivityScenarioEnabled();
+		if ($allowed)
+		{
+			return new Result();
+		}
+
+		return (new Result())->addError(
+			new Error(
+				Loc::getMessage('CRM_SETTINGS_POLICY_UNIVERSAL_ACTIVITY_SCENARIO_DISABLED_DENIED'),
+				'CRM_SETTINGS_POLICY_UNIVERSAL_ACTIVITY_SCENARIO_DISABLED_DENIED',
+			),
+		);
 	}
 }

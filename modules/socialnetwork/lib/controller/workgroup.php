@@ -15,6 +15,9 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\UserTable;
+use Bitrix\Socialnetwork\Collab\Access\CollabAccessController;
+use Bitrix\Socialnetwork\Collab\Access\CollabDictionary;
+use Bitrix\Socialnetwork\Collab\Access\Model\CollabModel;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Dialog;
 use Bitrix\Socialnetwork\EO_UserToGroup;
 use Bitrix\Socialnetwork\Helper;
@@ -29,11 +32,13 @@ use Bitrix\Socialnetwork\Internals\EventService\Push\PushEventDictionary;
 use Bitrix\Socialnetwork\Internals\EventService\Service;
 use Bitrix\Socialnetwork\Item\Subscription;
 use Bitrix\Socialnetwork\Item\Workgroup\AccessManager;
+use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\Item\WorkgroupFavorites;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\Space\MembersManager;
 use Bitrix\Socialnetwork\Space\Toolbar\Switcher\Option\Pin;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\WorkgroupPinTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 use Bitrix\Socialnetwork\WorkgroupSubjectTable;
@@ -282,6 +287,11 @@ class Workgroup extends Base
 		array $params = []
 	)
 	{
+		if (!$this->validateDateFilters($filter))
+		{
+			return null;
+		}
+
 		if (
 			empty($select)
 			|| !is_array($select)
@@ -433,6 +443,40 @@ class Workgroup extends Base
 		$workgroups = $this->convertKeysToCamelCase($workgroups);
 
 		return new Engine\Response\DataType\Page('workgroups', array_values($workgroups), $count);
+	}
+
+	private function validateDateFilters(array $filter): bool
+	{
+		$format = Context::getCurrent()->getCulture()?->getFormatDatetime()
+			?? \CLang::getDateFormat('FULL');
+
+		foreach ($filter as $key => $value)
+		{
+			if (!is_string($key) || preg_match('/^(?:>=|>|<=|<|=)?(?:DATE_CREATE|DATE_UPDATE)$/D', $key) !== 1)
+			{
+				continue;
+			}
+
+			if (!is_scalar($value) || $value === '' || (is_string($value) && strcasecmp($value, 'NOW') === 0))
+			{
+				continue;
+			}
+
+			if (
+				\CDatabase::formatDate((string)$value, $format, 'YYYY-MM-DD HH:MI:SS') === false
+				|| !\CheckDateTime((string)$value, $format)
+			)
+			{
+				$this->addError(new Error(
+					Loc::getMessage('SONET_CONTROLLER_WORKGROUP_INVALID_DATE_FILTER'),
+					'SONET_CONTROLLER_WORKGROUP_INVALID_DATE_FILTER'
+				));
+
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -1347,14 +1391,55 @@ class Workgroup extends Base
 
 	public function updateInvitedUsersAction(int $spaceId, array $users): void
 	{
-		$membersManager = new MembersManager();
-
-		if (!$membersManager->canInviteUsers($spaceId))
+		if (Feature::isNewProjectsOn())
 		{
+			$this->addError(new Error('Access denied'));
+
 			return;
 		}
 
-		$membersManager->updateInvitedUsers($spaceId, array_map(static fn($userId) => (int)$userId, $users));
+		$groupType = GroupProvider::getInstance()->getGroupType($spaceId);
+		if ($groupType === null)
+		{
+			$this->addError(new Error('Access denied'));
+
+			return;
+		}
+
+		$membersManager = new MembersManager();
+		$userIds = array_map(static fn($userId) => (int)$userId, $users);
+
+		if ($groupType === Type::Collab)
+		{
+			$invitedUserIds = [];
+			foreach ($membersManager->getGroupMembersList($spaceId) as $member)
+			{
+				if ($member['invited'])
+				{
+					$invitedUserIds[] = $member['id'];
+				}
+			}
+
+			$newUserIds = array_diff($userIds, $invitedUserIds);
+			$model = CollabModel::createFromId($spaceId)->setAddMembers(
+				array_map(static fn(int $userId): string => 'U' . $userId, $newUserIds),
+			);
+			$canInvite = CollabAccessController::getInstance($this->getCurrentUser()->getId())
+				->check(CollabDictionary::INVITE, $model);
+		}
+		else
+		{
+			$canInvite = $membersManager->canInviteUsers($spaceId);
+		}
+
+		if (!$canInvite)
+		{
+			$this->addError(new Error('Access denied'));
+
+			return;
+		}
+
+		$membersManager->updateInvitedUsers($spaceId, $userIds);
 	}
 
 	public function getGridPopupMembersAction(

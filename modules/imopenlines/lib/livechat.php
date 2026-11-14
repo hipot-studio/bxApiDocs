@@ -230,7 +230,7 @@ class LiveChat
 			$user = \Bitrix\Im\User::getInstance($messageFields['AUTHOR_ID']);
 			if ($userId == $messageFields['AUTHOR_ID'])
 			{
-				$extraFields['EXTRA_URL'] = $user->getWebsite();
+				$extraFields['EXTRA_URL'] = Tools\Url::getSafeExternalUrl($user->getWebsite()) ?? '';
 			}
 			else if (!UserV2::getInstance((int)$messageFields['AUTHOR_ID'])->isConnector() && !UserV2::getInstance((int)$messageFields['AUTHOR_ID'])->isBot())
 			{

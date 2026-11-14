@@ -305,62 +305,9 @@ class CDiskVolumeComponent extends BaseComponent
 	 */
 	protected function isNeedReload(): bool
 	{
-		// there are no running task
-		$filter = [
-			'=OWNER_ID' => $this->getUser()->getId(),
-			'=AGENT_LOCK' => [
-				Volume\Task::TASK_STATUS_RUNNING,
-				Volume\Task::TASK_STATUS_WAIT,
-			],
-		];
-		if (!$this->isAdminMode())
-		{
-			$filter['=STORAGE_ID'] = $this->getCurrentUserStorageId();
-		}
-		$workerResult = \Bitrix\Disk\Internals\VolumeTable::getList([
-			'select' => ['ID'],
-			'filter' => $filter,
-			'limit' => 1,
-		]);
-		if ($workerResult->fetch())
-		{
-			return false;
-		}
+		$storageId = $this->isAdminMode() ? null : $this->getCurrentUserStorageId();
 
-		// are there finished tasks
-		// last measure a day ago
-		$filter = [
-			'=OWNER_ID' => $this->getUser()->getId(),
-			[
-				'LOGIC' => 'OR',
-				'=AGENT_LOCK' => [
-					Volume\Task::TASK_STATUS_DONE,
-					Volume\Task::TASK_STATUS_CANCEL,
-				],
-				[
-					'LOGIC' => 'AND',
-					'=AGENT_LOCK' => [
-						Volume\Task::TASK_STATUS_NONE,
-					],
-					'<CREATE_TIME' => new \Bitrix\Main\Type\DateTime(date('Y-m-d H:i:s', strtotime('-1 days')), 'Y-m-d H:i:s'),
-				],
-			],
-		];
-		if (!$this->isAdminMode())
-		{
-			$filter['=STORAGE_ID'] = $this->getCurrentUserStorageId();
-		}
-		$workerResult = \Bitrix\Disk\Internals\VolumeTable::getList([
-			'select' => ['ID'],
-			'filter' => $filter,
-			'limit' => 1,
-		]);
-		if ($workerResult->fetch())
-		{
-			return true;
-		}
-
-		return false;
+		return (new Volume\FreshnessPolicy())->needsReload($this->getUser()->getId(), $storageId);
 	}
 
 	/**
@@ -1412,13 +1359,14 @@ class CDiskVolumeComponent extends BaseComponent
 		$filterPresetList = $this->getFilterPresetsDefinition($action);
 		$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->arResult['FILTER_ID'], $filterPresetList);
 		$filter = $filterOptions->getFilter($this->getFilterDefinition($action));
+		$filter = $this->restrictUserFilter($filter, $action);
 
 		// Predefined filter sets
 		if (isset($filter['PRESET_ID']) && $filter['FILTER_APPLIED'] == '1')
 		{
 			if ($filter['PRESET_ID'] === 'tmp_filter')
 			{
-				$this->indicatorId = $filter['indicatorId'];
+				$this->indicatorId = $filter['indicatorId'] ?? '';
 			}
 			else
 			{
@@ -1474,6 +1422,76 @@ class CDiskVolumeComponent extends BaseComponent
 		}
 
 		return $filter;
+	}
+
+	/**
+	 * Keeps only service keys and fields of the filter definition from the saved user preset.
+	 *
+	 * @param array $filter Result of \Bitrix\Main\UI\Filter\Options::getFilter.
+	 * @param string $action Component action command.
+	 *
+	 * @return array
+	 */
+	protected function restrictUserFilter(array $filter, string $action): array
+	{
+		$result = [];
+		foreach (['PRESET_ID', 'FILTER_ID', 'FILTER_APPLIED'] as $key)
+		{
+			if (array_key_exists($key, $filter))
+			{
+				$result[$key] = $filter[$key];
+			}
+		}
+		if (isset($filter['FIND']) && is_string($filter['FIND']))
+		{
+			$result['FIND'] = $filter['FIND'];
+		}
+
+		foreach ($this->getFilterDefinition($action) as $field)
+		{
+			$fieldId = $field['id'];
+			if (!isset($filter[$fieldId]))
+			{
+				continue;
+			}
+			$value = $filter[$fieldId];
+
+			if ($fieldId === 'TYPE')
+			{
+				if (!is_array($value))
+				{
+					continue;
+				}
+				$types = [];
+				foreach ($value as $type)
+				{
+					if (
+						(is_int($type) || (is_string($type) && preg_match('/^\d+$/', $type)))
+						&& isset($field['items'][(int)$type])
+					)
+					{
+						$types[] = (int)$type;
+					}
+				}
+				if (!empty($types))
+				{
+					$result[$fieldId] = $types;
+				}
+			}
+			elseif ($fieldId === 'indicatorId')
+			{
+				if (is_string($value) && isset($field['items'][$value]))
+				{
+					$result[$fieldId] = $value;
+				}
+			}
+			elseif (is_string($value))
+			{
+				$result[$fieldId] = $value;
+			}
+		}
+
+		return $result;
 	}
 
 

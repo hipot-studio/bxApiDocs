@@ -8,5 +8,6 @@ enum DocumentService: string
 	case OnlyOffice = 'onlyoffice';
 	case FlipChart = 'flipchart';
 	case Vibeoffice = 'vibeoffice';
+	case HtmlEditor = 'html';
 
 }

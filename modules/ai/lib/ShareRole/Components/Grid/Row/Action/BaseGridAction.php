@@ -77,6 +77,11 @@ abstract class BaseGridAction extends BaseAction
 		return null;
 	}
 
+	protected function isRoleAuthor(array $rawFields): bool
+	{
+		return (int)($rawFields['AUTHOR_ID'] ?? 0) === (int)$this->getCurrentUser()->getId();
+	}
+
 	protected function getCurrentUser(): CurrentUser
 	{
 		return CurrentUser::get();

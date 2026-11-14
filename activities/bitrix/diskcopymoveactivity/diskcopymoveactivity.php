@@ -94,6 +94,37 @@ class CBPDiskCopyMoveActivity
 		return false;
 	}
 
+	/**
+	 * A link refuses to be copied (e.g. a group disk connected to the user), so the object it points to
+	 * is copied under the name of the link.
+	 */
+	private function copyObject(
+		\Bitrix\Disk\BaseObject $sourceObject,
+		\Bitrix\Disk\Folder $folder,
+		$operator,
+	): ?\Bitrix\Disk\BaseObject
+	{
+		$copiedObject = $sourceObject->getRealObject()?->copyTo($folder, $operator, true);
+		if ($copiedObject && $sourceObject->isLink())
+		{
+			$copiedObject->rename($sourceObject->getName(), true);
+		}
+
+		return $copiedObject;
+	}
+
+	private function getOperationErrorMessage(\Bitrix\Disk\BaseObject $sourceObject): string
+	{
+		$failedObject = $this->Operation == 'move' ? $sourceObject : $sourceObject->getRealObject();
+		$message = (string)GetMessage('BPDCM_OPERATION_ERROR');
+		$errors = array_map(
+			static fn(\Bitrix\Main\Error $error): string => $error->getMessage(),
+			$failedObject?->getErrors() ?? [],
+		);
+
+		return $errors ? $message . ' ' . implode(' ', $errors) : $message;
+	}
+
 	public function Execute()
 	{
 		if (!CModule::IncludeModule("disk"))
@@ -127,18 +158,20 @@ class CBPDiskCopyMoveActivity
 
 			if ($this->Operation == 'move')
 			{
-				$sourceObject = $sourceObject->moveTo($folder, $operator, true);
+				$resultObject = $sourceObject->moveTo($folder, $operator, true);
 			}
 			else
 			{
-				$sourceObject = $sourceObject->copyTo($folder, $operator, true);
+				$resultObject = $this->copyObject($sourceObject, $folder, $operator);
 			}
 
-			if (!$sourceObject)
+			if (!$resultObject)
 			{
-				$this->WriteToTrackingService(GetMessage('BPDCM_OPERATION_ERROR'));
+				$this->WriteToTrackingService($this->getOperationErrorMessage($sourceObject));
 				continue;
 			}
+
+			$sourceObject = $resultObject;
 
 			$isFolder = ($sourceObject instanceof \Bitrix\Disk\Folder);
 

@@ -8,10 +8,20 @@ use Bitrix\Disk\Internal\Enum\SharingMemberType;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkScenarioRegistry;
 use Bitrix\Disk\Internal\Service\ExternalLink\MailAttachmentLinkContract;
 use Bitrix\Disk\Internal\Service\Folder\MailAttachmentsFolderPredicate;
+use Bitrix\Disk\Internal\Service\Sync\Access\PublicAccessPublisher;
 use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
 use Bitrix\Disk\Internal\Service\Sync\Journal\JournalWriter;
 use Bitrix\Disk\Internal\Service\Sync\Journal\TombstoneReason;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UniqueCodeBackfiller;
+use Bitrix\Disk\Internal\Service\Audit\AuditObjectEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
+use Bitrix\Disk\Internal\Service\Audit\AuditPublicLinkEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionException;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionResult;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\Entity\ModelSynchronizer;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectNameService;
@@ -24,6 +34,7 @@ use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Ui\Avatar;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\AddResult;
@@ -40,8 +51,12 @@ use Bitrix\Main\UserTable;
 
 abstract class BaseObject extends Internals\Model implements \JsonSerializable
 {
-	public const ERROR_NON_UNIQUE_NAME               = 'DISK_OBJ_22000';
-	public const ERROR_RESTORE_UNDER_LINK_WRONG_TYPE = 'DISK_OBJ_22001';
+	public const ERROR_NON_UNIQUE_NAME                  = 'DISK_OBJ_22000';
+	public const ERROR_RESTORE_UNDER_LINK_WRONG_TYPE    = 'DISK_OBJ_22001';
+	public const ERROR_MOVE_ROLLBACK_FAILED             = 'DISK_OBJ_22002';
+	public const ERROR_MOVE_RIGHTS_TRANSFER_FAILED      = 'DISK_OBJ_22003';
+	public const ERROR_EXTERNAL_LINK_ON_STORAGE_ROOT    = 'DISK_OBJ_22004';
+	public const ERROR_MOVE_INSIDE_EXTERNAL_TRANSACTION = 'DISK_OBJ_22005';
 
 	/** @var string */
 	protected $name;
@@ -99,6 +114,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	protected $deleteUser;
 	/** @var string|null */
 	protected $uniqueCode;
+	protected bool $hasUploadCleanupMarker = false;
 	protected ?array $objectOptions = null;
 
 	/**
@@ -109,6 +125,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 *
 	 * Set by the cascade itself - {@see Folder::deleteTree()}, {@see Folder::restore()} - because the
 	 * root of an operation is known to the code running it and cannot be told from the state of a row.
+	 * A restore from the depth of a trashed folder sets it too, on the folders of the chain it trashes
+	 * again only to restore them a moment later {@see recalculateDeletedTypeAfterRestore()}.
 	 */
 	protected bool $journalCascadeChild = false;
 
@@ -319,6 +337,17 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		return $this->uniqueCode;
 	}
 
+	protected function update(array $data)
+	{
+		$hasUploadCleanupMarker = $this->getUploadCleanupMarkerPresenceHint();
+		if ($hasUploadCleanupMarker !== null)
+		{
+			$data['HAS_UPLOAD_CLEANUP_MARKER'] = $hasUploadCleanupMarker ? 1 : 0;
+		}
+
+		return parent::update($data);
+	}
+
 	/**
 	 * Returns id of user, who deleted object.
 	 * @return int
@@ -390,6 +419,19 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function getRealObjectId()
 	{
 		return $this->isLink() ? $this->realObjectId : $this->id;
+	}
+
+	public function getUploadCleanupMarkerPresenceHint(): ?bool
+	{
+		if (!$this->isLoadedAttribute('hasUploadCleanupMarker'))
+		{
+			return null;
+		}
+
+		return (new MarkerService())->markerPresenceHint(
+			(int)$this->getId(),
+			$this->hasUploadCleanupMarker,
+		);
 	}
 
 	/**
@@ -573,9 +615,28 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @return bool|ExternalLink
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function addExternalLink(array $data)
+	public function addExternalLink(array $data, ?AuditTransaction $auditTransaction = null)
 	{
 		$this->errorCollection->clear();
+		$cleanupObject = $this->getRealObject();
+		if ($cleanupObject?->isRoot())
+		{
+			$this->errorCollection[] = new Error(
+				Loc::getMessage('DISK_OBJECT_MODEL_ERROR_EXTERNAL_LINK_ON_STORAGE_ROOT'),
+				self::ERROR_EXTERNAL_LINK_ON_STORAGE_ROOT,
+			);
+
+			return false;
+		}
+		$cleanupObjectId = (int)($cleanupObject?->getId() ?: $this->getId());
+		$hasCleanupMarker = $cleanupObject?->getUploadCleanupMarkerPresenceHint();
+		$markerService = new MarkerService();
+		if (!$markerService->revokeBeforeUse($cleanupObjectId, $hasCleanupMarker))
+		{
+			$this->errorCollection[] = new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED);
+
+			return false;
+		}
 
 		$data['OBJECT_ID'] = $this->id;
 
@@ -602,15 +663,82 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			$data = MailAttachmentLinkContract::applyTo($data);
 		}
 
-		$addResult = ExternalLink::add($data, $this->errorCollection);
+		$mutation = function () use ($data, $markerService, $cleanupObjectId, $hasCleanupMarker) {
+			$addResult = ExternalLink::add(
+				$data,
+				$this->errorCollection,
+				$markerService->markerPresenceHint($cleanupObjectId, $hasCleanupMarker ?? true),
+			);
+			if (!$addResult)
+			{
+				return null;
+			}
 
-		if ($addResult)
-		{
+			$authorId = isset($data['CREATED_BY']) ? (int)$data['CREATED_BY'] : null;
+			$auditResult = (new AuditPublicLinkEventProducer())->publishCreated($addResult, $authorId);
+			if (!$this->applyAuditResult($auditResult))
+			{
+				return null;
+			}
+
+			(new PublicAccessPublisher())->publishEnabled($addResult, $authorId);
+
+			return $addResult;
+		};
+		$afterCommit = function () use ($data): void {
 			$event = new Event(Driver::INTERNAL_MODULE_ID, 'onAfterAddExternalLinkToObject', [$this, $data]);
 			$event->send();
+		};
+
+		if ($auditTransaction !== null)
+		{
+			$addResult = $this->runAuditCoveredMutation($mutation);
+			if ($addResult)
+			{
+				$auditTransaction->addAfterCommit($afterCommit);
+			}
+
+			return $addResult;
 		}
 
-		return $addResult;
+		$transactionResult = (new AuditTransaction(Application::getConnection()))->execute(
+			function (AuditTransaction $transaction) use ($mutation, $afterCommit): AuditTransactionOutcome {
+				$addResult = $mutation();
+				if (!$addResult)
+				{
+					return AuditTransactionOutcome::failure(null);
+				}
+
+				$transaction->addAfterCommit($afterCommit);
+
+				return AuditTransactionOutcome::success($addResult);
+			},
+		);
+
+		if ($transactionResult->isSuccess())
+		{
+			return $transactionResult->getOutcome()->getValue();
+		}
+
+		$this->applyAuditTransactionFailure($transactionResult);
+
+		return null;
+	}
+
+	private function applyAuditTransactionFailure(AuditTransactionResult $result): void
+	{
+		$exception = $result->getExceptions()[0] ?? null;
+		if ($exception !== null)
+		{
+			$this->errorCollection[] = new Error($exception->getMessage());
+
+			return;
+		}
+
+		if (!$result->isRollbackConfirmed())
+		{
+			$this->errorCollection[] = new Error('External link transaction failed.');
+		}
 	}
 
 	/**
@@ -733,17 +861,27 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$now = new DateTime();
 
 		$oldName = $this->name;
-		$success = $this->update([
-			'NAME' => $newName,
-			'SYNC_UPDATE_TIME' => $now,
-			'UPDATE_TIME' => $now,
-		]);
+		$success = $this->runAuditCoveredMutation(function () use ($newName, $now, $oldName): bool {
+			$success = $this->update([
+				'NAME' => $newName,
+				'SYNC_UPDATE_TIME' => $now,
+				'UPDATE_TIME' => $now,
+			]);
+			if (!$success)
+			{
+				return false;
+			}
+
+			$auditResult = (new AuditObjectEventProducer())->publishRenamed($this, $oldName, $newName);
+
+			return $this->applyAuditResult($auditResult);
+		});
 		if (!$success)
 		{
 			return false;
 		}
-		$this->label = null;
 
+		$this->label = null;
 		Driver::getInstance()->getIndexManager()->changeName($this);
 		Driver::getInstance()->sendChangeStatusToSubscribers($this, 'quick');
 		$this->publishRenameToJournal();
@@ -876,6 +1014,53 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	abstract public function copyTo(Folder $targetFolder, $updatedBy, $generateUniqueName = false);
 
 	/**
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()): what the
+	 *                       content copied inside the transaction is judged by. A model writing no content
+	 *                       of its own leaves them unread.
+	 */
+	protected function copyToInsideAuditTransaction(
+		Folder $targetFolder,
+		$updatedBy,
+		bool $generateUniqueName,
+		AuditTransaction $auditTransaction,
+		bool $publishRootAudit,
+		array $options = [],
+	): ?BaseObject
+	{
+		return $this->copyTo($targetFolder, $updatedBy, $generateUniqueName);
+	}
+
+	protected function unwrapAuditCommandResult(AuditTransactionResult $result): mixed
+	{
+		$callbackException = $result->getCallbackException();
+		if (
+			$callbackException !== null
+			&& $result->isRollbackConfirmed()
+			&& count($result->getCallbackExceptions()) === 1
+			&& $result->getCompensationExceptions() === []
+		)
+		{
+			throw $callbackException;
+		}
+
+		if (
+			$result->isRollbackConfirmed()
+			&& $result->getCallbackExceptions() === []
+			&& $result->getCompensationExceptions() === []
+		)
+		{
+			return $result->getOutcome()->getValue();
+		}
+
+		if ($result->isSuccess())
+		{
+			return $result->getOutcome()->getValue();
+		}
+
+		throw new AuditTransactionException($result);
+	}
+
+	/**
 	 * A write which carries a name is refused by the index over the pair of name and parent, so it means
 	 * a name already taken in the folder. The other unique index of the table guards the unique code and
 	 * keeps the generic error.
@@ -916,6 +1101,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	/**
 	 * Moves object to another folder.
 	 * Support cross-storage move (mark deleted + create new)
+	 * A cross-storage move inside an open database transaction runs under a savepoint of its own; it is refused
+	 * inside an active audit transaction.
 	 * @param Folder $folder             Destination folder.
 	 * @param int    $movedBy            User id of user, which move file.
 	 * @param bool   $generateUniqueName Generates unique name for object if in destination directory.
@@ -937,6 +1124,20 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		$realStorageIdSource = $this->getStorageId();
 		$realStorageIdTarget = $folder->getRealObject()->getStorageId();
+		$oldParentId = (int)$this->getParentId();
+
+		if (AuditOperationContextStack::current() === null)
+		{
+			return AuditOperationContextStack::runWithContext(
+				AuditOperationContext::create(
+					actionKind: $realStorageIdSource == $realStorageIdTarget
+						? AuditOperationContext::ACTION_EXPLICIT_MOVE
+						: AuditOperationContext::ACTION_CROSS_STORAGE_MOVE,
+					selectedTargetIds: [(string)$this->getId()],
+				),
+				fn() => $this->moveTo($folder, $movedBy, $generateUniqueName),
+			);
+		}
 
 		$realFolderId = $folder->getRealObject()->getId();
 		if($this->getParentId() == $realFolderId)
@@ -968,18 +1169,68 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		$possibleNewName = $result->getName();
 
-		//simple move
-		if($realStorageIdSource == $realStorageIdTarget)
+		$formatPolicyError = $this->findFormatPolicyErrorForMove((int)$movedBy);
+		if ($formatPolicyError)
 		{
-			$object = $this->moveInSameStorageUnderName($folder, $movedBy, $possibleNewName, $generateUniqueName);
+			$this->errorCollection[] = $formatPolicyError;
+
+			return null;
 		}
-		else
+
+		if ($realStorageIdSource != $realStorageIdTarget)
 		{
-			// the cross-storage branch copies the object into the target folder under this name and trashes
-			// the original, so the row of the source folder keeps its own name and is never renamed here
-			$this->name = $possibleNewName;
-			$object = $this->moveInAnotherStorage($folder, $movedBy);
+			return $this->moveToAnotherStorageInsideAuditTransaction(
+				$folder,
+				$movedBy,
+				$possibleNewName,
+				$realStorageIdSource,
+				$oldParentId,
+			);
 		}
+
+		$object = $this->runAuditCoveredMutation(function (AuditTransaction $transaction) use (
+			$folder,
+			$movedBy,
+			$possibleNewName,
+			$generateUniqueName,
+			$realStorageIdSource,
+			$oldParentId
+		) {
+			$object = $this->moveInSameStorageUnderName(
+				$folder,
+				$movedBy,
+				$possibleNewName,
+				$generateUniqueName,
+				$transaction,
+			);
+
+			if($object === null)
+			{
+				return null;
+			}
+			$transaction->addCompensation(function (): void {
+				$sourceRow = ObjectTable::getByPrimary($this->getId())->fetch();
+				if ($sourceRow)
+				{
+					$this->setAttributes($sourceRow);
+				}
+			});
+
+			$auditResult = (new AuditObjectEventProducer())->publishMoved(
+				$object,
+				(int)$movedBy,
+				$oldParentId,
+				(int)$object->getParentId(),
+				(int)$realStorageIdSource,
+				(int)$object->getStorageId()
+			);
+			if (!$this->applyAuditResult($auditResult))
+			{
+				return null;
+			}
+
+			return $object;
+		});
 
 		if($object !== null)
 		{
@@ -1000,6 +1251,110 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	}
 
 	/**
+	 * Returns the refusal of the format policy of the one moving for what this object carries, or
+	 * null when the move is allowed. Asked before anything of the move is written, whether the move
+	 * stays within the storage or crosses to another one.
+	 *
+	 * @param int $movedBy User id of user, which moves object.
+	 * @return Error|null
+	 */
+	protected function findFormatPolicyErrorForMove(int $movedBy): ?Error
+	{
+		return null;
+	}
+
+	private function moveToAnotherStorageInsideAuditTransaction(
+		Folder $folder,
+		$movedBy,
+		string $possibleNewName,
+		int $realStorageIdSource,
+		int $oldParentId,
+	): ?BaseObject
+	{
+		$connection = Application::getConnection();
+		$transaction = new AuditTransaction($connection);
+		$insideAuditTransaction = AuditTransaction::isActive($connection);
+		$insideSavepoint = !$insideAuditTransaction && $transaction->canExecuteInsideSavepoint();
+		if ($insideAuditTransaction || (!$insideSavepoint && $transaction->hasOpenDatabaseTransaction()))
+		{
+			$this->errorCollection[] = new Error(
+				Loc::getMessage('DISK_OBJECT_MODEL_ERROR_MOVE_INSIDE_EXTERNAL_TRANSACTION'),
+				self::ERROR_MOVE_INSIDE_EXTERNAL_TRANSACTION,
+			);
+
+			return null;
+		}
+
+		$execute = $insideSavepoint
+			? $transaction->executeInsideSavepoint(...)
+			: $transaction->execute(...);
+		$originalName = $this->name;
+		$newObject = null;
+		$result = $execute(
+			function (AuditTransaction $transaction) use (
+				$folder,
+				$movedBy,
+				$possibleNewName,
+				$realStorageIdSource,
+				$oldParentId,
+				&$newObject,
+			): AuditTransactionOutcome {
+				$this->name = $possibleNewName;
+
+				$object = $this->moveInAnotherStorage($folder, $movedBy, $transaction, $newObject);
+				if ($object === null)
+				{
+					return AuditTransactionOutcome::failure();
+				}
+
+				if (!$folder->changeSelfUpdateTime())
+				{
+					$this->errorCollection->add($folder->getErrors());
+
+					return AuditTransactionOutcome::failure();
+				}
+
+				$auditResult = (new AuditObjectEventProducer())->publishMoved(
+					$this,
+					(int)$movedBy,
+					$oldParentId,
+					(int)$object->getParentId(),
+					$realStorageIdSource,
+					(int)$object->getStorageId(),
+				);
+				if (!$this->applyAuditResult($auditResult))
+				{
+					return AuditTransactionOutcome::failure();
+				}
+
+				$transaction->addAfterCommit(function (): void {
+					$event = new Event(Driver::INTERNAL_MODULE_ID, 'onAfterMoveObject', [$this]);
+					$event->send();
+				});
+
+				return AuditTransactionOutcome::success($object);
+			},
+		);
+
+		if ($result->isRollbackConfirmed())
+		{
+			$sourceRow = ObjectTable::getByPrimary($this->getId())->fetch();
+			if ($sourceRow)
+			{
+				// the row brings the id back as a string, while the id itself cannot change
+				unset($sourceRow['ID']);
+				$this->setAttributes($sourceRow);
+			}
+			else
+			{
+				$this->name = $originalName;
+			}
+		}
+
+		return $this->unwrapMoveToAnotherStorageResult($result, $newObject, $folder);
+	}
+
+	/**
 	 * Moves the object and only then gives it the name prepared for the target folder.
 	 * The prepared name is free in the target folder, but can be taken in the source one, and the unique index
 	 * of the object table covers the pair of name and parent, so renaming before the move breaks on a collision
@@ -1011,7 +1366,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		Folder $folder,
 		$movedBy,
 		string $preparedName,
-		bool $generateUniqueName
+		bool $generateUniqueName,
+		?AuditTransaction $auditTransaction = null,
 	)
 	{
 		$originalName = $this->name;
@@ -1022,7 +1378,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			return null;
 		}
 
-		$object = $this->moveInSameStorage($folder, $movedBy);
+		$object = $this->moveInSameStorage($folder, $movedBy, $auditTransaction);
 		if ($object === null)
 		{
 			if ($needToRename)
@@ -1096,7 +1452,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @return $this|null
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	protected function moveInSameStorage(Folder $folder, $movedBy)
+	protected function moveInSameStorage(
+		Folder $folder,
+		$movedBy,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$driver = Driver::getInstance();
 		$subscriberManager = $driver->getSubscriberManager();
@@ -1108,7 +1468,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		/** @var ObjectTable $tableClassName */
 		$tableClassName = $this->getTableClassName();
 
-		$moveResult = $tableClassName::move($this->id, $realFolderId);
+		$moveResult = $tableClassName::move(
+			$this->id,
+			$realFolderId,
+			$this->getRealObject()->getUploadCleanupMarkerPresenceHint(),
+		);
 		if(!$moveResult->isSuccess())
 		{
 			foreach($moveResult->getErrors() as $error)
@@ -1130,60 +1494,213 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 		$this->setAttributesFromResult($moveResult);
 
-		$driver->getRightsManager()->setAfterMove($this, $rightsCodesBeforeMove);
+		$driver->getRightsManager()->setAfterMove($this, $rightsCodesBeforeMove, $auditTransaction);
 
 		$subscribersAfterMove = $subscriberManager->collectSubscribersSmart($this);
-		$driver->getDeletedLogManager()->markAfterMove(
-			$this,
-			array_unique(array_diff($subscribersBeforeMove, $subscribersAfterMove)),
-			$movedBy,
-		);
-		//notify new subscribers (in DeletedLog we notify subscribers only missed access)
-		if($this instanceof Folder)
-		{
-			$driver->cleanCacheTreeBitrixDisk(array_keys($subscribersAfterMove));
-		}
-		$driver->sendChangeStatus($subscribersAfterMove);
-
 		ObjectTable::updateSyncTime($this->id, new DateTime());
-		$driver->sendChangeStatus($subscriberManager->collectSubscribersFromSubtree($this));
+		$afterCommit = function () use (
+			$driver,
+			$subscriberManager,
+			$subscribersBeforeMove,
+			$subscribersAfterMove,
+			$movedBy,
+		): void {
+			$driver->getDeletedLogManager()->markAfterMove(
+				$this,
+				array_unique(array_diff($subscribersBeforeMove, $subscribersAfterMove)),
+				$movedBy,
+			);
+			if($this instanceof Folder)
+			{
+				$driver->cleanCacheTreeBitrixDisk(array_keys($subscribersAfterMove));
+			}
+			$driver->sendChangeStatus($subscribersAfterMove);
+			$driver->sendChangeStatus($subscriberManager->collectSubscribersFromSubtree($this));
+		};
+		if ($auditTransaction !== null)
+		{
+			$auditTransaction->addAfterCommit($afterCommit);
+		}
+		else
+		{
+			$afterCommit();
+		}
 
 		return $this;
 	}
 
 	/**
 	 * Simple logic: create copy in another storage and move in trash can.
-	 * If we have problem - stop.
-	 * Return new object.
+	 * Move counts as done only after the source is in the trash can: a step which failed on the way
+	 * answers with a refusal, and the audit transaction of the move takes the copy back.
 	 * @param Folder $targetFolder
 	 * @param int    $movedBy
+	 * @param AuditTransaction $auditTransaction Transaction of the move.
+	 * @param BaseObject|null $newObject Receives the copy once it exists, so that the caller can name it
+	 * when the transaction fails to take it back.
 	 * @return null|BaseObject
 	 */
-	protected function moveInAnotherStorage(Folder $targetFolder, $movedBy)
+	protected function moveInAnotherStorage(
+		Folder $targetFolder,
+		$movedBy,
+		AuditTransaction $auditTransaction,
+		?BaseObject &$newObject = null,
+	)
 	{
-		$newObject = $this->copyTo($targetFolder, $movedBy);
+		$newObject = $this->copyForMove($targetFolder, $movedBy, $auditTransaction);
 		if(!$newObject)
 		{
 			return null;
 		}
 
-		$newObject->update([
+		if (!$newObject->update([
 			'UPDATE_TIME'  => $this->getUpdateTime(),
 			'CREATE_TIME'  => $this->getCreateTime(),
-		]);
-
-		if($newObject->getErrors())
+		]))
 		{
 			$this->errorCollection->add($newObject->getErrors());
-			return $newObject;
-		}
-		$rightsManager = Driver::getInstance()->getRightsManager();
-		$specificRights = $rightsManager->getSpecificRights($this);
-		$rightsManager->set($newObject, $specificRights);
 
-		$this->markDeleted($movedBy);
+			return null;
+		}
+
+		if (!$this->transferSpecificRights($newObject, $auditTransaction))
+		{
+			return null;
+		}
+
+		if (!$this->markDeletedInsideAuditTransaction($movedBy, $auditTransaction))
+		{
+			return null;
+		}
 
 		return $newObject;
+	}
+
+	protected function markDeletedInsideAuditTransaction(
+		$movedBy,
+		AuditTransaction $auditTransaction,
+	): bool
+	{
+		return $this->markDeleted($movedBy);
+	}
+
+	/**
+	 * Carries the own rights of the source over to the copy the move has created.
+	 * A refusal and a throw mean the same thing here: the copy has rights it should not have, so both
+	 * name the failure and let the caller roll the copy back. The text of a throw reaches the log alone:
+	 * errors of the model travel to the client.
+	 * @param BaseObject $newObject Copy created by the move.
+	 * @param AuditTransaction $auditTransaction Transaction of the move.
+	 * @return bool
+	 */
+	protected function transferSpecificRights(BaseObject $newObject, AuditTransaction $auditTransaction)
+	{
+		$rightsManager = $this->getRightsManager();
+		try
+		{
+			$specificRights = $rightsManager->getSpecificRights($this);
+			if($rightsManager->set($newObject, $specificRights, $auditTransaction, isServiceEdit: true))
+			{
+				return true;
+			}
+
+			$this->errorCollection->add($rightsManager->getErrors());
+		}
+		catch(\Throwable $exception)
+		{
+			$this->writeRightsTransferFailure($newObject, $exception);
+		}
+
+		$this->errorCollection[] = new Error(
+			Loc::getMessage('DISK_OBJECT_MODEL_ERROR_MOVE_RIGHTS_TRANSFER_FAILED'),
+			self::ERROR_MOVE_RIGHTS_TRANSFER_FAILED,
+			array(
+				'objectId' => $newObject->getId(),
+			)
+		);
+
+		return false;
+	}
+
+	protected function writeRightsTransferFailure(BaseObject $newObject, \Throwable $exception): void
+	{
+		Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+		(new \Bitrix\Main\Diag\LoggerFactory())
+			->createById('disk.move')
+			?->warning('Rights transfer of a cross-storage move failed', [
+				'objectId' => (int)$this->getId(),
+				'copyId' => (int)$newObject->getId(),
+				'exception' => $exception,
+			])
+		;
+	}
+
+	/**
+	 * Result of the audit transaction of a cross-storage move.
+	 * A transaction whose database rollback failed leaves the copy in the target folder. That does not turn
+	 * the unfinished move into a success: it is a refusal with an error to write down on the calling side.
+	 * A failed compensation runs after the rows of the copy are already rolled back, so it says nothing
+	 * about the copy and, like every other failure of the transaction, keeps its exception.
+	 * @param AuditTransactionResult $result Result of the move transaction.
+	 * @param BaseObject|null $newObject Copy created by the move, if it got that far.
+	 * @param Folder $targetFolder Destination folder.
+	 * @return BaseObject|null
+	 */
+	protected function unwrapMoveToAnotherStorageResult(
+		AuditTransactionResult $result,
+		?BaseObject $newObject,
+		Folder $targetFolder,
+	): ?BaseObject
+	{
+		try
+		{
+			return $this->unwrapAuditCommandResult($result);
+		}
+		catch (AuditTransactionException $exception)
+		{
+			if ($result->getStatus() !== AuditTransactionResult::STATUS_ROLLBACK_FAILED || $newObject === null)
+			{
+				throw $exception;
+			}
+
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+		}
+
+		$this->errorCollection[] = new Error(
+			Loc::getMessage('DISK_OBJECT_MODEL_ERROR_MOVE_ROLLBACK_FAILED'),
+			self::ERROR_MOVE_ROLLBACK_FAILED,
+			[
+				'objectId' => $newObject->getId(),
+				'folderId' => $targetFolder->getId(),
+			]
+		);
+
+		return null;
+	}
+
+	/**
+	 * @return RightsManager
+	 */
+	protected function getRightsManager()
+	{
+		return Driver::getInstance()->getRightsManager();
+	}
+
+	/**
+	 * The copy step of a cross-storage move. A move within one storage rewrites the parent of the
+	 * object and touches its content not at all; between storages the same move is done by copying
+	 * the content over and taking the source to the trash can. The step is named here so that a
+	 * model whose write is judged by more than the copy itself can tell the two apart.
+	 *
+	 * @param Folder $targetFolder Destination folder.
+	 * @param int    $movedBy User id of user, which moves object.
+	 * @param AuditTransaction $auditTransaction Transaction of the move the copy is made inside.
+	 * @return BaseObject|null
+	 */
+	protected function copyForMove(Folder $targetFolder, $movedBy, AuditTransaction $auditTransaction)
+	{
+		return $this->copyToInsideAuditTransaction($targetFolder, $movedBy, false, $auditTransaction, false);
 	}
 
 	/**
@@ -1330,10 +1847,57 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			return false;
 		}
 
-		$status = $realObject->restore($restoredBy);
-		$this->deleteInternal();
+		// the link stays in the trash can while the object it points at is not restored
+		if (!$realObject->restore($restoredBy))
+		{
+			$this->takeErrorsOfRealObject($realObject);
 
-		return $status;
+			return false;
+		}
+
+		// the restore of the object takes its links out of the trash can already, this one included
+		$this->deleteInternal();
+		$this->errorCollection->clear();
+		// a folder is restored with the refusals of the files it left in the trash can
+		$this->takeErrorsOfRealObject($realObject);
+
+		return true;
+	}
+
+	private function takeErrorsOfRealObject(BaseObject $realObject): void
+	{
+		$this->errorCollection->add($realObject->getErrors());
+		$realObject->errorCollection->clear();
+	}
+
+	/**
+	 * Makes an object trashed along with its parent a root of its own in the trash can. The object is
+	 * in the trash can already, so none of the effects of a deletion repeat.
+	 */
+	protected function keepInTrashCanAsRoot(): bool
+	{
+		$this->errorCollection->clear();
+
+		$nameService = new ObjectNameService(
+			Ui\Text::appendTrashCanSuffix($this->getNameWithoutTrashCanSuffix()),
+			$this->getParentId(),
+			$this->getType(),
+		);
+		$nameService->requireUniqueName();
+		$nameService->excludeId($this->getId());
+
+		$result = $nameService->prepareName();
+		if (!$result->isSuccess())
+		{
+			$this->errorCollection->add($result->getErrors());
+
+			return false;
+		}
+
+		return $this->update([
+			'NAME' => $result->getName(),
+			'DELETED_TYPE' => ObjectTable::DELETED_TYPE_ROOT,
+		]);
 	}
 
 	/**
@@ -1342,7 +1906,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return bool
 	 */
-	protected function markDeletedInternal($deletedBy, $deletedType = ObjectTable::DELETED_TYPE_ROOT)
+	protected function markDeletedInternal(
+		$deletedBy,
+		$deletedType = ObjectTable::DELETED_TYPE_ROOT,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		if ($this->deletedType == $deletedType)
 		{
@@ -1407,26 +1975,72 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			$data['DELETED_BY'] = $deletedBy;
 		}
 
-		$status = $this->update($data);
-		if ($status)
-		{
-			$driver = Driver::getInstance();
-			$driver->getDeletionNotifyManager()->put($this, $deletedBy);
-			$driver->getIndexManager()->dropIndexByModuleSearch($this);
+		$mutation = function () use ($data, $deletedBy, $deletedType): bool {
+			$status = $this->update($data);
+			if (!$status)
+			{
+				return false;
+			}
+
 			$this->publishToJournal(
 				ChangeType::Trashed,
 				$deletedBy,
 				['name', 'places'],
-				isCascadeRoot: (int)$deletedType === ObjectTable::DELETED_TYPE_ROOT,
+				isCascadeRoot: (int)$deletedType === ObjectTable::DELETED_TYPE_ROOT && !$this->journalCascadeChild,
 			);
 
-			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterMarkDeletedObject", [$this, $deletedBy, $deletedType]);
-			$event->send();
+			$auditResult = (new AuditObjectEventProducer())->publishMarkedDeleted($this, (int)$deletedBy, (int)$deletedType);
+			if (!$this->applyAuditResult($auditResult))
+			{
+				return false;
+			}
+
+			if ($deletedType == ObjectTable::DELETED_TYPE_ROOT)
+			{
+				$this->createLinkInTrashcan($deletedBy);
+			}
+
+			return true;
+		};
+		if ($auditTransaction !== null)
+		{
+			$status = $auditTransaction
+				->join(
+					static fn() => $mutation()
+						? AuditTransactionOutcome::success(true)
+						: AuditTransactionOutcome::failure(false),
+				)
+				->getValue()
+			;
+		}
+		else
+		{
+			$status = $this->runAuditCoveredMutation($mutation);
 		}
 
-		if ($deletedType == ObjectTable::DELETED_TYPE_ROOT)
+		if ($status)
 		{
-			$this->createLinkInTrashcan($deletedBy);
+			$afterCommit = function () use ($deletedBy, $deletedType): void {
+				$driver = Driver::getInstance();
+				$driver->getDeletionNotifyManager()->put($this, $deletedBy);
+				$driver->getIndexManager()->dropIndexByModuleSearch($this);
+
+				$event = new Event(
+					Driver::INTERNAL_MODULE_ID,
+					'onAfterMarkDeletedObject',
+					[$this, $deletedBy, $deletedType],
+				);
+				$event->send();
+			};
+
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($afterCommit);
+			}
+			else
+			{
+				$afterCommit();
+			}
 		}
 
 		return $status;
@@ -1490,15 +2104,18 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		/** @var ObjectTable $tableClassName */
 		$tableClassName = $this->getTableClassName();
 
-		$status = $this->update([
-			'NAME' => $this->getNameWithoutTrashCanSuffix(),
-			'DELETED_TYPE' => $tableClassName::DELETED_TYPE_NONE,
-			'UPDATE_TIME' => new DateTime(),
-			'UPDATED_BY' => $restoredBy,
-		]);
+		$status = $this->runAuditCoveredMutation(function () use ($tableClassName, $restoredBy): bool {
+			$status = $this->update([
+				'NAME' => $this->getNameWithoutTrashCanSuffix(),
+				'DELETED_TYPE' => $tableClassName::DELETED_TYPE_NONE,
+				'UPDATE_TIME' => new DateTime(),
+				'UPDATED_BY' => $restoredBy,
+			]);
+			if (!$status)
+			{
+				return false;
+			}
 
-		if($status)
-		{
 			//we have to delete links which are in trashcan. It's special case. @see \Bitrix\Disk\BaseObject::markDeletedInternal.
 			$links = BaseObject::getModelList([
 				'filter' => [
@@ -1525,17 +2142,50 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 				isCascadeRoot: !$this->journalCascadeChild,
 			);
 
-			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterRestoreObject", [$this, $restoredBy]);
+			$auditResult = (new AuditObjectEventProducer())->publishRestored($this, (int)$restoredBy);
+
+			return $this->applyAuditResult($auditResult);
+		});
+
+		if($status)
+		{
+			$event = new Event(Driver::INTERNAL_MODULE_ID, 'onAfterRestoreObject', [$this, $restoredBy]);
 			$event->send();
 		}
 
 		return $status;
 	}
 
+	protected function runAuditCoveredMutation(callable $callback)
+	{
+		return AuditTransaction::run($callback);
+	}
+
+	protected function applyAuditResult(\Bitrix\Main\Result $result): bool
+	{
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		$this->errorCollection->add($result->getErrors());
+
+		return false;
+	}
+
 	protected function recalculateDeletedTypeAfterRestore($restoredBy)
 	{
 		$fakeContext = Storage::getFakeSecurityContext();
 		$parents = $this->getParents($fakeContext, ['filter' => ['MIXED_SHOW_DELETED' => true]], SORT_ASC);
+		$chainFolderIds = [];
+		foreach ($parents as $parent)
+		{
+			if ($parent instanceof Folder && $parent->isDeleted())
+			{
+				$chainFolderIds[(int)$parent->getId()] = true;
+			}
+		}
+
 		foreach ($parents as $parent)
 		{
 			if(!$parent instanceof Folder || !$parent->isDeleted())
@@ -1549,6 +2199,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 				if($childPotentialRoot->getId() == $this->getId())
 				{
 					continue;
+				}
+				if (isset($chainFolderIds[(int)$childPotentialRoot->getId()]))
+				{
+					// a folder of the chain is restored right below, so its trashing here is not news for the journal
+					$childPotentialRoot->journalCascadeChild = true;
 				}
 				if($childPotentialRoot instanceof Folder)
 				{
@@ -2150,6 +2805,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			'DELETE_USER' => 'deleteUser',
 			'HAS_SUBFOLDERS' => null,
 			'UNIQUE_CODE' => 'uniqueCode',
+			'HAS_UPLOAD_CLEANUP_MARKER' => 'hasUploadCleanupMarker',
 		];
 	}
 

@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Search;
 
 use Bitrix\Crm\Binding\QuoteContactTable;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\QuoteTable;
 use CCrmCurrency;
 use CCrmOwnerType;
@@ -12,9 +13,27 @@ final class QuoteSearchContentBuilder extends SearchContentBuilder
 {
 	protected string $entityClassName = CCrmQuote::class;
 
+	private const INDEXED_FIELDS = [
+		Item::FIELD_NAME_TITLE,
+		Item::FIELD_NAME_OPPORTUNITY,
+		Item::FIELD_NAME_CURRENCY_ID,
+		Item::FIELD_NAME_ASSIGNED,
+		Item::FIELD_NAME_COMPANY_ID,
+	];
+
 	public function getEntityTypeId(): int
 	{
 		return CCrmOwnerType::Quote;
+	}
+
+	public function getSearchSelectFields(): ?array
+	{
+		return [Item::FIELD_NAME_ID, ...self::INDEXED_FIELDS];
+	}
+
+	protected function getIndexedItemFieldNames(): ?array
+	{
+		return [...self::INDEXED_FIELDS, Item::FIELD_NAME_CONTACT_BINDINGS];
 	}
 	
 	protected function prepareSearchMap(array $fields, array $options = null): SearchMap

@@ -142,6 +142,9 @@ class CAllCrmLead
 
 		$addressAdapter = new Crm\Entity\Compatibility\Adapter\Address(\CCrmOwnerType::Lead, EntityAddressType::Primary);
 		$compatibilityAdapter->addChild($addressAdapter);
+		$compatibilityAdapter->addChild(
+			new Crm\Entity\Compatibility\Adapter\AddressSearchContent($addressAdapter, \CCrmOwnerType::Lead)
+		);
 
 		return $compatibilityAdapter;
 	}

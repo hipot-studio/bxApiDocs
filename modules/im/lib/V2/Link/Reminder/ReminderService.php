@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Link\Push;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Localization\Loc;
@@ -129,9 +130,19 @@ class ReminderService
 		$reminders = ReminderCollection::getNeedReminded();
 
 		$reminders->getMessageCollection()->fillFiles();
+		$this->primeHistoryBorders($reminders);
 
 		foreach ($reminders as $reminder)
 		{
+			// The reminder is spent without the notification: its preview would carry a message the reader
+			// no longer sees - cleared for everyone and awaiting removal, or hidden by the reader themselves.
+			if ($this->isMessageHiddenFromAuthor($reminder))
+			{
+				$reminder->setIsReminded(true);
+
+				continue;
+			}
+
 			$sendResult = $this->sendNotifyAboutReminder($reminder);
 			if (!$sendResult->isSuccess())
 			{
@@ -229,5 +240,72 @@ class ReminderService
 	private function getSubTag(ReminderItem $reminder): string
 	{
 		return "MESSAGE_REMINDER_{$reminder->getId()}";
+	}
+
+	/**
+	 * The borders the reminders below are checked against, read for the whole queue at once: the agent
+	 * takes every reminder past its date, and asked one at a time each of them costs a select of its chat
+	 * and a select of the relation of its author. The chats come first because a comment chat answers with
+	 * the border its channel holds for the post ({@see Chat\CommentChat::isMessageBehindUserHistoryBorder()}),
+	 * so the channels are chats of this queue as well; the relations follow, by author, because a border of
+	 * a reader belongs to the pair and one queue holds the reminders of many.
+	 */
+	private function primeHistoryBorders(ReminderCollection $reminders): void
+	{
+		$chatIds = [];
+
+		foreach ($reminders as $reminder)
+		{
+			$chatIds[$reminder->getChatId()] = $reminder->getChatId();
+		}
+
+		if (empty($chatIds))
+		{
+			return;
+		}
+
+		Chat::fillInstances($chatIds);
+
+		$parentChatIds = [];
+
+		foreach ($chatIds as $chatId)
+		{
+			$parentChatId = Chat::getInstance($chatId)->getParentChatId() ?? 0;
+
+			if ($parentChatId > 0)
+			{
+				$parentChatIds[$chatId] = $parentChatId;
+			}
+		}
+
+		Chat::fillInstances($parentChatIds);
+
+		$chatIdsByAuthor = [];
+
+		foreach ($reminders as $reminder)
+		{
+			$chatId = $reminder->getChatId();
+			$authorId = $reminder->getAuthorId();
+
+			$chatIdsByAuthor[$authorId][$chatId] = $chatId;
+
+			if (isset($parentChatIds[$chatId]))
+			{
+				$chatIdsByAuthor[$authorId][$parentChatIds[$chatId]] = $parentChatIds[$chatId];
+			}
+		}
+
+		foreach ($chatIdsByAuthor as $authorId => $authorChatIds)
+		{
+			RelationCollection::fillStartIds($authorChatIds, $authorId);
+		}
+	}
+
+	private function isMessageHiddenFromAuthor(ReminderItem $reminder): bool
+	{
+		return Chat::getInstance($reminder->getChatId())->isMessageBehindUserHistoryBorder(
+			(int)$reminder->getMessageId(),
+			(int)$reminder->getAuthorId()
+		);
 	}
 }

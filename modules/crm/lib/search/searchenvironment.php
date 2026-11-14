@@ -97,6 +97,11 @@ class SearchEnvironment
 		return $str;
 	}
 
+	public static function isUserFieldTypeSupported(string $userTypeId): bool
+	{
+		return in_array($userTypeId, self::$supportedUserFieldTypeIds, true);
+	}
+
 	public static function getUserFields(int $entityId, string $userFieldEntityId): array
 	{
 		if (empty($userFieldEntityId))

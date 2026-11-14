@@ -18,16 +18,16 @@ final class WhatsNewFeature extends FeatureFlag
 
 	public function isMobileWhatsNewEnabled(): bool
 	{
-		return (bool)Option::get('mobile', self::OPTION_CODE, false);
+		return Option::get('mobile', self::OPTION_CODE, 'Y') === 'Y';
 	}
 
 	public function enable(): void
 	{
-		Option::set('mobile', self::OPTION_CODE, true);
+		Option::set('mobile', self::OPTION_CODE, 'Y');
 	}
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => self::OPTION_CODE]);
+		Option::set('mobile', self::OPTION_CODE, 'N');
 	}
 }

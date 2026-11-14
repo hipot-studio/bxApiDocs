@@ -15,7 +15,6 @@ enum AppAction: string
 	case InstallPersonalApp = 'install_personal_app';
 	case UninstallPersonalApp = 'uninstall_personal_app';
 	case ViewInstalledList = 'view_installed_list';
-	case ViewAllEmbeddings = 'view_all_embeddings';
 
 	public function getPermissionType(): ?PermissionType
 	{

@@ -57,6 +57,6 @@ class AddOperation extends AbstractOperation
 
 	protected function createGroup(int $ownerId, array $fields): int
 	{
-		return (int)CSocNetGroup::createGroup($ownerId, $fields);
+		return (int)CSocNetGroup::createGroup($ownerId, $fields, tagNames: $this->command->getTagNames());
 	}
 }

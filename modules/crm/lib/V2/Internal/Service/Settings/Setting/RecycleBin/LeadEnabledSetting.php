@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class LeadEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.recycle_bin.lead.enabled';
+	public const ID = 'crm.recycle_bin.lead.enabled';
 
 	private readonly LeadSettings $leadSettings;
 
@@ -26,18 +26,20 @@ final class LeadEnabledSetting extends AbstractSetting
 		$this->leadSettings = $leadSettings ?? LeadSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'enable_lead_recycle_bin',
 		);
 	}
 

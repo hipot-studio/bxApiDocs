@@ -147,7 +147,7 @@ abstract class Queue
 	 * @param string $reasonReturn
 	 * @return void
 	 */
-	public function returnNotAcceptedSessionsToQueue($userId, string $reasonReturn = ImOpenLines\Queue::REASON_DEFAULT): void
+	public function returnNotAcceptedSessionsToQueue(int $userId, string $reasonReturn = ImOpenLines\Queue::REASON_DEFAULT): void
 	{
 		$sessionList = [];
 
@@ -377,7 +377,7 @@ abstract class Queue
 	 * @param string $reasonReturn
 	 * @return void
 	 */
-	public function returnSessionsUsersToQueueIsStartAbsence($userId, $durationAbsenceDay, string $reasonReturn = ImOpenLines\Queue::REASON_DEFAULT): void
+	public function returnSessionsUsersToQueueIsStartAbsence(int $userId, $durationAbsenceDay, string $reasonReturn = ImOpenLines\Queue::REASON_DEFAULT): void
 	{
 		$this->returnNotAcceptedSessionsToQueue($userId, $reasonReturn);
 	}

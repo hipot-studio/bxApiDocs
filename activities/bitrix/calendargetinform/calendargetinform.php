@@ -10,11 +10,13 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\Activity\BaseActivity;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Call\Public\Provider\MeetingCallParticipationProvider;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
@@ -31,23 +33,52 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 	private const CALENDAR_FROM = 'CalendarFrom';
 	private const CALENDAR_TO = 'CalendarTo';
 	private const EVENT_FIELD = 'EventField';
+	private const EVENT_LIMIT = 'EventLimit';
+	private const CONFIRMED_CALL_PARTICIPATION = 'ConfirmedCallParticipation';
+	private const ITEM_COLOR = 'ItemColor';
+	private const OVERLAP_ICON_TYPE = 'OverlapIconType';
+	private const OVERLAP_ICON_COLOR = 'OverlapIconColor';
 	private const RETURN_PARAM_JSON = 'ResultJson';
 	private const RETURN_PARAM_AI = 'ResultJsonAi';
 	private const RETURN_EVENTS_COUNT = 'EventsCount';
 	private const RETURN_PARAM_TITLES_LIST = 'EVENTS_TITLES_LIST';
 	private const RETURN_PARAM_TITLES_BB_LIST = 'EVENTS_TITLES_BB_LIST';
+	private const RETURN_PARAM_DETAILS_BB_LIST = 'EVENTS_DETAILS_BB_LIST';
+	private const RETURN_PARAM_BLOCK_ITEMS_JSON = 'EVENTS_BLOCK_ITEMS_JSON';
+	private const RETURN_EVENTS_HAVE_OVERLAPS = 'EventsHaveOverlaps';
+	private const RETURN_SUCCEEDED = 'Succeeded';
 	private const RETURN_MEETINGS_TOTAL_MINUTES = 'MeetingsTotalMinutes';
+	private const RETURN_EVENTS_TRUNCATED = 'EventsTruncated';
+	private const EVENT_LIMIT_MAX = 500;
+	private const RAW_EVENT_LIMIT = 2000;
+	private const RAW_EVENT_PAGE_SIZE = 100;
+	private const EXPANDED_EVENT_LIMIT = 2000;
+	private const FETCH_INTERVAL_SECONDS = 31 * 24 * 3600;
+	private const FETCH_INTERVAL_LIMIT = 12;
+	private const CALL_PARTICIPATED = 'participated';
+	private const CALL_NOT_PARTICIPATED = 'notParticipated';
+	private const CALL_PARTICIPATION_UNKNOWN = 'unknown';
 	private const EVENT_FIELD_DESCRIPTION = 'description';
 	private const EVENT_FIELD_LOCATION = 'location';
 	private const EVENT_FIELD_ATTENDEES = 'attendees';
 	private const EVENT_FIELD_COMMENTS = 'comments';
 	private const EVENT_FIELD_CHAT = 'chat';
 	private const EVENT_FIELD_URL = 'url';
+	private const DISPLAY_TITLE_SEPARATOR = " \u{2014} ";
+	private const DISPLAY_METADATA_SEPARATOR = " \u{00B7} ";
+	private const OVERLAP_WARNING_ICON = "\u{26A0}";
+	private const TEMPLATE_ONLY_INPUTS = [
+		self::ITEM_COLOR,
+		self::OVERLAP_ICON_TYPE,
+		self::OVERLAP_ICON_COLOR,
+		self::CONFIRMED_CALL_PARTICIPATION,
+	];
 
 	protected static $requiredModules = ['calendar'];
 
 	/** @var int|null Computed inside fetchEvents(); consumed by internalExecute(). */
 	private ?int $meetingsTotalMinutes = null;
+	private bool $eventsTruncated = false;
 
 	public function __construct($name)
 	{
@@ -59,13 +90,23 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 			self::CALENDAR_FROM => '',
 			self::CALENDAR_TO => '',
 			self::EVENT_FIELD => null,
+			self::EVENT_LIMIT => null,
+			self::CONFIRMED_CALL_PARTICIPATION => null,
+			self::ITEM_COLOR => null,
+			self::OVERLAP_ICON_TYPE => null,
+			self::OVERLAP_ICON_COLOR => null,
 
 			self::RETURN_PARAM_JSON => '',
 			self::RETURN_PARAM_AI => '',
 			self::RETURN_EVENTS_COUNT => '',
 			self::RETURN_PARAM_TITLES_LIST => null,
 			self::RETURN_PARAM_TITLES_BB_LIST => null,
+			self::RETURN_PARAM_DETAILS_BB_LIST => null,
+			self::RETURN_PARAM_BLOCK_ITEMS_JSON => null,
+			self::RETURN_EVENTS_HAVE_OVERLAPS => false,
+			self::RETURN_SUCCEEDED => false,
 			self::RETURN_MEETINGS_TOTAL_MINUTES => null,
+			self::RETURN_EVENTS_TRUNCATED => false,
 		];
 
 		$this->setPropertiesTypes(
@@ -75,12 +116,22 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 				self::CALENDAR_FROM => ['Type' => FieldType::DATETIME,],
 				self::CALENDAR_TO => ['Type' => FieldType::DATETIME,],
 				self::EVENT_FIELD => ['Type' => FieldType::SELECT],
+				self::EVENT_LIMIT => ['Type' => FieldType::INT],
+				self::CONFIRMED_CALL_PARTICIPATION => ['Type' => FieldType::BOOL],
+				self::ITEM_COLOR => ['Type' => FieldType::STRING],
+				self::OVERLAP_ICON_TYPE => ['Type' => FieldType::STRING],
+				self::OVERLAP_ICON_COLOR => ['Type' => FieldType::STRING],
 				self::RETURN_PARAM_JSON  => ['Type' => FieldType::STRING],
 				self::RETURN_PARAM_AI => ['Type' => FieldType::STRING],
 				self::RETURN_EVENTS_COUNT => ['Type' => FieldType::INT],
 				self::RETURN_PARAM_TITLES_LIST => ['Type' => FieldType::TEXT],
 				self::RETURN_PARAM_TITLES_BB_LIST => ['Type' => FieldType::TEXT],
+				self::RETURN_PARAM_DETAILS_BB_LIST => ['Type' => FieldType::TEXT],
+				self::RETURN_PARAM_BLOCK_ITEMS_JSON => ['Type' => FieldType::TEXT],
+				self::RETURN_EVENTS_HAVE_OVERLAPS => ['Type' => FieldType::BOOL],
+				self::RETURN_SUCCEEDED => ['Type' => FieldType::BOOL],
 				self::RETURN_MEETINGS_TOTAL_MINUTES => ['Type' => FieldType::INT],
+				self::RETURN_EVENTS_TRUNCATED => ['Type' => FieldType::BOOL],
 			],
 		);
 	}
@@ -92,8 +143,14 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		$this->{self::RETURN_EVENTS_COUNT} = null;
 		$this->{self::RETURN_PARAM_TITLES_LIST} = null;
 		$this->{self::RETURN_PARAM_TITLES_BB_LIST} = null;
+		$this->{self::RETURN_PARAM_DETAILS_BB_LIST} = null;
+		$this->{self::RETURN_PARAM_BLOCK_ITEMS_JSON} = null;
+		$this->{self::RETURN_EVENTS_HAVE_OVERLAPS} = false;
+		$this->{self::RETURN_SUCCEEDED} = false;
 		$this->{self::RETURN_MEETINGS_TOTAL_MINUTES} = null;
+		$this->{self::RETURN_EVENTS_TRUNCATED} = false;
 		$this->meetingsTotalMinutes = null;
+		$this->eventsTruncated = false;
 
 		parent::reInitialize();
 	}
@@ -107,12 +164,6 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 
 		$fromTs = CBPHelper::makeTimestamp($this->{self::CALENDAR_FROM});
 		$toTs = CBPHelper::makeTimestamp($this->{self::CALENDAR_TO});
-
-		$maxDuration = 31 * 24 * 3600;
-		if (($toTs - $fromTs) > $maxDuration)
-		{
-			$toTs = $fromTs + $maxDuration;
-		}
 
 		$userId = (int)CBPHelper::extractFirstUser($this->{self::CALENDAR_USER}, $this->getDocumentId());
 		$groupId = (int)$this->{self::CALENDAR_GROUP};
@@ -136,7 +187,26 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 			return $errors;
 		}
 
-		$results = $this->fetchEvents($ownerId, $calendarType, $fromTs, $toTs, $select, $userId);
+		try
+		{
+			$eventLimit = $this->getEventLimit();
+			if (($toTs - $fromTs) > self::FETCH_INTERVAL_SECONDS)
+			{
+				$toTs = $fromTs + self::FETCH_INTERVAL_SECONDS;
+				$this->eventsTruncated = true;
+			}
+
+			$results = $eventLimit === null
+				? $this->fetchEvents($ownerId, $calendarType, $fromTs, $toTs, $select, $userId)
+				: $this->fetchLimitedEvents($ownerId, $calendarType, $fromTs, $toTs, $select, $userId, $eventLimit)
+			;
+		}
+		catch (\Throwable)
+		{
+			$errors->setError(new \Bitrix\Main\Error((string)Loc::getMessage('BPSNMA_PD_ERROR_INVALID_CONTEXT')));
+
+			return $errors;
+		}
 
 		$this->{self::RETURN_PARAM_JSON} = Json::encode($results);
 		$this->{self::RETURN_PARAM_AI} = Json::encode(
@@ -144,10 +214,20 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
 		);
 		$this->{self::RETURN_EVENTS_COUNT} = count($results);
+		$this->{self::RETURN_EVENTS_TRUNCATED} = $this->eventsTruncated;
 
-		[$titles, $bbTitles] = $this->buildTitleLists($results);
+		$overlapping = $this->findOverlappingEventIndexes($results);
+		[$titles, $bbTitles] = $this->buildTitleLists($results, $overlapping);
+		[, $displayBbTitles] = $this->buildDisplayTitleLists($results, $overlapping);
 		$this->{self::RETURN_PARAM_TITLES_LIST} = implode("\n", $titles);
 		$this->{self::RETURN_PARAM_TITLES_BB_LIST} = implode("\n", $bbTitles);
+		$this->{self::RETURN_PARAM_DETAILS_BB_LIST} = implode("\n", $displayBbTitles);
+		$this->{self::RETURN_PARAM_BLOCK_ITEMS_JSON} = Json::encode(
+			$this->buildBlockItems($results, $overlapping),
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+		);
+		$this->{self::RETURN_EVENTS_HAVE_OVERLAPS} = $overlapping !== [];
+		$this->{self::RETURN_SUCCEEDED} = true;
 
 		if ($this->meetingsTotalMinutes !== null)
 		{
@@ -157,25 +237,248 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		return $errors;
 	}
 
-	private function buildTitleLists(array $events): array
+	private function buildTitleLists(array $events, array $overlapping): array
 	{
 		$titles = [];
 		$bbTitles = [];
+		$overlapMark = $this->getTextOverlapMark();
 
-		foreach ($events as $event)
+		foreach ($events as $index => $event)
 		{
 			$name = (string)($event['name'] ?? '');
+			$bbName = $this->neutralizeMessageText($name);
 			$url = (string)($event['url'] ?? '');
 			$prefix = $this->formatEventTimePrefix($event);
 
 			$plain = $prefix === '' ? $name : $prefix . ' ' . $name;
-			$linked = $url !== '' ? '[url=' . $url . ']' . $name . '[/url]' : $name;
+			$linked = $url !== '' ? $this->formatTextLink($url, $bbName) : $bbName;
 
 			$titles[] = '- ' . $plain;
-			$bbTitles[] = '- ' . ($prefix === '' ? $linked : $prefix . ' ' . $linked);
+			$bbTitles[] = '- ' . ($prefix === '' ? $linked : $prefix . ' ' . $linked)
+				. (isset($overlapping[$index]) ? $overlapMark : '')
+			;
 		}
 
 		return [$titles, $bbTitles];
+	}
+
+	/**
+	 * Given the overlap icon, the node is rendered by the message reference: the lines follow the items
+	 * of EVENTS_BLOCK_ITEMS_JSON, and a text line, having no icon, marks an overlap with the warning character.
+	 */
+	private function buildDisplayTitleLists(array $events, array $overlapping): array
+	{
+		$overlapMark = $this->getTextOverlapMark();
+		if ($overlapMark !== '')
+		{
+			$titles = [];
+			$bbTitles = [];
+			foreach ($events as $index => $event)
+			{
+				$mark = isset($overlapping[$index]) ? $overlapMark : '';
+				$titles[] = '- ' . $this->formatEventItemText($event, false) . $mark;
+				$bbTitles[] = '- ' . $this->formatEventItemText($event, true, true) . $mark;
+			}
+
+			return [$titles, $bbTitles];
+		}
+
+		$titles = [];
+		$bbTitles = [];
+
+		foreach ($events as $index => $event)
+		{
+			$name = $this->normalizeDisplayText((string)($event['name'] ?? ''));
+			$url = (string)($event['url'] ?? '');
+			$prefix = $this->formatEventTimePrefix($event);
+			$location = $this->normalizeDisplayText((string)($event['location'] ?? ''));
+
+			$bbName = $this->neutralizeMessageText($name);
+
+			$plain = $prefix === '' ? $name : $prefix . self::DISPLAY_TITLE_SEPARATOR . $name;
+			$linked = $url !== '' ? $this->formatTextLink($url, $bbName) : $bbName;
+			$linked = $prefix === '' ? $linked : $prefix . self::DISPLAY_TITLE_SEPARATOR . $linked;
+			if ($location !== '')
+			{
+				$plain .= self::DISPLAY_METADATA_SEPARATOR . $location;
+				$linked .= self::DISPLAY_METADATA_SEPARATOR . $this->neutralizeMessageText($location);
+			}
+			if (isset($overlapping[$index]))
+			{
+				$plain .= self::DISPLAY_METADATA_SEPARATOR . self::OVERLAP_WARNING_ICON;
+				$linked .= self::DISPLAY_METADATA_SEPARATOR . self::OVERLAP_WARNING_ICON;
+			}
+
+			$titles[] = '- ' . $plain;
+			$bbTitles[] = '- ' . $linked;
+		}
+
+		return [$titles, $bbTitles];
+	}
+
+	/**
+	 * An overlap is marked by the icon property when OverlapIconType is set,
+	 * by the warning character otherwise.
+	 */
+	private function buildBlockItems(array $events, array $overlapping): array
+	{
+		$color = $this->getDecorationToken(self::ITEM_COLOR);
+		$iconType = $this->getDecorationToken(self::OVERLAP_ICON_TYPE);
+		$iconColor = $this->getDecorationToken(self::OVERLAP_ICON_COLOR);
+
+		$items = [];
+		foreach ($events as $index => $event)
+		{
+			$isOverlapping = isset($overlapping[$index]);
+
+			$text = $this->formatEventItemText($event, true);
+			if ($isOverlapping && $iconType === '')
+			{
+				$text .= self::DISPLAY_METADATA_SEPARATOR . self::OVERLAP_WARNING_ICON;
+			}
+
+			$item = ['text' => $text];
+			if ($color !== '')
+			{
+				$item['color'] = $color;
+			}
+			if ($isOverlapping && $iconType !== '')
+			{
+				$item['icon'] = ['type' => $iconType];
+				if ($iconColor !== '')
+				{
+					$item['icon']['color'] = $iconColor;
+				}
+			}
+
+			$items[] = $item;
+		}
+
+		return $items;
+	}
+
+	private function formatEventItemText(array $event, bool $withLink, bool $isMessageText = false): string
+	{
+		$name = $this->normalizeDisplayText((string)($event['name'] ?? ''));
+		$url = (string)($event['url'] ?? '');
+		$prefix = $this->formatEventTimePrefix($event);
+		$location = $this->normalizeDisplayText((string)($event['location'] ?? ''));
+		if ($isMessageText)
+		{
+			$name = $this->neutralizeMessageText($name);
+			$location = $this->neutralizeMessageText($location);
+		}
+
+		$text = $name;
+		if ($withLink && $url !== '')
+		{
+			$text = $isMessageText ? $this->formatTextLink($url, $name) : '[url=' . $url . ']' . $name . '[/url]';
+		}
+		$text = $prefix === '' ? $text : $prefix . ' ' . $text;
+		if ($location !== '')
+		{
+			$text .= ' (' . $location . ')';
+		}
+
+		return $text;
+	}
+
+	/**
+	 * The mark a text line of an overlap participant ends with once the blocks mark the overlap by the icon.
+	 */
+	private function getTextOverlapMark(): string
+	{
+		return $this->getDecorationToken(self::OVERLAP_ICON_TYPE) !== '' ? ' ' . self::OVERLAP_WARNING_ICON : '';
+	}
+
+	private function getDecorationToken(string $property): string
+	{
+		$value = $this->{$property};
+
+		return trim((string)(is_array($value) ? reset($value) : $value));
+	}
+
+	private function replaceSquareBrackets(string $text): string
+	{
+		return str_replace(['[', ']'], ['(', ')'], $text);
+	}
+
+	/**
+	 * The message text is converted from Markdown: brackets would open a Markdown link or a BB tag,
+	 * angle brackets an autolink, even across lines, and invisible characters are dropped by the converter,
+	 * joining what they separate.
+	 */
+	private function neutralizeMessageText(string $text): string
+	{
+		$text = preg_replace('/\p{Cf}/u', '', $text) ?? '';
+		$text = $this->replaceSquareBrackets($text);
+
+		return str_replace(['<', '>'], ["\u{2039}", "\u{203A}"], $text);
+	}
+
+	/**
+	 * A title starting with "(" is kept apart from the tag by a plain space, so that "](" is not formed.
+	 */
+	private function formatTextLink(string $url, string $title): string
+	{
+		$guard = str_starts_with($title, '(') ? ' ' : '';
+
+		return '[url=' . $url . ']' . $guard . $title . '[/url]';
+	}
+
+	private function normalizeDisplayText(string $text): string
+	{
+		$text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text) ?? '';
+		$text = $this->replaceSquareBrackets($text);
+
+		return mb_substr(trim(preg_replace('/\s+/u', ' ', $text) ?? ''), 0, 200);
+	}
+
+	private function findOverlappingEventIndexes(array $events): array
+	{
+		$timed = [];
+		foreach ($events as $index => $event)
+		{
+			$dateFrom = (string)($event['dateFrom'] ?? '');
+			$dateTo = (string)($event['dateTo'] ?? '');
+			if (!str_contains($dateFrom, 'T') || !str_contains($dateTo, 'T'))
+			{
+				continue;
+			}
+			try
+			{
+				$from = (new \DateTimeImmutable($dateFrom))->getTimestamp();
+				$to = (new \DateTimeImmutable($dateTo))->getTimestamp();
+			}
+			catch (\Throwable)
+			{
+				continue;
+			}
+			if ($from < $to)
+			{
+				$timed[] = ['index' => $index, 'from' => $from, 'to' => $to];
+			}
+		}
+		usort($timed, static fn(array $left, array $right): int => [$left['from'], $left['to'], $left['index']] <=> [$right['from'], $right['to'], $right['index']]);
+
+		$result = [];
+		$maxEnd = null;
+		$maxEndIndex = null;
+		foreach ($timed as $event)
+		{
+			if ($maxEnd !== null && $event['from'] < $maxEnd)
+			{
+				$result[$event['index']] = true;
+				$result[$maxEndIndex] = true;
+			}
+			if ($maxEnd === null || $event['to'] > $maxEnd)
+			{
+				$maxEnd = $event['to'];
+				$maxEndIndex = $event['index'];
+			}
+		}
+
+		return $result;
 	}
 
 	private function formatEventTimePrefix(array $event): string
@@ -232,12 +535,59 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 				'Default' => array_keys(self::getEventFieldOptions()),
 				'Multiple' => true,
 			],
+			self::EVENT_LIMIT => [
+				'Name' => Loc::getMessage('BPSNMA_PD_EVENT_LIMIT'),
+				'FieldName' => self::EVENT_LIMIT,
+				'Type' => FieldType::INT,
+				'Required' => false,
+			],
 		];
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		return [self::CONFIRMED_CALL_PARTICIPATION];
 	}
 
 	public static function getPropertiesDialogMap(?PropertiesDialog $dialog = null): array
 	{
 		return static::getPropertiesMap([]);
+	}
+
+	/**
+	 * The inputs a template sets for the node and the form does not show are taken over from the node,
+	 * so a save in the designer does not erase them. A new node has none to take over.
+	 */
+	protected static function extractPropertiesValues(PropertiesDialog $dialog, array $fieldsMap): Result
+	{
+		$result = parent::extractPropertiesValues($dialog, $fieldsMap);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$template = $dialog->getWorkflowTemplate();
+		$node = is_array($template)
+			? CBPWorkflowTemplateLoader::findActivityByName($template, $dialog->getActivityName())
+			: null
+		;
+		$storedProperties = $node['Properties'] ?? null;
+		if (!is_array($storedProperties))
+		{
+			return $result;
+		}
+
+		$properties = $result->getData();
+		foreach (self::TEMPLATE_ONLY_INPUTS as $name)
+		{
+			if (!array_key_exists($name, $properties) && array_key_exists($name, $storedProperties))
+			{
+				$properties[$name] = $storedProperties[$name];
+			}
+		}
+		$result->setData($properties);
+
+		return $result;
 	}
 
 	private function fetchEvents(
@@ -249,11 +599,45 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		int $viewerId = 0,
 	): array
 	{
-		$dateFrom = Util::formatDateTimeTimestampUTC($fromTs);
-		$dateTo = Util::formatDateTimeTimestampUTC($toTs - \CCalendar::GetDayLen());
+		$events = $this->fetchRawEvents($ownerId, $calendarType, $fromTs, $toTs, $select, $viewerId);
+		$uniqueEvents = [];
+		foreach ($events as $event)
+		{
+			$key = $event['ID'] . '|' . ($event['DATE_FROM'] ?? '');
+			if (!isset($uniqueEvents[$key]))
+			{
+				$uniqueEvents[$key] = $event;
+			}
+		}
+		$events = array_values($uniqueEvents);
+		$events = array_filter($events, fn(array $event) => !$this->isDeclinedMeeting($event));
+		usort(
+			$events,
+			fn(array $a, array $b) => $this->getEventStartTimestamp($a) <=> $this->getEventStartTimestamp($b),
+		);
+		$this->meetingsTotalMinutes = $this->computeMeetingsTotalMinutes($events);
 
-		$events = \CCalendarEvent::GetList(
-			[
+		return $this->formatEvents($events, $select, $calendarType, $viewerId);
+	}
+
+	protected function fetchRawEvents(
+		int $ownerId,
+		string $calendarType,
+		int $fromTs,
+		int $toTs,
+		array $select,
+		int $viewerId,
+		?int $sourceLimit = null,
+		bool $halfOpenWindow = false,
+		int $afterId = 0,
+	): array
+	{
+		$dateFrom = Util::formatDateTimeTimestampUTC($fromTs);
+		$dateTo = Util::formatDateTimeTimestampUTC(
+			$halfOpenWindow ? $toTs - 1 : $toTs - \CCalendar::GetDayLen(),
+		);
+
+		$params = [
 				'arFilter' => [
 					'FROM_LIMIT' => $dateFrom,
 					'TO_LIMIT' => $dateTo,
@@ -268,13 +652,162 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 				'setDefaultLimit' => false,
 				'checkPermissions' => false,
 				'userId' => $viewerId,
-			],
-		);
+		];
+		if ($sourceLimit !== null)
+		{
+			$params['limit'] = $sourceLimit;
+			$params['arOrder'] = ['ID' => 'ASC'];
+			$params['arFilter']['>ID'] = $afterId;
+			$params['parseRecursion'] = false;
+			$params['parseDescription'] = false;
+		}
+
+		return $this->getCalendarEvents($params);
+	}
+
+	protected function getCalendarEvents(array $params): array
+	{
+		return \CCalendarEvent::GetList($params);
+	}
+
+	private function fetchLimitedEvents(
+		int $ownerId,
+		string $calendarType,
+		int $fromTs,
+		int $toTs,
+		array $select,
+		int $viewerId,
+		int $eventLimit,
+	): array
+	{
+		$rawEvents = [];
+		$rawCount = 0;
+		$chunkFrom = $fromTs;
+		$chunkCount = 0;
+		$afterId = 0;
+		while (
+			$chunkFrom < $toTs
+			&& $chunkCount < self::FETCH_INTERVAL_LIMIT
+		)
+		{
+			$chunkTo = min($toTs, $chunkFrom + self::FETCH_INTERVAL_SECONDS);
+			$pageSize = min(self::RAW_EVENT_PAGE_SIZE, self::RAW_EVENT_LIMIT - $rawCount + 1);
+			$chunkEvents = $this->fetchRawEvents(
+				$ownerId,
+				$calendarType,
+				$chunkFrom,
+				$chunkTo,
+				$select,
+				$viewerId,
+				$pageSize,
+				true,
+				$afterId,
+			);
+			$pageCount = count($chunkEvents);
+			$remainingRawCount = self::RAW_EVENT_LIMIT - $rawCount;
+			$rawCount += $pageCount;
+			if ($rawCount > self::RAW_EVENT_LIMIT)
+			{
+				$chunkEvents = array_slice($chunkEvents, 0, $remainingRawCount);
+			}
+			foreach ($chunkEvents as $event)
+			{
+				$afterId = max($afterId, (int)$event['ID']);
+				$instances = $this->expandEventOccurrences(
+					$event,
+					$chunkFrom,
+					$chunkTo,
+					$viewerId,
+					self::EXPANDED_EVENT_LIMIT - count($rawEvents) + 1,
+				);
+				foreach ($instances as $instance)
+				{
+					$rawEvents[] = $instance;
+				}
+				if (count($rawEvents) > self::EXPANDED_EVENT_LIMIT)
+				{
+					break;
+				}
+			}
+			if ($rawCount > self::RAW_EVENT_LIMIT || count($rawEvents) > self::EXPANDED_EVENT_LIMIT)
+			{
+				break;
+			}
+			if ($pageCount < $pageSize)
+			{
+				$chunkFrom = $chunkTo;
+				$chunkCount++;
+				$afterId = 0;
+			}
+		}
+
+		if ($chunkFrom < $toTs)
+		{
+			$this->eventsTruncated = true;
+			$rawEvents = array_slice($rawEvents, 0, self::EXPANDED_EVENT_LIMIT);
+		}
+
+		$events = $this->prepareRawEvents($rawEvents, $fromTs, $toTs);
+		$events = $this->filterByCallParticipation($events, $viewerId, $fromTs, $toTs);
+		if (count($events) > $eventLimit)
+		{
+			$this->eventsTruncated = true;
+			$events = array_slice($events, 0, $eventLimit);
+		}
+
+		$this->meetingsTotalMinutes = $this->computeMeetingsTotalMinutes($events);
+
+		return $this->formatEvents($events, $select, $calendarType, $viewerId);
+	}
+
+	private function expandEventOccurrences(
+		array $event,
+		int $fromTs,
+		int $toTs,
+		int $viewerId,
+		int $resultLimit,
+	): array
+	{
+		if (!\CCalendarEvent::CheckRecurcion($event))
+		{
+			return [$event];
+		}
+
+		$instances = [];
+		\CTimeZone::Disable();
+		try
+		{
+			\CCalendarEvent::ParseRecursion($instances, $event, [
+				'userId' => $viewerId,
+				'fromLimit' => Util::formatDateTimeTimestampUTC($fromTs),
+				'toLimit' => Util::formatDateTimeTimestampUTC($toTs - 1),
+				'loadLimit' => $resultLimit,
+				'instanceCount' => false,
+				'preciseLimits' => true,
+				'includePreviousRecurrence' => true,
+			]);
+		}
+		finally
+		{
+			\CTimeZone::Enable();
+		}
+
+		return array_slice($instances, 0, $resultLimit);
+	}
+
+	private function prepareRawEvents(array $events, int $fromTs, int $toTs): array
+	{
 
 		$uniqueEvents = [];
 		foreach ($events as $event)
 		{
-			$key = $event['ID'] . '|' . ($event['DATE_FROM'] ?? '');
+			$interval = $this->getEventUtcInterval($event);
+			if ($interval === null || $interval[0] >= $toTs || $interval[1] <= $fromTs)
+			{
+				continue;
+			}
+
+			$key = (int)($event['ID'] ?? 0) . '|' . $interval[0];
 			if (!isset($uniqueEvents[$key]))
 			{
 				$uniqueEvents[$key] = $event;
@@ -285,12 +818,101 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 
 		usort(
 			$events,
-			fn(array $a, array $b) => $this->getEventStartTimestamp($a) <=> $this->getEventStartTimestamp($b),
+			function(array $a, array $b): int
+			{
+				$aInterval = $this->getEventUtcInterval($a) ?? [0, 0];
+				$bInterval = $this->getEventUtcInterval($b) ?? [0, 0];
+
+				return [$aInterval[0], $aInterval[1], (int)($a['ID'] ?? 0)]
+					<=> [$bInterval[0], $bInterval[1], (int)($b['ID'] ?? 0)];
+			},
 		);
 
-		$this->meetingsTotalMinutes = $this->computeMeetingsTotalMinutes($events);
+		return $events;
+	}
 
-		return $this->formatEvents($events, $select, $calendarType, $viewerId);
+	private function getEventLimit(): ?int
+	{
+		$value = $this->{self::EVENT_LIMIT};
+		if ($value === null || $value === '')
+		{
+			return null;
+		}
+		if (!is_numeric($value) || (int)$value < 1 || (int)$value > self::EVENT_LIMIT_MAX)
+		{
+			throw new \UnexpectedValueException('Calendar event limit is invalid.');
+		}
+
+		return (int)$value;
+	}
+
+	private function filterByCallParticipation(
+		array $events,
+		int $userId,
+		int $fromTs,
+		int $toTs,
+	): array
+	{
+		if (!\CBPHelper::getBool($this->{self::CONFIRMED_CALL_PARTICIPATION}))
+		{
+			return $events;
+		}
+
+		$meetings = [];
+		foreach ($events as $event)
+		{
+			$chatId = (int)($event['MEETING']['CHAT_ID'] ?? 0);
+			$interval = $this->getEventUtcInterval($event);
+			if ($chatId > 0 && $interval !== null && $interval[0] < $interval[1])
+			{
+				$meetingKey = (int)($event['ID'] ?? 0) . '|' . $interval[0];
+				$meetings[$meetingKey] = [
+					'chatId' => $chatId,
+					'windowFrom' => (new \DateTimeImmutable())->setTimestamp($interval[0]),
+					'windowTo' => (new \DateTimeImmutable())->setTimestamp($interval[1]),
+				];
+			}
+		}
+
+		$statuses = [];
+		if ($meetings !== [] && Loader::includeModule('call') && class_exists(MeetingCallParticipationProvider::class))
+		{
+			try
+			{
+				$statuses = (new MeetingCallParticipationProvider())->getForMeetings(
+					$meetings,
+					$userId,
+					(new \DateTimeImmutable())->setTimestamp($fromTs),
+					(new \DateTimeImmutable())->setTimestamp($toTs),
+				);
+			}
+			catch (\Throwable)
+			{
+				$statuses = [];
+			}
+		}
+
+		$result = [];
+		foreach ($events as $event)
+		{
+			$chatId = (int)($event['MEETING']['CHAT_ID'] ?? 0);
+			$interval = $this->getEventUtcInterval($event);
+			$meetingKey = (int)($event['ID'] ?? 0) . '|' . ($interval[0] ?? 0);
+			$status = $chatId > 0
+				? ($statuses[$meetingKey] ?? self::CALL_PARTICIPATION_UNKNOWN)
+				: self::CALL_PARTICIPATION_UNKNOWN;
+			if ($status === self::CALL_NOT_PARTICIPATED)
+			{
+				continue;
+			}
+
+			$event['_CONFIRMED_CALL_PARTICIPATION'] = $status === self::CALL_PARTICIPATED
+				? true
+				: null;
+			$result[] = $event;
+		}
+
+		return $result;
 	}
 
 	private function getEventStartTimestamp(array $event): int
@@ -371,6 +993,10 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 				'isMeeting' => (bool)($event['IS_MEETING'] ?? false),
 				'meetingStatus' => $event['MEETING_STATUS'] ?? null,
 			];
+			if (array_key_exists('_CONFIRMED_CALL_PARTICIPATION', $event))
+			{
+				$item['confirmedCallParticipation'] = $event['_CONFIRMED_CALL_PARTICIPATION'];
+			}
 
 			if ($selectDescription)
 			{
@@ -467,10 +1093,11 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 	 */
 	private function getEventUtcInterval(array $event): ?array
 	{
+		$isFullDayEvent = ($event['DT_SKIP_TIME'] ?? null) === 'Y';
 		$dateFrom = $this->mapEventDateToObject(
 			$event['DATE_FROM'] ?? null,
 			$event['TZ_FROM'] ?? null,
-			false,
+			$isFullDayEvent,
 		);
 		$fromTs = $dateFrom !== null
 			? $dateFrom->getTimestamp()
@@ -484,8 +1111,12 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		$dateTo = $this->mapEventDateToObject(
 			$event['DATE_TO'] ?? null,
 			$event['TZ_TO'] ?? null,
-			false,
+			$isFullDayEvent,
 		);
+		if ($dateTo !== null && $isFullDayEvent)
+		{
+			$dateTo->add('+1 day');
+		}
 		$toTs = $dateTo !== null
 			? $dateTo->getTimestamp()
 			: (isset($event['DATE_TO_TS_UTC']) ? (int)$event['DATE_TO_TS_UTC'] : null);

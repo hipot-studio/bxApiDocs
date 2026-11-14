@@ -207,7 +207,12 @@ class DownloadAgent
 			// file is on disk but its chat link was not published. Re-run finalization directly
 			// (it is idempotent) — do NOT go through the downloader, because DOWNLOAD_URL is
 			// already cleared and the factory's HEAD request would fail.
-			if ($service->requiresDisk($track))
+			//
+			// Which tracks have such work left is answered by the service and not by the need of
+			// Disk: the delivery of the recordings of a call is carried by the pass of the
+			// preview, and a preview needs no Disk
+			// {@see TrackService::requiresFinalizeRetry()}.
+			if ($service->requiresFinalizeRetry($track))
 			{
 				$log && $logger->info("DownloadAgent::run: Re-finalizing downloaded track. TrackId: {$trackId}");
 
@@ -215,7 +220,7 @@ class DownloadAgent
 				if ($finalizeResult->isSuccess())
 				{
 					self::sendTelemetry($call, $track, 'success', 'finished_success');
-					(new CloudRecordAnalytics($call))->addDownload($track);
+					static::cloudRecordAnalytics($call)->addDownload($track);
 
 					return '';
 				}
@@ -226,8 +231,7 @@ class DownloadAgent
 					. "Errors: " . implode('; ', $finalizeResult->getErrorMessages())
 				);
 
-				$biErrorCode = $finalizeResult->getErrors()[0]?->getCode() ?? 'unknown';
-				(new CloudRecordAnalytics($call))->addDownload($track, $biErrorCode);
+				self::reportFailedDownload($call, $track, $finalizeResult);
 
 				return self::scheduleRetry($call, $track, $retryCount, $finalizeResult);
 			}
@@ -277,7 +281,7 @@ class DownloadAgent
 
 			self::sendTelemetry($call, $track, 'success', 'finished_success');
 
-			(new CloudRecordAnalytics($call))->addDownload($track);
+			static::cloudRecordAnalytics($call)->addDownload($track);
 
 			return '';
 		}
@@ -288,10 +292,63 @@ class DownloadAgent
 			. "Errors: " . implode('; ', $result->getErrorMessages())
 		);
 
-		$biErrorCode = $result->getErrors()[0]?->getCode() ?? 'unknown';
-		(new CloudRecordAnalytics($call))->addDownload($track, $biErrorCode);
+		self::reportFailedDownload($call, $track, $result);
 
 		return self::scheduleRetry($call, $track, $retryCount, $result);
+	}
+
+	/**
+	 * The failure of a pass in the row of the download - left out only for the one failure that
+	 * is not about the download at all.
+	 *
+	 * server_download answers one question: did the file reach the portal. The publication of a
+	 * recording in chat is a step of the finalization that follows
+	 * {@see TrackService::finalizeDownload()}, and on the regular order of a cloud recording it is
+	 * carried by the pass of the preview, whose own file is in place and whose download went
+	 * through: reported here it would put the failure of a delivery into the very row the defect
+	 * of that delivery is counted by, as an error of downloading a file that downloaded fine.
+	 *
+	 * So the row is left alone for that class of failure and for no other
+	 * {@see TrackService::isDeliveryFailure()}, and only while the file really is on the portal
+	 * {@see TrackService::isStoredOnPortal()}. Nothing is hidden by the silence: the pass still
+	 * reschedules the agent, the failure has the telemetry of the retry, and the delivery has a
+	 * mark and a row of its own {@see \Bitrix\Call\NotifyService::sendRecordingReadyMessage()}.
+	 *
+	 * Everything else is written down here as it was: the download itself, the attach of the file,
+	 * the attach to Disk, and the chat link an audio record is published by. That last one is the
+	 * reason the rule is not "the file is in place": attachToDisk() saves DISK_FILE_ID before it
+	 * tries the link {@see \Bitrix\Call\Track::attachToDisk()}, so an audio record whose link
+	 * never reached the chat looks stored in every way - and it has no second row anywhere, since
+	 * the message of a recording is sent for video records alone.
+	 */
+	private static function reportFailedDownload(?Call\Call $call, Track $track, Result $result): void
+	{
+		$service = TrackService::getInstance();
+		$errorCode = $result->getErrors()[0]?->getCode() ?? 'unknown';
+
+		if ($service->isDeliveryFailure($result) && $service->isStoredOnPortal($track))
+		{
+			$log = CallAISettings::isLoggingEnable();
+			$log && Logger::getInstance()->info(
+				"DownloadAgent::run: The delivery is what failed, server_download left alone."
+				. " TrackId: {$track->getId()}, Error: {$errorCode}"
+			);
+
+			return;
+		}
+
+		static::cloudRecordAnalytics($call)->addDownload($track, (string)$errorCode);
+	}
+
+	/**
+	 * The analytics of the row of the download, built here and not inline: the row itself leaves
+	 * no trace a test process can read {@see \Bitrix\Main\Analytics\AnalyticsEvent::send()}, and a
+	 * rule about which failures reach it is worth nothing if nothing can tell whether one did
+	 * {@see self::reportFailedDownload()}.
+	 */
+	protected static function cloudRecordAnalytics(?Call\Call $call): CloudRecordAnalytics
+	{
+		return new CloudRecordAnalytics($call);
 	}
 
 	/**
@@ -416,8 +473,12 @@ class DownloadAgent
 
 	/**
 	 * Check if agent already scheduled for this track
+	 *
+	 * Public because the download of a track is also what tells a row still on its way from one
+	 * whose download was never scheduled or gave up
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::audioRecordOnItsWay()}.
 	 */
-	private static function hasScheduledAgent(int $trackId): bool
+	public static function hasScheduledAgent(int $trackId): bool
 	{
 		$pattern = self::class . "::run({$trackId},%";
 

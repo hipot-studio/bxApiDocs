@@ -151,6 +151,11 @@ class Input
 				case 'deactivateConnector':
 					$result = $this->deactivateConnector();
 					break;
+				//The same, limited to the binding the command names: a connector server that may issue a
+				//deactivation while a reconnection is in flight sends this one instead.
+				case 'deactivateConnectorBinding':
+					$result = $this->deactivateConnectorBinding();
+					break;
 				case 'setChatName':
 					$result = $this->setChatName();
 					break;
@@ -374,9 +379,64 @@ class Input
 			$resultData = array_merge($message, $result->getResult());
 			$resultData['eventResult'] = $resultEvent->getResult();
 			$result->setResult($resultData);
+
+			// A refusal of the open line is reported to the connectors that read the per-message result:
+			// without it a message nothing wrote is answered as delivered and never asked for again. The
+			// command itself stays successful - the refusal belongs to this message alone, exactly as the
+			// per-message SUCCESS says (@see receivingMessage()).
+			if (
+				in_array($this->connector, Library::ENABLE_RECEIVING_MESSAGE_RESULT, true)
+				&& !self::isMessageAccepted($resultEvent->getResult())
+			)
+			{
+				$result->addError(new Error(
+					Loc::getMessage('IMCONNECTOR_ERROR_MESSAGE_NOT_ACCEPTED'),
+					Library::ERROR_IMCONNECTOR_MESSAGE_NOT_ACCEPTED,
+					__METHOD__,
+					$message
+				));
+			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Whether a handler of the incoming message really wrote it.
+	 *
+	 * A handler that refuses the message returns `false`, and the event manager keeps such an answer out of
+	 * the results altogether, so no result at all is a refusal by everybody who was asked. A handler that
+	 * took the message answers with the fields of what it wrote, which is why a result naming an empty
+	 * `MESSAGE_ID` is a refusal too: the message was answered for, but nothing was created.
+	 *
+	 * @param mixed $eventResults Answers of the handlers, @see \Bitrix\Main\Event::getResults().
+	 * @return bool
+	 */
+	protected static function isMessageAccepted($eventResults): bool
+	{
+		foreach ((array)$eventResults as $eventResult)
+		{
+			if (
+				!($eventResult instanceof Main\EventResult)
+				|| $eventResult->getType() === Main\EventResult::ERROR
+			)
+			{
+				continue;
+			}
+
+			$parameters = $eventResult->getParameters();
+			if (!is_array($parameters) || empty($parameters))
+			{
+				continue;
+			}
+
+			if (!array_key_exists('MESSAGE_ID', $parameters) || !empty($parameters['MESSAGE_ID']))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -701,6 +761,43 @@ class Input
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Deactivates the connector, but only while the line still holds the binding the command names
+	 * (`binding_id` in its data, matched against the one kept in the line status).
+	 *
+	 * A deactivation travels asynchronously, so it can arrive after the line has been connected anew. The
+	 * plain deactivateConnector() would then put a live line into the error state, which stops incoming
+	 * messages (ERROR_IMCONNECTOR_NOT_ACTIVE_LINE) with nothing on either side saying why. A connector
+	 * that stamps every connection with a binding id sends it here instead: a reconnection mints a new
+	 * one, so a command issued before it no longer matches and is dropped.
+	 *
+	 * A command that names no binding is not acted upon at all — without one there is nothing to tell an
+	 * obsolete command from a current one, which is the whole point of this method.
+	 *
+	 * @return Result
+	 */
+	protected function deactivateConnectorBinding(): Result
+	{
+		$result = clone $this->result;
+
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$commandBinding = is_array($this->data) ? (string)($this->data['binding_id'] ?? '') : '';
+		$status = Status::getInstance($this->connector, (int)$this->line);
+		$lineBinding = (string)(((array)$status->getData())['binding_id'] ?? '');
+
+		if ($commandBinding === '' || $commandBinding !== $lineBinding)
+		{
+			// Answered as handled, not as failed: the sender has done its part and must not repeat it.
+			return $result;
+		}
+
+		return $this->deactivateConnector();
 	}
 
 	/**

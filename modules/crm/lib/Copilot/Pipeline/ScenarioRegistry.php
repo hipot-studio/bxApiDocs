@@ -7,6 +7,7 @@ namespace Bitrix\Crm\Copilot\Pipeline;
 use Bitrix\Crm\Copilot\Pipeline\Scenario\AnalyzeCommunicationScenario;
 use Bitrix\Crm\Copilot\Pipeline\Scenario\CallScoringScenario;
 use Bitrix\Crm\Copilot\Pipeline\Scenario\CallScoringScenarioV2;
+use Bitrix\Crm\Copilot\Pipeline\Scenario\ClientSummaryScenario;
 use Bitrix\Crm\Copilot\Pipeline\Scenario\ExtractScoringCriteriaScenario;
 use Bitrix\Crm\Copilot\Pipeline\Scenario\FillFieldsScenario;
 use Bitrix\Crm\Copilot\Pipeline\Scenario\FullScenario;
@@ -70,5 +71,6 @@ final class ScenarioRegistry
 		$this->register(new ExtractScoringCriteriaScenario());
 		$this->register(new RepeatSaleTipsScenario());
 		$this->register(new RepeatSaleScreeningScenario());
+		$this->register(new ClientSummaryScenario());
 	}
 }

@@ -9,6 +9,7 @@ use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\Restrictions\EditingRestrictionResolver;
 use Bitrix\Disk\Internals\Error\Error as InternalDiskError;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
@@ -38,6 +39,7 @@ abstract class SessionManager implements IErrorable
 	/** @var  ErrorCollection */
 	protected $errorCollection;
 	private string|null $externalHash;
+	private ?bool $editingRestricted = null;
 
 	public function __construct()
 	{
@@ -76,6 +78,61 @@ abstract class SessionManager implements IErrorable
 		$this->sessionType = $sessionType;
 
 		return $this;
+	}
+
+	/**
+	 * The type the session is really opened with.
+	 *
+	 * A request to edit a document the portal keeps closed comes back as a view: the document
+	 * opens, but no edit session appears behind it. Both the lookup and the creation of the session
+	 * go through here, so such a document reuses and leaves behind view sessions only.
+	 *
+	 * Which of the reasons closed it - the restricted format or the exhausted personal quota - is
+	 * of no interest to a session that has no interface of its own: the type is all that is written
+	 * down here, and the words about it are shown by the editor.
+	 */
+	protected function getEffectiveSessionType(): ?int
+	{
+		if ($this->sessionType !== DocumentSession::TYPE_EDIT)
+		{
+			return $this->sessionType;
+		}
+
+		$this->editingRestricted ??= (new EditingRestrictionResolver())
+			->isRestricted($this->resolveFileName(), $this->resolveFile())
+		;
+
+		return $this->editingRestricted ? DocumentSession::TYPE_VIEW : DocumentSession::TYPE_EDIT;
+	}
+
+	/**
+	 * Name of the document the session is being opened for, as far as the manager knows it. A
+	 * session addressed by its hash alone carries no document to name, and the format policy has
+	 * nothing to judge.
+	 */
+	private function resolveFileName(): ?string
+	{
+		if ($this->version)
+		{
+			return $this->version->getName();
+		}
+
+		return $this->resolveFile()?->getName();
+	}
+
+	/**
+	 * The file the session is being opened over, which the quota is asked about: the document is
+	 * written back into it, and the disk it lies in is the one that has to have room left.
+	 *
+	 * A session opened for a version names it as its own document, but the version belongs to a
+	 * file all the same, and it is that file the editing would reach. The order is the one of
+	 * {@see DocumentSource::getFileFromSource()}, so the seam judges the document the source of the
+	 * session resolved - and the caller has usually resolved it already, which is why the version
+	 * hands its file over without a second lookup.
+	 */
+	private function resolveFile(): ?File
+	{
+		return $this->file ?: $this->version?->getObject() ?: $this->attachedObject?->getFile();
 	}
 
 	public function setSessionContext(DocumentSessionContext $sessionContext): self
@@ -306,7 +363,13 @@ abstract class SessionManager implements IErrorable
 		$fields['EXTERNAL_LINK_ID'] = $this->getExternalLinkId();
 		$fields['SERVICE'] = $this->service->value;
 
-		return DocumentSession::add($fields, $this->errorCollection);
+		return DocumentSession::add(
+			$fields,
+			$this->errorCollection,
+			isset($this->file)
+				? $this->file->getRealObject()->getUploadCleanupMarkerPresenceHint()
+				: null,
+		);
 	}
 
 	/**

@@ -110,6 +110,7 @@ final class TariffPlateProvider
 	private function buildTariffData(): TariffPlateData
 	{
 		$state = $this->getTariffState();
+		$purchaseDecision = $this->getPurchaseDecision();
 
 		return TariffPlateData::make([
 			'name' => $this->license->getName(),
@@ -118,6 +119,8 @@ final class TariffPlateProvider
 			'state' => $state->value,
 			'expireText' => $this->formatExpireDate($this->license->getExpireDate()),
 			'daysLeft' => $this->license->getDaysLeft(),
+			'purchaseAction' => $purchaseDecision->action->value,
+			'tariffSelection' => $purchaseDecision->selection->value,
 			'cta' => $this->resolvePurchaseCta(),
 			'ctaForced' => $this->isPurchaseCtaForced(),
 			'isDemoAvailable' => $this->license->isDemoAvailable(),
@@ -202,6 +205,21 @@ final class TariffPlateProvider
 			isDowngraded: $this->license->isDowngradedToFree(),
 			isActive: $this->license->isActive(),
 			isAutopay: $this->license->isAutopay(),
+			daysLeft: $this->license->getDaysLeft(),
+		);
+	}
+
+	/**
+	 * The action the plate calls to and the scenario the tariff table opens with. The top tariff is the
+	 * "ent" family the license names: it covers every enterprise edition, while nfr is not a top one.
+	 */
+	private function getPurchaseDecision(): TariffPurchaseDecision
+	{
+		return (new TariffPurchaseDecisionResolver())->resolve(
+			isDemo: $this->license->isDemo(),
+			isFree: $this->license->isFree(),
+			isDowngraded: $this->license->isDowngradedToFree(),
+			isTopTariff: $this->license->getFamily() === 'ent',
 			daysLeft: $this->license->getDaysLeft(),
 		);
 	}

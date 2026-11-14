@@ -52,11 +52,12 @@ class FilterValidator
 
 		if (!$condition->getLeftOperand() instanceof Expression)
 		{
-			if (!isset($dto->getFields()[$condition->getLeftOperand()]))
+			$field = $dto->getFields()->getMeta($condition->getLeftOperand());
+			if ($field === null)
 			{
 				throw new UnknownDtoPropertyException($dto->getShortName(), $condition->getLeftOperand());
 			}
-			if (!$dto->getFields()[$condition->getLeftOperand()]->isFilterable())
+			if (!$field->isFilterable())
 			{
 				throw new DtoFieldRequiredAttributeException($dto->getShortName(), $condition->getLeftOperand(), Filterable::class);
 			}
@@ -64,7 +65,6 @@ class FilterValidator
 			{
 				self::validateSimpleCondition($condition, $dto);
 
-				$field = $dto->getFields()[$condition->getLeftOperand()];
 				$dynamicEnumProvider = $field->getDynamicEnumProvider();
 				$dynamicEnumDefinition = $dynamicEnumProvider !== null
 					? DynamicEnumRegistry::resolve($dynamicEnumProvider)
@@ -81,7 +81,7 @@ class FilterValidator
 				{
 					$isValid = $dynamicEnumDefinition !== null
 						? FieldsValidator::validateDynamicEnumValue($dynamicEnumDefinition, $rightOperand)
-						: FieldsValidator::validateDtoFieldValue($field, $rightOperand);
+						: FieldsValidator::validateFieldMetaValue($field, $rightOperand);
 					if (!$isValid)
 					{
 						throw new InvalidRequestFieldTypeException($field->getPropertyName(), $typeLabel);
@@ -94,11 +94,12 @@ class FilterValidator
 		{
 			if ($operand instanceof Expression)
 			{
-				if (!isset($dto->getFields()[$operand->getProperty()]))
+				$operandField = $dto->getFields()->getMeta($operand->getProperty());
+				if ($operandField === null)
 				{
 					throw new UnknownDtoPropertyException($dto->getShortName(), $operand->getProperty());
 				}
-				if (!$dto->getFields()[$operand->getProperty()]->isFilterable())
+				if (!$operandField->isFilterable())
 				{
 					throw new DtoFieldRequiredAttributeException($dto->getShortName(), $operand->getProperty(), Filterable::class);
 				}
@@ -165,7 +166,7 @@ class FilterValidator
 			throw new InvalidFilterException("Operator \"$operator->value\" requires an array only with 2 items.");
 		}
 
-		$operandType = $dto->getFields()[$condition->getLeftOperand()]->getPropertyType();
+		$operandType = $dto->getFields()->getMeta($condition->getLeftOperand())->getPropertyType();
 		$field = $condition->getLeftOperand();
 
 		if (!in_array($operandType, [DateTime::class, Date::class, 'int', 'float'], true))

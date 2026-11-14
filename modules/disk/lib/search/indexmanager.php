@@ -12,13 +12,22 @@ use Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable;
 use Bitrix\Disk\Internals\Index\ObjectHeadIndexTable;
 use Bitrix\Disk\Internals\ObjectSaveIndexTable;
 use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
+use Bitrix\Disk\Internal\Service\Sync\Journal\JournalWriter;
 use Bitrix\Disk\ProxyType\Group;
 use Bitrix\Disk\Search\Reindex\HeadIndex;
+use Bitrix\Disk\Search\Messenger\IndexBoardMessage;
 use Bitrix\Disk\Storage;
 use Bitrix\Disk\ProxyType;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\ConfigurationException;
+use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Messenger\Internals\Exception\Broker\SendFailedException;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Result;
 use CSearch;
 
 final class IndexManager
@@ -29,14 +38,16 @@ final class IndexManager
 	protected $contentManager;
 	protected $useSearchModule = true;
 	protected $allowUseExtendedFullText = true;
+	private JournalWriter $journalWriter;
 
 	/**
 	 * Constructor IndexManager.
 	 */
-	public function __construct()
+	public function __construct(?JournalWriter $journalWriter = null)
 	{
 		$this->errorCollection = new ErrorCollection;
 		$this->contentManager = new ContentManager;
+		$this->journalWriter = $journalWriter ?? new JournalWriter();
 
 		$this->initDefaultConfiguration();
 	}
@@ -143,6 +154,44 @@ final class IndexManager
 		);
 	}
 
+	public function publishFileToHeadIndex(File $file): HeadIndexOperationResult
+	{
+		if (!Configuration::allowIndexFiles())
+		{
+			return $this->getSkippedHeadIndexOperationResult();
+		}
+
+		$result = ObjectHeadIndexTable::publishIfChanged(
+			$file->getId(),
+			$this->getTextBuilder($file)->getSearchValue(),
+		);
+
+		return HeadIndexOperationResult::fromPersistenceResult($result);
+	}
+
+	public function updateFileHeadIndexIfExists(File $file): HeadIndexOperationResult
+	{
+		if (!Configuration::allowIndexFiles())
+		{
+			return $this->getSkippedHeadIndexOperationResult();
+		}
+
+		$result = ObjectHeadIndexTable::updateIfExistsAndChanged(
+			$file->getId(),
+			$this->getTextBuilder($file)->getSearchValue(),
+		);
+
+		return HeadIndexOperationResult::fromPersistenceResult($result);
+	}
+
+	private function getSkippedHeadIndexOperationResult(): HeadIndexOperationResult
+	{
+		$result = new Result();
+		$result->setData(['outcome' => HeadIndexOperationResult::OUTCOME_SKIPPED]);
+
+		return HeadIndexOperationResult::fromPersistenceResult($result);
+	}
+
 	/**
 	 * Runs index by file.
 	 *
@@ -222,7 +271,18 @@ final class IndexManager
 		}
 
 		$storage = $object->getStorage();
-		if (!$storage || !$storage->getProxyType()->canIndexBySearch())
+		if (!$storage)
+		{
+			return false;
+		}
+
+		$moduleId = $storage->getModuleId();
+		if ($moduleId !== Driver::INTERNAL_MODULE_ID && !Loader::includeModule($moduleId))
+		{
+			return false;
+		}
+
+		if (!$storage->getProxyType()->canIndexBySearch())
 		{
 			return false;
 		}
@@ -243,10 +303,224 @@ final class IndexManager
 			$this->saveOldFullText($file);
 		}
 
-		if ($this->allowUseExtendedFullText)
+		if ($this->allowUseExtendedFullText && (int)$file->getTypeFile() !== TypeFile::BOARD)
 		{
 			$this->saveExtendedFullTextByContent($file);
 		}
+	}
+
+	public function scheduleBoardIndex(File $file, int $globalContentVersion): void
+	{
+		if (
+			!$this->allowIndex($file)
+			|| !Configuration::isBoardIndexEnabled()
+			|| !Configuration::allowUseExtendedFullText()
+			|| (int)$file->getTypeFile() !== TypeFile::BOARD
+		)
+		{
+			return;
+		}
+
+		try
+		{
+			ObjectExtendedIndexTable::markBoardWaiting(
+				(int)$file->getId(),
+				$this->getTextBuilder($file)->getSearchValue(),
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			$this->logBoardIndexFailure('waiting', $file, $globalContentVersion, $exception);
+
+			return;
+		}
+
+		try
+		{
+			(new IndexBoardMessage((int)$file->getId(), $globalContentVersion))->schedule();
+		}
+		catch (ConfigurationException|SendFailedException $exception)
+		{
+			$this->logBoardIndexFailure('schedule', $file, $globalContentVersion, $exception);
+		}
+	}
+
+	/**
+	 * @param list<string> $fragments
+	 */
+	public function publishBoardIndex(int $objectId, int $expectedVersion, array $fragments): bool
+	{
+		if (!Configuration::isBoardIndexEnabled())
+		{
+			return false;
+		}
+
+		$truncation = null;
+		$publishedObject = null;
+		$published = $this->runBoardIndexTransition(
+			function () use ($objectId, $expectedVersion, $fragments, &$truncation, &$publishedObject): bool {
+				return $this->publishCurrentBoardIndex(
+					$objectId,
+					$expectedVersion,
+					$fragments,
+					$truncation,
+					$publishedObject,
+				);
+			},
+		);
+		if ($publishedObject !== null)
+		{
+			$this->journalWriter->publishObjectChange($publishedObject, ChangeType::IndexUpdated);
+		}
+		if ($published && $truncation !== null)
+		{
+			ServiceLocator::getInstance()->get('disk.boardIndexingLogger')->warning(
+				'Board index truncated: objectId={objectId}, version={version}, '
+				. 'originalBytes={originalBytes}, indexedBytes={indexedBytes}, limitBytes={limitBytes}',
+				[
+					'objectId' => $objectId,
+					'version' => $expectedVersion,
+					...$truncation,
+				],
+			);
+		}
+
+		return $published;
+	}
+
+	public function markBoardIndexFailed(int $objectId, int $expectedVersion): bool
+	{
+		return $this->runBoardIndexTransition(
+			fn(): bool => $this->markCurrentBoardIndexFailed($objectId, $expectedVersion),
+		);
+	}
+
+	private function runBoardIndexTransition(callable $transition): bool
+	{
+		$connection = Application::getConnection();
+		$pool = Application::getInstance()->getConnectionPool();
+		$wasMasterOnly = $pool->isMasterOnly();
+		$pool->useMasterOnly(true);
+		try
+		{
+			$connection->startTransaction();
+			try
+			{
+				$result = $transition();
+				$connection->commitTransaction();
+
+				return $result;
+			}
+			catch (\Throwable $exception)
+			{
+				$connection->rollbackTransaction();
+
+				throw $exception;
+			}
+		}
+		finally
+		{
+			$pool->useMasterOnly($wasMasterOnly);
+		}
+	}
+
+	/**
+	 * @param list<string> $fragments
+	 */
+	private function publishCurrentBoardIndex(
+		int $objectId,
+		int $expectedVersion,
+		array $fragments,
+		?array &$truncation,
+		?File &$publishedObject,
+	): bool
+	{
+		$connection = Application::getConnection();
+		$object = $connection->query((new SqlExpression(
+			'SELECT ID, NAME, CREATED_BY, TYPE, TYPE_FILE, REAL_OBJECT_ID, DELETED_TYPE, GLOBAL_CONTENT_VERSION'
+			. ' FROM ?# WHERE ID = ?i FOR UPDATE',
+			ObjectTable::getTableName(),
+			$objectId,
+		))->compile())->fetch();
+		$index = $connection->query((new SqlExpression(
+			'SELECT STATUS FROM ?# WHERE OBJECT_ID = ?i FOR UPDATE',
+			ObjectExtendedIndexTable::getTableName(),
+			$objectId,
+		))->compile())->fetch();
+
+		if (
+			!$object
+			|| !$index
+			|| (int)$object['TYPE'] !== ObjectTable::TYPE_FILE
+			|| (int)$object['TYPE_FILE'] !== TypeFile::BOARD
+			|| ((int)$object['REAL_OBJECT_ID'] !== 0 && (int)$object['REAL_OBJECT_ID'] !== $objectId)
+			|| (int)$object['DELETED_TYPE'] !== ObjectTable::DELETED_TYPE_NONE
+			|| !Configuration::allowUseExtendedFullText()
+			|| (int)$object['GLOBAL_CONTENT_VERSION'] !== $expectedVersion
+			|| (int)$index['STATUS'] !== ObjectExtendedIndexTable::STATUS_BOARD_WAITING
+		)
+		{
+			return false;
+		}
+
+		$textBuilder = $this->getTextBuilder(File::buildFromArray($object));
+		foreach ($fragments as $fragment)
+		{
+			$textBuilder->addText($fragment);
+		}
+		ObjectExtendedIndexTable::publishBoardIndex($objectId, $textBuilder->getSearchValue(), $truncation);
+		$publishedObject = File::buildFromArray($object);
+
+		return true;
+	}
+
+	private function markCurrentBoardIndexFailed(int $objectId, int $expectedVersion): bool
+	{
+		$connection = Application::getConnection();
+		$object = $connection->query((new SqlExpression(
+			'SELECT ID, GLOBAL_CONTENT_VERSION FROM ?# WHERE ID = ?i FOR UPDATE',
+			ObjectTable::getTableName(),
+			$objectId,
+		))->compile())->fetch();
+		$index = $connection->query((new SqlExpression(
+			'SELECT STATUS FROM ?# WHERE OBJECT_ID = ?i FOR UPDATE',
+			ObjectExtendedIndexTable::getTableName(),
+			$objectId,
+		))->compile())->fetch();
+
+		if (
+			!$object
+			|| !$index
+			|| (int)$object['GLOBAL_CONTENT_VERSION'] !== $expectedVersion
+			|| (int)$index['STATUS'] !== ObjectExtendedIndexTable::STATUS_BOARD_WAITING
+		)
+		{
+			return false;
+		}
+
+		ObjectExtendedIndexTable::markBoardIndexFailed($objectId);
+
+		return true;
+	}
+
+	private function logBoardIndexFailure(
+		string $stage,
+		File $file,
+		int $globalContentVersion,
+		\Throwable $exception,
+	): void
+	{
+		ServiceLocator::getInstance()->get('disk.boardIndexingLogger')->error(
+			'Board indexing failed: stage={stage}, objectId={objectId}, '
+			. 'globalContentVersion={globalContentVersion}, queueId={queueId}, exception={exception}',
+			[
+				'stage' => $stage,
+				'objectId' => (int)$file->getId(),
+				'globalContentVersion' => $globalContentVersion,
+				'queueId' => 'index_board',
+				'exception' => $exception::class,
+			],
+		);
 	}
 
 	public function indexFolderWithExtendedIndex(Folder $folder)
@@ -261,7 +535,11 @@ final class IndexManager
 
 	public function indexFileWithExtendedIndex(File $file)
 	{
-		if (!$this->allowIndex($file) || !$this->allowUseExtendedFullText)
+		if (
+			(int)$file->getTypeFile() === TypeFile::BOARD
+			|| !$this->allowIndex($file)
+			|| !$this->allowUseExtendedFullText
+		)
 		{
 			return;
 		}
@@ -352,7 +630,38 @@ final class IndexManager
 		}
 		elseif ($object instanceof File)
 		{
+			$boardIndex = null;
+			$previousHead = null;
+			if (
+				(int)$object->getTypeFile() === TypeFile::BOARD
+				&& $this->allowIndex($object)
+				&& $this->allowUseExtendedFullText
+			)
+			{
+				$boardIndex = ObjectExtendedIndexTable::query()
+					->setSelect(['SEARCH_INDEX'])
+					->where('OBJECT_ID', $object->getId())
+					->fetch()
+				;
+				$previousHead = ObjectHeadIndexTable::query()
+					->setSelect(['SEARCH_INDEX'])
+					->where('OBJECT_ID', $object->getId())
+					->fetch()['SEARCH_INDEX'] ?? null
+				;
+			}
+
 			$this->indexFile($object);
+			if ($boardIndex)
+			{
+				$content = (string)$boardIndex['SEARCH_INDEX'];
+				if ($previousHead !== null && str_starts_with($content, $previousHead))
+				{
+					$content = ltrim(substr($content, strlen($previousHead)));
+				}
+				ObjectExtendedIndexTable::update($object->getId(), [
+					'SEARCH_INDEX' => trim($this->getTextBuilder($object)->getSearchValue() . ' ' . $content),
+				]);
+			}
 		}
 	}
 
@@ -481,6 +790,55 @@ final class IndexManager
 		$index = \CSearch::getIndex(Driver::INTERNAL_MODULE_ID, $itemId);
 
 		return $index?: null;
+	}
+
+	/**
+	 * Returns bodies of files which were stored in module search.
+	 * @param File[] $files Files.
+	 *
+	 * @return array<int, string> File id => stored body. Files without stored body are omitted.
+	 */
+	public function getStoredBodies(array $files): array
+	{
+		$fileIdsByItemId = [];
+		foreach ($files as $file)
+		{
+			if ($file instanceof File)
+			{
+				$fileIdsByItemId[self::getItemId($file)] = (int)$file->getId();
+			}
+		}
+
+		if (!$fileIdsByItemId || !Loader::includeModule('search'))
+		{
+			return [];
+		}
+
+		// Search tables may live on a separate cluster node, so use the same connection as CSearch.
+		$connection = \CDatabase::GetModuleConnection('search');
+		$moduleId = $connection->ForSql(Driver::INTERNAL_MODULE_ID);
+
+		$bodies = [];
+		foreach (array_chunk(array_keys($fileIdsByItemId), 500) as $itemIds)
+		{
+			$itemIdsSql = implode(', ', array_map(
+				static fn(string $itemId): string => "'" . $connection->ForSql($itemId) . "'",
+				$itemIds,
+			));
+
+			$result = $connection->Query(
+				"SELECT ITEM_ID, BODY FROM b_search_content WHERE MODULE_ID = '{$moduleId}' AND ITEM_ID IN ({$itemIdsSql})"
+			);
+			while ($row = $result->Fetch())
+			{
+				if (!empty($row['BODY']) && isset($fileIdsByItemId[$row['ITEM_ID']]))
+				{
+					$bodies[$fileIdsByItemId[$row['ITEM_ID']]] = $row['BODY'];
+				}
+			}
+		}
+
+		return $bodies;
 	}
 
 	/**

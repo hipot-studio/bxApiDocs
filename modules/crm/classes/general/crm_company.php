@@ -1219,6 +1219,25 @@ class CAllCrmCompany
 				$sender->GetTableAlias()
 			);
 		}
+		if (array_key_exists('BINDING_OWNER', $arFilter))
+		{
+			$bindingOwner = Crm\Binding\OwnerBindingFilter::tryCreateOwnerFromFilterValue($arFilter['BINDING_OWNER']);
+			if (
+				$bindingOwner
+				&& Crm\Binding\OwnerBindingFilter::isSupported(CCrmOwnerType::Company, $bindingOwner->getEntityTypeId())
+			)
+			{
+				$sqlData['FROM'][] = Crm\Binding\OwnerBindingFilter::prepareJoinSql(
+					CCrmOwnerType::Company,
+					$bindingOwner,
+					$sender->GetTableAlias()
+				);
+			}
+			else
+			{
+				$sqlData['WHERE'][] = '1 = 0';
+			}
+		}
 
 		Tracking\UI\Filter::buildFilterAfterPrepareSql(
 			$sqlData,
@@ -3196,7 +3215,7 @@ class CAllCrmCompany
 		}
 
 		static $arImmutableFilters = array(
-			'FM', 'ID', 'CURRENCY_ID', 'ASSOCIATED_CONTACT_ID',
+			'FM', 'ID', 'CURRENCY_ID', 'ASSOCIATED_CONTACT_ID', 'BINDING_OWNER',
 			'ASSIGNED_BY_ID', 'CREATED_BY_ID', 'MODIFY_BY_ID',
 			'COMPANY_TYPE', 'INDUSTRY', 'EMPLOYEES', 'WEBFORM_ID',
 			'HAS_PHONE', 'HAS_EMAIL', 'HAS_IMOL', 'IS_MY_COMPANY', 'RQ',

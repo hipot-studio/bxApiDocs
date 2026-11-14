@@ -9,6 +9,12 @@ use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\Util;
+use Bitrix\Socialnetwork\Helper\ScrumProjectLimit;
+use Bitrix\Socialnetwork\Helper\ScrumProjectLimitException;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DB\TransactionException;
+use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ScrumLimit;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 use Bitrix\Socialnetwork\Item\Workgroup;
@@ -22,7 +28,7 @@ class CSocNetGroup extends CAllSocNetGroup
 	/***************************************/
 	/********  DATA MODIFICATION  **********/
 	/***************************************/
-	public static function Add($arFields)
+	public static function Add($arFields, ?array $tagNames = null)
 	{
 		global $DB, $CACHE_MANAGER, $USER_FIELD_MANAGER;
 
@@ -69,6 +75,15 @@ class CSocNetGroup extends CAllSocNetGroup
 		}
 		unset($arFields["SITE_ID_FULL"]);
 
+		// Only a new file needs the early refusal here: the final check would leave it orphaned
+		if (
+			is_array($arFields['IMAGE_ID'] ?? null)
+			&& static::isScrumLimitReachedBeforeWrite($arFields, $arFields1)
+		)
+		{
+			return false;
+		}
+
 		if (
 			array_key_exists("IMAGE_ID", $arFields)
 			&& is_array($arFields["IMAGE_ID"])
@@ -86,103 +101,133 @@ class CSocNetGroup extends CAllSocNetGroup
 		$arInsert = $DB->PrepareInsert("b_sonet_group", $arFields);
 		Util::processEqualityFieldsToInsert($arFields1, $arInsert);
 
-		$ID = false;
-		if ($arInsert[0] <> '')
+		$protected = ($arInsert[0] <> '')
+			&& static::hasCountedScrumMaster($arFields, $arFields1)
+			&& (new ScrumProjectLimit($DB->getConnection()))->isProtectionRequired();
+		$pool = Application::getInstance()->getConnectionPool();
+		if ($protected)
 		{
-			$strSql =
-				"INSERT INTO b_sonet_group(".$arInsert[0].") ".
-				"VALUES(".$arInsert[1].")";
-			$DB->Query($strSql);
-
-			$ID = (int)$DB->LastID();
-
-			$events = GetModuleEvents("socialnetwork", "OnSocNetGroupAdd");
-			while ($arEvent = $events->Fetch())
+			$pool->useMasterOnly(true);
+		}
+		try
+		{
+			$ID = false;
+			if ($arInsert[0] <> '')
 			{
-				ExecuteModuleEventEx($arEvent, array($ID, &$arFields));
+				$strSql =
+					"INSERT INTO b_sonet_group(".$arInsert[0].") ".
+					"VALUES(".$arInsert[1].")";
+				if (!static::writeWithScrumLimit(static function () use ($DB, $strSql, &$ID): void {
+					$DB->Query($strSql);
+					$ID = (int)$DB->LastID();
+				}, $protected))
+				{
+					return false;
+				}
+
+				$events = GetModuleEvents("socialnetwork", "OnSocNetGroupAdd");
+				while ($arEvent = $events->Fetch())
+				{
+					ExecuteModuleEventEx($arEvent, array($ID, &$arFields));
+				}
+
+				if ($ID > 0)
+				{
+					EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_ADD, [
+						'GROUP_ID' => $ID,
+					]);
+
+					if(!empty($arSiteID))
+					{
+						$DB->Query("
+							DELETE FROM b_sonet_group_site WHERE GROUP_ID = ".$ID."
+						");
+
+						$DB->Query("
+							INSERT INTO b_sonet_group_site(GROUP_ID, SITE_ID)
+							SELECT ".$ID.", LID
+							FROM b_lang
+							WHERE LID IN ('".implode("', '", $arSiteID)."')
+						");
+
+						if (intval($arFields["SUBJECT_ID"]) > 0)
+						{
+							WorkgroupSubject::syncSiteId(array(
+								'subjectId' => $arFields["SUBJECT_ID"],
+								'siteId' => $arSiteID
+							));
+						}
+					}
+
+					if(defined("BX_COMP_MANAGED_CACHE"))
+					{
+						$CACHE_MANAGER->ClearByTag("sonet_group_".$ID);
+						if (DeferredCacheFeature::isOn())
+						{
+							DeferredTagCleaner::getInstance()->clearByTag('sonet_group');
+						}
+						else
+						{
+							$CACHE_MANAGER->ClearByTag("sonet_group");
+						}
+					}
+
+					$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
+					CSocNetGroup::SearchIndex($ID, $arSiteID);
+					// A single tag "0" is empty() as KEYWORDS, but an explicit tag list must still reach the tag table.
+					if ($tagNames !== null || !empty($arFields["KEYWORDS"]))
+					{
+						$tagsList = $tagNames ?? explode(',', $arFields["KEYWORDS"]);
+						if (
+							!empty($tagsList)
+							&& is_array($tagsList)
+						)
+						{
+							$tagsList = array_map(function($a) { return trim($a, ' '); }, $tagsList);
+							$tagsList = array_filter($tagsList, function($a) { return ($a <> ''); });
+						}
+						if (
+							!empty($tagsList)
+							&& is_array($tagsList)
+						)
+						{
+							WorkgroupTagTable::set([
+								'groupId' => $ID,
+								'tags' => $tagsList
+							]);
+						}
+					}
+
+					Workgroup::setIndex(array(
+						'fields' => $arFields
+					));
+
+					$groupItem = Workgroup::getById($ID, false);
+					$groupItem->syncDeptConnection();
+
+					GroupRegistry::getInstance()->invalidate($ID);
+				}
 			}
 
-			if ($ID > 0)
+			return $ID;
+		}
+		finally
+		{
+			if ($protected)
 			{
-				EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_ADD, [
-					'GROUP_ID' => $ID,
-				]);
-
-				if(!empty($arSiteID))
-				{
-					$DB->Query("
-						DELETE FROM b_sonet_group_site WHERE GROUP_ID = ".$ID."
-					");
-
-					$DB->Query("
-						INSERT INTO b_sonet_group_site(GROUP_ID, SITE_ID)
-						SELECT ".$ID.", LID
-						FROM b_lang
-						WHERE LID IN ('".implode("', '", $arSiteID)."')
-					");
-
-					if (intval($arFields["SUBJECT_ID"]) > 0)
-					{
-						WorkgroupSubject::syncSiteId(array(
-							'subjectId' => $arFields["SUBJECT_ID"],
-							'siteId' => $arSiteID
-						));
-					}
-				}
-
-				if(defined("BX_COMP_MANAGED_CACHE"))
-				{
-					$CACHE_MANAGER->ClearByTag("sonet_group_".$ID);
-					if (DeferredCacheFeature::isOn())
-					{
-						DeferredTagCleaner::getInstance()->clearByTag('sonet_group');
-					}
-					else
-					{
-						$CACHE_MANAGER->ClearByTag("sonet_group");
-					}
-				}
-
-				$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
-				CSocNetGroup::SearchIndex($ID, $arSiteID);
-				if (!empty($arFields["KEYWORDS"]))
-				{
-					$tagsList = explode(',', $arFields["KEYWORDS"]);
-					if (
-						!empty($tagsList)
-						&& is_array($tagsList)
-					)
-					{
-						$tagsList = array_map(function($a) { return trim($a, ' '); }, $tagsList);
-						$tagsList = array_filter($tagsList, function($a) { return ($a <> ''); });
-					}
-					if (
-						!empty($tagsList)
-						&& is_array($tagsList)
-					)
-					{
-						WorkgroupTagTable::set([
-							'groupId' => $ID,
-							'tags' => $tagsList
-						]);
-					}
-				}
-
-				Workgroup::setIndex(array(
-					'fields' => $arFields
-				));
-
-				$groupItem = Workgroup::getById($ID, false);
-				$groupItem->syncDeptConnection();
-
-				GroupRegistry::getInstance()->invalidate($ID);
+				$pool->useMasterOnly(false);
 			}
 		}
-
-		return $ID;
 	}
 
-	public static function Update($ID, $arFields, $bAutoSubscribe = true, $bClearCommonTag = true, $bSync = true)
+	public static function Update(
+		$ID,
+		$arFields,
+		$bAutoSubscribe = true,
+		$bClearCommonTag = true,
+		$bSync = true,
+		?array $tagNames = null,
+	)
 	{
 		global $DB, $APPLICATION, $USER_FIELD_MANAGER;
 
@@ -266,6 +311,11 @@ class CSocNetGroup extends CAllSocNetGroup
 			}
 		}
 
+		if (static::isScrumLimitReachedBeforeWrite($arFields, $arFields1, $ID))
+		{
+			return false;
+		}
+
 		EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_BEFORE_UPDATE, [
 			'GROUP_ID' => $ID,
 		]);
@@ -300,302 +350,326 @@ class CSocNetGroup extends CAllSocNetGroup
 
 		$isRowUpdated = ($strUpdate <> '');
 
-		if ($isRowUpdated)
+		$protected = $isRowUpdated
+			&& static::hasCountedScrumMaster($fieldsToWrite, $arFields1)
+			&& (new ScrumProjectLimit($DB->getConnection()))->isProtectionRequired();
+		$pool = Application::getInstance()->getConnectionPool();
+		if ($protected)
 		{
-			$strSql =
-				"UPDATE b_sonet_group SET ".
-				"	".$strUpdate." ".
-				"WHERE ID = ".$ID." ";
-			$DB->Query($strSql);
-
-			if(!empty($arSiteID))
+			$pool->useMasterOnly(true);
+		}
+		try
+		{
+			if ($isRowUpdated)
 			{
-				$connection = \Bitrix\Main\Application::getConnection();
-
-				$strSql = "DELETE FROM b_sonet_group_site WHERE GROUP_ID=".$ID;
-				$DB->Query($strSql);
-
-				$strSql = $connection->getSqlHelper()->getInsertIgnore(
-					"b_sonet_group_site",
-					"(GROUP_ID, SITE_ID)",
-					"SELECT ".$ID.", LID ".
-					"FROM b_lang ".
-					"WHERE LID IN (".$str_SiteID.") "
-				);
-				$DB->Query($strSql);
-
-				$arLogID = array();
-
-				$dbResult = CSocNetLog::GetList(
-					array(),
-					array("LOG_RIGHTS" => "SG".$ID),
-					false,
-					false,
-					array("ID")
-				);
-
-				while ($arResult = $dbResult->Fetch())
+				$strSql =
+					"UPDATE b_sonet_group SET ".
+					"	".$strUpdate." ".
+					"WHERE ID = ".$ID." ";
+				if (!static::writeWithScrumLimit(static function () use ($DB, $strSql): void {
+					$DB->Query($strSql);
+				}, $protected, $ID))
 				{
-					$DB->Query("DELETE FROM b_sonet_log_site WHERE LOG_ID = ".$arResult["ID"]."");
+					return false;
+				}
 
-					$DB->Query($connection->getSqlHelper()->getInsertIgnore(
-						"b_sonet_log_site",
-						"(LOG_ID, SITE_ID)",
-						"SELECT ".$arResult["ID"].", LID ".
+				if(!empty($arSiteID))
+				{
+					$connection = \Bitrix\Main\Application::getConnection();
+
+					$strSql = "DELETE FROM b_sonet_group_site WHERE GROUP_ID=".$ID;
+					$DB->Query($strSql);
+
+					$strSql = $connection->getSqlHelper()->getInsertIgnore(
+						"b_sonet_group_site",
+						"(GROUP_ID, SITE_ID)",
+						"SELECT ".$ID.", LID ".
 						"FROM b_lang ".
-						"WHERE LID IN (".$str_SiteID.")"
-					));
+						"WHERE LID IN (".$str_SiteID.") "
+					);
+					$DB->Query($strSql);
 
-					$arLogID[] = $arResult["ID"];
-				}
-			}
+					$arLogID = array();
 
-			if (
-				!empty($arSiteID)
-				|| intval($arFields["SUBJECT_ID"] ?? 0) > 0
-			)
-			{
-				$subjectId = 0;
-				$groupSiteList = array();
+					$dbResult = CSocNetLog::GetList(
+						array(),
+						array("LOG_RIGHTS" => "SG".$ID),
+						false,
+						false,
+						array("ID")
+					);
 
-				if (intval($arFields["SUBJECT_ID"] ?? 0) <= 0)
-				{
-					$res = WorkgroupTable::getList(array(
-						'filter' => array('=ID' => $ID),
-						'select' => array('SUBJECT_ID')
-					));
-					if ($workgroupFieldsList = $res->fetch())
+					while ($arResult = $dbResult->Fetch())
 					{
-						$subjectId = intval($workgroupFieldsList["SUBJECT_ID"]);
-					}
-				}
-				else
-				{
-					$subjectId = intval($arFields["SUBJECT_ID"]);
-				}
+						$DB->Query("DELETE FROM b_sonet_log_site WHERE LOG_ID = ".$arResult["ID"]."");
 
-				if (empty($arSiteID))
-				{
-					$res = WorkgroupSiteTable::getList(array(
-						'filter' => array('=GROUP_ID' => $ID),
-						'select' => array('SITE_ID')
-					));
-					while ($workgroupSiteFieldsList = $res->fetch())
-					{
-						$groupSiteList[] = intval($workgroupSiteFieldsList["SITE_ID"]);
+						$DB->Query($connection->getSqlHelper()->getInsertIgnore(
+							"b_sonet_log_site",
+							"(LOG_ID, SITE_ID)",
+							"SELECT ".$arResult["ID"].", LID ".
+							"FROM b_lang ".
+							"WHERE LID IN (".$str_SiteID.")"
+						));
+
+						$arLogID[] = $arResult["ID"];
 					}
-				}
-				else
-				{
-					$groupSiteList = $arSiteID;
 				}
 
 				if (
-					$subjectId > 0
-					&& !empty($groupSiteList)
+					!empty($arSiteID)
+					|| intval($arFields["SUBJECT_ID"] ?? 0) > 0
 				)
 				{
-					WorkgroupSubject::syncSiteId(array(
-						'subjectId' => $subjectId,
-						'siteId' => $groupSiteList
-					));
+					$subjectId = 0;
+					$groupSiteList = array();
+
+					if (intval($arFields["SUBJECT_ID"] ?? 0) <= 0)
+					{
+						$res = WorkgroupTable::getList(array(
+							'filter' => array('=ID' => $ID),
+							'select' => array('SUBJECT_ID')
+						));
+						if ($workgroupFieldsList = $res->fetch())
+						{
+							$subjectId = intval($workgroupFieldsList["SUBJECT_ID"]);
+						}
+					}
+					else
+					{
+						$subjectId = intval($arFields["SUBJECT_ID"]);
+					}
+
+					if (empty($arSiteID))
+					{
+						$res = WorkgroupSiteTable::getList(array(
+							'filter' => array('=GROUP_ID' => $ID),
+							'select' => array('SITE_ID')
+						));
+						while ($workgroupSiteFieldsList = $res->fetch())
+						{
+							$groupSiteList[] = intval($workgroupSiteFieldsList["SITE_ID"]);
+						}
+					}
+					else
+					{
+						$groupSiteList = $arSiteID;
+					}
+
+					if (
+						$subjectId > 0
+						&& !empty($groupSiteList)
+					)
+					{
+						WorkgroupSubject::syncSiteId(array(
+							'subjectId' => $subjectId,
+							'siteId' => $groupSiteList
+						));
+					}
 				}
 			}
-		}
 
-		// A row may hold no type at all, and it then drops out of every negative type filter that goes
-		// through ORM. The column is kept out of the written set above, so healing it takes a statement of
-		// its own, and the TYPE IS NULL condition is what keeps that safe: it cannot roll back a type
-		// stored meanwhile
-		$isTypeMaterialized = false;
+			// A row may hold no type at all, and it then drops out of every negative type filter that goes
+			// through ORM. The column is kept out of the written set above, so healing it takes a statement of
+			// its own, and the TYPE IS NULL condition is what keeps that safe: it cannot roll back a type
+			// stored meanwhile
+			$isTypeMaterialized = false;
 
-		if ($persistedType === '')
-		{
-			$materializationResult = $DB->Query(
-				"UPDATE b_sonet_group SET TYPE = '".$DB->ForSql($restoredType)."' ".
-				"WHERE ID = ".$ID." AND TYPE IS NULL"
-			);
+			if ($persistedType === '')
+			{
+				$materializationResult = $DB->Query(
+					"UPDATE b_sonet_group SET TYPE = '".$DB->ForSql($restoredType)."' ".
+					"WHERE ID = ".$ID." AND TYPE IS NULL"
+				);
 
-			$isTypeMaterialized = ($materializationResult->AffectedRowsCount() > 0);
-		}
+				$isTypeMaterialized = ($materializationResult->AffectedRowsCount() > 0);
+			}
 
-		if ($isRowUpdated || $isTypeMaterialized)
-		{
-			self::clearGroupCache($ID, $bClearCommonTag);
-		}
+			if ($isRowUpdated || $isTypeMaterialized)
+			{
+				self::clearGroupCache($ID, $bClearCommonTag);
+			}
 
-		$isUserFieldUpdated = (bool)$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
-		GroupProvider::getInstance()->invalidate((int)$ID);
+			$isUserFieldUpdated = (bool)$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
+			GroupProvider::getInstance()->invalidate((int)$ID);
 
-		if (
-			!$isUserFieldUpdated
-			&& !$isRowUpdated
-			&& !$isTypeMaterialized
-		)
-		{
-			return false;
-		}
-
-		if (
-			!$isRowUpdated
-			&& !$isTypeMaterialized
-		)
-		{
-			// Nothing reached the group row, so dropping the caches only after the user fields have landed
-			// keeps a concurrent read from refilling the year-long getById() cache with the values being
-			// replaced
-			self::clearGroupCache($ID, $bClearCommonTag);
-		}
-
-		// Keep the legacy payload intact; expose write field names separately for selective invalidation.
-		$changedFields = $fieldsToWrite + $arFields1;
-		if ($isTypeMaterialized)
-		{
-			$changedFields['TYPE'] = $restoredType;
-		}
-		$changedFieldNames = array_keys($changedFields);
-
-		$events = GetModuleEvents("socialnetwork", "OnSocNetGroupUpdate");
-		while ($arEvent = $events->Fetch())
-		{
-			ExecuteModuleEventEx($arEvent, array($ID, &$arFields, $changedFieldNames));
-		}
-
-		EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_UPDATE, [
-			'GROUP_ID' => $ID,
-		]);
-
-		CSocNetGroup::SearchIndex($ID, false, $arGroupOld);
-
-		if (isset($arFields['KEYWORDS']))
-		{
-			$tagsList = explode(',', $arFields["KEYWORDS"]);
 			if (
-				!empty($tagsList)
-				&& is_array($tagsList)
+				!$isUserFieldUpdated
+				&& !$isRowUpdated
+				&& !$isTypeMaterialized
 			)
 			{
-				$tagsList = array_map(function($a) { return trim($a, ' '); }, $tagsList);
-				$tagsList = array_filter($tagsList, function($a) { return ($a <> ''); });
+				return false;
 			}
 
-			WorkgroupTagTable::set([
-				'groupId' => $ID,
-				'tags' => $tagsList
-			]);
-		}
-
-		Workgroup::setIndex(array(
-			'fields' => array_merge($arFields, array('ID' => $ID))
-		));
-
-		$arGroupNew = CSocNetGroup::GetByID($ID);
-		if (
-			$arGroupNew['OPENED'] === 'Y'
-			&& $arGroupOld['OPENED'] === 'N'
-		)
-		{
-			CSocNetGroup::ConfirmAllRequests($ID, $bAutoSubscribe, $arFields['INITIATED_BY_USER_ID'] ?? 0);
-		}
-
-		$isCollab = $arGroupNew['TYPE'] === Workgroup\Type::Collab->value;
-
-		if ($isCollab)
-		{
-			$chatData = Integration\Im\Chat\Workgroup::getChatData(['group_id' => $ID]);
-
-			$chatId = $chatData[$ID] ?? null;
-
-			if ($chatId > 0)
+			if (
+				!$isRowUpdated
+				&& !$isTypeMaterialized
+			)
 			{
-				$fields = [];
-				if (array_key_exists('NAME', $arFields))
+				// Nothing reached the group row, so dropping the caches only after the user fields have landed
+				// keeps a concurrent read from refilling the year-long getById() cache with the values being
+				// replaced
+				self::clearGroupCache($ID, $bClearCommonTag);
+			}
+
+			// Keep the legacy payload intact; expose write field names separately for selective invalidation.
+			$changedFields = $fieldsToWrite + $arFields1;
+			if ($isTypeMaterialized)
+			{
+				$changedFields['TYPE'] = $restoredType;
+			}
+			$changedFieldNames = array_keys($changedFields);
+
+			$events = GetModuleEvents("socialnetwork", "OnSocNetGroupUpdate");
+			while ($arEvent = $events->Fetch())
+			{
+				ExecuteModuleEventEx($arEvent, array($ID, &$arFields, $changedFieldNames));
+			}
+
+			EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_UPDATE, [
+				'GROUP_ID' => $ID,
+			]);
+
+			CSocNetGroup::SearchIndex($ID, false, $arGroupOld);
+
+			if (isset($arFields['KEYWORDS']))
+			{
+				// Keep tag boundaries when a tag itself contains a comma.
+				$tagsList = $tagNames ?? explode(',', $arFields["KEYWORDS"]);
+				if (
+					!empty($tagsList)
+					&& is_array($tagsList)
+				)
 				{
-					$fields['TITLE'] = $arFields['NAME'];
-				}
-				if (array_key_exists('DESCRIPTION', $arFields))
-				{
-					$fields['DESCRIPTION'] = $arFields['DESCRIPTION'];
-				}
-				if (array_key_exists('IMAGE_ID', $arFields))
-				{
-					$fields['AVATAR'] = (int)$arFields['IMAGE_ID'];
-				}
-				if (array_key_exists('OWNER_ID', $arFields))
-				{
-					$fields['OWNER_ID'] = $arFields['OWNER_ID'];
+					$tagsList = array_map(function($a) { return trim($a, ' '); }, $tagsList);
+					$tagsList = array_filter($tagsList, function($a) { return ($a <> ''); });
 				}
 
-				if (!empty($fields))
-				{
-					\Bitrix\Socialnetwork\Collab\Integration\IM\Messenger::synchronizeCollabChat($chatId, $fields);
-				}
+				WorkgroupTagTable::set([
+					'groupId' => $ID,
+					'tags' => $tagsList
+				]);
 			}
-		}
-		elseif (
-			!empty($arFields["NAME"])
-			|| !empty($arFields["IMAGE_ID"])
-			|| !empty($arFields["OWNER_ID"])
-			|| !empty($arFields["DESCRIPTION"])
-		)
-		{
-			$chatData = Integration\Im\Chat\Workgroup::getChatData(array(
-				'group_id' => $ID
+
+			Workgroup::setIndex(array(
+				'fields' => array_merge($arFields, array('ID' => $ID))
 			));
 
+			$arGroupNew = CSocNetGroup::GetByID($ID);
 			if (
-				!empty($chatData)
-				&& !empty($chatData[$ID])
-				&& intval($chatData[$ID]) > 0
+				$arGroupNew['OPENED'] === 'Y'
+				&& $arGroupOld['OPENED'] === 'N'
 			)
 			{
-				$chatId = $chatData[$ID];
+				CSocNetGroup::ConfirmAllRequests($ID, $bAutoSubscribe, $arFields['INITIATED_BY_USER_ID'] ?? 0);
+			}
 
-				$chat = new CIMChat(0);
+			$isCollab = $arGroupNew['TYPE'] === Workgroup\Type::Collab->value;
 
-				if(!empty($arFields["NAME"]))
+			if ($isCollab)
+			{
+				$chatData = Integration\Im\Chat\Workgroup::getChatData(['group_id' => $ID]);
+
+				$chatId = $chatData[$ID] ?? null;
+
+				if ($chatId > 0)
 				{
-					$chat->rename(
-						$chatId,
-						Integration\Im\Chat\Workgroup::buildChatName($arFields["NAME"], [
-							'project' => $arGroupNew["PROJECT"] === 'Y',
-							'type' => $arGroupNew['TYPE'] ?? ''
-						]),
-						false,
-						false
-					);
-				}
+					$fields = [];
+					if (array_key_exists('NAME', $arFields))
+					{
+						$fields['TITLE'] = $arFields['NAME'];
+					}
+					if (array_key_exists('DESCRIPTION', $arFields))
+					{
+						$fields['DESCRIPTION'] = $arFields['DESCRIPTION'];
+					}
+					if (array_key_exists('IMAGE_ID', $arFields))
+					{
+						$fields['AVATAR'] = (int)$arFields['IMAGE_ID'];
+					}
+					if (array_key_exists('OWNER_ID', $arFields))
+					{
+						$fields['OWNER_ID'] = $arFields['OWNER_ID'];
+					}
 
-				if(!empty($arFields["IMAGE_ID"]))
-				{
-					$chat->setAvatarId($chatId, $arFields['IMAGE_ID']);
-				}
-
-				if(!empty($arFields["OWNER_ID"]))
-				{
-					$chat->setOwner($chatId, $arFields["OWNER_ID"], false);
-				}
-
-				if (!empty($arFields["DESCRIPTION"]))
-				{
-					$chat->SetDescription($chatId, $arFields["DESCRIPTION"]);
+					if (!empty($fields))
+					{
+						\Bitrix\Socialnetwork\Collab\Integration\IM\Messenger::synchronizeCollabChat($chatId, $fields);
+					}
 				}
 			}
-		}
+			elseif (
+				!empty($arFields["NAME"])
+				|| !empty($arFields["IMAGE_ID"])
+				|| !empty($arFields["OWNER_ID"])
+				|| !empty($arFields["DESCRIPTION"])
+			)
+			{
+				$chatData = Integration\Im\Chat\Workgroup::getChatData(array(
+					'group_id' => $ID
+				));
 
-		if ($ID && $bSync)
+				if (
+					!empty($chatData)
+					&& !empty($chatData[$ID])
+					&& intval($chatData[$ID]) > 0
+				)
+				{
+					$chatId = $chatData[$ID];
+
+					$chat = new CIMChat(0);
+
+					if(!empty($arFields["NAME"]))
+					{
+						$chat->rename(
+							$chatId,
+							Integration\Im\Chat\Workgroup::buildChatName($arFields["NAME"], [
+								'project' => $arGroupNew["PROJECT"] === 'Y',
+								'type' => $arGroupNew['TYPE'] ?? ''
+							]),
+							false,
+							false
+						);
+					}
+
+					if(!empty($arFields["IMAGE_ID"]))
+					{
+						$chat->setAvatarId($chatId, $arFields['IMAGE_ID']);
+					}
+
+					if(!empty($arFields["OWNER_ID"]))
+					{
+						$chat->setOwner($chatId, $arFields["OWNER_ID"], false);
+					}
+
+					if (!empty($arFields["DESCRIPTION"]))
+					{
+						$chat->SetDescription($chatId, $arFields["DESCRIPTION"]);
+					}
+				}
+			}
+
+			if ($ID && $bSync)
+			{
+				$groupItem = Workgroup::getById($ID, false);
+				$groupItem->syncDeptConnection();
+			}
+
+			$groupId = (int)$ID;
+			if ($groupId > 0)
+			{
+				GroupRegistry::getInstance()->invalidate($groupId);
+			}
+
+			return $ID;
+		}
+		finally
 		{
-			$groupItem = Workgroup::getById($ID, false);
-			$groupItem->syncDeptConnection();
+			if ($protected)
+			{
+				$pool->useMasterOnly(false);
+			}
 		}
-
-		$groupId = (int)$ID;
-		if ($groupId > 0)
-		{
-			GroupRegistry::getInstance()->invalidate($groupId);
-		}
-
-		return $ID;
 	}
 
 	/***************************************/
@@ -713,7 +787,7 @@ class CSocNetGroup extends CAllSocNetGroup
 				"WHERE G.VISIBLE = 'Y' ";
 			if ($arSqls["WHERE"] <> '')
 			{
-				$strSql .= "AND ".$arSqls["WHERE"]." ";
+				$strSql .= "AND (".$arSqls["WHERE"].") ";
 			}
 
 			$strSql .= "UNION ".
@@ -723,7 +797,7 @@ class CSocNetGroup extends CAllSocNetGroup
 				"	".$arSqls["FROM"]." ".
 				"WHERE G.VISIBLE = 'N' ";
 			if ($arSqls["WHERE"] <> '')
-				$strSql .= "AND ".$arSqls["WHERE"]." ";
+				$strSql .= "AND (".$arSqls["WHERE"].") ";
 			$strSql .= " ";
 
 			if ($arSqls["GROUPBY"] <> '')
@@ -852,6 +926,142 @@ class CSocNetGroup extends CAllSocNetGroup
 		}
 
 		return $dbRes;
+	}
+
+	// Refuses before file and event side effects without the portal lock. It may only refuse: the final
+	// check in writeWithScrumLimit() stays the guarantee
+	private static function isScrumLimitReachedBeforeWrite(
+		array $fields,
+		array $equalityFields,
+		?int $groupId = null,
+	): bool
+	{
+		global $DB, $APPLICATION;
+
+		$connection = $DB->getConnection();
+		if (
+			!static::hasCountedScrumMaster($fields, $equalityFields)
+			|| !(new ScrumProjectLimit($connection))->isProtectionRequired()
+		)
+		{
+			return false;
+		}
+
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			if ($groupId !== null)
+			{
+				$sql = new SqlExpression('SELECT SCRUM_MASTER_ID FROM b_sonet_group WHERE ID = ?i', $groupId);
+				$sql->setConnection($connection);
+				$stored = $connection->query($sql->compile())->fetch();
+				if (($stored['SCRUM_MASTER_ID'] ?? null) !== null)
+				{
+					return false;
+				}
+			}
+
+			if (
+				!(ScrumLimit::isLimitExceeded() || !ScrumLimit::isFeatureEnabled())
+				|| ScrumLimit::canTurnOnTrial()
+			)
+			{
+				return false;
+			}
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+
+		$exception = new ScrumProjectLimitException(ScrumProjectLimitException::LIMIT_EXCEEDED);
+		$APPLICATION->ThrowException($exception->getMessage(), $exception->getErrorCode());
+
+		return true;
+	}
+
+	private static function writeWithScrumLimit(
+		callable $write,
+		bool $protected,
+		?int $groupId = null,
+	): bool
+	{
+		global $DB, $APPLICATION;
+
+		if (!$protected)
+		{
+			$write();
+
+			return true;
+		}
+
+		$connection = $DB->getConnection();
+		$limit = new ScrumProjectLimit($connection);
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$transactionStarted = false;
+		try
+		{
+			$connection->startTransaction();
+			$transactionStarted = true;
+			try
+			{
+				$limit->lock();
+				$increasesCount = true;
+				if ($groupId !== null)
+				{
+					// Keep an unguarded reset from changing this row before the counted write.
+					$sql = new SqlExpression(
+						'SELECT SCRUM_MASTER_ID FROM b_sonet_group WHERE ID = ?i FOR UPDATE', $groupId,
+					);
+					$sql->setConnection($connection);
+					$stored = $connection->query($sql->compile())->fetch();
+					$increasesCount = ($stored['SCRUM_MASTER_ID'] ?? null) === null;
+				}
+				if ($increasesCount)
+				{
+					if ((ScrumLimit::isLimitExceeded() || !ScrumLimit::isFeatureEnabled()) && !ScrumLimit::canTurnOnTrial())
+					{
+						throw new ScrumProjectLimitException(ScrumProjectLimitException::LIMIT_EXCEEDED);
+					}
+					$limit->incrementVersion();
+				}
+			}
+			catch (ScrumProjectLimitException $exception)
+			{
+				$transactionStarted = false;
+				$connection->commitTransaction();
+				$APPLICATION->ThrowException($exception->getMessage(), $exception->getErrorCode());
+
+				return false;
+			}
+			$write();
+			$transactionStarted = false;
+			$connection->commitTransaction();
+
+			return true;
+		}
+		catch (\Throwable $exception)
+		{
+			if ($transactionStarted)
+			{
+				$transactionStarted = false;
+				try
+				{
+					$connection->rollbackTransaction();
+				}
+				catch (TransactionException)
+				{
+				}
+			}
+
+			throw $exception;
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
 	}
 
 	// The stored type has the last word: a cached group snapshot may be older than the current row

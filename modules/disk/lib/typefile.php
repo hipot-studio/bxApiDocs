@@ -441,6 +441,12 @@ final class TypeFile
 	 */
 	public static function normalizeMimeType($mimeType, $filename)
 	{
+		// WPS Office (e.g. on Astra Linux) uploads documents as "application/wps-office.docx" and so on
+		if (is_string($mimeType) && str_starts_with($mimeType, 'application/wps-office.'))
+		{
+			return self::getMimeTypeByFilename($filename);
+		}
+
 		switch($mimeType)
 		{
 			case '':

@@ -13,7 +13,12 @@ use Bitrix\StaffTrack\Internal\Integration\Pull;
 
 class CheckInFormProvider
 {
-	public function load(int $userId, ?float $latitude = null, ?float $longitude = null): Result
+	public function load(
+		int $userId,
+		?float $latitude = null,
+		?float $longitude = null,
+		?string $dialogId = null,
+	): Result
 	{
 		$result = new Result();
 		$data = [];
@@ -38,7 +43,7 @@ class CheckInFormProvider
 			'workDaySettings' => WorkDayService::getWorkTime($userId),
 			'enabledBySettings' => Feature::isCheckInEnabledBySettings(),
 			'isFirstManualCheckIn' => $isFirstManualCheckIn,
-			...$this->getDialogInfo($userId),
+			...$this->getDialogInfo($userId, $dialogId),
 		]);
 
 		return $result;
@@ -113,8 +118,13 @@ class CheckInFormProvider
 		return $result;
 	}
 
-	private function getDialogInfo(int $userId): array
+	private function getDialogInfo(int $userId, ?string $dialogId): array
 	{
+		if (MessageService::hasDialogAccess($dialogId, $userId))
+		{
+			return MessageService::getDialogInfo($dialogId, $userId);
+		}
+
 		$dialogId = OptionProvider::getInstance()
 			->getOption($userId, Option::LAST_SELECTED_DIALOG_ID)
 			?->getValue()

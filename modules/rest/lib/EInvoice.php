@@ -4,6 +4,7 @@ namespace Bitrix\Rest;
 
 use Bitrix\Main;
 use Bitrix\Rest\Engine\Access;
+use Bitrix\Rest\Internal\Service\Application\EInvoice\ApplicationTagResolver;
 
 class EInvoice
 {
@@ -17,39 +18,21 @@ class EInvoice
 	public static function getApplicationList(): array
 	{
 		$cache = Main\Application::getInstance()->getCache();
-		$cacheId = self::APP_TAG . '_marketplace_v3';
-		$cacheTtl = 60 * 60 * 24; // 24 hour
-		$cachePath = '/rest/einvoice/';
-		$region = mb_strtolower(Main\Application::getInstance()->getLicense()->getRegion());
-		$country = mb_strtolower(Main\Config\Option::get('bitrix24', 'REG_COUNTRY', $region));
-		$tagsViaRegion = [self::APP_TAG, $region];
-		$tagsViaCountry = [self::APP_TAG, $country];
 
-		if ($cache->initCache($cacheTtl, $cacheId, $cachePath))
+		if ($cache->initCache(60 * 60 * 24, self::APP_TAG . '_marketplace_v4', '/rest/einvoice/'))
 		{
-			$result = $cache->getVars();
+			return $cache->getVars();
 		}
-		else
+
+		$apps = [];
+		foreach ((new ApplicationTagResolver())->getCodes() as $code)
 		{
-			$apps = Marketplace\Client::getByTag($tagsViaRegion)['ITEMS'] ?? [];
-
-			if($country !== $region && !empty($country))
-			{
-				$apps = array_merge(
-					$apps,
-					Marketplace\Client::getByTag($tagsViaCountry)['ITEMS'] ?? [],
-				);
-			}
-			$result = [];
-			foreach ($apps as $app)
-			{
-				$result[$app['ID']] = $app;
-			}
-			$result = array_values($result);
-
-			$cache->startDataCache();
-			$cache->endDataCache($result);
+			$apps = array_merge($apps, Marketplace\Client::getByTag([self::APP_TAG, $code])['ITEMS'] ?? []);
 		}
+		$result = array_values(array_column($apps, null, 'ID'));
+
+		$cache->startDataCache();
+		$cache->endDataCache($result);
 
 		return $result;
 	}

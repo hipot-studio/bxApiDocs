@@ -18,29 +18,31 @@ use Bitrix\Main\Result;
  */
 final class ActivityResponsibleUsedSetting extends AbstractSetting
 {
-	public const CODE = 'crm.counter.activity_responsible.used';
+	public const ID = 'crm.counter.activity_responsible.used';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(
 				new SettingOption(
 					true,
-					SettingTitleProvider::getOptionTitle(self::CODE, 'activity'),
+					SettingTitleProvider::getOptionTitle(self::ID, 'activity'),
 				),
 				new SettingOption(
 					false,
-					SettingTitleProvider::getOptionTitle(self::CODE, 'entity'),
+					SettingTitleProvider::getOptionTitle(self::ID, 'entity'),
 				),
 			),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'is_counters_use_activity_responsible',
 		);
 	}
 

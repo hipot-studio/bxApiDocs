@@ -14,10 +14,14 @@ use Bitrix\Calendar\ICal\helper\ReminderHelper;
 use Bitrix\Calendar\ICal\MailInvitation\AttachmentManager;
 use Bitrix\Calendar\ICal\MailInvitation\Helper;
 use Bitrix\Calendar\Util;
+use Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/modules/calendar/lib/ical/icsmanager.php');
 
 final class IcalIcsBuilder extends AttachmentManager
 {
 	private Event $eventObject;
+	private ?string $guestLinkUrl = null;
 
 	public function getContent(): string
 	{
@@ -28,11 +32,16 @@ final class IcalIcsBuilder extends AttachmentManager
 		return $icalCalendar->get();
 	}
 
-	public static function buildFromEvent(Event $eventObject): self
+	/**
+	 * The guest invite link comes in already resolved: access checks and services are
+	 * the caller's business, not the renderer's.
+	 */
+	public static function buildFromEvent(Event $eventObject, ?string $guestLinkUrl = null): self
 	{
 		$eventFields = self::prepareArrayFields($eventObject);
 		$manager = self::createInstance($eventFields);
 		$manager->eventObject = $eventObject;
+		$manager->guestLinkUrl = $guestLinkUrl;
 
 		return $manager;
 	}
@@ -111,9 +120,15 @@ final class IcalIcsBuilder extends AttachmentManager
 			->setPriority($priority)
 		;
 
-		if ($this->eventObject->getDescription())
+		$description = $this->eventObject->getDescription()
+			? $this->prepareDescription($this->eventObject->getDescription())
+			: null
+		;
+		$description = $this->addGuestLinkRequisite($description);
+
+		if ($description !== null)
 		{
-			$icalEvent->setDescription($this->prepareDescription($this->eventObject->getDescription()));
+			$icalEvent->setDescription($description);
 		}
 
 		if ($reminders = $this->eventObject->getRemindCollection()?->getCollection())
@@ -143,6 +158,28 @@ final class IcalIcsBuilder extends AttachmentManager
 		}
 
 		return $icalEvent;
+	}
+
+	/**
+	 * Puts the guest invite link in front of the event description, the same requisite
+	 * the mail invitation carries ({@see IcsManager::prepareEventDescription()}).
+	 *
+	 * The block separator is a pair of real newlines, not the pre-escaped '\n\n' of
+	 * IcsManager: here the description is escaped on render by TextPropertyType.
+	 */
+	private function addGuestLinkRequisite(?string $description): ?string
+	{
+		if (empty($this->guestLinkUrl))
+		{
+			return $description;
+		}
+
+		$guestLinkBlock = Loc::getMessage('EC_GUEST_LINK', ['#LINK#' => $this->guestLinkUrl]);
+
+		return ($description === null || $description === '')
+			? $guestLinkBlock
+			: $guestLinkBlock . "\n\n" . $description
+		;
 	}
 
 	private function buildIcalCalendar(): Calendar

@@ -14,7 +14,7 @@ class OwnerRepository extends BaseRepository
 {
 	public function unsetDeletedFlagsForUsers(array $userIds, int $roleId): Result
 	{
-		$idList = implode(',', $userIds);
+		$idList = implode(',', array_unique(array_map('intval', $userIds)));
 
 		return $this->getConnection()->query("
 			UPDATE

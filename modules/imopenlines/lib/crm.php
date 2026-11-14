@@ -11,18 +11,25 @@ use Bitrix\Crm\Communication\Type;
 use Bitrix\Crm\EntityManageFacility;
 use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\Crm\Automation\Trigger\OpenLineTrigger;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Channel\IMOpenLineTracker;
 use Bitrix\Crm\Automation\Trigger\OpenLineAnswerTrigger;
+use Bitrix\Crm\Automation\Trigger\OpenLineCloseTrigger;
 use Bitrix\Crm\Automation\Trigger\OpenLineMessageTrigger;
 use Bitrix\Crm\Automation\Trigger\OpenLineAnswerControlTrigger;
+use Bitrix\Crm\Automation\Trigger\OpenLineOutgoingMessageTrigger;
 
 use Bitrix\Im;
 use Bitrix\Im\V2\Entity\User\User as UserV2;
 
+use Bitrix\ImOpenLines\Crm\Automation\OutgoingMessageTriggerDispatcher;
 use Bitrix\ImOpenLines\Crm\Fields;
 use Bitrix\ImOpenLines\Im\Messages;
 use Bitrix\ImOpenLines\Crm\Activity;
 use Bitrix\ImOpenLines\Crm\Common as CrmCommon;
+use Bitrix\ImOpenLines\V2\Statistics\Dictionary as StatisticsDictionary;
+
+use Psr\Log\LoggerInterface;
 
 Loc::loadMessages(__FILE__);
 
@@ -57,8 +64,30 @@ class Crm
 		ERROR_IMOL_NO_CRM_BINDINGS = 'ERROR IMOPENLINES NO CRM BINDINGS',
 		ERROR_IMOL_CRM_ACTIVITY = 'ERROR IMOPENLINES CRM ACTIVITY',
 		ERROR_IMOL_CRM_NO_ID_ACTIVITY = 'ERROR IMOPENLINES CRM NO ID ACTIVITY',
-		ERROR_IMOL_CRM_NO_REQUIRED_PARAMETERS = 'ERROR IMOPENLINES CRM NO REQUIRED PARAMETERS'
+		ERROR_IMOL_CRM_NO_REQUIRED_PARAMETERS = 'ERROR IMOPENLINES CRM NO REQUIRED PARAMETERS',
+		ERROR_IMOL_CRM_CLOSE_TRIGGER = 'ERROR IMOPENLINES CRM CLOSE TRIGGER'
 	;
+
+	private const CLOSE_TRIGGER_LOGGER_ID = 'imopenlines.crm.close_trigger';
+
+	/** Everything the mandatory checks, the close reason, the bindings and the trigger payload need. */
+	private const CLOSE_TRIGGER_SESSION_SELECT = [
+		'ID',
+		'CLOSED',
+		'STATUS',
+		'SPAM',
+		'BLOCK_REASON',
+		'BLOCK_DATE',
+		'DATE_CLOSE',
+		'DATE_OPERATOR_CLOSE',
+		'CRM_ACTIVITY_ID',
+		'CONFIG_ID',
+		'CHAT_ID',
+		'USER_ID',
+		'OPERATOR_ID',
+		'TIME_CLOSE',
+		'MESSAGE_COUNT',
+	];
 
 	/** @var EntityManageFacility */
 	protected $facility;
@@ -80,6 +109,8 @@ class Crm
 	protected $ignoreSearchEmails = false;
 	protected $ignoreSearchPhones = false;
 	protected $ignoreSearchPerson = false;
+
+	private ?LoggerInterface $closeTriggerLogger = null;
 
 	/**
 	 * Crm constructor.
@@ -608,7 +639,10 @@ class Crm
 							if (!empty($bindingsForCrm))
 							{
 								$rawTrigger = $this->executeAutomationTrigger($bindingsForCrm, [
-									'CONFIG_ID' => $session->getData('CONFIG_ID')
+									'CONFIG_ID' => $session->getData('CONFIG_ID'),
+									'CHAT_ID' => $session->getData('CHAT_ID'),
+									'USER_ID' => $session->getData('USER_ID'),
+									'OPERATOR_ID' => $session->getData('OPERATOR_ID'),
 								]);
 
 								if (!$rawTrigger->isSuccess())
@@ -716,7 +750,10 @@ class Crm
 						if ($result->isSuccess())
 						{
 							$rawTrigger = $this->executeAutomationTrigger($this->getEntityManageFacility()->getActivityBindings(), [
-								'CONFIG_ID' => $session->getData('CONFIG_ID')
+								'CONFIG_ID' => $session->getData('CONFIG_ID'),
+								'CHAT_ID' => $session->getData('CHAT_ID'),
+								'USER_ID' => $session->getData('USER_ID'),
+								'OPERATOR_ID' => $session->getData('OPERATOR_ID'),
 							]);
 
 							if (!$rawTrigger->isSuccess())
@@ -1223,7 +1260,10 @@ class Crm
 
 							$isRegisterContact = $facility->registerContact($fieldsContactAdd, true, [
 								'CURRENT_USER' => $this->getResponsibleCrmId(),
-								'DISABLE_USER_FIELD_CHECK' => true
+								'DISABLE_USER_FIELD_CHECK' => true,
+								'ANALYTICS' => [
+									'c_section' => Dictionary::SECTION_OPEN_LINES,
+								],
 							]);
 
 							if (
@@ -1264,7 +1304,10 @@ class Crm
 					{
 						$isRegisterEntity = $facility->registerTouch($crmOwnerType, $fieldsAdd, true, [
 							'CURRENT_USER' => $this->getResponsibleCrmId(),
-							'DISABLE_USER_FIELD_CHECK' => true
+							'DISABLE_USER_FIELD_CHECK' => true,
+							'ANALYTICS' => [
+								'c_section' => Dictionary::SECTION_OPEN_LINES,
+							],
 						]);
 
 						if (
@@ -2038,6 +2081,323 @@ class Crm
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Livechat has mirrored the employee message into the client chat: the delivery proof of that
+	 * branch. The trigger of the outgoing event lives behind the bridge, so a transport reports the
+	 * delivery it made and knows nothing about the automation.
+	 *
+	 * The session comes in as an argument, the way @see executeAutomationAnswerTrigger() takes it: the
+	 * manager can have been substituted through Session::setCrmManager(), so the trigger reads the
+	 * session of the send and not the one the manager happens to hold. The source message is the fields
+	 * as the employee sent them, before the transport rewrote the text.
+	 *
+	 * Static on purpose: an instance of this bridge includes the crm module in its constructor, so an
+	 * entry point of its own instance would load crm on every outgoing message, ahead of the free
+	 * checks of the dispatcher. The manager is taken inside {@see OutgoingMessageTriggerDispatcher},
+	 * once the session flags have already admitted the message.
+	 */
+	public static function onOutgoingMessageMirroredToClient(
+		Session $session,
+		int $messageId,
+		array $sourceMessage,
+		int $mirrorMessageId,
+	): void
+	{
+		(new OutgoingMessageTriggerDispatcher($messageId, $sourceMessage))
+			->notifyLiveChatDelivered($mirrorMessageId, $session)
+		;
+	}
+
+	/**
+	 * The external channel has synchronously accepted the employee message; a later negative delivery
+	 * status of the channel revokes nothing. The result is the one the whole send returned, not the one
+	 * the channel returned: it succeeds only when the channel did, so its success is the acceptance.
+	 *
+	 * Static for the same reason as @see onOutgoingMessageMirroredToClient().
+	 */
+	public static function onOutgoingMessageAcceptedByChannel(
+		Session $session,
+		int $messageId,
+		array $sourceMessage,
+		Main\Result $sendResult,
+	): void
+	{
+		(new OutgoingMessageTriggerDispatcher($messageId, $sourceMessage))
+			->notifyExternalDelivered($sendResult, $session)
+		;
+	}
+
+	/**
+	 * Outgoing counterpart of @see executeAutomationMessageTrigger(): the employee wrote to the client.
+	 * The caller collects all the bindings once and passes them here as a whole.
+	 */
+	public function executeAutomationOutgoingMessageTrigger(array $bindings, array $data): Main\Result
+	{
+		if (
+			!\Bitrix\Crm\Automation\Factory::canUseAutomation()
+			|| $this->isSkipAutomationTrigger()
+			//Temporary check for compatibility
+			|| !class_exists(OpenLineOutgoingMessageTrigger::class)
+		)
+		{
+			return new Result();
+		}
+
+		return OpenLineOutgoingMessageTrigger::execute($bindings, $data);
+	}
+
+	/**
+	 * Runs the CRM automation trigger for an open line session that has really been closed.
+	 *
+	 * The saved row is re-read by the primary key on purpose: the runtime session object may still
+	 * hold service values put there by Session\Update::saveData() (MESSAGE_COUNT), so it is not
+	 * the source of truth for the trigger payload.
+	 *
+	 * @param int $sessionId
+	 * @return Result
+	 */
+	public function executeAutomationCloseTrigger(int $sessionId): Result
+	{
+		$result = new Result();
+
+		if (!$this->isCloseTriggerAvailable())
+		{
+			return $result;
+		}
+
+		$configId = 0;
+		$activityId = 0;
+		$closeReason = null;
+
+		try
+		{
+			$session = Model\SessionTable::getRow([
+				'select' => self::CLOSE_TRIGGER_SESSION_SELECT,
+				'filter' => ['=ID' => $sessionId],
+			]);
+
+			$activityId = (int)($session['CRM_ACTIVITY_ID'] ?? 0);
+			if ($activityId <= 0)
+			{
+				return $result;
+			}
+
+			$dateClose = $session['DATE_CLOSE'] ?? null;
+			$configId = (int)($session['CONFIG_ID'] ?? 0);
+			$chatId = (int)($session['CHAT_ID'] ?? 0);
+
+			if (
+				$session['CLOSED'] !== 'Y'
+				|| !($dateClose instanceof Main\Type\DateTime)
+				|| $configId <= 0
+				|| $chatId <= 0
+			)
+			{
+				$result->addError(new Error(
+					Loc::getMessage('IMOL_CRM_ERROR_NO_REQUIRED_PARAMETERS'),
+					self::ERROR_IMOL_CRM_NO_REQUIRED_PARAMETERS,
+					__METHOD__
+				));
+				$this->logCloseTriggerFailure(
+					$sessionId,
+					$configId,
+					$activityId,
+					$closeReason,
+					self::ERROR_IMOL_CRM_NO_REQUIRED_PARAMETERS
+				);
+
+				return $result;
+			}
+
+			$session['IS_CLOSED_BY_OPERATOR'] = empty($session['DATE_OPERATOR_CLOSE']) ? 'N' : 'Y';
+			$closeReason = StatisticsDictionary::getCloseReason($session);
+
+			// Spam is the only reason kept out of the automation: any other one, an exhausted reply
+			// limit included, reaches the robot as the close reason of the run.
+			if ($closeReason === StatisticsDictionary::CLOSE_REASON_SPAM)
+			{
+				return $result;
+			}
+
+			$bindings = $this->getCloseTriggerBindings($activityId);
+			if (empty($bindings))
+			{
+				return $result;
+			}
+
+			$triggerResult = $this->sendCloseTrigger($bindings, [
+				'CHAT_ID' => $chatId,
+				'CONFIG_ID' => $configId,
+				'USER_ID' => (int)$session['USER_ID'],
+				'OPERATOR_ID' => (int)$session['OPERATOR_ID'],
+				'DATE_CLOSE' => $dateClose->getTimestamp(),
+				'CLOSE_REASON' => $closeReason,
+				'TIME_CLOSE' => max(0, (int)$session['TIME_CLOSE']),
+				'MESSAGE_COUNT' => max(0, (int)$session['MESSAGE_COUNT']),
+			]);
+
+			if (!$triggerResult->isSuccess())
+			{
+				$result->addErrors($triggerResult->getErrors());
+				$this->logCloseTriggerFailure(
+					$sessionId,
+					$configId,
+					$activityId,
+					$closeReason,
+					self::getCloseTriggerErrorCode($triggerResult)
+				);
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			$result->addError(new Error(
+				$exception->getMessage(),
+				self::ERROR_IMOL_CRM_CLOSE_TRIGGER,
+				__METHOD__
+			));
+			$this->logCloseTriggerFailure(
+				$sessionId,
+				$configId,
+				$activityId,
+				$closeReason,
+				self::ERROR_IMOL_CRM_CLOSE_TRIGGER,
+				$exception
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * A CRM that does not know OpenLineCloseTrigger yet is a normal skip, not a failure.
+	 */
+	protected function isCloseTriggerAvailable(): bool
+	{
+		return $this->isLoaded()
+			&& class_exists(OpenLineCloseTrigger::class)
+			&& \Bitrix\Crm\Automation\Factory::canUseAutomation()
+			&& !$this->isSkipAutomationTrigger();
+	}
+
+	/**
+	 * Every binding of the activity as it is stored, in one place instead of the shared helper: that one
+	 * keeps a single entity per type and knows four types only, so several deals of one dialog collapse
+	 * into the oldest and a smart process item is lost. Every direct binding the trigger supports gets a
+	 * run of its own; which ones those are is decided downstream by
+	 * {@see \Bitrix\Crm\Automation\Trigger\BaseTrigger::execute()}, which also deduplicates the documents.
+	 * Entities reached through a client binding are not covered by that promise: within one run they come from
+	 * one shared selector, which keeps the first deal it resolved. That selector is cleared when the run starts,
+	 * so the client of the previous close does not travel into this one.
+	 *
+	 * @return array<int, array{OWNER_TYPE_ID: int, OWNER_ID: int}>
+	 */
+	private function getCloseTriggerBindings(int $activityId): array
+	{
+		if ($activityId <= 0 || !$this->isLoaded())
+		{
+			return [];
+		}
+
+		// The reader answers false on a rejected argument, so its answer is taken as bindings only when it is a list.
+		$storedBindings = \CCrmActivity::GetBindings($activityId);
+		if (!is_array($storedBindings))
+		{
+			return [];
+		}
+
+		$bindings = [];
+		foreach ($storedBindings as $binding)
+		{
+			$bindings[] = [
+				'OWNER_TYPE_ID' => (int)$binding['OWNER_TYPE_ID'],
+				'OWNER_ID' => (int)$binding['OWNER_ID'],
+			];
+		}
+
+		return $bindings;
+	}
+
+	protected function sendCloseTrigger(array $bindings, array $inputData): Main\Result
+	{
+		return OpenLineCloseTrigger::execute($bindings, $inputData);
+	}
+
+	/**
+	 * Diagnostic record for a close trigger that could not be delivered.
+	 * Only scalar identifiers and the exception class/code are logged: no chat messages, exception
+	 * message, SQL, session object or full snapshot.
+	 * The logger registry check is bypassed on purpose, so the record needs no option enabled on the
+	 * portal; without a sink configured through .settings.php the factory falls back to the portal
+	 * log file, and with no log file at all the record is dropped.
+	 * Identifiers travel as placeholders: the default formatter interpolates the message and does
+	 * not serialize the context on its own.
+	 * Diagnostics must never break the close, hence the guard: this method runs from a catch block
+	 * and a sink configured through .settings.php may throw on its own.
+	 */
+	private function logCloseTriggerFailure(
+		int $sessionId,
+		int $configId,
+		int $crmActivityId,
+		?string $closeReason,
+		string $errorCode,
+		?\Throwable $exception = null
+	): void
+	{
+		try
+		{
+			$this->closeTriggerLogger ??= $this->createCloseTriggerLogger();
+
+			$message = '{date} - {host}' . PHP_EOL
+				. 'Open line close automation trigger failed: code {errorCode}, session'
+				. ' {openLineSessionId}, line {configId}, activity {crmActivityId},'
+				. ' reason {closeReason}' . PHP_EOL;
+			$context = [
+				'openLineSessionId' => $sessionId,
+				'configId' => $configId,
+				'crmActivityId' => $crmActivityId,
+				'closeReason' => $closeReason ?? '',
+				'errorCode' => $errorCode,
+			];
+
+			if ($exception !== null)
+			{
+				$message .= 'Exception {exceptionClass}, code {exceptionCode}' . PHP_EOL;
+				$context['exceptionClass'] = $exception::class;
+				$context['exceptionCode'] = (string)$exception->getCode();
+			}
+
+			$this->closeTriggerLogger?->error($message . '{delimiter}' . PHP_EOL, $context);
+		}
+		catch (\Throwable)
+		{
+		}
+	}
+
+	/**
+	 * Extracted so the sink can be replaced without touching .settings.php.
+	 */
+	protected function createCloseTriggerLogger(): ?LoggerInterface
+	{
+		return (new Main\Diag\LoggerFactory())->createById(
+			self::CLOSE_TRIGGER_LOGGER_ID,
+			isCheckEnabledFromRegistry: false,
+		);
+	}
+
+	private static function getCloseTriggerErrorCode(Main\Result $triggerResult): string
+	{
+		foreach ($triggerResult->getErrors() as $error)
+		{
+			$code = (string)$error->getCode();
+			if ($code !== '' && $code !== '0')
+			{
+				return $code;
+			}
+		}
+
+		return self::ERROR_IMOL_CRM_CLOSE_TRIGGER;
 	}
 
 	/**

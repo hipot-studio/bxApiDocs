@@ -8,6 +8,7 @@ use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\Storage\AvailableStorageService;
 use Bitrix\Disk\Internals\FolderTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\ProxyType;
@@ -18,18 +19,13 @@ use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Disk\Security\FakeSecurityContext;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Storage;
-use Bitrix\Disk\User;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
-use Bitrix\Main\DB\SqlExpression;
-use Bitrix\Main\Entity\ReferenceField;
-use Bitrix\Main\FileTable;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
-use Bitrix\Socialnetwork\WorkgroupTable;
 
 class Provider
 {
@@ -40,6 +36,7 @@ class Provider
 	public const ORDER_FIELD_NAME = 'name';
 	public const ORDER_FIELD_CREATE_TIME = 'createTime';
 	public const ORDER_FIELD_UPDATE_TIME = 'updateTime';
+	public const ORDER_FIELD_SIZE = 'size';
 
 	public const ORDER_DIRECTION_ASC = 'asc';
 	public const ORDER_DIRECTION_DESC = 'desc';
@@ -60,10 +57,9 @@ class Provider
 	private const MAX_PAGE_OFFSET = 1000;
 	private const MAX_RUNTIME_FILTER_SCAN = 3000;
 	private const WARM_UP_BATCH_SIZE = 300;
-	private const GROUP_STORAGE_CACHE_VERSION = 'v5';
-	private const SOURCE_CATALOGUE_CACHE_VERSION = 'v1';
-	private const GROUP_STORAGE_CACHE_TTL = 14400;
-	private const GROUP_STORAGE_MANAGED_CACHE_TTL = 31536000;
+	private const SOURCE_CATALOGUE_CACHE_VERSION = 'v2';
+	private const SOURCE_CATALOGUE_CACHE_TTL = 14400;
+	private const SOURCE_CATALOGUE_MANAGED_CACHE_TTL = 31536000;
 	private const SUPPORTED_STORAGE_PROXY_TYPES = [
 		ProxyType\User::class,
 		ProxyType\Common::class,
@@ -78,16 +74,21 @@ class Provider
 		ItemNormalizer::IM_STORAGE_PROXY_TYPE,
 	];
 
-	private array $groupSourceTitles = [];
-	private array $groupSourceAvatarUrls = [];
+	private readonly ItemNormalizer $itemNormalizer;
+	private readonly AvailableStorageService $availableStorageService;
 
 	public function __construct(
 		private readonly Context $context,
-		private readonly ItemNormalizer $itemNormalizer = new ItemNormalizer(),
+		?ItemNormalizer $itemNormalizer = null,
 		private readonly FileTypeClassifier $fileTypeClassifier = new FileTypeClassifier(),
+		?AvailableStorageService $availableStorageService = null,
 		private readonly ViewerAttributesFactory $viewerAttributesFactory = new ViewerAttributesFactory(),
 	)
 	{
+		$this->availableStorageService = $availableStorageService ?? new AvailableStorageService();
+		$this->itemNormalizer = $itemNormalizer ?? new ItemNormalizer(
+			availableStorageService: $this->availableStorageService,
+		);
 	}
 
 	public function getInitialStage(
@@ -282,9 +283,10 @@ class Provider
 
 	private function buildSourceCatalogue(): array
 	{
-		$storages = $this->collectUniqueStorages($this->loadSourceStorages());
+		$storages = $this->loadSourceStorages();
 		$this->warmUpStorageMetadata($storages);
-		$groupTitles = $this->loadGroupTitlesForStorages($storages);
+		$groupTitles = $this->availableStorageService->loadGroupTitlesForStorages($storages);
+
 		$sources = [];
 		$groupIds = [];
 
@@ -301,8 +303,8 @@ class Provider
 
 			$source = $this->itemNormalizer->normalizeSourceDescriptor(
 				$storage,
-				$this->resolveSourceTitle($storage, $groupTitles),
-				$this->resolveSourceAvatarUrl($storage),
+				$this->availableStorageService->resolveSourceTitle($storage, $groupTitles),
+				$this->availableStorageService->resolveSourceAvatarUrl($storage),
 			);
 			if ($source !== null)
 			{
@@ -323,7 +325,7 @@ class Provider
 	{
 		$cache = Cache::createInstance();
 		if (!$cache->initCache(
-			$this->getGroupStorageCacheTtl(),
+			$this->getSourceCatalogueCacheTtl(),
 			$this->getSourceCatalogueCacheId(),
 			$this->getSourceCatalogueCachePath(),
 		))
@@ -354,7 +356,7 @@ class Provider
 		$cachePath = $this->getSourceCatalogueCachePath();
 		$cache = Cache::createInstance();
 		if (!$cache->startDataCache(
-			$this->getGroupStorageCacheTtl(),
+			$this->getSourceCatalogueCacheTtl(),
 			$this->getSourceCatalogueCacheId(),
 			$cachePath,
 		))
@@ -372,9 +374,20 @@ class Provider
 			$taggedCache->registerTag("sonet_group_{$groupId}");
 			$taggedCache->registerTag("sonet_features_G_{$groupId}");
 		}
+		foreach ($this->availableStorageService->getFilesFeatureCacheTags() as $tag)
+		{
+			$taggedCache->registerTag($tag);
+		}
 		$taggedCache->endTagCache();
 
 		$cache->endDataCache($data);
+	}
+
+	private function getSourceCatalogueCacheTtl(): int
+	{
+		return defined('BX_COMP_MANAGED_CACHE')
+			? self::SOURCE_CATALOGUE_MANAGED_CACHE_TTL
+			: self::SOURCE_CATALOGUE_CACHE_TTL;
 	}
 
 	private function getSourceCatalogueCacheId(): string
@@ -396,387 +409,9 @@ class Provider
 			. "/{$userId}";
 	}
 
-	private function collectUniqueStorages(array $storages): array
-	{
-		$uniqueStorages = [];
-		$seenIds = [];
-
-		foreach ($storages as $storage)
-		{
-			if (!$storage instanceof Storage)
-			{
-				continue;
-			}
-
-			$storageId = (int)$storage->getId();
-			if ($storageId <= 0 || isset($seenIds[$storageId]))
-			{
-				continue;
-			}
-
-			$seenIds[$storageId] = true;
-			$uniqueStorages[] = $storage;
-		}
-
-		return $uniqueStorages;
-	}
-
-	private function getReadableSourceStorages(): array
-	{
-		$storages = [
-			...$this->getReadableUserStorages(),
-			...$this->getReadableCommonStorages(),
-		];
-
-		return [...$storages, ...$this->getReadableGroupStorages()];
-	}
-
-	private function getReadableUserStorages(): array
-	{
-		$storage = Driver::getInstance()->getStorageByUserId($this->context->getUserId());
-		if (!$storage)
-		{
-			return [];
-		}
-
-		$rootObject = $storage->getRootObject();
-		$securityContext = $storage->getSecurityContext($this->context->getUserId());
-		if (!$rootObject || !$rootObject->canRead($securityContext))
-		{
-			return [];
-		}
-
-		return [$storage];
-	}
-
-	private function getReadableCommonStorages(): array
-	{
-		$conditionTree = Query::filter()
-			->where('STORAGE.ENTITY_TYPE', ProxyType\Common::class)
-		;
-
-		if (defined('SITE_ID') && SITE_ID !== '')
-		{
-			$conditionTree->where('STORAGE.SITE_ID', SITE_ID);
-		}
-
-		return Storage::getReadableList($this->createCommonStorageSecurityContext(), [
-			'filter' => $conditionTree,
-		]);
-	}
-
-	private function getReadableGroupStorages(): array
-	{
-		if (!\CBXFeatures::isFeatureEnabled('Workgroups') || !Loader::includeModule('socialnetwork'))
-		{
-			return [];
-		}
-
-		return $this->loadReadableGroupStorages();
-	}
-
-	protected function loadReadableGroupStorages(?int $limit = null): array
-	{
-		$userId = $this->context->getUserId();
-		$cachedData = $this->loadCachedGroupStorageData($userId);
-		if ($cachedData !== null)
-		{
-			$this->groupSourceTitles = $cachedData['titles'];
-			$this->groupSourceAvatarUrls = $cachedData['avatarUrls'];
-
-			$storages = [];
-			foreach (\array_chunk($cachedData['storageIds'], self::WARM_UP_BATCH_SIZE) as $storageIds)
-			{
-				\array_push($storages, ...$this->loadStoragesByIds($storageIds, ['ROOT_OBJECT']));
-			}
-			$storages = $this->orderStoragesByIds(
-				$storages,
-				$cachedData['storageIds'],
-			);
-
-			return $limit === null ? $storages : \array_slice($storages, 0, $limit);
-		}
-
-		$storages = $this->collectUniqueStorages(
-			$this->queryReadableGroupStorages($limit),
-		);
-		$storageIds = [];
-		$groupIds = [];
-		foreach ($storages as $storage)
-		{
-			$storageIds[] = (int)$storage->getId();
-			$groupId = (int)$storage->getEntityId();
-			if ($groupId > 0)
-			{
-				$groupIds[$groupId] = $groupId;
-			}
-		}
-
-		$this->groupSourceTitles = empty($groupIds)
-			? []
-			: $this->loadGroupTitles(array_values($groupIds));
-		$this->saveGroupStorageDataToCache($userId, [
-			'storageIds' => $storageIds,
-			'groupIds' => array_values($groupIds),
-			'titles' => $this->groupSourceTitles,
-			'avatarUrls' => $this->groupSourceAvatarUrls,
-		]);
-
-		return $storages;
-	}
-
-	protected function queryReadableGroupStorages(?int $limit = null): array
-	{
-		$userId = $this->context->getUserId();
-		$conditionTree = Query::filter()
-			->where('STORAGE.ENTITY_TYPE', ProxyType\Group::class)
-			->where('UG.USER_ID', $userId)
-			->whereIn('UG.ROLE', \Bitrix\Socialnetwork\UserToGroupTable::getRolesMember())
-			->where('UG.GROUP.ACTIVE', 'Y')
-			->where('UG.GROUP.CLOSED', 'N')
-		;
-
-		$connection = Application::getConnection();
-		$sqlHelper = $connection->getSqlHelper();
-
-		$parameters = [
-			'filter' => $conditionTree,
-			'order' => ['STORAGE_ID' => 'ASC'],
-			'runtime' => [
-				new ReferenceField(
-					'UG',
-					'Bitrix\Socialnetwork\UserToGroupTable',
-					[
-						'=this.STORAGE.ENTITY_ID' => (
-							$connection instanceof \Bitrix\Main\DB\PgsqlConnection
-								? new SqlExpression($sqlHelper->castToChar('?#'), 'GROUP_ID')
-								: 'ref.GROUP_ID'
-						),
-					],
-					['join_type' => 'INNER'],
-				),
-			],
-		];
-		if ($limit !== null)
-		{
-			$parameters['limit'] = $limit;
-		}
-
-		return Storage::getReadableList($this->createSecurityContext(), $parameters);
-	}
-
-	protected function loadCachedGroupStorageData(int $userId): ?array
-	{
-		$cache = Cache::createInstance();
-		if (!$cache->initCache(
-			$this->getGroupStorageCacheTtl(),
-			$this->getGroupStorageCacheId($userId),
-			$this->getGroupStorageCachePath($userId),
-		))
-		{
-			return null;
-		}
-
-		$data = $cache->getVars();
-		if (
-			!\is_array($data)
-			|| !isset($data['storageIds'], $data['groupIds'], $data['titles'], $data['avatarUrls'])
-			|| !\is_array($data['storageIds'])
-			|| !\is_array($data['groupIds'])
-			|| !\is_array($data['titles'])
-			|| !\is_array($data['avatarUrls'])
-		)
-		{
-			return null;
-		}
-
-		foreach ([...$data['storageIds'], ...$data['groupIds']] as $id)
-		{
-			if (!\is_int($id) || $id <= 0)
-			{
-				return null;
-			}
-		}
-
-		foreach ($data['titles'] as $groupId => $title)
-		{
-			if (!\is_int($groupId) || $groupId <= 0 || !\is_string($title))
-			{
-				return null;
-			}
-		}
-
-		foreach ($data['avatarUrls'] as $groupId => $avatarUrl)
-		{
-			if (
-				!\is_int($groupId)
-				|| $groupId <= 0
-				|| ($avatarUrl !== null && (!\is_string($avatarUrl) || trim($avatarUrl) === ''))
-			)
-			{
-				return null;
-			}
-		}
-
-		return [
-			'storageIds' => \array_values(\array_unique($data['storageIds'])),
-			'groupIds' => \array_values(\array_unique($data['groupIds'])),
-			'titles' => $data['titles'],
-			'avatarUrls' => $data['avatarUrls'],
-		];
-	}
-
-	protected function saveGroupStorageDataToCache(int $userId, array $data): void
-	{
-		$cachePath = $this->getGroupStorageCachePath($userId);
-		$cache = Cache::createInstance();
-		if (!$cache->startDataCache(
-			$this->getGroupStorageCacheTtl(),
-			$this->getGroupStorageCacheId($userId),
-			$cachePath,
-		))
-		{
-			return;
-		}
-
-		$taggedCache = Application::getInstance()->getTaggedCache();
-		$taggedCache->startTagCache($cachePath);
-		$taggedCache->registerTag("sonet_user2group_U{$userId}");
-		$taggedCache->registerTag(Storage::GROUP_STORAGE_CACHE_TAG);
-		foreach ($data['groupIds'] as $groupId)
-		{
-			$taggedCache->registerTag("sonet_group_{$groupId}");
-			$taggedCache->registerTag("sonet_features_G_{$groupId}");
-		}
-		$taggedCache->endTagCache();
-
-		$cache->endDataCache($data);
-	}
-
-	private function getGroupStorageCacheTtl(): int
-	{
-		return defined('BX_COMP_MANAGED_CACHE')
-			? self::GROUP_STORAGE_MANAGED_CACHE_TTL
-			: self::GROUP_STORAGE_CACHE_TTL;
-	}
-
-	private function getGroupStorageCacheId(int $userId): string
-	{
-		$siteId = defined('SITE_ID') ? (string)SITE_ID : '';
-
-		return self::GROUP_STORAGE_CACHE_VERSION . '_file_picker_group_storages_'
-			. md5($siteId)
-			. "_{$userId}";
-	}
-
-	private function getGroupStorageCachePath(int $userId): string
-	{
-		return '/disk/file_picker/group_sources/'
-			. str_pad((string)($userId % 100), 2, '0', STR_PAD_LEFT)
-			. "/{$userId}";
-	}
-
-	private function orderStoragesByIds(array $storages, array $storageIds): array
-	{
-		$storagesById = [];
-		foreach ($storages as $storage)
-		{
-			if ($storage instanceof Storage)
-			{
-				$storagesById[(int)$storage->getId()] = $storage;
-			}
-		}
-
-		$orderedStorages = [];
-		foreach ($storageIds as $storageId)
-		{
-			if (isset($storagesById[$storageId]))
-			{
-				$orderedStorages[] = $storagesById[$storageId];
-			}
-		}
-
-		return $orderedStorages;
-	}
-
-	private function resolveSourceTitle(Storage $storage, array $groupTitles): string
-	{
-		$proxyType = $storage->getProxyType();
-		if ($proxyType instanceof ProxyType\User)
-		{
-			return (string)$proxyType->getTitleForCurrentUser();
-		}
-
-		if ($proxyType instanceof ProxyType\Group)
-		{
-			return $groupTitles[(int)$storage->getEntityId()] ?? (string)$storage->getName();
-		}
-
-		return (string)$storage->getName();
-	}
-
-	private function resolveSourceAvatarUrl(Storage $storage): ?string
-	{
-		if (!$storage->getProxyType() instanceof ProxyType\Group)
-		{
-			return null;
-		}
-
-		return $this->groupSourceAvatarUrls[(int)$storage->getEntityId()] ?? null;
-	}
-
-	private function loadGroupTitlesForStorages(array $storages): array
-	{
-		$groupIds = [];
-		foreach ($storages as $storage)
-		{
-			if (!$storage instanceof Storage || $storage->getEntityType() !== ProxyType\Group::class)
-			{
-				continue;
-			}
-
-			$groupId = (int)$storage->getEntityId();
-			if ($groupId > 0)
-			{
-				$groupIds[$groupId] = $groupId;
-			}
-		}
-
-		if (empty($groupIds) || !Loader::includeModule('socialnetwork'))
-		{
-			return [];
-		}
-
-		$titles = \array_intersect_key($this->groupSourceTitles, $groupIds);
-		$loadedGroupIds = \array_fill_keys(
-			\array_keys($this->groupSourceAvatarUrls),
-			true,
-		);
-		$missingGroupIds = \array_diff_key($groupIds, $loadedGroupIds);
-		if (!empty($missingGroupIds))
-		{
-			$titles = \array_replace(
-				$titles,
-				$this->loadGroupTitles(array_values($missingGroupIds)),
-			);
-		}
-
-		return $titles;
-	}
-
 	protected function createSecurityContext(): SecurityContext
 	{
 		return new DiskSecurityContext($this->context->getUserId());
-	}
-
-	protected function createCommonStorageSecurityContext(): SecurityContext
-	{
-		if ($this->isStorageAdministrator())
-		{
-			return new FakeSecurityContext($this->context->getUserId());
-		}
-
-		return $this->createSecurityContext();
 	}
 
 	protected function createResolveSelectionSecurityContext(): SecurityContext
@@ -791,13 +426,7 @@ class Provider
 
 	protected function isStorageAdministrator(): bool
 	{
-		if (User::isCurrentUserAdmin())
-		{
-			return true;
-		}
-
-		return Loader::includeModule('socialnetwork')
-			&& \CSocNetUser::isCurrentUserModuleAdmin();
+		return $this->availableStorageService->isStorageAdministrator();
 	}
 
 	/**
@@ -917,7 +546,7 @@ class Provider
 			$storage,
 			$folder,
 			$filter,
-			$orderResult->getData()['order'],
+			$orderResult->getData(),
 			$offset,
 			$pageSize + 1,
 		);
@@ -1345,7 +974,7 @@ class Provider
 		Storage $storage,
 		Folder $folder,
 		Filter $filter,
-		array $order,
+		array $sort,
 		int $offset,
 		int $limit,
 	): array
@@ -1358,7 +987,7 @@ class Provider
 						$storage,
 						$folder,
 						$filter,
-						$order,
+						$sort,
 						$batchOffset,
 						$batchLimit,
 					),
@@ -1375,7 +1004,7 @@ class Provider
 				$storage,
 				$folder,
 				$filter,
-				$order,
+				$sort,
 				$batchOffset,
 				$batchLimit,
 			),
@@ -1445,7 +1074,7 @@ class Provider
 		Storage $storage,
 		Folder $folder,
 		Filter $filter,
-		array $order,
+		array $sort,
 		int $offset,
 		int $limit,
 	): array
@@ -1457,10 +1086,14 @@ class Provider
 				['=DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE],
 				$filter->getObjectQueryFilter(),
 			),
-			'order' => ['TYPE' => 'ASC', ...$order],
+			'order' => ['TYPE' => 'ASC', ...$sort['order']],
 			'limit' => $limit,
 			'offset' => $offset,
 		];
+		if (!empty($sort['runtime']))
+		{
+			$queryParameters['runtime'] = $sort['runtime'];
+		}
 
 		$loadedObjects = $this->loadChildren($folder, $securityContext, $queryParameters);
 
@@ -1628,6 +1261,7 @@ class Provider
 			self::ORDER_FIELD_NAME => 'NAME',
 			self::ORDER_FIELD_CREATE_TIME => 'CREATE_TIME',
 			self::ORDER_FIELD_UPDATE_TIME => 'UPDATE_TIME',
+			self::ORDER_FIELD_SIZE => 'SORT_SIZE',
 		];
 
 		if (
@@ -1649,11 +1283,32 @@ class Provider
 			return $result->addError(Error::create(Error::INVALID_ORDER));
 		}
 
+		$direction = mb_strtoupper($direction);
+		if ($field === self::ORDER_FIELD_SIZE)
+		{
+			// Folders get zero, so they keep the name order in both directions; NULL never reaches the order.
+			return $result->setData([
+				'order' => [
+					$fields[$field] => $direction,
+					'NAME' => 'ASC',
+					'ID' => 'ASC',
+				],
+				'runtime' => [
+					new ExpressionField(
+						$fields[$field],
+						'CASE WHEN %s = ' . ObjectTable::TYPE_FOLDER . ' THEN 0 ELSE COALESCE(%s, 0) END',
+						['TYPE', 'SIZE'],
+					),
+				],
+			]);
+		}
+
 		$result->setData([
 			'order' => [
-				$fields[$field] => mb_strtoupper($direction),
-				'ID' => mb_strtoupper($direction),
+				$fields[$field] => $direction,
+				'ID' => $direction,
 			],
+			'runtime' => [],
 		]);
 
 		return $result;
@@ -1721,7 +1376,7 @@ class Provider
 
 	protected function loadSourceStorages(): array
 	{
-		return $this->getReadableSourceStorages();
+		return $this->availableStorageService->getReadableStorages($this->context->getUserId());
 	}
 
 	protected function loadStoragesByIds(array $storageIds, array $with = []): array
@@ -1786,86 +1441,6 @@ class Provider
 	protected function loadObjects(array $parameters): iterable
 	{
 		return BaseObject::getModelList($parameters);
-	}
-
-	protected function loadGroupTitles(array $groupIds): array
-	{
-		$titles = [];
-		foreach (array_chunk($groupIds, self::WARM_UP_BATCH_SIZE) as $groupIdBatch)
-		{
-			$rows = [];
-			$imageIds = [];
-			foreach ($this->loadGroupTitleRows($groupIdBatch) as $row)
-			{
-				$rows[] = $row;
-				$imageIds[] = (int)($row['IMAGE_ID'] ?? 0);
-			}
-			$avatarUrls = $this->resolveGroupAvatarUrls($imageIds);
-
-			foreach ($rows as $row)
-			{
-				$groupId = (int)$row['ID'];
-				$title = trim((string)$row['NAME']);
-				if ($title !== '')
-				{
-					$titles[$groupId] = $title;
-				}
-				$imageId = (int)($row['IMAGE_ID'] ?? 0);
-				$this->groupSourceAvatarUrls[$groupId] = $avatarUrls[$imageId] ?? null;
-			}
-		}
-
-		return $titles;
-	}
-
-	protected function loadGroupTitleRows(array $groupIds): iterable
-	{
-		return WorkgroupTable::getList([
-			'select' => ['ID', 'NAME', 'IMAGE_ID'],
-			'filter' => ['@ID' => $groupIds],
-		]);
-	}
-
-	protected function resolveGroupAvatarUrls(array $imageIds): array
-	{
-		$imageIds = array_values(array_unique(array_filter(
-			array_map(static fn(mixed $imageId): int => (int)$imageId, $imageIds),
-			static fn(int $imageId): bool => $imageId > 0,
-		)));
-		if ($imageIds === [])
-		{
-			return [];
-		}
-
-		$avatarUrls = [];
-		foreach ($this->loadGroupAvatarFileRows($imageIds) as $file)
-		{
-			$file['SRC'] = \CFile::GetFileSRC($file);
-			$resizedFile = \CFile::ResizeImageGet(
-				$file,
-				['width' => 48, 'height' => 48],
-				BX_RESIZE_IMAGE_EXACT,
-				false,
-				false,
-				\Bitrix\Main\Context::getCurrent()->getRequest()->isAjaxRequest(),
-			);
-			$avatarUrl = is_array($resizedFile) ? ($resizedFile['src'] ?? null) : null;
-			if (is_string($avatarUrl) && trim($avatarUrl) !== '')
-			{
-				$avatarUrls[(int)$file['ID']] = $avatarUrl;
-			}
-		}
-
-		return $avatarUrls;
-	}
-
-	protected function loadGroupAvatarFileRows(array $imageIds): iterable
-	{
-		return FileTable::query()
-			->setSelect(['ID', 'WIDTH', 'HEIGHT', 'FILE_SIZE', 'SUBDIR', 'FILE_NAME', 'HANDLER_ID'])
-			->whereIn('ID', $imageIds)
-			->exec()
-		;
 	}
 
 	protected function loadChildren(

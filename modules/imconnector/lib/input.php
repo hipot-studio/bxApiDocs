@@ -63,7 +63,16 @@ class Input
 					$result->addErrors($resultReception->getErrors());
 				}
 
-				$result->setData($result->getData());
+				// The answer used to copy the data of this very Result onto itself, so DATA of every answer
+				// was the empty array it started as, and the per-message verdict of the open line
+				// (RESULT[n].SUCCESS, built by Provider\Base\Input::receivingMessage()) reached nobody.
+				// Passed on for the connectors that read it and only for them: every other connector keeps
+				// the answer it has always got, and nothing on their side asked for a body that would
+				// suddenly carry back every message just delivered.
+				if (in_array((string)($this->params['CONNECTOR'] ?? ''), Library::ENABLE_RECEIVING_MESSAGE_RESULT, true))
+				{
+					$result->setData($resultReception->getData());
+				}
 			}
 			catch (\Bitrix\Main\SystemException $e)
 			{

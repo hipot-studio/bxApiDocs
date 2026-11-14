@@ -1,5 +1,183 @@
 <?php
 
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable:stafftrack/lib/Internal/Model/OfficeEmployeeTable.php */
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * OfficeEmployee
+	 * @see \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee setOfficeId(\int|\Bitrix\Main\DB\SqlExpression $officeId)
+	 * @method bool hasOfficeId()
+	 * @method bool isOfficeIdFilled()
+	 * @method bool isOfficeIdChanged()
+	 * @method \int remindActualOfficeId()
+	 * @method \int requireOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee resetOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee unsetOfficeId()
+	 * @method \int fillOfficeId()
+	 * @method \int getUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee resetUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee resetCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee resetDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\EO_User getUser()
+	 * @method \Bitrix\Main\EO_User remindActualUser()
+	 * @method \Bitrix\Main\EO_User requireUser()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee setUser(\Bitrix\Main\EO_User $object)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee resetUser()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee unsetUser()
+	 * @method bool hasUser()
+	 * @method bool isUserFilled()
+	 * @method bool isUserChanged()
+	 * @method \Bitrix\Main\EO_User fillUser()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee set($fieldName, $value)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee reset($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\StaffTrack\Internal\Model\OfficeEmployee wakeUp($data)
+	 */
+	class EO_OfficeEmployee extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * OfficeEmployeeCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getOfficeIdList()
+	 * @method \int[] fillOfficeId()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\EO_User[] getUserList()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection getUserCollection()
+	 * @method \Bitrix\Main\EO_User_Collection fillUser()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\StaffTrack\Internal\Model\OfficeEmployee $object)
+	 * @method bool has(\Bitrix\StaffTrack\Internal\Model\OfficeEmployee $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee getByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee[] getAll()
+	 * @method bool remove(\Bitrix\StaffTrack\Internal\Model\OfficeEmployee $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection merge(?\Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee|null find(callable $callback)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection filter(callable $callback)
+	 */
+	class EO_OfficeEmployee_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable';
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_OfficeEmployee_Result exec()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection fetchCollection()
+	 */
+	class EO_OfficeEmployee_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection fetchCollection()
+	 */
+	class EO_OfficeEmployee_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee createObject($setDefaultValues = true)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection createCollection()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployee wakeUpObject($row)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection wakeUpCollection($rows)
+	 */
+	class EO_OfficeEmployee_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\AddressQueueTable:stafftrack/lib/Internal/Model/AddressQueueTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
@@ -384,6 +562,597 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 */
 	class EO_CheckIn_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\OfficePresenceTable:stafftrack/lib/Internal/Model/OfficePresenceTable.php */
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * EO_OfficePresence
+	 * @see \Bitrix\StaffTrack\Internal\Model\OfficePresenceTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int getOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence setOfficeId(\int|\Bitrix\Main\DB\SqlExpression $officeId)
+	 * @method bool hasOfficeId()
+	 * @method bool isOfficeIdFilled()
+	 * @method bool isOfficeIdChanged()
+	 * @method \int remindActualOfficeId()
+	 * @method \int requireOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence resetOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence unsetOfficeId()
+	 * @method \int fillOfficeId()
+	 * @method \Bitrix\Main\Type\DateTime getInZoneDate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence setInZoneDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $inZoneDate)
+	 * @method bool hasInZoneDate()
+	 * @method bool isInZoneDateFilled()
+	 * @method bool isInZoneDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualInZoneDate()
+	 * @method \Bitrix\Main\Type\DateTime requireInZoneDate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence resetInZoneDate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence unsetInZoneDate()
+	 * @method \Bitrix\Main\Type\DateTime fillInZoneDate()
+	 * @method \Bitrix\Main\Type\DateTime getLastPointDate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence setLastPointDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastPointDate)
+	 * @method bool hasLastPointDate()
+	 * @method bool isLastPointDateFilled()
+	 * @method bool isLastPointDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualLastPointDate()
+	 * @method \Bitrix\Main\Type\DateTime requireLastPointDate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence resetLastPointDate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence unsetLastPointDate()
+	 * @method \Bitrix\Main\Type\DateTime fillLastPointDate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence set($fieldName, $value)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence reset($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence wakeUp($data)
+	 */
+	class EO_OfficePresence extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficePresenceTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficePresenceTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * EO_OfficePresence_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getUserIdList()
+	 * @method \int[] getOfficeIdList()
+	 * @method \int[] fillOfficeId()
+	 * @method \Bitrix\Main\Type\DateTime[] getInZoneDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillInZoneDate()
+	 * @method \Bitrix\Main\Type\DateTime[] getLastPointDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillLastPointDate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\StaffTrack\Internal\Model\EO_OfficePresence $object)
+	 * @method bool has(\Bitrix\StaffTrack\Internal\Model\EO_OfficePresence $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence getByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence[] getAll()
+	 * @method bool remove(\Bitrix\StaffTrack\Internal\Model\EO_OfficePresence $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection merge(?\Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence|null find(callable $callback)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection filter(callable $callback)
+	 */
+	class EO_OfficePresence_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficePresenceTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficePresenceTable';
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_OfficePresence_Result exec()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection fetchCollection()
+	 */
+	class EO_OfficePresence_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection fetchCollection()
+	 */
+	class EO_OfficePresence_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence createObject($setDefaultValues = true)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection createCollection()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence wakeUpObject($row)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection wakeUpCollection($rows)
+	 */
+	class EO_OfficePresence_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\OfficePhotoTable:stafftrack/lib/Internal/Model/OfficePhotoTable.php */
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * OfficePhoto
+	 * @see \Bitrix\StaffTrack\Internal\Model\OfficePhotoTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto setOfficeId(\int|\Bitrix\Main\DB\SqlExpression $officeId)
+	 * @method bool hasOfficeId()
+	 * @method bool isOfficeIdFilled()
+	 * @method bool isOfficeIdChanged()
+	 * @method \int remindActualOfficeId()
+	 * @method \int requireOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto resetOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto unsetOfficeId()
+	 * @method \int fillOfficeId()
+	 * @method \int getFileId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
+	 * @method bool hasFileId()
+	 * @method bool isFileIdFilled()
+	 * @method bool isFileIdChanged()
+	 * @method \int remindActualFileId()
+	 * @method \int requireFileId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto resetFileId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto unsetFileId()
+	 * @method \int fillFileId()
+	 * @method \int getSort()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto resetSort()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto unsetSort()
+	 * @method \int fillSort()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto resetCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto resetDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto set($fieldName, $value)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto reset($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\StaffTrack\Internal\Model\OfficePhoto wakeUp($data)
+	 */
+	class EO_OfficePhoto extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficePhotoTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficePhotoTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * OfficePhotoCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getOfficeIdList()
+	 * @method \int[] fillOfficeId()
+	 * @method \int[] getFileIdList()
+	 * @method \int[] fillFileId()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\StaffTrack\Internal\Model\OfficePhoto $object)
+	 * @method bool has(\Bitrix\StaffTrack\Internal\Model\OfficePhoto $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto getByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto[] getAll()
+	 * @method bool remove(\Bitrix\StaffTrack\Internal\Model\OfficePhoto $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection merge(?\Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto|null find(callable $callback)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection filter(callable $callback)
+	 */
+	class EO_OfficePhoto_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficePhotoTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficePhotoTable';
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_OfficePhoto_Result exec()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection fetchCollection()
+	 */
+	class EO_OfficePhoto_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection fetchCollection()
+	 */
+	class EO_OfficePhoto_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto createObject($setDefaultValues = true)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection createCollection()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhoto wakeUpObject($row)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection wakeUpCollection($rows)
+	 */
+	class EO_OfficePhoto_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\OfficeTable:stafftrack/lib/Internal/Model/OfficeTable.php */
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * Office
+	 * @see \Bitrix\StaffTrack\Internal\Model\OfficeTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getTitle()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setTitle(\string|\Bitrix\Main\DB\SqlExpression $title)
+	 * @method bool hasTitle()
+	 * @method bool isTitleFilled()
+	 * @method bool isTitleChanged()
+	 * @method \string remindActualTitle()
+	 * @method \string requireTitle()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetTitle()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetTitle()
+	 * @method \string fillTitle()
+	 * @method \float getLatitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setLatitude(\float|\Bitrix\Main\DB\SqlExpression $latitude)
+	 * @method bool hasLatitude()
+	 * @method bool isLatitudeFilled()
+	 * @method bool isLatitudeChanged()
+	 * @method \float remindActualLatitude()
+	 * @method \float requireLatitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetLatitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetLatitude()
+	 * @method \float fillLatitude()
+	 * @method \float getLongitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setLongitude(\float|\Bitrix\Main\DB\SqlExpression $longitude)
+	 * @method bool hasLongitude()
+	 * @method bool isLongitudeFilled()
+	 * @method bool isLongitudeChanged()
+	 * @method \float remindActualLongitude()
+	 * @method \float requireLongitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetLongitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetLongitude()
+	 * @method \float fillLongitude()
+	 * @method \int getGeoRadius()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setGeoRadius(\int|\Bitrix\Main\DB\SqlExpression $geoRadius)
+	 * @method bool hasGeoRadius()
+	 * @method bool isGeoRadiusFilled()
+	 * @method bool isGeoRadiusChanged()
+	 * @method \int remindActualGeoRadius()
+	 * @method \int requireGeoRadius()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetGeoRadius()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetGeoRadius()
+	 * @method \int fillGeoRadius()
+	 * @method null|\string getAddress()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setAddress(null|\string|\Bitrix\Main\DB\SqlExpression $address)
+	 * @method bool hasAddress()
+	 * @method bool isAddressFilled()
+	 * @method bool isAddressChanged()
+	 * @method null|\string remindActualAddress()
+	 * @method null|\string requireAddress()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetAddress()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetAddress()
+	 * @method null|\string fillAddress()
+	 * @method null|\int getWorkTimeFrom()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setWorkTimeFrom(null|\int|\Bitrix\Main\DB\SqlExpression $workTimeFrom)
+	 * @method bool hasWorkTimeFrom()
+	 * @method bool isWorkTimeFromFilled()
+	 * @method bool isWorkTimeFromChanged()
+	 * @method null|\int remindActualWorkTimeFrom()
+	 * @method null|\int requireWorkTimeFrom()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetWorkTimeFrom()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetWorkTimeFrom()
+	 * @method null|\int fillWorkTimeFrom()
+	 * @method null|\int getWorkTimeTo()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setWorkTimeTo(null|\int|\Bitrix\Main\DB\SqlExpression $workTimeTo)
+	 * @method bool hasWorkTimeTo()
+	 * @method bool isWorkTimeToFilled()
+	 * @method bool isWorkTimeToChanged()
+	 * @method null|\int remindActualWorkTimeTo()
+	 * @method null|\int requireWorkTimeTo()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetWorkTimeTo()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetWorkTimeTo()
+	 * @method null|\int fillWorkTimeTo()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetCreatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method null|\int getUpdatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setUpdatedBy(null|\int|\Bitrix\Main\DB\SqlExpression $updatedBy)
+	 * @method bool hasUpdatedBy()
+	 * @method bool isUpdatedByFilled()
+	 * @method bool isUpdatedByChanged()
+	 * @method null|\int remindActualUpdatedBy()
+	 * @method null|\int requireUpdatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetUpdatedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetUpdatedBy()
+	 * @method null|\int fillUpdatedBy()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetDateCreate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method null|\Bitrix\Main\Type\DateTime getDateUpdate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setDateUpdate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateUpdate)
+	 * @method bool hasDateUpdate()
+	 * @method bool isDateUpdateFilled()
+	 * @method bool isDateUpdateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualDateUpdate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireDateUpdate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetDateUpdate()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetDateUpdate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillDateUpdate()
+	 * @method null|\int getSnapshotFileId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office setSnapshotFileId(null|\int|\Bitrix\Main\DB\SqlExpression $snapshotFileId)
+	 * @method bool hasSnapshotFileId()
+	 * @method bool isSnapshotFileIdFilled()
+	 * @method bool isSnapshotFileIdChanged()
+	 * @method null|\int remindActualSnapshotFileId()
+	 * @method null|\int requireSnapshotFileId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office resetSnapshotFileId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unsetSnapshotFileId()
+	 * @method null|\int fillSnapshotFileId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office set($fieldName, $value)
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office reset($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\StaffTrack\Internal\Model\Office wakeUp($data)
+	 */
+	class EO_Office extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficeTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficeTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * OfficeCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getTitleList()
+	 * @method \string[] fillTitle()
+	 * @method \float[] getLatitudeList()
+	 * @method \float[] fillLatitude()
+	 * @method \float[] getLongitudeList()
+	 * @method \float[] fillLongitude()
+	 * @method \int[] getGeoRadiusList()
+	 * @method \int[] fillGeoRadius()
+	 * @method null|\string[] getAddressList()
+	 * @method null|\string[] fillAddress()
+	 * @method null|\int[] getWorkTimeFromList()
+	 * @method null|\int[] fillWorkTimeFrom()
+	 * @method null|\int[] getWorkTimeToList()
+	 * @method null|\int[] fillWorkTimeTo()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method null|\int[] getUpdatedByList()
+	 * @method null|\int[] fillUpdatedBy()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getDateUpdateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillDateUpdate()
+	 * @method null|\int[] getSnapshotFileIdList()
+	 * @method null|\int[] fillSnapshotFileId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\StaffTrack\Internal\Model\Office $object)
+	 * @method bool has(\Bitrix\StaffTrack\Internal\Model\Office $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office getByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office[] getAll()
+	 * @method bool remove(\Bitrix\StaffTrack\Internal\Model\Office $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\StaffTrack\Internal\Model\OfficeCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeCollection merge(?\Bitrix\StaffTrack\Internal\Model\OfficeCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office|null find(callable $callback)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeCollection filter(callable $callback)
+	 */
+	class EO_Office_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficeTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficeTable';
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Office_Result exec()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeCollection fetchCollection()
+	 */
+	class EO_Office_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeCollection fetchCollection()
+	 */
+	class EO_Office_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office createObject($setDefaultValues = true)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeCollection createCollection()
+	 * @method \Bitrix\StaffTrack\Internal\Model\Office wakeUpObject($row)
+	 * @method \Bitrix\StaffTrack\Internal\Model\OfficeCollection wakeUpCollection($rows)
+	 */
+	class EO_Office_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInDailyStatsTable:stafftrack/lib/Internal/Model/CheckInDailyStatsTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
@@ -448,6 +1217,16 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * @method \Bitrix\StaffTrack\Internal\Model\EO_CheckInDailyStats resetLastCheckInId()
 	 * @method \Bitrix\StaffTrack\Internal\Model\EO_CheckInDailyStats unsetLastCheckInId()
 	 * @method \int fillLastCheckInId()
+	 * @method null|\int getManualCnt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_CheckInDailyStats setManualCnt(null|\int|\Bitrix\Main\DB\SqlExpression $manualCnt)
+	 * @method bool hasManualCnt()
+	 * @method bool isManualCntFilled()
+	 * @method bool isManualCntChanged()
+	 * @method null|\int remindActualManualCnt()
+	 * @method null|\int requireManualCnt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_CheckInDailyStats resetManualCnt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_CheckInDailyStats unsetManualCnt()
+	 * @method null|\int fillManualCnt()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -502,6 +1281,8 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * @method \int[] fillHasOpenEnter()
 	 * @method \int[] getLastCheckInIdList()
 	 * @method \int[] fillLastCheckInId()
+	 * @method null|\int[] getManualCntList()
+	 * @method null|\int[] fillManualCnt()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -914,6 +1695,207 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * @method \Bitrix\StaffTrack\Internal\Model\EO_Address_Collection wakeUpCollection($rows)
 	 */
 	class EO_Address_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\OfficeAccessRequestTable:stafftrack/lib/Internal/Model/OfficeAccessRequestTable.php */
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * EO_OfficeAccessRequest
+	 * @see \Bitrix\StaffTrack\Internal\Model\OfficeAccessRequestTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setOfficeId(\int|\Bitrix\Main\DB\SqlExpression $officeId)
+	 * @method bool hasOfficeId()
+	 * @method bool isOfficeIdFilled()
+	 * @method bool isOfficeIdChanged()
+	 * @method \int remindActualOfficeId()
+	 * @method \int requireOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetOfficeId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetOfficeId()
+	 * @method \int fillOfficeId()
+	 * @method \int getUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetUserId()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \string getStatus()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetStatus()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \int getRevision()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setRevision(\int|\Bitrix\Main\DB\SqlExpression $revision)
+	 * @method bool hasRevision()
+	 * @method bool isRevisionFilled()
+	 * @method bool isRevisionChanged()
+	 * @method \int remindActualRevision()
+	 * @method \int requireRevision()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetRevision()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetRevision()
+	 * @method \int fillRevision()
+	 * @method \Bitrix\Main\Type\DateTime getRequestedAt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setRequestedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $requestedAt)
+	 * @method bool hasRequestedAt()
+	 * @method bool isRequestedAtFilled()
+	 * @method bool isRequestedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualRequestedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireRequestedAt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetRequestedAt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetRequestedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillRequestedAt()
+	 * @method null|\int getDecidedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setDecidedBy(null|\int|\Bitrix\Main\DB\SqlExpression $decidedBy)
+	 * @method bool hasDecidedBy()
+	 * @method bool isDecidedByFilled()
+	 * @method bool isDecidedByChanged()
+	 * @method null|\int remindActualDecidedBy()
+	 * @method null|\int requireDecidedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetDecidedBy()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetDecidedBy()
+	 * @method null|\int fillDecidedBy()
+	 * @method null|\Bitrix\Main\Type\DateTime getDecidedAt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest setDecidedAt(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $decidedAt)
+	 * @method bool hasDecidedAt()
+	 * @method bool isDecidedAtFilled()
+	 * @method bool isDecidedAtChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualDecidedAt()
+	 * @method null|\Bitrix\Main\Type\DateTime requireDecidedAt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest resetDecidedAt()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unsetDecidedAt()
+	 * @method null|\Bitrix\Main\Type\DateTime fillDecidedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest set($fieldName, $value)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest reset($fieldName)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest wakeUp($data)
+	 */
+	class EO_OfficeAccessRequest extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficeAccessRequestTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficeAccessRequestTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * EO_OfficeAccessRequest_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getOfficeIdList()
+	 * @method \int[] fillOfficeId()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \int[] getRevisionList()
+	 * @method \int[] fillRevision()
+	 * @method \Bitrix\Main\Type\DateTime[] getRequestedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillRequestedAt()
+	 * @method null|\int[] getDecidedByList()
+	 * @method null|\int[] fillDecidedBy()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getDecidedAtList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillDecidedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest $object)
+	 * @method bool has(\Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest getByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest[] getAll()
+	 * @method bool remove(\Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection merge(?\Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest|null find(callable $callback)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection filter(callable $callback)
+	 */
+	class EO_OfficeAccessRequest_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\StaffTrack\Internal\Model\OfficeAccessRequestTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Internal\Model\OfficeAccessRequestTable';
+	}
+}
+namespace Bitrix\StaffTrack\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_OfficeAccessRequest_Result exec()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection fetchCollection()
+	 */
+	class EO_OfficeAccessRequest_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest fetchObject()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection fetchCollection()
+	 */
+	class EO_OfficeAccessRequest_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest createObject($setDefaultValues = true)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection createCollection()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest wakeUpObject($row)
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_OfficeAccessRequest_Collection wakeUpCollection($rows)
+	 */
+	class EO_OfficeAccessRequest_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\UserStatisticsHashTable:stafftrack/lib/Model/UserStatisticsHashTable.php */
 namespace Bitrix\StaffTrack\Model {

@@ -15,12 +15,16 @@ use Bitrix\Crm\Copilot\AiQueueBuffer\Provider\FillRepeatSaleTipsProvider;
 use Bitrix\Crm\Copilot\Pipeline\OperationRegistry;
 use Bitrix\Crm\Copilot\Pipeline\PipelineExecutor;
 use Bitrix\Crm\Copilot\Pipeline\ScenarioResolver;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\AiSummary;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\AbstractOperation;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallScriptFromDialog;
+use Bitrix\Crm\Integration\AI\Operation\Scenario;
+use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\VoxImplant;
@@ -52,6 +56,7 @@ final class EventHandler
 	public const SETTINGS_ANALYZE_COMMUNICATION_ENGINE_CODE = 'crm_copilot_analyze_communication_engine_code';
 	public const SETTINGS_SUMMARIZE_ENABLED_CODE = 'crm_copilot_summarize_enabled';
 	public const SETTINGS_SUMMARIZE_ENGINE_CODE = 'crm_copilot_summarize_engine_code';
+	public const SETTINGS_CLIENT_SUMMARY_ENABLED_CODE = 'crm_copilot_client_summary_enabled';
 
 	public const ENGINE_CATEGORY = 'text';
 
@@ -262,6 +267,24 @@ final class EventHandler
 			$itemRelations[self::SETTINGS_ANALYZE_COMMUNICATION_ENABLED_CODE] = [
 				self::SETTINGS_ANALYZE_COMMUNICATION_ENGINE_CODE,
 			];
+
+			if (Feature::enabled(AiSummary::class))
+			{
+				$items[self::SETTINGS_CLIENT_SUMMARY_ENABLED_CODE] = [
+					'group' => self::SETTINGS_GROUP_CODE,
+					'title' => Loc::getMessage(
+						'CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_CLIENT_SUMMARY_TITLE',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()],
+					),
+					'header' => Loc::getMessage(
+						'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_CLIENT_SUMMARY_HEADER',
+						['#COPILOT_NAME#' => AIManager::getCopilotName()],
+					),
+					'type' => Tuning\Type::BOOLEAN,
+					'default' => true,
+					'sort' => 60,
+				];
+			}
 		}
 
 		$result->modifyFields([
@@ -312,6 +335,15 @@ final class EventHandler
 		// can produce duplicate ToDo / EntityExclusion activities. Plan: add an atomic CONTINUED
 		// flag on the job row (UPDATE ... WHERE id=? AND continued=0) and bail when affected_rows=0.
 		$result = self::getQueueJobExecuteResult($event, $job);
+		if ($result === null && (int)$job->requireTypeId() === SummarizeCallTranscription::TYPE_ID)
+		{
+			$result = new Result(
+				SummarizeCallTranscription::TYPE_ID,
+				new ItemIdentifier(CCrmOwnerType::Activity, (int)$job->requireEntityId()),
+				jobId: (int)$job->requireId(),
+				isPending: false,
+			);
+		}
 		if ($result)
 		{
 			$nextTypeId = $job->requireNextTypeId();
@@ -320,6 +352,10 @@ final class EventHandler
 				$nextTypeId !== null ? (int)$nextTypeId : null,
 				self::extractScenarioNameFromEngineContext($event),
 			);
+			if ($scenarioName === null && $result->getTypeId() === SummarizeCallTranscription::TYPE_ID)
+			{
+				$scenarioName = Scenario::SUMMARIZE_SCENARIO;
+			}
 			if ($scenarioName !== null)
 			{
 				ServiceLocator::getInstance()->get(PipelineExecutor::class)->continueAfterCompletion(
@@ -370,7 +406,14 @@ final class EventHandler
 		$operationClass = ServiceLocator::getInstance()->get(OperationRegistry::class)->getByTypeId((int)$job->requireTypeId());
 		if ($operationClass !== null)
 		{
-			$operationClass::onQueueJobFail($event, $job);
+			$result = $operationClass::onQueueJobFail($event, $job);
+			if ($result->getTypeId() === SummarizeCallTranscription::TYPE_ID)
+			{
+				ServiceLocator::getInstance()->get(PipelineExecutor::class)->continueAfterCompletion(
+					$result,
+					Scenario::SUMMARIZE_SCENARIO,
+				);
+			}
 		}
 	}
 	//endregion
@@ -786,12 +829,22 @@ final class EventHandler
 		}
 
 		$additionalInfo = $engine->getContext()->getParameters()['additionalInfo'] ?? [];
-		if (!is_array($additionalInfo) || !array_key_exists('fillFieldsEntityAllowed', $additionalInfo))
+		if (!is_array($additionalInfo))
 		{
 			return [];
 		}
 
-		return ['fillFieldsEntityAllowed' => (bool)$additionalInfo['fillFieldsEntityAllowed']];
+		$extra = [];
+		if (array_key_exists('fillFieldsEntityAllowed', $additionalInfo))
+		{
+			$extra['fillFieldsEntityAllowed'] = (bool)$additionalInfo['fillFieldsEntityAllowed'];
+		}
+		if (($additionalInfo['manualCallAssessment'] ?? null) === true)
+		{
+			$extra['manualCallAssessment'] = true;
+		}
+
+		return $extra;
 	}
 
 	private static function registerCallActivityWithAudioRecordingEvent(array $activityFields): void

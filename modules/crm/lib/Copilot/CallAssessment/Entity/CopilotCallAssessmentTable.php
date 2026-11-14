@@ -5,7 +5,6 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Entity;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\Fields\Validators\PromptLengthValidator;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AutoCheckType;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Service\Container;
@@ -134,11 +133,6 @@ class CopilotCallAssessmentTable extends Main\ORM\Data\DataManager
 				->configureDefaultValue(CallAssessmentItem::HIGH_BORDER_DEFAULT)
 				->addValidator(new RangeValidator(min: 0, max: 100))
 			,
-			(new Main\ORM\Fields\EnumField('AVAILABILITY_TYPE'))
-				->configureRequired()
-				->configureValues(AvailabilityType::values())
-				->configureDefaultValue(AvailabilityType::ALWAYS_ACTIVE->value)
-			,
 			$fieldRepository->getCreatedTime('CREATED_AT'),
 			$fieldRepository->getUpdatedTime('UPDATED_AT'),
 			$fieldRepository
@@ -150,7 +144,6 @@ class CopilotCallAssessmentTable extends Main\ORM\Data\DataManager
 				->configureDefaultValue(static fn() => Container::getInstance()->getContext()->getUserId())
 			,
 			(new OneToMany('CLIENT_TYPES', CopilotCallAssessmentClientTypeTable::class, 'ASSESSMENT')),
-			(new OneToMany('AVAILABILITY_DATA', CopilotCallAssessmentAvailabilityTable::class, 'ASSESSMENT')),
 			(new OneToMany('CRITERIA', CopilotCallAssessmentCriteriaTable::class, 'ASSESSMENT')),
 		];
 	}

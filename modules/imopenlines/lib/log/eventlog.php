@@ -6,12 +6,15 @@ use \Bitrix\Imopenlines\Model\EventLogTable;
 use \Bitrix\Main\Result;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\ArgumentException;
+use \Bitrix\Main\Type\Date;
 use \Bitrix\Main\Type\DateTime;
 
 Loc::loadMessages(__FILE__);
 
 class EventLog
 {
+	private const DATE_FORMAT = 'Y-m-d H:i:s';
+
 	private static $eventMap = array(
 		Library::EVENT_SESSION_START => 'onSessionStart',
 		Library::EVENT_SESSION_LOAD => 'onSessionLoad',
@@ -90,7 +93,7 @@ class EventLog
 		$result['ADDITIONAL_DATA'] = $fieldsResult->getData();
 		$result['EVENT_FIELDS_DATA'] = array(
 			'DATE_TIME' => new DateTime(),
-			'ADDITIONAL_FIELDS' => $result['ADDITIONAL_DATA']
+			'ADDITIONAL_FIELDS' => self::convertDatesToStrings($result['ADDITIONAL_DATA'])
 		);
 
 		if (!$fieldsResult->isSuccess())
@@ -104,6 +107,21 @@ class EventLog
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The ORM unserializes ADDITIONAL_FIELDS without allowed classes, so date objects would come back incomplete.
+	 */
+	private static function convertDatesToStrings(array $data): array
+	{
+		array_walk_recursive($data, static function (&$value): void {
+			if ($value instanceof Date)
+			{
+				$value = $value->format(self::DATE_FORMAT);
+			}
+		});
+
+		return $data;
 	}
 
 	/**

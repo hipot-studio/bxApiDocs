@@ -49,18 +49,26 @@ final class LedgerRepository
 				return hash_equals($existing['PAYLOAD_HASH'], $hash) ? $this->submissionResult($existing, true) : self::error('IDEMPOTENCY_CONFLICT');
 			}
 			if ($source['STATE'] !== 'active' || (int)$source['REVISION'] !== $manifest->sourceRevision) { return self::error('STALE_PRESENTATION'); }
+			$bindings = [];
+			foreach (self::currentRows(UsageTable::class, ['=SOURCE_ID' => (int)$source['ID'], '=DATE_END' => null]) as $binding)
+			{
+				$bindings[(int)$binding['DOCUMENT_ID']] ??= $binding;
+			}
 			$items = [];
 			foreach ($manifest->items as $item)
 			{
 				if (strlen($item->effectiveText) > 262144 || strlen($item->effectiveLabel) > 262144) { return self::error('INVALID_PAYLOAD'); }
 				$items[$item->documentId] = $item;
-				$binding = self::currentRows(UsageTable::class, ['=SOURCE_ID' => (int)$source['ID'], '=DOCUMENT_ID' => $item->documentId, '=DATE_END' => null])[0] ?? false;
+				$binding = $bindings[$item->documentId] ?? false;
 				if (!$binding || (int)$binding['VERSION_ID'] !== $item->versionId || (int)$binding['REVISION'] !== $item->bindingRevision) { return self::error('STALE_PRESENTATION'); }
 				if ($binding['REQUIRED'] === 'Y' && $item->answer !== 'accepted') { return self::error('INVALID_PAYLOAD'); }
 			}
-			foreach (self::currentRows(UsageTable::class, ['=SOURCE_ID' => (int)$source['ID'], '=DATE_END' => null, '=REQUIRED' => 'Y']) as $binding)
+			foreach ($bindings as $binding)
 			{
-				if (!isset($items[(int)$binding['DOCUMENT_ID']])) { return self::error('INVALID_PAYLOAD'); }
+				if ($binding['REQUIRED'] === 'Y' && !isset($items[(int)$binding['DOCUMENT_ID']]))
+				{
+					return self::error('INVALID_PAYLOAD');
+				}
 			}
 			try
 			{
@@ -142,7 +150,7 @@ return self::error('STORAGE_ERROR'); }
 				$ids[] = (int)$saved->getId();
 			}
 			$saved = SubmissionTable::update($submissionId, ['STATE' => 'committed', 'RESOLUTION_SNAPSHOT' => self::canonicalJson($resolution),
-				'RESULT_ID' => $resolution->resultId, 'ACTIVITY_ID' => $resolution->activityId]);
+				'RESULT_ID' => $resolution->resultId, 'ACTIVITY_ID' => $resolution->activityId, 'ERROR_CODE' => null]);
 			if (!$saved->isSuccess()) { return self::error('STORAGE_ERROR'); }
 
 			return (new RegistryResult())->setSubmissionId($submissionId)->setState('committed')->setFactIds($ids);

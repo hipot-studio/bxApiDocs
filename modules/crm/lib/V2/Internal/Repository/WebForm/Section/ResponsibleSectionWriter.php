@@ -15,7 +15,7 @@ use Bitrix\Main\Result;
  *
  * The queue is rewritten as a whole and keeps the input as it is: repeated users are stored more
  * than once, the way the legacy queue did, because a user takes his turn once per row. The
- * rotation pointer of the queue is a portal option and survives the rewrite.
+ * rotation pointer of the queue is kept in the persistent storage and survives the rewrite.
  *
  * The work time check belongs to the queue, not to a single row: every row carries the same flag,
  * and an empty queue holds it nowhere. A change set that carries the flag alone leaves the queue

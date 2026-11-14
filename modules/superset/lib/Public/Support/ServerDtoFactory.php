@@ -32,6 +32,8 @@ final class ServerDtoFactory
 			token: (string)($server->getToken() ?? ''),
 			refreshToken: (string)($server->getRefreshToken() ?? ''),
 			dateStartAttempt: $server->getDateStartAttempt()?->format('Y-m-d H:i:s'),
+			generation: (string)($server->getGeneration() ?? ''),
+			protocolRequired: $server->isProtocolRequired(),
 		);
 	}
 }

@@ -8,6 +8,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\V2\Infrastructure\Rest\Controller\Form;
 use Bitrix\Crm\V2\Infrastructure\Rest\Controller\Lead;
 use Bitrix\Crm\V2\Infrastructure\Rest\Controller\MyCompany\Basic;
+use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Address;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Category;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Dictionary;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Field;
@@ -21,6 +22,7 @@ use Bitrix\Crm\V2\Internal\Exception\WebForm\OpenLinesNotInstalledException;
 use Bitrix\Crm\V2\Internal\Integration\ImOpenLines\OpenLineGateway;
 use Bitrix\Crm\V2\Internal\Service\Category\CategoryAccess;
 use Bitrix\Crm\V2\Internal\Service\Dictionary\DictionaryAccess;
+use Bitrix\Crm\V2\Internal\Service\Tracking\TrackingAccess;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\V3\Mcp\Access\MethodAccessCheckerInterface;
 use Bitrix\Rest\V3\Schema\MethodDescription;
@@ -66,12 +68,21 @@ final class CrmMethodAccessChecker implements MethodAccessCheckerInterface
 			CustomForm\SiteButton::class => $this->canReadForms($userId) && $this->canReadSiteButtons($userId),
 			CustomForm\OpenLine::class => $this->canReadForms($userId) && $this->canModifyOpenLineChats($userId),
 			Lead::class => Container::getInstance()->getUserPermissions($userId)->isCrmAdmin(),
+			Address\PortalAddress::class,
 			Product\Product::class,
 			Requisite\Requisite::class => Container::getInstance()->getUserPermissions($userId)->isAdmin(),
 			Requisite\Preset::class => $this->canReadItemsOfRouteInDefaultCategory($methodDescription, $userId),
 			Dictionary\DictionaryValue::class => $this->canAccessDictionaryValue($methodDescription, $userId),
-			// Trace-level access to the bound items is checked by the controller.
+			// The controllers check the rest: the access to the items a trace is bound to, and the right to
+			// the settings of the end-to-end analytics a change of a source or of expenses needs.
 			Tracking\Trace::class => $this->canReadSomeItemsInCrm($userId),
+			Tracking\Channel::class,
+			Tracking\Source::class,
+			Tracking\Expenses::class,
+			Tracking\Ad\Account::class,
+			Tracking\Ad\Tree::class,
+			Tracking\Ad\Expenses::class,
+			Tracking\Analytics\Source::class => (new TrackingAccess())->canRead($userId),
 			default => true,
 		};
 	}
@@ -90,7 +101,7 @@ final class CrmMethodAccessChecker implements MethodAccessCheckerInterface
 		{
 			'get', 'list', 'tail', 'aggregate' => $permissions->canReadItems($entityTypeId),
 			'add' => $permissions->canAddItems($entityTypeId),
-			'update', 'addFieldValue', 'deleteFieldValue' => $permissions->canUpdateItems($entityTypeId),
+			'update', 'addFieldValue', 'deleteFieldValue', 'setPrimaryContact' => $permissions->canUpdateItems($entityTypeId),
 			'delete' => $permissions->canDeleteItems($entityTypeId),
 			default => false,
 		};

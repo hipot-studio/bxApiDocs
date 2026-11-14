@@ -6,6 +6,7 @@ use Bitrix\Main;
 use Bitrix\Superset\Internal\Api;
 use Bitrix\Superset\Internal\HttpStatus;
 use Bitrix\Superset\Internal\Support\AbstractSupersetContext;
+use Bitrix\Superset\Internal\Support\RequestRejection;
 use Bitrix\Superset\Internal\Support\SqlReadOnlyClassifier;
 
 final class VirtualDatasetService extends AbstractSupersetContext
@@ -101,7 +102,7 @@ final class VirtualDatasetService extends AbstractSupersetContext
 			|| $requestResult->getHttpStatus() !== HttpStatus::CREATED
 		)
 		{
-			return $this->createRequestErrorResult($requestResult, 'Adding virtual dataset');
+			return $this->createDatasetRequestErrorResult($requestResult, 'Adding virtual dataset');
 		}
 		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
 		if ($notApplied !== null)
@@ -167,9 +168,8 @@ final class VirtualDatasetService extends AbstractSupersetContext
 		$classification = (new SqlReadOnlyClassifier())->classify($sql);
 		if (!$classification->isReadOnly)
 		{
-			return $this->createErrorResult(
+			return RequestRejection::create(
 				(string)$classification->reason,
-				null,
 				HttpStatus::UNPROCESSABLE_ENTITY,
 			);
 		}
@@ -196,7 +196,7 @@ final class VirtualDatasetService extends AbstractSupersetContext
 			|| $requestResult->getHttpStatus() !== HttpStatus::CREATED
 		)
 		{
-			return $this->createRequestErrorResult($requestResult, 'Adding virtual dataset from SQL');
+			return $this->createDatasetRequestErrorResult($requestResult, 'Adding virtual dataset from SQL');
 		}
 		$notApplied = $this->checkActAsApplied($requestResult, $actAsLogin);
 		if ($notApplied !== null)

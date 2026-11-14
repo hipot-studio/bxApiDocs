@@ -7,11 +7,11 @@
  */
 namespace Bitrix\Crm\WebForm;
 
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UserTable;
+use Bitrix\Crm\Service\RuntimeState\ResponsibleQueueCursor;
 use Bitrix\Crm\WebForm\Internals\QueueTable;
 
 Loc::loadMessages(__FILE__);
@@ -19,12 +19,14 @@ Loc::loadMessages(__FILE__);
 class ResponsibleQueue
 {
 	CONST OPTION_MODULE_ID = 'crm';
+	/** Prefix of the legacy option that kept the queue position before ResponsibleQueueCursor. */
 	CONST OPTION_LAST_NAME = 'crm_webform_resp_queue';
 	public $list = array();
 	public $lastId = null;
 	public $entityId = null;
 	protected $isWorkTimeCheckEnabled = false;
 	protected $autoSetLastId = false;
+	private bool $isLastIdLoaded = false;
 
 	public function __construct($entityId, $autoSetLastId = true)
 	{
@@ -32,7 +34,6 @@ class ResponsibleQueue
 		$this->autoSetLastId = $autoSetLastId;
 
 		$this->loadList();
-		$this->lastId = $this->getLastId();
 	}
 
 	public function getList()
@@ -92,7 +93,7 @@ class ResponsibleQueue
 
 	public static function remove($entityId)
 	{
-		Option::delete(self::OPTION_MODULE_ID, array('name' => self::OPTION_LAST_NAME . $entityId));
+		ResponsibleQueueCursor::forWebForm()->delete((int)$entityId);
 	}
 
 	public static function isSupportedWorkTime()
@@ -102,12 +103,12 @@ class ResponsibleQueue
 
 	public function setLastId($id)
 	{
-		Option::set(self::OPTION_MODULE_ID, self::OPTION_LAST_NAME . $this->entityId, $id);
+		ResponsibleQueueCursor::forWebForm()->set((int)$this->entityId, (int)$id);
 	}
 
 	public function getLastId()
 	{
-		return Option::get(self::OPTION_MODULE_ID, self::OPTION_LAST_NAME . $this->entityId, null);
+		return ResponsibleQueueCursor::forWebForm()->get((int)$this->entityId);
 	}
 
 	protected function getStack()
@@ -179,6 +180,13 @@ class ResponsibleQueue
 		if (count($this->list) == 0)
 		{
 			return null;
+		}
+
+		// The position is read on demand: a form is loaded far more often than it assigns a responsible.
+		if (!$this->isLastIdLoaded)
+		{
+			$this->lastId = $this->getLastId();
+			$this->isLastIdLoaded = true;
 		}
 
 		$nextId = null;

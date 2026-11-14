@@ -5,24 +5,24 @@ declare(strict_types=1);
 namespace Bitrix\Disk\FilePicker;
 
 use Bitrix\Disk\BaseObject;
-use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\File;
-use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
-use Bitrix\Disk\Internal\Service\UnifiedLink;
 use Bitrix\Disk\TypeFile;
+use Bitrix\Disk\UI\Viewer\Renderer\Html;
 use Bitrix\Disk\Ui\FileAttributes;
-use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\FileTable;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UI\Viewer\Renderer;
+use Bitrix\Main\UI\Viewer\Transformation\TransformerManager;
 
 /**
- * Tells whether the picker may offer the standard viewer for a file, judging by what the file model
- * already knows. The answer is optimistic by design: it costs no read of b_file and no write at all.
- * The objects behind the links of a listed set are resolved in one query, so no item costs a query.
+ * Tells whether the picker may offer the standard viewer for a file. Linked objects and stored document
+ * metadata are loaded in batches, so no listed item costs an individual query.
  */
 final class ViewerSupport
 {
-	private ?DocumentHandler $defaultHandlerForView = null;
-	private ?UnifiedLink\UnifiedLinkSupportService $unifiedLinkSupport = null;
+	/** @var array<int, array{CONTENT_TYPE: string, FILE_SIZE: int}|null> */
+	private array $fileDataByFileId = [];
+	private ?TransformerManager $transformerManager = null;
 
 	public function __construct(
 		private readonly RealObjectResolver $realObjectResolver = new RealObjectResolver(),
@@ -31,14 +31,46 @@ final class ViewerSupport
 	}
 
 	/**
-	 * Resolves the objects the links of the set stand for in one query. A link owns no stored file of its
-	 * own, so asking it for one goes to the object behind it, which would cost a query per listed link.
+	 * Resolves linked objects and reads document metadata once for the set. A link owns no stored file of
+	 * its own, so both reads use the object behind it.
 	 *
 	 * @param array<BaseObject> $objects
 	 */
 	public function warmUpLinkedFiles(array $objects): void
 	{
 		$this->realObjectResolver->warmUp($objects);
+		$this->fileDataByFileId = [];
+		foreach ($objects as $object)
+		{
+			if (!$object instanceof File || !TypeFile::isDocument($object->getName()))
+			{
+				continue;
+			}
+
+			$fileId = $this->resolveFileId($object);
+			if ($fileId > 0)
+			{
+				$this->fileDataByFileId[$fileId] = null;
+			}
+		}
+
+		if ($this->fileDataByFileId === [])
+		{
+			return;
+		}
+
+		$rows = FileTable::query()
+			->setSelect(['ID', 'CONTENT_TYPE', 'FILE_SIZE'])
+			->whereIn('ID', array_keys($this->fileDataByFileId))
+			->exec()
+		;
+		while ($row = $rows->fetch())
+		{
+			$this->fileDataByFileId[(int)$row['ID']] = [
+				'CONTENT_TYPE' => (string)$row['CONTENT_TYPE'],
+				'FILE_SIZE' => (int)$row['FILE_SIZE'],
+			];
+		}
 	}
 
 	public function isPreviewable(File $file): bool
@@ -47,6 +79,11 @@ final class ViewerSupport
 		if ($fileId <= 0)
 		{
 			return false;
+		}
+
+		if (TypeFile::isDocument($file->getName()))
+		{
+			return $this->canPreviewDocument($file, $fileId);
 		}
 
 		$contentType = TypeFile::getMimeTypeByFilename((string)$file->getName());
@@ -58,12 +95,50 @@ final class ViewerSupport
 			return false;
 		}
 
-		if (!FileAttributes::requiresUnifiedLinkToOpen($type, $contentType))
+		if ($type === Html::getJsType())
+		{
+			return false;
+		}
+
+		return !FileAttributes::requiresUnifiedLinkToOpen($type, $contentType, $file);
+	}
+
+	private function canPreviewDocument(File $file, int $fileId): bool
+	{
+		$storedFileData = $this->fileDataByFileId[$fileId] ?? null;
+		if (array_key_exists($fileId, $this->fileDataByFileId) && $storedFileData === null)
+		{
+			return false;
+		}
+
+		$contentType = $storedFileData === null
+			? TypeFile::getMimeTypeByFilename($file->getName())
+			: TypeFile::normalizeMimeType($storedFileData['CONTENT_TYPE'], $file->getName())
+		;
+		$size = $storedFileData['FILE_SIZE'] ?? $file->getSize();
+		if ($contentType === 'application/pdf')
 		{
 			return true;
 		}
 
-		return $this->allowsUnifiedLinkByConfiguration($file);
+		if (in_array($contentType, Renderer\Code::getAllowedContentTypes(), true))
+		{
+			return $size <= Renderer\Code::getSizeRestriction();
+		}
+
+		if (!ModuleManager::isModuleInstalled('transformer'))
+		{
+			return false;
+		}
+
+		$this->transformerManager ??= new TransformerManager();
+		$transformation = $this->transformerManager->buildTransformationByFile([
+			'CONTENT_TYPE' => $contentType,
+			'ORIGINAL_NAME' => $file->getName(),
+		]);
+
+		return $transformation !== null
+			&& ($transformation->getInputMaxSize() <= 0 || $size <= $transformation->getInputMaxSize());
 	}
 
 	/**
@@ -77,30 +152,4 @@ final class ViewerSupport
 		return $realObject === null ? (int)$file->getFileId() : (int)$realObject->getFileId();
 	}
 
-	/**
-	 * A separate item opens from the picker by its unified link and by nothing else, so the link has to be
-	 * possible at all. Only the configuration is asked: the support of the object writes the unique code
-	 * back when it is missing, which a listing must not do.
-	 */
-	private function allowsUnifiedLinkByConfiguration(File $file): bool
-	{
-		return UnifiedLink\Configuration::isDocumentHandlerAllowed($this->getDefaultHandlerForView())
-			&& $this->getUnifiedLinkSupport()->supportsByConfiguration($file)
-		;
-	}
-
-	/**
-	 * Resolving the handler walks the list of registered ones, and a listing judges a page of files at once.
-	 */
-	private function getDefaultHandlerForView(): DocumentHandler
-	{
-		return $this->defaultHandlerForView ??= DocumentViewPolicy::getDefaultHandlerForView();
-	}
-
-	private function getUnifiedLinkSupport(): UnifiedLink\UnifiedLinkSupportService
-	{
-		return $this->unifiedLinkSupport ??= ServiceLocator::getInstance()
-			->get(UnifiedLink\UnifiedLinkSupportService::class)
-		;
-	}
 }

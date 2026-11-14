@@ -30,7 +30,7 @@ abstract class RestToolSetProvider extends BaseToolSet implements ToolProviderDe
 	private const CACHE_METHOD_DESCRIPTIONS = 'methodDescriptions';
 	private const CACHE_BUILT_AT = 'builtAt';
 	private const CACHE_VERSION = 'version';
-	private const TOOL_MAPS_CACHE_VERSION = 5;
+	private const TOOL_MAPS_CACHE_VERSION = 7;
 
 	/** @var array<string, ToolDescriptionDto>|null */
 	private ?array $toolDescriptionsMap = null;

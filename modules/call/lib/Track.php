@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Call\Background\JobDispatcher;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
@@ -9,10 +10,12 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\UrlManager;
+use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Model\EO_CallTrack;
 use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Cache\ExternalAccessTokenManager;
+use Bitrix\Call\Integration\AI\CallAISettings;
 
 
 class Track extends EO_CallTrack
@@ -23,6 +26,48 @@ class Track extends EO_CallTrack
 		TYPE_VIDEO_RECORD = 'video_record',
 		TYPE_VIDEO_PREVIEW = 'video_preview'
 	;
+
+	/**
+	 * Outcome of a degradation, not a default of the normal path: the format was not recognized and
+	 * the name carried nothing usable. Retargeting it at the extension of a new format would mirror
+	 * the defect this rule fixes - every unrecognized recording would then be named after that one.
+	 */
+	private const FALLBACK_FILE_EXTENSION = 'ogg';
+
+	/**
+	 * Keys are normalized mime types (lowercase, no parameters): receivers normalize before a track is saved.
+	 * An extension belongs here only if disk classifies it as the intended file type.
+	 */
+	private const EXTENSION_BY_MIME_TYPE = [
+		'audio/mp4' => 'm4a',
+		'audio/x-m4a' => 'm4a',
+		'audio/ogg' => 'ogg',
+		'audio/mpeg' => 'mp3',
+		'video/mp4' => 'mp4',
+		'video/webm' => 'webm',
+		'video/ogg' => 'ogv',
+		'image/jpeg' => 'jpg',
+		'image/jpg' => 'jpg',
+		'image/png' => 'png',
+		'image/gif' => 'gif',
+		'image/webp' => 'webp',
+		'image/bmp' => 'bmp',
+		'image/tiff' => 'tiff',
+		'image/svg+xml' => 'svg',
+	];
+
+	/**
+	 * Extensions a recording may be named after when the table above knows no recording format of its
+	 * mime type. Deliberately wider than the values of that table: the step exists for a format that
+	 * reached the pipeline before its row did, so a list drawn from the table would never accept
+	 * anything. Only audio and video formats a recording pipeline produces belong here - a preview
+	 * never takes its name from the notification, and an extension of any other kind would let the
+	 * recording service hand a portal user a file whose name promises something a recording never is.
+	 */
+	private const RECORDING_MEDIA_EXTENSIONS = [
+		'm4a', 'mp3', 'ogg', 'oga', 'opus', 'weba', 'wav', 'aac', 'flac',
+		'mp4', 'm4v', 'webm', 'ogv', 'mov',
+	];
 
 	/**
 	 * Attach file from filesystem path to this track
@@ -117,21 +162,117 @@ class Track extends EO_CallTrack
 			return $result;
 		}
 
-		if ($tempPath)
+		$fileId = (int)$this->getFileId();
+		$fileSize = (int)$this->getFileSize();
+
+		if (!$this->claimDownloadedFile($tempPath, $fileId, $fileSize))
 		{
-			self::scheduleTempCleanup($tempPath);
+			if (CallAISettings::isLoggingEnable())
+			{
+				Logger::getInstance()->error(
+					"Track::attachTempFile: the row was pointed at another delivery while this file"
+					. " was being saved, so the landing of this one is dropped. TrackId: {$this->getId()}"
+				);
+			}
+
+			// The file this pass made addresses nothing: the row names the delivery that replaced
+			// it, and no second field ever named this one.
+			\CFile::Delete($fileId);
+			$this->sysReset('FILE_ID')->sysReset('FILE_SIZE');
+
+			return (new Result())->addError(new TrackError(
+				TrackError::SAVE_FILE_ERROR,
+				'The track row now points at another delivery'
+			));
 		}
 
-		$this
-			->setTempPath(null)
-			->setDownloadUrl(null)
-			->setDownloaded(true)
-			->save();
+		// The row and this object hold the same thing now, and the fields the claim wrote are not
+		// written a second time by the save below {@see self::claimDownloadedFile()}.
+		$this->sysSetActual('FILE_ID', $fileId);
+		$this->sysSetActual('FILE_SIZE', $fileSize);
+		$this->sysReset('FILE_ID')->sysReset('FILE_SIZE');
+		$this->sysSetActual('TEMP_PATH', null);
+		$this->sysSetActual('DOWNLOAD_URL', null);
+		$this->sysSetActual('DOWNLOADED', true);
+
+		// Whatever else this pass has learned about the row - a duration, a name, a mime type -
+		// still travels the way it always did. The landing itself is already written.
+		$saved = $this->save();
+		if (!$saved->isSuccess())
+		{
+			if (CallAISettings::isLoggingEnable())
+			{
+				Logger::getInstance()->error(
+					"Track::attachTempFile: the attached file was not saved to the track."
+					. " TrackId: {$this->getId()}, Errors: " . implode('; ', $saved->getErrorMessages())
+				);
+			}
+
+			return $result->addError(new TrackError(TrackError::SAVE_FILE_ERROR, 'Track row was not saved'));
+		}
+
+		// Only once the row has stopped pointing at the file: the cleanup runs inline in a console
+		// process {@see \Bitrix\Call\Background\JobDispatcher}, so on a failed save the row would
+		// keep TEMP_PATH of a file this pass has already deleted, and the next pass of the agent
+		// would resume the download into a path that is no longer there
+		// {@see \Bitrix\Call\Track\Downloader\ChunkedDownloader::download()}.
+		self::scheduleTempCleanup($tempPath);
 
 		return $result;
 	}
 
-	public function attachToDisk(): Result
+	/**
+	 * Writes the landing of a download into the row, and only while the row is still the row this
+	 * pass set out to land on.
+	 *
+	 * One statement and not a save of this object, because the object is old by the time it gets
+	 * here: the file was being written to the storage for as long as the recording is big, and no
+	 * lock is held over that - the download takes none, and the two locks around it belong to the
+	 * action of the restart and to the intake of a delivery, neither of which the agent takes
+	 * {@see \Bitrix\Call\Track\TrackService::takeDeliveredFile()}. A new delivery of the very same
+	 * recording is exactly what happens in that window, because the operator asks for one while
+	 * the first download is still going: the replacement points the row at the new address
+	 * {@see \Bitrix\Call\Track\TrackService::replaceLocalCopy()}, and a save of this object would
+	 * then write the old file back and the new address away - the address of the replacement gone
+	 * from the row, no agent left to schedule by it, and the analysis running on the recording the
+	 * operator asked to be rid of, under an answer that said the restart had started.
+	 *
+	 * TEMP_PATH is what the row is recognised by: it names the very file this pass downloaded, a
+	 * replacement empties it, and the next download of the row generates a new one. So a row that
+	 * still carries it is the row of this download, and a row that does not is somebody else's.
+	 *
+	 * The caller answers a lost claim as the failure of the attach, which is what it is: the file
+	 * of this pass never reached the row {@see self::attachTempFile()}.
+	 */
+	private function claimDownloadedFile(string $tempPath, int $fileId, int $fileSize): bool
+	{
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$connection->queryExecute(
+			'UPDATE ' . CallTrackTable::getTableName()
+			. ' SET FILE_ID = ' . $fileId
+			. ', FILE_SIZE = ' . $fileSize
+			. ", TEMP_PATH = NULL, DOWNLOAD_URL = NULL, DOWNLOADED = 'Y'"
+			. ' WHERE ID = ' . (int)$this->getId()
+			. " AND TEMP_PATH = '" . $helper->forSql($tempPath) . "'"
+		);
+
+		return $connection->getAffectedRowsCount() > 0;
+	}
+
+	/**
+	 * Puts the file the row holds on the Disk of the chat of the call and links it there.
+	 *
+	 * $replaceDiskContent asks for the third of the three things that can happen to the file of
+	 * the chat Disk: it is reused as it is, it is created, or - on a new delivery of the recording
+	 * that replaces the local copy of it {@see \Bitrix\Call\Track\TrackService::replaceLocalCopy()}
+	 * - the file the row has held all along gets the new recording as a new version. The link of
+	 * the chat points at that file and not at this row, so a file created beside it would leave the
+	 * chat with two links to one recording, and the call looking like a call with no recording at
+	 * all until the second one arrives.
+	 */
+	public function attachToDisk(bool $replaceDiskContent = false): Result
 	{
 		if (self::consumeDebugErrorAttempt('debug_force_disk_error_attempts'))
 		{
@@ -155,6 +296,26 @@ class Track extends EO_CallTrack
 			if ($this->getDiskFileId())
 			{
 				$diskFileId = $this->getDiskFileId();
+
+				if ($replaceDiskContent)
+				{
+					$versionResult = $this->uploadDiskVersion((int)$diskFileId, (int)$callInitiatorId);
+					if (!$versionResult->isSuccess())
+					{
+						// The class of the answer is the one of every other failure here, so the
+						// finalization takes the disk branch and the agent retries: the row keeps
+						// pointing at the file of the chat, and the next pass writes the version
+						// again over the very same file.
+						return $result
+							->setData([
+								'diskFileId' => $diskFileId,
+								'chatDelivered' => false,
+								'chatReason' => 'disk_version_failed',
+							])
+							->addErrors($versionResult->getErrors())
+						;
+					}
+				}
 			}
 			else
 			{
@@ -169,7 +330,33 @@ class Track extends EO_CallTrack
 
 			if ($diskFileId)
 			{
-				$this->setDiskFileId($diskFileId)->save();
+				$diskSaved = $this->setDiskFileId($diskFileId)->save();
+				if (!$diskSaved->isSuccess())
+				{
+					// The file is on the chat Disk and the row does not know it. In memory this
+					// object looks finished, and the pipeline asks about the portal by the row:
+					// left as a success it would take the record off the retries with nothing to
+					// find it by {@see \Bitrix\Call\Track\TrackService::isStoredOnPortal()}. The
+					// class of the answer is the one of this method, so the finalization takes the
+					// disk branch it takes for every other failure here.
+					if (CallAISettings::isLoggingEnable())
+					{
+						Logger::getInstance()->error(
+							"Track::attachToDisk: the disk file id was not saved to the track."
+							. " TrackId: {$this->getId()}, DiskFileId: {$diskFileId}"
+							. ", Errors: " . implode('; ', $diskSaved->getErrorMessages())
+						);
+					}
+
+					return $result
+						->setData([
+							'diskFileId' => $diskFileId,
+							'chatDelivered' => false,
+							'chatReason' => 'disk_file_id_save_failed',
+						])
+						->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'Disk file id was not saved'))
+					;
+				}
 
 				// For video records the chat "recording ready" message attaches this file and owns
 				// the media entry. Creating a link here would duplicate it in chat "Media & files".
@@ -275,6 +462,59 @@ class Track extends EO_CallTrack
 			return $result
 				->setData(['chatDelivered' => false, 'chatReason' => 'no_chat_id'])
 				->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'No chat ID for disk attachment'));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Writes the file the row holds now as a new version of the file of the chat Disk the row has
+	 * pointed at all along {@see self::attachToDisk()}.
+	 *
+	 * The version takes the very file of the row and does not copy its bytes, the way the creation
+	 * of the disk file takes them {@see \CIMDisk::UploadFileFromMain()}. The join with the previous
+	 * version is switched off on purpose: the recording the chat served until now stays a version
+	 * of its own, and the file of it stays owned by that version instead of being deleted by the
+	 * join.
+	 */
+	private function uploadDiskVersion(int $diskFileId, int $authorId): Result
+	{
+		$result = new Result();
+
+		if (!Loader::includeModule('disk'))
+		{
+			return $result->addError(
+				new TrackError(TrackError::DISK_ATTACH_ERROR, 'Can not update file on chat disk')
+			);
+		}
+
+		$diskFile = \Bitrix\Disk\File::getById($diskFileId);
+		if (!$diskFile instanceof \Bitrix\Disk\File)
+		{
+			return $result->addError(
+				new TrackError(TrackError::DISK_ATTACH_ERROR, "Disk file #{$diskFileId} of the track is gone")
+			);
+		}
+
+		$fileArray = \CFile::GetFileArray($this->getFileId());
+		if (empty($fileArray))
+		{
+			return $result->addError(
+				new TrackError(TrackError::DISK_ATTACH_ERROR, 'The new file of the track is gone')
+			);
+		}
+
+		if (!$diskFile->addVersion($fileArray, $authorId, true))
+		{
+			$reasons = implode(
+				'; ',
+				array_map(static fn($error): string => (string)$error->getMessage(), $diskFile->getErrors())
+			);
+
+			return $result->addError(new TrackError(
+				TrackError::DISK_ATTACH_ERROR,
+				'Disk file version was not created' . ($reasons === '' ? '' : ': ' . $reasons)
+			));
 		}
 
 		return $result;
@@ -420,6 +660,10 @@ class Track extends EO_CallTrack
 		];
 	}
 
+	/**
+	 * Builds the user-visible file name. Receivers set the name from the ready notification before calling
+	 * this, so a track type without a name template here keeps the notification name as the final one.
+	 */
 	public function generateFilename(): self
 	{
 		$callId = $this->getCallId();
@@ -429,41 +673,19 @@ class Track extends EO_CallTrack
 		{
 			$this->setFileName("track-pack-{$callId}-{$externalId}.zip");
 		}
-		elseif ($this->getType() == self::TYPE_RECORD)
+		elseif (in_array($this->getType(), [self::TYPE_RECORD, self::TYPE_VIDEO_RECORD], true))
 		{
-			$fileName =
-				Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
-					'#CALL_ID#' => $callId,
-					'#CALL_START#' => (new DateTime())->format('Y-m-d')
-				])
-				. ".ogg";
+			$nameBase = $this->getLocalizedFileNameBase() ?: "composed-{$callId}";
 
-			$this->setFileName($fileName ?: "composed-{$callId}.ogg");
-		}
-		elseif ($this->getType() == self::TYPE_VIDEO_RECORD)
-		{
-			$isVideo = str_starts_with($this->getFileMimeType(), 'video/');
-			$fileName =
-				Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
-					'#CALL_ID#' => $callId,
-					'#CALL_START#' => (new DateTime())->format('Y-m-d')
-				])
-				. ($isVideo ? ".mp4" : ".ogg");
-
-			$this->setFileName($fileName ?: "composed-{$callId}.mp4");
+			$this->setFileName($nameBase . '.' . $this->resolveRecordFileExtension());
 		}
 		elseif ($this->getType() == self::TYPE_VIDEO_PREVIEW)
 		{
-			$extension = $this->getFileExtensionFromMimeType() ?: 'jpg';
+			$localizedName = $this->getLocalizedFileNameBase();
+			$nameBase = $localizedName ? 'preview_' . $localizedName : "preview-{$callId}";
+			$extension = $this->getImageFileExtensionFromMimeType() ?: 'jpg';
 
-			$fileName =
-				'preview_' . Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
-					'#CALL_ID#' => $callId,
-					'#CALL_START#' => (new DateTime())->format('Y-m-d')
-				])
-				. ".{$extension}";
-
-			$this->setFileName($fileName ?: "preview-{$callId}.{$extension}");
+			$this->setFileName("{$nameBase}.{$extension}");
 		}
 		elseif (!$this->getFileName())
 		{
@@ -471,6 +693,86 @@ class Track extends EO_CallTrack
 		}
 
 		return $this;
+	}
+
+	private function getLocalizedFileNameBase(): string
+	{
+		return (string)Loc::getMessage('CALL_TRACK_RECORD_FILE_NAME', [
+			'#CALL_ID#' => $this->getCallId(),
+			'#CALL_START#' => (new DateTime())->format('Y-m-d'),
+		]);
+	}
+
+	/**
+	 * Extension of a recording: mime type first, then the extension of the name sent with the ready
+	 * notification, then the legacy fallback. The fallback means the format is not in the table yet.
+	 *
+	 * The name is chosen by the recording service, so the extension it carries is taken only when it
+	 * names a media format the pipeline may produce.
+	 */
+	private function resolveRecordFileExtension(): string
+	{
+		$extension = $this->getRecordingFileExtensionFromMimeType();
+		if ($extension !== null)
+		{
+			return $extension;
+		}
+
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
+		$callId = $this->getCallId();
+		$mimeType = (string)$this->getFileMimeType();
+		$fileName = (string)$this->getFileName();
+		$loggedMimeType = self::withoutLineBreaks($mimeType);
+
+		$log && $logger->warning(
+			'Track::resolveRecordFileExtension: unknown recording mime type.'
+			. " CallId: {$callId}, MimeType: {$loggedMimeType}",
+		);
+
+		$extensionFromName = mb_strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+		if (in_array($extensionFromName, self::RECORDING_MEDIA_EXTENSIONS, true))
+		{
+			return $extensionFromName;
+		}
+
+		$loggedFileName = self::withoutLineBreaks($fileName);
+
+		$log && $logger->warning(
+			'Track::resolveRecordFileExtension: recording extension fallback applied.'
+			. " CallId: {$callId}, MimeType: {$loggedMimeType}, FileName: {$loggedFileName}",
+		);
+
+		return self::FALLBACK_FILE_EXTENSION;
+	}
+
+	/**
+	 * A recording is sound or moving picture, while the shared table also knows the image types of
+	 * a preview: only an audio or video type may name a recording.
+	 */
+	private function getRecordingFileExtensionFromMimeType(): ?string
+	{
+		$mimeType = (string)$this->getFileMimeType();
+		if (!str_starts_with($mimeType, 'audio/') && !str_starts_with($mimeType, 'video/'))
+		{
+			return null;
+		}
+
+		return $this->getFileExtensionFromMimeType();
+	}
+
+	/**
+	 * A preview is always an image, while the shared table also knows the audio and video types of
+	 * the recording pipeline: only an image type may name a preview.
+	 */
+	private function getImageFileExtensionFromMimeType(): ?string
+	{
+		if (!str_starts_with((string)$this->getFileMimeType(), 'image/'))
+		{
+			return null;
+		}
+
+		return $this->getFileExtensionFromMimeType();
 	}
 
 	/**
@@ -481,22 +783,17 @@ class Track extends EO_CallTrack
 	private function getFileExtensionFromMimeType(): ?string
 	{
 		$mimeType = $this->getFileMimeType();
-		if (!$mimeType) {
+		if (!$mimeType)
+		{
 			return null;
 		}
 
-		$mimeToExtension = [
-			'image/jpeg' => 'jpg',
-			'image/jpg' => 'jpg',
-			'image/png' => 'png',
-			'image/gif' => 'gif',
-			'image/webp' => 'webp',
-			'image/bmp' => 'bmp',
-			'image/tiff' => 'tiff',
-			'image/svg+xml' => 'svg',
-		];
+		return self::EXTENSION_BY_MIME_TYPE[$mimeType] ?? null;
+	}
 
-		return $mimeToExtension[$mimeType] ?? null;
+	private static function withoutLineBreaks(string $value): string
+	{
+		return str_replace(["\r", "\n"], ' ', $value);
 	}
 
 	/**
@@ -508,11 +805,16 @@ class Track extends EO_CallTrack
 	}
 
 	/**
-	 * Schedule temp file cleanup via background job
+	 * Schedule temp file cleanup via {@see \Bitrix\Call\Background\JobDispatcher}.
+	 *
+	 * The caller is the code of the agent {@see self::attachTempFile()}, so the cleanup was
+	 * scheduled exactly where a deferred job is dropped: the temp files of a clone installation
+	 * piled up and nothing ever came back for them. The operation is one file and one directory,
+	 * cheap enough to do inline in a process that has no response to protect.
 	 */
 	public static function scheduleTempCleanup(string $tempPath): void
 	{
-		Application::getInstance()->addBackgroundJob(
+		JobDispatcher::getInstance()->enqueue(
 			[self::class, 'cleanupTempFile'],
 			['tempPath' => $tempPath],
 			Application::JOB_PRIORITY_LOW

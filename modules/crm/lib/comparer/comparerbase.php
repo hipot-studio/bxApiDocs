@@ -4,8 +4,10 @@ namespace Bitrix\Crm\Comparer;
 
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Order\OrderStatus;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Factory\Order as OrderFactory;
 
 class ComparerBase
 {
@@ -107,6 +109,11 @@ class ComparerBase
 	public static function isClosed(ItemIdentifier $identifier, bool $defaultFlag = null): ?bool
 	{
 		$factory = Container::getInstance()->getFactory($identifier->getEntityTypeId());
+		if ($factory instanceof OrderFactory)
+		{
+			return self::isOrderClosed($factory, $identifier->getEntityId(), $defaultFlag);
+		}
+
 		if (!$factory || !$factory->isStagesEnabled())
 		{
 			return $defaultFlag;
@@ -149,5 +156,20 @@ class ComparerBase
 		}
 
 		return PhaseSemantics::isFinal($semantics);
+	}
+
+	private static function isOrderClosed(OrderFactory $factory, int $orderId, ?bool $defaultFlag): ?bool
+	{
+		// the order factory does not work with items, so the order status is read directly
+		$order = $factory->getDataClass()::getRow([
+			'select' => ['STATUS_ID'],
+			'filter' => ['=ID' => $orderId],
+		]);
+		if (!$order)
+		{
+			return $defaultFlag;
+		}
+
+		return PhaseSemantics::isFinal(OrderStatus::getSemanticID((string)$order['STATUS_ID']));
 	}
 }

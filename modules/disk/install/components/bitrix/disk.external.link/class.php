@@ -26,6 +26,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internal\Service\HtmlViewerPageService;
+use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordProtectionService;
@@ -355,9 +356,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $this;
 	}
 
-	private function isViewableDocument(string $ext): bool
+	private function isViewableDocument(File $file, ?Version $version = null): bool
 	{
-		return DocumentHandler::isEditable($ext) || (mb_strtolower($ext) === 'pdf');
+		$extension = $version?->getExtension() ?? $file->getExtension();
+
+		return DocumentHandler::isEditable($extension)
+			|| mb_strtolower($extension) === 'pdf'
+			|| DocumentViewPolicy::isAdditionalVibeofficeSource($file, $version)
+		;
 	}
 
 	/**
@@ -388,9 +394,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return HtmlViewerPolicy::isViewable($file);
 		}
 
-		return Configuration::isEnabledHtmlViewer()
-			&& HtmlViewerPolicy::isViewableExtension($pinnedVersion?->getExtension())
-		;
+		return HtmlViewerPolicy::isViewableExtension($pinnedVersion?->getExtension());
 	}
 
 	private function storeDownloadToken($token)
@@ -412,9 +416,17 @@ class CDiskExternalLinkComponent extends DiskComponent
 	{
 		// Html has no editor, so edit is the view page, exactly as on the authenticated path.
 		$file = $this->externalLink->getFile();
-		if ($file instanceof File && HtmlViewerPolicy::isViewable($file))
+		if ($file instanceof File && $this->isHtmlViewerTarget($file, $this->resolvePinnedVersion($file)))
 		{
 			$this->redirectToAction('default');
+
+			return false;
+		}
+		if ($file instanceof File && $this->externalLink->isSpecificVersion())
+		{
+			$this->redirectToAction('default');
+
+			return false;
 		}
 
 		if (!$this->externalLink->getFile() || !$this->externalLink->allowEdit())
@@ -424,7 +436,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return false;
 		}
 
-		$isDocument = $this->isViewableDocument($this->externalLink->getFile()->getExtension());
+		$isDocument = $this->isViewableDocument($this->externalLink->getFile());
 		$documentViewer = $this->resolveDocumentViewer($this->defaultHandlerForView);
 		$isOfficeDocument = $documentViewer !== null && $isDocument;
 		$isBoard = $this->isBoardsHandler();
@@ -470,9 +482,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 				}
 
 				$documentSession = $createdSession;
+				$this->fillDownloadAvailability($this->externalLink->getFile());
+			}
+
+			if (!$isBoard)
+			{
 				$this->arResult['DOCUMENT_SESSION'] = $documentSession;
-				$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
-				$this->arResult['CAN_DOWNLOAD'] = true;
 			}
 
 			if ($isBoard && !$this->setParamsForBoard($documentSession, $this->externalLink->getFile()))
@@ -528,7 +543,10 @@ class CDiskExternalLinkComponent extends DiskComponent
 				? $this->externalLink->getVersion()
 				: $file;
 			$version = $viewerSource instanceof Version ? $viewerSource : null;
-			$isDocument = $viewerSource !== null && $this->isViewableDocument($viewerSource->getExtension());
+			$isDocument = $file instanceof File
+				&& (!$this->externalLink->isSpecificVersion() || $version !== null)
+				&& $this->isViewableDocument($file, $version)
+			;
 
 			// Html is answered before the board and office branches, the order the unified link keeps in
 			// HtmlRenderableHandlerFactory: the same decision is made twice, so it is made the same
@@ -1132,7 +1150,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				if ($this->getHandlerForViewByFile($object) instanceof BoardsHandler)
 				{
 					$attributes->addAction([
-						'type' => 'edit',
+						'type' => 'open',
 						'buttonIconClass' => ' ',
 						'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
 						'params' => [
@@ -1396,8 +1414,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 	{
 		$extension = mb_strtolower(getFileExtension($file->getName()));
 
-		return in_array($extension, ['tif', 'tiff'], true)
-			&& Configuration::isEnabledFileViewerFormats();
+		return in_array($extension, ['tif', 'tiff'], true);
 	}
 
 	private function getDocumentPreviewData(File $file, ?Version $version = null)
@@ -1497,7 +1514,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$passwordPassed = !$this->arResult['PROTECTED_BY_PASSWORD'] || $this->arResult['VALID_PASSWORD'];
-		$isDocument = $this->isViewableDocument($file->getExtension());
+		$isDocument = $this->isViewableDocument($file);
 		$documentHandler = $this->getHandlerForViewByFile($file);
 		if (!$passwordPassed || !$isDocument || !($documentHandler instanceof BoardsHandler))
 		{
@@ -1527,7 +1544,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$passwordPassed = !$this->arResult['PROTECTED_BY_PASSWORD'] || $this->arResult['VALID_PASSWORD'];
-		$isDocument = $this->isViewableDocument($file->getExtension());
+		$isDocument = $this->isViewableDocument($file);
 		$documentViewer = $this->resolveDocumentViewer($this->defaultHandlerForView);
 		if (!$passwordPassed || !$isDocument || $documentViewer === null)
 		{
@@ -1616,7 +1633,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return;
 		}
 
-		$this->externalLink->incrementDownloadCount();
+		// Showing the file on the page of the link (and its preview) is not a download.
+		if (!$showFile)
+		{
+			$this->externalLink->incrementDownloadCount();
+		}
+
 		if ($this->externalLink->isSpecificVersion())
 		{
 			$version = $file->getVersion($this->externalLink->getVersionId());
@@ -1916,6 +1938,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			!$this->externalLink
 			|| $this->externalLink->isExpired()
 			|| !$this->externalLink->getObject()
+			|| $this->externalLink->getObject()->isRoot()
 			|| ($this->fromUnifiedLink && !$this->isExternalLinkContextValid())
 		)
 		{
@@ -2032,6 +2055,20 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $this->langId;
 	}
 
+	/**
+	 * The download action refuses files the link does not let download, so the editor must not offer it.
+	 */
+	private function fillDownloadAvailability(File $file): void
+	{
+		$canDownload = $this->canDownloadObjectByExternalLink($file);
+		$this->arResult['CAN_DOWNLOAD'] = $canDownload;
+
+		if ($canDownload)
+		{
+			$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
+		}
+	}
+
 	private function canDownloadObjectByExternalLink(BaseObject $object): bool
 	{
 		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext(true);
@@ -2132,22 +2169,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return $documentHandlersManager->getHandlerByCode(BoardsHandler::getCode());
 		}
 
-		// Office branch: take the current default view handler, then run it through the single
-		// engine-selection seam (ALG-EXTERNAL-VIEWER-DISPATCH). Passing the handler's own code keeps
-		// a non-office default (google-viewer/bitrix) untouched — the resolver only translates an
-		// OnlyOffice(-derived) handler — so the office viewer becomes VibeofficeHandler when the
-		// portal flag is on and stays OnlyOfficeHandler when it is off (zero regression), while the
-		// google-viewer preview path is preserved. The external-link identity is carried in the
-		// context (no-op today).
-		$defaultHandler = $documentHandlersManager->getDefaultHandlerForView();
-		if ($defaultHandler === null)
-		{
-			return null;
-		}
-
-		return $documentHandlersManager->resolveEffectiveHandler(
-			$defaultHandler::getCode(),
-			DocumentResolveContext::forExternalLink($this->externalLink->getId(), $file?->getId()),
+		return DocumentViewPolicy::resolveEffectiveHandlerForView(
+			DocumentResolveContext::forExternalLink(
+				(int)$this->externalLink->getId(),
+				$file !== null ? (int)$file->getId() : null,
+			),
 		);
 	}
 

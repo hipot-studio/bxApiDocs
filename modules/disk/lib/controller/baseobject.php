@@ -4,10 +4,14 @@ namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
 use Bitrix\Disk\File;
-use Bitrix\Disk\Document\Flipchart\BoardService;
+use Bitrix\Disk\Document\Flipchart\BoardSessionTerminationService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Entity\Audit\AuditChannel;
+use Bitrix\Disk\Internal\Enum\ExternalLinkDisableReason;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
@@ -173,6 +177,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 			return;
 		}
+		$this->addErrorsOfRestoredObject($object);
 
 		//@see \Bitrix\Disk\FileLink::restore and \Bitrix\Disk\BaseObject::restoreByLinkObject
 		//in this case the object which we want to restore is original. We can't get symlink now.
@@ -181,17 +186,41 @@ abstract class BaseObject extends Internals\Engine\Controller
 		);
 	}
 
+	/**
+	 * A folder is restored even when the format policy keeps some files under it in the trash can:
+	 * the refusals stay with the folder, or with the object a link restored, and go to the user
+	 * beside the restored folder. A link answers with the errors of that object itself.
+	 */
+	protected function addErrorsOfRestoredObject(Disk\BaseObject $object): void
+	{
+		$this->errorCollection->add($object->getErrors());
+	}
+
 	protected function copyTo(Disk\BaseObject $object, Disk\Folder $toFolder)
 	{
-		$securityContext = $object->getStorage()->getSecurityContext($this->getCurrentUser()->getId());
-		if (!$object->canRead($securityContext) || !$toFolder->canAdd($securityContext))
+		$userId = $this->getCurrentUser()->getId();
+		$securityContext = $object->getStorage()?->getSecurityContext($userId);
+		$targetSecurityContext = $toFolder->getStorage()?->getSecurityContext($userId);
+		if (
+			!$securityContext
+			|| !$targetSecurityContext
+			|| !$object->canRead($securityContext)
+			|| !$toFolder->canAdd($targetSecurityContext)
+		)
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
 
 			return null;
 		}
 
-		$copiedObject = $object->copyTo($toFolder, $this->getCurrentUser()->getId(), true);
+		$copiedObject = AuditOperationContextStack::runWithContext(
+			AuditOperationContext::create(
+				actionKind: AuditOperationContext::ACTION_EXPLICIT_COPY,
+				channel: AuditChannel::WEB,
+				selectedTargetIds: [(string)$object->getId()],
+			),
+			fn() => $object->copyTo($toFolder, $this->getCurrentUser()->getId(), true),
+		);
 		if (!$copiedObject)
 		{
 			$this->errorCollection->add($object->getErrors());
@@ -204,15 +233,33 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 	protected function move(Disk\BaseObject $object, Disk\Folder $toFolder)
 	{
-		$securityContext = $object->getStorage()->getSecurityContext($this->getCurrentUser()->getId());
-		if (!$object->canMove($securityContext, $toFolder))
+		$userId = $this->getCurrentUser()->getId();
+		$securityContext = $object->getStorage()?->getSecurityContext($userId);
+		//the right to add belongs to the target storage, the rest of the composite right - to the source one
+		$targetSecurityContext = $toFolder->getRealObject()?->getStorage()?->getSecurityContext($userId);
+		if (
+			!$securityContext
+			|| !$targetSecurityContext
+			|| !$object->canRead($securityContext)
+			|| !$object->canMarkDeleted($securityContext)
+			|| !$targetSecurityContext->canAdd($toFolder->getRealObjectId())
+		)
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
 
 			return;
 		}
 
-		$movedObject = $object->moveTo($toFolder, $this->getCurrentUser()->getId(), true);
+		$movedObject = AuditOperationContextStack::runWithContext(
+			AuditOperationContext::create(
+				actionKind: $object->getStorageId() == $toFolder->getRealObject()->getStorageId()
+					? AuditOperationContext::ACTION_EXPLICIT_MOVE
+					: AuditOperationContext::ACTION_CROSS_STORAGE_MOVE,
+				channel: AuditChannel::WEB,
+				selectedTargetIds: [(string)$object->getId()],
+			),
+			fn() => $object->moveTo($toFolder, $this->getCurrentUser()->getId(), true),
+		);
 		if (!$movedObject)
 		{
 			$this->errorCollection->add($object->getErrors());
@@ -225,6 +272,18 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 	protected function generateExternalLink(Disk\BaseObject $object)
 	{
+		if (!$this->externalLinkAccessService->isExternalLinkEnabledOnPortal())
+		{
+			$this->errorCollection[] = new Error(
+				message: Loc::getMessage('DISK_ERROR_MESSAGE_EXTERNAL_LINK_DISABLED_ON_PORTAL'),
+				customData: [
+					'reason' => ExternalLinkDisableReason::Option,
+				],
+			);
+
+			return null;
+		}
+
 		if (!$this->canManageExternalLink($object))
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
@@ -286,12 +345,14 @@ abstract class BaseObject extends Internals\Engine\Controller
 			return true;
 		}
 
+		$externalLinkId = (int)$extLink->getId();
 		if ($extLink->delete())
 		{
 			$file = $object->getRealObject();
 			if ($file instanceof File && $file->getTypeFile() == TypeFile::FLIPCHART)
 			{
-				BoardService::kickGuestsUsers($file);
+				$service = new BoardSessionTerminationService($file);
+				$service->terminateSessionsByExternalLink($externalLinkId);
 			}
 
 			return true;

@@ -309,19 +309,10 @@ class ItemsList
 			return ['@' . $primary => $restrictExpression];
 		}
 
-		if (array_key_exists('@' . $primary, $filter))
-		{
-			return [
-				$filter,
-				['@' . $primary => $restrictExpression]
-			];
-		}
-		else
-		{
-			return array_merge(
-				$filter,
-				['@' . $primary => $restrictExpression]
-			);
-		}
+		// a subfilter keeps the caller's own LOGIC (e.g. OR) from taking the restriction in as an alternative
+		return [
+			$filter,
+			'@' . $primary => $restrictExpression,
+		];
 	}
 }

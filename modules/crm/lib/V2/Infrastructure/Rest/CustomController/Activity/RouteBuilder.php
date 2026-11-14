@@ -12,7 +12,7 @@ use Bitrix\Crm\V2\Public\EntityType;
 /**
  * The routes of the activities read in the context of an entity type: `crm.<entity>.activity.<action>` for
  * Lead, Deal, Contact and Company and for every smart process of the portal, all served by
- * {@see EntityActivity}.
+ * {@see EntityActivity}: one activity by `get`, the page of the activities of one object by `list`.
  *
  * Smart processes come and go with the portal, so the family is built from the actual composition of the
  * types, the way {@see \Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Category\RouteBuilder} builds its
@@ -48,6 +48,7 @@ class RouteBuilder
 	 */
 	private const ACTIONS = [
 		'get' => 'get',
+		'list' => 'list',
 	];
 
 	/**
@@ -147,9 +148,22 @@ class RouteBuilder
 				'mcp' => [
 					'export' => true,
 					'toolSetCode' => $toolSetCode,
-					'descriptionOverride' => "Get an activity linked to CRM {$entitySegment} by identifier.",
+					'descriptionOverride' => $this->describeAction($action, $entitySegment),
 				],
 			];
 		}
+	}
+
+	/**
+	 * What the tool of MCP is told about a route. The list carries its whole contract: a tool is called by its
+	 * description alone.
+	 */
+	private function describeAction(string $action, string $entitySegment): string
+	{
+		return match ($action)
+		{
+			'get' => "Get an activity linked to CRM {$entitySegment} by identifier.",
+			'list' => "List the activities linked to one CRM {$entitySegment}. " . EntityActivity::LIST_DESCRIPTION,
+		};
 	}
 }

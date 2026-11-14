@@ -33,7 +33,6 @@ final class HandlerQuery
 				'PLACEMENT_HANDLER',
 				'INSTALLED' => 'REST_APP.INSTALLED',
 				'APP_NAME' => 'REST_APP.APP_NAME',
-				'APP_ACCESS' => 'REST_APP.ACCESS',
 			],
 			'order' => ['ID' => 'ASC'],
 		]);
@@ -59,7 +58,6 @@ final class HandlerQuery
 				'ACTIVE' => 'REST_APP.ACTIVE',
 				'INSTALLED' => 'REST_APP.INSTALLED',
 				'APP_NAME' => 'REST_APP.APP_NAME',
-				'APP_ACCESS' => 'REST_APP.ACCESS',
 			])
 			->where('PLACEMENT', $placement)
 			->whereIn('USER_ID', (array)$this->getUserFilter($userId))
@@ -80,7 +78,6 @@ final class HandlerQuery
 				'ENTITY_ID',
 				'ACTIVE' => 'REST_APP.ACTIVE',
 				'INSTALLED' => 'REST_APP.INSTALLED',
-				'APP_ACCESS' => 'REST_APP.ACCESS',
 			])
 			->where('PLACEMENT', $placement)
 			->whereIn('USER_ID', (array)$this->getUserFilter($userId))

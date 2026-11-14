@@ -2,6 +2,7 @@
 
 namespace Bitrix\Socialnetwork\Promotion;
 
+use Bitrix\AI\Facade\Portal as AiPortal;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
@@ -39,7 +40,19 @@ class FeedAi extends AbstractPromotion
 		$portalCreateDate = (new Portal())->getCreationDateTime();
 		$suitablePortalCreationDate = $this->getMinimumSuitablePortalCreationDate();
 
-		return $portalCreateDate?->getTimestamp() > $suitablePortalCreationDate->getTimestamp();
+		if ($portalCreateDate?->getTimestamp() <= $suitablePortalCreationDate->getTimestamp())
+		{
+			return false;
+		}
+
+		// The facade method ships with the newer ai release; on an older one the gate
+		// just cannot apply and the promo keeps its previous behaviour.
+		if (method_exists(AiPortal::class, 'hasEnabledAiScenario') && !AiPortal::hasEnabledAiScenario())
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	private function getMinimumSuitablePortalCreationDate(): DateTime

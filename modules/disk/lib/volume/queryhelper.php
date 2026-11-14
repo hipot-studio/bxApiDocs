@@ -36,6 +36,8 @@ class QueryHelper
 
 	/**
 	 * Get filter parameters as SQL code.
+	 * Conditions on a field that is neither an alias nor a plain identifier,
+	 * or with a non-scalar value in a scalar position, are dropped.
 	 * @param array $filterFields Gets filter parameters.
 	 * @param array $filterAlias Aliases for the filter fields.
 	 * @return string
@@ -51,7 +53,7 @@ class QueryHelper
 		{
 			if ($key === 'LOGIC')
 			{
-				$logic = $val;
+				$logic = self::normalizeLogic($val);
 				continue;
 			}
 			$operator = '=';
@@ -76,7 +78,25 @@ class QueryHelper
 				{
 					$key = $filterAlias[$key];
 				}
+				elseif (!self::isSafeIdentifier($key))
+				{
+					continue;
+				}
 			}
+			elseif (!is_array($val))
+			{
+				continue;
+			}
+
+			if (
+				!in_array($operator, ['@', '!@'], true)
+				&& !is_numeric($key)
+				&& (is_array($val) || $val instanceof SqlSubQuery)
+			)
+			{
+				continue;
+			}
+
 			switch ($operator)
 			{
 				case '!':
@@ -98,9 +118,13 @@ class QueryHelper
 						$val = array_map([$sqlHelper, 'forSql'], $val);
 						$where[] = "$key IN('".implode("', '", $val)."')";
 					}
-					elseif (is_string($val) && $val <> '')
+					elseif ($val instanceof SqlSubQuery)
 					{
-						$where[] = "$key IN(".$val.')';
+						$where[] = "$key IN(".$val->getSql().')';
+					}
+					elseif ((is_string($val) || is_int($val) || is_float($val)) && (string)$val <> '')
+					{
+						$where[] = "$key IN('".$sqlHelper->forSql((string)$val)."')";
 					}
 					break;
 				}
@@ -112,27 +136,35 @@ class QueryHelper
 						$val = array_map([$sqlHelper, 'forSql'], $val);
 						$where[] = "$key NOT IN('".implode("', '", $val)."')";
 					}
-					elseif (is_string($val) && $val <> '')
+					elseif ($val instanceof SqlSubQuery)
 					{
-						$where[] = "$key NOT IN(".$val.')';
+						$where[] = "$key NOT IN(".$val->getSql().')';
+					}
+					elseif ((is_string($val) || is_int($val) || is_float($val)) && (string)$val <> '')
+					{
+						$where[] = "$key NOT IN('".$sqlHelper->forSql((string)$val)."')";
 					}
 					break;
 				}
 
 				default:
 				{
-					if (is_array($val))// && isset($val['LOGIC']))// && $val['LOGIC'] === 'OR')// OR condition
+					if (is_array($val))
 					{
 						$subLogic = 'AND';
-						if (isset($val['LOGIC']) && $val['LOGIC'] === 'OR')
+						if (array_key_exists('LOGIC', $val))
 						{
-							$subLogic = 'OR';
+							$subLogic = self::normalizeLogic($val['LOGIC']);
 							unset($val['LOGIC']);
 						}
 
 						$condition = [];
 						foreach ($val as $k => $v)
 						{
+							if (!is_string($k) || is_array($v) || $v instanceof SqlSubQuery)
+							{
+								continue;
+							}
 							$subOperator = '=';
 							if (preg_match("/^([=<>!@%]+)([^=<>!@%]+)$/", $k, $parts))
 							{
@@ -141,6 +173,10 @@ class QueryHelper
 							if (isset($filterAlias[$k]))
 							{
 								$k = $filterAlias[$k];
+							}
+							elseif (!self::isSafeIdentifier($k))
+							{
+								continue;
 							}
 							switch ($subOperator)
 							{
@@ -157,7 +193,10 @@ class QueryHelper
 									$condition[] = "$k $subOperator '".$sqlHelper->forSql($v)."'";
 							}
 						}
-						$where[] = '('.implode(" $subLogic ", $condition).')';
+						if (count($condition) > 0)
+						{
+							$where[] = '('.implode(" $subLogic ", $condition).')';
+						}
 					}
 					else
 					{
@@ -175,6 +214,21 @@ class QueryHelper
 		}
 
 		return $whereSql;
+	}
+
+	private static function normalizeLogic(mixed $logic): string
+	{
+		if (is_string($logic) && strtoupper(trim($logic)) === 'OR')
+		{
+			return 'OR';
+		}
+
+		return 'AND';
+	}
+
+	private static function isSafeIdentifier(string $field): bool
+	{
+		return (bool)preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/D', $field);
 	}
 
 
@@ -217,7 +271,7 @@ class QueryHelper
 			{
 				$field = $fieldAlias[$field];
 			}
-			elseif (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/D', $field))
+			elseif (!self::isSafeIdentifier($field))
 			{
 				continue;
 			}

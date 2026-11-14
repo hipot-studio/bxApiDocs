@@ -25,6 +25,8 @@ final class DocumentSessionContext implements Jsonable
 	protected $objectId;
 	/** @var BaseObject|File */
 	protected $object;
+	protected ?int $htmlBaselineVersion = null;
+	protected ?int $htmlExpiresAt = null;
 
 	public function __construct(int $objectId, int $attachedObjectId = null, int $externalLinkId = null)
 	{
@@ -105,20 +107,50 @@ final class DocumentSessionContext implements Jsonable
 			return null;
 		}
 
-		return new self(
+		return (new self(
 			$decoded['objectId'],
 			$decoded['attachedObjectId'] ?? null,
 			$decoded['externalLinkId'] ?? null
+		))->setHtmlEditorState(
+			isset($decoded['html']['baselineVersion']) ? (int)$decoded['html']['baselineVersion'] : null,
+			isset($decoded['html']['expiresAt']) ? (int)$decoded['html']['expiresAt'] : null,
 		);
 	}
 
 	public function toJson($options = 0)
 	{
-		return Json::encode([
+		$data = [
 			'attachedObjectId' => $this->getAttachedObjectId(),
 			'objectId' => $this->getObjectId(),
 			'externalLinkId' => $this->getExternalLinkId(),
-		], $options);
+		];
+		if ($this->htmlBaselineVersion !== null && $this->htmlExpiresAt !== null)
+		{
+			$data['html'] = [
+				'baselineVersion' => $this->htmlBaselineVersion,
+				'expiresAt' => $this->htmlExpiresAt,
+			];
+		}
+
+		return Json::encode($data, $options);
+	}
+
+	public function setHtmlEditorState(?int $baselineVersion, ?int $expiresAt): self
+	{
+		$this->htmlBaselineVersion = $baselineVersion;
+		$this->htmlExpiresAt = $expiresAt;
+
+		return $this;
+	}
+
+	public function getHtmlBaselineVersion(): ?int
+	{
+		return $this->htmlBaselineVersion;
+	}
+
+	public function getHtmlExpiresAt(): ?int
+	{
+		return $this->htmlExpiresAt;
 	}
 
 	public function getAttachedObjectId(): ?int

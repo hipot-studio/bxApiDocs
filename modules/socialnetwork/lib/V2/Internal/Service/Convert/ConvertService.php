@@ -203,6 +203,12 @@ class ConvertService
 			isOpened: $groupAfter->isOpened(),
 		);
 
+		$this->projectAnalytics->trackSetProjectName(
+			groupId: $groupId,
+			name: $groupAfter->getName(),
+			isOpened: $groupAfter->isOpened(),
+		);
+
 		return $result->setGroupAfter($groupAfter);
 	}
 

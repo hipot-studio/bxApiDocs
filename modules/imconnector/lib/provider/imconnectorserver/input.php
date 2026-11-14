@@ -6,6 +6,7 @@ use Bitrix\Main\Text\Encoding;
 
 use Bitrix\ImConnector\DeliveryMark;
 use Bitrix\ImConnector\Error;
+use Bitrix\ImConnector\Library;
 use Bitrix\ImConnector\Result;
 use Bitrix\ImConnector\Converter;
 use Bitrix\ImConnector\Provider\Base;
@@ -117,7 +118,15 @@ class Input extends Base\Input
 	protected function receivingMessage(): Result
 	{
 		$result = parent::receivingMessage();
-		$result->setData([]);
+
+		// The per-message result is dropped for everybody else: nobody on the other side reads it, while it
+		// is the bulk of the answer and it repeats the messages just delivered. Connectors that do read it
+		// keep it — for them a message the open line refused is the difference between a delivery to report
+		// and one to ask for again (@see Library::ENABLE_RECEIVING_MESSAGE_RESULT).
+		if (!in_array($this->connector, Library::ENABLE_RECEIVING_MESSAGE_RESULT, true))
+		{
+			$result->setData([]);
+		}
 
 		return $result;
 	}

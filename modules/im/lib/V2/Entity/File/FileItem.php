@@ -25,6 +25,7 @@ use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Im\V2\Result;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
@@ -309,11 +310,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'authorName' => $author->getName(),
 			'urlPreview' => $this->getPreviewLink(),
 			'urlShow' => $this->getShowLink(),
-			'urlDownload' => $this->getDownloadLink(),
+			'urlDownload' => $this->isDownloadRestricted() ? '' : $this->getDownloadLink(),
 			'viewerAttrs' => $this->getViewerAttributes(),
 			'mediaUrl' => $this->getMediaUrl(),
 			'isTranscribable' => $this->isTranscribable(),
-			'isVideoNote' => $this->isVideoNoteOfType($diskFile),
+			'isVideoNote' => $this->isActualVideoNote(),
 			'isVoiceNote' => $this->isVoiceNote(),
 			'duration' => $this->getDuration(),
 		];
@@ -324,11 +325,33 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	 * the params of the deleted file, and the clients draw a round record by this very field. The subtype of
 	 * the sidebar record is calculated by the same pair of the flag and the type.
 	 *
+	 * The real object answers for a symlink too: SaveToLocalDisk saves exactly it, so the points of the
+	 * refusal have to see the same video note behind a link. Its id is a field of the model, so the flag
+	 * is read without a query and the link is resolved into an object only for a file that carries it.
+	 *
 	 * @see \Bitrix\Im\V2\Link\File\FileItem::calculateSubtype()
 	 */
-	private function isVideoNoteOfType(?File $diskFile): bool
+	public function isActualVideoNote(): bool
 	{
-		return $this->isVideoNote() && (int)$diskFile?->getTypeFile() === TypeFile::VIDEO;
+		$diskFile = $this->getDiskFile();
+
+		if ($diskFile === null || !self::hasVideoNoteParam((int)$diskFile->getRealObjectId()))
+		{
+			return false;
+		}
+
+		return (int)$diskFile->getRealObject()?->getTypeFile() === TypeFile::VIDEO;
+	}
+
+	/**
+	 * Only the portal option is read here, without the type of the user: the payload of a message is built
+	 * once and delivered to every participant of the chat, so a rule depending on the current user would
+	 * either leak a working link or falsely restrict an employee. The refusal itself belongs to the download
+	 * points, this is a narrowing of the surface.
+	 */
+	private function isDownloadRestricted(): bool
+	{
+		return $this->isActualVideoNote() && !Locator::getVideoNoteDownloadPolicy()->isPortalEnabled();
 	}
 
 	private function getMediaUrl(): array
@@ -629,20 +652,26 @@ class FileItem implements RestEntity, PopupDataAggregatable
 				->setGroupBy($this->getChatId() ?? $diskFile->getParentId())
 				->setAttribute('data-im-chat-id', $this->getChatId())
 				->setTitle($diskFile->getName())
-				->addAction([
-					'type' => 'download',
-				])
-				->addAction([
-					'type' => 'copyToMe',
-					'text' => Loc::getMessage('IM_FILE_ITEM_ACTION_SAVE_TO_OWN_FILES'),
-					'action' => 'BXIM.disk.saveToDiskAction',
-					'params' => [
-						'fileId' => $diskFile->getId(),
-					],
-					'extension' => 'disk.viewer.actions',
-					'buttonIconClass' => 'ui-btn-icon-cloud',
-				])
 			;
+
+			if (!$this->isDownloadRestricted())
+			{
+				$viewerType
+					->addAction([
+						'type' => 'download',
+					])
+					->addAction([
+						'type' => 'copyToMe',
+						'text' => Loc::getMessage('IM_FILE_ITEM_ACTION_SAVE_TO_OWN_FILES'),
+						'action' => 'BXIM.disk.saveToDiskAction',
+						'params' => [
+							'fileId' => $diskFile->getId(),
+						],
+						'extension' => 'disk.viewer.actions',
+						'buttonIconClass' => 'ui-btn-icon-cloud',
+					])
+				;
+			}
 
 			if ($viewerType->getTypeClass() === FileAttributes::JS_TYPE_CLASS_ONLYOFFICE)
 			{
@@ -703,7 +732,12 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 	public function isVideoNote(): bool
 	{
-		return $this->getParams()->getParam(ParamName::IsVideoNote)?->getValue() ?? false;
+		return self::hasVideoNoteParam($this->getId());
+	}
+
+	private static function hasVideoNoteParam(int $diskFileId): bool
+	{
+		return ParamCollection::getInstance($diskFileId)->getParam(ParamName::IsVideoNote)?->getValue() ?? false;
 	}
 
 	public function isVoiceNote(): bool

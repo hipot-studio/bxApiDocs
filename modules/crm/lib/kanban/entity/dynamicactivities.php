@@ -2,8 +2,11 @@
 
 namespace Bitrix\Crm\Kanban\Entity;
 
+use Bitrix\Crm\Filter\ItemDataProvider;
 use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Search\SearchEnvironment;
 use Bitrix\Crm\Settings\CounterSettings;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Result;
 
 class DynamicActivities extends Dynamic
@@ -38,24 +41,7 @@ class DynamicActivities extends Dynamic
 		unset($filter[EntityActivities::ACTIVITY_STAGE_ID]);
 
 		$entityActivities = $this->getEntityActivities();
-
-		$counterResponsibleField = CounterSettings::getInstance()->useActivityResponsible()
-			? 'ACTIVITY_RESPONSIBLE_IDS'
-			: 'ASSIGNED_BY_ID';
-
-		$factoryFilter = $filter;
-		$stageSemanticFilter = $factoryFilter[EntityActivities::STAGE_SEMANTIC_FILTER] ?? null;
-		$this->unsetFilterKey($factoryFilter, EntityActivities::SHOW_ALL_STAGE_SEMANTICS);
-		$this->unsetFilterKey($factoryFilter, EntityActivities::STAGE_SEMANTIC_FILTER);
-		$this->applyStageSemanticFilter($factoryFilter, $stageSemanticFilter);
-		$this->unsetFilterKey($factoryFilter, 'ACTIVITY_COUNTER');
-		$this->unsetFilterKey($factoryFilter, 'ACTIVITY_RESPONSIBLE_IDS');
-		$this->unsetFilterKey($factoryFilter, $counterResponsibleField);
-
-		if ($this->factory->isRecurringEnabled())
-		{
-			$factoryFilter['!=IS_RECURRING'] = 'Y';
-		}
+		$factoryFilter = $this->prepareFactoryFilter($filter);
 
 		if ($requestedStageId === '')
 		{
@@ -79,6 +65,75 @@ class DynamicActivities extends Dynamic
 		$rawResult = parent::getItems($parameters);
 
 		return $entityActivities->prepareItemsResult($requestedStageId, $rawResult, $filter);
+	}
+
+	public function fillStageTotalSums(array $filter, array $runtime, array &$stages): void
+	{
+		$entityActivities = $this->getEntityActivities();
+		foreach ($stages as &$stage)
+		{
+			$stageId = $stage['id'];
+			if (
+				($stageId !== EntityActivities::STAGE_IDLE && !str_ends_with($stageId, ':' . EntityActivities::STAGE_IDLE))
+				|| CounterSettings::getInstance()->useActivityResponsible()
+				|| !empty($filter['ACTIVITY_COUNTER'])
+			)
+			{
+				$stage['count'] = $entityActivities->calculateTotalForStage($stageId, $filter);
+
+				continue;
+			}
+
+			$queries = $entityActivities->getEntityQueriesForStage($stageId, $filter);
+			if (empty($queries))
+			{
+				$stage['count'] = $queries === null ? -1 : 0;
+
+				continue;
+			}
+
+			$factoryFilter = $this->prepareFactoryFilter($filter);
+			if (isset($factoryFilter['SEARCH_CONTENT']))
+			{
+				SearchEnvironment::prepareSearchFilter($this->getTypeId(), $factoryFilter, [
+					'ENABLE_PHONE_DETECTION' => false,
+				]);
+				unset($factoryFilter['SEARCH_CONTENT']);
+			}
+			if ($this->factory->isStagesEnabled())
+			{
+				ItemDataProvider::processStageSemanticFilter($factoryFilter, $factoryFilter);
+			}
+			unset($factoryFilter[ItemDataProvider::FIELD_STAGE_SEMANTIC]);
+			$factoryFilter['@ID'] = new SqlExpression($queries[0]->getQuery());
+			$stage['count'] = $this->factory->getItemsCountFilteredByPermissions(
+				$factoryFilter,
+				runtimeFields: $runtime,
+			);
+		}
+	}
+
+	private function prepareFactoryFilter(array $filter): array
+	{
+		$counterResponsibleField = CounterSettings::getInstance()->useActivityResponsible()
+			? 'ACTIVITY_RESPONSIBLE_IDS'
+			: 'ASSIGNED_BY_ID';
+
+		$stageSemanticFilter = $filter[EntityActivities::STAGE_SEMANTIC_FILTER] ?? null;
+		$this->unsetFilterKey($filter, EntityActivities::ACTIVITY_STAGE_ID);
+		$this->unsetFilterKey($filter, EntityActivities::SHOW_ALL_STAGE_SEMANTICS);
+		$this->unsetFilterKey($filter, EntityActivities::STAGE_SEMANTIC_FILTER);
+		$this->applyStageSemanticFilter($filter, $stageSemanticFilter);
+		$this->unsetFilterKey($filter, 'ACTIVITY_COUNTER');
+		$this->unsetFilterKey($filter, 'ACTIVITY_RESPONSIBLE_IDS');
+		$this->unsetFilterKey($filter, $counterResponsibleField);
+
+		if ($this->factory->isRecurringEnabled())
+		{
+			$filter['!=IS_RECURRING'] = 'Y';
+		}
+
+		return $filter;
 	}
 
 	private function applyStageSemanticFilter(array &$filter, array|string|null $stageSemanticFilter): void

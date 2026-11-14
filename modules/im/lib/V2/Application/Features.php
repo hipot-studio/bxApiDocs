@@ -18,11 +18,18 @@ use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Integration\Intranet\Invitation;
 use Bitrix\Im\V2\Integration\Sign\DocumentSign;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
+use Bitrix\Im\V2\Link\Pin\PinLimits;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\ImBot\Bot\Giphy;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
+use Bitrix\StaffTrack\Public\Provider\CheckInSettingsProvider;
 
+/**
+ * Almost every flag here is portal-wide, but isVideoNoteDownloadAvailable answers for the current user.
+ * The set is therefore bound to the user it was built for and must not be cached or reused across users.
+ */
 class Features
 {
 	private static self $currentFeatures;
@@ -96,6 +103,7 @@ class Features
 		public readonly bool $isMessageFileAudioBlockAvailable,
 		public readonly bool $isChatBotCommandsAvailable,
 		public readonly bool $isUploadCaptionMentionsFormatAvailable,
+		public readonly bool $isEmojiSearchAvailable,
 		public readonly bool $isBackgroundAudioPlaybackAvailable,
 		public readonly bool $isVideoNotePlaybackRateAvailable,
 		public readonly bool $isMentionInstantSearchAvailable,
@@ -105,7 +113,24 @@ class Features
 		public readonly bool $isVibecodeAppOpenButtonAvailable,
 		public readonly bool $isForwardMultipleRecipientsAvailable,
 		public readonly bool $isContactCardAvailable,
+		public readonly bool $messageSearchAvailable,
 		public readonly bool $isChatThreadsAvailable,
+		public readonly bool $isCheckInAvailable,
+		public readonly bool $isFolderScopedPinsAvailable,
+		public readonly bool $isPersonalPinAvailable,
+		public readonly bool $isVideoNoteDownloadAvailable,
+		public readonly bool $bitrixGptVoiceWidgetActive,
+		/**
+		 * The only member of the set that is not a flag. The mobile application reads the whole set
+		 * through one proxy of its own module, so this is the way the pin limits reach it; the web
+		 * messenger takes the same section from its config.
+		 *
+		 * @var array{maxPinsPerChat: int, maxPersonalPinsPerChat: int}
+		 */
+		public readonly array $pinLimits,
+		public readonly bool $isAiAssistantRegenerateSignalsReady,
+		public readonly bool $isGuestOutgoingCallAvailable,
+		public readonly bool $isGuestOutgoingPrivateCallAvailable,
 	){}
 
 	public static function get(): self
@@ -189,6 +214,7 @@ class Features
 			isMessageFileAudioBlockAvailable: self::isMessageFileAudioBlockAvailable(),
 			isChatBotCommandsAvailable: self::isChatBotCommandsAvailable(),
 			isUploadCaptionMentionsFormatAvailable: self::isUploadCaptionMentionsFormatAvailable(),
+			isEmojiSearchAvailable: self::isEmojiSearchAvailable(),
 			isBackgroundAudioPlaybackAvailable: self::isBackgroundAudioPlaybackAvailable(),
 			isVideoNotePlaybackRateAvailable: self::isVideoNotePlaybackRateAvailable(),
 			isMentionInstantSearchAvailable: self::isMentionInstantSearchAvailable(),
@@ -198,8 +224,54 @@ class Features
 			isVibecodeAppOpenButtonAvailable: self::isVibecodeAppOpenButtonAvailable(),
 			isForwardMultipleRecipientsAvailable: self::isForwardMultipleRecipientsAvailable(),
 			isContactCardAvailable: self::isContactCardAvailable(),
+			messageSearchAvailable: self::isMessageSearchAvailableForUser(),
 			isChatThreadsAvailable: self::isChatThreadsAvailable(),
+			isCheckInAvailable: self::isCheckInAvailable(),
+			isFolderScopedPinsAvailable: self::isFolderScopedPinsAvailable(),
+			isPersonalPinAvailable: self::isPersonalPinAvailable(),
+			isVideoNoteDownloadAvailable: self::isVideoNoteDownloadAvailable(),
+			bitrixGptVoiceWidgetActive: self::isBitrixGptVoiceWidgetActive(),
+			pinLimits: PinLimits::getClientLimits(),
+			isAiAssistantRegenerateSignalsReady: self::isAiAssistantRegenerateSignalsReady(),
+			isGuestOutgoingCallAvailable: self::isGuestOutgoingCallAvailable(),
+			isGuestOutgoingPrivateCallAvailable: self::isGuestOutgoingPrivateCallAvailable(),
 		);
+	}
+
+	/**
+	 * Availability of the check-in entry point for the current user. The gates belong to the check-in
+	 * domain, so they are asked as one question there; the module stays optional, and a portal without
+	 * it - or with a version of it that predates the aggregate - gets false.
+	 */
+	private static function isCheckInAvailable(): bool
+	{
+		if (!Loader::includeModule('stafftrack'))
+		{
+			return false;
+		}
+
+		return method_exists(CheckInSettingsProvider::class, 'isCheckInAvailable')
+			&& (new CheckInSettingsProvider())->isCheckInAvailable()
+		;
+	}
+
+	/**
+	 * Whether a guest may start a call. Owned by the call module ({@see \Bitrix\Call\Settings}); the
+	 * messenger only needs the answer to decide on the call button of the chat header.
+	 */
+	private static function isGuestOutgoingCallAvailable(): bool
+	{
+		return Loader::includeModule('call') && \Bitrix\Call\Settings::isGuestOutgoingCallEnabled();
+	}
+
+	/**
+	 * Whether a guest may start a call at a bare user id - a one-to-one dialogue rather than a chat. The
+	 * answer above narrowed by the call scheme that serves this shape; the reasons belong to the call
+	 * module ({@see \Bitrix\Call\Settings::isGuestOutgoingPrivateCallEnabled}).
+	 */
+	private static function isGuestOutgoingPrivateCallAvailable(): bool
+	{
+		return Loader::includeModule('call') && \Bitrix\Call\Settings::isGuestOutgoingPrivateCallEnabled();
 	}
 
 	private static function isGiphyAvailable(): bool
@@ -268,6 +340,11 @@ class Features
 	public static function isAiFileTranscriptionAvailable(): bool
 	{
 		return ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive();
+	}
+
+	public static function isBitrixGptVoiceWidgetActive(): bool
+	{
+		return (new Restriction())->isBitrixGptVoiceWidgetActive();
 	}
 
 	public static function isChatSharingLinkAvailable(): bool
@@ -455,6 +532,26 @@ class Features
 	}
 
 	/**
+	 * Pin sets that belong to a folder instead of to the chat list as a whole. Counted on the server
+	 * per user and published to a client: with this one off the pin write fans a copy of the pin out
+	 * to every eligible folder while the ChatPin event names no folder at all, so a folder set stops
+	 * being an answer in a live session and a client has to know the write mode to pick its source.
+	 * Independent of the folder flags as well - with this one off the pin write keeps today's
+	 * behaviour whatever state the folders are in.
+	 *
+	 * @param int|null $userId the user whose pin write is being dispatched
+	 */
+	public static function isFolderScopedPinsAvailable(?int $userId = null): bool
+	{
+		if (Option::get('im', 'folder_scoped_pins_available', 'N') === 'Y')
+		{
+			return true;
+		}
+
+		return \CUserOptions::GetOption('im', 'folder_scoped_pins_available_user', 'N', $userId ?? false) === 'Y';
+	}
+
+	/**
 	 * The shell moves the settings entry point into the chat list header, which only exists
 	 * together with the folders, so the flag inherits their per-user rule
 	 * ({@see self::isChatFoldersWebAvailableForUser}): a guest gets no shell and keeps the
@@ -472,6 +569,21 @@ class Features
 	public static function isVibecodeAppsFolderAvailable(): bool
 	{
 		return Option::get('im', 'vibecode_apps_folder_available', 'N') === 'Y';
+	}
+
+	/**
+	 * Gate of the "Meetings" folder ({@see \Bitrix\Im\V2\Folder\System\MeetingFolder}). The module
+	 * check is part of the gate, not of the folder: without calendar there is nothing that creates
+	 * a meeting chat, so the folder would stand in the strip guaranteed empty.
+	 */
+	public static function isMeetingsFolderAvailable(): bool
+	{
+		if (Option::get('im', 'meetings_folder_available', 'N') !== 'Y')
+		{
+			return false;
+		}
+
+		return Loader::includeModule('calendar');
 	}
 
 	public static function isVibecodeAppOpenButtonAvailable(): bool
@@ -492,6 +604,25 @@ class Features
 	public static function isAiAssistantRegenerateAvailable(): bool
 	{
 		return Option::get('im', 'ai_assistant_regenerate_available', 'N') === 'Y';
+	}
+
+	/**
+	 * Tells the client that aiassistant already marks its answers as eligible for a repeat,
+	 * so the button can follow the message flag instead of the feature flag alone.
+	 */
+	public static function isAiAssistantRegenerateSignalsReady(): bool
+	{
+		if (!self::isAiAssistantRegenerateAvailable() || !Loader::includeModule('aiassistant'))
+		{
+			return false;
+		}
+
+		// The predicate ships with the aiassistant module on its own schedule: until it lands,
+		// report "not ready" instead of promising the client a flag nobody writes.
+		return method_exists(
+			\Bitrix\AiAssistant\Core\Regeneration\Service\RegenerationService::class,
+			'canRegenerate',
+		);
 	}
 
 	public static function isReplyWithMediaAvailable(): bool
@@ -522,6 +653,11 @@ class Features
 	public static function isCollabPreviewSourceEnabled(): bool
 	{
 		return Option::get('im', 'collab_preview_source_enabled', 'Y') === 'Y';
+	}
+
+	public static function isDiskImHeadIndexingEnabled(): bool
+	{
+		return Option::get('im', 'disk_im_head_indexing_enabled', 'N') === 'Y';
 	}
 
 	public static function isMarkdownAvailable(): bool
@@ -574,6 +710,11 @@ class Features
 		return Option::get('im', 'upload_caption_mentions_format_available', 'N') === 'Y';
 	}
 
+	public static function isEmojiSearchAvailable(): bool
+	{
+		return Option::get('im', 'emoji_search_available', 'N') === 'Y';
+	}
+
 	public static function isBackgroundAudioPlaybackAvailable(): bool
 	{
 		return Option::get('im', 'background_audio_playback_available', 'N') === 'Y';
@@ -619,8 +760,53 @@ class Features
 		return Option::get('im', 'edit_message_files_available', 'N') === 'Y';
 	}
 
+	public static function isMessageSearchAvailable(): bool
+	{
+		return Option::get('im', 'message_search_available', 'N') === 'Y';
+	}
+
+	/**
+	 * The block of messages is nothing a guest can be shown: a guest sits in one chat of somebody
+	 * else's portal, and the search surface is deliberately left out of the guest allowlist
+	 * ({@see \Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter::getAllowedGuestControllers}), so
+	 * the section would stand in his client and answer every request with an access error.
+	 *
+	 * @param int|null $userId the current user by default
+	 */
+	public static function isMessageSearchAvailableForUser(?int $userId = null): bool
+	{
+		// no authorized user at all comes back as `false` from Common, hence the cast
+		$userId ??= (int)Common::getUserId();
+
+		return self::isMessageSearchAvailable() && !($userId > 0 && User::getInstance($userId)->isGuest());
+	}
+
+	// server-only flag: kept out of the constructor so it never leaks into featureOptions
+	public static function isMessageSearchIndexingEnabled(): bool
+	{
+		return Option::get('im', 'message_search_indexing_enabled', 'N') === 'Y';
+	}
+
 	public static function isChatThreadsAvailable(): bool
 	{
 		return Option::get('im', 'chat_threads_available', 'N') === 'Y';
+	}
+
+	/**
+	 * The flag gates the interface only: server operations of the personal pin stay open, and marks
+	 * already made survive the flag being lowered.
+	 */
+	public static function isPersonalPinAvailable(): bool
+	{
+		return Option::get('im', 'personal_pin_available', 'N') === 'Y';
+	}
+
+	/**
+	 * Unlike the neighbouring portal-wide flags this one depends on the current user, so the whole
+	 * rule stays in the policy service and is never restated here.
+	 */
+	public static function isVideoNoteDownloadAvailable(): bool
+	{
+		return Locator::getVideoNoteDownloadPolicy()->isAllowed(User::getCurrent());
 	}
 }

@@ -18,4 +18,17 @@ final class Openlines
 
 		return (new \Bitrix\ImConnector\Controller\Openlines())->listAction($connectorId, $withConnector);
 	}
+
+	public function isAllowedInPortalRegion(string $connectorId): bool
+	{
+		if (!Loader::includeModule('imconnector'))
+		{
+			return false;
+		}
+
+		return \Bitrix\ImConnector\Connector::isAllowedConnectorInRegion(
+			$connectorId,
+			\Bitrix\ImConnector\Connector::getPortalRegion()
+		);
+	}
 }

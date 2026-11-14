@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Disk\Internals;
 
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Localization\Loc;
@@ -45,6 +46,19 @@ Loc::loadMessages(__FILE__);
 
 final class SharingTable extends DataManager
 {
+	public static function onBeforeAdd(Entity\Event $event): Entity\EventResult
+	{
+		$result = new Entity\EventResult();
+		$fields = $event->getParameter('fields');
+		$objectId = (int)($fields['REAL_OBJECT_ID'] ?? 0);
+		if ($objectId > 0 && !(new MarkerService())->revokeBeforeUse($objectId))
+		{
+			$result->addError(new Entity\EntityError(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+		}
+
+		return $result;
+	}
+
 	const STATUS_IS_UNREPLIED = 2;
 	const STATUS_IS_APPROVED  = 3;
 	const STATUS_IS_DECLINED  = 4;
@@ -63,6 +77,28 @@ final class SharingTable extends DataManager
 			return;
 		}
 
+		if (isset($primary))
+		{
+			if (!array_key_exists('TO_ENTITY', $data) && !array_key_exists('REAL_OBJECT_ID', $data))
+			{
+				return;
+			}
+			$stored = static::getByPrimary($primary, ['select' => ['TO_ENTITY', 'REAL_OBJECT_ID']])->fetch();
+			if (!$stored)
+			{
+				return;
+			}
+			$data += $stored;
+			if (
+				(string)$data['TO_ENTITY'] === (string)$stored['TO_ENTITY']
+				&& (int)$data['REAL_OBJECT_ID'] === (int)$stored['REAL_OBJECT_ID']
+			)
+			{
+				return;
+			}
+		}
+		$primaryId = is_array($primary) ? ($primary['ID'] ?? null) : $primary;
+
 		$query = new Entity\Query(static::getEntity());
 		$res = $query
 			->setSelect(array('ID', 'STATUS'))
@@ -75,7 +111,7 @@ final class SharingTable extends DataManager
 		;
 		while ($existing = $res->fetch())
 		{
-			if(!isset($primary) || $primary != $existing['ID'])
+			if(!isset($primaryId) || $primaryId != $existing['ID'])
 			{
 				if($existing['STATUS'] == self::STATUS_IS_DECLINED)
 				{

@@ -509,31 +509,53 @@ class Common
 
 	/**
 	 * @param int $activityId
+	 * @param int|null $userId user to check the access for; null means the current user.
 	 * @return Result
 	 */
-	public static function hasAccessToEntitiesBindingActivity($activityId)
+	public static function hasAccessToEntitiesBindingActivity($activityId, ?int $userId = null)
 	{
 		$result = new Result();
 		$result->setResult(false);
 
-		if (Loader::includeModule('crm'))
+		$activityId = (int)$activityId;
+		// No bound activity: this access-granting fallback must stay false, not fail open.
+		if ($activityId <= 0)
 		{
-			if (self::hasAccessToEntity(\CCrmOwnerType::ActivityName, $activityId))
+			return $result;
+		}
+
+		if (!Loader::includeModule('crm'))
+		{
+			return $result;
+		}
+
+		if (self::hasAccessToEntity(\CCrmOwnerType::ActivityName, $activityId, $userId))
+		{
+			$result->setResult(true);
+
+			return $result;
+		}
+
+		$bindings = self::getActivityBindings($activityId);
+		if (!$bindings->isSuccess())
+		{
+			return $result;
+		}
+
+		foreach ($bindings->getData() as $entityType => $entityId)
+		{
+			// getActivityBindings() pads every owner type with 0, and hasAccessToEntity() reads an
+			// empty id as "nothing to check" and returns true. Unbound types must never grant access.
+			if (!$entityType || (int)$entityId <= 0)
 			{
-				$result->setResult(true);
+				continue;
 			}
 
-			if ($result->getResult() == false)
+			if (self::hasAccessToEntity($entityType, (int)$entityId, $userId))
 			{
-				$bindings = self::getActivityBindings($activityId);
+				$result->setResult(true);
 
-				foreach ($bindings as $typeEntity => $idEntity)
-				{
-					if ($result->getResult() == false && self::hasAccessToEntity($typeEntity, $idEntity))
-					{
-						$result->setResult(true);
-					}
-				}
+				return $result;
 			}
 		}
 

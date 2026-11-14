@@ -6,6 +6,7 @@ namespace Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\Step\Add;
 
 use Bitrix\Crm\Timeline\ActivityController;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
+use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityStorageElement;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityFieldMap;
 use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\PipelineContext;
 use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\PipelineStepInterface;
@@ -30,13 +31,16 @@ use Bitrix\Main\Type\DateTime;
  *
  * THE ACTIVITY GOES OVER IN THE LEGACY SHAPE, and it has to be the rich one: the timeline reads the type, the
  * status, the provider, the author, the description, the times and the deadline off the array it is given, and
- * hands the very same array on to the factory building the item of the scheduled stream. Three rules of the shape
+ * hands the very same array on to the factory building the item of the scheduled stream. Four rules of the shape
  * are worth naming:
  * - the columns of the transit beat the fields of the model, exactly as they do when the row is written;
  * - the serialized three travel unserialized, which is the shape legacy has at this point of an add (:233-235) and
  *   the opposite of the shape the event before the write sees (item C4);
  * - the deadline is read through the guard, so an activity nobody gave one is handed no key at all instead of the
- *   sentinel. A sentinel taken for a date would date the record of a to-do in the year 9999.
+ *   sentinel. A sentinel taken for a date would date the record of a to-do in the year 9999;
+ * - the files travel as the serialized list of their identifiers, the empty list included: the one blob legacy
+ *   still holds serialized at this call (:129-135, restored only after it, :429-432) and the shape the item of
+ *   the scheduled stream unserializes to build its list of files.
  *
  * WHAT THE ARRAY DOES NOT CARRY. The columns the storage boundary derives on its own - the priority of an
  * unimportant activity, the direction, the moment of creation of an activity whose caller did not preserve one -
@@ -58,6 +62,10 @@ final class NotifyTimelineOnCreate implements PipelineStepInterface
 	private const COLUMN_IS_INCOMING_CHANNEL = 'IS_INCOMING_CHANNEL';
 
 	private const COLUMN_PING_OFFSETS = 'PING_OFFSETS';
+
+	private const COLUMN_STORAGE_ELEMENT_IDS = 'STORAGE_ELEMENT_IDS';
+
+	private const COLUMN_CREATED = 'CREATED';
 
 	private readonly ActivityController $timeline;
 
@@ -111,7 +119,7 @@ final class NotifyTimelineOnCreate implements PipelineStepInterface
 	}
 
 	/**
-	 * The activity in the legacy shape the timeline reads it in. See the note of the class on the three rules.
+	 * The activity in the legacy shape the timeline reads it in. See the note of the class on the four rules.
 	 *
 	 * @return array<string, mixed>
 	 */
@@ -126,13 +134,18 @@ final class NotifyTimelineOnCreate implements PipelineStepInterface
 				continue;
 			}
 
-			$fields[(string)$column] = self::legacyValueOf($value);
+			$fields[(string)$column] = self::legacyValueOf($value, (string)$column);
 		}
 
 		foreach ($context->getPayload()->getValues() as $field => $value)
 		{
 			$fields[ActivityFieldMap::getPayloadColumn((string)$field)] = $value;
 		}
+
+		$fields[self::COLUMN_STORAGE_ELEMENT_IDS] = serialize(array_map(
+			static fn(ActivityStorageElement $element): int => $element->getElementId(),
+			$context->getActivity()->getFiles() ?? [],
+		));
 
 		$fields['ID'] = $activityId;
 
@@ -162,7 +175,7 @@ final class NotifyTimelineOnCreate implements PipelineStepInterface
 				continue;
 			}
 
-			$columns[$column] = self::legacyValueOf(ActivityFieldMap::toColumnValue($column, $value));
+			$columns[$column] = self::legacyValueOf(ActivityFieldMap::toColumnValue($column, $value), (string)$column);
 		}
 
 		return $columns;
@@ -217,16 +230,22 @@ final class NotifyTimelineOnCreate implements PipelineStepInterface
 
 	/**
 	 * The value in the shape legacy carries rather than the shape the ORM writes: a flag is a letter and a moment
-	 * is the text of the site.
+	 * is the text of the site. The moment of creation is the exception: the timeline dates its record by it and
+	 * reads a text there as the time of the server, while the text of the site is the time of the user of the hit.
 	 */
-	private static function legacyValueOf(mixed $value): mixed
+	private static function legacyValueOf(mixed $value, string $column = ''): mixed
 	{
 		if (is_bool($value))
 		{
 			return $value ? 'Y' : 'N';
 		}
 
-		return $value instanceof DateTime ? (string)$value : $value;
+		if ($value instanceof DateTime)
+		{
+			return $column === self::COLUMN_CREATED ? $value : (string)$value;
+		}
+
+		return $value;
 	}
 
 	private static function fieldValueOf(Activity $activity, string $fieldName): mixed

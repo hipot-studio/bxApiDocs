@@ -9,6 +9,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable;
 use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 
 class ExtendedIndex extends Stepper
@@ -27,7 +28,13 @@ class ExtendedIndex extends Stepper
 		$rows = ObjectExtendedIndexTable::getList([
 			'select' => ['OBJECT_ID'],
 			'filter' => [
-			  '=STATUS' => ObjectExtendedIndexTable::STATUS_SHORT,
+				'=STATUS' => ObjectExtendedIndexTable::STATUS_SHORT,
+				[
+					'LOGIC' => 'OR',
+					['!=OBJECT.TYPE' => ObjectTable::TYPE_FILE],
+					['=OBJECT.TYPE_FILE' => null],
+					['!=OBJECT.TYPE_FILE' => TypeFile::BOARD],
+				],
 			],
 			'limit' => $portion,
 			'order' => ['UPDATE_TIME' => 'DESC']
@@ -111,7 +118,7 @@ class ExtendedIndex extends Stepper
 			{
 				$indexManager->indexFolderWithExtendedIndex($object);
 			}
-			elseif ($object instanceof File)
+			elseif ($object instanceof File && (int)$objectRow['TYPE_FILE'] !== TypeFile::BOARD)
 			{
 				$indexManager->indexFileWithExtendedIndex($object);
 			}

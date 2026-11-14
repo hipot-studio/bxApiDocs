@@ -16,7 +16,7 @@ class MapDataCache
 {
 	private const CACHE_TTL = 2592000;
 	private const CACHE_DIR = '/stafftrack/map_data';
-	private const CACHE_VERSION = 'v2';
+	private const CACHE_VERSION = 'v3';
 	private const CACHE_TAG = 'stafftrack_map_data';
 	private const OPTION_MODULE = 'stafftrack';
 	private const GENERATION_OPTION = 'map_data_cache_generation';

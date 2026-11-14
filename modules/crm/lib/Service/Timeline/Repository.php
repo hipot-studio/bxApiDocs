@@ -146,6 +146,7 @@ class Repository
 	public function getHistoryItemsPage(Query $queryParams): Result
 	{
 		$items = [];
+		$rawPositions = [];
 		$offsetTime = $queryParams->getOffsetTime();
 		$offsetId = $queryParams->getOffsetId();
 		$nextOffsetTime = null;
@@ -174,17 +175,30 @@ class Repository
 						'limit' => $queryParams->getLimit(),
 						'filter' => $queryParams->getFilter(),
 						'onlyFixed' => $queryParams->isSearchForFixedItems(),
-					]
+						'additionalFilter' => $queryParams->getAdditionalFilter(),
+					],
+					$rawPositions,
 				)
 			);
 		}
 		while (count($items) < $queryParams->getLimit() && $nextOffsetTime !== null);
 
 		return (new Result())
+			->setData(['rawPositions' => $rawPositions])
 			->setItems($items)
 			->setOffsetId($nextOffsetId)
 			->setOffsetTime($nextOffsetTime)
 		;
+	}
+
+	public function getNavigationCandidatesPage(Query $queryParams): Result
+	{
+		$result = $this->getHistoryItemsPage($queryParams);
+		$result->setItems(
+			(new Navigation\Visibility\ItemProjector($this->context))->project($result->getItems())
+		);
+
+		return $result;
 	}
 
 	/**
@@ -195,12 +209,14 @@ class Repository
 		?DateTime &$nextOffsetTime,
 		int $offsetId,
 		int &$nextOffsetId,
-		array $params = []
+		array $params = [],
+		array &$rawPositions = [],
 	): array
 	{
 		$onlyFixed = isset($params['onlyFixed']) && $params['onlyFixed'] == true;
 		$limit = (int)($params['limit'] ?? 0);
 		$filter = (array)($params['filter'] ?? []);
+		$additionalFilter = $params['additionalFilter'] ?? null;
 		$isOffsetExist = isset($offsetTime) && $offsetId > 0;
 
 		// The fixed items panel filters by bind.IS_FIXED which is not covered
@@ -213,7 +229,7 @@ class Repository
 		if ($opt)
 		{
 			$query = $this->prepareLoadHistoryQuery(
-				$limit, false, null, $filter, $offsetTime, $offsetId, true, $onlyFixed
+				$limit, false, null, $filter, $offsetTime, $offsetId, true, $onlyFixed, $additionalFilter,
 			);
 			$items = $this->fetchHistoryItems($offsetId, $query);
 
@@ -221,7 +237,7 @@ class Repository
 			if ($fetchDiff > 0 && $isOffsetExist)
 			{
 				$query = $this->prepareLoadHistoryQuery(
-					$fetchDiff, true, null, $filter, $offsetTime, $offsetId, true, $onlyFixed
+					$fetchDiff, true, null, $filter, $offsetTime, $offsetId, true, $onlyFixed, $additionalFilter,
 				);
 				$extraItems = $this->fetchHistoryItems($offsetId, $query);
 				$items = array_merge($items, $extraItems);
@@ -231,7 +247,7 @@ class Repository
 		{
 			$bindingQuery = $this->prepareLoadHistoryBindingQuery($onlyFixed);
 			$query = $this->prepareLoadHistoryQuery(
-				$limit, false, $bindingQuery, $filter, $offsetTime, $offsetId, false
+				$limit, false, $bindingQuery, $filter, $offsetTime, $offsetId, false, false, $additionalFilter,
 			);
 			$items = $this->fetchHistoryItems($offsetId, $query);
 
@@ -239,7 +255,7 @@ class Repository
 			if ($fetchDiff > 0 && $isOffsetExist)
 			{
 				$query = $this->prepareLoadHistoryQuery(
-					$fetchDiff, true, $bindingQuery, $filter, $offsetTime, $offsetId, false
+					$fetchDiff, true, $bindingQuery, $filter, $offsetTime, $offsetId, false, false, $additionalFilter,
 				);
 				$extraItems = $this->fetchHistoryItems($offsetId, $query);
 				$items = array_merge($items, $extraItems);
@@ -258,6 +274,14 @@ class Repository
 		}
 
 		$itemIDs = array_column($items, 'ID');
+		foreach ($items as $item)
+		{
+			$rawPositions[(int)$item['ID']] = [
+				'created' => $item['CREATED'],
+				'categoryId' => $item['TYPE_CATEGORY_ID'] ?? null,
+				'className' => $item['ASSOCIATED_ENTITY_CLASS_NAME'] ?? '',
+			];
+		}
 		$itemsMap = array_combine($itemIDs, $items);
 
 		/*
@@ -289,12 +313,17 @@ class Repository
 		?DateTime $offsetTime,
 		int $offsetId,
 		bool $isOptimized = false,
-		bool $onlyFixed = false
+		bool $onlyFixed = false,
+		?\Bitrix\Main\ORM\Query\Filter\ConditionTree $additionalFilter = null,
 	): \Bitrix\Main\ORM\Query\Query
 	{
 		$query = TimelineTable::query();
 		$query->addSelect('*');
 		$query->addSelect('bind.IS_FIXED', 'IS_FIXED');
+		if ($additionalFilter !== null)
+		{
+			$query->where($additionalFilter);
+		}
 
 		if ($isOptimized)
 		{

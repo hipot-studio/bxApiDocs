@@ -16,6 +16,13 @@ class Analytics
 {
 
 	private const DEFAULT_TOOL = 'ai';
+
+	// Transcription of the mobile voice widget of BitrixGPT: its generate events carry the section and a status.
+	public const VOICE_WIDGET_SECTION = 'voice_widget';
+	public const VOICE_WIDGET_STATUS_SUCCESS = 'success';
+	public const VOICE_WIDGET_STATUS_ERROR_EMPTY = 'error_empty';
+	public const VOICE_WIDGET_STATUS_ERROR_PROVIDER = 'error_provider';
+	public const VOICE_WIDGET_STATUS_ERROR_B24 = 'error_b24';
 	private const FEATURE_RELEASE_EVENT = 'feature_release';
 	private const FEATURE_RELEASE_CATEGORY = 'release';
 	private const FEATURE_FLAG_PREFIX = 'flag_';
@@ -40,12 +47,27 @@ class Analytics
 		'landing_ai_block_content' => 'system_site',
 	];
 
+	/**
+	 * @param string|null $status Only for the transcription of the voice widget; other events have no status.
+	 */
 	public static function engineGenerateResultEvent(
 		string $eventType,
 		IEngine $engine,
 		array $analyticData,
+		?string $status = null,
 	)
 	{
+		self::buildEngineGenerateResultEvent($eventType, $engine, $analyticData, $status)->send();
+	}
+
+	public static function buildEngineGenerateResultEvent(
+		string $eventType,
+		IEngine $engine,
+		array $analyticData,
+		?string $status = null,
+	): AnalyticsEvent
+	{
+		$isVoiceWidgetAudio = self::isVoiceWidgetAudio($engine, $analyticData);
 		$converter = new Converter(Converter::TO_CAMEL);
 		if ($engine->getPayload() instanceof StyledPicture)
 		{
@@ -69,6 +91,11 @@ class Analytics
 				{
 					$section = 'system';
 				}
+			}
+
+			if ($isVoiceWidgetAudio)
+			{
+				$section = self::VOICE_WIDGET_SECTION;
 			}
 		}
 
@@ -102,7 +129,51 @@ class Analytics
 			->setP3($p3)
 			->setP5($converter->process($engine->getContext()->getContextId()))
 			->setUserId($engine->getContext()->getUserId())
-			->send();
+		;
+		if ($isVoiceWidgetAudio)
+		{
+			$analyticsEvent->setStatus($status ?? self::VOICE_WIDGET_STATUS_SUCCESS);
+		}
+
+		return $analyticsEvent;
+	}
+
+	/**
+	 * The transcription is requested by the mobile voice widget of BitrixGPT.
+	 */
+	public static function isVoiceWidgetAudio(IEngine $engine, array $analyticData): bool
+	{
+		return $engine->getPayload() instanceof Audio
+			&& ($analyticData['c_section'] ?? '') === self::VOICE_WIDGET_SECTION
+		;
+	}
+
+	/**
+	 * The result of the transcription of the voice widget: success, or no speech recognized.
+	 */
+	public static function getVoiceWidgetResultStatus(?string $text): string
+	{
+		return trim((string)$text) === '' ? self::VOICE_WIDGET_STATUS_ERROR_EMPTY : self::VOICE_WIDGET_STATUS_SUCCESS;
+	}
+
+	/**
+	 * A failed transcription of the voice widget; other engines keep sending no event on errors.
+	 */
+	public static function sendVoiceWidgetAudioError(IEngine $engine, array $analyticData, string $status): void
+	{
+		if (!self::isVoiceWidgetAudio($engine, $analyticData))
+		{
+			return;
+		}
+
+		try
+		{
+			self::engineGenerateResultEvent('generate', $engine, $analyticData, $status);
+		}
+		catch (\Throwable)
+		{
+			// Analytics must not change the handling of the error.
+		}
 	}
 
 	public static function sendAiQueryLimitEvent(string $errorLimit, string $moduleId, int $userId): void

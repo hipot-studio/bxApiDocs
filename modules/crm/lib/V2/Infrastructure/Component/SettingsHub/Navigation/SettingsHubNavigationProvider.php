@@ -6,9 +6,14 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation;
 
 use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\SettingsHubFactory;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use LogicException;
 use Throwable;
+
+Loc::loadMessages(__FILE__);
 
 /** @internal */
 final class SettingsHubNavigationProvider
@@ -36,9 +41,29 @@ final class SettingsHubNavigationProvider
 					continue;
 				}
 
-				if (!$item->canRead($permissions))
+				$availability = $item->checkAvailability($permissions);
+				if (!$availability->isSuccess())
 				{
-					$navigation[$item->id()] = NavigationTarget::unavailable()->toArray();
+					$errors = $availability->getErrors();
+					if (
+						count($errors) !== 1
+						|| trim($errors[0]->getMessage()) === ''
+						|| trim((string)$errors[0]->getCode()) === ''
+					)
+					{
+						throw new LogicException('Navigation availability denial must have one error with message and code.');
+					}
+
+					$restrictionSliderCode = $errors[0]->getCustomData()['restrictionSliderCode'] ?? null;
+					if ($restrictionSliderCode !== null && !is_string($restrictionSliderCode))
+					{
+						throw new LogicException('Navigation restriction slider code must be a string or null.');
+					}
+
+					$navigation[$item->id()] = NavigationTarget::unavailable(
+						$errors[0]->getMessage(),
+						$restrictionSliderCode,
+					)->toArray();
 
 					continue;
 				}
@@ -52,12 +77,16 @@ final class SettingsHubNavigationProvider
 				};
 
 				$navigation[$item->id()] = $url === null || trim((string)$url) === ''
-					? NavigationTarget::unavailable()->toArray()
+					? NavigationTarget::unavailable(
+						Loc::getMessage('CRM_SETTINGS_HUB_NAVIGATION_TARGET_UNAVAILABLE'),
+					)->toArray()
 					: NavigationTarget::available((string)$url)->toArray();
 			}
 		}
-		catch (Throwable)
+		catch (Throwable $exception)
 		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
 			return $result->addError(
 				new Error(
 					'Failed to build the settings navigation.',

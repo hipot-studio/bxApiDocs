@@ -14,7 +14,7 @@ use Bitrix\Rest\Infrastructure\Rest\Request\Application\Embedding\AddEmbeddingRe
 use Bitrix\Rest\Infrastructure\Rest\Request\Application\Embedding\DeleteEmbeddingRequest;
 use Bitrix\Rest\Infrastructure\Rest\Request\Application\Embedding\ListEmbeddingRequest;
 use Bitrix\Rest\Infrastructure\Rest\Scopes\RestDeveloper;
-use Bitrix\Rest\Internal\Access\AppAccessChecker;
+use Bitrix\Rest\Internal\Access\EmbeddingAccessChecker;
 use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\PlacementTable;
 use Bitrix\Rest\Public\Command\Application\Embedding\AddEmbeddingCommand;
@@ -36,7 +36,7 @@ final class Embedding extends RestController
 {
 	use CommandRunner;
 
-	private ?AppAccessChecker $accessChecker = null;
+	private ?EmbeddingAccessChecker $accessChecker = null;
 
 	#[Scope(RestDeveloper::SCOPE)]
 	#[Title(new LocalizableMessage(code: 'REST_INFRASTRUCTURE_REST_CONTROLLER_APPLICATION_EMBEDDING_LISTACTION_TITLE', phraseSrcFile: __FILE__))]
@@ -56,7 +56,7 @@ final class Embedding extends RestController
 
 		$this->ensureCanViewEmbeddingList($app);
 
-		$userIds = $this->getAccessChecker()->canViewAllEmbeddings($app)
+		$userIds = $this->getAccessChecker()->canViewAllEmbeddings()
 			? null
 			: [PlacementTable::DEFAULT_USER_ID_VALUE, $this->getCurrentUserId()];
 
@@ -145,9 +145,9 @@ final class Embedding extends RestController
 		return Main\DI\ServiceLocator::getInstance()->get(EmbeddingDtoMapper::class);
 	}
 
-	private function getAccessChecker(): AppAccessChecker
+	private function getAccessChecker(): EmbeddingAccessChecker
 	{
-		return $this->accessChecker ??= new AppAccessChecker($this->getCurrentUserId());
+		return $this->accessChecker ??= new EmbeddingAccessChecker($this->getCurrentUserId());
 	}
 
 	private function getAppByClientId(string $clientId, ApplicationProvider $appProvider): App

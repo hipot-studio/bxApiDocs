@@ -18,26 +18,33 @@ use Bitrix\Main\Result;
  */
 final class EntityAddressSetting extends AbstractSetting
 {
-	public const CODE = 'crm.format.entity_address';
+	public const ID = 'crm.format.entity_address';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		$options = [];
+		$examples = EntityAddressFormatter::getAllExamples(false);
 		foreach ($this->getDescriptions() as $value => $title)
 		{
-			$options[] = new SettingOption((int)$value, $title);
+			$example = $examples[$value] ?? null;
+			$hint = $example === null
+				? null
+				: trim(strip_tags((string)preg_replace('~<br\s*/?>~i', "\n", $example)));
+			$options[] = new SettingOption((int)$value, $title, $hint);
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'ent_addr_frmt_id',
 		);
 	}
 

@@ -202,7 +202,7 @@ class RoleRepository extends BaseRepository
 			])
 			->where('USER_ID', $userId);
 
-		$query->whereNotIn('ID', $subQuery);
+		$query->whereNotIn('CODE', $subQuery);
 	}
 
 	public function getByRoleCodes(array $roleCodes): array
@@ -235,6 +235,35 @@ class RoleRepository extends BaseRepository
 				'DATE_MODIFY' => $dateUpdate,
 			]
 		);
+	}
+
+	/**
+	 * @param int[] $roleIds
+	 * @return array<int, int> role id => author id
+	 */
+	public function getAuthorIdsByRoleIds(array $roleIds): array
+	{
+		if (empty($roleIds))
+		{
+			return [];
+		}
+
+		$rows = RoleTable::query()
+			->setSelect([
+				'ID',
+				'AUTHOR_ID',
+			])
+			->whereIn('ID', $roleIds)
+			->fetchAll()
+		;
+
+		$result = [];
+		foreach ($rows as $row)
+		{
+			$result[(int)$row['ID']] = (int)$row['AUTHOR_ID'];
+		}
+
+		return $result;
 	}
 
 	public function getAvatarByRoleId(int $roleId): array|bool

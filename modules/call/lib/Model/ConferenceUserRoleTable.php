@@ -25,15 +25,7 @@ class ConferenceUserRoleTable extends DataManager
 {
 	public static function getTableName(): string
 	{
-		//todo remove migration option check
-		static $tableName = null;
-		if ($tableName === null)
-		{
-			$tableName = \Bitrix\Main\Config\Option::get('call', 'call_db_migrated', 0) >= 5
-				? 'b_call_conference_user_role'
-				: 'b_im_conference_user_role';
-		}
-		return $tableName;
+		return 'b_call_conference_user_role';
 	}
 
 	public static function getMap(): array

@@ -201,6 +201,10 @@ final class LegacyCountersAdapter
 			{
 				case 'default':
 				case 'openChannel':
+				// The meeting chat has a section of its own since "Meetings", but for the legacy format
+				// it stays an ordinary chat: that is the bucket its unread was counted in before the
+				// folder, and the counter type its pushes carry is still 'chat'.
+				case 'calendar':
 					$inChat = true;
 					break;
 

@@ -13,6 +13,7 @@ final class CreateServerCommand extends AbstractCommand
 		public readonly int $accountId,
 		public readonly ?string $portalId = null,
 		public readonly ?string $portalUrl = null,
+		public readonly ?string $generation = null,
 	)
 	{
 	}
@@ -24,6 +25,7 @@ final class CreateServerCommand extends AbstractCommand
 				'accountId' => $this->accountId,
 				'portalId' => $this->portalId,
 				'portalUrl' => $this->portalUrl,
+				'generation' => $this->generation,
 			])
 		);
 	}

@@ -8,6 +8,7 @@ use Bitrix\AI;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 IncludeModuleLangFile(__FILE__);
 class CHTMLEditor
@@ -224,8 +225,8 @@ class CHTMLEditor
 		$arParams['limitPhpAccess'] = $arParams['limitPhpAccess'] === true;
 		$this->display = !isset($arParams['display']) || $arParams['display'];
 
-		$arParams["bodyClass"] = COption::GetOptionString("fileman", "editor_body_class", "");
-		$arParams["bodyId"] = COption::GetOptionString("fileman", "editor_body_id", "");
+		$arParams["bodyClass"] = htmlspecialcharsbx(COption::GetOptionString("fileman", "editor_body_class"));
+		$arParams["bodyId"] = htmlspecialcharsbx(COption::GetOptionString("fileman", "editor_body_id"));
 
 		$this->content = ($arParams['content'] ?? '');
 		$this->content = preg_replace("/\r\n/is", "\n", $this->content);
@@ -408,6 +409,7 @@ class CHTMLEditor
 			'isCopilotEnabled' => $isCopilotEnabled,
 			'isCopilotImageEnabledBySettings' => $arParams['isCopilotImageEnabledBySettings'] ?? true,
 			'isCopilotTextEnabledBySettings' => $arParams['isCopilotTextEnabledBySettings'] ?? true,
+			'aiBrandDisplayName' => $this->getAiBrandDisplayName(),
 			'copilotParams' => $arParams["copilotParams"],
 			'isMentionUnavailable' => $arParams['isMentionUnavailable'] ?? false,
 			'inputName' => $this->inputName,
@@ -571,6 +573,16 @@ class CHTMLEditor
 		$engine = AI\Engine::getByCategory(AI\Engine::CATEGORIES['text'], AI\Context::getFake());
 
 		return !is_null($engine);
+	}
+
+	public function getAiBrandDisplayName(): string
+	{
+		if (Loader::includeModule('ui'))
+		{
+			return (new CopilotNameService())->getCopilotName();
+		}
+
+		return '';
 	}
 
 	function GetAiCategory(string $id, string $name): ?string
@@ -911,6 +923,15 @@ class CHTMLEditor
 			case "edit_snippet":
 				if (!$USER->CanDoOperation('fileman_view_file_structure'))
 					break;
+
+				$code = isset($_REQUEST['code']) ? $_REQUEST['code'] : '';
+				if (CFileman::IsPHP($code) && !$USER->CanDoOperation('edit_php'))
+				{
+					$result = ['result' => false];
+
+					break;
+				}
+
 				$template = $_REQUEST['site_template'];
 
 				// Update
@@ -1113,49 +1134,82 @@ class CHTMLEditor
 					array("events" => array(
 						"onFileIsUploaded" => function ($hash, &$file, &$package, &$upload, &$error)
 						{
-							$error = \CFile::CheckFile($file["files"]["default"], 0, "image/", \CFile::GetImageExtensions());
-							$io = CBXVirtualIo::GetInstance();
-							$fileName = $file["name"];
-
-							if(empty($error) && $io->ValidateFilenameString($fileName) && $io->ValidatePathString(self::GetUploadPath().$fileName))
+							if (!is_array($file)
+								|| !is_array($file['files'] ?? null)
+								|| !is_array($file['files']['default'] ?? null))
 							{
-								if (COption::GetOptionString('fileman', "use_medialib", "Y") != "N" &&
-									CMedialib::CanDoOperation('medialib_view_collection', 0, false, true))
+								return false;
+							}
+
+							$imageFile = $file['files']['default'];
+							$fileName = $file['name'] ?? null;
+							$io = CBXVirtualIo::GetInstance();
+							if (!is_string($fileName) || $fileName === ''
+								|| $fileName !== ($imageFile['name'] ?? null)
+								|| str_contains($fileName, '/') || str_contains($fileName, '\\')
+								|| !$io->ValidateFilenameString($fileName)
+								|| !$io->ValidatePathString(self::GetUploadPath().$fileName)
+								|| !in_array(strtolower(GetFileExtension($fileName)),
+									explode(',', \CFile::GetImageExtensions()), true)
+								|| HasScriptExtension($fileName)
+								|| !is_string($imageFile['tmp_name'] ?? null) || $imageFile['tmp_name'] === ''
+								|| !is_string($imageFile['type'] ?? null))
+							{
+								return false;
+							}
+
+							$error = \CFile::CheckImageFile($imageFile);
+							if (!empty($error))
+							{
+								return false;
+							}
+
+							if (COption::GetOptionString('fileman', "use_medialib", "Y") != "N" &&
+								CMedialib::CanDoOperation('medialib_view_collection', 0, false, true))
+							{
+								$image = CMedialib::AutosaveImage($imageFile);
+								if ($image && $image['PATH'])
 								{
-									$image = CMedialib::AutosaveImage($file["files"]["default"]);
-									if ($image && $image['PATH'])
-									{
-										$file["uploadedPath"] = $image['PATH'];
-										return true;
-									}
-									else
-									{
-										return false;
-									}
-								}
-								else
-								{
-									$newPath = self::GetUploadPath().$fileName;
-									if($io->FileExists($_SERVER["DOCUMENT_ROOT"].$newPath))
-									{
-										$ext = GetFileExtension($fileName);
-										$name = GetFileNameWithoutExtension($fileName);
-										$iter = 1;
-										while(true && $iter < 1000)
-										{
-											$newPath = self::GetUploadPath().$name.'('.$iter.').'.$ext;
-											if(!$io->FileExists($_SERVER["DOCUMENT_ROOT"].$newPath))
-											{
-												break;
-											}
-											$iter++;
-										}
-									}
-									CopyDirFiles($file["files"]["default"]["tmp_name"], $_SERVER["DOCUMENT_ROOT"].$newPath);
-									$file["uploadedPath"] = $newPath;
+									$file["uploadedPath"] = $image['PATH'];
 									return true;
 								}
+
+								return false;
 							}
+
+							$documentRoot = realpath($_SERVER['DOCUMENT_ROOT']);
+							if ($documentRoot === false)
+							{
+								return false;
+							}
+
+							$newPath = self::GetUploadPath().$fileName;
+							if ($io->FileExists($documentRoot.$newPath))
+							{
+								$ext = GetFileExtension($fileName);
+								$name = GetFileNameWithoutExtension($fileName);
+								for ($iter = 1; $iter < 1000; $iter++)
+								{
+									$newPath = self::GetUploadPath().$name.'('.$iter.').'.$ext;
+									if (!$io->FileExists($documentRoot.$newPath))
+									{
+										break;
+									}
+								}
+								if ($iter === 1000)
+								{
+									return false;
+								}
+							}
+
+							$destination = $documentRoot.$newPath;
+							if (!CheckDirPath($destination) || !@copy($imageFile['tmp_name'], $destination))
+							{
+								return false;
+							}
+							@chmod($destination, BX_FILE_PERMISSIONS);
+							$file["uploadedPath"] = $newPath;
+							return true;
 						}
 					)),
 					"get"

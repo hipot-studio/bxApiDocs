@@ -7,11 +7,12 @@ namespace Bitrix\Crm\V2\Internal\Service\Settings\Handler;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\V2\Internal\Exception\Settings\SettingNotFoundException;
+use Bitrix\Crm\V2\Internal\Integration\Pull\SettingsHubPull;
 use Bitrix\Crm\V2\Internal\Service\Settings\Mutation\TransportValueMapper;
-use Bitrix\Crm\V2\Internal\Service\Settings\Presentation\SettingsPresentationProvider;
 use Bitrix\Crm\V2\Internal\Service\Settings\SettingRegistryInterface;
 use Bitrix\Crm\V2\Public\Command\Settings\UpdateSettingCommand;
 use Bitrix\Main\Result;
+use Throwable;
 
 /** @internal */
 final class UpdateSettingCommandHandler
@@ -19,7 +20,7 @@ final class UpdateSettingCommandHandler
 	public function __construct(
 		private readonly SettingRegistryInterface $registry,
 		private readonly TransportValueMapper $transportValueMapper,
-		private readonly SettingsPresentationProvider $settingsPresentationProvider,
+		private readonly SettingsHubPull $settingsHubPull,
 	)
 	{
 	}
@@ -27,26 +28,26 @@ final class UpdateSettingCommandHandler
 	public function handle(UpdateSettingCommand $command): Result
 	{
 		$permissions = Container::getInstance()->getUserPermissions($command->getUserId());
-		$code = $command->getCode();
+		$id = $command->getId();
 
 		try
 		{
-			$registration = $this->registry->getRegistrationByCode($code);
+			$registration = $this->registry->getRegistrationById($id);
 		}
 		catch (SettingNotFoundException)
 		{
 			return (new Result())->addError(ErrorCode::getNotFoundError());
 		}
 
-		$setting = $this->registry->getByCode($code);
 		if (!$this->registry->canWrite($registration, $permissions))
 		{
 			return (new Result())->addError(ErrorCode::getAccessDeniedError());
 		}
+		$setting = $this->registry->getById($id);
 
 		$mappingResult = $this->transportValueMapper->map(
 			$setting->getSchema(),
-			$code,
+			$id,
 			$command->getValue(),
 		);
 		if (!$mappingResult->isSuccess())
@@ -60,6 +61,15 @@ final class UpdateSettingCommandHandler
 			return (new Result())->addErrors($settingResult->getErrors());
 		}
 
-		return $this->settingsPresentationProvider->get($permissions);
+		try
+		{
+			$this->settingsHubPull->publish($command->getEventId());
+		}
+		catch (Throwable)
+		{
+			// Pull transport must not undo a completed settings write.
+		}
+
+		return new Result();
 	}
 }

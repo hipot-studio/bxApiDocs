@@ -3,6 +3,7 @@
 use Bitrix\Disk;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Service\Document\OfficeEditorAvailability;
 use Bitrix\Disk\Type\DocumentGridVariant;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internals\Error\Error;
@@ -29,6 +30,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 
 	private Disk\Type\DocumentGridVariant $variant = Disk\Type\DocumentGridVariant::All;
 	private ?array $analytics = null;
+	private bool $openEditInsteadOfPreview = false;
 
 	public function __construct($component = null)
 	{
@@ -83,20 +85,15 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		return parent::prepareParams();
 	}
 
-	protected function shouldWorkWithOnlyOffice(): bool
+	protected function canOpenEditInsteadOfPreview(): bool
 	{
-		if (!Disk\Document\OnlyOffice\OnlyOfficeHandler::isEnabled())
-		{
-			return false;
-		}
-
-		$bitrix24Scenario = new Disk\Document\OnlyOffice\Bitrix24Scenario();
-		if (!$bitrix24Scenario->canUseEdit())
-		{
-			return false;
-		}
-
-		return true;
+		return
+			OfficeEditorAvailability::isAvailable()
+			&& (
+				Disk\Document\Vibeoffice\Feature::servesPortalEditing()
+				|| (new Disk\Document\OnlyOffice\Bitrix24Scenario())->canUseEdit()
+			)
+		;
 	}
 
 	public function prepareItems(array $files, array $visibleColumns = []): array
@@ -113,6 +110,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 
 		$this->nowTime = time() + CTimeZone::getOffset();
 		$this->fullFormatWithoutSec = preg_replace('/:s$/', '', CDatabase::dateFormatToPHP(CSite::GetDateFormat("FULL")));
+		$this->openEditInsteadOfPreview = $this->canOpenEditInsteadOfPreview();
 
 		/* @var Disk\File $file */
 		foreach ($files as $file)
@@ -192,7 +190,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 
 			$documentName = \CUtil::JSEscape($item['NAME']);
 
-			if ($this->shouldWorkWithOnlyOffice())
+			if ($this->openEditInsteadOfPreview)
 			{
 				$attr->setAttribute('data-open-edit-instead-preview', true);
 			}
@@ -494,7 +492,10 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 					&& Disk\Search\Reindex\ExtendedIndex::isReady()
 				)
 				{
-					$filter["*EXTENDED_INDEX.SEARCH_INDEX"] = $fulltextContent;
+					$filter[] = (new Disk\Search\SearchFilterBuilder())->buildExtendedIndexFilter(
+						trim($rawFilter['FIND']),
+						$fulltextContent,
+					);
 				}
 				elseif
 				(
@@ -701,7 +702,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				$arResult['justCounter'] = $arResult['justCounter'] + 1;
 
 				$fileNameFormatted = <<<HTML
-					<span class="bx-disk-folder-title" style='cursor: pointer;' id="disk_obj_{$row['ID']}" {$row['ATTRIBUTES']}>
+					<span class="bx-disk-folder-title" style='cursor: pointer;' id="disk_obj_{$row['ID']}" data-testid="disk-documents-row-title" {$row['ATTRIBUTES']}>
 						{$nameSpecialChars}
 					</span>
 HTML;
@@ -738,14 +739,14 @@ HTML
 						'CREATED_BY' => <<<HTML
 <div class="bx-disk-user-link disk-documents-grid-user">
 	{$row['CREATED_BY']['AVATAR_HTML']}
-	<a class="disk-documents-grid-user-link" target='_blank' href="{$row['CREATED_BY']['URL']}">{$row['CREATED_BY']['NAME']}</a>
+	<a class="disk-documents-grid-user-link" target='_blank' href="{$row['CREATED_BY']['URL']}" data-testid="disk-documents-row-created-by-link">{$row['CREATED_BY']['NAME']}</a>
 </div>
 HTML
 						,
 						'UPDATED_BY' => <<<HTML
 <div class="bx-disk-user-link disk-documents-grid-user">
 	{$row['UPDATED_BY']['AVATAR_HTML']}
-	<a class="disk-documents-grid-user-link" target='_blank' href="{$row['UPDATED_BY']['URL']}">{$row['UPDATED_BY']['NAME']}</a>
+	<a class="disk-documents-grid-user-link" target='_blank' href="{$row['UPDATED_BY']['URL']}" data-testid="disk-documents-row-updated-by-link">{$row['UPDATED_BY']['NAME']}</a>
 </div>
 HTML
 						,
@@ -753,7 +754,7 @@ HTML
 						'CREATE_TIME' => $row['CREATE_TIME'],
 						'UPDATE_TIME' => $row['UPDATE_TIME'],
 						'SHARED' => <<<HTML
-<div class="bx-disk-sharing" id="bx-disk-user-shared-{$row['ID']}">
+<div class="bx-disk-sharing" id="bx-disk-user-shared-{$row['ID']}" data-testid="disk-documents-cell-shared" aria-busy="true">
 	<script>BX.ready(function(){
 		BX.Disk.Documents.showShared({$row['ID']}, BX('bx-disk-user-shared-{$row['ID']}'));
 	});</script>
@@ -780,7 +781,7 @@ HTML
 		if ($this->shouldShowCellForExternalLink($file))
 		{
 			return <<<HTML
-<div class="bx-disk-external-link" id="bx-disk-external-link-{$row['ID']}">
+<div class="bx-disk-external-link" id="bx-disk-external-link-{$row['ID']}" data-testid="disk-documents-cell-external-link" aria-busy="true">
 	<div class=" disk-control-external-link disk-control-external-link-skeleton--active">
 		<div class="disk-control-external-link-btn">
 			<span class="ui-switcher --air ui-switcher-off">

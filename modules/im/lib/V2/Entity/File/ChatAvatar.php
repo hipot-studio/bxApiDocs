@@ -41,6 +41,29 @@ class ChatAvatar
 		return $url;
 	}
 
+	/**
+	 * The uploaded avatar every client sees cropped, as the b_file record it is.
+	 *
+	 * getAvatar() answers with the 200x200 resize_cache copy, which is the right thing for a
+	 * picture next to a message and the wrong one for a caller that has to work with the very
+	 * image the user set: a chat avatar is a plain b_file, so the original is reachable by the
+	 * same path the web server already serves.
+	 *
+	 * @return array b_file fields with SRC, or an empty array when there is no avatar to read
+	 */
+	public function getOriginalFile(): array
+	{
+		$avatarId = $this->chat->getAvatarId();
+		if ($avatarId <= 0)
+		{
+			return [];
+		}
+
+		$file = CFile::GetFileArray($avatarId);
+
+		return is_array($file) ? $file : [];
+	}
+
 	public function update(
 		int|string $avatar,
 		bool $withMessage = true,

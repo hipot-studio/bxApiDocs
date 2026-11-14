@@ -17,6 +17,9 @@ class QueueManager
 	private ?BasicError $error = null;
 	private ?int $lineId = null;
 
+	/** @var array<int, int[]> operators of the departments of the queue, read once per save */
+	private array $departmentUsers = [];
+
 	/** @var QueueManager[] */
 	protected static $instance = [];
 
@@ -601,7 +604,28 @@ class QueueManager
 	 */
 	public function update($fields, $usersFields = false): Result
 	{
+		$claimsOfEarlierSaves = QueueAvatar::claimsOfEarlierSaves();
+
+		try
+		{
+			return $this->updateQueue($fields, $usersFields, $claimsOfEarlierSaves);
+		}
+		catch (\Throwable $exception)
+		{
+			// no row of the queue is written, so an upload taken over for it goes back to the editor
+			QueueAvatar::releaseUnwrittenClaims();
+
+			throw $exception;
+		}
+	}
+
+	/**
+	 * @param array<int, true> $claimsOfEarlierSaves
+	 */
+	private function updateQueue($fields, $usersFields, array $claimsOfEarlierSaves): Result
+	{
 		$result = new Result();
+		$this->departmentUsers = [];
 
 		foreach ($fields as $cell => $fieldsEntity)
 		{
@@ -627,6 +651,8 @@ class QueueManager
 			$updateQueue = [];
 			$deleteQueue = [];
 
+			$avatarsOfUnwrittenRows = [];
+
 			$usersRaw = QueueTable::getList([
 				'filter' => [
 					'=CONFIG_ID' => $this->lineId
@@ -641,6 +667,17 @@ class QueueManager
 				$currentUsers[$user['USER_ID']] = $user;
 				$queueUsersBefore[] = $user['USER_ID'];
 				$deleteUsers[$user['USER_ID']] = $user;
+			}
+
+			if (is_array($usersFields))
+			{
+				$usersFields = self::keyUsersFieldsByOperator($usersFields);
+
+				$usersFields = $this->sanitizeUsersAvatars(
+					$usersFields,
+					$currentUsers ?? [],
+					$this->getUserIdsToWrite($fields)
+				);
 			}
 
 			$configQueueRaw = ConfigQueueTable::getList([
@@ -697,7 +734,10 @@ class QueueManager
 						}
 						else
 						{
-							$addUsers[] = self::getDataAddUser($this->lineId, $fieldsEntity['ENTITY_ID'], $usersFields, $numUser);
+							// a queue naming the operator as "01" replaces the row of the operator 1 instead of
+							// updating it, so this is the branch such a name reaches: the fields of it are keyed
+							// by the id as an int, and the row must be written from the very fields that were checked
+							$addUsers[] = self::getDataAddUser($this->lineId, (int)$fieldsEntity['ENTITY_ID'], $usersFields, $numUser);
 						}
 					}
 
@@ -706,7 +746,7 @@ class QueueManager
 				}
 				elseif ($fieldsEntity['ENTITY_TYPE'] === 'department')
 				{
-					$usersDepartment = StructureService::getInstance()->getDepartmentUserIds($fieldsEntity['ENTITY_ID']);
+					$usersDepartment = $this->getDepartmentUsers($fieldsEntity['ENTITY_ID']);
 					foreach ($usersDepartment as $userId)
 					{
 						if (self::isValidUser($userId))
@@ -798,7 +838,10 @@ class QueueManager
 			{
 				foreach ($updateUsers as $id => $user)
 				{
-					QueueTable::update($id, $user);
+					if (!QueueTable::update($id, $user)->isSuccess())
+					{
+						$avatarsOfUnwrittenRows[] = (int)($user['USER_AVATAR_ID'] ?? 0);
+					}
 				}
 				$result->setResult(true);
 			}
@@ -806,19 +849,172 @@ class QueueManager
 			{
 				foreach ($addUsers as $user)
 				{
-					QueueTable::add($user);
+					if (!QueueTable::add($user)->isSuccess())
+					{
+						$avatarsOfUnwrittenRows[] = (int)($user['USER_AVATAR_ID'] ?? 0);
+					}
 				}
 				$result->setResult(true);
 			}
+
+			// a row refused by the orm keeps the avatar it had, so the upload taken over for it is stored
+			// nowhere: left with the mark of the line it would be neither deletable from the form nor
+			// bindable again. The rest of the save stands, so the files go back one by one and only
+			// while no written row points to them - a photo given to several operators is held by the
+			// rows that did get written
+			QueueAvatar::releaseClaims($avatarsOfUnwrittenRows);
 
 			$this->sendQueueChangeEvents($queueUsersBefore, $queueUsersAfter);
 		}
 		else
 		{
+			// no row of the queue is written here; the avatars of the rows are checked further down,
+			// so what goes back is an upload taken over earlier within this request
+			QueueAvatar::releaseUnwrittenClaims();
+
 			$result->addError(new Error('Invalid fields describing queue entities were passed', 'IMOL_ERROR_INCORRECT_FIELDS', __METHOD__, $fields));
 		}
 
+		if ($result->isSuccess())
+		{
+			// the rows are written, so the uploads of their avatars are not this request's to give back
+			QueueAvatar::keepWrittenClaims($claimsOfEarlierSaves);
+		}
+
 		return $result;
+	}
+
+	/**
+	 * The operators whose rows this save writes: the entities of the queue of the type user and the
+	 * members of its departments. Only the fields of these operators are read further down, so an
+	 * upload taken over for any other operator would be stored nowhere and would stay marked as one
+	 * of the line - refused by both rules and undeletable from the form of the line.
+	 *
+	 * A queue of no entities at all writes the default operators instead and reads no fields, so
+	 * nothing is taken over for it.
+	 *
+	 * @return array<int, true>
+	 */
+	private function getUserIdsToWrite(array $fields): array
+	{
+		$userIds = [];
+
+		foreach ($fields as $fieldsEntity)
+		{
+			if ($fieldsEntity['ENTITY_TYPE'] === 'user')
+			{
+				$userIds[(int)$fieldsEntity['ENTITY_ID']] = true;
+			}
+			elseif ($fieldsEntity['ENTITY_TYPE'] === 'department')
+			{
+				foreach ($this->getDepartmentUsers($fieldsEntity['ENTITY_ID']) as $userId)
+				{
+					if (self::isValidUser($userId))
+					{
+						$userIds[(int)$userId] = true;
+					}
+				}
+			}
+		}
+
+		return $userIds;
+	}
+
+	/**
+	 * The operators of the department, read once per save: the members are needed both before the
+	 * rows are written, to tell which avatars this save may take over, and while they are written.
+	 * Every save starts with an empty memory of them, so a save that follows a change of the
+	 * structure in the same process reads the members anew.
+	 *
+	 * @return int[]
+	 */
+	private function getDepartmentUsers($departmentId): array
+	{
+		$departmentId = (int)$departmentId;
+
+		return $this->departmentUsers[$departmentId] ??= StructureService::getInstance()->getDepartmentUserIds($departmentId);
+	}
+
+	/**
+	 * The fields of the operators keyed by the id of the operator as an int. The fields come from a
+	 * request, so "01" is as possible a key as 1, and a check reading them one way while the write
+	 * reads them the other lets an avatar be taken over for a row that never gets it: the file stays
+	 * marked as one of the line while nothing points to it. Of two keys of the same operator the
+	 * canonical one wins, so both sides resolve the pair 1 and "01" the same way.
+	 *
+	 * @return array<int, mixed>
+	 */
+	private static function keyUsersFieldsByOperator(array $usersFields): array
+	{
+		$fieldsOfOperators = [];
+
+		foreach ($usersFields as $userId => $fields)
+		{
+			$operatorId = (int)$userId;
+
+			if (isset($fieldsOfOperators[$operatorId]) && (string)$userId !== (string)$operatorId)
+			{
+				continue;
+			}
+
+			$fieldsOfOperators[$operatorId] = $fields;
+		}
+
+		return $fieldsOfOperators;
+	}
+
+	/**
+	 * Keeps in the queue rows only an avatar id the editor of this line may point to. A rejected id
+	 * falls back to the avatar the row holds now, so the refusal neither stores the file nor drops
+	 * the current avatar of the operator.
+	 *
+	 * @param array $usersFields
+	 * @param array $currentUsers
+	 * @param array<int, true> $userIdsToWrite
+	 *
+	 * @return array
+	 */
+	private function sanitizeUsersAvatars(array $usersFields, array $currentUsers, array $userIdsToWrite): array
+	{
+		// shortcut for the branch of QueueAvatar::claimForBinding() about an avatar of a row of this
+		// queue: the rows are already read here, so the check of them costs nothing
+		$avatarIdsOfLine = [];
+		foreach ($currentUsers as $currentUser)
+		{
+			$avatarIdsOfLine[(int)$currentUser['USER_AVATAR_ID']] = true;
+		}
+
+		foreach ($usersFields as $userId => $fields)
+		{
+			if (
+				!isset($userIdsToWrite[$userId])
+				|| !is_array($fields)
+				|| !isset($fields['USER_AVATAR_ID'])
+			)
+			{
+				continue;
+			}
+
+			$avatarId = is_scalar($fields['USER_AVATAR_ID']) ? (int)$fields['USER_AVATAR_ID'] : 0;
+
+			if (
+				$avatarId > 0
+				&& !isset($avatarIdsOfLine[$avatarId])
+				&& !QueueAvatar::claimForBinding($avatarId, $this->lineId)
+			)
+			{
+				$currentRow = $currentUsers[$userId] ?? [];
+				$avatarId = (int)($currentRow['USER_AVATAR_ID'] ?? 0);
+				$usersFields[$userId]['USER_AVATAR'] = $avatarId > 0
+					? (string)($currentRow['USER_AVATAR'] ?? '')
+					: ''
+				;
+			}
+
+			$usersFields[$userId]['USER_AVATAR_ID'] = $avatarId;
+		}
+
+		return $usersFields;
 	}
 
 	/**

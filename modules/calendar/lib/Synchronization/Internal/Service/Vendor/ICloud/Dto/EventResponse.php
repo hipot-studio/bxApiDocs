@@ -87,11 +87,6 @@ class EventResponse
 		return new self($data['href'], $data['getetag']);
 	}
 
-	public function getRawOverriddenInstancesData(): array
-	{
-		return $this->excludedEventsData;
-	}
-
 	/**
 	 * @throws ObjectException
 	 */

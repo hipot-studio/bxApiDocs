@@ -301,7 +301,7 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 	/**
 	 * Candidates the script selector may choose between. An explicit list configured in the template wins -
 	 * it is the choice of the user. Otherwise CRM decides which settings are admissible for this call, so
-	 * the selector never sees a setting the schedule, the client type or the call type has already ruled
+	 * the selector never sees a setting the client type or the call type has already ruled
 	 * out, and never has to guess among all the scripts of the portal either.
 	 *
 	 * @return int[]
@@ -317,7 +317,6 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 		return ItemFactory::getCandidateIdsByActivityId(
 			$activityId,
 			requireScoringCriteria: true,
-			requireCurrentAvailability: true,
 		);
 	}
 

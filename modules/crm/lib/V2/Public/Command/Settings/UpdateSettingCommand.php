@@ -12,16 +12,17 @@ use Bitrix\Main\Result;
 final class UpdateSettingCommand extends AbstractCommand
 {
 	public function __construct(
-		private readonly string $code,
+		private readonly string $id,
 		private readonly mixed $value,
 		private readonly int $userId,
+		private readonly ?string $eventId = null,
 	)
 	{
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return $this->code;
+		return $this->id;
 	}
 
 	public function getValue(): mixed
@@ -32,6 +33,11 @@ final class UpdateSettingCommand extends AbstractCommand
 	public function getUserId(): int
 	{
 		return $this->userId;
+	}
+
+	public function getEventId(): ?string
+	{
+		return $this->eventId;
 	}
 
 	protected function execute(): Result

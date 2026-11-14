@@ -20,7 +20,7 @@ use Bitrix\Main\SystemException;
  * headers (a sandbox Content-Security-Policy) and the sandboxed iframe on the client. This is a
  * deliberate departure from the markdown path, which sanitizes via CBXSanitizer.
  *
- * When the viewer is enabled a served document may load external https resources and run external
+ * A served document may load external https resources and run external
  * scripts making network requests: the CSP is deliberately permissive there. Isolation no longer rests
  * on closing those channels but on the sandbox opaque origin (allow-scripts without allow-same-origin),
  * which keeps the document off the portal session.
@@ -28,7 +28,7 @@ use Bitrix\Main\SystemException;
  * What is served is kept in step with what the viewer opens: HtmlViewerPolicy decides both, so the
  * endpoint never hands out a non-html file as text/html.
  *
- * Every refusal the service decides itself (viewer disabled, file outside the policy, size limit,
+ * Every refusal the service decides itself (file outside the policy, size limit,
  * unreadable content) is answered with a localized stub page carrying the same isolating headers, so the
  * iframe renders the reason directly. A caller that refuses before the service is reached (an action
  * filter, an unresolvable id, the external link component) answers on its own and is offered the same
@@ -98,19 +98,12 @@ class HtmlViewerService
 
 	/**
 	 * Guards the file entry point before any content is read, so the endpoint answers only for files the
-	 * viewer itself would open. The option is answered first with its own DISABLED code, and the rest of
-	 * HtmlViewerPolicy::isViewable() — the name together with the stored type — answers for the file: a
+	 * viewer itself would open. HtmlViewerPolicy::isViewable() checks the name and the stored type: a
 	 * document renamed to .html is refused here instead of leaving the endpoint as text/html.
 	 */
 	private function refuseUnlessViewable(File $file): ?HttpResponse
 	{
-		$refusal = $this->refuseUnlessEnabled();
-		if ($refusal !== null)
-		{
-			return $refusal;
-		}
-
-		if (!HtmlViewerPolicy::isViewableFile($file))
+		if (!HtmlViewerPolicy::isViewable($file))
 		{
 			return $this->errorResponse(404, 'DISK_HTML_VIEWER_ERROR_UNAVAILABLE');
 		}
@@ -124,23 +117,12 @@ class HtmlViewerService
 	 */
 	private function refuseUnlessViewableExtension(?string $extension): ?HttpResponse
 	{
-		$refusal = $this->refuseUnlessEnabled();
-		if ($refusal !== null)
-		{
-			return $refusal;
-		}
-
 		if (!HtmlViewerPolicy::isViewableExtension($extension))
 		{
 			return $this->errorResponse(404, 'DISK_HTML_VIEWER_ERROR_UNAVAILABLE');
 		}
 
 		return null;
-	}
-
-	private function refuseUnlessEnabled(): ?HttpResponse
-	{
-		return Configuration::isEnabledHtmlViewer() ? null : $this->errorResponse(404, 'DISK_HTML_VIEWER_ERROR_DISABLED');
 	}
 
 	private function showByBlob(int $fileId, int $size): HttpResponse
@@ -154,7 +136,7 @@ class HtmlViewerService
 		if ($content === null)
 		{
 			// A missing blob is a storage fault, not a refusal, yet it answers the same stub with the same
-			// status as the configuration ones: the log is the only place the three can be told apart.
+			// status as the policy refusal: the log distinguishes the storage fault.
 			Application::getInstance()->getExceptionHandler()->writeToLog(
 				new SystemException("Html viewer source blob #{$fileId} could not be read from storage."),
 			);
@@ -228,7 +210,7 @@ class HtmlViewerService
 	/**
 	 * Builds the sandbox Content-Security-Policy served on every response (success and error stubs alike).
 	 *
-	 * With the viewer enabled the policy is deliberately permissive: passive resources (style/font/img/media)
+	 * The policy is deliberately permissive: passive resources (style/font/img/media)
 	 * and scripts may reach any https origin, and connect-src is open so external scripts can make network
 	 * requests. This intentionally lifts the former ban on external scripts; isolation rests on the sandbox
 	 * opaque origin, not on closing these channels.

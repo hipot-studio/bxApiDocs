@@ -73,12 +73,12 @@ class MenuList
 		];
 	}
 
-	private function createSection(string $id, string $title, int $sort): array
+	private function createSection(string $id, ?string $title, int $sort): array
 	{
 		return [
 			'id' => $id,
 			'code' => $id,
-			'title' => $title,
+			'title' => $title ?? '',
 			'sort' => $sort,
 			'items' => [],
 		];
@@ -112,6 +112,12 @@ class MenuList
 		foreach ($menuData as $sectionData)
 		{
 			if (empty($sectionData['id']))
+			{
+				continue;
+			}
+
+			// section without translated title is not shown
+			if (trim((string)($sectionData['title'] ?? '')) === '')
 			{
 				continue;
 			}

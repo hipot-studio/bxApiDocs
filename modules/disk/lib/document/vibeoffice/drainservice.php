@@ -70,7 +70,7 @@ final class DrainService
 	}
 
 	/**
-	 * Registers the self-rescheduling drain agent from the hot vibeoffice-open path.
+	 * Registers the self-rescheduling drain agent in the successful open's background job.
 	 *
 	 * The agent is not installed unconditionally at module install/update anymore: on portals
 	 * that never enabled vibeoffice it would otherwise probe the hot, shared
@@ -78,9 +78,9 @@ final class DrainService
 	 * vibeoffice session is actually opened, so it exists ONLY where vibeoffice was really used.
 	 *
 	 * Idempotent: {@see \CAgent::AddAgent()} de-duplicates by NAME (with `existError: false` it
-	 * returns the existing agent id without a duplicate and without throwing), so calling this on every
-	 * open is cheap and safe. It also re-installs the agent after {@see self::drainAgent()} has
-	 * self-unregistered on an idle portal. The next time vibeoffice is enabled/used, register()
+	 * returns the existing agent id without a duplicate and without throwing), so every successful
+	 * open can queue registration in the same request after its response. It also re-installs the agent
+	 * after {@see self::drainAgent()} self-unregistered on an idle portal. The next time vibeoffice is used, register()
 	 * brings the drain reconciler back.
 	 */
 	public static function register(): void
@@ -100,7 +100,7 @@ final class DrainService
 	 * is on (normal operation).
 	 *
 	 * Lazy lifecycle: the agent is (re)installed on demand by {@see self::register()} from the
-	 * hot vibeoffice-open path, so it exists only on portals that actually used vibeoffice. When the
+	 * successful open's background job, so it exists only on portals that actually used vibeoffice. When the
 	 * flag is off AND nothing is left to drain the agent SELF-UNREGISTERS (returns ''), so an idle
 	 * portal keeps no hourly probe of the hot shared session table; the next open re-registers it.
 	 * While the flag is on the probe is skipped entirely (early return BEFORE any table scan or

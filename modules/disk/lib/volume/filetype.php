@@ -37,12 +37,15 @@ class FileType extends Volume\Base
 		}
 
 		$parentFolderId = $this->getFilterValue('PARENT_ID', '=@!');
-		if (!empty($parentFolderId))
+		if (!empty($parentFolderId) && !$parentFolderId instanceof Volume\SqlSubQuery)
 		{
 			$this
 				->addSelect('PARENT_ID', "'$parentFolderId'")
 				->unsetFilter('PARENT_ID')
-				->addFilter('@PARENT_ID', Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId));
+				->addFilter(
+					'@PARENT_ID',
+					new Volume\SqlSubQuery(Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId))
+				);
 		}
 
 		$subSelectSql = Volume\QueryHelper::prepareSelect($this->getSelect());

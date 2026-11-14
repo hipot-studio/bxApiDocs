@@ -290,6 +290,8 @@ class DocumentStateRepository
 					$metadata[DocumentSessionManager::CONTEXT_VO_CONTENT_VERSION_KEY] =
 						$content['EXPECTED_CONTENT_VERSION'];
 					$metadata['contentFileId'] = $content['EXPECTED_FILE_ID'];
+					$metadata[DocumentSessionManager::CONTEXT_VO_SAVED_VERSION_ID_KEY] =
+						DocumentSessionManager::getLatestSavedVersionId((int)$file->getRealObjectId());
 				}
 				if (!(new DocumentSessionManager())->persistSessionMetadata($session, $metadata))
 				{

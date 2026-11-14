@@ -14,9 +14,10 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Enum\CustomServerTypes;
 use Bitrix\Disk\Internal\Interface\CustomServerInterface;
 use Bitrix\Disk\Internal\Service\CustomServerConfigsMapper;
+use Bitrix\Disk\Internal\Service\Document\OfficeEditorEntryHandler;
+use Bitrix\Disk\Internal\Service\Document\OfficeEngineRecognizer;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Handlers\CustomOnlyOfficeServerHandler;
 use Bitrix\Disk\Internal\Service\R7\Handlers\CustomR7ServerHandler;
-use Bitrix\Disk\Internal\UseCase\Document\FixUnknownDocumentHandlerUseCase;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Public\Provider\CustomServerAvailabilityProvider;
@@ -40,7 +41,7 @@ class DocumentHandlersManager
 	/** @var  ErrorCollection */
 	protected $errorCollection;
 	protected $userId;
-	private ?FixUnknownDocumentHandlerUseCase $fixUnknownDocumentHandlerUseCase = null;
+	private ?DocumentHandler $defaultServiceForCurrentUser = null;
 	protected CustomServerAvailabilityProvider $customServerAvailability;
 	protected CustomServerProvider $customServerProvider;
 	protected CustomServerConfigsMapper $customServerConfigsMapper;
@@ -76,10 +77,9 @@ class DocumentHandlersManager
 	public function getDefaultServiceForCurrentUser()
 	{
 		//todo may be we should use userId but now we look on $USER;
-		static $currentHandler;
-		if($currentHandler)
+		if ($this->defaultServiceForCurrentUser)
 		{
-			return $currentHandler;
+			return $this->defaultServiceForCurrentUser;
 		}
 		$codeForUser = UserConfiguration::getDocumentServiceCode();
 		if(empty($codeForUser))
@@ -89,9 +89,40 @@ class DocumentHandlersManager
 			$googleDriveClass = GoogleHandler::className();
 			$codeForUser = $googleDriveClass::getCode();
 		}
-		$currentHandler = $this->getHandlerByCode($codeForUser);
+		$this->defaultServiceForCurrentUser = $this->getSelectableHandlerByCode($codeForUser);
 
-		return $currentHandler;
+		return $this->defaultServiceForCurrentUser;
+	}
+
+	/**
+	 * Gets the handler a user chooses by its code: the one of the registry, or the item of the office editor
+	 * for the entry code while OnlyOffice is not registered and VibeOffice is enabled.
+	 *
+	 * @param string $code
+	 * @return DocumentHandler|null
+	 * @throws SystemException
+	 */
+	public function getSelectableHandlerByCode(string $code): ?DocumentHandler
+	{
+		if ($this->shouldStandForEntryCode($code))
+		{
+			return new OfficeEditorEntryHandler($this->userId);
+		}
+
+		return $this->getHandlerByCode($code);
+	}
+
+	/**
+	 * The office editor keeps its entry code when OnlyOffice is not registered and VibeOffice opens the documents
+	 * (ADR 3.10).
+	 */
+	private function shouldStandForEntryCode(string $code): bool
+	{
+		return
+			OfficeEngineRecognizer::isEntryCode($code)
+			&& !$this->isRegisteredHandlerCode($code)
+			&& VibeofficeHandler::isEnabled()
+		;
 	}
 
 	/**
@@ -120,16 +151,17 @@ class DocumentHandlersManager
 	}
 
 	/**
-	 * Resolves the effective document handler for a dispatch request.
+	 * Resolves the effective document handler for a dispatch request. This is the single seam where the engine
+	 * is chosen, in this order (ADR 3.10):
 	 *
-	 * When the resolved handler is an OnlyOfficeHandler (including its custom-server subclasses) and
-	 * vibeoffice is enabled on the portal, the office engine is translated to the {@see VibeofficeHandler}.
-	 * Otherwise the handler is returned as is (including null for an unknown code). This is the single
-	 * seam where the engine is chosen.
+	 * 1. a server of the client — its own code, or the entry code while it is the portal viewer — is returned
+	 *    as is;
+	 * 2. the entry code or another handler of the OnlyOffice family is translated to the {@see VibeofficeHandler}
+	 *    when vibeoffice is enabled for the context, even if OnlyOffice is not registered;
+	 * 3. otherwise the handler is returned as is (including null for an unknown code).
 	 *
-	 * The translation is additionally narrowed by the project cohort through
-	 * {@see Vibeoffice\Feature::isEnabledForContext()}. An empty allowlist keeps the feature
-	 * portal-wide (current behaviour).
+	 * The translation is narrowed by the project cohort through {@see Vibeoffice\Feature::isEnabledForContext()}.
+	 * An empty allowlist keeps the feature portal-wide.
 	 *
 	 * @param string $serviceCode
 	 * @param DocumentResolveContext|null $context
@@ -138,10 +170,18 @@ class DocumentHandlersManager
 	 */
 	public function resolveEffectiveHandler(string $serviceCode, ?DocumentResolveContext $context = null): ?DocumentHandler
 	{
-		$handler = $this->getHandlerByCode($serviceCode);
+		$isEntryCode = OfficeEngineRecognizer::isEntryCode($serviceCode);
+		$isClientServer =
+			OfficeEngineRecognizer::isClientServerCode($serviceCode)
+			|| ($isEntryCode && $this->isClientServerSelected())
+		;
+		if ($isClientServer)
+		{
+			return $this->getHandlerByCode($serviceCode);
+		}
 
 		if (
-			$handler instanceof OnlyOfficeHandler
+			($isEntryCode || $this->isOnlyOfficeFamilyCode($serviceCode))
 			&& VibeofficeHandler::isEnabled()
 			&& Vibeoffice\Feature::isEnabledForContext($context)
 		)
@@ -149,7 +189,41 @@ class DocumentHandlersManager
 			return $this->getHandlerByCode(VibeofficeHandler::getCode());
 		}
 
-		return $handler;
+		return $this->getHandlerByCode($serviceCode);
+	}
+
+	/**
+	 * Whether the portal viewer is a custom server of the client that is ready for use. Such a server exists
+	 * only on a box portal.
+	 */
+	public function isClientServerSelected(): bool
+	{
+		if (Configuration::getDefaultViewerServiceCode(false) !== OnlyOfficeHandler::getCode())
+		{
+			return false;
+		}
+
+		$customConfigType = Configuration::getDefaultViewerCustomConfigType();
+		if ($customConfigType === null)
+		{
+			return false;
+		}
+
+		$customServer = $this->customServerProvider->getFirstByType($customConfigType);
+		if (!$customServer instanceof CustomServerInterface)
+		{
+			return false;
+		}
+
+		return $this->customServerAvailability->isAvailableCustomServerForUse($customServer);
+	}
+
+	private function isOnlyOfficeFamilyCode(string $code): bool
+	{
+		return
+			$this->isRegisteredHandlerCode($code)
+			&& is_a($this->documentHandlerList[$code], OnlyOfficeHandler::class, true)
+		;
 	}
 
 	/**
@@ -189,6 +263,23 @@ class DocumentHandlersManager
 		return $list;
 	}
 
+	/**
+	 * @return string[]
+	 */
+	public function getRegisteredOfficeEngineCodes(): array
+	{
+		$codes = [];
+		foreach ($this->documentHandlerList as $code => $handlerClass)
+		{
+			if (is_a($handlerClass, OnlyOfficeHandler::class, true) || is_a($handlerClass, VibeofficeHandler::class, true))
+			{
+				$codes[] = $code;
+			}
+		}
+
+		return $codes;
+	}
+
 	private function shouldHideGoogle(DocumentHandler $handler): bool
 	{
 		return false;
@@ -202,13 +293,20 @@ class DocumentHandlersManager
 	/**
 	 * Handlers eligible for user-facing "create/open with" pickers:
 	 * {@see FileCreatable} handlers minus internal engines
-	 * ({@see DocumentHandler::isSelectableForCreation()}).
+	 * ({@see DocumentHandler::isSelectableForCreation()}), and the item of the office editor under the entry
+	 * code while OnlyOffice is not registered and VibeOffice is enabled.
 	 *
 	 * @return DocumentHandler[] keyed by handler code
 	 */
 	public function getHandlersForCreatingFile(): array
 	{
 		$list = [];
+		$entryCode = OnlyOfficeHandler::getCode();
+		if ($this->shouldStandForEntryCode($entryCode))
+		{
+			$list[$entryCode] = new OfficeEditorEntryHandler($this->userId);
+		}
+
 		foreach ($this->getHandlers() as $code => $handler)
 		{
 			if ($handler instanceof FileCreatable && $handler::isSelectableForCreation())
@@ -312,25 +410,55 @@ class DocumentHandlersManager
 	/**
 	 * Returns default document handler for view files.
 	 *
-	 * @return DocumentHandler|null
-	 * @throws SystemException
+	 * A registered handler that cannot view and an unknown handler code both fall back to the Bitrix viewer.
+	 * This method is reached from the page of an external link before the password is checked, so it must not
+	 * rewrite the portal setting.
+	 *
+	 * @return DocumentHandler
 	 * @throws \Bitrix\Main\NotImplementedException
 	 */
 	public function getDefaultHandlerForView()
 	{
-		$documentHandler = $this->getHandlerByCode(Configuration::getDefaultViewerServiceCode());
-		if (is_null($documentHandler) && $this->getErrorByCode(self::ERROR_UNKNOWN_HANDLER))
+		$serviceCode = Configuration::getDefaultViewerServiceCode();
+		// The saved entry code is kept for the portal to return to OnlyOffice once it is enabled again.
+		if ($this->shouldStandForEntryCode($serviceCode))
 		{
-			$this->fixUnknownDocumentHandlerForView();
-			$documentHandler = $this->getHandlerByCode(Configuration::getDefaultViewerServiceCode(false));
+			return $this->getHandlerByCode(VibeofficeHandler::getCode());
 		}
 
-		if(!$documentHandler instanceof IViewer)
+		$documentHandler = $this->getViewerHandlerByCode($serviceCode);
+		if ($documentHandler instanceof IViewer)
 		{
-			throw new SystemException("Invalid class '{$documentHandler::getCode()}' for documentHandler. Must be implement IViewer");
+			return $documentHandler;
 		}
 
-		return $documentHandler;
+		return new BitrixHandler($this->userId);
+	}
+
+	/**
+	 * A saved code is unusable in two ways: it may be missing from the registry, or it may belong to a
+	 * handler that does not support viewing. Both answer with null, and the caller tells them apart by
+	 * the registry itself: the error collection carries the errors of every earlier call as well.
+	 */
+	private function getViewerHandlerByCode(string $code): ?DocumentHandler
+	{
+		try
+		{
+			$documentHandler = $this->getHandlerByCode($code);
+		}
+		catch (SystemException $exception)
+		{
+			$this->errorCollection->add([new Error($exception->getMessage(), self::ERROR_UNKNOWN_HANDLER)]);
+
+			return null;
+		}
+
+		return $documentHandler instanceof IViewer ? $documentHandler : null;
+	}
+
+	private function isRegisteredHandlerCode(string $code): bool
+	{
+		return isset($this->documentHandlerList[$code]);
 	}
 
 	public function isReady(DocumentHandler $documentHandler)
@@ -513,15 +641,5 @@ class DocumentHandlersManager
 		}
 
 		return $this->customServerConfigsMapper->getForNormalCodes()[$code][$customConfigType->value] ?? null;
-	}
-
-	private function fixUnknownDocumentHandlerForView(): void
-	{
-		if (is_null($this->fixUnknownDocumentHandlerUseCase))
-		{
-			$this->fixUnknownDocumentHandlerUseCase = new FixUnknownDocumentHandlerUseCase();
-		}
-
-		$this->fixUnknownDocumentHandlerUseCase->fix();
 	}
 }

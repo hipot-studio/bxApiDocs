@@ -94,10 +94,14 @@ class ReportBuilder extends Builder
 		return $this->builders;
 	}
 
-	public function getRows($level, $parentId = null)
+	public function getRows($level, $parentId = null, ?array $childIds = null)
 	{
+		if ($childIds === [])
+		{
+			return [];
+		}
 		$result = [];
-		$items = $this->getExpenses($level, $parentId);
+		$items = $this->getExpenses($level, $parentId, $childIds);
 		while($item = $items->fetch())
 		{
 			$childId = $item['CHILD_ID'];
@@ -139,7 +143,8 @@ class ReportBuilder extends Builder
 				$query = Crm\LeadTable::query(),
 				\CCrmOwnerType::Lead,
 				$level,
-				$parentId
+				$parentId,
+				$childIds
 			);
 			while ($item = $items->fetch())
 			{
@@ -157,7 +162,8 @@ class ReportBuilder extends Builder
 			$query = Crm\DealTable::query()->addSelect('IS_WON'),
 			\CCrmOwnerType::Deal,
 			$level,
-			$parentId
+			$parentId,
+			$childIds
 		);
 
 		while ($item = $items->fetch())
@@ -206,7 +212,7 @@ class ReportBuilder extends Builder
 		return array_values($result);
 	}
 
-	private function getTraces(ORM\Query\Query $query, $entityTypeId, $level, $parentId = null)
+	private function getTraces(ORM\Query\Query $query, $entityTypeId, $level, $parentId = null, ?array $childIds = null)
 	{
 		$query
 			->addSelect('CNT')
@@ -240,11 +246,15 @@ class ReportBuilder extends Builder
 		{
 			$query->where('TRACE_ENTITY.TRACE.TRACE_SOURCE.SOURCE_CHILD.PARENT_ID', $parentId);
 		}
+		if ($childIds !== null)
+		{
+			$query->whereIn('TRACE_ENTITY.TRACE.TRACE_SOURCE.SOURCE_CHILD_ID', $childIds);
+		}
 
 		return $query->exec();
 	}
 
-	private function getExpenses($level, $parentId = null)
+	private function getExpenses($level, $parentId = null, ?array $childIds = null)
 	{
 		$query = Tracking\Internals\SourceExpensesTable::query()
 			->registerRuntimeField(new ORM\Fields\ExpressionField(
@@ -295,6 +305,10 @@ class ReportBuilder extends Builder
 		if ($parentId)
 		{
 			$query->where("{$prefix}.PARENT_ID", $parentId);
+		}
+		if ($childIds !== null)
+		{
+			$query->whereIn("{$prefix}.ID", $childIds);
 		}
 
 		$query->addSelect("{$prefix}.TITLE", 'TITLE');

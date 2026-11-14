@@ -11,14 +11,15 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\GuestUser;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\Folder;
-use Bitrix\Disk\Document\OnlyOffice\RestrictionManager;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientFactory;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientInterface;
 use Bitrix\Disk\Document\Vibeoffice\EditorConfigResponse;
 use Bitrix\Disk\Document\Vibeoffice\Filters\EgressUrlSignatureCheck;
 use Bitrix\Disk\Document\Vibeoffice\Filters\WebhookSignatureCheck;
 use Bitrix\Disk\Document\Vibeoffice\HostDocumentKey;
+use Bitrix\Disk\Document\Vibeoffice\OpenFailureCode;
 use Bitrix\Disk\Document\Vibeoffice\OpenRetryPolicy;
+use Bitrix\Disk\Document\Vibeoffice\OpenRoutePolicy;
 use Bitrix\Disk\Document\Vibeoffice\SessionRegistry;
 use Bitrix\Disk\Document\Vibeoffice\TerminalSessionFinalizer;
 use Bitrix\Disk\Document\Vibeoffice\Webhook\DeliveryTable;
@@ -32,6 +33,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\User;
+use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\LoggerFactory;
@@ -79,9 +81,6 @@ final class Vibeoffice extends Engine\Controller
 	/** Logger id of the open journal (ALG-RETRY); `.settings.php` configures its sink by this id. */
 	private const OPEN_LOGGER_ID = 'disk.vibeoffice.open';
 
-	/** The stable code the shell of the component picks the screen of the branch of saving by. */
-	private const IN_PROGRESS_ERROR_CODE = 'ERR-IN-PROGRESS';
-
 	/** A named-lock timeout of {@see Document\Vibeoffice\DocumentStateRepository}. */
 	private const LOCK_TIMEOUT_ERROR_CODE = 'vibeoffice_lock_timeout';
 
@@ -108,6 +107,9 @@ final class Vibeoffice extends Engine\Controller
 		'open_identity_mismatch',
 		'save_refused',
 	];
+
+	/** Value of `editor.ui.shell` of the open-body: the VibeOffice design of the DS image. */
+	private const EDITOR_UI_SHELL = 'vibeoffice';
 
 	private ?DocumentSession $openedDocumentSession = null;
 	private ?UnifiedLinkAccessLevel $unifiedLinkAccessLevel = null;
@@ -534,7 +536,17 @@ final class Vibeoffice extends Engine\Controller
 			return $this->showNotFoundPageAction();
 		}
 
-		return $this->loadDocumentEditor($object, null, $attachedObject, DocumentSession::TYPE_EDIT, $editorMode);
+		$file = $object ?? $attachedObject?->getFile();
+		$selection = $file ? OpenRoutePolicy::select($file, null, $attachedObject) : null;
+		if ($selection === null)
+		{
+			return $this->showNotFoundPageAction();
+		}
+		$type = $selection['editable']
+			? DocumentSession::TYPE_EDIT
+			: DocumentSession::TYPE_VIEW;
+
+		return $this->loadDocumentEditor($object, $selection['version'], $attachedObject, $type, $editorMode);
 	}
 
 	public function loadDocumentViewerAction(
@@ -560,7 +572,7 @@ final class Vibeoffice extends Engine\Controller
 		{
 			$attachedObject = null;
 		}
-		elseif ($attachedObject)
+		elseif ($attachedObject && $this->isSelectedContentCoveredByAttachedObject($attachedObject, $version))
 		{
 			$canRead = true;
 		}
@@ -584,32 +596,34 @@ final class Vibeoffice extends Engine\Controller
 			return $this->showNotFoundPageAction();
 		}
 
-		if ($version === null)
+		$file = $object ?? $attachedObject?->getFile();
+		$selection = $file ? OpenRoutePolicy::select($file, $version, $attachedObject) : null;
+		if ($selection === null)
 		{
-			$file = $object ?: $attachedObject?->getFile();
-			if ($file instanceof Disk\File)
-			{
-				try
-				{
-					(new Document\Vibeoffice\SavedContentSynchronizer())->synchronize($file);
-
-					// The synchronizer may wait for an asynchronous webhook to upload a new
-					// version. Do not pass the pre-wait model instance to the session manager:
-					// it can still contain the old GLOBAL_CONTENT_VERSION.
-					$freshFile = Disk\File::getById($file->getId());
-					if ($freshFile && (!$attachedObject || !$attachedObject->isSpecificVersion()))
-					{
-						$object = $freshFile;
-					}
-				}
-				catch (\Throwable)
-				{
-					// A delayed platform save must not turn a readable document into an error page.
-				}
-			}
+			return $this->showNotFoundPageAction();
 		}
 
-		return $this->loadDocumentEditor($object, $version, $attachedObject, DocumentSession::TYPE_VIEW, $editorMode);
+		return $this->loadDocumentEditor(
+			$object,
+			$selection['version'],
+			$attachedObject,
+			DocumentSession::TYPE_VIEW,
+			$editorMode,
+		);
+	}
+
+	private function isSelectedContentCoveredByAttachedObject(
+		Disk\AttachedObject $attachedObject,
+		?Disk\Version $version,
+	): bool
+	{
+		if ($attachedObject->isSpecificVersion())
+		{
+			return $version === null
+				|| (int)$attachedObject->getVersionId() === (int)$version->getId();
+		}
+
+		return $version === null;
 	}
 
 	public function loadDocumentEditorByViewSessionAction(Models\DocumentSession $documentSession): ?HttpResponse
@@ -636,13 +650,19 @@ final class Vibeoffice extends Engine\Controller
 			return null;
 		}
 
+		$selection = OpenRoutePolicy::selectSession($documentSession);
+		if ($selection === null || !$selection['editable'])
+		{
+			return $this->showNotFoundPageAction();
+		}
+
 		$sessionManager = $this->getSessionManager();
 		$sessionManager
 			->setUserId((int)$this->getCurrentUser()->getId())
 			->setSessionType(DocumentSession::TYPE_EDIT)
 			->setSessionContext($documentSession->getContext())
 			->setFile($documentSession->getFile())
-			->setVersion($documentSession->getVersion())
+			->setVersion($selection['version'])
 			->setAttachedObject($documentSession->getContext()?->getAttachedObject())
 		;
 		if (!$sessionManager->lock())
@@ -717,6 +737,16 @@ final class Vibeoffice extends Engine\Controller
 			return null;
 		}
 
+		$selection = OpenRoutePolicy::select($file, $version, $attachedObject);
+		if ($selection === null)
+		{
+			return $this->showNotFoundPageAction();
+		}
+		if ($type === DocumentSession::TYPE_EDIT && !$selection['editable'])
+		{
+			$type = DocumentSession::TYPE_VIEW;
+		}
+
 		$trackedObjectManager = Driver::getInstance()->getTrackedObjectManager();
 		if ($attachedObject)
 		{
@@ -735,7 +765,7 @@ final class Vibeoffice extends Engine\Controller
 			->setSessionType($type)
 			->setSessionContext($documentSessionContext)
 			->setFile($object)
-			->setVersion($version)
+			->setVersion($selection['version'])
 			->setAttachedObject($attachedObject)
 		;
 		if (!$sessionManager->lock())
@@ -776,12 +806,8 @@ final class Vibeoffice extends Engine\Controller
 			]);
 		}
 
-		// Lazily (re)install the rollback drain agent (A′): we only reach this point when a
-		// vibeoffice session was really opened (the flag is on — the dispatcher routed here), so
-		// the drain reconciler is installed only on portals that actually used vibeoffice.
-		// Idempotent (AddAgent de-dups by NAME); it also revives the agent after an idle
-		// self-unregister ({@see Document\Vibeoffice\DrainService::drainAgent()}).
-		Document\Vibeoffice\DrainService::register();
+		// Register after the response, in the same request that successfully created the session.
+		Application::getInstance()->addBackgroundJob([Document\Vibeoffice\DrainService::class, 'register']);
 
 		// Redirect into the editor shell-component carrying only the session id/hash (as
 		// OnlyOffice does). The platform `open`/join and DTO-EDITORCONFIG delivery are deferred
@@ -928,12 +954,8 @@ final class Vibeoffice extends Engine\Controller
 			return $this->showNotFoundConfig();
 		}
 
-		// Lazily (re)install the rollback drain agent (A′): the external-link vibeoffice session is
-		// created on a SEPARATE route (disk.external.link component's generateDocumentSession), not
-		// through loadDocumentEditor, so it would otherwise never register the drain reconciler.
-		// Reaching an authorized vibeoffice external session confirms real usage (the resolver only
-		// picks vibeoffice while the flag is on). Idempotent (AddAgent de-dups by NAME).
-		Document\Vibeoffice\DrainService::register();
+		// External-link sessions bypass loadDocumentEditor, so queue registration here in the same request.
+		Application::getInstance()->addBackgroundJob([Document\Vibeoffice\DrainService::class, 'register']);
 
 		// An edit session is only admissible while the link still allows editing; otherwise it is
 		// degraded to a view session (mirrors DocumentSession::canEdit and shouldDowngradeToView),
@@ -991,6 +1013,19 @@ final class Vibeoffice extends Engine\Controller
 
 		$accessLevel = $this->resolveUnifiedLinkAccessLevel($documentSession);
 		if (!$accessLevel->canRead())
+		{
+			return $this->showNotFoundConfig();
+		}
+
+		$attachedObject = $documentSession->getContext()?->getAttachedObject();
+		$attachedFile = $attachedObject?->getFile();
+		$sessionFile = $documentSession->getFile();
+		if ($attachedObject
+			&& (!$attachedFile || !$sessionFile
+				|| (int)$attachedFile->getRealObjectId() !== (int)$sessionFile->getRealObjectId()
+				|| !$this->isSelectedContentCoveredByAttachedObject($attachedObject, $documentSession->getVersion()))
+			&& !$this->canReadFileByCurrentUser($documentSession)
+		)
 		{
 			return $this->showNotFoundConfig();
 		}
@@ -1087,6 +1122,31 @@ final class Vibeoffice extends Engine\Controller
 
 			return null;
 		}
+		$selection = OpenRoutePolicy::selectSession($documentSession);
+		if ($selection === null)
+		{
+			return $this->showNotFoundConfig();
+		}
+
+		if ($documentSession->isEdit() && !$selection['editable'])
+		{
+			$documentSession = $this->findViewSession($documentSession);
+			if (!$documentSession)
+			{
+				return null;
+			}
+		}
+
+		if ($this->isSelectedContentTooLarge($documentSession, $file))
+		{
+			$this->addError(new Error(
+				'The document exceeds the file size limit.',
+				OpenFailureCode::FileTooLarge->value,
+				['responseVerified' => false, 'requestSent' => false, 'preflight' => true],
+			));
+
+			return null;
+		}
 
 		// The document source (`document.url`/`document.filetype`) is always sent: for a
 		// version-bound session it points at that version's content, and on a join of a
@@ -1131,13 +1191,23 @@ final class Vibeoffice extends Engine\Controller
 
 		$this->openedDocumentSession = $documentSession;
 
-		// P4.T2 (API-RESTRICT): hand the frontend the data it needs to repeat the
-		// OnlyOffice-style limit cycle in the vibeoffice editor component. The global
-		// counter is shared with OnlyOffice (no SERVICE split); no promo/boost upsell.
 		return $editorConfig->toArray() + [
-			'restriction' => $this->buildRestrictionData(),
 			'openingBudget' => $this->openingBudget?->toArray(),
 		];
+	}
+
+	private function isSelectedContentTooLarge(DocumentSession $documentSession, Disk\File $file): bool
+	{
+		$limit = $this->getConfiguration()->getMaxFileSize();
+		if ($limit <= 0)
+		{
+			return false;
+		}
+
+		$version = $documentSession->getVersionId() > 0 ? $documentSession->getVersion() : null;
+		$selectedSize = $version ? (int)$version->getSize() : (int)$file->getSize();
+
+		return $selectedSize > $limit;
 	}
 
 	private function findViewSession(DocumentSession $documentSession): ?DocumentSession
@@ -1264,6 +1334,18 @@ final class Vibeoffice extends Engine\Controller
 		return $this->canDownloadBySecurityContext($documentSession);
 	}
 
+	private function canReadFileByCurrentUser(DocumentSession $documentSession): bool
+	{
+		$file = $documentSession->getFile();
+		$storage = $file?->getStorage();
+		if (!$file || !$storage)
+		{
+			return false;
+		}
+
+		return $file->canRead($storage->getCurrentUserSecurityContext());
+	}
+
 	private function canDownloadByExternalLink(
 		DocumentSession $documentSession,
 		ExternalLink $externalLink,
@@ -1339,32 +1421,6 @@ final class Vibeoffice extends Engine\Controller
 		;
 	}
 
-	/**
-	 * P4.T2 (API-RESTRICT): builds the limit data the frontend needs to repeat the cycle
-	 * `shouldUseRestriction → lock → isAllowedEdit → registerUsage → unlock` and to post
-	 * the encountered limit into the existing `disk.api.limitEncounter.documentEditSession`.
-	 *
-	 * vibeoffice deliberately reuses the existing OnlyOffice {@see RestrictionManager}
-	 * AS IS, without splitting by SERVICE: its sessions count against the same global
-	 * `b_disk_oo_restriction_log` and the same portal limit as OnlyOffice. No promo-gate
-	 * and no OnlyOffice→vibeoffice boost are applied — on `EXCEEDED_LIMIT` the frontend
-	 * performs a hard refusal / downgrade to view, with no upsell slider.
-	 *
-	 * Q-1: on a box without OnlyOffice cloud-registration the limit resolves to UNLIMITED
-	 * (vibeoffice on box is effectively unlimited); this is the documented, expected
-	 * behaviour — no new branch is added to RestrictionManager.
-	 *
-	 * @return array{shouldUseRestriction: bool, availableDocumentSessionCount: int}
-	 */
-	protected function buildRestrictionData(): array
-	{
-		$restrictionManager = new RestrictionManager();
-
-		return [
-			'shouldUseRestriction' => $restrictionManager->shouldUseRestriction(),
-			'availableDocumentSessionCount' => $restrictionManager->getAvailableDocumentSessionCount(),
-		];
-	}
 
 	/**
 	 * Re-validates that the current user may access the session's file before
@@ -2047,16 +2103,21 @@ final class Vibeoffice extends Engine\Controller
 			'lang' => (string)(Context::getCurrent()?->getLanguage() ?? 'en'),
 		];
 
+		// `editor.ui.shell` names the design: the platform passes it into the signed `editorConfig.ui`
+		// (API-OPEN), and the DS image starts the VibeOffice shell on it. Every open through VibeOffice
+		// carries it, whatever the format or the channel.
+		$body['editor']['ui'] = [
+			'shell' => self::EDITOR_UI_SHELL,
+		];
+
 		// Point #4 (messenger-call, compact editor): when the session was opened with a compact
 		// request (persisted into CONTEXT.vo by loadDocumentEditor), send the optional `editor.ui.mode`
 		// so the platform injects the compact-chrome flags into the signed `editorConfig.customization`
 		// before it returns the verbatim config (API-OPEN). Only "compact" is recognised; for a full
-		// editor (the default, e.g. every open outside a call) the `ui` section is omitted (fail-safe).
+		// layout (the default, e.g. every open outside a call) the mode is omitted (fail-safe).
 		if ($this->resolveEditorMode($documentSession) === Document\OnlyOffice\Editor\ConfigBuilder::VISUAL_MODE_COMPACT)
 		{
-			$body['editor']['ui'] = [
-				'mode' => 'compact',
-			];
+			$body['editor']['ui']['mode'] = 'compact';
 		}
 
 		if ($withDocumentSource)
@@ -2228,7 +2289,7 @@ final class Vibeoffice extends Engine\Controller
 		// Re-check rights on the resolved session, do not trust the hash alone (same rule as
 		// getEditorConfig): the signed egress URLs are pulled later WITHOUT authentication,
 		// so revoked file rights must cut the issuance here.
-		if (!$this->canAccessSession($documentSession))
+		if (!$this->canAccessSession($documentSession) || !$this->canReadFileByCurrentUser($documentSession))
 		{
 			return $this->showNotFoundConfig();
 		}
@@ -2552,33 +2613,22 @@ final class Vibeoffice extends Engine\Controller
 				// A refusal of the host itself (no HTTP status): temporary ones join the platform ones on
 				// the screen of the branch of saving, the rest are kept as they are.
 				$mapped[] = in_array($error->getCode(), self::TEMPORARY_HOST_CODES, true)
-					? new Error($error->getMessage(), self::IN_PROGRESS_ERROR_CODE, $hostData)
+					? new Error($error->getMessage(), OpenFailureCode::InProgress->value, $hostData)
 					: $error
 				;
 
 				continue;
 			}
 
-			$errCode = match (true)
-			{
-				$platformCode === 'save_refused' => 'ERR-SAVE-REFUSED',
-				$platformCode === 'doc_full' => 'ERR-DOC-FULL',
-				OpenRetryPolicy::isTemporaryPlatformCode($platformCode) => self::IN_PROGRESS_ERROR_CODE,
-				$httpStatus === 409 => self::IN_PROGRESS_ERROR_CODE,
-				$httpStatus === 403 => 'ERR-NO-GRANT',
-				$httpStatus === 413 => 'ERR-FILE-TOO-LARGE',
-				$httpStatus === 422 => 'ERR-UNSUPPORTED-FILETYPE',
-				$httpStatus === 502 => 'ERR-PULL-FAILED',
-				$httpStatus === 503 => 'ERR-NO-CAPACITY',
-				$httpStatus === 401 => 'ERR-AUTH',
-				default => 'ERR-OPEN-FAILED',
-			};
+			$errorData = $error->getCustomData();
+			$responseVerified = !is_array($errorData) || ($errorData['responseVerified'] ?? true) !== false;
+			$errCode = OpenFailureCode::fromPlatform($httpStatus, $platformCode, $responseVerified)->value;
 
 			$mapped[] = new Error(
 				$error->getMessage(),
 				$errCode,
 				[
-					'responseVerified' => true,
+					'responseVerified' => $responseVerified,
 					'httpStatus' => $httpStatus,
 					'platformCode' => $platformCode,
 					'retryAfter' => $this->extractRetryAfter($error),

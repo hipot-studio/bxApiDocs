@@ -196,4 +196,62 @@ class Outcome extends EO_CallOutcome
 			'limit' => 1
 		])?->fetchObject();
 	}
+
+	/**
+	 * Id of the newest result of the call, 0 for a call that has none.
+	 *
+	 * A boundary of a generation of its own, read beside the one of the tasks and never in place
+	 * of it: a result carries no id of the task that produced it, and `OUTCOME_ID` of a task names
+	 * the result the task was BUILT FROM, which is older than the result it will leave behind
+	 * {@see CallAIService::restartWithPurge()}.
+	 */
+	public static function getLatestOutcomeId(int $callId): int
+	{
+		$row = CallOutcomeTable::query()
+			->setSelect(['ID'])
+			->where('CALL_ID', $callId)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
+
+		return (int)($row['ID'] ?? 0);
+	}
+
+	/**
+	 * Ids of the results of one type of the call that are not newer than the boundary of the
+	 * generation.
+	 *
+	 * Ids and not objects: the one caller erases them {@see CallAIService::purgeGeneration()} and
+	 * an id is all a deletion needs, while an object of a result carries the whole longText of the
+	 * content it is about to lose - read out of the base, built into an entity and thrown away,
+	 * once per row of the history of the call, inside the lock of a restart the operator is
+	 * waiting on.
+	 *
+	 * @return int[] oldest first
+	 */
+	public static function getOutcomeIdsOfSenseUpTo(int $callId, SenseType $senseType, int $boundaryId): array
+	{
+		if ($boundaryId <= 0)
+		{
+			return [];
+		}
+
+		$ids = [];
+		$rows = CallOutcomeTable::query()
+			->setSelect(['ID'])
+			->where('CALL_ID', $callId)
+			->where('TYPE', $senseType->value)
+			->where('ID', '<=', $boundaryId)
+			->setOrder(['ID' => 'ASC'])
+			->exec()
+		;
+		while ($row = $rows->fetch())
+		{
+			$ids[] = (int)$row['ID'];
+		}
+
+		return $ids;
+	}
 }

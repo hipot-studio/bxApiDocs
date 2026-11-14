@@ -7,8 +7,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\StaffTrack\Dictionary\EmployeeOfficeCardStatus;
-use Bitrix\StaffTrack\Item\EmployeeOfficeCard;
+use Bitrix\StaffTrack\Dictionary\EmployeeLocationBlockMode;
+use Bitrix\StaffTrack\Item\EmployeeLocationBlock;
+use Bitrix\StaffTrack\Public\Provider\EmployeeLocationBlockProvider;
 use Bitrix\StaffTrack\Public\Provider\EmployeeOfficeProvider;
 
 Loc::loadMessages(__FILE__);
@@ -36,41 +37,35 @@ class StaffTrackEmployeeOfficeCardComponent extends \CBitrixComponent
 	protected function prepareResult(): array
 	{
 		$employeeId = (int)$this->arParams['USER_ID'];
-		$card = $this->getCard($employeeId);
+		$viewerId = (int)$this->arParams['VIEWER_ID'];
 
-		$hasOffice = $card !== null
-			&& $card->status === EmployeeOfficeCardStatus::AVAILABLE
-			&& $card->officeId !== null
-		;
-		$hasSnapshot = $hasOffice && (string)$card->snapshotUrl !== '';
+		$block = $this->getBlock($viewerId, $employeeId);
+		if ($block === null)
+		{
+			return $this->getEmptyResult($employeeId);
+		}
 
-		return [
-			'IS_VISIBLE' => $hasSnapshot,
-			'SHOULD_REQUEST_SNAPSHOT' => $hasOffice
-				&& !$hasSnapshot
-				&& $this->canCaptureSnapshot((int)$card->officeId),
-			'EMPLOYEE_ID' => $employeeId,
-			'SNAPSHOT_URL' => $hasSnapshot ? $card->snapshotUrl : null,
-			'OFFICE_ID' => $hasOffice ? $card->officeId : null,
-			'TITLE' => $hasOffice ? $card->title : null,
-			'ADDRESS' => $hasOffice ? $card->address : null,
-			'PRESENCE' => $hasOffice ? $card->presence?->value : null,
-			'MAP_URL' => $this->getMapUrl($hasOffice ? $card->officeId : null),
-		];
+		if ($block->mode === EmployeeLocationBlockMode::ROUTE)
+		{
+			return $this->getRouteResult($block, $employeeId);
+		}
+
+		return $this->getOfficeResult($block, $employeeId);
 	}
 
-	protected function getCard(int $employeeId): ?EmployeeOfficeCard
+	protected function getBlock(int $viewerId, int $employeeId): ?EmployeeLocationBlock
 	{
 		if (!Loader::includeModule('stafftrack'))
 		{
 			return null;
 		}
 
-		return $this->getEmployeeOfficeProvider()->getProfileCard(
-			(int)$this->arParams['VIEWER_ID'],
-			$employeeId,
-			false,
-		);
+		return $this->getEmployeeLocationBlockProvider()->getBlock($viewerId, $employeeId, false);
+	}
+
+	protected function getEmployeeLocationBlockProvider(): EmployeeLocationBlockProvider
+	{
+		return new EmployeeLocationBlockProvider();
 	}
 
 	protected function canCaptureSnapshot(int $officeId): bool
@@ -88,10 +83,78 @@ class StaffTrackEmployeeOfficeCardComponent extends \CBitrixComponent
 		return defined('SITE_DIR') ? SITE_DIR : '/';
 	}
 
-	private function getMapUrl(?int $officeId): string
+	private function getRouteResult(EmployeeLocationBlock $block, int $employeeId): array
 	{
-		$pageUrl = $this->getSiteDir() . self::MAP_PAGE_PATH;
+		return [
+			'IS_VISIBLE' => true,
+			'MODE' => $block->mode->value,
+			'EMPLOYEE_ID' => $employeeId,
+			'SNAPSHOT_URL' => $block->snapshotUrl,
+			'SHOULD_REQUEST_SNAPSHOT' => $block->snapshotUrl === null,
+			'OFFICE_ID' => null,
+			'TITLE' => null,
+			'ADDRESS' => $block->address,
+			'TIME_LABEL' => $this->formatTime($block->dateCreate),
+			'PRESENCE' => null,
+			'MAP_URL' => $block->mapUrl,
+			'AVATAR_URL' => $block->avatarUrl,
+		];
+	}
 
-		return $officeId === null ? $pageUrl : $pageUrl . '?office_id=' . $officeId;
+	private function getOfficeResult(EmployeeLocationBlock $block, int $employeeId): array
+	{
+		$officeId = (int)$block->officeId;
+		$hasSnapshot = (string)$block->snapshotUrl !== '';
+
+		return [
+			'IS_VISIBLE' => $hasSnapshot,
+			'MODE' => $block->mode->value,
+			'EMPLOYEE_ID' => $employeeId,
+			'SNAPSHOT_URL' => $hasSnapshot ? $block->snapshotUrl : null,
+			'SHOULD_REQUEST_SNAPSHOT' => !$hasSnapshot && $this->canCaptureSnapshot($officeId),
+			'OFFICE_ID' => $officeId,
+			'TITLE' => $block->officeTitle,
+			'ADDRESS' => $block->address,
+			'TIME_LABEL' => null,
+			'PRESENCE' => $hasSnapshot ? $block->presence?->value : null,
+			'MAP_URL' => $block->mapUrl,
+			'AVATAR_URL' => null,
+		];
+	}
+
+	private function getEmptyResult(int $employeeId): array
+	{
+		return [
+			'IS_VISIBLE' => false,
+			'MODE' => null,
+			'EMPLOYEE_ID' => $employeeId,
+			'SNAPSHOT_URL' => null,
+			'SHOULD_REQUEST_SNAPSHOT' => false,
+			'OFFICE_ID' => null,
+			'TITLE' => null,
+			'ADDRESS' => null,
+			'TIME_LABEL' => null,
+			'PRESENCE' => null,
+			'MAP_URL' => $this->getSiteDir() . self::MAP_PAGE_PATH,
+			'AVATAR_URL' => null,
+		];
+	}
+
+	private function formatTime(?string $dateCreate): ?string
+	{
+		if ($dateCreate === null || $dateCreate === '')
+		{
+			return null;
+		}
+
+		$wallClock = strtotime($dateCreate);
+		if ($wallClock === false)
+		{
+			return null;
+		}
+
+		$timeFormat = \Bitrix\Main\Context::getCurrent()->getCulture()->getShortTimeFormat();
+
+		return FormatDate($timeFormat, $wallClock);
 	}
 }

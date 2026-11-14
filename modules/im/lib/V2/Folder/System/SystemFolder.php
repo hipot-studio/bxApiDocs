@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Folder\System;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Folder\BaseFolder;
 use Bitrix\Im\V2\Folder\Definition\FolderDefinition;
 use Bitrix\Im\V2\Folder\Definition\SectionDefinition;
@@ -62,14 +63,43 @@ abstract class SystemFolder extends BaseFolder
 	}
 
 	/**
+	 * Portal-wide availability: options and modules only. Must not look at any user,
+	 * the current one included - the potential composition of "All" is built on it
+	 * ({@see AllFolder::getPotentialRecentSections}).
+	 *
+	 * Domain-rule (NOT a security check): availability can change between read
+	 * and write (feature flag toggled, module removed). Treated as race-tolerant -
+	 * callers degrade softly rather than failing with FOLDER_ACCESS_DENIED.
+	 */
+	abstract public function isAvailableOnPortal(): bool;
+
+	/**
 	 * Per-user availability check — moved here from immobile/NavigationTab/Tab/*.
+	 * No folder answers it past the portal-wide check, and the system user owns no
+	 * folders, so it is refused here whatever the folder says.
 	 *
 	 * Domain-rule (NOT a security check): availability can change between read
 	 * and write (feature flag toggled, user-type changed). Treated as
 	 * race-tolerant — callers degrade softly (skip / FOLDER_OPERATION_NOT_SUPPORTED)
 	 * rather than failing with FOLDER_ACCESS_DENIED.
 	 */
-	abstract public function isAvailable(int $userId): bool;
+	final public function isAvailable(int $userId): bool
+	{
+		return
+			$this->isAvailableOnPortal()
+			&& $userId > User::SYSTEM_USER_ID
+			&& $this->isAvailableForUser($userId)
+		;
+	}
+
+	/**
+	 * Per-user part of {@see self::isAvailable}, asked only for a real user on a portal
+	 * where the folder is available.
+	 */
+	protected function isAvailableForUser(int $userId): bool
+	{
+		return true;
+	}
 
 	/**
 	 * Whether legacy global pins can contain chats belonging to this folder.
@@ -131,13 +161,17 @@ abstract class SystemFolder extends BaseFolder
 
 	public function toRestFormat(array $option = []): array
 	{
+		$visibility = $this->getPublishedVisibility();
+
 		return [
 			'id' => $this->getId(),
 			'type' => self::TYPE,
 			'code' => $this->getRestCode(),
 			'title' => $this->getTitle(),
 			'sort' => $this->getSort(),
-			'visible' => $this->isVisible(),
+			'hiddenBySystem' => $this->isHiddenBySystem(),
+			'hiddenByUser' => $visibility['hiddenByUser'],
+			'canHide' => $visibility['canHide'],
 			'description' => $this->getDescription(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
 			'definition' => $this->getDefinition()->toRestFormat(),

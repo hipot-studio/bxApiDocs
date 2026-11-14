@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class ProductRowExportEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.deal.product_rows_export.enabled';
+	public const ID = 'crm.deal.product_rows_export.enabled';
 
 	private readonly DealSettings $dealSettings;
 
@@ -26,18 +26,18 @@ final class ProductRowExportEnabledSetting extends AbstractSetting
 		$this->dealSettings = $dealSettings ?? DealSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

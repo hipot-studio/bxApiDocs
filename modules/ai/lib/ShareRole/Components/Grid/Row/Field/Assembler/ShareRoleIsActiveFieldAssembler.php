@@ -2,6 +2,7 @@
 
 namespace Bitrix\AI\ShareRole\Components\Grid\Row\Field\Assembler;
 
+use Bitrix\AI\Facade\User;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Text\HtmlFilter;
 use CUtil;
@@ -13,18 +14,22 @@ class ShareRoleIsActiveFieldAssembler extends FieldAssembler
 		$isActive = $value['isActive'];
 		$roleCode = $value['roleCode'];
 		$roleName = CUtil::JSEscape($value['roleName']);
+		$isEditable = $value['isEditable'];
+		$onclickAttribute = '';
 
-		if ($isActive)
+		if ($isEditable && $isActive)
 		{
 			$onclick = HtmlFilter::encode(
-				"BX.AI.ShareRole.Library.Controller.handleClickOnDeactivateRoleMenuItem(event, '$roleCode', '$roleName')"
+				"BX.AI.ShareRole.Library.Controller.handleClickOnDeactivateRoleMenuItem(event, '$roleCode', '$roleName')",
 			);
+			$onclickAttribute = ' onclick="' . $onclick . '"';
 		}
-		else
+		elseif ($isEditable)
 		{
 			$onclick = HtmlFilter::encode(
-				"BX.AI.ShareRole.Library.Controller.handleClickOnActivateRoleMenuItem(event, '$roleCode', '$roleName')"
+				"BX.AI.ShareRole.Library.Controller.handleClickOnActivateRoleMenuItem(event, '$roleCode', '$roleName')",
 			);
+			$onclickAttribute = ' onclick="' . $onclick . '"';
 		}
 
 		$className = 'ui-switcher ui-switcher-color-green';
@@ -33,9 +38,13 @@ class ShareRoleIsActiveFieldAssembler extends FieldAssembler
 		{
 			$className .= ' ui-switcher-off';
 		}
+		if (!$isEditable)
+		{
+			$className .= ' ui-switcher-lock';
+		}
 
 		return '
-			<div class="' . $className . '" onclick="' . $onclick . '">
+			<div class="' . $className . '"' . $onclickAttribute . '>
 				<span class="ui-switcher-cursor"></span>
 				<span class="ui-switcher-disabled"></span>
 				<span class="ui-switcher-enabled"></span>
@@ -62,12 +71,18 @@ class ShareRoleIsActiveFieldAssembler extends FieldAssembler
 			$data = [
 				'isActive' => $row['data'][$columnId] ?? null,
 				'roleCode' => $row['data']['ID'],
-				'roleName' => $row['data']['DATA']['NAME']
+				'roleName' => $row['data']['DATA']['NAME'],
+				'isEditable' => (int)($row['data']['AUTHOR_ID'] ?? 0) === $this->getCurrentUserId(),
 			];
 
 			$row['columns'][$columnId] = $this->prepareColumn($data);
 		}
 
 		return $row;
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return User::getCurrentUserId();
 	}
 }

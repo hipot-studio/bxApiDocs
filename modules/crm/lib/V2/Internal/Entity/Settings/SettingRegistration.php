@@ -22,7 +22,7 @@ final class SettingRegistration
 	public function __construct(
 		/** @var class-string<SettingInterface> */
 		public readonly string $settingClass,
-		public readonly string $code,
+		public readonly string $id,
 		/** @var non-empty-list<SettingAccessPolicyInterface> */
 		public readonly array $readPolicies,
 		/** @var non-empty-list<SettingAccessPolicyInterface> */
@@ -34,9 +34,9 @@ final class SettingRegistration
 			throw new ArgumentException('Setting class must not be empty.', 'settingClass');
 		}
 
-		if ($this->code === '')
+		if ($this->id === '')
 		{
-			throw new ArgumentException('Code must not be empty.', 'code');
+			throw new ArgumentException('Id must not be empty.', 'id');
 		}
 
 		self::assertPolicyList($this->readPolicies, 'readPolicies');

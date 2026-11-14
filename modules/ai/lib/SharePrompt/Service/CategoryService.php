@@ -23,6 +23,7 @@ class CategoryService
 	{
 		return [
 			Category::READONLY_LIVEFEED,
+			Category::READONLY_NOTE,
 			Category::CHAT,
 			Category::SYSTEM,
 			Category::LIST,

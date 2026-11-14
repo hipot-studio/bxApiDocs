@@ -167,6 +167,7 @@ final class ActivityContextLoader
 			ownerId: $request->ownerId,
 			jobId: $request->jobId,
 			assessmentSettingsId: $request->assessmentSettingsId,
+			targetBlock: $request->targetBlock,
 		);
 	}
 }

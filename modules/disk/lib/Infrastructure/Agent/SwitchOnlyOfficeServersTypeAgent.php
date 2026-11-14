@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Infrastructure\Agent;
 
 use Bitrix\Disk\Configuration;
+use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Command\DropOnlyOfficeSessionsAfterSwitchCommand;
 use Bitrix\Disk\Internal\Command\SendOnlyOfficeForceReloadEventCommand;
@@ -41,6 +42,15 @@ class SwitchOnlyOfficeServersTypeAgent extends BaseDiskAgent
         $this->logger->debug('agent run');
 
 		$result = new RunResult(true);
+
+		if (!OnlyOfficeHandler::isEnabled())
+		{
+			$this->logger->debug('onlyoffice is not enabled');
+			$this->cleanup();
+
+			return $result;
+		}
+
 		$hasAnyActiveBooster = $this->baasSessionBoostService->getQuota() > 0;
 		$onlyOfficeServersType = Configuration::getOnlyOfficeServersType();
 		$newServersType = null;

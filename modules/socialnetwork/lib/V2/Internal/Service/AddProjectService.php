@@ -13,7 +13,6 @@ use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertStatus;
 use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
-use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectTagRepositoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Service\Notification\ProjectNotificationSettingsService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureDictionary;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\InitiatorMemberTrait;
@@ -22,6 +21,7 @@ use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectCollabAddService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectCreateFeatures;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectFeatureToggleService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectInputNormalizer;
+use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectTagNormalizer;
 
 class AddProjectService
 {
@@ -29,7 +29,7 @@ class AddProjectService
 
 	public function __construct(
 		private readonly ProjectCollabAddService $projectCollabAddService,
-		private readonly ProjectTagRepositoryInterface $projectTagRepository,
+		private readonly ProjectTagNormalizer $projectTagNormalizer,
 		private readonly MemberEntityMapper $memberEntityMapper,
 		private readonly ProjectCreateFeatures $projectCreateFeatures,
 		private readonly ProjectFeatureToggleService $projectFeatureToggleService,
@@ -96,11 +96,13 @@ class AddProjectService
 
 		if ($project->tagNames !== null)
 		{
-			$tagValidation = $this->projectTagRepository->validate($project->tagNames);
+			$tagValidation = $this->projectTagNormalizer->normalize($project->tagNames);
 			if (!$tagValidation->isSuccess())
 			{
 				return (new Result())->addErrors($tagValidation->getErrors());
 			}
+
+			$data['tagNames'] = $tagValidation->getData()['tagNames'];
 		}
 
 		$addCommand = CollabAddCommand::createFromArray($data)
@@ -147,15 +149,6 @@ class AddProjectService
 			if (!$featureResult->isSuccess())
 			{
 				return (new Result())->addErrors($featureResult->getErrors());
-			}
-		}
-
-		if ($project->tagNames !== null)
-		{
-			$tagResult = $this->projectTagRepository->save($projectId, $project->tagNames);
-			if (!$tagResult->isSuccess())
-			{
-				return (new Result())->addErrors($tagResult->getErrors());
 			}
 		}
 

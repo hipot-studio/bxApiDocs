@@ -6,9 +6,11 @@ namespace Bitrix\Crm\V2\Internal\Access\Settings\Composite;
 
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Internal\Access\Settings\SettingAccessPolicyInterface;
+use Bitrix\Crm\V2\Internal\Access\Settings\SettingPolicyEvaluator;
 use Bitrix\Crm\V2\Internal\Service\Settings\SettingInterface;
 use Bitrix\Main\ArgumentException;
-use Throwable;
+use Bitrix\Main\Error;
+use Bitrix\Main\Result;
 
 /**
  * @internal
@@ -21,6 +23,7 @@ final class AnyOfPolicy implements SettingAccessPolicyInterface
 	 */
 	public function __construct(
 		private readonly array $policies,
+		private readonly Error $denial,
 	)
 	{
 		if ($this->policies === [])
@@ -40,25 +43,23 @@ final class AnyOfPolicy implements SettingAccessPolicyInterface
 				throw new ArgumentException('Every policy must implement SettingAccessPolicyInterface.', 'policies');
 			}
 		}
+
+		SettingPolicyEvaluator::assertDenial((new Result())->addError($this->denial));
 	}
 
-	public function isAllowed(SettingInterface $setting, UserPermissions $permissions): bool
+	public function check(SettingInterface $setting, UserPermissions $permissions): Result
 	{
 		foreach ($this->policies as $policy)
 		{
-			try
+			$result = $policy->check($setting, $permissions);
+			if ($result->isSuccess())
 			{
-				if ($policy->isAllowed($setting, $permissions))
-				{
-					return true;
-				}
+				return new Result();
 			}
-			catch (Throwable)
-			{
-				return false;
-			}
+
+			SettingPolicyEvaluator::assertDenial($result);
 		}
 
-		return false;
+		return (new Result())->addError($this->denial);
 	}
 }

@@ -198,6 +198,19 @@ class Address extends Adapter
 		);
 	}
 
+	/**
+	 * Whether the update with these fields saves or deletes the address.
+	 */
+	final public function isChangedByUpdate(array $fields): bool
+	{
+		if (isset($fields['ADDRESS_DELETE']) && $fields['ADDRESS_DELETE'] === 'Y')
+		{
+			return true;
+		}
+
+		return !$this->isAddressEmpty($this->mapCompatibleToAddressFields($fields));
+	}
+
 	final protected function doPerformUpdate(int $id, array &$fields, array $compatibleOptions): Result
 	{
 		$addressFields = $this->mapCompatibleToAddressFields($fields);

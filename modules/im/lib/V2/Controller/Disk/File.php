@@ -6,6 +6,7 @@ use Bitrix\Disk\TypeFile;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\CheckDiskFileAccess;
+use Bitrix\Im\V2\Controller\Filter\CheckVideoNoteDownloadPolicy;
 use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Entity\File\FileItem;
@@ -26,6 +27,7 @@ class File extends BaseController
 			'save' => [
 				'+prefilters' => [
 					new CheckDiskFileAccess(),
+					new CheckVideoNoteDownloadPolicy(),
 				]
 			],
 			'transcribe' => [

@@ -37,6 +37,11 @@ class EditShareRoleAction extends BaseGridAction
 
 	public function getControl(array $rawFields): ?array
 	{
+		if (!$this->isRoleAuthor($rawFields))
+		{
+			return null;
+		}
+
 		$roleCode = $rawFields['ID'];
 		$this->onclick = HtmlFilter::encode("BX.AI.ShareRole.Library.Controller.editRole('$roleCode')");
 

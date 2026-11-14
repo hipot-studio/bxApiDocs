@@ -35,7 +35,7 @@ class PresetAccessChecker
 	public function ensureCanEditOwn(array $presetData): void
 	{
 		$this->checkIntegrity($presetData);
-		$this->checkAccess($presetData, allowNonAdminNonWebhookPreset: false);
+		$this->checkAccess($presetData, allowNonAdminNonWebhookPreset: $this->isApplicationPreset($presetData));
 		$this->checkAccessToIncomingWebhook($presetData, $this->webhookAccessChecker->canManageOwnIncomingWebhook(...));
 		$this->checkAccessToApplication($presetData, $this->getAppAccessCheckerCallback($presetData));
 	}

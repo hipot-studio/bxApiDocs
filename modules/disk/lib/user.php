@@ -58,6 +58,7 @@ class User extends Internals\Model
 	/** @var bool */
 	private $isCrmEmail;
 	private $isExternalBotUser = false;
+	private $isOpenlineUser = false;
 
 	/** @var User[] */
 	protected static $loadedUsers;
@@ -192,10 +193,18 @@ class User extends Internals\Model
 				$userModel->resolveFlagsFromRow($attributes);
 			}
 
+			$externalAuthId = $attributes['EXTERNAL_AUTH_ID'] ?? null;
+
 			/** @see \Bitrix\Im\Bot::EXTERNAL_AUTH_ID */
-			if (isset($attributes['EXTERNAL_AUTH_ID']) &&  $attributes['EXTERNAL_AUTH_ID'] === 'bot')
+			if ($externalAuthId === 'bot')
 			{
 				$userModel->setIsBotUser(true);
+			}
+
+			/** @see \Bitrix\ImConnector\Library::NAME_EXTERNAL_USER */
+			if ($externalAuthId === 'imconnector')
+			{
+				$userModel->setIsOpenlineUser(true);
 			}
 
 			self::$loadedUsers[$id] = $userModel;
@@ -639,6 +648,21 @@ class User extends Internals\Model
 	public function setIsBotUser($value)
 	{
 		$this->isExternalBotUser = (bool)$value;
+	}
+
+	public function isOpenlineUser(): bool
+	{
+		return $this->isOpenlineUser;
+	}
+
+	public function setIsOpenlineUser(bool $value): void
+	{
+		$this->isOpenlineUser = $value;
+	}
+
+	public function shouldHavePersonalStorage(): bool
+	{
+		return !$this->isBotUser() && !$this->isOpenlineUser();
 	}
 
 	/**

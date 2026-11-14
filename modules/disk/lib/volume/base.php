@@ -423,6 +423,11 @@ abstract class Base implements Volume\IVolumeIndicator, IErrorable
 				{
 					unset($filter[$fieldName]);
 				}
+				elseif ($value instanceof Volume\SqlSubQuery)
+				{
+					// The subquery is raw SQL for QueryHelper only; the ORM keeps getting it as a plain value
+					$filter[$fieldName] = $value->getSql();
+				}
 			}
 		}
 
@@ -1045,11 +1050,14 @@ abstract class Base implements Volume\IVolumeIndicator, IErrorable
 		$connection = Application::getConnection();
 
 		$parentFolderId = $this->getFilterValue('PARENT_ID', '=@!');
-		if (!empty($parentFolderId))
+		if (!empty($parentFolderId) && !$parentFolderId instanceof Volume\SqlSubQuery)
 		{
 			$this
 				->unsetFilter('PARENT_ID')
-				->addFilter('@PARENT_ID', Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId));
+				->addFilter(
+					'@PARENT_ID',
+					new Volume\SqlSubQuery(Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId))
+				);
 		}
 
 		$whereSql = Volume\QueryHelper::prepareWhere(
@@ -1298,14 +1306,12 @@ abstract class Base implements Volume\IVolumeIndicator, IErrorable
 			$className = __NAMESPACE__.'\\'.str_replace('_', '\\', $indicatorTypeId);
 		}
 
-		/** @var Volume\IVolumeIndicator $indicator */
-		$indicator = new $className();
-		if (!$indicator instanceof Volume\IVolumeIndicator)
+		if (!is_subclass_of($className, IVolumeIndicator::class))
 		{
 			throw new Main\ObjectException('Return must implements '. __NAMESPACE__. '\\IVolumeIndicator interface.');
 		}
 
-		return $indicator;
+		return (new $className());
 	}
 
 	/**

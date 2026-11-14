@@ -39,6 +39,11 @@ class Task extends Base
 
 	public function getTitle(): ?string
 	{
+		return self::getTitleText();
+	}
+
+	public static function getTitleText(): ?string
+	{
 		return Loc::getMessage('CRM_TIMELINE_ACTIVITY_BIZPROC_TASK_TITLE');
 	}
 

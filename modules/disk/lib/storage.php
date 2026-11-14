@@ -693,9 +693,16 @@ final class Storage extends Internals\Model implements \JsonSerializable
 	 * @param array $data contains additional fields (CREATED_BY, NAME, etc).
 	 * @param array $rights
 	 * @param bool  $generateUniqueName
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return File|null
 	 */
-	public function uploadFile(array $fileArray, array $data, array $rights = array(), $generateUniqueName = false)
+	public function uploadFile(
+		array $fileArray,
+		array $data,
+		array $rights = array(),
+		$generateUniqueName = false,
+		array $options = []
+	)
 	{
 		$this->errorCollection->clear();
 
@@ -706,7 +713,7 @@ final class Storage extends Internals\Model implements \JsonSerializable
 
 			return null;
 		}
-		$fileModel = $rootFolder->uploadFile($fileArray, $data, $rights, $generateUniqueName);
+		$fileModel = $rootFolder->uploadFile($fileArray, $data, $rights, $generateUniqueName, $options);
 		if(!$fileModel)
 		{
 			$this->errorCollection->add($rootFolder->getErrors());
@@ -722,10 +729,11 @@ final class Storage extends Internals\Model implements \JsonSerializable
 	 * @param array $data
 	 * @param array $rights
 	 * @param bool  $generateUniqueName
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return File|null
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function addBlankFile(array $data, array $rights = array(), $generateUniqueName = false)
+	public function addBlankFile(array $data, array $rights = array(), $generateUniqueName = false, array $options = [])
 	{
 		$this->errorCollection->clear();
 
@@ -736,7 +744,7 @@ final class Storage extends Internals\Model implements \JsonSerializable
 
 			return null;
 		}
-		$fileModel = $rootFolder->addBlankFile($data, $rights, $generateUniqueName);
+		$fileModel = $rootFolder->addBlankFile($data, $rights, $generateUniqueName, $options);
 		if(!$fileModel)
 		{
 			$this->errorCollection->add($rootFolder->getErrors());
@@ -751,9 +759,10 @@ final class Storage extends Internals\Model implements \JsonSerializable
 	 * @param array $data
 	 * @param array $rights
 	 * @param bool  $generateUniqueName
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return File|null
 	 */
-	public function addFile(array $data, array $rights = array(), $generateUniqueName = false)
+	public function addFile(array $data, array $rights = array(), $generateUniqueName = false, array $options = [])
 	{
 		$this->errorCollection->clear();
 
@@ -764,7 +773,7 @@ final class Storage extends Internals\Model implements \JsonSerializable
 
 			return null;
 		}
-		$fileModel = $rootFolder->addFile($data, $rights, $generateUniqueName);
+		$fileModel = $rootFolder->addFile($data, $rights, $generateUniqueName, $options);
 		if(!$fileModel)
 		{
 			$this->errorCollection->add($rootFolder->getErrors());
@@ -1129,13 +1138,11 @@ final class Storage extends Internals\Model implements \JsonSerializable
 		$conditionTree
 			->whereColumn('ID', 'STORAGE.ROOT_OBJECT_ID')
 			->where('STORAGE.MODULE_ID', Driver::INTERNAL_MODULE_ID)
-			->where('RIGHTS_CHECK', true)
 		;
 
 		$filter = [
 			'=PARENT_ID' => null,
 			'=STORAGE.MODULE_ID' => Driver::INTERNAL_MODULE_ID,
-			'=RIGHTS_CHECK' => true,
 		];
 
 		if (empty($parameters['filter']))

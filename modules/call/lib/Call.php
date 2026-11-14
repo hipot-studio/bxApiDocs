@@ -4,6 +4,7 @@ namespace Bitrix\Call;
 
 use Bitrix\Im\Dialog;
 use Bitrix\Im\Model\AliasTable;
+use Bitrix\Call\Background\JobDispatcher;
 use Bitrix\Call\Model\CallTable;
 use Bitrix\Call\Model\CallUserTable;
 use Bitrix\Main\Application;
@@ -88,6 +89,11 @@ class Call
 	 * Record will be analyzed with AI
 	 */
 	protected bool $enableAiAnalyze = false;
+
+	/**
+	 * A user destroyed the recording of this call {@see self::isRecordDestroyed()}
+	 */
+	protected bool $recordDestroyed = false;
 
 	protected ?\Bitrix\Call\Integration\AbstractEntity $associatedEntity = null;
 
@@ -638,7 +644,11 @@ class Call
 
 		if ($changes !== [])
 		{
-			Application::getInstance()->addBackgroundJob([EventHandler::class, 'dispatchUserStateChangeEventsBatch'], [$changes]);
+			// The events of this batch end up as pushes to the clients of the call, so they go
+			// through the dispatcher: a process without an epilogue would drop them for good
+			// {@see \Bitrix\Call\Background\JobDispatcher}. On a hit nothing changes - the same
+			// queue of the core, the same moment after the response.
+			JobDispatcher::getInstance()->enqueue([EventHandler::class, 'dispatchUserStateChangeEventsBatch'], [$changes]);
 		}
 
 		return $applied;
@@ -1249,29 +1259,9 @@ class Call
 	 */
 	public function autoStartRecording(): bool
 	{
-		// by settings or tariif
-		$enable = false;
-
 		Loader::includeModule('call');
 
-		if (
-			\Bitrix\Call\Integration\AI\CallAISettings::isCallAIEnable()
-			&& \Bitrix\Call\Integration\AI\CallAISettings::isAutoStartRecordingEnable()
-		)
-		{
-			// by user limit
-			$minUserCount = (int)\Bitrix\Call\Integration\AI\CallAISettings::getRecordMinUsers();
-			if ($minUserCount > 0)
-			{
-				$userCount = $this->getUserCount();
-				if ($userCount && $userCount >= $minUserCount)
-				{
-					$enable = true;
-				}
-			}
-		}
-
-		return $enable;
+		return \Bitrix\Call\Integration\AI\CallAISettings::isAutoStartRecordingAvailableFor($this->getUserCount());
 	}
 
 	public function getUserCount(): int
@@ -1316,6 +1306,111 @@ class Call
 	public function disableAudioRecord(): self
 	{
 		$this->enableAudioRecord = false;
+		return $this;
+	}
+
+	/**
+	 * Whether a user has destroyed the recording of this call.
+	 *
+	 * The mark of an explicit deletion, kept by the portal itself. It is the portal that answers
+	 * the user with success {@see \Bitrix\Call\Controller\Track::destroyAction()}, so it is the
+	 * portal that has to remember the answer: the modern scheme tells the media service nothing
+	 * about the destroy at all, and the legacy one reports success whether or not the service
+	 * accepted it. Meanwhile the portal keeps entry points that ask the service for the files of a
+	 * finished call at any later moment - the wait of the follow-up, the button of the failure
+	 * message in the chat and the public restart - and a file of a destroyed record answered by a
+	 * service that never learned of the deletion would land back in the chat the user removed it
+	 * from {@see \Bitrix\Call\Integration\AI\CallAIService::askServiceForFiles()}.
+	 *
+	 * The flags of the recording cannot carry this: both go off for technical reasons too - a quota
+	 * refused, a recording that failed - and it is exactly for those calls that the portal rescues
+	 * the file {@see self::isAudioRecordEnabled()}, so the intent has to be stored apart from them.
+	 */
+	public function isRecordDestroyed(): bool
+	{
+		return $this->recordDestroyed;
+	}
+
+	/**
+	 * The same mark, read from the table instead of the instance, and left in the instance too.
+	 *
+	 * For the one caller whose instance cannot be trusted: the intake of a file lies at the end of
+	 * a request to the media service, so its call was loaded before that request was sent, and a
+	 * user who destroyed the recording while it was in flight left the mark in the table alone
+	 * {@see \Bitrix\Call\Track\TrackService::intakeServiceFile()}. Reading it here is what makes
+	 * the refusal of such a file rest on the deletion itself rather than on the age of a snapshot.
+	 *
+	 * A window is still left - between this read and the row of the file being made - and only a
+	 * lock shared with the deletion would close it; the mark, unlike the row, is never unlearned by
+	 * a later request {@see self::markRecordDestroyed()}.
+	 */
+	public function readRecordDestroyedMark(): bool
+	{
+		if (!$this->id)
+		{
+			return $this->recordDestroyed;
+		}
+
+		$stored = CallTable::getList([
+			'select' => ['RECORD_DESTROYED'],
+			'filter' => ['=ID' => $this->id],
+			'limit' => 1,
+		])->fetch();
+
+		if (is_array($stored))
+		{
+			// An array row of the table carries 'Y'/'N', the value of a BooleanField untouched, and
+			// null for a call of a version that kept no mark - which is not a deletion
+			// {@see self::createWithArray()}.
+			$this->recordDestroyed = ($stored['RECORD_DESTROYED'] === 'Y' || $stored['RECORD_DESTROYED'] === true);
+		}
+
+		return $this->recordDestroyed;
+	}
+
+	/**
+	 * Remembers that a user removed the recording of this call - the destroy of the record itself
+	 * {@see \Bitrix\Call\Controller\Track::destroyAction()} and the deletion of the whole
+	 * follow-up, which takes every file row of the call with it
+	 * {@see \Bitrix\Call\Integration\AI\CallAIService::dropCallAiFollowUp()}.
+	 *
+	 * Persists ONLY this column, and deliberately outside save(): a mark of deleted data has to
+	 * survive the save() of any instance of the call loaded before the deletion, which would write
+	 * the whole row back as it was read {@see self::save()}. The file of the record arrives from
+	 * the service in a request of its own {@see \Bitrix\Call\Controller\CallController::trackReadyAction()},
+	 * so that is not a rare race but the very moment the mark exists for.
+	 *
+	 * @return self
+	 */
+	public function markRecordDestroyed(): self
+	{
+		$this->recordDestroyed = true;
+		if ($this->id)
+		{
+			CallTable::update($this->id, ['RECORD_DESTROYED' => true]);
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Lifts the mark of a destroyed record, because the call is recording again.
+	 *
+	 * The mark closes the record a user removed, not the call for good - exactly as at the media
+	 * service, where a new start puts the status of the record back to enabled
+	 * {@see \Bitrix\CallController\Controller\InternalApi::startTrackAction()}: the files of the
+	 * new recording are the files of a recording nobody has removed.
+	 *
+	 * @return self
+	 */
+	public function liftRecordDestroyedMark(): self
+	{
+		$this->recordDestroyed = false;
+		if ($this->id)
+		{
+			CallTable::update($this->id, ['RECORD_DESTROYED' => false]);
+		}
+
 		return $this;
 	}
 
@@ -1372,9 +1467,12 @@ class Call
 		string $sendMode = Signaling::MODE_ALL,
 		bool $isRepeated = false,
 		?array $usersInOtherCalls = null,
-		?int $ttl = null
+		?int $ttl = null,
+		bool $isManualInvite = false,
+		?string $inviteGenerationId = null,
 	): void
 	{
+		$inviteGenerationId = $this->normalizeInviteGenerationId($inviteGenerationId);
 		$usersInOtherCalls ??= CallFactory::filterUsersInActiveCalls($toUserIds, $this->getId());
 
 		// Scheme routing keeps legacy classic web/desktop clients working —
@@ -1392,8 +1490,10 @@ class Call
 				sendPush: $sendPush,
 				sendMode: $sendMode,
 				isRepeated: $isRepeated,
+				isManualInvite: $isManualInvite,
 				usersInOtherCalls: $usersInOtherCalls,
 				ttl: $ttl,
+				inviteGenerationId: $inviteGenerationId,
 			);
 			return;
 		}
@@ -1405,15 +1505,32 @@ class Call
 			video: $video,
 			sendPush: $sendPush,
 			isRepeated: $isRepeated,
+			isManualInvite: $isManualInvite,
 			usersInOtherCalls: $usersInOtherCalls,
 			ttl: $ttl,
+			inviteGenerationId: $inviteGenerationId,
 		);
+	}
+
+	private function normalizeInviteGenerationId(?string $inviteGenerationId): ?string
+	{
+		if (
+			$inviteGenerationId === null
+			|| strlen($inviteGenerationId) > 64
+			|| preg_match('/^[A-Za-z0-9_-]+$/D', $inviteGenerationId) !== 1
+		)
+		{
+			return null;
+		}
+
+		return $inviteGenerationId;
 	}
 
 	/**
 	 * @param string $state
+	 * @param string|null $fromState Change the state only if the stored call is in this state.
 	 */
-	public function updateState($state): bool
+	public function updateState($state, ?string $fromState = null): bool
 	{
 		if ($this->state == $state)
 		{
@@ -1421,9 +1538,13 @@ class Call
 		}
 		$prevState = $this->state;
 		$this->state = $state;
-		$updateResult = CallTable::updateState($this->getId(), $state);
+		$updateResult = CallTable::updateState($this->getId(), $state, $fromState);
 		if (!$updateResult)
 		{
+			if ($fromState !== null)
+			{
+				$this->state = $prevState;
+			}
 			return false;
 		}
 
@@ -1519,6 +1640,13 @@ class Call
 	 * finished call. Delivery of sendFinish() stays synchronous but off-clock
 	 * (outside the lock); heavy stat aggregation and chat sibling teardown are
 	 * deferred to background jobs.
+	 *
+	 * The two jobs below stay on the queue of the core and are NOT handed to
+	 * {@see \Bitrix\Call\Background\JobDispatcher} - each of them says why. What they share is
+	 * the batch: the hourly cleanup agent finishes every stale call of the portal in one pass
+	 * {@see Recent::finishOldCallsAgent()}, so running them inline would multiply that pass by
+	 * the number of such calls, and none of them delivers anything to a person. The third one,
+	 * the replay of the state changes of the finish, went to the dispatcher - see it below.
 	 */
 	public function finishSideEffects(): void
 	{
@@ -1549,6 +1677,10 @@ class Call
 			// committed FINISHED — a repeat finish() takes the fast-path and never re-runs
 			// this teardown, so the room would leak. Re-attempt off-clock; finishCall() is
 			// keyed by UUID and idempotent, so the retry cannot double-finish.
+			//
+			// Stays deferred: this is a second request to the controller that has just failed,
+			// and in the pass of the cleanup agent it would become one such round-trip per stale
+			// call, in front of every call still waiting to be finished.
 			Application::getInstance()->addBackgroundJob(
 				[static::class, 'runRetryFinishOnController'],
 				[(int)$this->getId()],
@@ -1614,6 +1746,10 @@ class Call
 
 		if ($callId)
 		{
+			// Stays deferred: the aggregation of the statistics of a call is the heaviest job of
+			// this method and it writes a row nobody is waiting for. In the pass of the cleanup
+			// agent it would run once per stale call, and a portal with a long backlog would
+			// spend the pass on statistics instead of finishing the calls.
 			Application::getInstance()->addBackgroundJob(
 				[static::class, 'runSaveStat'],
 				[$callId],
@@ -1651,7 +1787,23 @@ class Call
 
 		if ($changes !== [] && $callId)
 		{
-			Application::getInstance()->addBackgroundJob(
+			// Every change is replayed as an event whose listener writes a row of the journal and
+			// pushes a counter {@see EventHandler::onCallUserStateChange()}, and those rows are
+			// the only ones there are: transitionState() above sends no events of its own, which
+			// is the whole reason this batch exists.
+			//
+			// It is a batch, and a pass of the cleanup agent over N stale calls carries N such
+			// fan-outs - but deferring it buys that pass nothing and risks the rows. A runner that
+			// ends without an epilogue never runs the queue of the core, and the rows are then
+			// written by nobody; the standard runner of the agents does reach it
+			// (`main/tools/cron_events.php` goes on to `CMain::FinalActions()`), and there the
+			// inline call only does the same work earlier, in a process no answer is waited from.
+			// And the rows falling out take the final journal of the call down with them: the
+			// broadcast of that journal only replays rows that are already there
+			// {@see EventHandler::broadcastCallLogFinish()}, it runs after this batch, and past
+			// the dispatcher the order of the two is kept on both paths - inline here, and by the
+			// priorities of the queue of the core on a hit (NORMAL is taken before LOW).
+			JobDispatcher::getInstance()->enqueue(
 				[EventHandler::class, 'dispatchUserStateChangeEventsBatch'],
 				[$changes],
 				Application::JOB_PRIORITY_NORMAL,
@@ -2294,6 +2446,11 @@ class Call
 			$instance->enableAiAnalyze = $instance->enableAudioRecord;
 		}
 
+		// Both shapes of the column on purpose: the row of the table arrives as 'Y'/'N', and the
+		// array of a call being cloned carries the value the getter gave {@see self::toArray()}.
+		$recordDestroyed = $fields['RECORD_DESTROYED'] ?? null;
+		$instance->recordDestroyed = ($recordDestroyed === 'Y' || $recordDestroyed === true);
+
 		return $instance;
 	}
 
@@ -2311,7 +2468,7 @@ class Call
 	/**
 	 * Rehydrate a call from its persisted row WITHOUT running initCall().
 	 */
-	protected static function loadWithoutInit(int $id): ?Call
+	public static function loadWithoutInit(int $id): ?Call
 	{
 		$row = CallTable::getRowById($id);
 		if (!is_array($row))

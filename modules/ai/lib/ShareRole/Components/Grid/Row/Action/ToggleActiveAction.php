@@ -77,8 +77,13 @@ class ToggleActiveAction extends BaseGridAction
 		return Container::init()->getItem(ChangeActivityRequest::class);
 	}
 
-	public function getControl(array $rawFields): array
+	public function getControl(array $rawFields): ?array
 	{
+		if (!$this->isRoleAuthor($rawFields))
+		{
+			return null;
+		}
+
 		$this->default = true;
 		$roleCode = $rawFields['ID'];
 

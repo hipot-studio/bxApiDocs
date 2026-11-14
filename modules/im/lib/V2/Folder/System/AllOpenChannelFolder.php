@@ -42,7 +42,12 @@ final class AllOpenChannelFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_OPEN_CHANNEL_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
+	{
+		return true;
+	}
+
+	protected function isAvailableForUser(int $userId): bool
 	{
 		try
 		{

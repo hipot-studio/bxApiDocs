@@ -238,12 +238,12 @@ class EntityEditorConfig
 	public function getConfiguration(bool $useDefaultIfNotExists = false): ?Configuration
 	{
 		$config = $this->get();
-		if ($config === null && $useDefaultIfNotExists)
+		if (!is_array($config) && $useDefaultIfNotExists)
 		{
 			$config = $this->getDefault();
 		}
 
-		if ($config === null)
+		if (!is_array($config))
 		{
 			return null;
 		}

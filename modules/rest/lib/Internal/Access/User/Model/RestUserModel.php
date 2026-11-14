@@ -33,7 +33,14 @@ class RestUserModel extends UserModel
 			global $USER;
 
 			$checkUserId = $this->getUserId();
-			if ($this->getUserId() > 0 && $USER instanceof CUser && (int)$this->getUserId() === (int)$USER->getId())
+			if ($checkUserId <= 0)
+			{
+				$this->isAdmin = false;
+
+				return $this->isAdmin;
+			}
+
+			if ($USER instanceof CUser && $checkUserId === (int)$USER->getId())
 			{
 				$checkUserId = 0;
 			}
@@ -57,6 +64,21 @@ class RestUserModel extends UserModel
 		}
 
 		return $this->getLegacyUser()->CanAccess($accessCodes);
+	}
+
+	public function getAccessCodes(): array
+	{
+		$userId = $this->getUserId();
+		if ($userId <= 0)
+		{
+			return ['G2'];
+		}
+
+		$codes = \CAccess::GetUserCodesArray($userId);
+		$codes[] = self::USER_ACCESS_CODE_AUTHORIZED;
+		$codes[] = self::USER_ACCESS_CODE_ALL;
+
+		return array_values(array_unique($codes));
 	}
 
 	public function getData(): ?array
@@ -95,7 +117,7 @@ class RestUserModel extends UserModel
 
 					public function IsAuthorized(): bool
 					{
-						return false;
+						return $this->targetUserId > 0;
 					}
 				};
 			}

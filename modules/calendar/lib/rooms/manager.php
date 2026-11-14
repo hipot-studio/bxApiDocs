@@ -2,10 +2,6 @@
 
 namespace Bitrix\Calendar\Rooms;
 
-use Bitrix\Calendar\Core\Event\EventSaveStateException;
-use Bitrix\Calendar\Access\ActionDictionary;
-use Bitrix\Calendar\Access\Model\SectionModel;
-use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -21,7 +17,6 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
-use Throwable;
 
 Loc::loadMessages(__FILE__);
 
@@ -30,7 +25,6 @@ class Manager
 	public const TYPE = 'location';
 	private const OCCUPANCY_SNAPSHOT_QUERY_CHUNK_SIZE = 300;
 	private const ROOM_QUERY_CHUNK_SIZE = 300;
-	private const RESERVATION_ROOM_QUERY_CHUNK_SIZE = 500;
 
 	/** @var Room|null $room */
 	private ?Room $room = null;
@@ -363,264 +357,6 @@ class Manager
 	}
 
 	/**
-	 * Returns an active reservation visible to the saving actor.
-	 *
-	 * @return array
-	 */
-	public static function assertReservationAvailable(
-		int $bookingId,
-		int $roomId,
-		bool $checkPermission = true,
-		?int $userId = null,
-		?bool $checkRoomPermission = null,
-		mixed $newLocation = null,
-	): array
-	{
-		$bookings = self::assertReservationsAvailable([
-			['bookingId' => $bookingId, 'roomId' => $roomId, 'newLocation' => $newLocation],
-		], $checkPermission, $userId, $checkRoomPermission);
-
-		return $bookings[$bookingId];
-	}
-
-	/**
-	 * Validates the complete reservation set before its caller starts mutating events.
-	 *
-	 * @param list<array{bookingId: int, roomId: int, newLocation: mixed}> $reservations
-	 * @return array<int, array>
-	 */
-	public static function assertReservationsAvailable(
-		array $reservations,
-		bool $checkPermission = true,
-		?int $userId = null,
-		?bool $checkRoomPermission = null,
-	): array
-	{
-		$userId ??= \CCalendar::GetCurUserId();
-		$checkRoomPermission ??= $checkPermission;
-		$bookingIds = [];
-		foreach ($reservations as $reservation)
-		{
-			$bookingId = (int)$reservation['bookingId'];
-			if ($bookingId <= 0 || (int)$reservation['roomId'] <= 0)
-			{
-				throw EventSaveStateException::roomReservationNotAvailable();
-			}
-			$bookingIds[$bookingId] = true;
-		}
-		$bookings = [];
-		foreach (array_chunk(array_keys($bookingIds), self::OCCUPANCY_SNAPSHOT_QUERY_CHUNK_SIZE) as $bookingIdChunk)
-		{
-			$events = \CCalendarEvent::GetList([
-				'arFilter' => ['ID' => $bookingIdChunk, 'DELETED' => 'N', 'CAL_TYPE' => self::TYPE],
-				'parseRecursion' => false,
-				'checkPermissions' => $checkPermission,
-				'userId' => $userId,
-				'setDefaultLimit' => false,
-				'skipCache' => true,
-			]);
-			foreach ($events as $booking)
-			{
-				$bookings[(int)$booking['ID']] = $booking;
-			}
-		}
-		$roomIds = [];
-		foreach ($reservations as $reservation)
-		{
-			$roomId = (int)$reservation['roomId'];
-			$booking = $bookings[(int)$reservation['bookingId']] ?? null;
-			if (
-				!is_array($booking)
-				|| ($booking['CAL_TYPE'] ?? null) !== self::TYPE
-				|| (int)($booking['SECTION_ID'] ?? $booking['SECT_ID'] ?? 0) !== $roomId
-			)
-			{
-				throw EventSaveStateException::roomReservationNotAvailable();
-			}
-			$roomIds[$roomId] = true;
-		}
-		$rooms = self::assertRoomsStructurallyAvailable(array_keys($roomIds));
-		if ($checkRoomPermission)
-		{
-			$permissionRoomIds = [];
-			foreach ($reservations as $reservation)
-			{
-				$roomId = (int)$reservation['roomId'];
-				if (!self::isOwnedReservationRelease(
-					$bookings[(int)$reservation['bookingId']], $userId, $roomId,
-					$reservation['newLocation'] ?? null,
-				))
-				{
-					$permissionRoomIds[$roomId] = true;
-				}
-			}
-			self::assertReservationRoomPermissions(array_intersect_key($rooms, $permissionRoomIds), $userId);
-		}
-
-		return $bookings;
-	}
-
-	/** @return array<int, array> */
-	private static function assertRoomsStructurallyAvailable(array $roomIds): array
-	{
-		try
-		{
-			$rooms = [];
-			foreach (array_chunk($roomIds, self::RESERVATION_ROOM_QUERY_CHUNK_SIZE) as $roomIdChunk)
-			{
-				$rows = LocationTable::query()
-					->setSelect(['SECTION_ID', 'NAME' => 'SECTION.NAME',
-						'CAL_TYPE' => 'SECTION.CAL_TYPE', 'OWNER_ID' => 'SECTION.OWNER_ID'])
-					->registerRuntimeField('SECTION', new ReferenceField(
-						'SECTION', SectionTable::getEntity(), Query\Join::on('ref.ID', 'this.SECTION_ID'),
-						['join_type' => Query\Join::TYPE_INNER],
-					))
-					->whereIn('SECTION_ID', $roomIdChunk)
-					->where('SECTION.CAL_TYPE', self::TYPE)
-					->where('SECTION.ACTIVE', 'Y')
-					->setLimit(self::RESERVATION_ROOM_QUERY_CHUNK_SIZE + 1)
-					->exec()
-				;
-				$availableRoomIds = [];
-				while ($room = $rows->fetch())
-				{
-					if (trim(Emoji::decode((string)$room['NAME'])) !== '')
-					{
-						$roomId = (int)$room['SECTION_ID'];
-						$availableRoomIds[] = $roomId;
-						$rooms[$roomId] = $room;
-					}
-				}
-				if (array_diff($roomIdChunk, $availableRoomIds) !== [])
-				{
-					throw EventSaveStateException::roomReservationNotAvailable();
-				}
-			}
-
-			return $rooms;
-		}
-		catch (Throwable)
-		{
-			throw EventSaveStateException::roomReservationNotAvailable();
-		}
-	}
-
-	private static function isOwnedReservationRelease(
-		array $booking,
-		int $userId,
-		int $oldRoomId,
-		mixed $newLocation,
-	): bool
-	{
-		if (!is_string($newLocation) || $userId <= 0 || (int)($booking['CREATED_BY'] ?? 0) !== $userId)
-		{
-			return false;
-		}
-		$location = Util::parseLocation($newLocation);
-
-		return $location['mrid'] === false
-			&& (
-				$location['room_id'] === false
-				|| ((int)$location['room_id'] > 0 && (int)$location['room_id'] !== $oldRoomId)
-			);
-	}
-
-	private static function assertReservationRoomPermissions(array $rooms, int $userId): void
-	{
-		try
-		{
-			$controller = new SectionAccessController($userId);
-			foreach ($rooms as $roomId => $room)
-			{
-				$model = SectionModel::createNew()
-					->setId((int)$roomId)->setType((string)$room['CAL_TYPE'])->setOwnerId((int)$room['OWNER_ID']);
-				if (!$controller->check(ActionDictionary::ACTION_SECTION_EVENT_VIEW_TIME, $model)
-					|| !$controller->check(ActionDictionary::ACTION_SECTION_EVENT_VIEW_FULL, $model))
-				{
-					throw EventSaveStateException::roomReservationNotAvailable();
-				}
-			}
-		}
-		catch (Throwable)
-		{
-			throw EventSaveStateException::roomReservationNotAvailable();
-		}
-	}
-
-	public static function setLocationWithReservationValidation(
-		mixed $oldLocation,
-		mixed $newLocation,
-		array $params,
-		int $userId,
-		bool $checkRoomPermission,
-		?OccupancyLock $lock,
-		bool &$mutationStarted,
-	): mixed
-	{
-		$reservation = Util::parseLocation($oldLocation);
-		$checkPermission = ($params['checkPermission'] ?? null) !== false;
-		$currentBooking = null;
-		if ($reservation['room_event_id'])
-		{
-			$currentBooking = self::assertReservationAvailable(
-				(int)$reservation['room_event_id'], (int)$reservation['room_id'],
-				$checkPermission, $userId, $checkRoomPermission, $newLocation,
-			);
-		}
-		$params['parentParams']['occupancyLock'] = $lock;
-		$newReservation = Util::parseLocation($newLocation);
-		$reserveUserId = (int)($params['parentParams']['userId'] ?? \CCalendar::GetCurUserId());
-		// Reuse only this frame's authoritative read, before any reservation mutation or callbacks.
-		if (
-			$currentBooking !== null
-			&& (int)($currentBooking['ID'] ?? 0) === (int)$reservation['room_event_id']
-			&& (int)($currentBooking['SECTION_ID'] ?? 0) === (int)$reservation['room_id']
-			&& is_string($oldLocation)
-			&& is_string($newLocation)
-			&& $reservation['mrid'] === false
-			&& $reservation['room_id'] > 0
-			&& $newReservation['mrid'] === false
-			&& $newReservation['room_id'] > 0
-			&& ($params['parentParams']['arFields']['LOCATION']['OLD'] ?? null) === $oldLocation
-			&& $userId === $reserveUserId
-			&& $checkRoomPermission === $checkPermission
-		)
-		{
-			$mutationStarted = true;
-			$timezoneEnabled = \CTimeZone::Enabled();
-			if ($timezoneEnabled)
-			{
-				\CTimeZone::Disable();
-			}
-			try
-			{
-				$bookingId = self::reserveRoomWithValidatedBooking([
-					'room_id' => $newReservation['room_id'],
-					'room_event_id' => $reservation['room_event_id'],
-					'parentParams' => $params['parentParams'],
-					'checkPermission' => $params['checkPermission'] ?? null,
-				], $currentBooking);
-				if (!$bookingId)
-				{
-					throw new \RuntimeException('Unable to update the meeting room reservation.');
-				}
-
-				return 'calendar_' . $newReservation['room_id'] . '_' . $bookingId;
-			}
-			finally
-			{
-				if ($timezoneEnabled)
-				{
-					\CTimeZone::Enable();
-				}
-			}
-		}
-		$mutationStarted = true;
-
-		return Util::setLocation($oldLocation, $newLocation, $params);
-	}
-
-	/**
 	 * @param array $params
 	 *
 	 * @return int|null
@@ -631,28 +367,8 @@ class Manager
 	 */
 	public static function reserveRoom(array $params = []): ?int
 	{
-		$params['checkPermission'] = $params['checkPermission'] ?? null;
+		$params['checkPermission'] = $params['checkPermission'] ?? $params['parentParams']['checkPermission'] ?? null;
 		$params['room_id'] = $params['room_id'] ?? null;
-		$bookingId = (int)($params['room_event_id'] ?? 0);
-		$currentBooking = null;
-		if ($bookingId > 0)
-		{
-			$oldLocation = Util::parseLocation($params['parentParams']['arFields']['LOCATION']['OLD'] ?? null);
-			$oldRoomId = (int)($oldLocation['room_id'] ?: $params['room_id']);
-			$userId = (int)($params['parentParams']['userId'] ?? \CCalendar::GetCurUserId());
-			$checkPermission = $params['checkPermission'] !== false;
-			$currentBooking = self::assertReservationAvailable(
-				$bookingId, $oldRoomId, $checkPermission, $userId, $checkPermission,
-				'calendar_' . (int)$params['room_id'],
-			);
-		}
-
-		return self::reserveRoomWithValidatedBooking($params, $currentBooking);
-	}
-
-	private static function reserveRoomWithValidatedBooking(array $params, ?array $currentBooking): ?int
-	{
-		$bookingId = (int)($params['room_event_id'] ?? 0);
 		$roomList = self::getRoomById((int)$params['room_id'], ['checkPermission' => $params['checkPermission']]);
 
 		if (
@@ -664,11 +380,6 @@ class Manager
 			)
 		)
 		{
-			if ($bookingId > 0)
-			{
-				throw EventSaveStateException::roomReservationNotAvailable();
-			}
-
 			return null;
 		}
 
@@ -698,9 +409,10 @@ class Manager
 
 		return \CCalendarEvent::Edit([
 			'arFields' => $arFields,
-			'currentEvent' => $currentBooking,
 			'sendInvitations' => false,
 			'sendEditNotification' => false,
+			'userId' => $params['parentParams']['userId'] ?? null,
+			'checkPermission' => $params['checkPermission'] ?? true,
 		]);
 	}
 
@@ -754,6 +466,13 @@ class Manager
 			],
 		]);
 
+		if ($result === false)
+		{
+			$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR')));
+
+			return $this;
+		}
+
 		$params['event_id'] = $result['recEventId'] ?? $result['id'] ?? null;
 
 		$this->sendCancelBookingNotification($params);
@@ -802,7 +521,9 @@ class Manager
 			false,
 			[
 				'checkPermissions' => false,
-				'markDeleted' => false
+				'markDeleted' => false,
+				'occupancyLock' => $params['occupancyLock'] ?? null,
+				'originalFrom' => $params['originalFrom'] ?? null,
 			]
 		);
 	}
@@ -880,6 +601,86 @@ class Manager
 		}
 
 		return true;
+	}
+
+	public static function hasMissingReservation(array $sourceEventIds): bool
+	{
+		foreach (self::getReservationStates($sourceEventIds) as $state)
+		{
+			if ($state['missing'])
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static function getReservationStates(array $sourceEventIds): array
+	{
+		$sourceEventIds = array_values(array_unique(array_filter(
+			array_map('intval', $sourceEventIds),
+			static fn(int $id): bool => $id > 0,
+		)));
+		if (empty($sourceEventIds))
+		{
+			return [];
+		}
+
+		$sources = EventTable::query()
+			->setSelect(['ID', 'LOCATION', 'PARENT_ID', 'CAL_TYPE'])
+			->whereIn('ID', $sourceEventIds)
+			->fetchAll();
+		$states = [];
+		$references = [];
+		foreach ($sources as $source)
+		{
+			$states[(int)$source['ID']] = ['source' => $source, 'missing' => false];
+			$location = Util::parseLocation($source['LOCATION']);
+			if ((int)$location['room_id'] > 0 && (int)$location['room_event_id'] > 0)
+			{
+				$references[] = ['source' => $source, 'location' => $location];
+			}
+		}
+		if (empty($references))
+		{
+			return $states;
+		}
+
+		$bookingIds = array_unique(array_column(array_column($references, 'location'), 'room_event_id'));
+		$bookings = [];
+		foreach (EventTable::query()
+			->setSelect(['ID', 'CAL_TYPE', 'SECTION_ID', 'PARENT_ID', 'DELETED'])
+			->whereIn('ID', $bookingIds)
+			->fetchAll() as $booking)
+		{
+			$bookings[(int)$booking['ID']] = $booking;
+		}
+
+		foreach ($references as $reference)
+		{
+			$source = $reference['source'];
+			$location = $reference['location'];
+			$booking = $bookings[(int)$location['room_event_id']] ?? null;
+			if ($booking === null)
+			{
+				$states[(int)$source['ID']]['missing'] = true;
+				continue;
+			}
+			if (
+				$booking['DELETED'] === 'Y'
+				&& $booking['CAL_TYPE'] === self::TYPE
+				&& (int)$booking['SECTION_ID'] === (int)$location['room_id']
+				&& (int)$booking['PARENT_ID'] === (int)$source['ID']
+				&& (int)$source['PARENT_ID'] === (int)$source['ID']
+				&& $source['CAL_TYPE'] !== self::TYPE
+			)
+			{
+				$states[(int)$source['ID']]['missing'] = true;
+			}
+		}
+
+		return $states;
 	}
 
 	public static function createOccupancySnapshot(int $mainEventId, mixed $oldLocation): array

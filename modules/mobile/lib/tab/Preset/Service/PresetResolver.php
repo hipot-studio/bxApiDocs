@@ -20,10 +20,10 @@ final class PresetResolver
 
 	public function __construct(
 		private readonly Manager $manager,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly PresetAccessPolicy $accessPolicy = new PresetAccessPolicy(),
 		private readonly UserPresetStateService $stateService = new UserPresetStateService(),
 		?TabPresetConfigProvider $configProvider = null,
-		private readonly MobileMenuCacheInvalidator $cacheInvalidator = new MobileMenuCacheInvalidator(),
 		?PresetAssignmentV2Service $assignmentV2Service = null,
 		?LegacyUserPresetStateReader $legacyStateReader = null,
 		?\Closure $legacyStateLoader = null,
@@ -32,7 +32,12 @@ final class PresetResolver
 	{
 		$this->configProvider = $configProvider ?? new TabPresetConfigProvider($this->manager);
 		$this->assignmentV2Service = $assignmentV2Service
-			?? new PresetAssignmentV2Service($this->manager, $this->accessPolicy, $this->configProvider);
+			?? new PresetAssignmentV2Service(
+				manager: $this->manager,
+				cacheInvalidator: $this->cacheInvalidator,
+				accessPolicy: $this->accessPolicy,
+				configProvider: $this->configProvider,
+			);
 		$legacyStateReader ??= new LegacyUserPresetStateReader($this->configProvider);
 		$this->legacyStateLoader = $legacyStateLoader ?? $legacyStateReader->read(...);
 		$this->latestAssignmentLoader = $latestAssignmentLoader ?? $this->getLatestAssignment(...);

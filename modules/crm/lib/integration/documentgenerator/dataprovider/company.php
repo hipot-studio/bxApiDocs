@@ -7,12 +7,15 @@ use Bitrix\Crm\CompanyTable;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\Money;
 use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\DataProviderManager;
+use Bitrix\Main\IO\Path;
+use Bitrix\Main\Localization\Loc;
 
 class Company extends CrmEntityDataProvider
 {
 	protected $bankDetailIds;
 	protected $revenue;
 	protected $contacts;
+	protected $contactIds;
 
 	private ?int $logoId = null;
 
@@ -108,9 +111,11 @@ class Company extends CrmEntityDataProvider
 			$this->fields['ADDRESS_LEGAL']['TYPE'] = \Bitrix\Crm\Integration\DocumentGenerator\Value\Address::class;
 			if (!$this->isLightMode())
 			{
+				Loc::loadMessages(Path::combine(__DIR__, 'deal.php'));
 				$this->fields['CONTACTS'] = [
 					'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_CONTACTS_TITLE'),
 					'PROVIDER' => ArrayDataProvider::class,
+					'ITEM_IDS' => 'getContactIds',
 					'OPTIONS' => [
 						'ITEM_PROVIDER' => Contact::class,
 						'ITEM_NAME' => 'CONTACT',
@@ -415,8 +420,8 @@ class Company extends CrmEntityDataProvider
 				foreach($contactBindings as $binding)
 				{
 					$contact = DataProviderManager::getInstance()->getDataProvider(Contact::class, $binding['CONTACT_ID'], [
-						'isLightMode' => true,
 						'DISABLE_MY_COMPANY' => true,
+						'isLightMode' => true,
 					], $this);
 					$this->contacts[] = $contact;
 				}
@@ -424,6 +429,29 @@ class Company extends CrmEntityDataProvider
 		}
 
 		return $this->contacts;
+	}
+
+	/**
+	 * Returns contact IDs in binding order.
+	 *
+	 * @return list<int>
+	 */
+	public function getContactIds(): array
+	{
+		if($this->contactIds === null)
+		{
+			$this->contactIds = [];
+			if(intval($this->source) > 0)
+			{
+				$contactBindings = \Bitrix\Crm\Binding\ContactCompanyTable::getCompanyBindings($this->source);
+				foreach($contactBindings as $binding)
+				{
+					$this->contactIds[] = (int)$binding['CONTACT_ID'];
+				}
+			}
+		}
+
+		return $this->contactIds;
 	}
 
 	public function getLogo(): ?string

@@ -2,6 +2,7 @@
 
 namespace Bitrix\StaffTrack\Internal\Repository;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\SqlQueryException;
@@ -137,6 +138,39 @@ class OfficePresenceRepository
 		}
 
 		return $presence;
+	}
+
+	/**
+	 * Takes back every confirmation counted for an office, in one statement and without reading the rows:
+	 * the zone of the office moved or shrank, and a confirmation earned inside the old one proves nothing
+	 * about the new one. The moment of the last point and the office of the row stay, so the next point
+	 * inside the new zone is written as a first confirmation.
+	 *
+	 * Meant to run inside the transaction of the card that changed the zone, so a failure is answered with
+	 * a sign and the caller rolls the card back with it.
+	 */
+	public function clearConfirmationsByOfficeId(int $officeId): bool
+	{
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
+		try
+		{
+			$connection->queryExecute(
+				'UPDATE ' . $sqlHelper->quote(OfficePresenceTable::getTableName())
+				. ' SET ' . $sqlHelper->quote('IN_ZONE_DATE') . ' = NULL'
+				. ' WHERE ' . $sqlHelper->quote('OFFICE_ID') . ' = ' . $officeId
+				. ' AND ' . $sqlHelper->quote('IN_ZONE_DATE') . ' IS NOT NULL',
+			);
+		}
+		catch (SqlQueryException $e)
+		{
+			$this->logFailure('clearConfirmations', $e);
+
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

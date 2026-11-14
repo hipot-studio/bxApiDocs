@@ -87,6 +87,11 @@ class CBPCrmSetContactField extends CBPSetFieldActivity
 		return CBPActivityExecutionStatus::Closed;
 	}
 
+	protected static function resolveUpdatedDocumentType(): ?array
+	{
+		return \CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Contact);
+	}
+
 	public static function GetPropertiesDialog(
 		$documentType,
 		$activityName,

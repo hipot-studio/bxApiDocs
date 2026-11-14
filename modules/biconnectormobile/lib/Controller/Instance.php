@@ -15,7 +15,7 @@ class Instance extends Base
 	protected function getDefaultPreFilters(): array
 	{
 		$filters = [
-			// The feature flag is checked before tariff, tool and rights: a disabled feature must answer
+			// Checked before tariff, tool and rights: a portal without biconnector must answer
 			// FEATURE_DISABLED rather than an upgrade offer.
 			new MobileBIFeatureAccess(),
 		];

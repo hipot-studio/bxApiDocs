@@ -150,25 +150,30 @@ class CIMChat
 
 		$chat = Chat::getInstance($toChatId);
 		$lastMessageIdInChat = $chat->getLastMessageId();
+		// The border of a cleanup for everyone lives on the chat: a reader without a relation has no
+		// other one, and a member the walk of the cleanup has not reached yet still carries the old one.
+		$startId = $chat->getHistoryStartId();
 		$limitById = '';
 		$limitFetchMessages = 30;
 		$relations = \CIMChat::GetRelationById($toChatId, false, $bTimeZone, false);
 		if (isset($relations[$fromUserId]))
 		{
-			if ($relations[$fromUserId]['START_ID'] > 0)
-			{
-				$limitById = 'AND M.ID >= '.intval($relations[$fromUserId]['START_ID']);
-			}
+			$startId = max($startId, (int)$relations[$fromUserId]['START_ID']);
 
 			//if ($relations[$fromUserId]['STATUS'] != IM_STATUS_READ && $relations[$fromUserId]['COUNTER'] > $limitFetchMessages)
 			$messageCountFilter = \Bitrix\Main\ORM\Query\Query::filter()
-				->where('ID', '>=', (int)$relations[$fromUserId]['START_ID'])
+				->where('ID', '>=', $startId)
 				->where('ID', '>=', (int)$relations[$fromUserId]['LAST_ID'])
 				->where('ID', '<=', $lastMessageIdInChat)
 				->where('CHAT_ID', $toChatId)
 			;
 			$messageCount = \Bitrix\Im\Model\MessageTable::getCount($messageCountFilter);
 			$limitFetchMessages = max($messageCount, 30);
+		}
+
+		if ($startId > 0)
+		{
+			$limitById = 'AND M.ID >= '.$startId;
 		}
 
 		if (!$bTimeZone)
@@ -2598,9 +2603,9 @@ class CIMChat
 			return false;
 		}
 
-		if (isset($arParams['MESSAGE']))
+		if (isset($arParams['MESSAGE']) && is_scalar($arParams['MESSAGE']))
 		{
-			$message = trim($arParams['MESSAGE']);
+			$message = trim((string)$arParams['MESSAGE']);
 		}
 
 		if (isset($message) && $message)
@@ -3232,19 +3237,28 @@ class CIMChat
 	{
 		global $DB;
 
-		self::hide($chatData['ID']);
+		$chatId = (int)$chatData['ID'];
 
-		$strSQL = "DELETE FROM b_im_chat WHERE ID = ".$chatData['ID'];
+		self::hide($chatId);
+
+		// the entries of a comment thread are addressed by its channel and by the key of its post, so the
+		// address is read while the chat still stands and the index is emptied by the background batch
+		\Bitrix\Main\DI\ServiceLocator::getInstance()
+			->get(IM\V2\Integration\Search\IndexService::class)
+			->onChatDeleted(Chat::getInstance($chatId))
+		;
+
+		$strSQL = "DELETE FROM b_im_chat WHERE ID = ".$chatId;
 		$DB->Query($strSQL, true);
 
-		$strSQL = "DELETE FROM b_im_relation WHERE CHAT_ID = ".$chatData['ID'];
+		$strSQL = "DELETE FROM b_im_relation WHERE CHAT_ID = ".$chatId;
 		$DB->Query($strSQL, true);
 
-		$strSQL = "DELETE FROM b_im_message WHERE CHAT_ID = ".$chatData['ID'];
+		$strSQL = "DELETE FROM b_im_message WHERE CHAT_ID = ".$chatId;
 		$DB->Query($strSQL, true);
 
-		IM\V2\Link\Url\UrlCollection::deleteByChatsIds([(int)$chatData['ID']]);
-		IM\V2\Chat::cleanCache((int)$chatData['ID']);
+		IM\V2\Link\Url\UrlCollection::deleteByChatsIds([$chatId]);
+		IM\V2\Chat::cleanCache($chatId);
 
 		if ($chatData['DISK_FOLDER_ID'])
 		{

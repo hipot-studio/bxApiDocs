@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Access\Activity;
 
+use Bitrix\Crm\Activity\Provider\CallList;
+use Bitrix\Crm\Activity\Provider\SignB2eDocument;
+use Bitrix\Crm\Activity\Provider\SignDocument;
+use Bitrix\Crm\Security\Controller\Base as SecurityController;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
@@ -11,6 +15,7 @@ use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityBinding;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityBindingRepository;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityRepositoryInterface;
 use Bitrix\Crm\V2\Internal\Repository\Activity\RememberingActivityRepository;
+use CCrmOwnerType;
 use Closure;
 
 /**
@@ -60,6 +65,9 @@ use Closure;
  */
 final class ActivityAccess
 {
+	/** What the order of a reading decision and the rule of a provider read of the row of a candidate. */
+	private const READING_FIELDS = ProviderVerdictResolver::READING_PROJECTION;
+
 	private readonly RememberingActivityRepository $activityRepository;
 
 	private readonly ?Closure $providerVerdictResolver;
@@ -69,6 +77,21 @@ final class ActivityAccess
 	private readonly DecisionCache $decisionCache;
 
 	private readonly BindingAttributeLoader $bindingLoader;
+
+	/** The legacy class of a rule reading the rights of a signing document => the type of the document. */
+	private const DOCUMENTS_OF_SIGNING_RULES = [
+		SignDocument::class => CCrmOwnerType::SmartDocument,
+		SignB2eDocument::class => CCrmOwnerType::SmartB2eDocument,
+	];
+
+	/** @var array<int, int> the types of objects whose categories {@see self::preloadForReading()} preloaded */
+	private array $typesWithPreloadedCategories = [];
+
+	/** Whether {@see self::preloadForReading()} keeps the verdicts about call lists. */
+	private bool $areCallListVerdictsKept = false;
+
+	/** Whether a reading {@see self::preloadForReading()} prepared has not been ended yet. */
+	private bool $isReading = false;
 
 	/**
 	 * @param RememberingActivityRepository|null $activityRepository
@@ -91,6 +114,13 @@ final class ActivityAccess
 	 *        remembers only for itself.
 	 * @param BindingAttributeLoader|null $bindingLoader
 	 *        likewise, and for the same reason: a loader passed in carries a batch somebody else preloaded.
+	 * @param Closure|null $providerRuleDetector
+	 *        `function (Activity $activity): bool` - whether the provider of the activity, known by the model
+	 *        read narrow, has a permission rule of its own ({@see self::preloadForReading()}). Without one nothing
+	 *        a rule reads is preloaded there, and the verdict of a provider reads it on its own.
+	 * @param ProviderVerdictResolver|null $providerRules
+	 *        what reads, for a batch, the rest a rule of a provider reads per activity on its own - the one that
+	 *        answers {@see $providerVerdictResolver}. Without one a rule reads it activity by activity.
 	 */
 	public function __construct(
 		?RememberingActivityRepository $activityRepository = null,
@@ -99,6 +129,8 @@ final class ActivityAccess
 		?CallDeletionRestrictionRule $callDeletionRestriction = null,
 		?DecisionCache $decisionCache = null,
 		?BindingAttributeLoader $bindingLoader = null,
+		private readonly ?Closure $providerRuleDetector = null,
+		private readonly ?ProviderVerdictResolver $providerRules = null,
 	)
 	{
 		$this->activityRepository = $activityRepository ?? new RememberingActivityRepository();
@@ -199,6 +231,94 @@ final class ActivityAccess
 	}
 
 	/**
+	 * {@see self::preload()} for the question of reading alone, over a set most of which is only checked and never
+	 * shown - the candidates of a list. The rows are read narrowed to what the order of the decision reads of them
+	 * (the provider and the responsible person), the rows of the activities whose provider has a rule of its own as
+	 * well: the rule of a preloaded activity is handed the same narrow model
+	 * ({@see ProviderVerdictResolver::READING_PROJECTION}). A text of many kilobytes is thus not read for any
+	 * activity that is only passed by.
+	 *
+	 * The decisions are the same as after {@see self::preload()}, and the checks that follow read nothing either.
+	 * A question other than reading may still need a column the narrow read left out and then reads it.
+	 *
+	 * A rule of a provider of its own is a legacy hook that checks the owner of the row of the activity on its own
+	 * and one query at a time: it reads the columns it is handed past the model, the category of the owner and the
+	 * permission attributes of the owner. All three are read here for the batch - the columns in one query, the
+	 * other two in one per type of an owner - so that the hook finds them in the memory it reads.
+	 *
+	 * Two rules check an object of their own besides the owner of the row, and it is read for the batch as well: a
+	 * rule of a signing document reads the category and the permission attributes of the document, one query per
+	 * type of a document for each; a rule of a call list reads its call list, its items and the rights over them,
+	 * and the call lists are decided for the batch whatever their number ({@see CallList::preloadReadVerdicts()}).
+	 *
+	 * THE CATEGORIES AND THE VERDICTS ABOUT CALL LISTS ARE TRUSTED UNTIL {@see self::endReading()}. The legacy
+	 * check of an owner reads the category from the row every time and takes it from the memory only for an object
+	 * a preload named ({@see \Bitrix\Crm\Service\Factory::isItemCategoryIdPreloaded()}), so whoever preloads ends
+	 * the reading.
+	 *
+	 * For an administrator the bindings, the owners of the activities left without one and the permission
+	 * attributes are not read: the order of the decision lets an administrator through before it reaches any of
+	 * them. The rule of a provider is asked before that, and it resolves the category of the owner of the row
+	 * whoever asks, so the rows, the columns of the rules and those categories are read for an administrator too.
+	 * Nor are they read for an activity whose rule answers reading itself
+	 * ({@see ProviderVerdictResolver::answeredAboutReading()}): the order stops at that answer.
+	 *
+	 * AN OBJECT FOUND TO HAVE NO ROW IS REMEMBERED AS SUCH UNTIL {@see self::endReading()} and no longer, so a
+	 * document or an owner that is not there costs one query for the batch and is read anew after it.
+	 *
+	 * @param int[] $activityIds
+	 */
+	public function preloadForReading(int $userId, array $activityIds): void
+	{
+		$this->isReading = true;
+		SecurityController::startRememberingMisses();
+
+		$heads = $this->activityRepository->getByIds($activityIds, self::READING_FIELDS);
+		$answeredByRule = [];
+		$withRule = $this->providerRuleDetector === null
+			? []
+			: array_keys(array_filter($heads, $this->providerRuleDetector))
+		;
+		if ($withRule !== [])
+		{
+			$this->preloadOwnersOfRows($userId, $this->providerRules?->preload($withRule) ?? []);
+			$this->preloadObjectsOfRules($userId, $this->providerRules?->associatedEntitiesOf($withRule) ?? []);
+			$answeredByRule = $this->providerRules?->answeredAboutReading($withRule) ?? [];
+		}
+
+		if (!$this->userPermissions($userId)->isAdmin())
+		{
+			$this->bindingLoader->preload($userId, array_values(array_diff($activityIds, $answeredByRule)));
+		}
+	}
+
+	/**
+	 * Ends the reading {@see self::preloadForReading()} prepared: the categories it preloaded are not trusted any
+	 * more, and the legacy check of an owner reads them from the row again; nor are the verdicts about call lists
+	 * kept, the columns read for the rules of the providers, or the fact that an object had no row. A reader of a
+	 * list calls it once the call is over, whatever way it ends. The decisions taken stay.
+	 */
+	public function endReading(): void
+	{
+		foreach ($this->typesWithPreloadedCategories as $entityTypeId)
+		{
+			Container::getInstance()->getFactory($entityTypeId)?->releasePreloadedItemCategoryIds();
+		}
+		$this->typesWithPreloadedCategories = [];
+		if ($this->areCallListVerdictsKept)
+		{
+			CallList::forgetReadVerdicts();
+			$this->areCallListVerdictsKept = false;
+		}
+		if ($this->isReading)
+		{
+			SecurityController::stopRememberingMisses();
+			$this->providerRules?->forgetPreloaded();
+			$this->isReading = false;
+		}
+	}
+
+	/**
 	 * The activities of the set as this mode ({@see AccessMode}) lets the user see them, in the order they came
 	 * in: the ones that may be read as they are, the rest either gone or replaced by a stub.
 	 *
@@ -266,11 +386,20 @@ final class ActivityAccess
 	 * them a step of a pipeline writing something a decision is derived from: the one saving the bindings, the one
 	 * writing the row, and the one erasing the activity, which takes both inputs away at once. No storage boundary
 	 * knows anything about rights, on purpose.
+	 *
+	 * A reader may forget an activity it checked and is not going to show - a candidate of a list outside its page -
+	 * to keep the memory of the hit from growing with every candidate it passed. Nothing about the activity changed
+	 * then, so a question asked about it later comes to the same decision again. The columns
+	 * {@see self::preloadForReading()} read for the rule of its provider are forgotten with it. The category and the
+	 * permission attributes of the owner of its row are not: they belong to the object and not to the activity, the
+	 * bindings of the next candidates name the same objects, and the machinery holding them drops them when the
+	 * object itself changes - as with the attributes of the bound objects ({@see BindingAttributeLoader::forget()}).
 	 */
 	public function forgetActivity(int $activityId): void
 	{
 		$this->decisionCache->forget($activityId);
 		$this->bindingLoader->forget($activityId);
+		$this->providerRules?->forget($activityId);
 		$this->activityRepository->forget($activityId);
 	}
 
@@ -390,6 +519,62 @@ final class ActivityAccess
 			Operation::Update, Operation::Complete, Operation::Postpone
 				=> $itemPermissions->canUpdate($entityTypeId, $entityId),
 		};
+	}
+
+	/**
+	 * The category and the permission attributes of the owners of the rows of these activities, one query per type
+	 * of an owner for each: what the legacy check of an owner a rule of a provider runs reads per activity.
+	 *
+	 * @param ActivityBinding[] $owners the owners of the rows of the activities whose providers have a rule of
+	 *        their own
+	 */
+	private function preloadOwnersOfRows(int $userId, array $owners): void
+	{
+		$ownerIdsByType = [];
+		foreach ($owners as $owner)
+		{
+			$ownerIdsByType[$owner->getOwnerType()->getId()][$owner->getOwnerId()] = $owner->getOwnerId();
+		}
+
+		$itemPermissions = $this->userPermissions($userId)->item();
+		foreach ($ownerIdsByType as $entityTypeId => $ownerIds)
+		{
+			$ownerIds = array_values($ownerIds);
+			$this->typesWithPreloadedCategories[$entityTypeId] = $entityTypeId;
+			Container::getInstance()->getFactory($entityTypeId)?->preloadItemCategoryIds($ownerIds);
+			$itemPermissions->preloadPermissionAttributes($entityTypeId, $ownerIds);
+		}
+	}
+
+	/**
+	 * What the rules of the providers check besides the owners of the rows, for the batch: the categories and the
+	 * permission attributes of the signing documents, one query per type of a document for each, and the verdicts
+	 * about the call lists. A document that is not there is kept as having no category, so its rule decides as it
+	 * decides one by one without reading the document again.
+	 *
+	 * @param array<string, int[]> $associatedEntities the legacy class of a rule => the entities its activities name
+	 */
+	private function preloadObjectsOfRules(int $userId, array $associatedEntities): void
+	{
+		$itemPermissions = $this->userPermissions($userId)->item();
+		foreach ($associatedEntities as $legacyClassName => $entityIds)
+		{
+			$documentTypeId = self::DOCUMENTS_OF_SIGNING_RULES[$legacyClassName] ?? null;
+			if ($documentTypeId !== null)
+			{
+				$this->typesWithPreloadedCategories[$documentTypeId] = $documentTypeId;
+				Container::getInstance()->getFactory($documentTypeId)?->preloadItemCategoryIds($entityIds);
+				$itemPermissions->preloadPermissionAttributes($documentTypeId, $entityIds);
+			}
+			elseif ($legacyClassName === CallList::class)
+			{
+				$this->areCallListVerdictsKept = true;
+				foreach (CallList::preloadReadVerdicts($entityIds, $userId) as $entityTypeId)
+				{
+					$this->typesWithPreloadedCategories[$entityTypeId] = $entityTypeId;
+				}
+			}
+		}
 	}
 
 	private function userPermissions(int $userId): UserPermissions

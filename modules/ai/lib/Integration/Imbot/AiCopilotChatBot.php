@@ -1,0 +1,1730 @@
+<?php
+
+namespace Bitrix\AI\Integration\Imbot;
+
+use Bitrix\AI\Context;
+use Bitrix\AI\Services\MarkdownToBBCodeTranslationService;
+use Bitrix\AiAssistant\Config\Feature;
+use Bitrix\AiAssistant\Core\Dto\MessageDto;
+use Bitrix\AiAssistant\Core\Im\ImBot as AiAssistantImBot;
+use Bitrix\AiAssistant\Core\Enum\MessageType;
+use Bitrix\AiAssistant\Core\Enum\UserPlatform;
+use Bitrix\AiAssistant\Core\Repository\MessageParamsRepository;
+use Bitrix\AiAssistant\Core\Service\AiBot;
+use Bitrix\Im\Bot;
+use Bitrix\Im\V2\Analytics\CopilotAnalytics;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
+use Bitrix\Im\V2\Integration\AI\SimpleHistoryBuilder;
+use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Relation\AddUsersConfig;
+use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\EventResult;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Error;
+use Bitrix\Main\LoaderException;
+use Bitrix\Main\Result;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Config\Option;
+use Bitrix\AI;
+use Bitrix\Im;
+use Bitrix\ImBot;
+use Bitrix\ImBot\Bot\Base;
+use Bitrix\Pull;
+
+/**
+ * @internal
+ */
+class AiCopilotChatBot extends Base
+{
+	public const BOT_CODE = 'copilot';
+
+	// context id for ai service
+	public const
+		CONTEXT_MODULE = 'im',
+		CONTEXT_ID = 'copilot_chat',
+		CONTEXT_SUMMARY = 'copilot_chat_summary',
+		SUMMARY_PROMPT_ID = 'set_ai_session_name',
+		ASSISTANT_ROLE_ID = 'copilot_assistant_chat'
+	;
+
+	// option amount of the messages to select for context
+	public const
+		OPTION_CONTEXT_AMOUNT = 'copilot_context_amount',
+		CONTEXT_AMOUNT_DEFAULT = 25, // default value
+		OPTION_MENTION_CONTEXT_AMOUNT = 'copilot_mention_context_amount',
+		EXTERNAL_MENTION_CONTEXT_AMOUNT = 50 // default value for external mentions
+	;
+
+	// option mode interaction with ai service
+	public const
+		OPTION_MODE = 'copilot_mode',
+		MODE_LONG_PULLING = 'long_pulling', // long pulling
+		MODE_ASYNC_QUEUE = 'async_queue' // asynchronous requests
+	;
+
+	public const
+		MESSAGE_COMPONENT_ID = 'CopilotMessage',
+		MESSAGE_COMPONENT_START = 'ChatCopilotCreationMessage',
+		MESSAGE_COMPONENT_COLLECTIVE = 'ChatCopilotAddedUsersMessage',
+		MESSAGE_PARAMS_ERROR = 'COPILOT_ERROR',
+		MESSAGE_PARAMS_MORE = 'COPILOT_HAS_MORE',
+		// Mirrors aiassistant \Bitrix\AiAssistant\Core\Im\ImBot::PARAM_SCHEDULED_TASK_RUN_ID as a
+		// literal on purpose: the marker is read on every incoming copilot message, and aiassistant
+		// is installed and updated on its own schedule - a portal without it, or with a version that
+		// predates the marker, must not get a fatal error out of this check.
+		MESSAGE_PARAMS_SCHEDULED_TASK_RUN_ID = 'SCHEDULED_TASK_RUN_ID'
+	;
+
+	public const ALL_COPILOT_MESSAGE_COMPONENTS = [
+		self::MESSAGE_COMPONENT_ID,
+		self::MESSAGE_COMPONENT_START,
+		self::MESSAGE_COMPONENT_COLLECTIVE,
+	];
+
+	public const
+		ERROR_SYSTEM = 'SYSTEM_ERROR',
+		ERROR_AGREEMENT = 'AGREEMENT_ERROR',
+		ERROR_TARIFF = 'TARIFF_ERROR',
+		ERROR_NETWORK = 'NETWORK',
+		AI_ENGINE_ERROR_PROVIDER = 'AI_ENGINE_ERROR_PROVIDER',
+		LIMIT_IS_EXCEEDED_DAILY = 'LIMIT_IS_EXCEEDED_DAILY',
+		LIMIT_IS_EXCEEDED_MONTHLY = 'LIMIT_IS_EXCEEDED_MONTHLY',
+		/** @see \Bitrix\AI\Limiter\Enums\ErrorLimit::BAAS_LIMIT */
+		LIMIT_IS_EXCEEDED_BAAS = 'LIMIT_IS_EXCEEDED_BAAS'
+	;
+
+	protected const BOT_PROPERTIES = [
+		'CODE' => self::BOT_CODE,
+		'TYPE' => Im\Bot::TYPE_SUPERVISOR,
+		'MODULE_ID' => self::MODULE_ID,
+		'CLASS' => \Bitrix\Imbot\Bot\CopilotChatBot::class,
+		'OPENLINE' => 'N', // Allow in Openline chats
+		'HIDDEN' => 'Y',
+		'INSTALL_TYPE' => Im\Bot::INSTALL_TYPE_SILENT, // suppress success install message
+		'METHOD_MESSAGE_ADD' => 'onMessageAdd',/** @see CopilotChatBot::onMessageAdd */
+		'METHOD_MESSAGE_UPDATE' => 'onMessageUpdate',/** @see CopilotChatBot::onMessageUpdate */
+		'METHOD_MESSAGE_DELETE' => 'onMessageDelete',/** @see CopilotChatBot::onMessageDelete */
+		'METHOD_BOT_DELETE' => 'onBotDelete',/** @see CopilotChatBot::onBotDelete */
+		'METHOD_WELCOME_MESSAGE' => 'onChatStart',/** @see CopilotChatBot::onChatStart */
+	];
+
+	//region Register
+
+	/**
+	 * Register CopilotChatBot at portal.
+	 *
+	 * @param array $params
+	 * @return int
+	 */
+	public static function register(array $params = []): int
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return -1;
+		}
+
+		if (self::getBotId())
+		{
+			return self::getBotId();
+		}
+
+		$languageId = Loc::getCurrentLang();
+		if (!empty($params['LANG']))
+		{
+			$languageId = $params['LANG'];
+			Loc::loadLanguageFile(__FILE__, $languageId);
+		}
+
+		$botProps = array_merge(self::BOT_PROPERTIES, [
+			'LANG' => $languageId,// preferred language
+			'PROPERTIES' => [
+				'NAME' => Loc::getMessage(
+					'IMBOT_COPILOT_BOT_NAME_MSGVER_1',
+					['#COPILOT_NAME#' => self::getBotName()],
+					$languageId
+				),
+				'COLOR' => 'COPILOT',
+			],
+		]);
+
+		$botAvatar = self::uploadAvatar($languageId);
+		if (!empty($botAvatar))
+		{
+			$botProps['PROPERTIES']['PERSONAL_PHOTO'] = $botAvatar;
+		}
+
+		$botId = Im\Bot::register($botProps);
+		if ($botId)
+		{
+			self::setBotId($botId);
+		}
+
+		$eventManager = Main\EventManager::getInstance();
+		foreach (self::getEventHandlerList() as $handler)
+		{
+			$eventManager->registerEventHandlerCompatible(
+				$handler['module'],
+				$handler['event'],
+				self::MODULE_ID,
+				\Bitrix\Imbot\Bot\CopilotChatBot::class,
+				$handler['handler']
+			);
+		}
+
+		self::restoreHistory();
+
+		// Im\Bot::register() answers with the id as a string when the record is already there, and with
+		// false when it refuses.
+		return (int)$botId;
+	}
+
+	/**
+	 * Returns event handler list.
+	 * @return array{module: string, event: string, class: string, handler: string}[]
+	 */
+	public static function getEventHandlerList(): array
+	{
+		return [
+			[
+				'module' => 'ai',
+				'event' => 'onQueueJobExecute', /** @see AI\QueueJob::EVENT_SUCCESS */
+				'handler' => 'onQueueJobMessage', /** @see CopilotChatBot::onQueueJobMessage */
+			],
+			[
+				'module' => 'ai',
+				'event' => 'onQueueJobFail', /** @see AI\QueueJob::EVENT_FAIL */
+				'handler' => 'onQueueJobFail', /** @see CopilotChatBot::onQueueJobFail */
+			],
+			[
+				'module' => 'ai',
+				'event' => 'onContextGetMessages', /** @see AI\Context::getMessages */
+				'handler' => 'onGetContextMessages', /** @see CopilotChatBot::onGetContextMessages */
+			],
+		];
+	}
+
+	/**
+	 * Restores chat copilot membership.
+	 * @return void
+	 */
+	protected static function restoreHistory(): void
+	{
+		$chatRes = Im\Model\ChatTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=TYPE' => Im\V2\Chat::IM_TYPE_COPILOT,
+				'!=AUTHOR_ID' => self::getBotId(),
+			],
+		]);
+		while ($chatData = $chatRes->fetch())
+		{
+			$chat = Im\V2\Chat::getInstance((int)$chatData['ID']);
+			$chat->addUsers(
+				[self::getBotId()],
+				new AddUsersConfig(hideHistory: true, withMessage: false, skipRecent: true)
+			);
+		}
+	}
+
+	/**
+	 * Unregister CopilotChatBot at portal.
+	 *
+	 * @return bool
+	 */
+	public static function unRegister(): bool
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		$eventManager = Main\EventManager::getInstance();
+		foreach (self::getEventHandlerList() as $handler)
+		{
+			$eventManager->unregisterEventHandler(
+				$handler['module'],
+				$handler['event'],
+				self::MODULE_ID,
+				\Bitrix\Imbot\Bot\CopilotChatBot::class,
+				$handler['handler']
+			);
+		}
+
+		return Im\Bot::unRegister(['BOT_ID' => self::getBotId()]);
+	}
+
+	/**
+	 * Is bot enabled.
+	 * @return bool
+	 */
+	public static function isEnabled(): bool
+	{
+		return (self::getBotId() > 0);
+	}
+
+	/**
+	 * Refresh settings agent.
+	 * @param bool $regular
+	 * @return string
+	 */
+	public static function refreshAgent(bool $regular = false): string
+	{
+		if (!$regular)
+		{
+			self::updateBotProperties();
+
+			return '';
+		}
+
+		if (
+			!Loader::includeModule('im')
+			|| !Im\V2\Application\Features::isBitrixGptV2Available()
+		)
+		{
+			// The agent is registered under the imbot proxy name by the updaters, so it has to
+			// reschedule itself under that same name: the ai class is only reachable through imbot.
+			return '\\' . \Bitrix\Imbot\Bot\CopilotChatBot::class . '::refreshAgent(true);';
+		}
+
+		self::updateBotProperties();
+
+		return '';
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function updateBotProperties(): bool
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		if (!self::getBotId())
+		{
+			return false;
+		}
+
+		$botDataLang = BotData::getInstance(self::getBotId())->getLang();
+
+		$languageId = !empty($botDataLang) ? $botDataLang : Loc::getCurrentLang();
+		Loc::loadLanguageFile(__FILE__, $languageId);
+
+		$newData = array_merge(self::BOT_PROPERTIES, [
+			'PROPERTIES' => [
+				'NAME' => Loc::getMessage(
+					'IMBOT_COPILOT_BOT_NAME_MSGVER_1',
+					['#COPILOT_NAME#' => self::getBotName()],
+					$languageId
+				),
+				'COLOR' => 'COPILOT',
+			],
+		]);
+
+		$avatarUrl = self::uploadAvatar($languageId);
+		if ($avatarUrl)
+		{
+			$avatarId = \CFile::saveFile($avatarUrl, self::MODULE_ID);
+			if ($avatarId)
+			{
+				$newData['PROPERTIES']['PERSONAL_PHOTO'] = $avatarId;
+			}
+		}
+
+		Im\Bot::update(['BOT_ID' => self::getBotId()], $newData);
+
+		return true;
+	}
+
+	public static function uploadAvatar($lang = LANGUAGE_ID): array|bool|string
+	{
+		if (
+			Loader::includeModule('im')
+			&& Im\V2\Application\Features::isBitrixGptV2Available()
+		)
+		{
+			$avatarPath =
+				Main\Application::getDocumentRoot()
+				. '/bitrix/modules/imbot/install/avatar/' . self::BOT_CODE . '/ai-v2.png'
+			;
+
+			if (Main\IO\File::isFileExists($avatarPath))
+			{
+				return \CFile::makeFileArray($avatarPath);
+			}
+		}
+
+		return parent::uploadAvatar($lang);
+	}
+
+	//endregion
+
+	//region Chat events
+
+	/**
+	 * Event handler on message add.
+	 * @see \Bitrix\Im\Bot::onMessageAdd
+	 *
+	 * @param int $messageId Message Id.
+	 * @param array $messageFields Event arguments.
+	 * @return bool
+	 */
+	public static function onMessageAdd($messageId, $messageFields): bool
+	{
+		return self::processMessageAdd((int)$messageId, $messageFields, false);
+	}
+
+	private static function processMessageAdd(
+		int $messageId,
+		array $messageFields,
+		bool $byMention
+	): bool
+	{
+		$chat = Im\V2\Chat::getInstance((int)$messageFields['TO_CHAT_ID']);
+
+		if (!self::checkMessageRestriction($messageFields))
+		{
+			return false;
+		}
+
+		if (!Chat\CopilotChat::isActive())
+		{
+			self::sendError((int)$messageFields['TO_CHAT_ID'], Loc::getMessage(
+				'IMBOT_COPILOT_ERROR_NOT_ACTIVE_MSGVER_1',
+				['#COPILOT_NAME#' => self::getBotName()]
+			));
+
+			return false;
+		}
+
+		$preparedMessageFields = \CIMMessenger::prepareFieldsForMessageObject($messageFields);
+		$preparedMessageFields['ID'] = $messageId;
+		// small optimization: preload message params
+		$targetMessage = (new Message())->fill(['PARAMS' => $preparedMessageFields['PARAMS'] ?? []]);
+		$targetMessage->load($preparedMessageFields);
+		if ($targetMessage->getAuthorId() === self::getBotId())
+		{
+			return false;
+		}
+
+		if (self::isScheduledTaskRequest($targetMessage->getParams()->toRestFormat()))
+		{
+			return false;
+		}
+
+		$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_ID);
+		$engine = self::getEngineByChat($chat, $context);
+		$serviceRestriction = self::checkAiServeRestriction($engine, (int)$messageFields['FROM_USER_ID']);
+		if (!$serviceRestriction->isSuccess())
+		{
+			$serviceRestrictionError = $serviceRestriction->getErrors()[0];
+			self::sendError((int)$messageFields['TO_CHAT_ID'], $serviceRestrictionError->getMessage());
+
+			(new CopilotAnalytics($chat))->addGenerate(
+				$serviceRestriction,
+				$byMention,
+				$targetMessage
+			);
+
+			return false;
+		}
+
+		$originalMessage = (new Message())
+			->setMessage($messageFields['MESSAGE_ORIGINAL'])
+			->setChatId($chat->getId())
+			->setChat($chat)
+		;
+
+		if ($chat->getType() === Chat::IM_TYPE_COPILOT && self::checkMessageMentions($chat, $originalMessage))
+		{
+			return false;
+		}
+
+		if (
+			$chat->getType() !== Chat::IM_TYPE_COPILOT
+			&& !self::checkBotMention($originalMessage)
+			&& !self::checkBotReply($messageFields)
+		)
+		{
+			return false;
+		}
+
+		if ($chat->getRelationByUserId(self::getBotId()))
+		{
+			$messages = MessageCollection::createFromArray([$targetMessage]);
+			$chat
+				->withContextUser(self::getBotId())
+				->readMessages($messages, true)
+			;
+		}
+
+		if (self::isBgptV2Enabled())
+		{
+			return self::handleMessageViaAiAssistant($messageId, $messageFields);
+		}
+
+
+		$reasoningIsEnabled = (
+			$targetMessage->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
+			&& $engine?->supportsReasoning()
+		);
+
+		self::sendTyping(
+			(int)$messageFields['TO_CHAT_ID'],
+			$reasoningIsEnabled
+		);
+
+		// send them to ai service
+		$result = self::askService([
+			'CHAT_ID' => $messageFields['TO_CHAT_ID'],
+			'MESSAGE_ID' => $messageId,
+			'MESSAGE' => $targetMessage,
+			'CHAT_TYPE' => $chat->getType(),
+			'CHAT' => $chat,
+			'BY_MENTION' => $byMention,
+		]);
+
+		if ($result->isSuccess())
+		{
+			/** @var array{MESSAGE: string, HAS_MORE: bool} $output */
+			if (
+				($output = $result->getData())
+				&& !empty($output['MESSAGE'])
+			)
+			{
+				$message = [
+					'MESSAGE' => $output['MESSAGE'],
+					'PARAMS' => [
+						Im\V2\Message\Params::COMPONENT_PARAMS => [
+							self::MESSAGE_PARAMS_MORE => (bool)$output['HAS_MORE'],
+						],
+					],
+				];
+				self::sendMessage((int)$messageFields['TO_CHAT_ID'], $message, true, $messageId);
+
+				if (
+					strlen($messageFields['MESSAGE']) >= 30
+					&& self::isDialogHasDefaultTitle($chat)
+				)
+				{
+					$messageFields['MESSAGE_ID'] = $messageId;
+					Main\Application::getInstance()->addBackgroundJob(
+						[self::class, 'getDialogMeaning'],
+						[$messageFields, $chat]
+					);
+				}
+			}
+		}
+		else
+		{
+			$error = $result->getErrors()[0];
+
+			ImBot\Log::write(
+				[
+					'errorCode' => $error->getCode(),
+					'errorMessage' => $error->getMessage(),
+					'chatId' => $messageFields['TO_CHAT_ID'],
+					'messageId' => $messageId,
+				],
+				'AI MESSAGE ERROR:'
+			);
+
+			self::addError(new ImBot\Error(
+				__METHOD__,
+				$error->getCode(),
+				$error->getMessage()
+			));
+
+			$errorMessage = self::translateErrorMessage($error);
+			self::sendError((int)$messageFields['TO_CHAT_ID'], $errorMessage);
+		}
+
+		return $result->isSuccess();
+	}
+
+	private static function isBgptV2Enabled(): bool
+	{
+		return Loader::includeModule('aiassistant')
+			&& (Feature::getInstance()?->isBitrixGptV2Available()
+				|| Option::get(self::MODULE_ID, 'bgpt_v2_enabled', 'N') === 'Y'
+			);
+	}
+
+	public static function onExternalMention(int $messageId, array $messageFields): bool
+	{
+		if (!self::isExternalMentionAvailable($messageFields))
+		{
+			return false;
+		}
+
+		if (self::isBgptV2Enabled())
+		{
+			return self::handleExternalMentionViaAiAssistant($messageId, $messageFields);
+		}
+
+		return self::processMessageAdd($messageId, $messageFields, true);
+	}
+
+	private static function handleExternalMentionViaAiAssistant(int $messageId, array $messageFields): bool
+	{
+		if (!self::checkMessageRestriction($messageFields))
+		{
+			return false;
+		}
+
+		$chatId = (int)$messageFields['TO_CHAT_ID'];
+		$userId = (int)$messageFields['FROM_USER_ID'];
+		$chat = Im\V2\Chat::getInstance($chatId);
+
+		$preparedFields = \CIMMessenger::prepareFieldsForMessageObject($messageFields);
+		$preparedFields['ID'] = $messageId;
+		$targetMessage = (new Message())->fill(['PARAMS' => $preparedFields['PARAMS'] ?? []]);
+		$targetMessage->load($preparedFields);
+
+		if ($targetMessage->getAuthorId() === self::getBotId())
+		{
+			return false;
+		}
+
+		if (self::isScheduledTaskRequest($targetMessage->getParams()->toRestFormat()))
+		{
+			return false;
+		}
+
+		$originalMessage = (new Message())
+			->setMessage($messageFields['MESSAGE_ORIGINAL'])
+			->setChatId($chat->getId())
+			->setChat($chat)
+		;
+
+		if (!self::checkBotMention($originalMessage) && !self::checkBotReply($messageFields))
+		{
+			return false;
+		}
+
+		if ($chat->getRelationByUserId(self::getBotId()))
+		{
+			$messages = MessageCollection::createFromArray([$targetMessage]);
+			$chat
+				->withContextUser(self::getBotId())
+				->readMessages($messages, true)
+			;
+		}
+
+		self::sendTyping($chatId);
+
+		// Strip bot mention markup [USER=botId]Name[/USER] from the message text
+		$rawContent = $messageFields['MESSAGE_ORIGINAL'] ?? $messageFields['MESSAGE'];
+		$content = trim(preg_replace('/\[USER=' . self::getBotId() . '\][^\[]*\[\/USER\]\s*/u', '', $rawContent));
+		$targetMessage->setMessage($content);
+
+		$params = [
+			'messageType' => MessageType::Default->value,
+			'senderBotId' => self::getBotId(),
+			'beforeMessageId' => $messageId,
+			'chatMode' => 'inline',
+			'agentMode' => ($messageFields['PARAMS']['COPILOT_AGENT_MODE'] ?? null) === 'Y',
+			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
+				? UserPlatform::Mobile->value
+				: UserPlatform::Web->value
+			,
+		] + self::buildAiAssistantParams($messageFields);
+		$messageDto = new MessageDto(
+			id: $messageId,
+			chatId: $chatId,
+			authorId: $userId,
+			type: MessageType::Default,
+			content: AiAssistantImBot::buildMessageTextWithReply($targetMessage),
+			params: $params,
+			dateCreate: $targetMessage->getDateCreate()?->format(\DateTimeInterface::ATOM),
+		);
+		ServiceLocator::getInstance()->get(MessageParamsRepository::class)?->setMessageParams(
+			$messageId,
+			$chatId,
+			$params
+		);
+
+		ServiceLocator::getInstance()
+			->get(AiBot::class)
+			->handleIncomingMessage($messageDto)
+		;
+
+		return true;
+	}
+
+	private static function handleMessageViaAiAssistant(int $messageId, array $messageFields): bool
+	{
+		$chatId = (int)$messageFields['TO_CHAT_ID'];
+		$userId = (int)$messageFields['FROM_USER_ID'];
+		self::sendTyping($chatId);
+
+		// In a private 1-on-1 chat with the bot there are exactly 2 participants (user + bot) and the
+		// bot answers every message in default mode. Once other people are added (collective copilot
+		// chat or any non-private chat with the bot) it must switch to inline mode.
+		$chatMode = Im\V2\Chat::getInstance($chatId)->getUserCount() > 2 ? 'inline' : 'default';
+
+		$persistentParams = [
+			'messageType' => MessageType::Default->value,
+			'senderBotId' => self::getBotId(),
+			'beforeMessageId' => $messageId,
+			'chatMode' => $chatMode,
+			'forceSearch' => ($messageFields['PARAMS']['COPILOT_FORCE_SEARCH'] ?? null) === 'Y',
+			'agentMode' => ($messageFields['PARAMS']['COPILOT_AGENT_MODE'] ?? null) === 'Y',
+			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
+				? UserPlatform::Mobile->value
+				: UserPlatform::Web->value
+			,
+		] + self::buildAiAssistantParams($messageFields);
+
+		$params = $persistentParams + [
+			'pageContext' => $messageFields['PARAMS']['COPILOT_PAGE_CONTEXT'] ?? null,
+		];
+
+		$preparedFields = \CIMMessenger::prepareFieldsForMessageObject($messageFields);
+		$preparedFields['ID'] = $messageId;
+		$targetMessage = (new Message())->fill(['PARAMS' => $preparedFields['PARAMS'] ?? []]);
+		$targetMessage->load($preparedFields);
+
+		$messageDto = new MessageDto(
+			id: $messageId,
+			chatId: $chatId,
+			authorId: $userId,
+			type: MessageType::Default,
+			content: AiAssistantImBot::buildMessageTextWithReply($targetMessage),
+			params: $params,
+			dateCreate: $targetMessage->getDateCreate()?->format(\DateTimeInterface::ATOM),
+		);
+		ServiceLocator::getInstance()->get(MessageParamsRepository::class)?->setMessageParams(
+			$messageId,
+			$chatId,
+			$persistentParams
+		);
+
+		ServiceLocator::getInstance()
+			->get(AiBot::class)
+			->handleIncomingMessage($messageDto)
+		;
+
+		return true;
+	}
+
+	/**
+	 * A scheduled task run publishes its request as the task owner and submits that request to the
+	 * service itself, so the chat shows what was asked. Answering it here would put a second,
+	 * independent answer in the chat: the marker travels with the message and keeps this bot silent.
+	 */
+	private static function isScheduledTaskRequest(array $params): bool
+	{
+		return (int)($params[self::MESSAGE_PARAMS_SCHEDULED_TASK_RUN_ID] ?? 0) > 0;
+	}
+
+	/**
+	 * The params whose names belong to aiassistant: which MCP servers the message carries and
+	 * whether it was typed by a person or created by the server. Both handlers merge the same set,
+	 * so neither path can drift away from the other. `generationSource` is not decoration here:
+	 * without it a server created message looks to `AiBot::carriesClientChatSelection()` like a
+	 * fresh choice from the chat selector and overwrites the stored one.
+	 */
+	private static function buildAiAssistantParams(array $messageFields): array
+	{
+		return [
+			'generationSource' => $messageFields['PARAMS'][AiAssistantImBot::PARAM_GENERATION_SOURCE] ?? null,
+		] + self::buildMcpSelectionParams($messageFields);
+	}
+
+	/**
+	 * aiassistant is installed and updated on its own schedule, so having the module loaded does not
+	 * mean the operation is already published: in the version this bot was built against it is still
+	 * private, and `method_exists()` says yes to a private method too. Hence the callability check:
+	 * it answers the question that matters, whether this class may call it. On an older aiassistant
+	 * the transport keeps the behaviour that version has always had instead of a fatal error on
+	 * every incoming copilot message.
+	 *
+	 * Only the copilot source is accepted in scalar form. The other one, `AI_ASSISTANT_MCP_AUTH_ID`,
+	 * belongs to the selector of the assistant chat and reaches the message bypassing the rollout
+	 * flag that guards the copilot selector, so this chat must not become a way around that flag.
+	 */
+	private static function buildMcpSelectionParams(array $messageFields): array
+	{
+		if (!is_callable([AiAssistantImBot::class, 'extractMcpAuthParams']))
+		{
+			return self::buildSelectionParamsOfOlderAssistant($messageFields);
+		}
+
+		return AiAssistantImBot::extractMcpAuthParams(
+			$messageFields['PARAMS'] ?? [],
+			[AiAssistantImBot::MCP_AUTH_SOURCE_COPILOT],
+		);
+	}
+
+	/**
+	 * The set this transport built before the operation was published, and the only place where it
+	 * reads a param name of aiassistant itself. This is not a second reader of the current contract:
+	 * an assistant without the operation knows no plural param either, so the scalar name repeated
+	 * here is the whole contract of the version actually installed. Dropping it would make a staged
+	 * update, imbot ahead of aiassistant, silently lose the server from a message typed by hand:
+	 * the very thing this fix is about.
+	 */
+	private static function buildSelectionParamsOfOlderAssistant(array $messageFields): array
+	{
+		$mcpAuthId = $messageFields['PARAMS']['COPILOT_MCP_AUTH_ID'] ?? null;
+
+		return [
+			'mcpAuthId' => $mcpAuthId,
+			AiAssistantImBot::PARAM_MCP_AUTH_SOURCE => is_numeric($mcpAuthId) && (int)$mcpAuthId > 0
+				? AiAssistantImBot::MCP_AUTH_SOURCE_COPILOT
+				: null
+			,
+		];
+	}
+
+	private static function replaceAiMentions(?string $messageText, ?int $chatId): ?string
+	{
+		if (!isset($messageText, $chatId))
+		{
+			return '';
+		}
+
+		return Im\V2\Integration\AI\MentionService::getInstance()->replaceAiMentions($messageText, $chatId);
+	}
+
+	private static function isExternalMentionAvailable(array $fields): bool
+	{
+		$chat = Im\V2\Chat::getInstance((int)$fields['TO_CHAT_ID']);
+
+		return
+			!($chat instanceof Chat\ChannelChat)
+			&& !($chat instanceof Chat\OpenLineLiveChat)
+			&& Loader::includeModule('im')
+			&& Im\V2\Application\Features::isCopilotMentionAvailable()
+		;
+	}
+
+	private static function checkMessageMentions(Im\V2\Chat $chat, Message $message): bool
+	{
+		if ($message->hasMentionAll())
+		{
+			return true;
+		}
+
+		$chatUserIds = $chat->getRelations()->getUsers()->getIds();
+		unset($chatUserIds[self::getBotId()]);
+
+		$mentionedUserIds = $message->getMentionedUserIds();
+
+		$intersection = array_intersect($mentionedUserIds, $chatUserIds);
+
+		return !empty($intersection);
+	}
+
+	private static function checkBotMention(Message $message): bool
+	{
+		$mentionedUserIds = $message->getMentionedUserIds();
+		return in_array(self::getBotId(), $mentionedUserIds, true);
+	}
+
+	private static function checkBotReply(array $messageFields): bool
+	{
+		return
+			($messageFields['REPLY_MESSAGE'] ?? null) !== null
+			&& ($messageFields['REPLY_MESSAGE']['AUTHOR_ID'] ?? null) === self::getBotId()
+		;
+	}
+
+	/**
+	 * @param int $messageId Message Id.
+	 * @param array $messageFields Event arguments.
+	 *
+	 * @return bool
+	 */
+	public static function onMessageUpdate($messageId, $messageFields): bool
+	{
+		return false;
+	}
+
+	/**
+	 * @param int $messageId Message Id.
+	 * @param array $messageFields Event arguments.
+	 *
+	 * @return bool
+	 */
+	public static function onMessageDelete($messageId, $messageFields): bool
+	{
+		if (!self::checkMessageRestriction($messageFields))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	//endregion
+
+	//region AI Payload
+
+	/**
+	 * Make request to AI Engine.
+	 * @param array{CHAT_ID: int, MESSAGE_ID: int, MESSAGE: Message, CHAT_TYPE: string, CHAT: Im\V2\Chat, BY_MENTION: bool} $params
+	 * @return Result<array{HASH: string, MESSAGE: string, HAS_MORE: bool}>
+	 */
+	protected static function askService(array $params): Result
+	{
+		$result = new Result();
+
+		$contextParams = [
+			'chat_id' => $params['CHAT_ID'],
+			'message_id' => $params['MESSAGE_ID'],
+			'by_mention' => $params['BY_MENTION'] ? 'Y' : 'N',
+		];
+
+		$chat = $params['CHAT'];
+		$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_ID, $contextParams);
+		$engine = self::getEngineByChat($chat, $context);
+
+		if ($engine instanceof AI\Engine)
+		{
+			$payload = self::fillPayload($params);
+
+			if (self::isMemoryContextEnabled())
+			{
+				$engine->useMemoryContextService();
+			}
+
+			if (
+				$params['MESSAGE']->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
+				&& $engine->supportsReasoning()
+			)
+			{
+				$engine->setReasoningMode(true);
+			}
+
+			$engine
+				->setPayload($payload)
+				->setHistoryState(false)
+				->onSuccess(function (AI\Result $queueResult, ?string $queueHash = null) use($engine, &$result) {
+					$isQueueable = $engine instanceof AI\Engine\IQueue;
+					$message = $isQueueable ? $queueResult->getRawData() : ($queueResult?->getBBCodeData() ?? $queueResult->getPrettifiedData());
+
+					$rawData = $queueResult->getRawData();
+					$hasMore =
+						isset($rawData['choices'], $rawData['choices'][0], $rawData['choices'][0]['finish_reason'])
+						&& $rawData['choices'][0]['finish_reason'] == 'length'
+					;
+
+					$result->setData([
+						'HASH' => $queueHash,
+						'MESSAGE' => $message,
+						'HAS_MORE' => $hasMore,
+					]);
+
+				})
+				->onError(function (Error $processingError) use(&$result) {
+					$result->addError($processingError);
+				})
+			;
+			if (self::getMode() == self::MODE_ASYNC_QUEUE)
+			{
+				$engine->completionsInQueue(); // asynchronous requests
+			}
+			else
+			{
+				$engine->completions();// long pulling
+			}
+		}
+
+		(new CopilotAnalytics($params['CHAT']))->addGenerate(
+			$result,
+			$params['BY_MENTION'],
+			$params['MESSAGE']
+		);
+
+		return $result;
+	}
+
+	protected static function fillPayload(array $params): AI\Payload\Payload
+	{
+		$message = $params['MESSAGE'];
+		$byMention = $params['BY_MENTION'];
+		$history = (new SimpleHistoryBuilder($message, self::getContextLimit($byMention)))->build();
+		$payload = new AI\Payload\Text($history->toString());
+		$roleManager = new Im\V2\Integration\AI\RoleManager();
+		$systemChatRole = AI\Prompt\Role::get('copilot_chat_mention');
+		$roleByChat = AI\Prompt\Role::get($roleManager->getMainRole($params['CHAT']->getChatId()));
+		$payload->setRole($roleByChat);
+		if ($systemChatRole !== null && $roleByChat?->getCode() === 'copilot_assistant')
+		{
+			$payload->setRole($systemChatRole);
+		}
+
+		return $payload;
+	}
+
+	/**
+	 * Generates summary.
+	 * @param array{CHAT_ID: int, MESSAGE_TEXT: string} $params
+	 * @return Result
+	 */
+	protected static function extractSummary(array $params): Result
+	{
+		$result = new Result();
+
+		$prompt = AI\Prompt\Manager::getByCode(self::SUMMARY_PROMPT_ID);
+		if ($prompt instanceof AI\Prompt\Item)
+		{
+			$contextParams = ['chat_id' => $params['CHAT_ID']];
+			$text = $params['MESSAGE_TEXT'];
+
+			$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_SUMMARY, $contextParams);
+
+			$chat = Chat::getInstance((int)$params['CHAT_ID']);
+
+			$engine = self::getEngineByChat($chat, $context);
+
+			if ($engine instanceof AI\Engine)
+			{
+				$payload = new AI\Payload\Prompt(self::SUMMARY_PROMPT_ID);
+				$payload
+					->setMarkers(['original_message' => $text])
+					->setRole(AI\Prompt\Role::get(Im\V2\Integration\AI\RoleManager::getDefaultRoleCode()))
+				;
+
+				$engine
+					->setPayload($payload)
+					->setParameters(['max_tokens' => 250])
+					->setHistoryState(false)
+					->onSuccess(function (AI\Result $queueResult, ?string $queueHash = null) use($engine, &$result) {
+						$isQueueable = $engine instanceof AI\Engine\IQueue;
+						$message = $isQueueable ? $queueResult->getRawData() : ($queueResult?->getPlainTextData() ?? $queueResult->getPrettifiedData());
+
+						$result->setData([
+							'SUMMARY' => $message,
+						]);
+					})
+					->onError(function (Error $processingError) use(&$result) {
+						$result->addError($processingError);
+					})
+				;
+				if (self::getMode() == self::MODE_ASYNC_QUEUE)
+				{
+					$engine->completionsInQueue(); // asynchronous requests
+				}
+				else
+				{
+					$engine->completions();// long pulling
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Event handler for `ai:onContextGetMessages` event.
+	 * @see AI\Context::getMessages
+	 * @event ai:onContextGetMessages
+	 *
+	 * @param string $moduleId
+	 * @param string $contextId
+	 * @param array $parameters
+	 * @param mixed|null $nextStep
+	 * @return array
+	 */
+	public static function onGetContextMessages($moduleId, $contextId, $parameters = [], $nextStep = null): array
+	{
+		return [];
+	}
+
+	private static function getChatIdFromContextParameters(array $contextParameters): ?int
+	{
+		$value = $contextParameters['chat_id'] ?? null;
+		if (is_numeric($value))
+		{
+			return (int)$value;
+		}
+
+		// case when $contextParameters['chat_id'] store dialogId
+		// TODO: remove it later
+		if (is_string($value) && str_starts_with($value, 'chat'))
+		{
+			return (int)mb_substr($value, 4);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Success callback handler.
+	 * @see AI\QueueJob::execute
+	 * @event ai:onQueueJobExecute
+	 *
+	 * @param string $hash
+	 * @param AI\Engine\IEngine $engine
+	 * @param AI\Result $result
+	 * @param Error|null $error
+	 * @return void
+	 */
+	public static function onQueueJobMessage(string $hash, AI\Engine\IEngine $engine, AI\Result $result, ?Error $error): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		$moduleId = $engine->getContext()->getModuleId();
+		$contextId = $engine->getContext()->getContextId();
+		$parameters = $engine->getContext()->getParameters();
+
+		if (
+			empty($moduleId)
+			|| $moduleId != self::CONTEXT_MODULE
+			|| empty($contextId)
+			|| !in_array($contextId, [self::CONTEXT_ID, self::CONTEXT_SUMMARY])
+			|| empty($parameters)
+			|| empty($parameters['chat_id'])
+		)
+		{
+			return;
+		}
+
+		$chatId = self::getChatIdFromContextParameters($parameters);
+		if (!$chatId)
+		{
+			return;
+		}
+
+		$messageId = $parameters['message_id'] ?? null;
+		$byMention = ($parameters['by_mention'] ?? 'N') === 'Y';
+
+		if (!empty($result->getPrettifiedData()))
+		{
+			$chat = Im\V2\Chat::getInstance($chatId);
+
+			if ($contextId == self::CONTEXT_SUMMARY)
+			{
+				self::renameChat($chat, ($result->getPlainTextData() ?? $result->getPrettifiedData()));
+
+				return;
+			}
+
+			self::sendMessage(
+				$chatId,
+				($result?->getBBCodeData() ?? $result->getPrettifiedData()),
+				true,
+				(int)$messageId
+			);
+			$message = new Message((int)$messageId);
+			$messageText = $message->getMessage();
+
+			$receiveResult = new Result();
+			if ($error)
+			{
+				$receiveResult->addError($error);
+			}
+
+			(new CopilotAnalytics($message->getChat()))
+				->withContextUser($message->getAuthorId())
+				->addReceive($receiveResult, $message, $byMention)
+			;
+
+			if (!isset($messageId))
+			{
+				return;
+			}
+			if (!self::isDialogHasDefaultTitle($chat))
+			{
+				return;
+			}
+
+			if (is_string($messageText) && strlen($messageText) >= 30)
+			{
+				Main\Application::getInstance()->addBackgroundJob(
+					[self::class, 'getDialogMeaning'],
+					[
+						['CHAT_ID' => $chatId, 'MESSAGE' => $messageText, 'MESSAGE_ID' => (int)$messageId],
+						$chat,
+					]
+				);
+			}
+		}
+	}
+
+	/**
+	 * Callback handler Copilot job has been failed.
+	 * @see AI\QueueJob::clearOldAgent
+	 * @see AI\QueueJob::fail
+	 * @event ai:onQueueJobFail
+	 *
+	 * @param string $hash
+	 * @param AI\Engine\IEngine $engine
+	 * @param AI\Result $result
+	 * @param Error|null $error
+	 * @return void
+	 */
+	public static function onQueueJobFail(string $hash, AI\Engine\IEngine $engine, AI\Result $result, ?Error $error): void
+	{
+		$moduleId = $engine->getContext()->getModuleId();
+		$contextId = $engine->getContext()->getContextId();
+		$parameters = $engine->getContext()->getParameters();
+
+		if (
+			empty($moduleId)
+			|| $moduleId != self::CONTEXT_MODULE
+			|| empty($contextId)
+			|| !in_array($contextId, [self::CONTEXT_ID, self::CONTEXT_SUMMARY])
+			|| empty($parameters)
+			|| empty($parameters['chat_id'])
+		)
+		{
+			return;
+		}
+
+		$chatId = self::getChatIdFromContextParameters($parameters);
+		if (!$chatId)
+		{
+			return;
+		}
+
+		$messageId = $parameters['message_id'] ?? null;
+		$byMention = ($parameters['by_mention'] ?? 'N') === 'Y';
+		if ($messageId && Loader::includeModule('im'))
+		{
+			$receiveResult = new Result();
+			if ($error)
+			{
+				$receiveResult->addError($error);
+			}
+			$message = new Message($messageId);
+			(new CopilotAnalytics($message->getChat()))
+				->withContextUser($message->getAuthorId())
+				->addReceive($receiveResult, $message, $byMention)
+			;
+		}
+
+		ImBot\Log::write(
+			[
+				'errorMessage' => $error ? $error->getMessage() : 'Job fail',
+				'errorCode' => $error ? $error->getCode() : '',
+				'hash' => $hash,
+				'params' => $parameters,
+			],
+			'AI QUEUE FAIL:'
+		);
+
+		if ($contextId == self::CONTEXT_ID)
+		{
+			$errorMessage = self::translateErrorMessage($error);
+			self::sendError($chatId, $errorMessage);
+		}
+	}
+
+	protected static function translateErrorMessage(?Error $error): string
+	{
+		$customData = $error?->getCustomData();
+		$defaultMessage = Loc::getMessage('IMBOT_COPILOT_JOB_FAIL_MSGVER_1');
+
+		$message = match (true)
+		{
+			$error === null || is_numeric($error->getCode()) || $error->getCode() === 'HASH_EXPIRED' => $defaultMessage,
+			is_array($customData) && !empty($customData['msgForIm']) => $customData['msgForIm'],
+			is_array($customData) && !empty($customData['msgBBCode']) => $customData['msgBBCode'],
+			is_array($customData) && !empty($customData['msgPlainText']) => $customData['msgPlainText'],
+			$error->getCode() === self::LIMIT_IS_EXCEEDED_BAAS => Loc::getMessage(
+				'IMBOT_COPILOT_ERROR_LIMIT_BAAS_MSGVER_1',
+				[
+					'#LINK#' => '/online/?FEATURE_PROMOTER=limit_boost_copilot',
+					'#COPILOT_NAME#' => self::getBotName(),
+				]
+			),
+			$error->getCode() === 'NETWORK' => Loc::getMessage('IMBOT_COPILOT_ERROR_NETWORK_MSGVER_1'),
+			(bool)$error->getMessage() => $error->getMessage(),
+			default => $defaultMessage,
+		};
+
+		return is_string($message) ? $message : $defaultMessage;
+	}
+
+	public static function getEngineByChat(Im\V2\Chat $chat, ?Context $context = null): ?AI\Engine
+	{
+		if (
+			Loader::includeModule('im')
+			&& Im\V2\Application\Features::isBitrixGptV2Available()
+		)
+		{
+			return Im\V2\Integration\AI\EngineManager::getDefaultEngine($context);
+		}
+
+		$engine = null;
+
+		if ($chat instanceof Im\V2\Chat\GroupChat)
+		{
+			$engineCode = $chat->getEngineCode();
+			$engine = (new Im\V2\Integration\AI\EngineManager())->getEngineByCode($engineCode, $context);
+		}
+
+		if (!isset($engine))
+		{
+			$engine = Im\V2\Integration\AI\EngineManager::getDefaultEngine($context);
+		}
+
+		return $engine;
+	}
+
+	protected static function getContext(string $moduleId, string $contextId, array $parameters = []): Context
+	{
+		$context = new Context($moduleId, $contextId);
+
+		if (!empty($parameters))
+		{
+			$context->setParameters($parameters);
+		}
+
+		return $context;
+	}
+	//endregion
+
+	//region Restrictions
+
+	/**
+	 * Check service AI unavailability and restrictions.
+	 * @return Result
+	 */
+	protected static function checkAiServeRestriction(?AI\Engine $engine, int $currentUserId): Result
+	{
+		$checkResult = new Result();
+		if ($engine instanceof AI\Engine)
+		{
+			if (!$engine->isAvailableByAgreement())
+			{
+				$checkResult->addError(self::getErrorMessageOnTariffRestriction($currentUserId));
+			}
+			elseif (!$engine->isAvailableByTariff())
+			{
+				$checkResult->addError(new Error(
+					Loc::getMessage(
+						'IMBOT_COPILOT_TARIFF_RESTRICTION_MSGVER_1',
+						['#COPILOT_NAME#' => self::getBotName()]
+					) ?? 'AI service unavailable by tariff',
+					self::ERROR_TARIFF
+				));
+			}
+		}
+		else
+		{
+			$checkResult->addError(new Error(
+				Loc::getMessage('IMBOT_COPILOT_UNAVAILABLE') ?? 'Module AI is unavailable',
+				self::ERROR_SYSTEM
+			));
+		}
+
+		return $checkResult;
+	}
+
+	protected static function getErrorMessageOnTariffRestriction(int $currentUserId): Error
+	{
+		$isB24 = Main\ModuleManager::isModuleInstalled('bitrix24');
+		if (method_exists(AI\Facade\Bitrix24::class, 'shouldUseB24'))
+		{
+			$isB24 = AI\Facade\Bitrix24::shouldUseB24();
+		}
+
+		if (!$isB24)
+		{
+			return new Error(
+				Loc::getMessage(
+					'IMBOT_COPILOT_AGREEMENT_RESTRICTION_BOX_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => self::getBotName(),
+						'#LINK#' => '/online/?AI_UX_TRIGGER=box_agreement',
+					]
+				) ?? 'AI service agreement must be accepted',
+				self::ERROR_AGREEMENT
+			);
+		}
+
+		if (
+			Loader::includeModule('bitrix24')
+			&& \CBitrix24::IsPortalAdmin($currentUserId)
+		)
+		{
+			return new Error(
+				Loc::getMessage(
+					'IMBOT_COPILOT_AGREEMENT_RESTRICTION_ADMIN_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => self::getBotName(),
+						'#LINK#' => '/',
+					]
+				) ?? 'AI service agreement must be accepted',
+				self::ERROR_AGREEMENT
+			);
+		}
+
+		return new Error(
+			Loc::getMessage(
+				'IMBOT_COPILOT_AGREEMENT_RESTRICTION_USER_MSGVER_1',
+				['#COPILOT_NAME#' => self::getBotName()]
+			) ?? 'AI service agreement must be accepted',
+			self::ERROR_AGREEMENT
+		);
+	}
+
+	/**
+	 * Put here any restriction for chat membership.
+	 *
+	 * @param array $messageFields
+	 * @return bool
+	 */
+	protected static function checkMembershipRestriction(Im\V2\Chat $chat, array $messageFields): bool
+	{
+		if (
+			!($chat instanceof Im\V2\Chat\CopilotChat)
+			|| $messageFields['MESSAGE_TYPE'] != Im\V2\Chat::IM_TYPE_COPILOT
+		)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Put here any restriction for message type length.
+	 * @param array $messageFields
+	 * @return bool
+	 */
+	protected static function checkMessageRestriction(array $messageFields): bool
+	{
+		if (isset($messageFields['SYSTEM']) && $messageFields['SYSTEM'] == 'Y')
+		{
+			return false;
+		}
+		if (isset($messageFields['PARAMS']['FORWARD_CONTEXT_ID']))
+		{
+			return false;
+		}
+
+		if (!empty($messageFields['MESSAGE']))
+		{
+			return true;
+		}
+
+		// file-only message: allow it only for the AiAssistant branch, which can process attachments
+		return self::isBgptV2Enabled() && !empty($messageFields['FILES']);
+	}
+
+	//endregion
+
+	//region Title
+
+	/**
+	 * Do we need to rename copilot chat.
+	 *
+	 * @param Im\V2\Chat $chat
+	 * @return bool
+	 */
+	protected static function isDialogHasDefaultTitle(Im\V2\Chat $chat): bool
+	{
+		if ($chat instanceof Im\V2\Chat\CopilotChat)
+		{
+			if ($template = Im\V2\Chat\CopilotChat::getTitleTemplate())
+			{
+				$template = strtr($template, ['#NUMBER#' => '[0-9]+']);
+				return (bool)preg_match("/{$template}/", $chat->getTitle());
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Rename copilot chat.
+	 *
+	 * @param array $messageFields
+	 * @param Im\V2\Chat $chat
+	 * @return void
+	 */
+	public static function getDialogMeaning(array $messageFields, Im\V2\Chat $chat): void
+	{
+		$resultTitle = self::extractSummary([
+			'CHAT_ID' => $messageFields['CHAT_ID'],
+			'MESSAGE_TEXT' => $messageFields['MESSAGE']
+		]);
+		if (
+			$resultTitle->isSuccess()
+			&& ($outputTitle = $resultTitle->getData())
+			&& !empty($outputTitle['SUMMARY'])
+		)
+		{
+			self::renameChat($chat, $outputTitle['SUMMARY']);
+		}
+		elseif (!$resultTitle->isSuccess())
+		{
+			$error = $resultTitle->getErrors()[0];
+			ImBot\Log::write(
+				[
+					'errorCode' => $error->getCode(),
+					'errorMessage' => $error->getMessage(),
+					'chatId' => $messageFields['CHAT_ID'],
+					'messageId' => $messageFields['MESSAGE_ID'],
+				],
+				'AI TITLE ERROR:'
+			);
+		}
+	}
+
+	/**
+	 * Rename copilot chat.
+	 *
+	 * @param Im\V2\Chat $chat
+	 * @param string $title
+	 * @return void
+	 */
+	private static function renameChat(Im\V2\Chat $chat, string $title): void
+	{
+		if (
+			!empty($title)
+			&& $chat instanceof Im\V2\Chat\CopilotChat
+		)
+		{
+			//todo: Use v2 api for renaming
+			//$chat->setTitle($title)->save();
+
+			(new \CIMChat())->rename($chat->getChatId(), $title, false, false);
+		}
+	}
+
+	//endregion
+
+	//region Send message
+
+	/**
+	 * Sends message to client.
+	 *
+	 * @param int $chatId
+	 * @param array|string $message
+	 * @param bool $needToReplaceAiMentions
+	 * @param int|null $triggerMessageId
+	 * @return void
+	 */
+	protected static function sendMessage(
+		int $chatId,
+		$message,
+		bool $needToReplaceAiMentions = true,
+		?int $triggerMessageId = null
+	): void
+	{
+		if (!is_array($message))
+		{
+			$message = ['MESSAGE' => $message];
+		}
+
+		$message['FROM_USER_ID'] = self::getBotId();
+		$message['CHAT_ID'] = $chatId;
+		$message['URL_PREVIEW'] = 'N';
+
+		if (!empty($message['PARAMS']))
+		{
+			$message['PARAMS'] = [];
+		}
+
+		$chat = Chat::getInstance($chatId);
+
+		$message['PARAMS'][Im\V2\Message\Params::COMPONENT_ID] = self::MESSAGE_COMPONENT_ID;
+		$message['PARAMS'][Im\V2\Message\Params::COPILOT_ROLE] = (new Im\V2\Integration\AI\RoleManager())->getMainRole($chatId);
+		if ($triggerMessageId !== null)
+		{
+			$message['PARAMS'][Im\V2\Message\Params::COPILOT_TRIGGER_MESSAGE_ID] = $triggerMessageId;
+		}
+		if (!$chat->getRelationByUserId(self::getBotId()))
+		{
+			$message['SKIP_USER_CHECK'] = 'Y';
+		}
+		if ($needToReplaceAiMentions)
+		{
+			$message['MESSAGE'] = self::replaceAiMentions($message['MESSAGE'], $chatId);
+		}
+		$message['MESSAGE'] = self::convertToBbCode($message['MESSAGE']);
+		$message['MESSAGE'] = self::convertToBbCode($message['MESSAGE']);
+		if ($chat instanceof Chat\PrivateChat)
+		{
+			$message['PARAMS']['NOTIFY'] = 'N';
+		}
+
+		\CIMMessenger::add($message);
+	}
+
+	/**
+	 * Sends message to client.
+	 *
+	 * @param int $chatId
+	 * @param array|string $message
+	 * @return void
+	 */
+	protected static function sendError(int $chatId, $message): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		if (!is_array($message))
+		{
+			$message = ['MESSAGE' => $message];
+		}
+
+		$message['FROM_USER_ID'] = self::getBotId();
+		$message['CHAT_ID'] = $chatId;
+		$message['URL_PREVIEW'] = 'N';
+
+		if (!empty($message['PARAMS']))
+		{
+			$message['PARAMS'] = [];
+		}
+
+		$message['PARAMS'][Im\V2\Message\Params::COMPONENT_ID] = self::MESSAGE_COMPONENT_ID;
+		$message['PARAMS'][Im\V2\Message\Params::COMPONENT_PARAMS] = [
+			self::MESSAGE_PARAMS_ERROR => true
+		];
+		$message['PARAMS'][Im\V2\Message\Params::COPILOT_ROLE] = (new Im\V2\Integration\AI\RoleManager())->getMainRole($chatId);
+
+		$chat = Chat::getInstance($chatId);
+		if (!$chat->getRelationByUserId(self::getBotId()))
+		{
+			$message['SKIP_USER_CHECK'] = 'Y';
+		}
+
+		\CIMMessenger::add($message);
+	}
+
+	/**
+	 * Sends typing event.
+	 *
+	 * @param int $chatId
+	 * @return void
+	 * @throws LoaderException
+	 */
+	protected static function sendTyping(int $chatId, ?bool $reasoning = false): void
+	{
+		$action = new Chat\InputAction\Action(Chat::getInstance($chatId), Chat\InputAction\Type::Writing);
+		$action->setContextUser(self::getBotId());
+
+		if ($reasoning)
+		{
+			$action->setDuration(600)->setStatusMessageCode('IMBOT_COPILOT_INPUT_ACTION_THINKING');
+		}
+
+		$action->notify();
+
+		if (Loader::includeModule('pull'))
+		{
+			Pull\Event::send();
+		}
+	}
+
+	public static function onChatStart($dialogId, $joinFields)
+	{
+		return false;
+	}
+
+	public static function onGetInputActionStatusMessages()
+	{
+		return new EventResult(
+			EventResult::SUCCESS,
+			[
+				'IMBOT_COPILOT_INPUT_ACTION_THINKING' => Loc::getMessage(
+					'IMBOT_COPILOT_INPUT_ACTION_THINKING_MSGVER_1',
+					['#COPILOT_NAME#' => self::getBotName()]
+				),
+			],
+			self::MODULE_ID
+		);
+	}
+
+	//endregion
+
+	//region Options
+
+	/**
+	 * Returns current mode interaction with AI service: asynchronous requests or long pulling request.
+	 * @return string
+	 */
+	public static function getMode(): string
+	{
+		static $mode;
+		if ($mode === null)
+		{
+			$mode = Option::get(self::MODULE_ID, self::OPTION_MODE, self::MODE_LONG_PULLING);
+			if (!in_array($mode, [self::MODE_LONG_PULLING, self::MODE_ASYNC_QUEUE]))
+			{
+				$mode = self::MODE_LONG_PULLING;
+			}
+		}
+
+		return $mode;
+	}
+
+	protected static function getContextLimit(bool $byMention): int
+	{
+		if ($byMention)
+		{
+			return (int)Option::get(
+					self::MODULE_ID,
+					self::OPTION_MENTION_CONTEXT_AMOUNT,
+					self::EXTERNAL_MENTION_CONTEXT_AMOUNT
+				);
+		}
+
+		return self::getContextAmount();
+	}
+
+	protected static function convertToBbCode(string $text): string
+	{
+		if (class_exists(MarkdownToBBCodeTranslationService::class))
+		{
+			return ServiceLocator::getInstance()->get(MarkdownToBBCodeTranslationService::class)->convert($text);
+		}
+
+		return $text;
+	}
+
+
+	/**
+	 * Returns amount messages for context.
+	 * @return int
+	 */
+	public static function getContextAmount(): int
+	{
+		static $amount;
+		if ($amount === null)
+		{
+			$amount = (int)Option::get(self::MODULE_ID, self::OPTION_CONTEXT_AMOUNT, self::CONTEXT_AMOUNT_DEFAULT);
+			if ($amount == 0)
+			{
+				$amount = self::CONTEXT_AMOUNT_DEFAULT;
+			}
+		}
+
+		return $amount;
+	}
+
+	public static function isMemoryContextEnabled(): bool
+	{
+		return Option::get(self::MODULE_ID, 'enableCopilotMemoryContext', 'N') === 'Y';
+	}
+
+	protected static function getBotName(): string
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return 'CoPilot';
+		}
+
+		return CopilotNameResolver::getInstance()->getName();
+	}
+
+	//endregion
+}

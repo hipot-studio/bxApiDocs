@@ -11,6 +11,7 @@ use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\BaasManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
@@ -183,6 +184,7 @@ class CCrmRepeatSaleSegmentDetailsComponent extends Base
 		return [
 			'moduleId' => 'crm',
 			'contextId' => 'crm_repeat_sale_segment_prompt_' . CurrentUser::get()->getId(),
+			'feature' => CopilotFeatureCode::REPEAT_SALE_SEGMENT_PROMPT,
 			'category' => Category::CRM_COMMENT_FIELD->value,
 			'autoHide' => true,
 		];

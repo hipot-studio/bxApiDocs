@@ -9,6 +9,14 @@ namespace Bitrix\Crm\WebForm;
 
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
+use Bitrix\Crm\V2\Internal\Access\LegalRegistry\RegistryAccess;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FeatureGate;
+use Bitrix\Crm\V2\Public\Command\LegalRegistry\FormBindingsCommand;
+use Bitrix\Crm\V2\Public\Entity\LegalRegistry\FormBindings;
+use Bitrix\Crm\V2\Public\Provider\LegalRegistry\CatalogProvider;
+use Bitrix\Crm\V2\Public\Provider\LegalRegistry\UsageProvider;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormMutationGuard;
 
 /**
  * Class Options
@@ -21,6 +29,8 @@ class Options
 
 	/** @var Embed\Config $config Config. */
 	private $config;
+	private bool $hasLegalDocumentsPayload = false;
+	private mixed $legalDocumentsPayload = null;
 
 	/**
 	 * Create.
@@ -65,6 +75,12 @@ class Options
 	 */
 	public function merge(array $options = [])
 	{
+		if (is_array($options['data'] ?? null)
+			&& array_key_exists('legalDocuments', $options['data']))
+		{
+			$this->hasLegalDocumentsPayload = true;
+			$this->legalDocumentsPayload = $options['data']['legalDocuments'];
+		}
 		$this->form->merge($this->convertToFormOptions($options));
 		$this->form->getIntegration()->setData($options['integration'] ?? null);
 		$this->config->setDataFromArray($options['data'] ?? []);
@@ -76,25 +92,117 @@ class Options
 	 *
 	 * @return Main\Result
 	 */
-	public function save()
+	public function save(?int $userId = null)
 	{
 		$result = new Main\Result();
-		$this->form->save();
-
-		foreach ($this->form->getErrors() as $errorMessage)
+		if (!$this->hasLegalDocumentsPayload)
 		{
-			$result->addError(new Main\Error($errorMessage));
+			$this->form->save();
+			foreach ($this->form->getErrors() as $errorMessage)
+			{
+				$result->addError(new Main\Error($errorMessage));
+			}
+
+			return $result;
+		}
+		try { return $this->saveWithLegalDocuments($userId, $result); }
+		finally
+		{
+			$this->form->setLegalBindingsWriteContext(null, null);
+			$this->hasLegalDocumentsPayload = false;
+			$this->legalDocumentsPayload = null;
+		}
+	}
+
+	private function saveWithLegalDocuments(?int $userId, Main\Result $result): Main\Result
+	{
+		$userId ??= (int)CurrentUser::get()->getId();
+		if ($userId <= 0 || !RegistryAccess::forUser($userId)->canEditForm())
+		{
+			return $result->addError(new Main\Error('Legal document access denied.', 'NOT_FOUND_OR_DENIED'));
+		}
+		$availability = FeatureGate::requireEnabled();
+		if (!$availability->isSuccess()) { return $result->addErrors($availability->getErrors()); }
+		$payload = $this->legalDocumentsPayload;
+		try
+		{
+			if (!is_array($payload) || !array_key_exists('items', $payload)
+				|| !array_key_exists('expectedSourceRevision', $payload))
+			{
+				throw new \InvalidArgumentException('Invalid legal document bindings.');
+			}
+			$bindings = new FormBindings($payload['items'], $payload['expectedSourceRevision']);
+		}
+		catch (\TypeError|\InvalidArgumentException)
+		{
+			return $result->addError(new Main\Error('Invalid legal document bindings.', 'INVALID_PAYLOAD'));
+		}
+		$connection = Main\Application::getConnection();
+		$level = (new \ReflectionProperty($connection, 'transactionLevel'))->getValue($connection);
+		if ($level > 0)
+		{
+			return $result->addError(new Main\Error('An outer transaction is active.', 'INVALID_STATE'));
 		}
 
-		return $result;
+		$this->form->setLegalBindingsWriteContext($userId, $bindings);
+		$initialFormId = $this->form->getId();
+		$started = false;
+		$committed = false;
+		$guard = null;
+		try
+		{
+			$guard = $initialFormId > 0 ? FormMutationGuard::acquire((int)$initialFormId) : null;
+			$connection->startTransaction();
+			$started = true;
+			$this->form->save();
+			foreach ($this->form->getErrors() as $errorMessage)
+			{
+				$result->addError(new Main\Error($errorMessage));
+			}
+			if ($result->isSuccess())
+			{
+				$guard ??= FormMutationGuard::acquire((int)$this->form->getId());
+				$saved = (new FormBindingsCommand($userId, (int)$this->form->getId(), $bindings))->run();
+				if (!$saved->isSuccess()) { $result->addErrors($saved->getErrors()); }
+			}
+			if (!$result->isSuccess())
+			{
+				$connection->rollbackTransaction();
+				$started = false;
+				$this->form->setId($initialFormId);
+				return $result;
+			}
+			$connection->commitTransaction();
+			$started = false;
+			$committed = true;
+			$this->form->completeLegalBindingsWrite();
+			foreach ($this->form->getErrors() as $errorMessage)
+			{
+				$result->addError(new Main\Error($errorMessage));
+			}
+
+			return $result;
+		}
+		catch (\Throwable $error)
+		{
+			if ($started) { try { $connection->rollbackTransaction(); } catch (\Throwable) {} }
+			if (!$committed) { $this->form->setId($initialFormId); }
+
+			return $result->addError($committed
+				? new Main\Error('CRM form side effect failed after save.', 'SIDE_EFFECT_FAILED')
+				: new Main\Error('Legal document save failed.',
+					$error->getMessage() === 'REVISION_CONFLICT' ? 'REVISION_CONFLICT' : 'STORAGE_ERROR'));
+		}
+		finally { $guard?->release(); }
 	}
 
 	/**
 	 * Get options as array.
 	 *
+	 * @param int|null $userId User ID for the editor projection.
 	 * @return array
 	 */
-	public function getArray()
+	public function getArray(?int $userId = null)
 	{
 		$formData = $this->form->get();
 		$config = $this->config->toArray();
@@ -103,7 +211,7 @@ class Options
 		$refill = ($formData['FORM_SETTINGS']['REFILL']['ACTIVE'] ?? 'N') === 'Y';
 
 		return [
-			'data' => $config['data'],
+			'data' => array_replace($config['data'], $this->getLegalDocumentEditorData($userId)),
 			'identification' => [
 				'id' => $config['id'],
 				'sec' => $config['sec'],
@@ -189,6 +297,49 @@ class Options
 					isset($formData['FORM_SETTINGS']['BOOKING_RESOURCE_AUTO_SELECTION'])
 					&& $formData['FORM_SETTINGS']['BOOKING_RESOURCE_AUTO_SELECTION'] === 'Y'
 				),
+			],
+		];
+	}
+
+	private function getLegalDocumentEditorData(?int $userId): array
+	{
+		$userId ??= (int)CurrentUser::get()->getId();
+		if (!(new CatalogProvider())->getSchemaAccess($userId)->isSuccess())
+		{
+			return [];
+		}
+		$base = Manager::getUrl();
+		if (!is_string($base) || !str_starts_with($base, '/') || str_starts_with($base, '//'))
+		{
+			return [];
+		}
+		$formId = (int)$this->form->getId();
+		$bindings = new FormBindings([], null);
+		if ($formId > 0)
+		{
+			$result = (new UsageProvider())->getBindingsByForm($userId, $formId);
+			if (!$result->isSuccess() || $result->getBindings() === null)
+			{
+				return [];
+			}
+			$bindings = $result->getBindings();
+		}
+		$canEdit = RegistryAccess::forUser($userId)->canEditForm();
+
+		return [
+			'legalDocuments' => [
+				'items' => $bindings->items,
+				'expectedSourceRevision' => $bindings->expectedSourceRevision,
+			],
+			'legalDocumentIntegration' => [
+				'enabled' => true,
+				'capabilities' => [
+					'canRead' => true,
+					'canEdit' => $canEdit,
+					'canBind' => $canEdit && $formId > 0,
+				],
+				'catalogUrl' => (string)(new Main\Web\Uri($base))->addParams(['legal_document' => 'catalog']),
+				'cardUrl' => (string)(new Main\Web\Uri($base))->addParams(['legal_document' => 'card']),
 			],
 		];
 	}

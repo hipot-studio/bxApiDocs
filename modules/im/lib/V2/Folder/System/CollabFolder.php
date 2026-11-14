@@ -40,7 +40,7 @@ final class CollabFolder extends SystemFolder
 		return $this->getTitleLangKey() . '_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return Collab::isAvailable();
 	}

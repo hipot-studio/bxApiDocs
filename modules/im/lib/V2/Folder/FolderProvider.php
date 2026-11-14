@@ -6,11 +6,14 @@ namespace Bitrix\Im\V2\Folder;
 use Bitrix\Im\Model\FolderChatTable;
 use Bitrix\Im\Model\FolderSourceTable;
 use Bitrix\Im\Model\FolderTable;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Common\Normalizer;
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Folder\Cache\FolderCache;
 use Bitrix\Im\V2\Folder\Cache\FolderListData;
 use Bitrix\Im\V2\Folder\Definition\CompositeDefinition;
 use Bitrix\Im\V2\Folder\System\AllFolder;
+use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityResolver;
 
 class FolderProvider
 {
@@ -18,6 +21,7 @@ class FolderProvider
 		private readonly FolderCache $folderCache,
 		private readonly FolderBootstrapper $folderBootstrapper,
 		private readonly FolderFactory $folderFactory,
+		private readonly FolderVisibilityResolver $visibilityResolver,
 	)
 	{
 	}
@@ -55,6 +59,8 @@ class FolderProvider
 			$this->hydrateComposition($folder, $this->loadSourceCodesForFolder((int)$row['ID']));
 		}
 
+		$this->visibilityResolver->attachContext([$folder], (int)$row['USER_ID']);
+
 		return $folder;
 	}
 
@@ -72,7 +78,10 @@ class FolderProvider
 
 		if ($cached !== null)
 		{
-			return $this->hydrateFromCacheData($cached);
+			$collection = $this->hydrateFromCacheData($cached);
+			$this->visibilityResolver->attachContext($collection, $userId);
+
+			return $collection;
 		}
 
 		// Cache miss: lazy init system folders + MIG-01 (legacy pin migration).
@@ -145,7 +154,41 @@ class FolderProvider
 			$collection->add($folder);
 		}
 
+		$this->visibilityResolver->attachContext($collection, $userId);
+
 		return $collection;
+	}
+
+	/**
+	 * The single resolution point of the primary root folder for a user: the guest cut, then his root
+	 * layout narrowed to what is available to him, then {@see FolderCollection::getPrimaryRoot}.
+	 * Every consumer asks this method rather than reading the predicate off a folder of its own.
+	 *
+	 * The guest cut lives here because it is not in the layout: {@see AllFolder::isAvailable} answers
+	 * with the bare portal option and ignores the user, while a guest has no folders of his own at all
+	 * — he sits in one chat of somebody else's portal. He can still reach the pin endpoint, so without
+	 * this cut his pin would land in the set of a folder he cannot read. It is asked ahead of the
+	 * layout, whose read the cut would only throw away.
+	 *
+	 * Only the guest is cut, and deliberately not
+	 * {@see Features::isChatFoldersWebAvailableForUser}, which carries the release gate of the web
+	 * folders on top of the guest rule. Whether the folders are switched on in the web interface says
+	 * nothing about where a pin belongs: the write is dispatched by
+	 * {@see Features::isFolderScopedPinsAvailable} alone, and mixing the web gate in used to leave the
+	 * per-folder row unwritten - the mobile client reads pins by folder only and showed the chat
+	 * unpinned.
+	 *
+	 * @return Folder|null null when this user has no primary root folder at all — a guest, or a layout
+	 *                     that never got its system folders; the caller has to carry that null.
+	 */
+	public function getPrimaryRootForUser(int $userId): ?Folder
+	{
+		if ($userId <= 0 || User::getInstance($userId)->isGuest())
+		{
+			return null;
+		}
+
+		return $this->getByUser($userId)->onlyAvailable($userId)->getPrimaryRoot();
 	}
 
 	/**
@@ -242,7 +285,43 @@ class FolderProvider
 			}
 		}
 
+		$foldersByUser = [];
+		foreach ($result as $folder)
+		{
+			$foldersByUser[(int)$folder->getUserId()][] = $folder;
+		}
+
+		foreach ($foldersByUser as $userId => $folders)
+		{
+			$this->visibilityResolver->attachContext($folders, $userId);
+		}
+
 		return $result;
+	}
+
+	/**
+	 * Top-level folders the owner hid, read past {@see FolderCache}: the caller holds
+	 * {@see \Bitrix\Im\V2\Folder\Visibility\FolderVisibilityLock} and has to see the write of whoever
+	 * released it, while the cache of this hit may predate that write.
+	 *
+	 * @return int[]
+	 */
+	public function getHiddenByUserFolderIds(int $userId): array
+	{
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		$rows = FolderTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->where('PARENT_CHAT_ID', 0)
+			->where('HIDDEN_BY_USER', true)
+			->fetchAll()
+		;
+
+		return array_map(static fn (array $row): int => (int)$row['ID'], $rows);
 	}
 
 	/**

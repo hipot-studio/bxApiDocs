@@ -5,11 +5,15 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
+
+Loc::loadMessages(__FILE__);
 
 final class Exchange1cNavigationItem implements SettingsHubWrappedNavigationItemLifecycle
 {
@@ -33,17 +37,53 @@ final class Exchange1cNavigationItem implements SettingsHubWrappedNavigationItem
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return true;
+		return $permissions->isCrmAdmin()
+			&& in_array($this->siteLanguage, self::SUPPORTED_LANGUAGES, true);
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return in_array($this->siteLanguage, self::SUPPORTED_LANGUAGES, true)
-			&& $permissions->isCrmAdmin()
-			&& $this->isIblockAvailable
-			&& $this->isCurrencyAvailable
-			&& $this->isSaleAvailable
-			&& $this->isCatalogAvailable;
+		if (!$this->isIblockAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_EXCHANGE1C_IBLOCK_UNAVAILABLE'),
+					'EXCHANGE1C_IBLOCK_UNAVAILABLE',
+				),
+			);
+		}
+
+		if (!$this->isCurrencyAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_EXCHANGE1C_CURRENCY_UNAVAILABLE'),
+					'EXCHANGE1C_CURRENCY_UNAVAILABLE',
+				),
+			);
+		}
+
+		if (!$this->isSaleAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_EXCHANGE1C_SALE_UNAVAILABLE'),
+					'EXCHANGE1C_SALE_UNAVAILABLE',
+				),
+			);
+		}
+
+		if (!$this->isCatalogAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_EXCHANGE1C_CATALOG_UNAVAILABLE'),
+					'EXCHANGE1C_CATALOG_UNAVAILABLE',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

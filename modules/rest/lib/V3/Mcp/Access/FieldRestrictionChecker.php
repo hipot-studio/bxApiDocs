@@ -3,19 +3,39 @@
 namespace Bitrix\Rest\V3\Mcp\Access;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
+use Bitrix\Rest\V3\Exception\RestException;
+use Bitrix\Rest\V3\Mcp\Schema\AggregateSelectResolver;
 use Bitrix\Rest\V3\Schema\MethodDescription;
+use Bitrix\Rest\V3\Structure\Aggregation\AggregationSelectStructure;
+use Bitrix\Rest\V3\Structure\CursorStructure;
+use Bitrix\Rest\V3\Structure\FieldsStructure;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Ordering\OrderStructure;
+use Bitrix\Rest\V3\Structure\ReferencesDtoFields;
 
 /**
  * Turns the hiddenFields and fieldWhitelist declarations of McpTool into a real restriction:
  * the published schema hides such fields, and a tool argument that still mentions one is rejected here.
  *
- * The walk repeats FilterStructure::fillStructure() and Condition::__construct() node by node, so every shape
- * that ends up as a column of the query is collected. A shape those two would not accept is rejected instead
- * of being skipped: an argument the checker cannot read must not reach the executor.
+ * Fields of filter, order, cursor, fields and of an aggregation select are read by the structures those arguments
+ * feed, so the checker follows the same grammar as the request. A shape the structure would not accept is rejected
+ * instead of being skipped: an argument the checker cannot read must not reach the executor.
  */
 final class FieldRestrictionChecker
 {
 	private const FIELD_PATH_SEPARATOR = '.';
+
+	/**
+	 * @var array<string, class-string<ReferencesDtoFields>>
+	 */
+	private const STRUCTURE_ARGUMENTS = [
+		'order' => OrderStructure::class,
+		'fields' => FieldsStructure::class,
+	];
+
+	public function __construct(private readonly ?AggregateSelectResolver $aggregateSelectResolver = null)
+	{
+	}
 
 	/**
 	 * @throws McpException when tool arguments mention a field excluded from the export
@@ -28,7 +48,7 @@ final class FieldRestrictionChecker
 			return;
 		}
 
-		foreach ($this->collectReferencedFields($arguments) as $fieldName)
+		foreach ($this->collectReferencedFields($methodDescription, $arguments) as $fieldName)
 		{
 			if (!$mcpTool->isFieldAllowed($fieldName))
 			{
@@ -40,21 +60,40 @@ final class FieldRestrictionChecker
 	/**
 	 * @return string[]
 	 */
-	private function collectReferencedFields(array $arguments): array
+	private function collectReferencedFields(MethodDescription $methodDescription, array $arguments): array
 	{
 		$fieldNames = [];
 
-		foreach (['select', 'order', 'fields', 'aggregate'] as $key)
+		if ($this->getAggregateSelectResolver()->isAggregateSelect($methodDescription))
 		{
-			$this->collectFieldNames($arguments[$key] ?? null, $key, $fieldNames);
+			$this->collectStructureFieldNames(
+				AggregationSelectStructure::class,
+				$arguments['select'] ?? null,
+				'select',
+				$fieldNames,
+			);
+		}
+		else
+		{
+			$this->collectSelectFieldNames($arguments['select'] ?? null, $fieldNames);
+		}
+
+		foreach (self::STRUCTURE_ARGUMENTS as $argumentName => $structureClass)
+		{
+			$this->collectStructureFieldNames(
+				$structureClass,
+				$arguments[$argumentName] ?? null,
+				$argumentName,
+				$fieldNames,
+			);
 		}
 
 		if (isset($arguments['cursor']) && is_array($arguments['cursor']))
 		{
-			$this->addFieldName($arguments['cursor']['field'] ?? null, 'cursor', $fieldNames);
+			$this->collectStructureFieldNames(CursorStructure::class, $arguments['cursor'], 'cursor', $fieldNames);
 		}
 
-		$this->collectFilterFields($arguments['filter'] ?? null, $fieldNames);
+		$this->collectStructureFieldNames(FilterStructure::class, $arguments['filter'] ?? null, 'filter', $fieldNames);
 
 		return array_values(array_unique($fieldNames));
 	}
@@ -62,223 +101,66 @@ final class FieldRestrictionChecker
 	/**
 	 * @param string[] $fieldNames
 	 */
-	private function collectFieldNames(mixed $value, string $key, array &$fieldNames): void
+	private function collectSelectFieldNames(mixed $select, array &$fieldNames): void
+	{
+		if ($select === null)
+		{
+			return;
+		}
+
+		if (is_string($select))
+		{
+			// a scalar is cast to a single item list by the structure it feeds
+			$this->addFieldName($select, 'select', $fieldNames);
+
+			return;
+		}
+
+		if (!is_array($select))
+		{
+			throw $this->unsupportedShape('select');
+		}
+
+		foreach ($select as $itemKey => $item)
+		{
+			// SelectStructure::create() reads the value and ignores the key, so both positions are collected
+			if (!is_int($itemKey))
+			{
+				$this->addFieldName($itemKey, 'select', $fieldNames);
+			}
+
+			$this->addFieldName($item, 'select', $fieldNames);
+		}
+	}
+
+	/**
+	 * @param class-string<ReferencesDtoFields> $structureClass
+	 * @param string[] $fieldNames
+	 */
+	private function collectStructureFieldNames(
+		string $structureClass,
+		mixed $value,
+		string $argumentName,
+		array &$fieldNames,
+	): void
 	{
 		if ($value === null)
 		{
 			return;
 		}
 
-		if (is_string($value))
+		try
 		{
-			// a scalar is cast to a single item list by the structure it feeds
-			$this->addFieldName($value, $key, $fieldNames);
-
-			return;
+			$referencedFields = $structureClass::getReferencedFields($value);
+		}
+		catch (RestException)
+		{
+			throw $this->unsupportedShape($argumentName);
 		}
 
-		if (!is_array($value))
+		foreach ($referencedFields as $fieldName)
 		{
-			throw $this->unsupportedShape($key);
-		}
-
-		if ($key === 'aggregate')
-		{
-			// aggregate is a map of function name to the fields it is applied to
-			foreach ($value as $aggregatedFields)
-			{
-				$this->collectAggregatedFieldNames($aggregatedFields, $fieldNames);
-			}
-
-			return;
-		}
-
-		foreach ($value as $itemKey => $item)
-		{
-			if ($key === 'select')
-			{
-				// SelectStructure::create() reads the value and ignores the key, so both positions are collected
-				if (!is_int($itemKey))
-				{
-					$this->addFieldName($itemKey, $key, $fieldNames);
-				}
-
-				$this->addFieldName($item, $key, $fieldNames);
-
-				continue;
-			}
-
-			// fields and order are keyed by field name
-			$this->addFieldName(is_int($itemKey) ? $item : $itemKey, $key, $fieldNames);
-		}
-	}
-
-	/**
-	 * AggregationSelectStructure::create() takes the field name from the key and the value as its alias.
-	 * An integer key means the opposite: the value itself is the field name.
-	 *
-	 * @param string[] $fieldNames
-	 */
-	private function collectAggregatedFieldNames(mixed $aggregatedFields, array &$fieldNames): void
-	{
-		if ($aggregatedFields === null)
-		{
-			return;
-		}
-
-		if (is_string($aggregatedFields))
-		{
-			// a scalar is cast to a single item list by the structure it feeds
-			$this->addFieldName($aggregatedFields, 'aggregate', $fieldNames);
-
-			return;
-		}
-
-		if (!is_array($aggregatedFields))
-		{
-			throw $this->unsupportedShape('aggregate');
-		}
-
-		foreach ($aggregatedFields as $fieldKey => $alias)
-		{
-			$this->addFieldName(is_int($fieldKey) ? $alias : $fieldKey, 'aggregate', $fieldNames);
-		}
-	}
-
-	/**
-	 * @param string[] $fieldNames
-	 */
-	private function collectFilterFields(mixed $filter, array &$fieldNames): void
-	{
-		if ($filter === null)
-		{
-			return;
-		}
-
-		if (!is_array($filter))
-		{
-			throw $this->unsupportedShape('filter');
-		}
-
-		if ($filter === [])
-		{
-			return;
-		}
-
-		$isStructured =
-			isset($filter['type'])
-			|| isset($filter['logic'])
-			|| isset($filter['conditions'])
-			|| isset($filter['negative'])
-		;
-		if (!$isStructured)
-		{
-			$this->collectPlainFilterFields($filter, $fieldNames);
-
-			return;
-		}
-
-		if (($filter['type'] ?? null) === 'condition')
-		{
-			$this->addOperandField($filter['leftOperand'] ?? null, $fieldNames);
-			$this->addValueOperandField($filter['rightOperand'] ?? null, $fieldNames);
-
-			return;
-		}
-
-		if (!isset($filter['conditions']) || !is_array($filter['conditions']))
-		{
-			throw $this->unsupportedShape('filter');
-		}
-
-		foreach ($filter['conditions'] as $condition)
-		{
-			$this->collectFilterFields($condition, $fieldNames);
-		}
-	}
-
-	/**
-	 * @param string[] $fieldNames
-	 */
-	private function collectPlainFilterFields(array $filter, array &$fieldNames): void
-	{
-		if (is_array($filter[0] ?? null) && !isset($filter[0]['expression']))
-		{
-			foreach ($filter as $condition)
-			{
-				$this->collectFilterFields($condition, $fieldNames);
-			}
-
-			return;
-		}
-
-		$count = count($filter);
-		if (!array_key_exists(0, $filter) || ($count !== 2 && $count !== 3))
-		{
-			throw $this->unsupportedShape('filter');
-		}
-
-		// a plain condition is [field, operator, value] or [field, value]
-		$this->addOperandField($filter[0], $fieldNames);
-		$this->addValueOperandField($count === 3 ? ($filter[2] ?? null) : ($filter[1] ?? null), $fieldNames);
-	}
-
-	/**
-	 * A field position: either a name or an expression built over a name.
-	 *
-	 * @param string[] $fieldNames
-	 */
-	private function addOperandField(mixed $operand, array &$fieldNames): void
-	{
-		if (is_array($operand))
-		{
-			$this->addExpressionFields($operand, $fieldNames);
-
-			return;
-		}
-
-		$this->addFieldName($operand, 'filter', $fieldNames);
-	}
-
-	/**
-	 * A value position becomes a column only through an expression: Condition::__construct() converts an array
-	 * carrying the expression key and keeps anything else as a plain value.
-	 *
-	 * @param string[] $fieldNames
-	 */
-	private function addValueOperandField(mixed $operand, array &$fieldNames): void
-	{
-		if (is_array($operand) && isset($operand['expression']))
-		{
-			$this->addExpressionFields($operand, $fieldNames);
-		}
-	}
-
-	/**
-	 * @param string[] $fieldNames
-	 */
-	private function addExpressionFields(array $operand, array &$fieldNames): void
-	{
-		if (!isset($operand['expression']))
-		{
-			throw $this->unsupportedShape('filter');
-		}
-
-		// Factory::createFromArray() casts parameters to an array and passes them to the expression as column names
-		$parameters = (array)($operand['parameters'] ?? null);
-		if ($parameters === [])
-		{
-			throw $this->unsupportedShape('filter');
-		}
-
-		foreach ($parameters as $parameter)
-		{
-			if (!is_string($parameter) || $parameter === '')
-			{
-				throw $this->unsupportedShape('filter');
-			}
-
-			$this->addFieldName($parameter, 'filter', $fieldNames);
+			$this->addFieldName($fieldName, $argumentName, $fieldNames);
 		}
 	}
 
@@ -299,6 +181,11 @@ final class FieldRestrictionChecker
 
 		// restrictions are declared for the entity own fields, so a path to a related entity is checked by its root
 		$fieldNames[] = explode(self::FIELD_PATH_SEPARATOR, $fieldName, 2)[0];
+	}
+
+	private function getAggregateSelectResolver(): AggregateSelectResolver
+	{
+		return $this->aggregateSelectResolver ?? new AggregateSelectResolver();
 	}
 
 	private function unsupportedShape(string $argumentName): McpException

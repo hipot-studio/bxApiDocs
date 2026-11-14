@@ -68,8 +68,9 @@ class HtmlViewerPageService
 		$userId = $this->getCurrentUserId();
 		$name = (string)$file->getName();
 
-		return $this->preparePublicDomainParams([
+		$params = [
 			'NAME' => $name,
+			'EDIT_URL' => '',
 			'CONTENT_URL' => $this->sign($urlManager->getUrlForShowHtml((int)$file->getId()), $signature),
 			'PORTAL_URL' => $this->getPortalUrl(),
 			'HEADER_COMPOSITION' => $this->composeHeader(
@@ -78,7 +79,10 @@ class HtmlViewerPageService
 				$name,
 				$downloadUrl,
 			),
-		], $file->getRealObject());
+		];
+		$this->addEditUrl($params, $file);
+
+		return $this->preparePublicDomainParams($params, $file->getRealObject());
 	}
 
 	public function buildParamsByVersion(Version $version, ?UnifiedLinkAccessLevel $accessLevel = null): array
@@ -95,8 +99,9 @@ class HtmlViewerPageService
 		$userId = $this->getCurrentUserId();
 		$name = (string)$version->getName();
 
-		return $this->preparePublicDomainParams([
+		$params = [
 			'NAME' => $name,
+			'EDIT_URL' => '',
 			'CONTENT_URL' => $contentUrl,
 			'PORTAL_URL' => $this->getPortalUrl(),
 			'HEADER_COMPOSITION' => $this->composeHeader(
@@ -105,7 +110,9 @@ class HtmlViewerPageService
 				$name,
 				$downloadUrl,
 			),
-		]);
+		];
+
+		return $this->preparePublicDomainParams($params);
 	}
 
 	public function buildParamsByAttachedObject(
@@ -118,8 +125,9 @@ class HtmlViewerPageService
 		$userId = $this->getCurrentUserId();
 		$name = (string)$attached->getName();
 
-		return $this->preparePublicDomainParams([
+		$params = [
 			'NAME' => $name,
+			'EDIT_URL' => '',
 			'CONTENT_URL' => $urlManager->getUrlForShowHtmlAttached((int)$attached->getId()),
 			'PORTAL_URL' => $this->getPortalUrl(),
 			'HEADER_COMPOSITION' => $this->composeHeader(
@@ -128,7 +136,13 @@ class HtmlViewerPageService
 				$name,
 				$downloadUrl,
 			),
-		]);
+		];
+		if (!$attached->isSpecificVersion())
+		{
+			$this->addEditUrl($params, $attached->getFile(), (int)$attached->getId());
+		}
+
+		return $this->preparePublicDomainParams($params);
 	}
 
 	/**
@@ -165,6 +179,7 @@ class HtmlViewerPageService
 
 		return [
 			'NAME' => $name,
+			'EDIT_URL' => '',
 			'CONTENT_URL' => $urlManager->getUrlExternalLink([
 				'hash' => $link->getHash(),
 				'action' => 'showHtml',
@@ -232,6 +247,7 @@ class HtmlViewerPageService
 		$params['CONTENT_URL'] = (string)(new Uri($params['CONTENT_URL']))->addParams([
 			'access_token' => $accessToken,
 		]);
+		$params['EDIT_URL'] = '';
 		$params['PORTAL_URL'] = $this->getCanonicalUrl($params['PORTAL_URL']);
 
 		$composition = $params['HEADER_COMPOSITION'];
@@ -242,7 +258,11 @@ class HtmlViewerPageService
 
 		$composition['elements'] = array_values(array_filter(
 			(array)$composition['elements'],
-			static fn(string $element): bool => $element !== DocumentHeaderElement::Access->value,
+			static fn(string $element): bool => !in_array(
+				$element,
+				[DocumentHeaderElement::Access->value, DocumentHeaderElement::Edit->value],
+				true,
+			),
 		));
 		$composition['urls']['download'] = $this->getCanonicalUrl($composition['urls']['download']);
 
@@ -255,6 +275,29 @@ class HtmlViewerPageService
 		$params['HEADER_COMPOSITION'] = $composition;
 
 		return $params;
+	}
+
+	private function addEditUrl(array &$params, ?File $file, ?int $attachedObjectId = null): void
+	{
+		$params['EDIT_URL'] = '';
+		if (!$file instanceof File)
+		{
+			return;
+		}
+
+		$composition = $params['HEADER_COMPOSITION'] ?? null;
+		if (
+			!is_array($composition)
+			|| !in_array(DocumentHeaderElement::Edit->value, (array)($composition['elements'] ?? []), true)
+		)
+		{
+			return;
+		}
+
+		$params['EDIT_URL'] = Driver::getInstance()->getUrlManager()->getUrlForHtmlEditor(
+			$file,
+			$attachedObjectId,
+		);
 	}
 
 	protected function getPublicDomainAccessToken(): ?string

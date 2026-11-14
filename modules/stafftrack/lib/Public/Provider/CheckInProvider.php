@@ -2,13 +2,15 @@
 
 namespace Bitrix\StaffTrack\Public\Provider;
 
+use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Internal\Integration\Disk\FileResolver;
 use Bitrix\StaffTrack\Internal\Integration\HumanResources\DepartmentProvider as HumanResourcesDepartmentProvider;
 use Bitrix\StaffTrack\Internal\Integration\Pull;
+use Bitrix\StaffTrack\Internal\Integration\Timeman\TimeZoneService;
 use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkDayService;
 use Bitrix\StaffTrack\Internal\Model\CheckInDailyStatsTable;
 use Bitrix\StaffTrack\Internal\Repository\CheckInRepository;
@@ -16,15 +18,16 @@ use Bitrix\StaffTrack\Internal\Service\CheckIn\AggregatorEventMapper;
 use Bitrix\StaffTrack\Internal\Service\CheckIn\CheckInDayRowsReader;
 use Bitrix\StaffTrack\Internal\Service\CheckIn\CheckInVisitCounter;
 use Bitrix\StaffTrack\Public\Services\CheckInMarkerAggregator;
-use Bitrix\StaffTrack\Public\Services\DailyStatsUpdater;
+use Bitrix\StaffTrack\Public\Services\DailyStatsReader;
 use Bitrix\StaffTrack\Public\Services\FirstManualCheckInCache;
+use Bitrix\StaffTrack\Public\Services\LatestCheckInReader;
 use Bitrix\StaffTrack\Service\CheckIn\CheckInGeoCleanupService;
 use Bitrix\StaffTrack\Public\Services\MapDataCache;
+use Bitrix\StaffTrack\Public\Services\PointAcceptanceService;
+use Bitrix\StaffTrack\Public\Services\WorktimeMarkerBuilder;
 
 class CheckInProvider
 {
-	private const DAY_END_OFFSET = 86399;
-	private const MAX_TIMEZONE_OFFSET = 50400;
 	// Mirror of the tracker settings, moving either moves the gap threshold below: THRESHOLDS.TIME_CEILING_SEC
 	// in stafftrackmobile/install/mobileapp/stafftrackmobile/extensions/stafftrack/check-in-v3/auto-check-in/
 	// track-simplifier/extension.js and POLL_MOVING_MS in .../auto-check-in/geo-state-machine/extension.js.
@@ -36,15 +39,25 @@ class CheckInProvider
 	private const GAP_THRESHOLD_SEC = self::TRACKER_TIME_CEILING_SEC
 		+ (self::GAP_MISSED_POLLS_ALLOWED * self::TRACKER_POLL_MOVING_SEC);
 
+	// The messenger asks hasCheckIns on every hit, the answer is kept this long.
+	public const HAS_CHECK_INS_CACHE_TTL = 86400;
+	private const HAS_CHECK_INS_CACHE_DIR = '/stafftrack/has_check_ins';
+
 	private CheckInRepository $repository;
 	private CheckInDayRowsReader $dayRowsReader;
 	private CheckInVisitCounter $visitCounter;
+	private DailyStatsReader $dailyStatsReader;
+	private LatestCheckInReader $latestCheckInReader;
+	private TimeZoneService $timeZoneService;
 
-	public function __construct()
+	public function __construct(?TimeZoneService $timeZoneService = null)
 	{
 		$this->repository = new CheckInRepository();
 		$this->dayRowsReader = new CheckInDayRowsReader($this->repository);
 		$this->visitCounter = new CheckInVisitCounter($this->dayRowsReader);
+		$this->dailyStatsReader = new DailyStatsReader($this->repository);
+		$this->latestCheckInReader = new LatestCheckInReader($this->repository, $this->dailyStatsReader);
+		$this->timeZoneService = $timeZoneService ?? ServiceLocator::getInstance()->get(TimeZoneService::class);
 	}
 
 	private function subscribeToPush(int $userId): void
@@ -92,7 +105,7 @@ class CheckInProvider
 
 			$userIds = [
 				$currentUserId,
-				...DepartmentProvider::getSubordinateIds($currentUserId),
+				...DepartmentProvider::getTeamIds($currentUserId),
 			];
 		}
 
@@ -100,7 +113,7 @@ class CheckInProvider
 
 		$requestedDate = $this->getRequestedDate($timestamp > 0 ? $timestamp : null, $timezoneOffset);
 
-		if ($this->isPastLocalDate($requestedDate, $timezoneOffset))
+		if ($this->isClosedToNewPoints($requestedDate))
 		{
 			$cached = MapDataCache::get($currentUserId, $requestedDate, $userIds);
 			if ($cached !== null)
@@ -123,11 +136,19 @@ class CheckInProvider
 		return $result;
 	}
 
-	private function isPastLocalDate(string $requestedDate, int $timezoneOffset): bool
+	/**
+	 * Whether no point of the date can be accepted any more, so that its map may be cached. The rule belongs
+	 * to the acceptance and is read from there: the write drops the cache of a date by the same rule, and the
+	 * two telling a date apart differently would leave a stale map behind.
+	 */
+	private function isClosedToNewPoints(string $localDate): bool
 	{
-		$todayLocalDate = date('Y-m-d', time() + $timezoneOffset);
+		return PointAcceptanceService::isDateClosedToNewPoints($localDate, $this->getServerNow());
+	}
 
-		return $requestedDate < $todayLocalDate;
+	protected function getServerNow(): int
+	{
+		return time();
 	}
 
 	/**
@@ -165,12 +186,14 @@ class CheckInProvider
 			$requestedDate,
 		);
 
-		$dayResult = $this->buildDayResult($dayRows, $timezoneOffset, $currentUserId, $userId, $timestamp);
+		$dayResult = $this->buildDayResult($dayRows, $timezoneOffset, $currentUserId, $userId, $requestedDate);
 
-		// The day is already built above, so the badge is counted off the very markers this answer carries
-		// instead of being read a second time: the number on the avatar and the rows of the timeline are
-		// then one answer and cannot disagree. The daily-stats row is still raised - it is where a day
-		// with no row of its own gets one ({@see getDailyStatsByUsers()}) - but no longer counted from.
+		// The day is already built above, so the badge is counted off that very build instead of a second
+		// reading: the markers of the check-ins, 'rawMarkers'. The edges of the work day join the rows of the
+		// timeline and are no visits: the timeline shows a row more than the badge counts for every edge it
+		// shows - the start, and the end once the day is closed; without the right to read work time, none.
+		// The daily-stats row is still raised - it is where a day with no row of its own gets one
+		// ({@see getDailyStatsByUsers()}) - but no longer counted from.
 		$this->getDailyStatsByUsers([$userId], $timezoneOffset, $timestamp);
 		$stats = [$userId => $this->visitCounter->countMarkers($dayResult['rawMarkers'])];
 
@@ -227,7 +250,7 @@ class CheckInProvider
 			$requestedDate,
 		);
 
-		$dayResult = $this->buildDayResult($dayRows, $timezoneOffset, $currentUserId, $userId, $timestamp);
+		$dayResult = $this->buildDayResult($dayRows, $timezoneOffset, $currentUserId, $userId, $requestedDate);
 
 		$result = array_merge(
 			[
@@ -252,12 +275,53 @@ class CheckInProvider
 		return $result;
 	}
 
+	public function hasDayCheckIn(int $userId, int $timezoneOffset): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$statsByUser = $this->getDailyStatsByUsers([$userId], $timezoneOffset, withBackFill: false);
+
+		return (int)($statsByUser[$userId]['LAST_CHECK_IN_ID'] ?? 0) > 0;
+	}
+
 	/**
-	 * @param int $userId
-	 * @param int $timestamp
-	 * @param int|null $timezoneOffset
-	 * @return int
+	 * @return array{id: int, lat: float, lon: float, address: string, time: int, dateCreate: string}|null
 	 */
+	public function getLatestDayPoint(int $userId, int $timezoneOffset, bool $withStatsBackFill = true): ?array
+	{
+		if ($userId <= 0 || !$this->isGeoEncryptionAvailable())
+		{
+			return null;
+		}
+
+		$statsByUser = $this->getDailyStatsByUsers([$userId], $timezoneOffset, withBackFill: $withStatsBackFill);
+		$lastCheckInId = (int)($statsByUser[$userId]['LAST_CHECK_IN_ID'] ?? 0);
+		if ($lastCheckInId <= 0)
+		{
+			return null;
+		}
+
+		$checkIn = $this->repository->getCheckInsByIds([$lastCheckInId])[0] ?? null;
+		if ($checkIn === null || !CheckInNormalizer::hasGeo($checkIn))
+		{
+			return null;
+		}
+
+		$timestamp = $checkIn['DATE_CREATE'] instanceof DateTime ? $checkIn['DATE_CREATE']->getTimestamp() : 0;
+
+		return [
+			'id' => (int)$checkIn['ID'],
+			'lat' => (float)$checkIn['LATITUDE'],
+			'lon' => (float)$checkIn['LONGITUDE'],
+			'address' => (string)($checkIn['ADDRESS'] ?? ''),
+			'time' => $timestamp,
+			'dateCreate' => CheckInNormalizer::formatDateCreate($timestamp, $checkIn, $timezoneOffset),
+		];
+	}
+
 	public function getManualCheckInCountByDate(int $userId, int $timestamp, ?int $timezoneOffset = null): int
 	{
 		$timezoneOffset ??= \CTimeZone::GetOffset();
@@ -318,41 +382,62 @@ class CheckInProvider
 	}
 
 	/**
+	 * Whether the employee has ever checked in. Entry points outside the domain greet the user who
+	 * already knows the check-in differently from the one meeting it for the first time, and this is the
+	 * question they ask. A day already folded by the aggregation counts as much as a fresh row, so both
+	 * halves of the history answer; neither reads a single point. The answer is kept per employee for
+	 * HAS_CHECK_INS_CACHE_TTL, false included: a first mark is seen once the kept answer expires.
+	 */
+	public function hasCheckIns(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$cache = Cache::createInstance();
+		$cacheId = 'has_check_ins_' . $userId;
+		$cacheDir = self::HAS_CHECK_INS_CACHE_DIR . '/' . $userId;
+
+		if ($cache->initCache(self::HAS_CHECK_INS_CACHE_TTL, $cacheId, $cacheDir))
+		{
+			$vars = $cache->getVars();
+			if (is_array($vars) && array_key_exists('hasCheckIns', $vars))
+			{
+				return (bool)$vars['hasCheckIns'];
+			}
+		}
+
+		$hasCheckIns = $this->repository->hasCheckInRows($userId)
+			|| $this->repository->hasAggregatedDays($userId)
+		;
+
+		if ($cache->startDataCache(self::HAS_CHECK_INS_CACHE_TTL, $cacheId, $cacheDir))
+		{
+			$cache->endDataCache(['hasCheckIns' => $hasCheckIns]);
+		}
+
+		return $hasCheckIns;
+	}
+
+	/**
 	 * @param int[] $userIds
 	 * @return array{checkIns: array<int, array>, stats: array<int, int>, manualStats: array<int, int>}
 	 */
 	private function collectLatestCheckInsWithStats(array $userIds, int $timezoneOffset, int $timestamp): array
 	{
-		$userIds = array_values(array_unique(array_map('intval', $userIds)));
-		if (empty($userIds))
-		{
-			return ['checkIns' => [], 'stats' => [], 'manualStats' => []];
-		}
-
-		$statsByUser = $this->getDailyStatsByUsers($userIds, $timezoneOffset, $timestamp);
-		if (empty($statsByUser))
-		{
-			return ['checkIns' => [], 'stats' => [], 'manualStats' => []];
-		}
-
-		$lastCheckInIds = $this->extractLastCheckInIds($statsByUser);
-		$checkInsById = $this->resolveLastCheckIns($lastCheckInIds, $userIds, $timezoneOffset, $timestamp);
+		$requestedDate = $this->getRequestedDate($timestamp > 0 ? $timestamp : null, $timezoneOffset);
 
 		$checkIns = [];
+		// The points of the map, read by the one reader the presence list counts them with: the check-in
+		// the statistics of the date name last, and only where it carries coordinates.
 		$badgeUserIds = [];
-		foreach ($statsByUser as $statRow)
+		foreach ($this->latestCheckInReader->read($userIds, $requestedDate) as $userId => $latest)
 		{
-			$checkIn = $checkInsById[(int)$statRow['LAST_CHECK_IN_ID']] ?? null;
-			if ($checkIn === null || !CheckInNormalizer::hasGeo($checkIn))
-			{
-				continue;
-			}
-
-			$badgeUserIds[] = (int)$statRow['USER_ID'];
-			$checkIns[] = CheckInNormalizer::normalize($checkIn, $timezoneOffset);
+			$badgeUserIds[] = $userId;
+			$checkIns[] = CheckInNormalizer::normalize($latest['checkIn'], $timezoneOffset);
 		}
 
-		$requestedDate = $this->getRequestedDate($timestamp > 0 ? $timestamp : null, $timezoneOffset);
 		// The badge of every avatar on the team map, counted by the aggregator that draws the day itself.
 		// The stored CNT beside it counts records - a manual check-in taken where the tracker recorded a
 		// stay is two of those and one visit - and the employee whose card the map opens would then meet
@@ -404,108 +489,40 @@ class CheckInProvider
 	}
 
 	/**
-	 * @param array<int, array> $statsByUser
-	 * @return int[]
-	 */
-	private function extractLastCheckInIds(array $statsByUser): array
-	{
-		$ids = [];
-		foreach ($statsByUser as $stats)
-		{
-			$id = (int)$stats['LAST_CHECK_IN_ID'];
-			if ($id > 0)
-			{
-				$ids[] = $id;
-			}
-		}
-
-		return $ids;
-	}
-
-	/**
-	 * @param int[] $lastCheckInIds
-	 * @param int[] $userIds
-	 * @return array<int, array>
-	 */
-	private function resolveLastCheckIns(array $lastCheckInIds, array $userIds, int $timezoneOffset, int $timestamp): array
-	{
-		if (empty($lastCheckInIds))
-		{
-			return [];
-		}
-
-		$checkInRows = $this->repository->getCheckInsByIds($lastCheckInIds);
-		$checkInsById = array_column($checkInRows, null, 'ID');
-
-		$unresolvedIds = array_diff($lastCheckInIds, array_map('intval', array_keys($checkInsById)));
-		if (empty($unresolvedIds))
-		{
-			return $checkInsById;
-		}
-
-		foreach ($this->findAggregatedCheckInsByIds($unresolvedIds, $userIds, $timezoneOffset, $timestamp) as $id => $point)
-		{
-			$checkInsById[$id] = $point;
-		}
-
-		return $checkInsById;
-	}
-
-	/**
-	 * @param int[] $unresolvedIds
-	 * @param int[] $userIds
-	 * @return array<int, array>
-	 */
-	private function findAggregatedCheckInsByIds(array $unresolvedIds, array $userIds, int $timezoneOffset, int $timestamp): array
-	{
-		$requestedDate = $this->getRequestedDate($timestamp > 0 ? $timestamp : null, $timezoneOffset);
-		[$dateStart, $dateEnd] = $this->getWideDayBoundaries($requestedDate);
-
-		$aggregatedPoints = $this->repository->getAllUsersAggregatedPointsByPeriod($userIds, $dateStart, $dateEnd);
-		$unresolvedLookup = array_flip($unresolvedIds);
-
-		$found = [];
-		foreach ($aggregatedPoints as $point)
-		{
-			$id = (int)($point['ID'] ?? 0);
-			if (isset($unresolvedLookup[$id]))
-			{
-				$found[$id] = $point;
-			}
-		}
-
-		return $found;
-	}
-
-	/**
 	 * @param array $userIds
 	 * @param int $timezoneOffset
 	 * @param int $timestamp
+	 * @param bool $withBackFill
 	 * @return array<int, array> userId => stats row
 	 */
-	private function getDailyStatsByUsers(array $userIds, int $timezoneOffset, int $timestamp = 0): array
+	private function getDailyStatsByUsers(
+		array $userIds,
+		int $timezoneOffset,
+		int $timestamp = 0,
+		bool $withBackFill = true,
+	): array
 	{
 		$requestedDate = $this->getRequestedDate($timestamp > 0 ? $timestamp : null, $timezoneOffset);
-		$localDate = new \Bitrix\Main\Type\Date($requestedDate, 'Y-m-d');
 
-		$statsRows = $this->repository->getDailyStatsByUsers($userIds, $localDate);
-
-		$usersWithStats = array_map(static fn($row) => (int)$row['USER_ID'], $statsRows);
-		$usersWithoutStats = array_diff($userIds, $usersWithStats);
-
-		if (!empty($usersWithoutStats))
+		// A read that has to leave the table alone reads it bare: the location block of the mini profile
+		// only looks at the day, and raising the missing row there would write into the base on every hover.
+		// Everyone else goes through the reader that writes it, the one the map reads with. The presence list
+		// uses it only for a date closed to new points: on a date still open to them every check-in has written
+		// its row itself, and the list takes the rows as written.
+		if (!$withBackFill)
 		{
-			$this->backFillMissingStats($usersWithoutStats, $requestedDate, $localDate);
-			$statsRows = $this->repository->getDailyStatsByUsers($userIds, $localDate);
+			$localDate = new \Bitrix\Main\Type\Date($requestedDate, 'Y-m-d');
+
+			$statsByUser = [];
+			foreach ($this->repository->getDailyStatsByUsers($userIds, $localDate) as $row)
+			{
+				$statsByUser[(int)$row['USER_ID']] = $row;
+			}
+
+			return $statsByUser;
 		}
 
-		$statsByUser = [];
-		foreach ($statsRows as $row)
-		{
-			$statsByUser[(int)$row['USER_ID']] = $row;
-		}
-
-		return $statsByUser;
+		return $this->dailyStatsReader->read($userIds, $requestedDate);
 	}
 
 	/**
@@ -514,13 +531,7 @@ class CheckInProvider
 	 */
 	private function getWideDayBoundaries(string $requestedDate): array
 	{
-		$midnightUtc = strtotime($requestedDate . ' 00:00:00 UTC');
-		$endOfDayUtc = $midnightUtc + self::DAY_END_OFFSET;
-
-		return [
-			DateTime::createFromTimestamp($midnightUtc - self::MAX_TIMEZONE_OFFSET),
-			DateTime::createFromTimestamp($endOfDayUtc + self::MAX_TIMEZONE_OFFSET),
-		];
+		return DailyStatsReader::wideDayBoundaries($requestedDate);
 	}
 
 	/**
@@ -588,21 +599,29 @@ class CheckInProvider
 		int $timezoneOffset,
 		int $currentUserId,
 		int $userId,
-		int $timestamp
+		string $requestedDate
 	): array
 	{
 		$serverNow = time();
-		// The day being asked about, read the way the rows of this answer were already collected: a
-		// timestamp of nothing is how a client says "today" (getRequestedDate), and taken raw here it would
-		// put the work day of 1970 under the track of today - a day answered as one nobody ever worked.
-		$timestamp = $timestamp > 0 ? $timestamp : $serverNow;
 
 		// One day and one clock: the work day is windowed by the very moment and offset the points of this
 		// answer were already collected under, and not by the clock of whoever is looking at them.
-		[$dayAnchorTimestamp, $dayAnchorOffset] = self::dayReadingAnchor($dayRows, $timestamp, $timezoneOffset, $userId);
+		[$dayAnchorTimestamp, $dayAnchorOffset] = $this->dayReadingAnchor(
+			$dayRows,
+			$requestedDate,
+			$timezoneOffset,
+			$userId,
+		);
 		// And the same window says how old the day is: the cleanup meets the points where they begin, so
-		// that is the edge the retention is measured at - see areDurationsSuppressed().
-		[$dayWindowStart, $dayWindowEnd] = WorkDayService::getDayWindow($dayAnchorTimestamp, $dayAnchorOffset);
+		// that is the edge the retention is measured at - see areDurationsSuppressed(). A day without points
+		// has no stamp to count the window by, and when the clocks of the employee or of the server are changed
+		// around its date, the offset of its noon may be an hour off at either midnight: such a day runs from
+		// midnight to midnight by the clock of the employee.
+		$isClockChanged = $dayRows === []
+			&& $this->isClockChangedAround($userId, $dayAnchorTimestamp, $dayAnchorOffset, $timezoneOffset);
+		[$dayWindowStart, $dayWindowEnd] = $isClockChanged
+			? $this->employeeDayWindow($userId, $requestedDate, $dayAnchorTimestamp, $timezoneOffset)
+			: WorkDayService::getDayWindow($dayAnchorTimestamp, $dayAnchorOffset);
 
 		$withDurations = !self::areDurationsSuppressed(
 			$this->isGeoRetentionLimited(),
@@ -616,12 +635,8 @@ class CheckInProvider
 		// what the day is READ by below rather than a time this answer carries. Breaks sign the silence, and
 		// only durations are signed with them.
 		//
-		// Both halves are asked under one and the same condition, because both are read for the durations
-		// alone: the bounds are the edges of the track, so a day with no points has nothing to draw them
-		// around, and a day whose durations are withheld has nothing to measure between them - its client
-		// leaves before it ever reads them. Asked all the same, they would cost the resolve of an entire org
-		// structure for an answer nobody unpacks, and nothing downstream would ever show it.
-		$withDayReading = $withDurations && $dayRows !== [];
+		// The bounds come from work time tracking, so they are read for a day without points too.
+		$withPauses = $withDurations && $dayRows !== [];
 
 		[
 			'start' => $dayStartTimestamp,
@@ -629,12 +644,12 @@ class CheckInProvider
 			'closed' => $isDayClosed,
 			'closedAtUnrestricted' => $dayClosedAtUnrestricted,
 			'pauses' => $pauses,
-		] = WorkDayService::getDay(
+		] = WorkDayService::getDayOfWindow(
 			$userId,
-			$dayAnchorTimestamp,
-			$dayAnchorOffset,
-			withBounds: $withDayReading,
-			withPauses: $withDayReading,
+			$dayWindowStart,
+			$dayWindowEnd,
+			withBounds: true,
+			withPauses: $withPauses,
 		);
 
 		// A closed record can carry a stop written into the future - stopping a paused day records the
@@ -697,6 +712,28 @@ class CheckInProvider
 			);
 		}
 
+		// The edges of the work day are printed in one clock, as the client reads one zone per day: the offset
+		// the day is windowed by. By the noon a start before a change of the clocks would read an hour off,
+		// just after midnight even under the date before, so a day without points the clocks are changed around
+		// is printed by the clock its work day began under (closed, if it began the date before).
+		$worktimeOffset = $isClockChanged
+			? $this->printingOffset(
+				$userId,
+				$dayStartTimestamp ?? $dayCloseTimestamp ?? $dayAnchorTimestamp,
+				$timezoneOffset,
+			)
+			: $dayAnchorOffset;
+
+		// the start and the end of the work day join the check-in markers in one order by time
+		$markersOfTheDay = [
+			...$normalizedMarkers,
+			...WorktimeMarkerBuilder::build($dayStartTimestamp, $dayCloseTimestamp, $worktimeOffset),
+		];
+		usort(
+			$markersOfTheDay,
+			static fn (array $first, array $second): int => $first['time'] <=> $second['time'],
+		);
+
 		$track = self::buildTrack(
 			$dayRows,
 			self::collectStayIntervals($markers),
@@ -707,9 +744,10 @@ class CheckInProvider
 
 		return [
 			'track' => $track,
-			'markers' => $normalizedMarkers,
+			'markers' => $markersOfTheDay,
 			// The markers as the aggregator answered them, for a caller that has to count the visits of
-			// the day rather than draw them - counted off the same build, never off a second reading.
+			// the day rather than draw them - counted off the same build, never off a second reading. The
+			// edges of the work day that joined 'markers' above are no visits and stay out of here.
 			'rawMarkers' => $markers,
 			'isDayClosed' => $isDayClosed,
 			'timing' => self::buildDayTiming(
@@ -745,23 +783,27 @@ class CheckInProvider
 	 * point, the offset off the first point that carries one: the stamp is nullable, and a day opening with
 	 * a folded point that kept none would be windowed in the hours of the server instead of his own.
 	 *
-	 * A day of no points is read for nothing but whether it is over, and there is no point to take the pair
-	 * from: such a day keeps the offset of the request, as it always did. Nothing of the day hangs on it -
-	 * an empty day has no track to measure and no geodata to have lost.
+	 * A day without points is anchored at noon of the named date in the zone of the employee. When the clocks
+	 * are changed around the date, the noon only names it, and the window is counted from its two midnights
+	 * (employeeDayWindow()).
 	 *
 	 * @param array<int, array> $dayRows
 	 * @return array{0: int, 1: int}
 	 */
-	private static function dayReadingAnchor(
+	private function dayReadingAnchor(
 		array $dayRows,
-		int $timestamp,
+		string $requestedDate,
 		int $timezoneOffset,
 		int $userId
 	): array
 	{
 		if ($dayRows === [])
 		{
-			return [$timestamp, $timezoneOffset];
+			// the named date as filterDayRows() and the presence list read it
+			$serverNoon = (int)strtotime($requestedDate . ' 12:00:00');
+			$anchor = $serverNoon - $this->employeeTimezoneOffset($userId, $serverNoon, $timezoneOffset);
+
+			return [$anchor, $this->employeeTimezoneOffset($userId, $anchor, $timezoneOffset)];
 		}
 
 		$firstRow = $dayRows[array_key_first($dayRows)];
@@ -771,6 +813,114 @@ class CheckInProvider
 			$dateCreate instanceof DateTime ? $dateCreate->getTimestamp() : (int)$dateCreate,
 			CheckInDayRowsReader::resolveTimezoneOffset($dayRows, $userId),
 		];
+	}
+
+	/**
+	 * Whether the offset of the employee from the server zone is another than at the noon of his date at either
+	 * midnight the noon windows the day by, or a day before or after the noon: the clocks of one of the two are
+	 * changed around the date. An employee of an unknown zone keeps the offset of the request all along, and his
+	 * day is windowed by the noon as before.
+	 */
+	private function isClockChangedAround(int $userId, int $noon, int $noonOffset, int $requestOffset): bool
+	{
+		[$windowStart, $windowEnd] = WorkDayService::getDayWindow($noon, $noonOffset);
+		foreach ([$noon - 86400, $windowStart, $windowEnd, $noon + 86400] as $moment)
+		{
+			if ($this->employeeTimezoneOffset($userId, $moment, $requestOffset) !== $noonOffset)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The window of a day without points the clocks are changed around: from the first moment of its date to
+	 * the first moment of the next one, by the clock of the employee. The offset of the noon alone may be an
+	 * hour off at one of the two midnights: a shift begun before the change would fall out of its day, or one
+	 * of the evening before into it.
+	 *
+	 * @param int $noon the noon of the date the employee lives (dayReadingAnchor())
+	 * @return array{0: int, 1: int} start and end of the local day of the employee, end excluded
+	 */
+	private function employeeDayWindow(int $userId, string $date, int $noon, int $requestOffset): array
+	{
+		$wallMidnight = (int)strtotime($date . ' 00:00:00 UTC');
+
+		return [
+			$this->employeeMidnight($userId, $wallMidnight, $noon - 86400, $noon, $requestOffset),
+			$this->employeeMidnight($userId, $wallMidnight + 86400, $noon, $noon + 86400, $requestOffset),
+		];
+	}
+
+	/**
+	 * The moment the clock of the employee reads that midnight at. It is counted by the offset of the noon before
+	 * it and by that of the noon after it, and the count the offset at the moment itself confirms is the one: the
+	 * earlier when the clocks go back after midnight, the later when they go back before it. A midnight neither
+	 * count confirms is skipped by the clocks, and the date begins where they are put forward.
+	 *
+	 * @param int $wallMidnight the midnight as a wall time, counted as if it were UTC
+	 */
+	private function employeeMidnight(
+		int $userId,
+		int $wallMidnight,
+		int $noonBefore,
+		int $noonAfter,
+		int $requestOffset,
+	): int
+	{
+		$offsetBefore = $this->employeeUtcOffset($userId, $noonBefore, $requestOffset);
+		$byOffsetBefore = $wallMidnight - $offsetBefore;
+		if ($this->employeeUtcOffset($userId, $byOffsetBefore, $requestOffset) === $offsetBefore)
+		{
+			return $byOffsetBefore;
+		}
+
+		$offsetAfter = $this->employeeUtcOffset($userId, $noonAfter, $requestOffset);
+		$byOffsetAfter = $wallMidnight - $offsetAfter;
+		if ($this->employeeUtcOffset($userId, $byOffsetAfter, $requestOffset) === $offsetAfter)
+		{
+			return $byOffsetAfter;
+		}
+
+		return $byOffsetBefore;
+	}
+
+	/**
+	 * The offset of the employee from UTC at that moment: his offset from the server zone and that of the server.
+	 */
+	private function employeeUtcOffset(int $userId, int $timestamp, int $requestOffset): int
+	{
+		return $this->employeeTimezoneOffset($userId, $timestamp, $requestOffset) + (int)date('Z', $timestamp);
+	}
+
+	/**
+	 * The offset from the server zone that prints that moment by the clock of the employee. The server prints
+	 * by its own clock at the moment handed to it, so the offset at the moment itself would print an hour off
+	 * when the clocks of the server are changed in between.
+	 */
+	private function printingOffset(int $userId, int $timestamp, int $requestOffset): int
+	{
+		$wallTime = $timestamp + $this->employeeUtcOffset($userId, $timestamp, $requestOffset);
+
+		return (int)strtotime(gmdate('Y-m-d H:i:s', $wallTime)) - $timestamp;
+	}
+
+	/**
+	 * The offset of the employee from the server zone at that moment, in the zone work time tracking records
+	 * his day in; the offset of the request without work time tracking.
+	 */
+	protected function employeeTimezoneOffset(int $userId, int $timestamp, int $requestOffset): int
+	{
+		try
+		{
+			return $this->timeZoneService->getEmployeeOffsetFromServer($userId, $timestamp) ?? $requestOffset;
+		}
+		catch (\Throwable)
+		{
+			return $requestOffset;
+		}
 	}
 
 	/**
@@ -909,6 +1059,11 @@ class CheckInProvider
 	protected function isGeoRetentionLimited(): bool
 	{
 		return Feature::isGeoRetentionLimited();
+	}
+
+	protected function isGeoEncryptionAvailable(): bool
+	{
+		return Feature::isGeoEncryptionAvailable();
 	}
 
 	/**
@@ -1118,64 +1273,8 @@ class CheckInProvider
 		return $result;
 	}
 
-	private function backFillMissingStats(array $userIds, string $requestedDate, Main\Type\Date $localDate): void
-	{
-		[$dateStart, $dateEnd] = $this->getWideDayBoundaries($requestedDate);
-
-		$allCheckInRows = $this->repository->getAllUsersCheckInByPeriod($userIds, $dateStart, $dateEnd);
-		$allAggregatedPoints = $this->repository->getAllUsersAggregatedPointsByPeriod($userIds, $dateStart, $dateEnd);
-
-		$checkInsByUser = [];
-		foreach (array_merge($allCheckInRows, $allAggregatedPoints) as $row)
-		{
-			if ($this->isCheckInOnLocalDate($row, $requestedDate))
-			{
-				$checkInsByUser[(int)$row['USER_ID']][] = $row;
-			}
-		}
-
-		$statsUpdater = new DailyStatsUpdater();
-
-		foreach ($userIds as $userId)
-		{
-			$allCheckIns = $checkInsByUser[$userId] ?? [];
-			if (empty($allCheckIns))
-			{
-				continue;
-			}
-
-			usort($allCheckIns, static function ($a, $b)
-			{
-				$tsA = ($a['DATE_CREATE'] instanceof DateTime ? $a['DATE_CREATE']->getTimestamp() : (int)$a['DATE_CREATE']) + (int)($a['USER_TIMEZONE'] ?? 0);
-				$tsB = ($b['DATE_CREATE'] instanceof DateTime ? $b['DATE_CREATE']->getTimestamp() : (int)$b['DATE_CREATE']) + (int)($b['USER_TIMEZONE'] ?? 0);
-
-				return $tsA <=> $tsB ?: ((int)($a['ID'] ?? 0) <=> (int)($b['ID'] ?? 0));
-			});
-
-			$statsUpdater->backFillForUser($userId, $allCheckIns, $localDate);
-		}
-	}
-
 	private function isCheckInOnLocalDate(array $checkIn, string $requestedDate): bool
 	{
-		$dateCreate = $checkIn['DATE_CREATE'] ?? null;
-
-		if ($dateCreate instanceof DateTime)
-		{
-			$timestamp = $dateCreate->getTimestamp();
-		}
-		elseif (is_int($dateCreate))
-		{
-			$timestamp = $dateCreate;
-		}
-		else
-		{
-			return false;
-		}
-
-		$userTimezone = (int)($checkIn['USER_TIMEZONE'] ?? 0);
-		$localDate = date('Y-m-d', $timestamp + $userTimezone);
-
-		return $localDate === $requestedDate;
+		return DailyStatsReader::isCheckInOnLocalDate($checkIn, $requestedDate);
 	}
 }

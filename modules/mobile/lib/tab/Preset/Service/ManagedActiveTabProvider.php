@@ -16,6 +16,7 @@ final class ManagedActiveTabProvider
 		private readonly Manager $manager,
 		private readonly int $userId,
 		private readonly string $siteId,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly PresetAccessPolicy $accessPolicy = new PresetAccessPolicy(),
 		private readonly UserPresetStateService $stateService = new UserPresetStateService(),
 		?TabPresetConfigProvider $configProvider = null,
@@ -26,6 +27,7 @@ final class ManagedActiveTabProvider
 		$this->configProvider = $configProvider ?? new TabPresetConfigProvider($this->manager);
 		$this->presetResolver = $presetResolver ?? new PresetResolver(
 			manager: $this->manager,
+			cacheInvalidator: $this->cacheInvalidator,
 			accessPolicy: $this->accessPolicy,
 			stateService: $this->stateService,
 			configProvider: $this->configProvider,

@@ -3,8 +3,11 @@ namespace Bitrix\ImOpenLines\Integrations\Report\Statistics;
 
 
 use Bitrix\ImOpenLines\Integrations\Report\Statistics\Entity\StatisticQueueTable;
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Entity\Query;
+use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -23,6 +26,9 @@ abstract class Manager
 	const DIALOG_CREATE_STATISTIC_KEY = 'dialog_create';
 	const DIALOG_SKIP_STATISTIC_KEY = 'dialog_skip';
 	const DIALOG_ANSWER_STATISTIC_KEY = 'dialog_answer';
+
+	private const TRANSACTION_BATCH_SIZE = 500;
+	private const NESTED_ROLLBACK_MESSAGE = 'Nested rollbacks are unsupported.';
 	/**
 	 * @return array
 	 */
@@ -85,7 +91,7 @@ abstract class Manager
 					'SESSION_ID' => $sessionId,
 					'STATISTIC_KEY' => $statisticKey,
 					'DATE_QUEUE' => new DateTime(),
-					'PARAMS' => $additionalParams,
+					'PARAMS' => QueuePayload::encode($additionalParams),
 				)
 			));
 		}
@@ -99,54 +105,125 @@ abstract class Manager
 	/**
 	 * @return string
 	 */
-	public static function calculateStatisticsInQueue(): string
+	public static function calculateStatisticsInQueue(int $pageSize = 100000): string
 	{
-		$pageSize = 100000;
-
-		$query = new Query(StatisticQueueTable::getEntity());
-		$query->addSelect('ID');
-		$query->addSelect('STATISTIC_KEY');
-		$query->addSelect('PARAMS');
-		$query->addOrder('DATE_QUEUE');
-		$query->where('DATE_QUEUE', '<=', new DateTime());
-		$query->setLimit($pageSize);
-
-		$offset = 0;
+		$connection = Application::getConnection();
+		$dateLimit = new DateTime();
+		$lastId = 0;
 		do
 		{
-			$query->setOffset($offset);
-			$cursor = $query->exec();
-			$hasResultData = $cursor->getSelectedRowsCount() > 0;
-			if ($hasResultData)
+			// Processed rows are deleted, so the page is taken by key rather than by offset
+			$cursor = StatisticQueueTable::query()
+				->setSelect(['ID', 'STATISTIC_KEY', 'PARAMS'])
+				->where('ID', '>', $lastId)
+				->where('DATE_QUEUE', '<=', $dateLimit)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit($pageSize)
+				->exec()
+			;
+			$hasResultData = false;
+			// One commit per batch; each row gets its own savepoint inside processQueueItem()
+			$connection->startTransaction();
+			try
 			{
+				$batchCount = 0;
 				while ($resultFromQueue = $cursor->fetch())
 				{
-					$id = $resultFromQueue['ID'];
-					$statisticNameKey = $resultFromQueue['STATISTIC_KEY'];
-					$params = $resultFromQueue['PARAMS'];
-					if (is_array($params))
+					$hasResultData = true;
+					$lastId = (int)$resultFromQueue['ID'];
+					self::processQueueItem($resultFromQueue);
+
+					if (++$batchCount >= self::TRANSACTION_BATCH_SIZE)
 					{
-						if (is_array($resultFromQueue['PARAMS']['OPERATOR_ID']))
-						{
-							$savedParams = $params;
-							foreach ($resultFromQueue['PARAMS']['OPERATOR_ID'] as $operatorId)
-							{
-								$savedParams['OPERATOR_ID'] = $operatorId;
-								self::writeToStatistics($statisticNameKey, $savedParams);
-							}
-						}
-						else
-						{
-							self::writeToStatistics($statisticNameKey, $params);
-						}
+						$connection->commitTransaction();
+						$connection->startTransaction();
+						$batchCount = 0;
 					}
-					self::removeFromQueue($id);
 				}
-				$offset += $pageSize;
+				$connection->commitTransaction();
+			}
+			catch (\Throwable $exception)
+			{
+				// The whole batch is rolled back and stays in the queue for the next run
+				self::rollbackTransaction($connection);
+				self::writeToLog($exception);
+
+				break;
 			}
 		}
 		while ($hasResultData);
 
 		return __METHOD__. '();';
+	}
+
+	private static function processQueueItem(array $row): void
+	{
+		try
+		{
+			$params = is_array($row['PARAMS']) ? QueuePayload::decode($row['PARAMS']) : null;
+		}
+		catch (ArgumentException $exception)
+		{
+			self::writeToLog($exception);
+			self::removeFromQueue($row['ID']);
+
+			return;
+		}
+
+		// A failed write keeps the row for the next run and leaves no partial aggregates
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			if ($params !== null)
+			{
+				self::writeQueueItemToStatistics($row['STATISTIC_KEY'], $params);
+			}
+			self::removeFromQueue($row['ID']);
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $exception)
+		{
+			self::rollbackTransaction($connection);
+			self::writeToLog($exception);
+		}
+	}
+
+	private static function rollbackTransaction(Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (TransactionException $exception)
+		{
+			// Inside an outer transaction the rollback to the savepoint is already done
+			if ($exception->getMessage() !== self::NESTED_ROLLBACK_MESSAGE)
+			{
+				throw $exception;
+			}
+		}
+	}
+
+	private static function writeQueueItemToStatistics($statisticNameKey, array $params): void
+	{
+		if (is_array($params['OPERATOR_ID'] ?? null))
+		{
+			$savedParams = $params;
+			foreach ($params['OPERATOR_ID'] as $operatorId)
+			{
+				$savedParams['OPERATOR_ID'] = $operatorId;
+				self::writeToStatistics($statisticNameKey, $savedParams);
+			}
+		}
+		else
+		{
+			self::writeToStatistics($statisticNameKey, $params);
+		}
+	}
+
+	private static function writeToLog(\Throwable $exception): void
+	{
+		Application::getInstance()->getExceptionHandler()->writeToLog($exception);
 	}
 }

@@ -2,7 +2,6 @@
 
 namespace Bitrix\Im\V2\Pull\Event;
 
-use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\CollabChat;
@@ -10,6 +9,7 @@ use Bitrix\Im\V2\Pull\Dto\Diff;
 use Bitrix\Im\V2\Pull\EventType;
 use Bitrix\Im\V2\Pull\RecentPreviewPullTrait;
 use Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback;
+use Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerReader;
 use Bitrix\Im\V2\Recent\PreviewSource\PreviewSource;
 use Bitrix\Main\Type\DateTime;
 
@@ -22,6 +22,8 @@ class RecentUpdate extends BaseChatEvent
 
 	/** @var array<int,PreviewSource>|null */
 	private ?array $collabPreviewSources = null;
+
+	private ?CollabPreviewSourcePointerReader $collabPreviewSourcePointerReader = null;
 
 	private ?CollabPreviewSourcePiggyback $previewHint = null;
 
@@ -218,27 +220,13 @@ class RecentUpdate extends BaseChatEvent
 			return $this->collabPreviewSources;
 		}
 
-		$recipients = $this->getRecipients();
-		if (empty($recipients))
-		{
-			return $this->collabPreviewSources;
-		}
-
 		$collabChatId = (int)$this->chat->getId();
 		$mainLastMessageId = $this->chat->getLastMessage()?->getId() ?? 0;
 
-		$rows = RecentTable::query()
-			->setSelect(['USER_ID', 'PREVIEW_SOURCE_CID', 'PREVIEW_SOURCE_MID'])
-			->where('ITEM_CID', $collabChatId)
-			->whereIn('USER_ID', $recipients)
-			->fetchAll()
-		;
-
-		foreach ($rows as $row)
+		foreach ($this->getCollabPreviewSourcePointerReader()->read() as $userId => $pointer)
 		{
-			$userId = (int)$row['USER_ID'];
-			$sourceMessageId = (int)($row['PREVIEW_SOURCE_MID'] ?? 0);
-			$sourceChatId = (int)($row['PREVIEW_SOURCE_CID'] ?? 0);
+			$sourceMessageId = $pointer['messageId'];
+			$sourceChatId = $pointer['sourceChatId'];
 
 			$this->collabPreviewSources[$userId] = ($sourceMessageId > 0 && $sourceChatId > 0)
 				? new PreviewSource(
@@ -250,6 +238,16 @@ class RecentUpdate extends BaseChatEvent
 		}
 
 		return $this->collabPreviewSources;
+	}
+
+	private function getCollabPreviewSourcePointerReader(): CollabPreviewSourcePointerReader
+	{
+		$this->collabPreviewSourcePointerReader ??= new CollabPreviewSourcePointerReader(
+			(int)$this->chat->getId(),
+			$this->recipients,
+		);
+
+		return $this->collabPreviewSourcePointerReader;
 	}
 
 	protected function getType(): EventType

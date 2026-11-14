@@ -19,7 +19,7 @@ use Bitrix\Main\Result;
  */
 final class MergeEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.livefeed.merge.enabled';
+	public const ID = 'crm.livefeed.merge.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly LiveFeedSettings $liveFeedSettings;
@@ -29,18 +29,18 @@ final class MergeEnabledSetting extends AbstractSetting
 		$this->liveFeedSettings = $liveFeedSettings ?? LiveFeedSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

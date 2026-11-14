@@ -12,9 +12,10 @@ use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exception\Validation\DtoFieldRequiredAttributeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Structure\Ordering\OrderItem;
+use Bitrix\Rest\V3\Structure\ReferencesDtoFields;
 use Bitrix\Rest\V3\Structure\Structure;
 
-final class ItemListOrderStructure extends Structure
+final class ItemListOrderStructure extends Structure implements ReferencesDtoFields
 {
 	/** @param OrderItem[] $items */
 	private function __construct(private readonly array $items)
@@ -23,18 +24,7 @@ final class ItemListOrderStructure extends Structure
 
 	public static function create(mixed $value, string $dtoClass, Request $request): self
 	{
-		if (!is_array($value) || ($value !== [] && array_is_list($value)))
-		{
-			throw new InvalidOrderException($value);
-		}
-
-		foreach ($value as $order)
-		{
-			if (!is_string($order))
-			{
-				throw new InvalidOrderException($order);
-			}
-		}
+		self::assertShape($value);
 
 		$items = [];
 		foreach ($value as $fieldName => $order)
@@ -67,6 +57,38 @@ final class ItemListOrderStructure extends Structure
 		}
 
 		return new self($items);
+	}
+
+	/**
+	 * The fields of the order are its keys.
+	 *
+	 * @return list<string>
+	 * @throws InvalidOrderException
+	 */
+	public static function getReferencedFields(mixed $value): array
+	{
+		self::assertShape($value);
+
+		return array_map('strval', array_keys($value));
+	}
+
+	/**
+	 * @throws InvalidOrderException
+	 */
+	private static function assertShape(mixed $value): void
+	{
+		if (!is_array($value) || ($value !== [] && array_is_list($value)))
+		{
+			throw new InvalidOrderException($value);
+		}
+
+		foreach ($value as $order)
+		{
+			if (!is_string($order))
+			{
+				throw new InvalidOrderException($order);
+			}
+		}
 	}
 
 	/** @return OrderItem[] */

@@ -157,7 +157,7 @@ class Dashboard extends BaseController
 			new ActionFilter\Csrf(),
 			new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
 			new ActionFilter\Scope(ActionFilter\Scope::NOT_REST),
-			// The feature flag is checked before tariff, tool and rights: a disabled feature must answer
+			// Checked before tariff, tool and rights: a portal without biconnector must answer
 			// FEATURE_DISABLED rather than an upgrade offer.
 			new MobileBIFeatureAccess(),
 		];

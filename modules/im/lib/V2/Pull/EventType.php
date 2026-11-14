@@ -56,4 +56,6 @@ enum EventType: string
 	case SettingsUpdate = 'settingsUpdate';
 	case CopilotGenerationState = 'copilotGenerationState';
 	case ApplicationOpenChat = 'applicationOpenChat';
+	case ChatHistoryDeletedForSelf = 'chatHistoryDeletedForSelf';
+	case ChatHistoryDeletedForAll = 'chatHistoryDeletedForAll';
 }

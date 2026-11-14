@@ -3,6 +3,10 @@
 namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Dto\Audit\AuditActionContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
@@ -62,14 +66,33 @@ abstract class Base implements IErrorable
 		$this->userId = $USER->getId();
 	}
 
+	protected function createAuditRestActionContext(): AuditActionContext
+	{
+		$appId = (string)$this->restServer->getClientId();
+		$application = $appId !== ''
+			? ['id' => $appId]
+			: null
+		;
+
+		return (new AuditActionContextResolver())->resolveForRest(
+			userId: (int)$this->userId,
+			application: $application,
+		);
+	}
+
 	protected function assertCanDownload(File $file): void
 	{
-		$securityContext = $file->getStorage()?->getCurrentUserSecurityContext();
-
-		if (!$securityContext || !$file->canDownload($securityContext))
+		if (!$this->canDownloadByStorageRights($file))
 		{
 			throw new AccessException;
 		}
+	}
+
+	protected function canDownloadByStorageRights(File $file): bool
+	{
+		$securityContext = $file->getStorage()?->getCurrentUserSecurityContext();
+
+		return $securityContext && $file->canDownload($securityContext);
 	}
 
 	/**
@@ -90,8 +113,14 @@ abstract class Base implements IErrorable
 		try
 		{
 			$binder = new Engine\Binder($this, $this->methodName, array($this->params));
+			$auditContext = AuditOperationContext::create(
+				actionContext: $this->createAuditRestActionContext(),
+			);
 
-			return $binder->invoke();
+			return AuditOperationContextStack::runWithContextIfEmpty(
+				$auditContext,
+				fn() => $binder->invoke(),
+			);
 		}
 		catch (ArgumentException $e)
 		{

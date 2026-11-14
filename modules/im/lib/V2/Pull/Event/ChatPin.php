@@ -16,11 +16,18 @@ class ChatPin extends BaseChatEvent
 	protected int $userId;
 	protected bool $active;
 
+	/**
+	 * The two facts of one change travel together (EVENT-01): $folderId names the folder whose pin
+	 * set moved, $globalPinned the new value of the overall pinned flag. Either may be null — the
+	 * fact it carries simply did not change — and the field is then left out of the payload, so a
+	 * client applies only what actually happened and derives neither fact from the other.
+	 */
 	public function __construct(
 		Chat $chat,
 		bool $active,
 		$userId,
 		protected readonly ?int $folderId = null,
+		protected readonly ?bool $globalPinned = null,
 	)
 	{
 		parent::__construct($chat);
@@ -45,6 +52,11 @@ class ChatPin extends BaseChatEvent
 		if ($this->folderId !== null)
 		{
 			$payload['folderId'] = $this->folderId;
+		}
+
+		if ($this->globalPinned !== null)
+		{
+			$payload['globalPinned'] = $this->globalPinned;
 		}
 
 		return $payload;

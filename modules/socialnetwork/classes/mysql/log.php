@@ -831,41 +831,11 @@ class CSocNetLog extends CAllSocNetLog
 			&& is_object($USER)
 		)
 		{
-			$acc = new CAccess;
-			$acc->UpdateCodes();
-
-			$arSqls["RIGHTS"] = "EXISTS ( SELECT SLR.ID FROM b_sonet_log_right SLR
-				LEFT JOIN b_user_access UA ON (UA.ACCESS_CODE = SLR.GROUP_CODE AND UA.USER_ID = " . (int)$USER->GetID() . ")
-				WHERE L.ID = SLR.LOG_ID ".
-					(
-						(
-							$USER->IsAuthorized()
-							&& isset($arParams["MY_GROUPS_ONLY"])
-							&& $arParams["MY_GROUPS_ONLY"] === "Y"
-						)
-						?
-							" AND (
-								(SLR.GROUP_CODE LIKE 'SG%' AND (UA.ACCESS_CODE = SLR.GROUP_CODE AND UA.USER_ID = " . (int)$USER->GetID() . ")) 
-								OR SLR.GROUP_CODE = 'U" . (int)$USER->GetID() . "'
-							)"
-						:
-							" AND (
-								0=1 ".
-								(is_object($USER) && CSocNetUser::IsCurrentUserModuleAdmin() ? " OR SLR.GROUP_CODE = 'SA'" : "").
-								(is_object($USER) && $USER->IsAuthorized() ? " OR (SLR.GROUP_CODE = 'AU')" : "").
-								" OR (SLR.GROUP_CODE = 'G2')".
-								(
-									isset($arParams['CHECK_RIGHTS_OSG'])
-									&& $arParams['CHECK_RIGHTS_OSG'] === 'Y'
-									&& is_object($USER)
-									&& $USER->IsAuthorized()
-										? " OR (SLR.GROUP_CODE LIKE 'OSG%')"
-										: ''
-								).
-								(!empty($arFilter['LOG_RIGHTS_SG']) && !is_array($arFilter['LOG_RIGHTS_SG']) ? " OR (SLR.GROUP_CODE = '".$DB->ForSQL($arFilter['LOG_RIGHTS_SG'])."')" : "").
-								(is_object($USER) && $USER->IsAuthorized() ? " OR (UA.ACCESS_CODE = SLR.GROUP_CODE AND UA.USER_ID = ". (int)$USER->GetID() . ")" : "")."
-							)"
-					).")";
+			$policyQuery = \Bitrix\Socialnetwork\Log\ViewerAccess::createLogIdQuery($arParams, $arFilter);
+			if ($policyQuery !== null)
+			{
+				$arSqls['RIGHTS'] = 'L.ID IN (' . $policyQuery->getQuery() . ')';
+			}
 		}
 
 		if (

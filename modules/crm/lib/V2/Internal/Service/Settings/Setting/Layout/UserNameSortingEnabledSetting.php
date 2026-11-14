@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class UserNameSortingEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.layout.user_name_sorting.enabled';
+	public const ID = 'crm.layout.user_name_sorting.enabled';
 
 	private readonly LayoutSettings $layoutSettings;
 
@@ -26,18 +26,20 @@ final class UserNameSortingEnabledSetting extends AbstractSetting
 		$this->layoutSettings = $layoutSettings ?? LayoutSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'enable_user_name_sorting',
 		);
 	}
 

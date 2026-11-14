@@ -3,7 +3,10 @@
 namespace Bitrix\ImOpenLines\V2\Chat;
 
 use Bitrix\Im\V2\Chat as BaseChat;
+use Bitrix\Im\V2\Chat\OpenLineChat;
+use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\SilentMode\PersonalSilentMode;
+use Bitrix\ImOpenLines\V2\Line\LineSettings;
 use Bitrix\Main\Loader;
 
 class OpenLineChatDecorator
@@ -48,8 +51,59 @@ class OpenLineChatDecorator
 					'dateCreate' => $this->data->getDateCreate(),
 					'multidialog' => $this->isMultidialog(),
 				],
+				'lineSettings' => $this->getLineSettings(),
 			],
 		];
+	}
+
+	private function getLineSettings(): ?array
+	{
+		$lineId = $this->resolveLineId();
+		if ($lineId <= 0)
+		{
+			return null;
+		}
+
+		return LineSettings::createByLineId($lineId)->toRestFormat();
+	}
+
+	/**
+	 * The session line wins over the chat entity data: on transfer with a line change
+	 * the session is the source of truth. The client resolves the line the same way.
+	 */
+	private function resolveLineId(): int
+	{
+		$lineId = $this->resolveSessionLineId();
+
+		if ($lineId <= 0)
+		{
+			$lineId = (int)$this->data->getLineId();
+		}
+
+		return $lineId;
+	}
+
+	/**
+	 * Narrow read by the session id from the entity data: a full session load would hydrate
+	 * the whole wide row for a single field. Without the session id the chat resolves the
+	 * session on its own. Not cached: CONFIG_ID changes on transfer.
+	 */
+	private function resolveSessionLineId(): int
+	{
+		if (!$this->chat instanceof OpenLineChat)
+		{
+			return 0;
+		}
+
+		$sessionId = (int)$this->data->getSessionId();
+		if ($sessionId <= 0)
+		{
+			return (int)($this->chat->getSession()?->getConfigId() ?? 0);
+		}
+
+		$session = SessionTable::getByPrimary($sessionId, ['select' => ['CONFIG_ID']])->fetch();
+
+		return is_array($session) ? (int)$session['CONFIG_ID'] : 0;
 	}
 
 	/**

@@ -31,6 +31,7 @@ use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Error;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
@@ -52,7 +53,9 @@ use Throwable;
  *                               regular Disk file in the shared `b_disk_version` chain, which
  *                               is exactly why no migration is needed on rollback (ADR §3).
  *  - `document.failover`      → refresh the stored vo-metadata of the session (Q-3); the
- *                               frontend helper restores itself over SSE.
+ *                               frontend helper restores itself over SSE. When the failover
+ *                               restored nothing, its empty key cannot identify the lost sessions;
+ *                               the delivery is acknowledged without finalizing them.
  *  - `document.session-closed`→ deactivate the local sessions for the document key.
  *
  * The processor returns a {@see Result}; a successful `document.saved` carries an `ack` only
@@ -328,7 +331,10 @@ final class WebhookProcessor
 				return $this->ignoreDelivery($deliveryId, $event, $key, 'scope_unknown');
 			}
 			$scope = $scopeResult->getData();
-			if ((!$policy['identityKnown'] && (!$policy['legacy'] || $event === self::EVENT_FAILOVER))
+			// "There is no placement" is a known fact and not a lost identity: that form of the empty
+			// key is handled below instead of being thrown away with the delivery.
+			$identityUnknown = !$policy['identityKnown'] && !$policy['placementAbsent'];
+			if (($identityUnknown && (!$policy['legacy'] || $event === self::EVENT_FAILOVER))
 				|| ($policy['legacy'] && !$scope['legacy'] && $event !== self::EVENT_FAILOVER)
 				|| (!$scope['state'] && (!$policy['legacy'] || $scope['sessions'] === [])))
 			{
@@ -370,6 +376,13 @@ final class WebhookProcessor
 							: $finalized;
 					},
 				);
+			}
+			// An empty placement identifies neither a lost editor generation nor its sessions.
+			// Local timestamps cannot establish that association across retries and clock drift.
+			// Acknowledge it without terminating sessions or overwriting their metadata.
+			if ($policy['placementAbsent'])
+			{
+				return $this->ignoreDelivery($deliveryId, $event, $key, 'placement_unassociated');
 			}
 			if ($event === self::EVENT_FAILOVER && $scope['state'])
 			{

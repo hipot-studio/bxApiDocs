@@ -20,6 +20,14 @@ use Bitrix\Crm\Integration;
 class Action extends Base
 {
 	const CODE = 'actions';
+	private ?array $expenseSourceScope = null;
+
+	public function restrictExpensesToSources(array $sourceIds): self
+	{
+		$this->expenseSourceScope = array_fill_keys($sourceIds, true);
+
+		return $this;
+	}
 
 	public function getCode()
 	{
@@ -52,10 +60,10 @@ class Action extends Base
 		$dateTo = $this->dateTo ? Date::createFromTimestamp($this->dateTo->getTimestamp()) : null;
 
 		$list = array_merge(
-			static::getAdExpenses($dateFrom, $dateTo),
-			static::getSenderExpenses($dateFrom, $dateTo)
+			static::getAdExpenses($dateFrom, $dateTo, $this->expenseSourceScope),
+			static::getSenderExpenses($dateFrom, $dateTo, $this->expenseSourceScope)
 		);
-		foreach (static::getUserExpenses($dateFrom, $dateTo) as $row)
+		foreach (static::getUserExpenses($dateFrom, $dateTo, $this->expenseSourceScope) as $row)
 		{
 			$isFound = false;
 			foreach ($list as $index => $item)
@@ -111,12 +119,21 @@ class Action extends Base
 		return $list;
 	}
 
-	public static function getUserExpenses(Date $dateFrom, Date $dateTo)
+	public static function getUserExpenses(Date $dateFrom, Date $dateTo, ?array $sourceScope = null)
 	{
 		$list = [];
 		$listBySource = [];
 		$sources = Tracking\Provider::getActualSources();
+		if ($sourceScope !== null)
+		{
+			$sources = array_filter($sources, static fn(array $source): bool =>
+				isset($sourceScope[(int)$source['ID']]));
+		}
 		$sourceIds = array_column($sources, 'ID');
+		if ($sourceIds === [])
+		{
+			return [];
+		}
 		$sources = array_combine($sourceIds, $sources);
 		$sourceIds = array_filter(
 			$sourceIds,
@@ -210,11 +227,15 @@ class Action extends Base
 		return $list;
 	}
 
-	private static function getSenderExpenses($dateFrom, $dateTo)
+	private static function getSenderExpenses($dateFrom, $dateTo, ?array $sourceScope = null)
 	{
 		$list = [];
 		foreach (Tracking\Provider::getActualSources() as $source)
 		{
+			if ($sourceScope !== null && !isset($sourceScope[(int)$source['ID']]))
+			{
+				continue;
+			}
 			switch ($source['CODE'])
 			{
 				case Tracking\Source\Base::Sender:
@@ -236,11 +257,15 @@ class Action extends Base
 		return $list;
 	}
 
-	private static function getAdExpenses($dateFrom, $dateTo)
+	private static function getAdExpenses($dateFrom, $dateTo, ?array $sourceScope = null)
 	{
 		$list = [];
 		foreach (Tracking\Provider::getActualAdSources() as $source)
 		{
+			if ($sourceScope !== null && !isset($sourceScope[(int)$source['ID']]))
+			{
+				continue;
+			}
 			$ad = new Tracking\Analytics\Ad($source);
 			if (!$ad->isConnected())
 			{

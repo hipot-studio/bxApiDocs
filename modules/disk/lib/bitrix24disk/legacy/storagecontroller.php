@@ -10,6 +10,10 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Public\Service\Restrictions\WriteErrorTransportMap;
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\Controller;
 use Bitrix\Disk\Internals\Error\Error;
@@ -17,6 +21,7 @@ use Bitrix\Disk\Storage;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Bitrix24Disk\Legacy\Exceptions\AccessDeniedException;
 use Bitrix\Disk\Bitrix24Disk\Legacy\Exceptions\BadStorageAfterMigrateException;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -44,7 +49,7 @@ class StorageController extends Controller
 	const STATUS_NOT_FOUND       = 'not_found';
 	const STATUS_OLD_VERSION     = 'old_version';
 	const STATUS_NON_UNIQUE_NAME = 'non_unique_name';
-	const STATUS_NO_SPACE        = 'no_space';
+	const STATUS_NO_SPACE        = WriteErrorTransportMap::DESKTOP_STATUS_NO_SPACE;
 	const STATUS_UNLIMITED       = 'unlimited';
 	const STATUS_LIMITED         = 'limited';
 	const STATUS_CHUNK_ERROR     = 'chunk_error';
@@ -52,6 +57,7 @@ class StorageController extends Controller
 	const STATUS_TRY_LATER       = 'try_later';
 	const STATUS_LOCKED          = 'locked';
 	const STATUS_ERROR_TOKEN_SID = 'error_token_sid';
+	const STATUS_FORMAT_RESTRICTED = WriteErrorTransportMap::DESKTOP_STATUS_FORMAT_RESTRICTED;
 
 
 	const EVENT_ON_AFTER_DISK_FIRST_USAGE_BY_DAY = 'OnAfterDiskFirstUsageByDay';
@@ -63,6 +69,7 @@ class StorageController extends Controller
 	const EVENT_ON_AFTER_DISK_FOLDER_DELETE      = 'OnAfterDiskFolderDelete';
 
 	const COOKIE_DISK_USAGE = 'DISK_BDISK_USAGE';
+	private const SESSION_DISK_USAGE_DATE = 'DISK_BDISK_USAGE_DATE';
 
 	const ERROR_CREATE_FORK_FILE = 'SC_FF_22001';
 
@@ -223,6 +230,18 @@ class StorageController extends Controller
 		return true;
 	}
 
+	protected function runAction()
+	{
+		$user = $this->getUser();
+		$userId = $user instanceof \CUser ? (int)$user->getId() : 0;
+		$actionContext = (new AuditActionContextResolver())->resolveForDesktop($userId);
+
+		return AuditOperationContextStack::runWithContextIfEmpty(
+			AuditOperationContext::create(actionContext: $actionContext),
+			fn() => parent::runAction(),
+		);
+	}
+
 	protected function sendJsonResponse($response, $params = null)
 	{
 		if(!$this->ignoreQuotaError() && $this->isQuotaError())
@@ -249,6 +268,7 @@ class StorageController extends Controller
 			);
 		}
 
+		$response = $this->applyTransportStatus($response, $errors);
 
 		if($detail)
 		{
@@ -262,19 +282,28 @@ class StorageController extends Controller
 
 	private function storeUsagePerDay()
 	{
-		if(!$this->request->getCookie(self::COOKIE_DISK_USAGE))
+		$today = date('Y-m-d');
+		//BDisk does not keep cookies and sends only the session id, so the day is marked in the session too.
+		$session = Application::getInstance()->getKernelSession();
+		if(
+			$this->request->getCookie(self::COOKIE_DISK_USAGE)
+			|| ($session[self::SESSION_DISK_USAGE_DATE] ?? null) === $today
+		)
 		{
-			[$y, $m, $d] = explode('-', date('Y-m-d'));
-
-			//end of current day;
-			$this->getApplication()->set_cookie(self::COOKIE_DISK_USAGE, 'Y', mktime(0, 0, 0, $m, $d + 1, $y));
-
-			$event = new Event(Driver::INTERNAL_MODULE_ID, self::EVENT_ON_AFTER_DISK_FIRST_USAGE_BY_DAY);
-			$event->send();
-
-			return true;
+			return false;
 		}
-		return false;
+
+		$session[self::SESSION_DISK_USAGE_DATE] = $today;
+
+		[$y, $m, $d] = explode('-', $today);
+
+		//end of current day;
+		$this->getApplication()->set_cookie(self::COOKIE_DISK_USAGE, 'Y', mktime(0, 0, 0, $m, $d + 1, $y));
+
+		$event = new Event(Driver::INTERNAL_MODULE_ID, self::EVENT_ON_AFTER_DISK_FIRST_USAGE_BY_DAY);
+		$event->send();
+
+		return true;
 	}
 
 	protected function processActionUpload()
@@ -761,9 +790,12 @@ class StorageController extends Controller
 			}
 
 			//todo simple check for move/rename
-			if($filename != $file['extra']['name'] || $parentFolderId != $file['extra']['sectionId'])
+			$isMoveOrRename = $filename != $file['extra']['name'] || $parentFolderId != $file['extra']['sectionId'];
+			$renameAfterContentUpdate = false;
+			if($isMoveOrRename)
 			{
-				if(!$storage->isUnique($filename, $parentFolderId, $opponentId))
+				// The name may differ from the stored one only by case or Unicode normalization.
+				if(!$storage->isUnique($filename, $parentFolderId, $opponentId, (int)$elementId))
 				{
 					$opponentFile = array();
 					if($opponentId)
@@ -775,6 +807,17 @@ class StorageController extends Controller
 					$this->sendJsonResponse($opponentFile);
 				}
 
+				// The only rival left is the file itself: the database takes the name for the stored one,
+				// so it is a plain save and the name must not change unless the content does.
+				$renameAfterContentUpdate =
+					$tmpFile
+					&& $parentFolderId == $file['extra']['sectionId']
+					&& !$storage->isUnique($filename, $parentFolderId)
+				;
+			}
+
+			if($isMoveOrRename && !$renameAfterContentUpdate)
+			{
 				if($filename != $file['extra']['name'])
 				{
 					$file = $storage->renameFile($filename, $elementId, $parentFolderId);
@@ -805,6 +848,10 @@ class StorageController extends Controller
 			if($tmpFile) //update content
 			{
 				$file = $storage->updateFile($filename, $elementId, $tmpFile, array('originalTimestamp' => $this->request->getPost('originalTimestamp')));
+				if($file && $renameAfterContentUpdate)
+				{
+					$file = $storage->renameFile($filename, $elementId, $parentFolderId) ?: $file;
+				}
 				if($file)
 				{
 					$event = new Event(Driver::INTERNAL_MODULE_ID, self::EVENT_ON_AFTER_DISK_FILE_UPDATE, array($file['extra']['id'], $file));
@@ -1290,6 +1337,60 @@ class StorageController extends Controller
 		}
 
 		return false;
+	}
+
+	/**
+	 * Names the refusal in the answer, when the transport map has a name for it and the answer
+	 * carries none of its own yet.
+	 *
+	 * Only two statuses of this protocol name no reason: `error` and `denied` are what an action
+	 * answers with when it could not say closer what went wrong, and a name from the map is exactly
+	 * what they lack. Every other status - a lock held by somebody else, a version older than the
+	 * stored one, a name already taken, a quota, and every successful answer as well - already
+	 * answers the question the client asked, and the client acts on that word; a refusal lying in
+	 * the error collection must not take its place, or the answer of one action would depend on
+	 * what another has left behind.
+	 *
+	 * @param mixed $response Answer being built.
+	 * @param Error[] $errors Errors left behind by the action and by the storage.
+	 * @return mixed
+	 */
+	private function applyTransportStatus($response, array $errors)
+	{
+		$namelessRefusals = array(self::STATUS_ERROR, self::STATUS_DENIED);
+		if(!is_array($response) || !in_array($response['status'] ?? null, $namelessRefusals, true))
+		{
+			return $response;
+		}
+
+		$transportStatus = $this->findTransportStatus($errors);
+		if($transportStatus !== null)
+		{
+			$response['status'] = $transportStatus;
+		}
+
+		return $response;
+	}
+
+	/**
+	 * Status this response carries for a domain refusal the transport map knows, or null when it
+	 * knows none of them: then the status stays the one the action has set.
+	 *
+	 * @param Error[] $errors Errors of the controller and of the storage.
+	 * @return string|null
+	 */
+	private function findTransportStatus(array $errors)
+	{
+		foreach($errors as $error)
+		{
+			$status = WriteErrorTransportMap::getDesktopStatus((string)$error->getCode());
+			if($status !== null)
+			{
+				return $status;
+			}
+		}
+
+		return null;
 	}
 
 	private function getUserStorageId()

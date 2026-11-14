@@ -7,9 +7,11 @@ namespace Bitrix\Disk\Internal\Service\Sync\Journal;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Repository\Sync\SyncAccessSnapshotRepository;
 use Bitrix\Disk\Internal\Repository\Sync\SyncLogRepository;
+use Bitrix\Disk\Internal\Repository\Sync\SyncMetricRepository;
 use Bitrix\Disk\Internal\Repository\Sync\SyncRightsSnapshotRepository;
 use Bitrix\Disk\Internal\Repository\Sync\SyncSessionRepository;
 use Bitrix\Disk\Internal\Service\Logger\LoggerFactory;
+use Bitrix\Disk\Internal\Service\Sync\SyncFeatureOption;
 use Bitrix\Disk\Internal\Service\Sync\SyncLimits;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -57,10 +59,10 @@ use Psr\Log\LoggerInterface;
  * gap has its row rewritten in place, under the identifier the portion already carries, so every deletion
  * of the walk repeats the age the row was chosen by and takes out what is still old.
  *
- * Nothing here is gated on the switch of the contour. A portal that turns the contour off stops writing
- * to the journal but does not stop holding what it wrote, and a cleanup stopping with the switch would
- * turn "off" into "kept for ever". Unlike the aging of the interaction set, this walk touches no table
- * any other feature of the module reads.
+ * Nothing but the hourly rows of the metrics is gated on the switch of the contour. A portal that turns
+ * the contour off stops writing to the journal but does not stop holding what it wrote, and a cleanup
+ * stopping with the switch would turn "off" into "kept for ever". Unlike the aging of the interaction
+ * set, this walk touches no table any other feature of the module reads.
  */
 final class JournalCleaner
 {
@@ -106,6 +108,8 @@ final class JournalCleaner
 
 	private const SECONDS_IN_HOUR = 3600;
 
+	private const SECONDS_IN_DAY = 86400;
+
 	private const LOGGER_CHANNEL = 'sync';
 
 	private SyncLimits $limits;
@@ -113,6 +117,8 @@ final class JournalCleaner
 	private SyncSessionRepository $sessions;
 	private SyncAccessSnapshotRepository $pairSnapshots;
 	private SyncRightsSnapshotRepository $rightsSnapshots;
+	private SyncMetricRepository $metrics;
+	private SyncFeatureOption $feature;
 	private LoggerInterface $logger;
 	private ?int $portion;
 	private Closure $now;
@@ -133,6 +139,8 @@ final class JournalCleaner
 		?LoggerInterface $logger = null,
 		?int $portion = null,
 		?callable $now = null,
+		?SyncMetricRepository $metrics = null,
+		?SyncFeatureOption $feature = null,
 	)
 	{
 		$this->limits = $limits ?? new SyncLimits();
@@ -140,6 +148,8 @@ final class JournalCleaner
 		$this->sessions = $sessions ?? new SyncSessionRepository();
 		$this->pairSnapshots = $pairSnapshots ?? new SyncAccessSnapshotRepository();
 		$this->rightsSnapshots = $rightsSnapshots ?? new SyncRightsSnapshotRepository();
+		$this->metrics = $metrics ?? new SyncMetricRepository();
+		$this->feature = $feature ?? new SyncFeatureOption();
 		$this->logger = $logger ?? LoggerFactory::create(self::LOGGER_CHANNEL, feature: 'journal cleanup');
 		$this->portion = $portion === null ? null : max(self::MIN_PORTION, $portion);
 		$this->now = $now === null ? static fn (): int => time() : Closure::fromCallable($now);
@@ -147,7 +157,7 @@ final class JournalCleaner
 
 	/**
 	 * One tick: the journal first, then the rows that only mean anything while a cursor of the pair is
-	 * alive, then the orphan snapshots of the roots.
+	 * alive, then the orphan snapshots of the roots, then the hourly rows of the metrics.
 	 *
 	 * The journal goes first because it is the one table growing with the write rate of the portal; the
 	 * others are bounded by the number of pairs and of running recalculations. A tick that spends its
@@ -162,6 +172,7 @@ final class JournalCleaner
 	 *     sessions: int,
 	 *     pairSnapshots: int,
 	 *     rightsSnapshots: int,
+	 *     metrics: int,
 	 *     budgetSpent: bool,
 	 *     contended: bool
 	 * }
@@ -176,6 +187,9 @@ final class JournalCleaner
 		$retention = DateTime::createFromTimestamp($now - $this->limits->getJournalRetentionSeconds());
 		$orphaned = DateTime::createFromTimestamp(
 			$now - self::ORPHAN_RIGHTS_SNAPSHOT_HOURS * self::SECONDS_IN_HOUR,
+		);
+		$metricsRetention = DateTime::createFromTimestamp(
+			$now - SyncMetricRepository::HOURLY_RETENTION_DAYS * self::SECONDS_IN_DAY,
 		);
 
 		$startedAt = microtime(true);
@@ -195,6 +209,7 @@ final class JournalCleaner
 		$sessions = $contended ? 0 : $this->cleanSessions($retention, $deadline, $take);
 		$pairSnapshots = $contended ? 0 : $this->cleanPairSnapshots($retention, $deadline, $take);
 		$rightsSnapshots = $contended ? 0 : $this->cleanOrphanRightsSnapshots($orphaned, $deadline);
+		$metrics = $contended ? 0 : $this->cleanHourlyMetrics($metricsRetention, $deadline);
 
 		$result = [
 			'records' => $journal['records'],
@@ -202,14 +217,15 @@ final class JournalCleaner
 			'sessions' => $sessions,
 			'pairSnapshots' => $pairSnapshots,
 			'rightsSnapshots' => $rightsSnapshots,
+			'metrics' => $metrics,
 			'budgetSpent' => $deadline(),
 			'contended' => $contended,
 		];
 
 		$this->logger->debug(
 			'the cleanup removed {records} records of the journal with {codes} codes, {sessions} sessions,'
-			. ' {pairSnapshots} snapshots of pairs and {rightsSnapshots} orphan snapshots of roots,'
-			. ' cutting the journal at {boundary}',
+			. ' {pairSnapshots} snapshots of pairs, {rightsSnapshots} orphan snapshots of roots and'
+			. ' {metrics} hourly rows of metrics, cutting the journal at {boundary}',
 			$result + ['boundary' => $retention->toString()],
 		);
 
@@ -401,6 +417,40 @@ final class JournalCleaner
 		while (true)
 		{
 			$taken = $this->rightsSnapshots->deleteOlderThan($olderThan, $portion);
+			$removed += $taken;
+
+			if ($taken < $portion || $deadline())
+			{
+				break;
+			}
+		}
+
+		return $removed;
+	}
+
+	/**
+	 * Hourly rows of the metrics past their own retention; the rows of the running totals stay.
+	 *
+	 * Takes no lock for the same reason as the orphan snapshots of the roots: one statement a portion, and
+	 * a portion repeated by another node deletes the same rows. A portal with the contour off writes no
+	 * metrics, and the rows it has are left for when it is switched back on.
+	 *
+	 * @param callable(): bool $deadline
+	 * @throws SqlQueryException
+	 */
+	private function cleanHourlyMetrics(DateTime $olderThan, callable $deadline): int
+	{
+		if (!$this->feature->isEnabled())
+		{
+			return 0;
+		}
+
+		$portion = $this->portion();
+		$removed = 0;
+
+		while (true)
+		{
+			$taken = $this->metrics->deleteHourlyBefore($olderThan, $portion);
 			$removed += $taken;
 
 			if ($taken < $portion || $deadline())

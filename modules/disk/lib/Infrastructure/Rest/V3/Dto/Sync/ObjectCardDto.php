@@ -60,6 +60,9 @@ final class ObjectCardDto extends Dto
 	 */
 	public int $versionNumber;
 
+	/** Whether the prepared board index can be read now. Present only for board files. */
+	public bool $indexAvailable;
+
 	public DateTime $createdAt;
 
 	/**
@@ -124,4 +127,7 @@ final class ObjectCardDto extends Dto
 	 * the section of location.
 	 */
 	public bool $placeExpected;
+
+	/** The section of access. Absent entirely when the card was not asked for it. */
+	public AccessSectionDto $access;
 }

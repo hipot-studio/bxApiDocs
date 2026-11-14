@@ -112,7 +112,9 @@ final class ContactBindingLoader
 			$bucket[(int)$row['ENTITY_ID']][] = [
 				'CONTACT_ID' => (int)$row['CONTACT_ID'],
 				'SORT' => (int)($row['SORT'] ?? 0),
-				'IS_PRIMARY' => (bool)$row['IS_PRIMARY'] ? 'Y' : 'N',
+				// The column is read back as the string it is stored as, so the flag is compared and not cast:
+				// casting would read the stored 'N' as true and make every binding the primary one.
+				'IS_PRIMARY' => ((string)($row['IS_PRIMARY'] ?? 'N')) === 'Y' ? 'Y' : 'N',
 			];
 		}
 

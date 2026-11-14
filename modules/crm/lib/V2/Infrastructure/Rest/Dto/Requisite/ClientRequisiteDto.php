@@ -5,32 +5,16 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite;
 
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Mapping\Requisite\ClientRequisiteDtoMapper;
-use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Rule\Min;
-use Bitrix\Rest\V3\Attribute\Editable;
 use Bitrix\Rest\V3\Attribute\MappedBy;
-use Bitrix\Rest\V3\Attribute\Required;
-use Bitrix\Rest\V3\Dto\Dto;
 
 /**
- * The requisite a CRM entity has chosen among those of its client, together with the bank requisite
- * chosen beside it. The same shape answers a read and carries the fields of a write.
+ * The choice made among the requisites of the client of a CRM entity: the pair of
+ * {@see AbstractRequisitePairDto}, read and written under the name of this group.
  *
- * The pair is written as a whole: the bank requisite belongs to the requisite standing next to it, so
- * `requisiteId` is required on a write and `bankRequisiteId` alone is not a request the contract
- * accepts. Zero clears a choice, `null` says nothing is chosen.
- *
- * A non-empty identifier does not promise the record is still there - a requisite may have been
- * deleted after the choice was made, and a read answers with what was stored.
+ * The requisites of the seller are a separate choice of the same entity, carried by
+ * {@see MyCompanyRequisiteDto}.
  */
 #[MappedBy(ClientRequisiteDtoMapper::class)]
-final class ClientRequisiteDto extends Dto
+final class ClientRequisiteDto extends AbstractRequisitePairDto
 {
-	#[Required(['set'])]
-	#[Editable(['set'])]
-	#[Min(0, groups: ['set'])]
-	public ?int $requisiteId;
-
-	#[Editable(['set'])]
-	#[Min(0, groups: ['set'])]
-	public ?int $bankRequisiteId;
 }

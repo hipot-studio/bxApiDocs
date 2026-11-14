@@ -380,6 +380,35 @@ class User extends \IRestService
 		return static::$userFieldDateTypes;
 	}
 
+	private static function isNonStringUserField(string $code): bool
+	{
+		global $USER_FIELD_MANAGER;
+
+		$fields = $USER_FIELD_MANAGER->getUserFields(static::$entityUser);
+		$baseType = $fields[$code]['USER_TYPE']['BASE_TYPE'] ?? null;
+
+		return in_array($baseType, ['int', 'enum', 'file', 'double', 'datetime'], true);
+	}
+
+	private static function isEmptyInFilter(string $filterType, string $code, mixed $value): bool
+	{
+		return
+			$value === []
+			&& in_array($filterType, ['@', '!@'], true)
+			&& static::isNonStringUserField($code)
+		;
+	}
+
+	private static function applyEmptyInFilter(array $filter, string $filterType): array
+	{
+		if ($filterType === '@')
+		{
+			$filter[] = ['=ID' => []];
+		}
+
+		return $filter;
+	}
+
 	private static function unConvertDateValue(string $userTypeId, $value)
 	{
 		return match ($userTypeId)
@@ -978,15 +1007,21 @@ class User extends \IRestService
 
 	private static function checkTypeFields($fields): void
 	{
-		$notStringTypeField = ['PERSONAL_PHOTO', 'WORK_LOGO'];
+		$fileFields = ['PERSONAL_PHOTO', 'WORK_LOGO'];
+		$stringFields = ['XML_ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'TITLE', 'EMAIL', 'TIME_ZONE'];
+		$allowedFields = static::getDefaultAllowedUserFields();
 		foreach ($fields as $key => $field)
 		{
-			$fieldMustBeString = str_contains($key, 'WORK_')
-				|| str_contains($key, 'PERSONAL_')
-				&& !in_array($key, $notStringTypeField, true)
-			;
+			$isStringField = in_array($key, $allowedFields, true)
+				&& (
+					str_starts_with($key, 'WORK_')
+					|| str_starts_with($key, 'PERSONAL_')
+					|| in_array($key, $stringFields, true)
+				)
+				&& !in_array($key, $fileFields, true)
+				;
 
-			if ($fieldMustBeString && !is_string($field))
+			if ($isStringField && !is_scalar($field) && $field !== null && !($field instanceof \Stringable))
 			{
 				throw new ArgumentException('invalid_type_field', $key);
 			}
@@ -1015,6 +1050,8 @@ class User extends \IRestService
 		{
 			if($bAdmin || ($USER->getID() == $userFields['ID'] && $USER->CanDoOperation('edit_own_profile')))
 			{
+				self::checkTypeFields($userFields);
+
 				$updateFields = self::prepareSaveData($userFields);
 
 				// security
@@ -1422,6 +1459,13 @@ class User extends \IRestService
 
 				if (str_starts_with($code, 'UF_'))
 				{
+					if (static::isEmptyInFilter($filterType, $code, $value))
+					{
+						$filter = static::applyEmptyInFilter($filter, $filterType);
+
+						continue;
+					}
+
 					$userFieldDateTypes = static::getUserFieldDateTypes();
 					$filter[$filterType . $code] = isset($userFieldDateTypes[$code])
 						? static::unConvertDateValue($userFieldDateTypes[$code], $value)

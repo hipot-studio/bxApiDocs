@@ -7,12 +7,16 @@ namespace Bitrix\Rest\Internal\Access\App\Model;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Rest\Internal\Entity\Application\App;
-use Bitrix\Rest\Internal\Entity\Application\AppAttributeCode;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 
 final class AppModel implements AccessibleItem
 {
 	private ?App $app = null;
+	private bool $appLoaded = true;
+	private int $id = 0;
+	private bool $installed = false;
+	private ?int $ownerUserId = null;
+	private array $accessCodes = [];
 
 	public static function createFromId(?int $itemId): self
 	{
@@ -36,26 +40,50 @@ final class AppModel implements AccessibleItem
 		return $model;
 	}
 
+	/**
+	 * @param array{ID: int, INSTALLED: bool, OWNER_USER_ID: ?int, ACCESS_CODES: string[]} $data
+	 */
+	public static function createFromAccessData(array $data): self
+	{
+		$model = new self();
+		$model->id = $data['ID'];
+		$model->installed = $data['INSTALLED'];
+		$model->ownerUserId = $data['OWNER_USER_ID'];
+		$model->accessCodes = $data['ACCESS_CODES'];
+		$model->appLoaded = false;
+
+		return $model;
+	}
+
 	public function getId(): int
 	{
-		return $this->app?->getId() ?? 0;
+		return $this->appLoaded ? ($this->app?->getId() ?? 0) : $this->id;
 	}
 
 	public function getApp(): ?App
 	{
+		if (!$this->appLoaded)
+		{
+			$this->app = (new AppRepository())->getById($this->getId());
+			$this->appLoaded = true;
+		}
+
 		return $this->app;
 	}
 
 	public function isInstalled(): bool
 	{
-		return $this->app?->isInstalled() ?? false;
+		return $this->appLoaded ? ($this->app?->isInstalled() ?? false) : $this->installed;
 	}
 
 	public function getOwnerUserId(): ?int
 	{
-		$value = $this->app?->getAttributeValue(AppAttributeCode::OwnerUserId->value);
+		if (!$this->appLoaded)
+		{
+			return $this->ownerUserId;
+		}
 
-		return $value !== null ? (int)$value : null;
+		return $this->app?->getOwnerUserId();
 	}
 
 	public function isPersonal(): bool
@@ -65,6 +93,11 @@ final class AppModel implements AccessibleItem
 
 	public function getAccessCodes(): array
 	{
+		if (!$this->appLoaded)
+		{
+			return $this->accessCodes;
+		}
+
 		$access = $this->app?->getAccess();
 
 		if (empty($access))

@@ -13,7 +13,8 @@ use Bitrix\Main\DI\ServiceLocator;
 
 /**
  * Which chats a personal folder may hold. The rule is computed, never enumerated:
- * the 'default' recent section plus the recent sections of the potential composition of "All"
+ * the 'default' recent section plus the recent sections of the potential composition of "All" -
+ * every source available on the portal, whoever asks
  * ({@see AllFolder::getPotentialRecentSections()}), so a source added to the canonical registry
  * of "All" earns the right on its own.
  *

@@ -5,13 +5,16 @@ namespace Bitrix\Crm\Service\Sale\Reservation;
 use Bitrix\Crm\Order\OrderDealSynchronizer;
 use Bitrix\Crm\Reservation\Internals\ProductRowReservationTable;
 use Bitrix\Crm\Reservation\Strategy\Reserve\ReservationResult;
+use Bitrix\Crm\Reservation\Validator\ExistingStore;
 use Bitrix\Crm\Service\Sale\BasketService;
 use Bitrix\Crm\Service\Sale\Shipment\ProductService;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Sale\BasketItem;
+use Bitrix\Sale\Configuration;
 use Bitrix\Sale\Internals\ShipmentItemTable;
 use Bitrix\Sale\Shipment;
 use Bitrix\Sale\ShipmentItem;
@@ -35,6 +38,7 @@ class ShipmentService
 	)
 	{
 		Loader::requireModule('sale');
+		Loc::loadMessages(__FILE__);
 
 		$this->basketService = $basketService;
 		$this->shipmentProductService = $shipmentProductService;
@@ -110,9 +114,11 @@ class ShipmentService
 	/**
 	 * Reserve shipped quantity.
 	 *
+	 * A row whose store (empty means the default one) no longer exists is not reserved again; the rest are.
+	 *
 	 * @param Shipment $shipment
 	 *
-	 * @return Result
+	 * @return Result on success, with data `['WARNINGS' => string[]]` naming the rows left without a reserve.
 	 */
 	public function reserveCanceledShipment(Shipment $shipment): Result
 	{
@@ -133,6 +139,8 @@ class ShipmentService
 			return $result;
 		}
 		[$entityTypeId, $entityId] = $result->getData();
+		$result = new Result();
+		$result->setData(['WARNINGS' => []]);
 
 		// only for deal sync
 		if ($entityTypeId !== CCrmOwnerType::Deal)
@@ -185,7 +193,7 @@ class ShipmentService
 		]);
 		$rowReserves = array_column($rowReserves->fetchAll(), null, 'ROW_ID');
 
-		$reservationResult = new ReservationResult();
+		$rowsToReserve = [];
 		foreach ($productRow2basket as $rowId => $basketId)
 		{
 			$rowReserve = $rowReserves[$rowId] ?? null;
@@ -219,22 +227,55 @@ class ShipmentService
 				continue;
 			}
 
+			$storeId = (int)($rowReserve['STORE_ID'] ?? 0);
+			$rowsToReserve[$rowId] = [
+				'CURRENT_QUANTITY' => $currentQuantity,
+				'DELTA_QUANTITY' => $deltaQuantity,
+				'STORE_ID' => isset($rowReserve['STORE_ID']) ? $storeId : null,
+				'RESOLVED_STORE_ID' => $storeId > 0 ? $storeId : (int)Configuration::getDefaultStoreId(),
+				'DATE_RESERVE_END' => $rowReserve['DATE_RESERVE_END'] ?? null,
+				'PRODUCT_NAME' => (string)$basketItem->getField('NAME'),
+			];
+		}
+
+		$missingStoreIds = array_fill_keys(
+			ExistingStore::getMissingStoreIds(array_column($rowsToReserve, 'RESOLVED_STORE_ID')),
+			true
+		);
+
+		$warnings = [];
+		$reservationResult = new ReservationResult();
+		foreach ($rowsToReserve as $rowId => $row)
+		{
+			if (isset($missingStoreIds[$row['RESOLVED_STORE_ID']]))
+			{
+				$warnings[] = (string)Loc::getMessage(
+					'CRM_SHIPMENT_SERVICE_RESERVE_SKIPPED_STORE_NOT_EXISTS',
+					[
+						'#PRODUCT_NAME#' => $row['PRODUCT_NAME'],
+					]
+				);
+
+				continue;
+			}
+
 			$reserveInfo = $reservationResult->addReserveInfo(
 				$rowId,
-				$currentQuantity,
-				$deltaQuantity
+				$row['CURRENT_QUANTITY'],
+				$row['DELTA_QUANTITY']
 			);
 
-			if (isset($rowReserve['STORE_ID']))
+			if (isset($row['STORE_ID']))
 			{
-				$reserveInfo->setStoreId((int)$rowReserve['STORE_ID']);
+				$reserveInfo->setStoreId($row['STORE_ID']);
 			}
 
-			if (isset($rowReserve['DATE_RESERVE_END']))
+			if (isset($row['DATE_RESERVE_END']))
 			{
-				$reserveInfo->setDateReserveEnd($rowReserve['DATE_RESERVE_END']);
+				$reserveInfo->setDateReserveEnd($row['DATE_RESERVE_END']);
 			}
 		}
+		$result->setData(['WARNINGS' => $warnings]);
 
 		if (!empty($reservationResult->getChangedReserveInfos()))
 		{

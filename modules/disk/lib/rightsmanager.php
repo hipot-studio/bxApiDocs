@@ -5,8 +5,10 @@ namespace Bitrix\Disk;
 use Bitrix\Disk\Access\AccessCodeEnum;
 use Bitrix\Disk\Document\TrackedObject;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\Sync\Access\RightsAccessPublisher;
+use Bitrix\Disk\Internal\Service\Sync\Access\SharingAccessPublisher;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
@@ -16,6 +18,8 @@ use Bitrix\Disk\Internals\Rights\SetupSession;
 use Bitrix\Disk\Internals\Rights\Table\TmpSimpleRight;
 use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -28,6 +32,7 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Collection;
+use WeakMap;
 
 class RightsManager implements IErrorable
 {
@@ -68,6 +73,18 @@ class RightsManager implements IErrorable
 	/** @var array<int, bool> */
 	private array $readableTaskIdMap = [];
 	private ?RightsAccessPublisher $accessPublisher = null;
+	private ?SharingAccessPublisher $sharingPublisher = null;
+	/** @var WeakMap<AuditTransaction, array<int, true>>|null objects whose sharing is published on commit */
+	private ?WeakMap $sharingPendingOnCommit = null;
+	/**
+	 * @var WeakMap<AuditTransaction, array<int, array{BaseObject, array, int}>>|null the last edit of rights of every
+	 *      object, recalculated once on commit
+	 */
+	private ?WeakMap $recalculationsPendingOnCommit = null;
+	/** @var array<int, int> recalculations of rights scheduled in this process and not run yet, by object */
+	private array $pendingRecalculations = [];
+	/** @var array<int, string[]> codes a recalculation left the object with, for the next one of it */
+	private array $codesLeftByRecalculation = [];
 
 	private array $unifiedLinkAccessLevelToOperationsMap = [
 		UnifiedLinkAccessLevel::Read->value => [
@@ -95,13 +112,32 @@ class RightsManager implements IErrorable
 	 * Rewrite if exists.
 	 * @param BaseObject|BaseObject $object
 	 * @param array $rights
+	 * @param bool $isServiceEdit The rights are carried over to an object the same operation has just
+	 *        created (a move into another storage, a copy of a group). Such an edit publishes no change
+	 *        of sharing: the client learns of the object from the record of its creation.
 	 * @return bool
 	 * @throws SystemException
 	 * @throws LoaderException
 	 */
-	public function set(BaseObject $object, array $rights)
+	public function set(
+		BaseObject $object,
+		array $rights,
+		?AuditTransaction $auditTransaction = null,
+		bool $isServiceEdit = false,
+	)
 	{
-		return $this->setInternal($object, $rights, $this->getAccessPublisher()->captureCodes($object->getId()));
+		if (!$this->revokeCleanupBeforeRightsMutation($object))
+		{
+			return false;
+		}
+
+		return $this->setInternal(
+			$object,
+			$rights,
+			$this->getAccessPublisher()->captureCodes($object->getId()),
+			$auditTransaction,
+			$isServiceEdit ? null : $this->getSharingPublisher()->captureTargets($object),
+		);
 	}
 
 	/**
@@ -110,10 +146,19 @@ class RightsManager implements IErrorable
 	 *        a parameter and not read here, because a caller that tears the rows of the object down
 	 *        itself begins the edit earlier than this method: the codes of an object are those of the
 	 *        nearest ancestor carrying a readable right, and deleting its rows moves that ancestor.
+	 * @param array|null $targetsBeforeEdit Targets of sharing of the object before the edit, read by
+	 *        {@see SharingAccessPublisher::captureTargets()} for the same reason. Null publishes no
+	 *        change of sharing.
 	 * @throws SystemException
 	 * @throws LoaderException
 	 */
-	private function setInternal(BaseObject $object, array $rights, array $codesBeforeEdit): bool
+	private function setInternal(
+		BaseObject $object,
+		array $rights,
+		array $codesBeforeEdit,
+		?AuditTransaction $auditTransaction = null,
+		?array $targetsBeforeEdit = null,
+	): bool
 	{
 		$this->checkUseInternalsRightsOnStorage($object, $rights);
 		$this->errorCollection->clear();
@@ -134,26 +179,15 @@ class RightsManager implements IErrorable
 		$rights = $this->uniqualizeRightsOnObject($rights);
 		$rights = $this->cleanWrongNegativeRights($object, $rights);
 
-		$accessPublisher = $this->getAccessPublisher();
-
 		$this->deleteInternal($object);
 		if(!$this->insertRightsInternal($object, $rights))
 		{
 			return false;
 		}
 
-		Application::getInstance()->addBackgroundJob(function () use ($object, $rights, $accessPublisher, $codesBeforeEdit) {
-			$simpleBuilder = new SimpleReBuilder($object, $rights);
-			$setupSessionId = $simpleBuilder->getSetupSessionId();
-			$accessPublisher->rememberCapture($setupSessionId, $object->getId(), $codesBeforeEdit);
+		$this->publishSharing($object, $targetsBeforeEdit, $codesBeforeEdit, $auditTransaction);
 
-			$simpleBuilder->run();
-
-			$accessPublisher->publishRecalculated($setupSessionId, $object->getId());
-
-			Driver::getInstance()->getIndexManager()->recalculateRights($object);
-			$this->clearStorageListCachesForRootObject($object);
-		}, [], --$this->backgroundJobPriority);
+		$this->scheduleRecalculation($object, $rights, $codesBeforeEdit, $auditTransaction);
 
 		return true;
 	}
@@ -165,7 +199,11 @@ class RightsManager implements IErrorable
 	 * @throws \Bitrix\Main\SystemException
 	 * @return bool
 	 */
-	public function setAsNewLeaf(BaseObject $object, array $rights)
+	public function setAsNewLeaf(
+		BaseObject $object,
+		array $rights,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->checkUseInternalsRightsOnStorage($object, $rights);
 		$this->errorCollection->clear();
@@ -197,8 +235,18 @@ class RightsManager implements IErrorable
 		$simpleBuilder = new SimpleReBuilder($object, $rights);
 		$simpleBuilder->runAsNewLeaf();
 
-		Driver::getInstance()->getIndexManager()->recalculateRights($object);
-		$this->clearStorageListCachesForRootObject($object);
+		$recalculateRights = function () use ($object): void {
+			Driver::getInstance()->getIndexManager()->recalculateRights($object);
+			$this->clearStorageListCachesForRootObject($object);
+		};
+		if ($auditTransaction !== null)
+		{
+			$auditTransaction->addAfterCommit($recalculateRights);
+		}
+		else
+		{
+			$recalculateRights();
+		}
 
 		return true;
 	}
@@ -228,14 +276,16 @@ class RightsManager implements IErrorable
 	 *        that forgets them is better off failing than publishing to the wrong audience in silence.
 	 * @return bool
 	 */
-	public function setAfterMove(BaseObject $object, array $codesBeforeMove)
+	public function setAfterMove(
+		BaseObject $object,
+		array $codesBeforeMove,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->errorCollection->clear();
 
 		$existsRights = $this->getSpecificRights($object);
 		$rights = $this->cleanWrongNegativeRights($object, $this->uniqualizeRightsOnObject($existsRights));
-
-		$accessPublisher = $this->getAccessPublisher();
 
 		$this->deleteInternal($object);
 		if(!$this->insertRightsInternal($object, $rights))
@@ -243,20 +293,203 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		Application::getInstance()->addBackgroundJob(function () use ($object, $rights, $accessPublisher, $codesBeforeMove) {
+		$this->scheduleRecalculation($object, $rights, $codesBeforeMove, $auditTransaction);
+
+		return true;
+	}
+
+	/**
+	 * Recalculates the simple rights of the subtree in the background and publishes the boundary of access
+	 * the recalculation moved.
+	 *
+	 * Several edits of the rights of one object may be made in one hit before any of their recalculations
+	 * runs. Every edit rewrites b_disk_right at once, so the recalculations run when the rights already
+	 * describe the last edit, while the simple rights still stand before the first one. Neither the codes
+	 * captured in the hit nor those read through the rights tell the states in between: a revocation that
+	 * follows a grant would be compared with the state before the grant and kept silent towards the very
+	 * reader it took the object from. So a recalculation followed by another one of the same object hands
+	 * the codes it computed to that one, as the codes before its edit.
+	 *
+	 * Inside a transaction the edits of one object are one save: nobody sees the states between them, since
+	 * none of them is committed. A change of role tears the rights of a sharing down and appends them again,
+	 * and a recalculation of each step would publish a boundary that only the intermediate state moved. So
+	 * the object is recalculated once after the commit, with the rights of its last edit, and compared with
+	 * the codes its first edit captured.
+	 *
+	 * @param string[] $codesBeforeEdit Codes of the object captured before the edit began.
+	 */
+	private function scheduleRecalculation(
+		BaseObject $object,
+		array $rights,
+		array $codesBeforeEdit,
+		?AuditTransaction $auditTransaction,
+	): void
+	{
+		if ($auditTransaction === null)
+		{
+			$this->addRecalculationJob($object, $rights, $codesBeforeEdit, --$this->backgroundJobPriority);
+
+			return;
+		}
+
+		$objectId = (int)$object->getId();
+		$this->recalculationsPendingOnCommit ??= new WeakMap();
+		$pendingEdits = $this->recalculationsPendingOnCommit[$auditTransaction] ?? [];
+		$isFirstEditOfTheSave = !isset($pendingEdits[$objectId]);
+		// the place of the last edit in the queue: the recalculation of a child edited after its parent must
+		// still run after that of the parent, which rewrites the index of the children of a folder
+		$pendingEdits[$objectId] = [$object, $rights, --$this->backgroundJobPriority];
+		$this->recalculationsPendingOnCommit[$auditTransaction] = $pendingEdits;
+		if (!$isFirstEditOfTheSave)
+		{
+			return;
+		}
+
+		$takeLastEdit = function () use ($auditTransaction, $objectId): ?array {
+			$pendingEdits = $this->recalculationsPendingOnCommit[$auditTransaction] ?? [];
+			$lastEdit = $pendingEdits[$objectId] ?? null;
+			unset($pendingEdits[$objectId]);
+			$this->recalculationsPendingOnCommit[$auditTransaction] = $pendingEdits;
+
+			return $lastEdit;
+		};
+		$auditTransaction->addAfterCommit(function () use ($takeLastEdit, $codesBeforeEdit): void {
+			$lastEdit = $takeLastEdit();
+			if ($lastEdit === null)
+			{
+				return;
+			}
+
+			[$lastObject, $lastRights, $priority] = $lastEdit;
+			$this->addRecalculationJob($lastObject, $lastRights, $codesBeforeEdit, $priority);
+		});
+		$auditTransaction->addCompensation(static function () use ($takeLastEdit): void {
+			$takeLastEdit();
+		});
+	}
+
+	/**
+	 * @param string[] $codesBeforeEdit
+	 */
+	private function addRecalculationJob(
+		BaseObject $object,
+		array $rights,
+		array $codesBeforeEdit,
+		int $priority,
+	): void
+	{
+		$objectId = (int)$object->getId();
+		$accessPublisher = $this->getAccessPublisher();
+
+		$backgroundJob = function () use ($object, $objectId, $rights, $accessPublisher, $codesBeforeEdit): void {
+			$codesLeftByPrecedingEdit = $this->codesLeftByRecalculation[$objectId] ?? null;
+			unset($this->codesLeftByRecalculation[$objectId]);
+			$this->forgetPendingRecalculation($objectId);
+			$isFollowedByAnotherEdit = isset($this->pendingRecalculations[$objectId]);
+
 			$simpleBuilder = new SimpleReBuilder($object, $rights);
 			$setupSessionId = $simpleBuilder->getSetupSessionId();
-			$accessPublisher->rememberCapture($setupSessionId, $object->getId(), $codesBeforeMove);
+			$accessPublisher->rememberCapture(
+				$setupSessionId,
+				$objectId,
+				$codesLeftByPrecedingEdit ?? $codesBeforeEdit,
+			);
 
 			$simpleBuilder->run();
 
-			$accessPublisher->publishRecalculated($setupSessionId, $object->getId());
+			$codesAfter = null;
+			if ($isFollowedByAnotherEdit)
+			{
+				$codesAfter = $accessPublisher->codesOfRecalculated($objectId, $simpleBuilder->getAccessCodes());
+				if ($codesAfter !== null)
+				{
+					$this->codesLeftByRecalculation[$objectId] = $codesAfter;
+				}
+			}
+
+			$accessPublisher->publishRecalculated($setupSessionId, $objectId, $codesAfter);
 
 			Driver::getInstance()->getIndexManager()->recalculateRights($object);
 			$this->clearStorageListCachesForRootObject($object);
-		}, [], --$this->backgroundJobPriority);
+		};
+		$this->pendingRecalculations[$objectId] = ($this->pendingRecalculations[$objectId] ?? 0) + 1;
+		Application::getInstance()->addBackgroundJob($backgroundJob, [], $priority);
+	}
 
-		return true;
+	private function forgetPendingRecalculation(int $objectId): void
+	{
+		$pending = ($this->pendingRecalculations[$objectId] ?? 0) - 1;
+		if ($pending > 0)
+		{
+			$this->pendingRecalculations[$objectId] = $pending;
+		}
+		else
+		{
+			unset($this->pendingRecalculations[$objectId]);
+		}
+	}
+
+	/**
+	 * One save may edit the rights of an object several times: a change of role tears the rights of a
+	 * sharing down and appends them again. Inside a transaction the targets are compared once, after the
+	 * commit, against those the first edit found, and the record goes to the readers before that edit.
+	 */
+	private function publishSharing(
+		BaseObject $object,
+		?array $targetsBeforeEdit,
+		array $codesBeforeEdit,
+		?AuditTransaction $auditTransaction,
+	): void
+	{
+		if ($targetsBeforeEdit === null)
+		{
+			return;
+		}
+
+		$sharingPublisher = $this->getSharingPublisher();
+		if ($auditTransaction === null)
+		{
+			$sharingPublisher->publishIfChanged($object, $targetsBeforeEdit, $codesBeforeEdit);
+
+			return;
+		}
+
+		$objectId = (int)$object->getId();
+		$this->sharingPendingOnCommit ??= new WeakMap();
+		$pendingObjectIds = $this->sharingPendingOnCommit[$auditTransaction] ?? [];
+		if (isset($pendingObjectIds[$objectId]))
+		{
+			return;
+		}
+		$pendingObjectIds[$objectId] = true;
+		$this->sharingPendingOnCommit[$auditTransaction] = $pendingObjectIds;
+
+		$forget = function () use ($auditTransaction, $objectId): void {
+			$pendingObjectIds = $this->sharingPendingOnCommit[$auditTransaction] ?? [];
+			unset($pendingObjectIds[$objectId]);
+			$this->sharingPendingOnCommit[$auditTransaction] = $pendingObjectIds;
+		};
+		$auditTransaction->addAfterCommit(static function () use (
+			$forget,
+			$sharingPublisher,
+			$object,
+			$targetsBeforeEdit,
+			$codesBeforeEdit,
+		): void {
+			$forget();
+			$sharingPublisher->publishIfChanged($object, $targetsBeforeEdit, $codesBeforeEdit);
+		});
+		$auditTransaction->addCompensation($forget);
+	}
+
+	private function getAccessPublisher(): RightsAccessPublisher
+	{
+		return $this->accessPublisher ??= new RightsAccessPublisher();
+	}
+
+	protected function getSharingPublisher(): SharingAccessPublisher
+	{
+		return $this->sharingPublisher ??= new SharingAccessPublisher();
 	}
 
 	private function clearStorageListCachesForRootObject(BaseObject $object): void
@@ -267,11 +500,6 @@ class RightsManager implements IErrorable
 		}
 
 		$object->getStorage()?->clearStorageListCaches();
-	}
-
-	private function getAccessPublisher(): RightsAccessPublisher
-	{
-		return $this->accessPublisher ??= new RightsAccessPublisher();
 	}
 
 	/**
@@ -353,24 +581,39 @@ class RightsManager implements IErrorable
 
 	public function delete(BaseObject $object)
 	{
+		if (!$this->revokeCleanupBeforeRightsMutation($object))
+		{
+			return false;
+		}
+
 		$codesBeforeEdit = $this->getAccessPublisher()->captureCodes($object->getId());
+		$targetsBeforeEdit = $this->getSharingPublisher()->captureTargets($object);
 
 		if(!$this->deleteInternal($object))
 		{
 			return false;
 		}
 
-		return $this->setInternal($object, [], $codesBeforeEdit);
+		return $this->setInternal($object, [], $codesBeforeEdit, targetsBeforeEdit: $targetsBeforeEdit);
 	}
 
-	public function deleteByDomain(BaseObject $object, $domain)
+	public function deleteByDomain(
+		BaseObject $object,
+		$domain,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		if(empty($domain))
 		{
 			return false;
 		}
+		if (!$this->revokeCleanupBeforeRightsMutation($object))
+		{
+			return false;
+		}
 
 		$codesBeforeEdit = $this->getAccessPublisher()->captureCodes($object->getId());
+		$targetsBeforeEdit = $this->getSharingPublisher()->captureTargets($object);
 
 		if(!$this->deleteInternal($object, $domain))
 		{
@@ -382,12 +625,44 @@ class RightsManager implements IErrorable
 			return true;
 		}
 
-		return $this->setInternal($object, $this->getSpecificRights($object), $codesBeforeEdit);
+		return $this->setInternal(
+			$object,
+			$this->getSpecificRights($object),
+			$codesBeforeEdit,
+			$auditTransaction,
+			$targetsBeforeEdit,
+		);
 	}
 
-	public function append(BaseObject $object, array $rights)
+	public function append(
+		BaseObject $object,
+		array $rights,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
-		return $this->set($object, array_merge($this->getSpecificRights($object), $rights));
+		return $this->set(
+			$object,
+			array_merge($this->getSpecificRights($object), $rights),
+			$auditTransaction,
+		);
+	}
+
+	private function revokeCleanupBeforeRightsMutation(BaseObject $object): bool
+	{
+		$cleanupObject = $object->getRealObject();
+		$cleanupObjectId = (int)($cleanupObject?->getId() ?: $object->getId());
+		if ((new MarkerService())->revokeBeforeUse(
+			$cleanupObjectId,
+			$cleanupObject?->getUploadCleanupMarkerPresenceHint(),
+		))
+		{
+			return true;
+		}
+
+		$this->errorCollection->clear();
+		$this->errorCollection->addOne(new Error(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+
+		return false;
 	}
 
 	public function hasSimpleRight(int $userId, int $objectId): bool
@@ -518,6 +793,45 @@ class RightsManager implements IErrorable
 		return $row ? (int)$row['PARENT_ID'] : null;
 	}
 
+	/**
+	 * Is there a checkpoint standing strictly inside the subtree, and nothing else about it.
+	 *
+	 * A query of its own and not the batch above with a limit of one: the batch joins b_disk_object for the
+	 * columns of a listing, which costs a primary key lookup on every closure row and is thrown away whole
+	 * by a caller that only asks whether such a row exists.
+	 */
+	public function hasCheckpointDescendant(int $rootObjectId): bool
+	{
+		$rootObjectId = (int)$rootObjectId;
+		$readableTaskIds = $this->getReadableTaskIds();
+		if ($rootObjectId <= 0 || empty($readableTaskIds))
+		{
+			return false;
+		}
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableObjectPath = $sqlHelper->quote(ObjectPathTable::getTableName());
+		$tableRight = $sqlHelper->quote(RightTable::getTableName());
+		$readableTaskIdsSql = implode(', ', array_map('intval', $readableTaskIds));
+
+		$sql = <<<SQL
+			SELECT 1
+			FROM {$tableObjectPath} path
+			WHERE
+				path.PARENT_ID = {$rootObjectId}
+				AND path.OBJECT_ID <> {$rootObjectId}
+				AND EXISTS (
+					SELECT 1
+					FROM {$tableRight} readable_right
+					WHERE readable_right.OBJECT_ID = path.OBJECT_ID
+						AND readable_right.TASK_ID IN ({$readableTaskIdsSql})
+				)
+			SQL;
+
+		return $connection->query($sqlHelper->getTopSql($sql, 1))->fetch() !== false;
+	}
+
 	public function getCheckpointDescendantsBatch(
 		int $rootObjectId,
 		int $lastDepthLevel = 0,
@@ -603,6 +917,65 @@ class RightsManager implements IErrorable
 	}
 
 	/**
+	 * Takes the granting rows of the base domain on the given codes and task away and leaves every other
+	 * row of the object where it is.
+	 *
+	 * A caller that instead reads the whole set, drops what it wants gone and writes the remainder back
+	 * with {@see self::set()} loses every row written in between - a row of a sharing, for one - because
+	 * the snapshot it filters was read before that row existed. Rows are named by what they hold and not
+	 * by their identifiers: every write on an object rewrites its rows, so an identifier read a moment
+	 * earlier points at nothing.
+	 *
+	 * @param string[] $accessCodes
+	 * @return bool
+	 */
+	public function deleteBaseDomainRights(
+		BaseObject $object,
+		array $accessCodes,
+		$taskId,
+		?AuditTransaction $auditTransaction = null,
+	)
+	{
+		$accessCodes = array_values(array_unique(array_filter(
+			array_map(static fn($accessCode): string => trim((string)$accessCode), $accessCodes),
+			static fn(string $accessCode): bool => $accessCode !== '',
+		)));
+		$taskId = (int)$taskId;
+		if (!$accessCodes || $taskId <= 0)
+		{
+			return true;
+		}
+
+		if (!$this->revokeCleanupBeforeRightsMutation($object))
+		{
+			return false;
+		}
+
+		$codesBeforeEdit = $this->getAccessPublisher()->captureCodes($object->getId());
+		$targetsBeforeEdit = $this->getSharingPublisher()->captureTargets($object);
+
+		// one statement: deleting row by row, a failure midway would leave a part of the rows deleted with
+		// neither the recalculation nor the record of the journal the rewrite below makes
+		RightTable::deleteByConditions([
+			'=OBJECT_ID' => $object->getId(),
+			'@ACCESS_CODE' => $accessCodes,
+			'=TASK_ID' => $taskId,
+			'=NEGATIVE' => 0,
+			['LOGIC' => 'OR', ['=DOMAIN' => null], ['=DOMAIN' => '']],
+		]);
+		// The rows the folded subtree verdicts were read off are gone.
+		DiskSecurityContext::invalidateSubtreeVerdicts();
+
+		return $this->setInternal(
+			$object,
+			$this->getSpecificRights($object),
+			$codesBeforeEdit,
+			$auditTransaction,
+			$targetsBeforeEdit,
+		);
+	}
+
+	/**
 	 * Resets simple rights on the object.
 	 * Notice: it will be process for long time.
 	 * @param BaseObject $object File or Folder.
@@ -683,6 +1056,8 @@ class RightsManager implements IErrorable
 		}
 
 		RightTable::deleteBatch($filter);
+		// The rows the folded subtree verdicts were read off are gone.
+		DiskSecurityContext::invalidateSubtreeVerdicts();
 
 		return true;
 	}
@@ -1435,6 +1810,8 @@ class RightsManager implements IErrorable
 		}
 
 		RightTable::insertBatch($rightsToInsert);
+		// A new checkpoint may now stand inside a subtree whose verdict is already folded.
+		DiskSecurityContext::invalidateSubtreeVerdicts();
 
 		return true;
 	}
@@ -1627,6 +2004,8 @@ class RightsManager implements IErrorable
 		$parameters['filter'] ??= [];
 		$parameters['runtime'] ??= [];
 
+		// CASE WHEN ... THEN bounds whatever stands between the two words, so the computed field needs no
+		// parentheses of its own and keeps the expression a producer wrote.
 		$parameters['runtime'][] = new ExpressionField(
 			'RIGHTS_CHECK',
 			'CASE WHEN ' . $rightsExpression . ' THEN 1 ELSE 0 END',
@@ -1634,8 +2013,20 @@ class RightsManager implements IErrorable
 			['data_type' => 'boolean'],
 		);
 
+		// A legacy filter array cannot carry the predicate itself: Query::setFilterChains() descends into
+		// nested arrays only and drops an object under a numeric key, so there the computed field compared
+		// against truth stays the only form. The field is registered for both branches all the same - one
+		// nothing refers to builds no chain and reaches no SQL, and an outside consumer depends on it being
+		// registered regardless: im\V2\Link\File\FileCollection::processDiskFileFilters() takes
+		// $parameters['runtime'][0] by position and registers it on a query of its own.
+		//
+		// The condition tree gets the predicate parenthesised: unlike the field above it bounds nothing, and
+		// an OR inside the expression would bind to the conditions standing beside it in that tree and leave
+		// the rights check optional.
 		$parameters['filter'] instanceof ConditionTree
-			? $parameters['filter']->addCondition(Query::filter()->where('RIGHTS_CHECK', true))
+			? $parameters['filter']->addCondition(
+				Query::filter()->whereExpr('(' . $rightsExpression . ')', $specificColumns),
+			)
 			: $parameters['filter']['=RIGHTS_CHECK'] = true;
 
 		return $parameters;
@@ -1737,6 +2128,15 @@ final class SimpleReBuilder
 	public function getSetupSessionId()
 	{
 		return $this->setupSession ? (int)$this->setupSession->getId() : 0;
+	}
+
+	/**
+	 * Access codes of the simple rights computed for the object itself, empty before a run.
+	 * @return string[]
+	 */
+	public function getAccessCodes(): array
+	{
+		return array_column($this->simpleRights ?? [], 'ACCESS_CODE');
 	}
 
 	/**

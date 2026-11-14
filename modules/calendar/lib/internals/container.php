@@ -6,8 +6,6 @@ namespace Bitrix\Calendar\Internals;
 
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\ICloudEventSynchronizer;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\ICloudSectionSynchronizer;
-use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepository;
-use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\GoogleEventSynchronizer;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\GoogleSectionSynchronizer;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Office365EventSynchronizer;

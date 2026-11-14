@@ -3,6 +3,8 @@
 namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
+use Bitrix\Disk\Internal\Service\Audit\AuditTrashcanEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
 use Bitrix\Disk\Internals\Engine;
 
 final class TrashCan extends Engine\Controller
@@ -21,6 +23,15 @@ final class TrashCan extends Engine\Controller
 
 	public function emptyAction(Disk\Storage $storage)
 	{
+		// the cleaner skips every object the user may not destroy, so without the right on the root it drops nothing
+		$securityContext = $storage->getSecurityContext($this->getCurrentUser()->getId());
+		if (!$storage->getRootObject()?->canDelete($securityContext))
+		{
+			$this->addDeniedError();
+
+			return;
+		}
+
 		$indicator = new Disk\Volume\Storage\TrashCan();
 		$indicator
 			->setOwner($this->getCurrentUser()->getId())
@@ -34,14 +45,60 @@ final class TrashCan extends Engine\Controller
 		$task = $indicator->getMeasurementResult()->fetch();
 		$taskId = $task['ID'];
 
-		$agentParams = [
-			'delay' => 5,
-			'filterId' => $taskId,
-			'ownerId' => $this->getCurrentUser()->getId(),
-			'storageId' => $storage->getId(),
-			Disk\Volume\Task::DROP_TRASHCAN => true,
-		];
+		if (!Disk\Volume\Cleaner::addWorker())
+		{
+			return;
+		}
 
-		Disk\Volume\Cleaner::addWorker($agentParams);
+		$task = new Disk\Volume\Task();
+		if (!$task->loadTaskById($taskId, $this->getCurrentUser()->getId()))
+		{
+			return;
+		}
+
+		$this->acceptTaskWithAudit(
+			$task,
+			new AuditTrashcanEventProducer(),
+			(int)$storage->getId(),
+			(int)$this->getCurrentUser()->getId(),
+		);
+	}
+
+	private function acceptTaskWithAudit(
+		Disk\Volume\Task $task,
+		AuditTrashcanEventProducer $producer,
+		int $storageId,
+		int $userId,
+	): bool
+	{
+		return AuditTransaction::run(function (AuditTransaction $transaction) use (
+			$task,
+			$producer,
+			$storageId,
+			$userId,
+		): bool {
+			$task->setStatus(Disk\Volume\Task::TASK_STATUS_WAIT);
+			$task->setStatusSubTask(
+				Disk\Volume\Task::DROP_TRASHCAN,
+				Disk\Volume\Task::TASK_STATUS_WAIT,
+			);
+			if (!$task->fixState())
+			{
+				return false;
+			}
+
+			$auditResult = $producer->publishEmptied($storageId, $userId);
+			if (!$auditResult->isSuccess())
+			{
+				$this->addErrors($auditResult->getErrors());
+
+				return false;
+			}
+			$transaction->addAfterCommit(
+				static fn(): int => Disk\Volume\Cleaner::countWorker($userId),
+			);
+
+			return true;
+		});
 	}
 }

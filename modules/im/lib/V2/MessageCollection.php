@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Entity\File\FilePopupItem;
 use Bitrix\Im\V2\Entity\Url\UrlCollection;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
+use Bitrix\Im\V2\Link\PersonalPin\PersonalPinService;
 use Bitrix\Im\V2\Link\Pin\PinService;
 use Bitrix\Im\V2\Message\AdditionalMessagePopupItem;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AbstractBlock;
@@ -56,7 +57,6 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	protected bool $isUrlsFilled = false;
 	protected bool $isUnreadFilled = false;
 	protected bool $isViewedFilled = false;
-	protected bool $isViewedCountFilled = false;
 	protected bool $isReactionsFilled = false;
 	protected bool $isBuilderFilled = false;
 
@@ -576,26 +576,6 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $this;
 	}
 
-	public function fillViewedCount(): self
-	{
-		if ($this->isViewedCountFilled)
-		{
-			return $this;
-		}
-
-		$provider = ServiceLocator::getInstance()->get(ViewProvider::class);
-		$counts = $provider->getViewedCountForMessages($this->getIds());
-
-		foreach ($this as $message)
-		{
-			$message->setViewedCount($counts[$message->getMessageId()] ?? 0);
-		}
-
-		$this->isViewedCountFilled = true;
-
-		return $this;
-	}
-
 	public function fillReactions(): self
 	{
 		if ($this->isReactionsFilled)
@@ -716,14 +696,6 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		if (!$onlyCommonInfo)
 		{
 			$this->fillUnread()->fillViewed();
-		}
-
-		// viewedCount is emitted only for the full payload (see Message::toRestFormat):
-		// the fill condition must match the output gate exactly to avoid both a wasted
-		// COUNT (fill without output) and an N+1 lazy load (output without fill).
-		if (!$shortInfo && !$onlyCommonInfo)
-		{
-			$this->fillViewedCount();
 		}
 
 		return $this
@@ -997,12 +969,22 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $this->getCommonChat()->canDo($action, $target);
 	}
 
+	/**
+	 * Marks of both kinds leave with the message: the common pin for the whole chat, the personal
+	 * ones for each of their owners. The personal cleanup runs even when the common one failed - the
+	 * two live in separate tables, so a broken delete of one must not leave the other hanging.
+	 */
 	public function unpin(bool $clearParams = true): Result
 	{
 		$pinService = new PinService();
 		$pinService->setContext($this->context);
 
-		return $pinService->unpinMessages($this, $clearParams);
+		$result = $pinService->unpinMessages($this, $clearParams);
+
+		$personalPinService = new PersonalPinService();
+		$personalPinService->setContext($this->context);
+
+		return $result->addErrors($personalPinService->unpinMessagesForAllOwners($this)->getErrors());
 	}
 
 	protected static function processFilters(Query $query, array $filter, array $order): void

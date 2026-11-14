@@ -19,6 +19,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\FolderLink;
 use Bitrix\Disk\Internals\ExternalLinkTable;
+use Bitrix\Disk\Internals\ObjectNameKey;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Bitrix24Disk\Legacy\Exceptions\AccessDeniedException;
@@ -597,7 +598,7 @@ class DiskStorage extends AbstractStorage
 
 		/** @var Folder $folder */
 		$parentId = $folder->getRealObject()->getId();
-		$folder = Folder::load(array('=NAME' => $name, 'PARENT_ID' => $parentId));
+		$folder = $this->loadSubFolderByName($parentId, $name);
 		if($folder)
 		{
 			$this->loadTree();
@@ -605,6 +606,22 @@ class DiskStorage extends AbstractStorage
 		}
 		$this->errorCollection->add(array(new Error("Could not " . __METHOD__ . " , load Folder by name {$name}, parentId {$parentId}", 11147)));
 		return array();
+	}
+
+	private function loadSubFolderByName(int $parentId, string $name): ?Folder
+	{
+		$row = ObjectNameKey::findSameName(
+			[
+				'select' => ['ID', 'NAME'],
+				'filter' => [
+					'=TYPE' => ObjectTable::TYPE_FOLDER,
+					'=PARENT_ID' => $parentId,
+				],
+			],
+			$name,
+		);
+
+		return $row ? Folder::loadById($row['ID']) : null;
 	}
 
 	/**
@@ -712,7 +729,7 @@ class DiskStorage extends AbstractStorage
 		}
 		else
 		{
-			$folder = Folder::loadById($targetDirectoryId);
+			$folder = $this->loadTargetFolder($targetDirectoryId);
 		}
 		/** @var Folder $folder */
 		if(!$folder)
@@ -730,7 +747,7 @@ class DiskStorage extends AbstractStorage
 		if($tmpFile->isCloud() && $tmpFile->getContentType())
 		{
 
-			$fileId = \CFile::saveFile(array(
+			$uploadedFile = array(
 				'name' => $tmpFile->getFilename(),
 				'tmp_name' => $tmpFile->getAbsolutePath(),
 				'type' => $tmpFile->getContentType(),
@@ -738,7 +755,41 @@ class DiskStorage extends AbstractStorage
 				'height' => $tmpFile->getHeight(),
 				'size' => $tmpFile->getSize(),
 				'MODULE_ID' => Driver::INTERNAL_MODULE_ID,
-			), Driver::INTERNAL_MODULE_ID, true, true);
+			);
+
+			// The bytes are still in the temporary file of the upload, so the format is judged here
+			// and the mark left in $options keeps the write node away from the stored content.
+			$writeOptions = array();
+			$formatPolicyError = File::findFormatPolicyErrorForUpload(
+				$uploadedFile,
+				$name,
+				(int)$this->getUser()->getId(),
+				$writeOptions,
+			);
+			if($formatPolicyError)
+			{
+				$this->errorCollection->add(array($formatPolicyError));
+
+				return array();
+			}
+
+			// The content is judged before it is copied inside the bucket: the write node would
+			// refuse it all the same, but only after the copy and the rows of the file are made.
+			// A link hands the file over to the real folder behind it, so the disk judged is the one
+			// that folder lies in and not the one the link lies in - as the write node judges it.
+			if($this->isCloudUploadWholeInTheBucket($tmpFile))
+			{
+				$realFolder = $folder->getRealObject() ?? $folder;
+				$personalQuotaError = File::findPersonalQuotaErrorForUpload($uploadedFile, $realFolder->getStorage(), $writeOptions);
+				if($personalQuotaError)
+				{
+					$this->errorCollection->add(array($personalQuotaError));
+
+					return array();
+				}
+			}
+
+			$fileId = \CFile::saveFile($uploadedFile, Driver::INTERNAL_MODULE_ID, true, true);
 			if(!$fileId)
 			{
 				$this->errorCollection->add(array(new Error("Could not " . __METHOD__ . ", save cloud file", 111588)));
@@ -764,7 +815,7 @@ class DiskStorage extends AbstractStorage
 			{
 				$fileData['UPDATE_TIME'] = DateTime::createFromTimestamp($this->convertFromExternalVersion($data['originalTimestamp']));
 			}
-			$fileModel = $folder->addFile($fileData);
+			$fileModel = $folder->addFile($fileData, array(), false, $writeOptions);
 			if(!$fileModel)
 			{
 				\CFile::delete($fileId);
@@ -818,6 +869,62 @@ class DiskStorage extends AbstractStorage
 		return array();
 	}
 
+	/**
+	 * The size of a cloud upload is declared by the client with its first part, and so is, in effect,
+	 * the count of bytes received: a part sent again adds to it, and a last part of one byte closes
+	 * the multipart upload early. Only the object in the bucket tells what the write would take, so
+	 * the quota is judged early only when that object is there and of the size declared - otherwise
+	 * the answer would tell whether any size fits the disk. Such an upload is left to the copy of
+	 * the content and to the write node. The count spares the request to the bucket for an upload
+	 * plainly unfinished.
+	 */
+	private function isCloudUploadWholeInTheBucket(TmpFile $tmpFile): bool
+	{
+		$declaredSize = (int)$tmpFile->getSize();
+		if ((int)$tmpFile->getReceivedSize() < $declaredSize)
+		{
+			return false;
+		}
+
+		return $this->findCloudObjectSize($tmpFile) === $declaredSize;
+	}
+
+	/**
+	 * Returns the size of the object of the cloud upload in its bucket, or null if there is no such
+	 * object (the multipart upload is not closed) or it cannot be looked up.
+	 */
+	protected function findCloudObjectSize(TmpFile $tmpFile): ?int
+	{
+		if (!$tmpFile->getBucketId() || !$tmpFile->getPath() || !Loader::includeModule('clouds'))
+		{
+			return null;
+		}
+
+		try
+		{
+			$bucket = new \CCloudStorageBucket($tmpFile->getBucketId());
+			if (!$bucket->init())
+			{
+				return null;
+			}
+
+			// The path is the one the multipart upload was started with; the service adds the
+			// prefix of the bucket itself, as it does when the temporary object is deleted.
+			$fileInfo = $bucket->getFileInfo('/' . ltrim($tmpFile->getPath(), '/'));
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		if (!is_array($fileInfo) || !isset($fileInfo['size']) || !is_numeric($fileInfo['size']))
+		{
+			return null;
+		}
+
+		return (int)$fileInfo['size'];
+	}
+
 	protected function processImageRotate(TmpFile $tmpFile, File $fileModel)
 	{
 		if (!$this->hasImageOrientation($tmpFile, $fileModel))
@@ -835,6 +942,11 @@ class DiskStorage extends AbstractStorage
 		{
 			$this->addShutdownTask(function() use($fileModel, $tmpFilePath) {
 				$fileData = \CFile::makeFileArray($tmpFilePath);
+				if ($fileData)
+				{
+					// The copy is named by uniqid(); the version must keep the name of the file on the disk.
+					$fileData['name'] = $fileModel->getName();
+				}
 				if ($fileData && $fileModel->uploadVersion($fileData, $fileModel->getCreatedBy()))
 				{
 					$result = Internals\FileTable::changeSyncDateTime($fileModel->getId(), (new DateTime())->add('1 seconds'));
@@ -890,8 +1002,7 @@ class DiskStorage extends AbstractStorage
 			$tmpFile->delete();
 		});
 
-		/** @var File $file */
-		$file = File::loadById($targetElementId);
+		$file = $this->loadFileToUpdate($targetElementId);
 		if(!$file)
 		{
 			$this->errorCollection->add(array(new Error("Could not " . __METHOD__ . " by id {$targetElementId}", 11154)));
@@ -907,7 +1018,7 @@ class DiskStorage extends AbstractStorage
 		if($tmpFile->isCloud() && $tmpFile->getContentType())
 		{
 
-			$fileId = \CFile::saveFile(array(
+			$uploadedFile = array(
 				'name' => $tmpFile->getFilename(),
 				'tmp_name' => $tmpFile->getAbsolutePath(),
 				'type' => $tmpFile->getContentType(),
@@ -915,7 +1026,38 @@ class DiskStorage extends AbstractStorage
 				'height' => $tmpFile->getHeight(),
 				'size' => $tmpFile->getSize(),
 				'MODULE_ID' => Driver::INTERNAL_MODULE_ID,
-			), Driver::INTERNAL_MODULE_ID, true, true);
+			);
+
+			// The bytes are still in the temporary file of the upload, so the format is judged here
+			// and the mark left in $options keeps the write node away from the stored content.
+			$writeOptions = array();
+			$formatPolicyError = File::findFormatPolicyErrorForUpload(
+				$uploadedFile,
+				$file->getName(),
+				(int)$this->getUser()->getId(),
+				$writeOptions,
+			);
+			if($formatPolicyError)
+			{
+				$this->errorCollection->add(array($formatPolicyError));
+
+				return false;
+			}
+
+			// The version is judged by what it adds to the disk before it is copied inside the bucket:
+			// the model tells whether it joins the last one, the write node would only refuse it later.
+			if($this->isCloudUploadWholeInTheBucket($tmpFile))
+			{
+				$personalQuotaError = $file->findPersonalQuotaErrorForVersionUpload($uploadedFile, $this->getUser()->getId(), $writeOptions);
+				if($personalQuotaError)
+				{
+					$this->errorCollection->add(array($personalQuotaError));
+
+					return false;
+				}
+			}
+
+			$fileId = \CFile::saveFile($uploadedFile, Driver::INTERNAL_MODULE_ID, true, true);
 
 			$fileArray = \CFile::getFileArray($fileId);
 			if(!$fileArray)
@@ -927,7 +1069,7 @@ class DiskStorage extends AbstractStorage
 			{
 				$fileArray['UPDATE_TIME'] = DateTime::createFromTimestamp($this->convertFromExternalVersion($data['originalTimestamp']));
 			}
-			if($file->addVersion($fileArray, $this->getUser()->getId()))
+			if($file->addVersion($fileArray, $this->getUser()->getId(), false, $writeOptions))
 			{
 				$file->changeEtag($tmpFile->getToken());
 				$this->loadTree();
@@ -939,7 +1081,7 @@ class DiskStorage extends AbstractStorage
 			}
 			elseif($file->getErrorByCode($file::ERROR_EXCLUSIVE_LOCK))
 			{
-				$forkedFile = $this->processWithLockedFile($file, $fileArray, $fileId);
+				$forkedFile = $this->processWithLockedFile($file, $fileArray, $fileId, $writeOptions);
 				if($forkedFile)
 				{
 					$this->errorCollection->clear();
@@ -963,6 +1105,7 @@ class DiskStorage extends AbstractStorage
 				$this->errorCollection->add(array(new Error("Could not " . __METHOD__ . " MakeFileArray", 11155)));
 				return false;
 			}
+			$fileArray['name'] = $file->getName();
 			if(!empty($data['originalTimestamp']))
 			{
 				$fileArray['UPDATE_TIME'] = DateTime::createFromTimestamp($this->convertFromExternalVersion($data['originalTimestamp']));
@@ -999,7 +1142,30 @@ class DiskStorage extends AbstractStorage
 		return false;
 	}
 
-	private function processWithLockedFile(File $file, $fileArray, $fileId = null)
+	/**
+	 * Loads the folder a new file is written to. It may be a link: the root of a shared folder or of
+	 * a connected group disk.
+	 *
+	 * @param int $folderId Id of the folder.
+	 * @return Folder|null
+	 */
+	protected function loadTargetFolder($folderId)
+	{
+		return Folder::loadById($folderId);
+	}
+
+	/**
+	 * Loads the file a new version is written to.
+	 *
+	 * @param int $fileId Id of the file.
+	 * @return File|null
+	 */
+	protected function loadFileToUpdate($fileId)
+	{
+		return File::loadById($fileId);
+	}
+
+	private function processWithLockedFile(File $file, $fileArray, $fileId = null, array $options = array())
 	{
 		$folderForSavedFiles = $this->storage->getFolderForSavedFiles();
 		if(!$folderForSavedFiles)
@@ -1018,14 +1184,14 @@ class DiskStorage extends AbstractStorage
 				'FILE_ID' => $fileId,
 				'SIZE' => $fileArray['size'],
 				'CREATED_BY' => $this->getUser()->getId(),
-			), array(), true);
+			), array(), true, $options);
 		}
 		else
 		{
 			$forkedFile = $folderForSavedFiles->uploadFile($fileArray, array(
 				'NAME' => $file->getName(),
 				'CREATED_BY' => $this->getUser()->getId(),
-			), array(), true);
+			), array(), true, $options);
 		}
 
 		if(!$forkedFile)
@@ -1197,9 +1363,9 @@ class DiskStorage extends AbstractStorage
 		return array();
 	}
 
-	public function isUnique($name, $targetDirectoryId, &$opponentId = null)
+	public function isUnique($name, $targetDirectoryId, &$opponentId = null, ?int $excludeId = null)
 	{
-		return BaseObject::isUniqueName($name, $targetDirectoryId, null, $opponentId);
+		return BaseObject::isUniqueName($name, $targetDirectoryId, $excludeId, $opponentId);
 	}
 
 	public function isCorrectName($name, &$msg)

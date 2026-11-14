@@ -5,9 +5,11 @@ namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Controller\DataProviders\ChildrenDataProvider;
+use Bitrix\Disk\Controller\DataProviders\FolderInfoDataProvider;
 use Bitrix\Disk\Controller\ActionFilter\RequiredParameter;
 use Bitrix\Disk\Internal\Command\BaseObject\AddSubFolderCommand;
 use Bitrix\Disk\Internal\Command\BaseObject\CreateByContentCommand;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\BaseObjectResolver;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkArchiveService;
@@ -151,6 +153,7 @@ class UnifiedLinkActions extends BaseObject
 			],
 			'singleCheckAllSource' => [
 				'getChildren' => Disk\RightsManager::OP_READ,
+				'getFolderInfo' => Disk\RightsManager::OP_READ,
 			],
 			'bulk' => [
 				'moveCollection' => Disk\RightsManager::OP_READ,
@@ -225,6 +228,11 @@ class UnifiedLinkActions extends BaseObject
 		$configureActions['getChildren'] = [
 			'+prefilters' => [
 				$this->checkers['getChildren'],
+			],
+		];
+		$configureActions['getFolderInfo'] = [
+			'+prefilters' => [
+				$this->checkers['getFolderInfo'],
 			],
 		];
 		$configureActions['addSubFolder'] = [
@@ -1050,6 +1058,50 @@ class UnifiedLinkActions extends BaseObject
 		return $response;
 	}
 
+	public function getFolderInfoAction(?Disk\BaseObject $baseObject, CurrentUser $currentUser): ?array
+	{
+		if (!$baseObject instanceof Disk\Folder)
+		{
+			$this->addError(new Error(Loc::getMessage('DISK_CONTROLLER_UNIFIED_LINK_ACTIONS_ERROR_MESSAGE_DENIED')));
+
+			return null;
+		}
+
+		$shouldCheckUnifiedLink = $this->shouldCheckUnifiedLinkForCurrentCollectionAction();
+		if (!is_bool($shouldCheckUnifiedLink))
+		{
+			return null;
+		}
+
+		$result = $this->createFolderInfoDataProvider()->getInfo(
+			folder: $baseObject,
+			currentUser: $currentUser,
+			shouldCheckUnifiedLink: $shouldCheckUnifiedLink,
+		);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$data = $result->getData();
+		$directFilesSize = $data['directFilesSize'];
+
+		return [
+			'name' => $baseObject->getName(),
+			'directFilesSize' => $directFilesSize,
+			'directFilesSizeFormatted' => \CFile::formatSize($directFilesSize),
+			'directFilesCount' => $data['directFilesCount'],
+			'directFoldersCount' => $data['directFoldersCount'],
+		];
+	}
+
+	protected function createFolderInfoDataProvider(): FolderInfoDataProvider
+	{
+		return new FolderInfoDataProvider();
+	}
+
 	protected function shouldCheckUnifiedLinkForCurrentCollectionAction(): ?bool
 	{
 		$checker = $this->checkers[$this->getCurrentAction()->getName()] ?? null;
@@ -1121,6 +1173,7 @@ class UnifiedLinkActions extends BaseObject
 		CurrentUser $currentUser,
 		string $name,
 		bool $generateUniqueName = false,
+		bool $autoCorrect = false,
 	): ?array
 	{
 		if (!$baseObject instanceof Disk\Folder)
@@ -1135,6 +1188,7 @@ class UnifiedLinkActions extends BaseObject
 			name: $name,
 			createdBy: (int)$currentUser->getId(),
 			generateUniqueName: $generateUniqueName,
+			autoCorrect: $autoCorrect,
 			shouldCheckUnifiedLink: true,
 		))->run();
 
@@ -1176,6 +1230,7 @@ class UnifiedLinkActions extends BaseObject
 		$diskObject = $baseObject->jsonSerialize();
 		$diskObject['rights'] = $this->rightsManager->getAvailableActions($baseObject, $securityContext);
 		$diskObject['links']['external'] = $this->getExternalLink($baseObject);
+		$diskObject = $this->addHtmlViewerLink($diskObject, $baseObject);
 
 		return [
 			'diskObject' => $diskObject,
@@ -1323,6 +1378,7 @@ class UnifiedLinkActions extends BaseObject
 
 				continue;
 			}
+			$this->addErrorsOfRestoredObject($object);
 
 			$restoredIds[] = $object->getRealObjectId();
 		}
@@ -1505,5 +1561,35 @@ class UnifiedLinkActions extends BaseObject
 		$resolvedObject = Disk\Internal\Service\UnifiedLink\BaseObjectResolver::resolve($baseObject, $version);
 
 		return $this->get($resolvedObject);
+	}
+
+	protected function get(Disk\BaseObject $object): array
+	{
+		$response = parent::get($object);
+		$response['object'] = $this->addHtmlViewerLink($response['object'], $object);
+
+		return $response;
+	}
+
+	/**
+	 * Both response shapes of this controller pass through here, so a file cannot carry the viewer address
+	 * in one of them and lose it in the other. The revision and the attachment are read from the request
+	 * because the shared description is not given them.
+	 */
+	private function addHtmlViewerLink(array $diskObject, Disk\BaseObject $object): array
+	{
+		if (
+			$object instanceof Disk\File
+			&& (int)$this->request->get('versionId') <= 0
+			&& (int)$this->request->get('attachedObjectId') <= 0
+			&& (int)$object->getSize() <= Disk\Configuration::getMaxSizeForHtmlViewer()
+			&& HtmlViewerPolicy::isViewable($object)
+		)
+		{
+			$urlManager = Disk\Driver::getInstance()->getUrlManager();
+			$diskObject['links']['htmlViewer'] = $urlManager->getUnifiedLink($object);
+		}
+
+		return $diskObject;
 	}
 }

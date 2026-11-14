@@ -2,8 +2,13 @@
 
 namespace Bitrix\Mobile\Tab\Preset\Service;
 
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Diag\ExceptionHandler;
+use Bitrix\Main\Loader;
+use Bitrix\Mobile\Public\Features\ManagedTabPresetsFeature;
 use Bitrix\Mobile\Tab\Preset\Integration\Messenger\MenuCacheInvalidationMessage;
+use Bitrix\Pull\Event;
 
 final class MobileMenuCacheInvalidator
 {
@@ -18,10 +23,13 @@ final class MobileMenuCacheInvalidator
 
 	private readonly \Closure $cacheDirectoryCleaner;
 	private readonly \Closure $cacheInvalidationScheduler;
+	private readonly \Closure $presetChangedNotifier;
 
 	public function __construct(
+		private readonly ExceptionHandler $exceptionHandler,
 		?\Closure $cacheDirectoryCleaner = null,
 		?\Closure $cacheInvalidationScheduler = null,
+		?\Closure $presetChangedNotifier = null,
 	)
 	{
 		$this->cacheDirectoryCleaner = $cacheDirectoryCleaner ?? static function (string $cacheDir): void {
@@ -29,6 +37,16 @@ final class MobileMenuCacheInvalidator
 		};
 		$this->cacheInvalidationScheduler = $cacheInvalidationScheduler ?? static function (array $userIds): void {
 			(new MenuCacheInvalidationMessage($userIds))->send(MenuCacheInvalidationMessage::QUEUE_ID);
+		};
+		$this->presetChangedNotifier = $presetChangedNotifier ?? static function (array $userIds): void {
+			if (Feature::isEnabled(ManagedTabPresetsFeature::class) && Loader::includeModule('pull'))
+			{
+				Event::add($userIds, [
+					'module_id' => 'mobile',
+					'command' => 'managedTabPresetChanged',
+					'params' => [],
+				]);
+			}
 		};
 	}
 
@@ -71,6 +89,17 @@ final class MobileMenuCacheInvalidator
 		foreach ($userIds as $userId)
 		{
 			$this->clearUser($userId);
+		}
+		if ($userIds !== [])
+		{
+			try
+			{
+				($this->presetChangedNotifier)($userIds);
+			}
+			catch (\Throwable $exception)
+			{
+				$this->exceptionHandler->writeToLog($exception);
+			}
 		}
 	}
 

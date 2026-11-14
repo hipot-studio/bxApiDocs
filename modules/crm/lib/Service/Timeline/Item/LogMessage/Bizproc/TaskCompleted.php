@@ -79,8 +79,15 @@ class TaskCompleted extends LogMessage
 
 	private function getStatusBlock(): Tag
 	{
+		$code = match ($this->getModel()->getSettings()['AUTO_DECISION'] ?? null)
+		{
+			'yes' => 'CRM_LOG_MESSAGE_BIZPROC_TASK_COMPLETED_STATUS_AUTO_YES',
+			'no' => 'CRM_LOG_MESSAGE_BIZPROC_TASK_COMPLETED_STATUS_AUTO_NO',
+			default => 'CRM_LOG_MESSAGE_BIZPROC_TASK_COMPLETED_STATUS',
+		};
+
 		return new Tag(
-			Loc::getMessage('CRM_LOG_MESSAGE_BIZPROC_TASK_COMPLETED_STATUS') ?? '',
+			Loc::getMessage($code) ?? '',
 			Tag::TYPE_SECONDARY
 		);
 	}

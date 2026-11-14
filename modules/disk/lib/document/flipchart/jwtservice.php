@@ -3,6 +3,11 @@
 namespace Bitrix\Disk\Document\Flipchart;
 
 use Bitrix\Disk\Document\Flipchart\Cloud\SignBoardConfig;
+use Bitrix\Disk\Document\Flipchart\DualMode\ConfigurationException;
+use Bitrix\Disk\Document\Flipchart\DualMode\ServiceAddress;
+use Bitrix\Disk\Document\Flipchart\DualMode\ServiceProfile;
+use Bitrix\Disk\Document\Flipchart\Enum\BoardIndexErrorCategory;
+use Bitrix\Disk\Document\Flipchart\Http\RequestDeadline;
 use Bitrix\Disk\User;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Web\JWT;
@@ -96,6 +101,77 @@ class JwtService
 		return $result;
 	}
 
+	public function generateTokenForIndexing(
+		string $documentId,
+		?ServiceProfile $profile = ServiceProfile::Old,
+		?RequestDeadline $deadline = null,
+	): BoardSigningResult
+	{
+		if ($profile === null)
+		{
+			return BoardSigningResult::createError(BoardIndexErrorCategory::ProfileUnresolved);
+		}
+
+		$data = [
+			'document_id' => $documentId,
+			'access_level' => 'read',
+			'can_edit_board' => false,
+			'user_id' => (string)$this->user->getId(),
+			'username' => $this->user->getLogin(),
+		];
+
+		if (Configuration::isUsingDocumentProxy())
+		{
+			if ($profile !== ServiceProfile::Old)
+			{
+				return BoardSigningResult::createError(BoardIndexErrorCategory::ProfileUnavailable);
+			}
+
+			$registration = Configuration::getCloudRegistrationData();
+			if ($registration === null)
+			{
+				return BoardSigningResult::createError(BoardIndexErrorCategory::ProxyNotRegistered);
+			}
+
+			return $this->createConfigSigner($registration['serverHost'])->signForIndexing(
+				$data,
+				$deadline ?? new RequestDeadline(),
+			);
+		}
+
+		try
+		{
+			$apiUrl = Configuration::getApiHost($profile);
+		}
+		catch (ConfigurationException)
+		{
+			return BoardSigningResult::createError(BoardIndexErrorCategory::ProfileUnavailable);
+		}
+
+		if (!ServiceAddress::isValid(rtrim($apiUrl, '/')))
+		{
+			return BoardSigningResult::createError(BoardIndexErrorCategory::ProfileUnavailable);
+		}
+
+		$secret = Configuration::getJwtSecret();
+		$oldLeeway = JWT::$leeway;
+		try
+		{
+			JWT::$leeway = Configuration::getJwtTtl();
+
+			return BoardSigningResult::createSuccess(JWT::encode($data, $secret), $apiUrl);
+		}
+		finally
+		{
+			JWT::$leeway = $oldLeeway;
+		}
+	}
+
+	protected function createConfigSigner(string $serverHost): SignBoardConfig
+	{
+		return new SignBoardConfig($serverHost);
+	}
+
 	public function getTokenFromProxy(): ?string
 	{
 		return $this->dataFromProxy['token'] ?? null;
@@ -121,9 +197,11 @@ class JwtService
 			if ($signedData->isSuccess())
 			{
 				$this->dataFromProxy = $signedData->getData();
+
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -147,18 +225,21 @@ class JwtService
 				}
 			}
 		}
+
 		return null;
 	}
 
 	public function addWebhookGetParam(string $key, string $value): self
 	{
 		$this->webhookGetParams[$key] = $value;
+
 		return $this;
 	}
 
 	public function setWebhookGetParams(array $params): self
 	{
 		$this->webhookGetParams = $params;
+
 		return $this;
 	}
 }

@@ -106,6 +106,11 @@ class Form extends Main\Engine\Controller
 			]);
 		}
 
+		if (($this->getRequest()->get('legalDocumentsOnly') ?? null) === 'Y')
+		{
+			$result->addHeader('Cache-Control', 'no-store');
+		}
+
 		return $result;
 	}
 

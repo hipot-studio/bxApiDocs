@@ -2,15 +2,31 @@
 namespace Bitrix\Socialnetwork\Integration\Landing;
 
 use Bitrix\Blog\PostTable;
+use Bitrix\Blog\PostSocnetRightsTable;
 use Bitrix\Main;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Landing;
 use Bitrix\Main\FileTable;
+use Bitrix\Main\ORM\Fields\DatetimeField;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Socialnetwork\Log\ViewerAccess;
+use Bitrix\Socialnetwork\LogRightTable;
+use Bitrix\Socialnetwork\LogTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
+use Bitrix\Socialnetwork\Helper\Workgroup\Access;
+use Bitrix\Socialnetwork\Permission\GroupAccessController;
+use Bitrix\Socialnetwork\Permission\GroupDictionary;
 
 class Livefeed extends Landing\Source\DataLoader
 {
+	private array $selectedGroupIds = [];
+
 	/**
 	 * @return void
 	 */
@@ -130,6 +146,17 @@ class Livefeed extends Landing\Source\DataLoader
 		return new Main\EventResult(Main\EventResult::SUCCESS, $result, 'socialnetwork');
 	}
 
+	public static function onBeforeDynamicBlockCache(Main\Event $event): ?Main\EventResult
+	{
+		$sourceIds = $event->getParameter('SOURCE_IDS');
+		if (is_array($sourceIds) && in_array('socialnetwork:livefeed', $sourceIds, true))
+		{
+			return new Main\EventResult(Main\EventResult::ERROR, null, 'socialnetwork');
+		}
+
+		return null;
+	}
+
 	/**
 	 * @return array
 	 */
@@ -163,7 +190,7 @@ class Livefeed extends Landing\Source\DataLoader
 			}
 		}
 
-		$groupIdList = array_filter(array_map(function($val) {
+		$groupIdList = array_unique(array_filter(array_map(function($val) {
 			$res = false;
 			if (preg_match('/^SG(\d+)$/i', $val, $matches))
 			{
@@ -173,13 +200,18 @@ class Livefeed extends Landing\Source\DataLoader
 			return $res;
 		}, $result), function ($val) {
 			return ($val > 0);
-		});
+		}));
 
-		if (empty($groupIdList))
+		$this->selectedGroupIds = array_values($groupIdList);
+		return $this->resolveEligibleGroups($this->selectedGroupIds);
+	}
+
+	private function resolveEligibleGroups(array $groupIdList): array
+	{
+		if (!$groupIdList)
 		{
-			return $result;
+			return ['viewer' => [], 'export' => []];
 		}
-
 		$result = [];
 		$res = WorkgroupTable::getList([
 			'filter' => [
@@ -187,14 +219,55 @@ class Livefeed extends Landing\Source\DataLoader
 				'=ACTIVE' => 'Y',
 				'@ID' => $groupIdList
 			],
-			'select' => [ 'ID' ]
+			'select' => [ 'ID', 'VISIBLE' ]
 		]);
+		$groups = [];
 		while ($workgroupFields = $res->fetch())
 		{
-			$result[] = 'SG'.$workgroupFields['ID'];
+			$groups[(int)$workgroupFields['ID']] = $workgroupFields['VISIBLE'] === 'Y';
 		}
 
-		return $result;
+		$userId = \Bitrix\Socialnetwork\Helper\User::getCurrentUserId();
+		if ($userId === 0)
+		{
+			foreach ($groups as $groupId => $visible)
+			{
+				if ($visible)
+				{
+					$result[] = 'SG' . $groupId;
+				}
+			}
+		}
+		elseif (Access::isRuleEnabled(GroupDictionary::VIEW))
+		{
+			foreach (array_chunk(array_keys($groups), GroupAccessController::MAX_MASS_CHECK_ITEMS) as $groupIds)
+			{
+				$access = GroupAccessController::getAccessibleGroups($userId, GroupDictionary::VIEW, $groupIds);
+				foreach ($access as $groupId => $view)
+				{
+					if ($view->canView)
+					{
+						$result[] = 'SG' . $groupId;
+					}
+				}
+			}
+		}
+		else
+		{
+			foreach ($groups as $groupId => $visible)
+			{
+				if (Access::canViewWithMinimalData([
+					'groupId' => $groupId,
+					'userId' => $userId,
+					'visible' => $visible,
+				]))
+				{
+					$result[] = 'SG' . $groupId;
+				}
+			}
+		}
+
+		return ['viewer' => $result, 'export' => $this->getExportGroups(array_keys($groups))];
 	}
 
 	/**
@@ -268,7 +341,7 @@ class Livefeed extends Landing\Source\DataLoader
 		$rightsFilter = $this->getRightsFilter();
 		$authorFilter = $this->getAuthorFilter();
 
-		if (empty($rightsFilter))
+		if (empty($rightsFilter['viewer']) && empty($rightsFilter['export']))
 		{
 			return $result;
 		}
@@ -308,7 +381,7 @@ class Livefeed extends Landing\Source\DataLoader
 		}
 
 		$livefeedFilter = [
-			'LOG_RIGHTS' => $rightsFilter,
+			'LOG_RIGHTS' => $rightsFilter['viewer'],
 			'EVENT_ID' => \CSocNetLogTools::findFullSetByEventID('blog_post'),
 			'<=LOG_DATE' => 'NOW',
 		];
@@ -320,10 +393,23 @@ class Livefeed extends Landing\Source\DataLoader
 		)
 		{
 			$livefeedFilter['USER_ID'] = intval($authorFilter[0]);
+			$entityTypes = [];
+			foreach (\CSocNetAllowed::GetAllowedEntityTypesDesc() as $type => $description)
+			{
+				if (($description['USE_CB_FILTER'] ?? null) === 'Y')
+				{
+					$entityTypes[] = $type;
+				}
+			}
+			if ($entityTypes)
+			{
+				$livefeedFilter['ENTITY_TYPE'] = $entityTypes;
+			}
 		}
 
 		$settings = [
 			'order' => $livefeedOrder,
+			'exportGroups' => $rightsFilter['export'],
 			'filter' => $livefeedFilter,
 			'limit' => [
 				'nTopCount' => $this->getLimit()
@@ -351,16 +437,17 @@ class Livefeed extends Landing\Source\DataLoader
 			return $result;
 
 		$rightsFilter = $this->getRightsFilter();
-		if (empty($rightsFilter))
+		if (empty($rightsFilter['viewer']) && empty($rightsFilter['export']))
 		{
 			return $result;
 		}
 
 		$settings = [
-			'order' => [],
+			'order' => ['LOG_DATE' => 'DESC'],
+			'exportGroups' => $rightsFilter['export'],
 			'filter' => [
 				'SOURCE_ID' => $element,
-				'LOG_RIGHTS' => $rightsFilter,
+				'LOG_RIGHTS' => $rightsFilter['viewer'],
 				'EVENT_ID' => \CSocNetLogTools::findFullSetByEventID('blog_post'),
 				'<=LOG_DATE' => 'NOW',
 			],
@@ -383,14 +470,212 @@ class Livefeed extends Landing\Source\DataLoader
 		return $result;
 	}
 
+	private function getExportGroups(array $groupIds): array
+	{
+		if (!$groupIds || !Main\Loader::includeModule('blog'))
+		{
+			return [];
+		}
+
+		$permissions = \CSocNetFeaturesPerms::GetOperationPerm('G', $groupIds, 'blog', 'view_post');
+		$result = [];
+		foreach ($groupIds as $groupId)
+		{
+			$code = 'SG' . $groupId . '_K';
+			$roles = \CBlogPost::getFullGroupRoleSet($permissions[$groupId] ?? '', 'SG' . $groupId . '_');
+			if (in_array($code, $roles, true))
+			{
+				$result[] = (int)$groupId;
+			}
+		}
+
+		return $result;
+	}
+
+	private function buildViewerFilter(array $groupCodes): ?ConditionTree
+	{
+		global $USER;
+
+		if (!$groupCodes || !is_object($USER))
+		{
+			return null;
+		}
+		$viewer = ViewerAccess::createLogIdQuery([
+			'CHECK_RIGHTS' => 'Y', 'USER_ID' => (int)$USER->GetID(),
+		], []);
+		if ($viewer === null)
+		{
+			return null;
+		}
+
+		return Query::filter()->whereIn('ID', $viewer)->whereIn('ID',
+			LogRightTable::query()->setSelect(['LOG_ID'])->whereIn('GROUP_CODE', $groupCodes)
+		);
+	}
+
+	private function buildOrdinaryFilter(array $groupIds): ?ConditionTree
+	{
+		if (!$groupIds)
+		{
+			return null;
+		}
+
+		$ordinary = Query::filter()->logic('or');
+		foreach ($groupIds as $groupId)
+		{
+			$code = 'SG' . $groupId;
+			$group = Query::filter();
+			foreach ([$code, $code . '_K'] as $audience)
+			{
+				$group->whereIn('ID', LogRightTable::query()->setSelect(['LOG_ID'])
+					->where('GROUP_CODE', $audience)
+				)->whereIn('SOURCE_ID', PostSocnetRightsTable::query()->setSelect(['POST_ID'])
+					->where('ENTITY_TYPE', 'SG')->where('ENTITY_ID', $groupId)->where('ENTITY', $audience)
+				);
+			}
+			$ordinary->where($group);
+		}
+
+		return $ordinary;
+	}
+
+	private function buildAuthorizedPostQuery(
+		array $settings, array $rights, string $direction, array $postIds = [],
+	): ?Query
+	{
+		$viewer = $this->buildViewerFilter($rights['viewer']);
+		$ordinary = $this->buildOrdinaryFilter($rights['export']);
+		if (($viewer === null && $ordinary === null) || empty($settings['filter']['EVENT_ID']))
+		{
+			return null;
+		}
+		$permission = Query::filter()->logic('or');
+		if ($viewer !== null)
+		{
+			$permission->where($viewer);
+		}
+		if ($ordinary !== null)
+		{
+			$permission->where($ordinary);
+		}
+		$now = new SqlExpression(Main\Application::getConnection()->getSqlHelper()->getCurrentDateTimeFunction());
+		$aggregate = new ExpressionField('SORT_DATE', $direction === 'ASC' ? 'MIN(%s)' : 'MAX(%s)', ['LOG_DATE']);
+		$aggregate->configureValueField(new DatetimeField('SORT_DATE'));
+		$query = LogTable::query()
+			->registerRuntimeField(new Reference('POST', PostTable::class,
+				Join::on('this.SOURCE_ID', 'ref.ID'), ['join_type' => 'INNER']))
+			->registerRuntimeField($aggregate)
+			->setSelect(['SOURCE_ID', 'SORT_DATE'])
+			->where($permission)
+			->whereIn('EVENT_ID', $settings['filter']['EVENT_ID'])
+			->where(Query::filter()->logic('or')->whereNull('INACTIVE')->where('INACTIVE', '!=', 'Y'))
+			->where('LOG_DATE', '<=', $now)
+			->where('POST.PUBLISH_STATUS', BLOG_PUBLISH_STATUS_PUBLISH)
+			->where('POST.DATE_PUBLISH', '<=', $now)
+			->setGroup(['SOURCE_ID'])
+			->setOrder(['SORT_DATE' => $direction, 'SOURCE_ID' => $direction])
+		;
+		foreach (['SOURCE_ID', 'USER_ID'] as $field)
+		{
+			if (isset($settings['filter'][$field]))
+			{
+				$query->where($field, $settings['filter'][$field]);
+			}
+		}
+		if (!empty($settings['filter']['ENTITY_TYPE']))
+		{
+			$query->whereIn('ENTITY_TYPE', $settings['filter']['ENTITY_TYPE']);
+		}
+		if ($postIds)
+		{
+			$query->whereIn('SOURCE_ID', $postIds);
+		}
+
+		return $query;
+	}
+
+	private function selectPostIds(array $settings): array
+	{
+		$direction = strtoupper($settings['order']['LOG_DATE'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+		$query = $this->buildAuthorizedPostQuery($settings, [
+			'viewer' => $settings['filter']['LOG_RIGHTS'], 'export' => $settings['exportGroups'],
+		], $direction);
+		if ($query === null)
+		{
+			return [];
+		}
+
+		$params = $settings['limit'];
+		$limit = is_array($params) ? (int)($params['nTopCount'] ?? 0) : (int)$params;
+		if ($limit > 0)
+		{
+			$query->setLimit($limit);
+		}
+		else
+		{
+			$total = (int)$query->queryCountTotal();
+			$window = (new LivefeedNavigation())->normalize($total, $params);
+			if ($window === null)
+			{
+				return [];
+			}
+			if (!$window['showAll'])
+			{
+				$query->setLimit($window['limit'])->setOffset($window['offset']);
+			}
+		}
+		$ids = [];
+		$result = $query->exec();
+		while ($row = $result->fetch())
+		{
+			$ids[] = (int)$row['SOURCE_ID'];
+		}
+
+		return $this->revalidateSelectedPostIds($settings, $ids, $direction);
+	}
+
+	private function revalidateSelectedPostIds(array $settings, array $ids, string $direction): array
+	{
+		if (!$ids)
+		{
+			return [];
+		}
+		$rights = $this->resolveEligibleGroups($this->selectedGroupIds);
+		$query = $this->buildAuthorizedPostQuery($settings, $rights, $direction, $ids);
+		if ($query === null)
+		{
+			return [];
+		}
+		$allowed = [];
+		$result = $query->exec();
+		while ($row = $result->fetch())
+		{
+			$allowed[(int)$row['SOURCE_ID']] = true;
+		}
+
+		return array_values(array_filter($ids, static fn(int $id): bool => isset($allowed[$id])));
+	}
+
+	private function getElementsInternal(array $settings): array
+	{
+		global $USER;
+
+		if (!is_object($USER) || !Main\Loader::includeModule('blog'))
+		{
+			return [];
+		}
+
+		$ids = $this->selectPostIds($settings);
+		return $ids ? $this->loadPostPayload($ids) : [];
+	}
+
 	/**
-	 * @param array $settings
+	 * @param array $blogPostIdList
 	 * @return array
 	 */
-	private function getElementsInternal(array $settings)
+	private function loadPostPayload(array $blogPostIdList): array
 	{
 		global $CACHE_MANAGER, $USER_FIELD_MANAGER;
-
 		$result = [];
 
 		$pathToSmile = Main\Config\Option::get("socialnetwork", "smile_page", false, SITE_ID);
@@ -422,25 +707,6 @@ class Livefeed extends Landing\Source\DataLoader
 			$allow["VIDEO"] = "N";
 		}
 
-		$iterator = \CSocNetLog::getList(
-			$settings['order'],
-			$settings['filter'],
-			false,
-			$settings['limit'],
-			[ 'SOURCE_ID' ],
-			[
-				'CHECK_RIGHTS' => 'N',
-				'USE_FOLLOW' => 'N',
-				'USE_SUBSCRIBE' => 'N',
-				'USE_FAVORITES' => 'N',
-			]
-		);
-
-		$blogPostIdList = [];
-		while ($row = $iterator->fetch())
-		{
-			$blogPostIdList[] = $row['SOURCE_ID'];
-		}
 
 		$diskInstalled = Main\Loader::includeModule('disk');
 
@@ -653,11 +919,10 @@ class Livefeed extends Landing\Source\DataLoader
 			}
 			if (!empty($result))
 			{
-				usort($result, function($a, $b) use ($blogPostIdList) {
-					$keyA = array_search($a['ID'], $blogPostIdList);
-					$keyB = array_search($b['ID'], $blogPostIdList);
-					return ($keyA > $keyB) ? +1 : -1;
-				});
+				$positions = array_flip($blogPostIdList);
+				usort($result, static fn(array $a, array $b): int =>
+					$positions[(int)$a['ID']] <=> $positions[(int)$b['ID']]
+				);
 			}
 		}
 

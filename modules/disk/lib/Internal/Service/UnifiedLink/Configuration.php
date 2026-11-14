@@ -3,8 +3,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink;
 
-use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Main\Config\Option;
 
@@ -54,6 +55,14 @@ class Configuration
 		);
 	}
 
+	public static function getDefaultAccessLevelForObject(BaseObject $baseObject): UnifiedLinkAccessLevel
+	{
+		return $baseObject instanceof Folder
+			? self::getFolderDefaultAccessLevel()
+			: self::getDefaultAccessLevel()
+		;
+	}
+
 	public static function setFileTypeSupport(int $fileType, bool $isSupported = true): void
 	{
 		Option::set(
@@ -76,15 +85,5 @@ class Configuration
 	private static function getOptionNameForFileType(int $fileType): string
 	{
 		return "unified_link.allow_type_{$fileType}";
-	}
-
-	public static function isDocumentHandlerAllowed(DocumentHandler $documentHandler): bool
-	{
-		return Option::get('disk', self::getOptionNameForDocumentHandler($documentHandler), 'N') === 'Y';
-	}
-
-	private static function getOptionNameForDocumentHandler(DocumentHandler $documentHandler): string
-	{
-		return "unified_link.allow_document_handler_{$documentHandler::getCode()}";
 	}
 }

@@ -17,6 +17,7 @@ use Bitrix\Im\V2\Entity\User\UserType;
 use Bitrix\Im\V2\Folder\FolderCascadeHandler;
 use Bitrix\Im\V2\Integration\AI\AIHelper;
 use Bitrix\Im\V2\Integration\Call\CallToken;
+use Bitrix\Im\V2\Integration\Search\IndexService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Integration\AI\Restriction;
@@ -188,6 +189,8 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public const ROLE_NONE = 'NONE';
 
 	private const CHUNK_SIZE = 1000;
+	/** Chats one selection of the relations of a user covers ({@see self::fillSelfRelations()}). */
+	private const SELF_RELATIONS_CHUNK = 300;
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
 	protected const EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD = false;
 	protected const MAX_USERS_TO_DISABLE_DELETE_MESSAGE = 50;
@@ -348,6 +351,17 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return ChatFactory::getInstance()->getChatById($chatId);
 	}
 
+	/**
+	 * The same chats {@see self::getInstance()} hands out one by one, brought into its cache in one
+	 * selection. A prefetch and nothing more: every chat is still taken with getInstance().
+	 *
+	 * @param int[] $chatIds
+	 */
+	public static function fillInstances(array $chatIds): void
+	{
+		ChatFactory::getInstance()->fillChats($chatIds);
+	}
+
 	public static function cleanCache(int $id, bool $cleanStaticCache = true): void
 	{
 		$cacheLevel = $cleanStaticCache ? Im\V2\Cache\CacheLevel::All : Im\V2\Cache\CacheLevel::Persistent;
@@ -399,7 +413,53 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function getStartId(?int $userId = null): int
 	{
-		return RelationCollection::getStartId($userId ?? $this->getContext()->getUserId(), $this->getChatId());
+		$relationStartId = RelationCollection::getStartId(
+			$userId ?? $this->getContext()->getUserId(),
+			$this->getChatId()
+		);
+
+		return max($relationStartId, $this->getHistoryStartId());
+	}
+
+	/**
+	 * The border left by a cleanup for everyone. It lives on the chat, not on the relations, because the
+	 * content stays in the database until the scheduled cleanup takes it, and until then a reader without
+	 * a relation (open chats and channels are readable without membership) would have no border at all.
+	 */
+	public function getHistoryStartId(): int
+	{
+		return (int)($this->getChatParams()->get(Params::HISTORY_START_ID)?->getValue() ?? 0);
+	}
+
+	/**
+	 * The highest border a cleanup for oneself has left on the relation of any member: the point up to
+	 * which a message may be hidden from somebody without being hidden from everybody. Kept on the chat
+	 * so that a delivery to the readers of the chat can tell, without a read of the relations, that no
+	 * one has cleared past the message it carries - the case nearly every delivery is. A member who came
+	 * in after the message with the history hidden has a border of their own above it that is not part
+	 * of this one: the delivery reaches them as it did before the cleanup existed.
+	 */
+	public function getSelfHistoryStartId(): int
+	{
+		return (int)($this->getChatParams()->get(Params::SELF_HISTORY_START_ID)?->getValue() ?? 0);
+	}
+
+	/**
+	 * Whether a message of this chat was cleared for everyone: unreachable already, while its content
+	 * waits for the scheduled cleanup.
+	 */
+	public function isMessageBehindHistoryBorder(int $messageId): bool
+	{
+		return $messageId < $this->getHistoryStartId();
+	}
+
+	/**
+	 * The same question asked for one reader: besides the border a cleanup for everyone has left on the
+	 * chat, a member who has cleared the history for themselves stands above their own.
+	 */
+	public function isMessageBehindUserHistoryBorder(int $messageId, int $userId): bool
+	{
+		return $this->isMessageBehindHistoryBorder($messageId) || $this->getStartId($userId) > $messageId;
 	}
 
 	public function isExist(): bool
@@ -856,6 +916,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$sendingService->fireEventAfterMessageSend($this, $message);
 		(new Im\V2\Link\LinkFacade($sendingConfig))->setContext($authorContext)->saveLinksFromMessage($message);
 		$this->transcribeFilesAfterMessageSend($message);
+		ServiceLocator::getInstance()->get(IndexService::class)->onMessageSend($message, $this);
 	}
 
 	protected function transcribeFilesAfterMessageSend(Message $message): void
@@ -1308,6 +1369,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	}
 
 	/**
+	 * Drawn in portions of {@see self::SELF_RELATIONS_CHUNK}: a caller such as the sync of an offline
+	 * client names as many chats as its page of the journal carries, and a single IN of all of them is
+	 * a statement the driver may refuse.
+	 *
 	 * @param static[] $chats
 	 * @param int|null $userId
 	 * @return void
@@ -1326,17 +1391,23 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
-		$query = RelationTable::query()
-			->setSelect(RelationCollection::COMMON_FIELDS)
-			->where('USER_ID', $userId)
-			->whereIn('CHAT_ID', $chatIds)
-		;
+		$relationEntities = [];
 
-		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
-			->forUser($userId, TreeOrigin::forChat('CHAT'))
-			->apply($query);
+		foreach (array_chunk($chatIds, self::SELF_RELATIONS_CHUNK) as $chunk)
+		{
+			$query = RelationTable::query()
+				->setSelect(RelationCollection::COMMON_FIELDS)
+				->where('USER_ID', $userId)
+				->whereIn('CHAT_ID', $chunk)
+			;
 
-		$relationEntities = $query->fetchAll();
+			ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+				->forUser($userId, TreeOrigin::forChat('CHAT'))
+				->apply($query);
+
+			array_push($relationEntities, ...$query->fetchAll());
+		}
+
 		$relations = new RelationCollection($relationEntities);
 
 		foreach ($chats as $chat)
@@ -1497,7 +1568,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$push = Im\V2\Message\PushFormat::formatStartRecordVoice($this);
 		if ($this->getType() === self::IM_TYPE_COMMENT)
 		{
-			\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_'.$this->getParentChatId(), $push);
+			Im\V2\Pull\CommentTagPublisher::addToStack($this, $push);
 		}
 		else
 		{
@@ -2832,6 +2903,18 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $this->getRelationFacade()?->getRawFullRelations() ?? new RelationCollection();
 	}
 
+	/**
+	 * The set is raw on purpose: the write path asks whether a row exists, and a relation hidden by the
+	 * access filter would look absent, so a second relation of the same user would be created on top of it.
+	 *
+	 * @param int[] $userIds
+	 * @return RelationCollection
+	 */
+	protected function getRawRelationsByUserIds(array $userIds): RelationCollection
+	{
+		return $this->getRelationFacade()?->getRawByUserIds($userIds) ?? new RelationCollection();
+	}
+
 	public function getRelationFacade(): ?Im\V2\Relation\ChatRelations
 	{
 		if ($this->getId())
@@ -3361,8 +3444,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		{
 			$this->sendMessageUsersAdd($changes->getNewMembers(), $config);
 		}
+		$this->addNewMembersToRecent($changes, $config);
 		$this->disableUserDeleteMessage($config->skipRecent);
 		$this->sendEventUsersAdd($changes->getNewRelations());
+		ServiceLocator::getInstance()->get(IndexService::class)->onUsersAdded($this, $changes->getNewRelations());
 
 		$this->onAfterUsersAdd($changes);
 
@@ -3389,7 +3474,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	protected function getConfigForCascadeAddUsers(AddUsersConfig $config): AddUsersConfig
 	{
-		return $config->addVisitedChatId($this->getChatId() ?? 0)->withOriginChat($this)->setManagerIds([]);
+		return $config
+			->addVisitedChatId($this->getChatId() ?? 0)
+			->withOriginChat($this)
+			->setManagerIds([])
+			->withoutInitialMemberState()
+		;
 	}
 
 	private function shouldAddUsersToParentCascade(AddUsersConfig $config): bool
@@ -3425,6 +3515,26 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return new Result();
 	}
 
+	protected function addNewMembersToRecent(RelationChangeSet $changes, AddUsersConfig $config): void
+	{
+		if (!$config->addToRecent || $config->isFakeAdd)
+		{
+			return;
+		}
+
+		$userIds = $changes->getNewMembers();
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()->get(Im\V2\Recent\NewMembersRecentWriter::class)->write(
+			$this,
+			$this->getRawRelationsByUserIds($userIds),
+			$config->unreadMarkedMessageId,
+		);
+	}
+
 	protected function resolveRelationConflicts(array $userIds, AddUsersConfig $config): RelationChangeSet
 	{
 		$changes = new RelationChangeSet();
@@ -3433,7 +3543,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return $changes;
 		}
 
-		$usersAlreadyInChat = $this->getRawRelations();
+		$usersAlreadyInChat = $this->getRawRelationsByUserIds($userIds);
 
 		foreach ($userIds as $userId)
 		{
@@ -3449,6 +3559,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			{
 				$changes->addNewMembers($userId);
 				$relation->markAsHidden(false);
+				if ($config->isMuted($userId))
+				{
+					$relation->setNotifyBlock(true);
+				}
 			}
 			if ($config->reason !== Reason::DEFAULT)
 			{
@@ -3650,6 +3764,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		{
 			$relation->setManager(true);
 		}
+		if ($config->isMuted($userId))
+		{
+			$relation->setNotifyBlock(true);
+		}
 
 		return $relation;
 	}
@@ -3836,6 +3954,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		try
 		{
+			// The relation is already gone, and every step below may throw: the search index would then
+			// keep the code of a member the chat no longer holds, with nothing left to report the removal.
+			ServiceLocator::getInstance()->get(IndexService::class)->onUserDeleted($this, $userId);
 			$this->processUpdateStateAfterUserDelete($userId, $config)->save();
 			$this->sendPushUserDelete($userId, $relations);
 			$this->sendEventUserDelete($userId);
@@ -4679,9 +4800,15 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function toRestFormat(array $option = []): array
 	{
 		$isGuest = $this->getContext()->getUser()->isGuest();
+		$avatarOriginalUrl = (new Entity\File\ChatAvatar($this))->getOriginalFile()['SRC'] ?? '';
 
 		$commonFields = [
 			'avatar' => $this->getAvatar(),
+			// The 'avatar' above is the 200x200 resize_cache copy, which is all a message list needs
+			// and nothing a caller needs to work with the very image the user set: a chat avatar is a
+			// plain b_file, so the original is made addressable next to the crop.
+			'avatarId' => $this->getAvatarId() ?? 0,
+			'avatarOriginalUrl' => $avatarOriginalUrl,
 			'color' => $this->getColor(true),
 			'description' => $this->getDescription() ?? '',
 			'dialogId' => $this->getDialogId(),
@@ -4949,15 +5076,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	protected function recomputeCollabPreviewSourceAfterMute(int $userId): void
 	{
-		$collabChatId = $this->getCollabAncestorIdForPreviewSource();
-		if ($collabChatId === null)
-		{
-			return;
-		}
-
 		ServiceLocator::getInstance()
 			->get(Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerService::class)
-			->recomputeForUser($collabChatId, $userId)
+			->recomputeForSourceChatMute((int)$this->getChatId(), $userId)
 		;
 	}
 
@@ -4992,6 +5113,8 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 
 		$currentUserId = Entity\User\User::getCurrent()->getId();
+
+		ServiceLocator::getInstance()->get(IndexService::class)->onChatDeleted($this);
 
 		Application::getInstance()->addBackgroundJob(
 			fn () => (new Im\V2\Chat\Cleanup\ChatContentCollector($this->chatId))

@@ -4,7 +4,6 @@ namespace Bitrix\Disk\Ui;
 
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\BitrixHandler;
-use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
@@ -34,6 +33,7 @@ final class FileAttributes extends ItemAttributes
 	public const ATTRIBUTE_MARKDOWN_URL = 'data-markdown-url';
 	public const ATTRIBUTE_DOWNLOAD_DISABLED = 'data-viewer-download-disabled';
 	public const ATTRIBUTE_TIFF_PREVIEW_URL = 'data-tiff-preview-url';
+	public const ATTRIBUTE_VIEWER_SERVICE_CODE = 'data-viewer-service-code';
 
 	public const JS_TYPE_CLASS_MARKDOWN = 'BX.Disk.Viewer.MarkdownItem';
 	public const JS_TYPE_CLASS_TIFF = 'BX.Disk.Viewer.TiffItem';
@@ -126,7 +126,12 @@ final class FileAttributes extends ItemAttributes
 	 * @param string $contentType
 	 * @return bool
 	 */
-	public static function requiresUnifiedLinkToOpen(string $type, string $contentType): bool
+	public static function requiresUnifiedLinkToOpen(
+		string $type,
+		string $contentType,
+		?File $file = null,
+		?Version $version = null,
+	): bool
 	{
 		if ($type === Disk\UI\Viewer\Renderer\Board::getJsType())
 		{
@@ -134,8 +139,16 @@ final class FileAttributes extends ItemAttributes
 		}
 
 		return self::isSetViewDocumentInClouds()
-			&& Document\DocumentViewPolicy::isAllowedUseClouds($contentType)
-			&& Document\DocumentViewPolicy::getDefaultHandlerForView() instanceof OnlyOfficeHandler
+			&& self::isCloudSourceAllowed($contentType, $file, $version)
+			&& Document\OfficeEngineRecognizer::isOfficeEngine(Document\DocumentViewPolicy::getDefaultHandlerForView())
+		;
+	}
+
+	private static function isCloudSourceAllowed(string $contentType, ?File $file, ?Version $version): bool
+	{
+		return $file === null
+			? Document\DocumentViewPolicy::isAllowedUseClouds($contentType)
+			: Document\DocumentViewPolicy::isAllowedUseVibeofficeSource($file, $version, $contentType)
 		;
 	}
 
@@ -385,7 +398,8 @@ final class FileAttributes extends ItemAttributes
 			$this->needSetUnifiedLink = true;
 		}
 
-		if ($this->getViewerType() === Disk\UI\Viewer\Renderer\Board::getJsType())
+		$isBoard = $this->getViewerType() === Disk\UI\Viewer\Renderer\Board::getJsType();
+		if ($isBoard)
 		{
 			if ($isSupportsUnifiedLink)
 			{
@@ -439,10 +453,18 @@ final class FileAttributes extends ItemAttributes
 
 		$this->setMkvSources();
 
-		if (self::isSetViewDocumentInClouds() && Document\DocumentViewPolicy::isAllowedUseClouds($this->fileData['CONTENT_TYPE']))
+		if (
+			!$isBoard
+			&& self::isSetViewDocumentInClouds()
+			&& self::isCloudSourceAllowed(
+				$this->fileData['CONTENT_TYPE'],
+				$this->getFileObject(),
+				self::getVersionObject($this->fileData),
+			)
+		)
 		{
 			$documentHandler = Document\DocumentViewPolicy::getDefaultHandlerForView();
-			if ($documentHandler instanceof OnlyOfficeHandler)
+			if (Document\OfficeEngineRecognizer::isOfficeEngine($documentHandler))
 			{
 				if ($isSupportsUnifiedLink)
 				{
@@ -454,6 +476,16 @@ final class FileAttributes extends ItemAttributes
 						->setTypeClass(self::JS_TYPE_CLASS_ONLYOFFICE)
 						->setAsSeparateItem()
 						->setExtension('disk.viewer.onlyoffice-item')
+						->setAttribute(
+							self::ATTRIBUTE_VIEWER_SERVICE_CODE,
+							$this->getFileObject() instanceof File
+								&& Document\DocumentViewPolicy::isAdditionalVibeofficeSource(
+									$this->getFileObject(),
+									self::getVersionObject($this->fileData),
+								)
+									? Document\Vibeoffice\VibeofficeHandler::getCode()
+									: Configuration::getDefaultViewerServiceCode(),
+						)
 					;
 
 					Extension::load('disk.viewer.onlyoffice-item');
@@ -528,12 +560,20 @@ final class FileAttributes extends ItemAttributes
 		$type = parent::getViewerTypeByFile($fileArray);
 		$type = self::refineType($type, $fileArray);
 
-		if (!self::isSetViewDocumentInClouds())
+		// A board has its own viewer, even if the external handler claims its content type.
+		if ($type === Disk\UI\Viewer\Renderer\Board::getJsType() || !self::isSetViewDocumentInClouds())
 		{
 			return $type;
 		}
 
-		if ($type === Renderer\Pdf::getJsType() || Document\DocumentViewPolicy::isAllowedUseClouds($fileArray['CONTENT_TYPE']))
+		if (
+			$type === Renderer\Pdf::getJsType()
+			|| self::isCloudSourceAllowed(
+				$fileArray['CONTENT_TYPE'],
+				$fileArray[self::KEY_FILE_OBJECT] ?? null,
+				self::getVersionObject($fileArray),
+			)
+		)
 		{
 			return self::JS_TYPE;
 		}
@@ -556,11 +596,6 @@ final class FileAttributes extends ItemAttributes
 		if (self::isFakeFileData($fileArray))
 		{
 			return $type;
-		}
-
-		if (self::isAdditionalViewerFormat($fileArray) && !Configuration::isEnabledFileViewerFormats())
-		{
-			return Renderer\Stub::getJsType();
 		}
 
 		if (self::isTiffFile($fileArray))
@@ -658,11 +693,6 @@ final class FileAttributes extends ItemAttributes
 	 */
 	private static function isHtmlViewerSource(File $file, ?Version $version): bool
 	{
-		if (!Configuration::isEnabledHtmlViewer())
-		{
-			return false;
-		}
-
 		return $version === null
 			? HtmlViewerPolicy::isViewableFile($file)
 			: HtmlViewerPolicy::isViewableExtension($version->getExtension())
@@ -703,11 +733,6 @@ final class FileAttributes extends ItemAttributes
 		$extension = mb_strtolower(GetFileExtension((string)($fileData['ORIGINAL_NAME'] ?? '')));
 
 		return $extension === 'mkv';
-	}
-
-	private static function isAdditionalViewerFormat(array $fileData): bool
-	{
-		return self::isTiffFile($fileData) || self::isWavFile($fileData) || self::isMkvFile($fileData);
 	}
 
 	protected static function isSetViewDocumentInClouds()

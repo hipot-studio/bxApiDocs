@@ -65,13 +65,32 @@ class Message extends BaseController
 			return null;
 		}
 
-		ServiceLocator::getInstance()->get(CopilotMessageService::class)->sendRegenerateEvent(
+		$outcome = ServiceLocator::getInstance()->get(CopilotMessageService::class)->sendRegenerateEvent(
 			$message->getChat(),
 			$message,
 			$triggerMessage,
 			$userId
-		);
+		)->getResult();
 
-		return ['result' => true];
+		// A refusal is data, not a controller error: result stays true even when the attempt
+		// was ignored or failed, so clients that do not read the decision behave as before.
+		$response = ['result' => true];
+
+		if (isset($outcome['decision']))
+		{
+			$response['decision'] = $outcome['decision']->value;
+		}
+
+		if (isset($outcome['reason']))
+		{
+			$response['reason'] = $outcome['reason'];
+		}
+
+		if (isset($outcome['errorText']))
+		{
+			$response['errorText'] = $outcome['errorText'];
+		}
+
+		return $response;
 	}
 }

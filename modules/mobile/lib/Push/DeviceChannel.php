@@ -15,6 +15,12 @@ Loader::requireModule('pull');
  */
 final class DeviceChannel extends Channel
 {
+	public function __construct(
+		private readonly ScheduleCompatibility $scheduleCompatibility = new ScheduleCompatibility(),
+	)
+	{
+	}
+
 	/**
 	 * @param int $userId
 	 * @param Message $message
@@ -28,20 +34,30 @@ final class DeviceChannel extends Channel
 		{
 			return $result->addError(new Error('Message body cannot be empty'));
 		}
+		$params = [
+			'command' => self::COMMON_MOBILE_PUSH_EVENT,
+			'message' => Json::encode($message),
+		];
+		$deliveryContextParameters = $this->scheduleCompatibility->getDeliveryContextParameters(
+			self::MODULE_ID,
+			$message->getType(),
+			[
+				'message' => $message->getBody(),
+				'params' => $params,
+			],
+		);
 
-		$sent = (new \CPushManager())->sendMessage([
+		$sent = $this->scheduleCompatibility->sendMessage([
 			[
 				'USER_ID' => $userId,
 				'APP_ID' => self::APP_ID,
 				'EXPIRY' => 0,
-				'PARAMS'=> [
-					'command' => self::COMMON_MOBILE_PUSH_EVENT,
-					'message'=> Json::encode($message),
-				],
+				'PARAMS' => $params,
 				'ADVANCED_PARAMS' => [
 					'senderName' => $message->getTitle() ?: self::APP_ID,
-					'senderMessage' => $message->getBody()
-				]
+					'senderMessage' => $message->getBody(),
+					...$deliveryContextParameters,
+				],
 			]
 		]);
 

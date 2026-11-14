@@ -144,6 +144,8 @@ class ExternalLink extends BaseFileList
 				'hasDeathTime' => $extLink->hasDeathTime(),
 				'availableEdit' => $availableEdit,
 				'canEditDocument' => $canEditDocument,
+				// the list responses of the disk module report it too, the client hides the settings by it
+				'canEditSettings' => $extLink->canEditSettings(),
 				'deathTime' => $extLink->getDeathTime(),
 				'deathTimeTimestamp' => $extLink->hasDeathTime() ? $extLink->getDeathTime()->getTimestamp() : null,
 			],

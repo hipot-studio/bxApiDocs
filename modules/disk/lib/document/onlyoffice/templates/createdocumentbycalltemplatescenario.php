@@ -89,6 +89,9 @@ final class CreateDocumentByCallTemplateScenario
 		$fileArray = $fileResult->getData()['bfile'];
 		$chatTitle = $this->getChatTitle($this->call->getAssociatedEntity());
 
+		// The document is added to the Disk by the user, so it is written like anything else they
+		// add: a format the portal restricts is refused here, and the refusal travels back to the
+		// interface through the errors of the folder.
 		$newFile = $targetFolder->uploadFile($fileArray, [
 			'NAME' => Loc::getMessage("DISK_DOCUMENT_OO_DOC_BY_CALL_TEMPLATE_FILENAME_MSGVER_1", ['#NAME#' => $chatTitle]) . '.docx',
 			'CREATED_BY' => $this->userId,

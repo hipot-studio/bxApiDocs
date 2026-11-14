@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Service\Address;
 
+use Bitrix\Crm\V2\Internal\Repository\Address\AddressColumnMap;
 use Bitrix\Crm\V2\Public\Entity\Address\Address;
 
 /**
@@ -21,17 +22,15 @@ use Bitrix\Crm\V2\Public\Entity\Address\Address;
  */
 final class OwnerAddressFieldMap
 {
-	/** Storage column by the field name of {@see Address::toArray()}. */
-	private const COLUMNS = [
-		'address1' => 'ADDRESS_1',
-		'address2' => 'ADDRESS_2',
-		'city' => 'CITY',
-		'postalCode' => 'POSTAL_CODE',
-		'region' => 'REGION',
-		'province' => 'PROVINCE',
-		'country' => 'COUNTRY',
-		'countryCode' => 'COUNTRY_CODE',
-	];
+	/**
+	 * Storage column by the field name of {@see Address::toArray()}.
+	 *
+	 * Declared in {@see AddressColumnMap} and named here: the reads of the same area ask the storage the
+	 * same question, and two maps of it would answer differently the first time a column was renamed in
+	 * one of them. Only the address half of that map is taken - every method below walks the map whole,
+	 * and the identity of the row is not an address value.
+	 */
+	private const COLUMNS = AddressColumnMap::TEXT_COLUMN_BY_FIELD;
 
 	/**
 	 * @param array<string, mixed> $values Values by the names of {@see Address::toArray()}; anything

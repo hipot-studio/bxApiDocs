@@ -6,6 +6,7 @@ namespace Bitrix\Im\V2\Message\Update\Files;
 
 use Bitrix\Disk\File;
 use Bitrix\Im\V2\Entity\File\FileCollection;
+use Bitrix\Im\V2\Integration\Disk\UploadCleanupService;
 use Bitrix\Im\V2\Message;
 
 /**
@@ -24,6 +25,9 @@ class AddedFilesPreparer
 
 	/** @var int[] */
 	private array $unpreparedFileIds = [];
+
+	/** @var array<int, array{file: File, claimToken: string, expectedGlobalContentVersion: int}> */
+	private array $publicationClaims = [];
 
 	private int $createdByUserId = 0;
 
@@ -49,7 +53,13 @@ class AddedFilesPreparer
 		$userId = $message->getContext()->getUserId();
 		$prefixedIds = $this->prefixAddedFiles($addedFileIds, $chatId, $message->getChat()->getDiskFolderId());
 
-		$prepared = \CIMDisk::prepareFilesInChat($chatId, array_values($prefixedIds), ['USER_ID' => $userId]);
+		$prepared = \CIMDisk::prepareFilesInChat(
+			$chatId,
+			array_values($prefixedIds),
+			['USER_ID' => $userId],
+			false,
+			true,
+		);
 		if (!is_array($prepared))
 		{
 			$this->unpreparedFileIds = $addedFileIds;
@@ -58,6 +68,7 @@ class AddedFilesPreparer
 		}
 
 		$this->createdByUserId = $userId;
+		$this->publicationClaims = $prepared['UPLOAD_CLEANUP_PUBLICATION_CLAIMS'] ?? [];
 		$preparedIds = $this->mapPreparedFiles($prefixedIds, $prepared);
 		$this->unpreparedFileIds = array_values(array_diff($addedFileIds, array_keys($preparedIds)));
 
@@ -79,11 +90,24 @@ class AddedFilesPreparer
 	 */
 	public function rollback(): void
 	{
+		(new UploadCleanupService())->rollbackPublicationClaims($this->publicationClaims, $this->createdByUserId);
+		$this->publicationClaims = [];
+
 		foreach ($this->createdFiles as $file)
 		{
 			$file->delete($this->createdByUserId);
 		}
 
+		$this->createdFiles = [];
+	}
+
+	/**
+	 * Commits cleanup-marker claims only after the updated message has been stored.
+	 */
+	public function commit(): void
+	{
+		(new UploadCleanupService())->commitPublicationClaims($this->publicationClaims);
+		$this->publicationClaims = [];
 		$this->createdFiles = [];
 	}
 

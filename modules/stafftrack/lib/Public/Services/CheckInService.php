@@ -3,7 +3,9 @@
 namespace Bitrix\StaffTrack\Public\Services;
 
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\Date;
 use Bitrix\StaffTrack\Internal\Service\CheckIn\CheckInBacklogService;
+use Bitrix\StaffTrack\Internal\Service\CheckIn\ManualCountFiller;
 use Bitrix\StaffTrack\Public\Command\CheckInDto;
 use Bitrix\StaffTrack\Public\Command\CheckIn\Add;
 use Bitrix\StaffTrack\Public\Command\CheckIn\AddBatch;
@@ -24,6 +26,8 @@ class CheckInService
 	 * retriable outcome by, and an answer without one is repeated as a network failure.
 	 */
 	public const ERROR_BATCH_SIZE = AddBatch::ERROR_BATCH_SIZE;
+
+	private const DAY_SEC = 86400;
 
 	private static ?self $instance = null;
 
@@ -63,5 +67,21 @@ class CheckInService
 	public function aggregateStaleCheckIns(): bool
 	{
 		return (new CheckInBacklogService())->aggregateStaleCheckIns();
+	}
+
+	public function backfillManualCounts(int $afterId): ?int
+	{
+		return (new ManualCountFiller())->backfill($afterId, self::lastDateClosedToNewPoints(time()));
+	}
+
+	private static function lastDateClosedToNewPoints(int $now): Date
+	{
+		$timestamp = $now;
+		while (!PointAcceptanceService::isDateClosedToNewPoints(gmdate('Y-m-d', $timestamp), $now))
+		{
+			$timestamp -= self::DAY_SEC;
+		}
+
+		return new Date(gmdate('Y-m-d', $timestamp), 'Y-m-d');
 	}
 }

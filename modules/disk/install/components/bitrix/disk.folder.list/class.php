@@ -1,17 +1,24 @@
 <?php
 
+use Bitrix\Bizproc\Public\Dto\ManualStartContext;
+use Bitrix\Bizproc\Public\Service\WorkflowTemplate\ManualStartPolicyService;
+use Bitrix\Bizproc\Starter\Enum\ManualStartSurface;
 use Bitrix\Disk\Analytics\Availability;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Integration\AiAssistant\FileChatAvailability;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
+use Bitrix\Disk\Public\Service\DockedUpload\UploadOwner;
 use Bitrix\Disk\QuickAccess\FileDataParameterService;
 use Bitrix\Disk\Search\Reindex\BaseObjectIndex;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
 use Bitrix\Disk\Search\Reindex\HeadIndex;
+use Bitrix\Disk\Search\SearchFilterBuilder;
 use Bitrix\Disk\Security\ParameterSigner;
 use Bitrix\Disk\Storage;
 use Bitrix\Disk\TypeFile;
@@ -24,10 +31,13 @@ use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\Integration\BizProcManager;
+use Bitrix\Disk\Internal\Service\Quota\QuotaOnboarding;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Internals\Grid\FolderListOptions;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\ProxyType;
+use Bitrix\Disk\Public\Enum\RestrictionPolicy;
+use Bitrix\Disk\Public\Enum\RestrictionsAvailabilityState;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
@@ -52,6 +62,7 @@ use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\Result;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Grid;
 use Bitrix\Main\Loader;
@@ -61,6 +72,7 @@ use Bitrix\Main\Search\Content;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Filter\Options;
+use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\UI\UiTour;
 use Bitrix\Main\UI\Viewer\ItemAttributes;
 use Bitrix\Main\Web\Cookie;
@@ -99,6 +111,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	/** @var  array */
 	private $imageSize = ['width' => 64, 'height' => 64, 'exact' => 'Y'];
 	private $templateBizProc;
+	private ?bool $hasManualStartRightOnStorage = null;
 	/** @var CollabService */
 	private $collabService;
 	private bool $isUserCollaber = false;
@@ -106,8 +119,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private ?Cookie $readOnlyCollabFolderStateCookie = null;
 	private UnifiedLinkAccessService $unifiedLinkAccessService;
 	private UnifiedLinkUrl $unifiedLinkUrl;
+	private UploadOwner $uploadOwner;
 	private ?array $analytics = null;
 	private FileDataParameterService $fileDataParameterService;
+	private ?Ui\FolderListFileTypePageCollector $fileTypePageCollector = null;
 
 	public function __construct($component = null)
 	{
@@ -118,6 +133,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$this->fileDataParameterService = $serviceLocator->get('disk.fileDataParameterService');
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
 		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+		$this->uploadOwner = $serviceLocator->get(UploadOwner::class);
 	}
 
 	protected function processBeforeAction($actionName)
@@ -234,6 +250,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$this->trashMode = true;
 		}
 
+		$this->arParams['DOCKED_UPLOADER_SUPPORTED'] = ($this->arParams['DOCKED_UPLOADER_SUPPORTED'] ?? 'N') === 'Y' ? 'Y' : 'N';
+
 		$this->analytics = $this->arParams['ANALYTICS'] ?? ['c_element' => 'disk_page'];
 
 		return $this;
@@ -311,8 +329,21 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$connectedGroupObject = $this->getConnectedGroupObject();
 		$filterOptions = new Options($this->gridOptions->getGridId());
 		$folderListFilter = new Ui\FolderListFilter($this->storage->getId(), $this->isTrashMode());
+		$filterConfig = $folderListFilter->getConfig();
+		if (!$this->isTrashMode())
+		{
+			// main.ui.filter draws the menu from the saved presets of the user, {@see Ui\FilterPresetSynchronizer}
+			(new Ui\FilterPresetSynchronizer())->addMissingPresets(
+				$filterConfig['FILTER_ID'],
+				$filterConfig['FILTER_PRESETS'],
+			);
+		}
 
 		$isCollab = $this->collabService->isCollabStorage($this->storage);
+		$isFavoriteStarAllowed =
+			$isCollab
+			&& ($this->arParams['ALLOW_FAVORITE_STAR'] ?? false) === true
+		;
 		$avatar = null;
 		if ($isCollab)
 		{
@@ -326,6 +357,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$this->setUiFlagForReadonlyCollabFolderState($canAddInCurrentFolder);
 
+		$restrictionsAvailabilityStates = $this->readRestrictionsAvailabilityStates();
+		$restrictionsMenuEntry = $this->buildRestrictionsMenuEntry($restrictionsAvailabilityStates);
 		if ($this->isViewByUnifiedLink)
 		{
 			$currentFolderUls = $this->getUlsForNavigation($this->folder->getId());
@@ -338,11 +371,12 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$this->arResult = [
 			'GRID_INFORMATION' => $this->information,
 			'ERRORS_IN_GRID_ACTIONS' => $errorsInGridActions->toArray(),
-			'FILTER' => $folderListFilter->getConfig(),
+			'FILTER' => $filterConfig,
 			'IS_RUNNING_FILTER' => !empty($filterOptions->getSearchString()),
 			'GRID' => $this->getGridData(),
 			'IS_BITRIX24' => ModuleManager::isModuleInstalled('bitrix24'),
 			'IS_TRASH_MODE' => $this->isTrashMode(),
+			'IS_FAVORITE_STAR_ALLOWED' => $isFavoriteStarAllowed,
 			'FOLDER' => [
 				'ID' => $this->folder->getId(),
 				'MODEL' => $this->folder,
@@ -366,6 +400,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'TRASH_FILE_LINK_PREFIX' => $proxyType->getBaseUrlTrashcanFileDetail(),
 				'ROOT_OBJECT_ID' => $this->storage->getRootObjectId(),
 				'CAN_ADD' => $this->storage->canAdd($securityContext),
+				'CAN_EMPTY_TRASH' => (bool)$this->storage->getRootObject()?->canDelete($securityContext),
 				'CAN_CHANGE_RIGHTS_ON_STORAGE' => $this->storage->canChangeRights($securityContext),
 				'CAN_CHANGE_SETTINGS_ON_STORAGE' => $this->storage->canChangeSettings($securityContext),
 				'CAN_CHANGE_SETTINGS_ON_BIZPROC' => $this->storage->canCreateWorkflow($securityContext),
@@ -384,10 +419,17 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'ENABLED_MOD_ZIP' => ZipNginx\Configuration::isEnabled(),
 			'ENABLED_EXTERNAL_LINK' => Configuration::isEnabledExternalLink(),
 			'ENABLED_OBJECT_LOCK' => Configuration::isEnabledObjectLock(),
+			'ENABLED_DOCKED_UPLOADER' => $this->isDockedUploaderOwner(),
+			'DESTINATION_PICKER_ENABLED' => $this->isDestinationPickerAvailable(),
 			'ENABLED_TRASHCAN_TTL' => Configuration::getTrashCanTtl() !== -1,
 			'TRASHCAN_TTL' => Configuration::getTrashCanTtl(),
 			'CLOUD_DOCUMENT' => $this->getConfigurationOfCloudDocument(),
 			'PATH_TO_DISK_VOLUME' => $this->buildPathToDiskVolume(),
+			'RESTRICTIONS_MENU_ENTRY' => $restrictionsMenuEntry,
+			'IS_QUOTA_ONBOARDING_SHOWN' => $this->isQuotaOnboardingShown(
+				$restrictionsMenuEntry,
+				$restrictionsAvailabilityStates,
+			),
 			'PATH_TO_USER_TRASHCAN_LIST' => $this->buildPathToUserTrashcanList(),
 			'DOCUMENT_HANDLERS' => $this->getDocumentHandlersForCreatingFile(),
 			'STATUS_BIZPROC' => $this->storage->isEnabledBizProc() && Loader::includeModule("bizproc"),
@@ -544,8 +586,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				$info = [
 					'id' => $row['id'],
 					'name' => $object->getName(),
-					'uniqueCode' => $this->isViewByUnifiedLink ? $object->getUniqueCode() : null,
+					'uniqueCode' => $object instanceof Folder ? $object->getUniqueCode() : null,
+					'isViewByUnifiedLink' => $this->isViewByUnifiedLink,
 					'isFolder' => $object instanceof Folder,
+					'showFolderInfo' => ($object instanceof Folder) && !$object->isDeleted(),
 					'isFile' => $object instanceof File,
 					'canDownload' => (bool)$row['attrs']['data-can-download'],
 					'isMailAttachments' => ($object instanceof Folder) && $object->getCode() === SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS,
@@ -679,30 +723,53 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		$parameters = $this->modifyByFilter($parameters);
+		$gridOrder = $parameters['order'];
 
-		$parameters['select'] = ['ID'];
-		// +1 lets orm resolve the total on the last page without a dedicated count query
-		$parameters['limit'] = $pageSize + 1;
-		$parameters['offset'] = $nav->getOffset();
-		$parameters['count_total'] = true;
-
-		$objectIds = [];
-		$objectIdsCursor = ObjectTable::getList($parameters);
-		foreach ($objectIdsCursor as $row)
+		if ($this->fileTypePageCollector?->needsExactMatching())
 		{
-			$objectIds[] = $row['ID'];
+			// stored file type does not tell these categories apart, so the page is built from exact matches
+			$gridOrder = $this->appendPrimaryKeyToOrder($parameters['order']);
+			$objectIds = $this->collectExactFileTypePageIds($parameters, $gridOrder, $pageSize, $nav->getOffset());
+			// exact matching stops at a candidate budget, so the total is only known up to the current page
+			$totalObjectCount = $nav->getOffset() + min(count($objectIds), $pageSize);
 		}
-		$totalObjectCount = (int)$objectIdsCursor->getCount();
-
-		// a page past the last one is empty, and for an empty page orm reports the offset as the
-		// total; only a query from the start of the list tells the real count
-		if (!$objectIds && $nav->getOffset() > 0)
+		else
 		{
-			$countParameters = $parameters;
-			$countParameters['limit'] = 1;
-			$countParameters['offset'] = 0;
+			$parameters['select'] = ['ID'];
+			// +1 lets orm resolve the total on the last page without a dedicated count query
+			$parameters['limit'] = $pageSize + 1;
+			$parameters['offset'] = $nav->getOffset();
+			$parameters['count_total'] = true;
 
-			$totalObjectCount = (int)ObjectTable::getList($countParameters)->getCount();
+			$objectIds = [];
+			$objectIdsCursor = ObjectTable::getList($parameters);
+			foreach ($objectIdsCursor as $row)
+			{
+				$objectIds[] = $row['ID'];
+			}
+			$totalObjectCount = (int)$objectIdsCursor->getCount();
+
+			// a page past the last one is empty, and for an empty page orm reports the offset as the
+			// total; only a query from the start of the list tells the real count
+			if (!$objectIds && $nav->getOffset() > 0)
+			{
+				$countParameters = $parameters;
+				$countParameters['limit'] = 1;
+				$countParameters['offset'] = 0;
+
+				$totalObjectCount = (int)ObjectTable::getList($countParameters)->getCount();
+
+				// the list could shrink after a deletion: show the last page with records, not an empty one
+				$nav->setRecordCount($totalObjectCount);
+				if ($this->pinNavigationToLastPage($nav) && $totalObjectCount > 0)
+				{
+					$parameters['offset'] = $nav->getOffset();
+					foreach (ObjectTable::getList($parameters) as $row)
+					{
+						$objectIds[] = $row['ID'];
+					}
+				}
+			}
 		}
 
 		$this->folder->preloadOperationsForSpecifiedObjects(
@@ -711,6 +778,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			shouldPreloadDownloadAccess: true,
 		);
 		$isShowFromDifferentLevels = $this->isShowFromDifferentLevels($parameters['filter']);
+		$isTrashSearchFromDifferentLevels =
+			$isShowFromDifferentLevels
+			&& isset($parameters['filter']['!=DELETED_TYPE'])
+		;
+		$trashPathCrumbs = [];
 		$sharedObjectIds = [];
 		if (!$this->isTrashMode() && $objectIds)
 		{
@@ -752,7 +824,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'filter' => [
 				'@ID' => $objectIds ?: [0],
 			],
-			'order' => $parameters['order'],
+			'order' => $gridOrder,
 		];
 		if ($isEnabledObjectLock && !$this->isTrashMode())
 		{
@@ -799,7 +871,35 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 			$actions = $columns = [];
 
-			if ($isShowFromDifferentLevels)
+			if ($isTrashSearchFromDifferentLevels)
+			{
+				// the distance from the current folder loses the deleted folders between it and the object;
+				// the deleted part of the path depends only on the parent, so folders and files under it
+				// reuse one query: the page is the base url of the trashcan page, the crumbs and the file name
+				$trashPathKey = $object->getParentId() . ':' . $object->getDeletedType();
+				$objectProxyType = $object->getStorage()->getProxyType();
+				if ($isFolder)
+				{
+					$trashBaseUrl = $objectProxyType->getBaseUrlTashcanList();
+					$trashPathCrumbs[$trashPathKey] ??= substr(
+						$this->getListingPage($object, null),
+						strlen($trashBaseUrl),
+					);
+					$listingPage = $trashBaseUrl . $trashPathCrumbs[$trashPathKey];
+				}
+				else
+				{
+					$trashBaseUrl = $objectProxyType->getBaseUrlTrashcanFileDetail();
+					$originalName = $object->getOriginalName();
+					$trashPathCrumbs[$trashPathKey] ??= substr(
+						$this->getDetailFilePage($object, null),
+						strlen($trashBaseUrl),
+						-strlen($originalName),
+					);
+					$detailPageFile = $trashBaseUrl . $trashPathCrumbs[$trashPathKey] . $originalName;
+				}
+			}
+			elseif ($isShowFromDifferentLevels)
 			{
 				$distance = $crumbStorage->calculateDistance($this->folder, $object) ?: [];
 				$pathFromFolder = trim(implode('/', $distance), '/');
@@ -997,6 +1097,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					$actions[] = [
 						"text" => Loc::getMessage('DISK_TRASHCAN_ACT_RESTORE'),
 						'className' => 'disk-folder-list-context-menu-item',
+						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_recover.svg',
 						"onclick" => "BX.Disk['FolderListClass_{$this->getComponentId()}'].openConfirmRestore({
 							object: {
 								id: {$object->getId()},
@@ -1283,6 +1384,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				}
 
 				$actions[] = [
+					// the menu script puts the BitrixGPT item right above this one
+					'id' => 'delete',
 					"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_MARK_DELETED'),
 					'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_remove.svg',
 					'className' => 'disk-folder-list-context-menu-item',
@@ -1542,8 +1645,19 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'object' => $object,
 				'data' => $exportData,
 				'columns' => $columns,
+				'cellActions' => ($isFolder && !$object->isDeleted()) ? [
+					'NAME' => [
+						[
+							'class' => 'js-disk-folder-info-placeholder',
+							'attributes' => [
+								'data-object-id' => $objectId,
+								'data-unique-code' => $object->getUniqueCode(),
+							],
+						],
+					],
+				] : [],
 				'attrs' => $attrs,
-				'actions' => $actions,
+				'actions' => $this->appendBitrixGptMenuAction($actions, $object),
 			];
 		}
 
@@ -1562,6 +1676,126 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$grid['ONLY_READ_ACTIONS'] = $onlyRead;
 
 		return $grid;
+	}
+
+	private function appendBitrixGptMenuAction(array $actions, BaseObject $object): array
+	{
+		if (
+			!$object instanceof File
+			|| $this->isTrashMode()
+			|| $this->isViewByUnifiedLink
+			|| (int)$object->getTypeFile() === TypeFile::FLIPCHART
+		)
+		{
+			return $actions;
+		}
+
+		// the availability service is wired with aiassistant classes, so the locator needs the module loaded
+		if (!Loader::includeModule('aiassistant'))
+		{
+			return $actions;
+		}
+
+		$file = ServiceLocator::getInstance()->get(FileChatAvailability::class)->getAvailableMenuFile(
+			$object,
+			(int)CurrentUser::get()->getId(),
+		);
+		if ($file === null)
+		{
+			return $actions;
+		}
+
+		// a menu rebuilt from these actions keeps the item where the menu script puts it: right above Delete, else last
+		$position = count($actions);
+		foreach (array_values($actions) as $index => $action)
+		{
+			if (($action['id'] ?? null) === 'delete')
+			{
+				$position = $index;
+				break;
+			}
+		}
+		array_splice($actions, $position, 0, [['id' => 'bitrixgpt', 'fileId' => (int)$file->getId()]]);
+
+		return $actions;
+	}
+
+	/**
+	 * Reads candidates in batches until the page of exactly classified files is complete.
+	 * Every batch uses the filter, runtime fields and rights check of the original query.
+	 * @param array $parameters Query parameters built for the page of the folder list.
+	 * @param array $order Order of candidates, stable across batches.
+	 * @param int $pageSize Size of the current page.
+	 * @param int $offset Offset counted in matched objects.
+	 * @return array Ids of the page and one extra id when the next page exists.
+	 * @throws SystemException
+	 */
+	private function collectExactFileTypePageIds(array $parameters, array $order, int $pageSize, int $offset): array
+	{
+		// a symlink row keeps its own name and file type, so the prefilter and the exact check read the same data
+		$parameters['select'] = ['ID', 'TYPE', 'NAME', 'TYPE_FILE'];
+		$parameters['order'] = $order;
+
+		$collectResult = $this->fileTypePageCollector->collectPage(
+			static function(int $batchOffset, int $batchLimit) use ($parameters): Result {
+				$parameters['offset'] = $batchOffset;
+				$parameters['limit'] = $batchLimit;
+
+				$objects = [];
+				foreach (ObjectTable::getList($parameters) as $row)
+				{
+					$objects[] = BaseObject::buildFromArray($row);
+				}
+
+				return (new Result())->setData(['objects' => $objects]);
+			},
+			$pageSize,
+			$offset,
+		);
+
+		if (!$collectResult->isSuccess())
+		{
+			throw new SystemException(implode('; ', $collectResult->getErrorMessages()));
+		}
+
+		$objectIds = [];
+		foreach ($collectResult->getData()['objects'] as $object)
+		{
+			$objectIds[] = $object->getId();
+		}
+
+		return $objectIds;
+	}
+
+	/** Makes the candidate order the same in every batch: the unique key follows the direction of the main one. */
+	private function appendPrimaryKeyToOrder(array $order): array
+	{
+		if (isset($order['ID']))
+		{
+			return $order;
+		}
+
+		$mainDirection = mb_strtoupper((string)reset($order)) === 'DESC' ? 'DESC' : 'ASC';
+		$order['ID'] = $mainDirection;
+
+		return $order;
+	}
+
+	/**
+	 * Moves a request for a page past the last one to the last page. Record count has to be set.
+	 * @return bool Whether the current page has been changed.
+	 */
+	private function pinNavigationToLastPage(PageNavigation $nav): bool
+	{
+		$lastPage = max($nav->getPageCount(), 1);
+		if ($nav->getCurrentPage() <= $lastPage)
+		{
+			return false;
+		}
+
+		$nav->setCurrentPage($lastPage);
+
+		return true;
 	}
 
 	private function filterB24Feature($feature, $js, $skip = false)
@@ -1692,7 +1926,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$buttons = [
 				ZipNginx\Configuration::isEnabled() ? $downloadButton : null,
 				$copyButton,
-				$moveButton,
+				$configuration['delete'] ? $moveButton : null,
 				$configuration['edit'] ? $snippet->getEditAction() : null,
 				$configuration['delete'] ? $deleteButton : null,
 			];
@@ -1917,7 +2151,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				&& ExtendedIndex::isReady()
 			)
 			{
-				$filter["*EXTENDED_INDEX.SEARCH_INDEX"] = $fulltextContent;
+				$filter[] = (new SearchFilterBuilder())->buildExtendedIndexFilter(
+					trim($filterData['FIND']),
+					$fulltextContent,
+				);
 			}
 			elseif (
 				(!empty($filterData['SEARCH_BY_CONTENT']) || !HeadIndex::isReady())
@@ -2053,7 +2290,21 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			}
 		}
 
-		$parameters['filter'] = array_merge($parameters['filter'], $filter);
+		if (!$this->isTrashMode())
+		{
+			// a filter saved before the field appeared has no key at all, which means no file type restriction
+			$rawFileTypeFilters = array_key_exists(Ui\FolderListFilter::FILE_TYPE_FIELD_ID, $filterData)
+				? $filterData[Ui\FolderListFilter::FILE_TYPE_FIELD_ID]
+				: []
+			;
+
+			$this->fileTypePageCollector = Ui\FolderListFileTypePageCollector::createFromFilterValue(
+				$rawFileTypeFilters,
+			);
+			$filter = array_merge($filter, $this->fileTypePageCollector->getObjectQueryFilter());
+		}
+
+		$parameters['filter'] = array_merge($parameters['filter'] ?? [], $filter);
 
 		return $parameters;
 	}
@@ -2209,7 +2460,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$isBpStarterExists = Loader::includeModule('bizproc') && class_exists(\Bitrix\Bizproc\Starter\Starter::class);
 		if ($isBpStarterExists)
 		{
-			if ($object->canStartBizProc($securityContext))
+			if ($object->canStartBizProc($securityContext) || $this->hasManualStartRightOnStorage())
 			{
 				$actions[] = $this->getStartBPActionForMenu($documentData, $rowId);
 			}
@@ -2242,7 +2493,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				];
 			}
 
-			if (!empty($listBpTemplates) && $object->canStartBizProc($securityContext))
+			if (
+				!empty($listBpTemplates)
+				&& ($object->canStartBizProc($securityContext) || $this->hasManualStartRightOnStorage())
+			)
 			{
 				$actions[] = [
 					'className' => 'disk-folder-list-context-menu-item',
@@ -2381,6 +2635,24 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return [$actions, $columnsBizProc, $bizprocIcon];
 	}
 
+	private function hasManualStartRightOnStorage(): bool
+	{
+		if ($this->hasManualStartRightOnStorage === null)
+		{
+			$this->hasManualStartRightOnStorage =
+				Loader::includeModule('bizproc')
+				&& method_exists(ManualStartPolicyService::class, 'hasAnyManualStartRight')
+				&& (new ManualStartPolicyService())->hasAnyManualStartRight(
+					(int)$this->getUser()->getId(),
+					\Bitrix\Disk\BizProcDocument::generateDocumentComplexType($this->storage->getId()),
+					ManualStartContext::webEntry(Driver::INTERNAL_MODULE_ID, ManualStartSurface::DiskFile),
+				)
+			;
+		}
+
+		return $this->hasManualStartRightOnStorage;
+	}
+
 	private function getStartBPActionForMenu(array $documentData, string $rowId): array
 	{
 		$diskParams = \Bitrix\Main\Web\Json::encode([
@@ -2508,6 +2780,113 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return '';
 	}
 
+	/**
+	 * Entry point of the Disk restrictions section for the settings menu: either an address
+	 * to open the section, or a limit code to offer the tariff, or nothing at all.
+	 *
+	 * The administrator is checked the same way the API of the section checks it, so the menu
+	 * never offers what the API refuses.
+	 *
+	 * The section holds a policy for every restriction, and each of them is switched on by a
+	 * flag of its own, so the entry answers for the whole set: one applied policy opens the
+	 * section, and a tariff standing in the way of one offers the purchase that would open it.
+	 * A policy closed by its flag or by the edition brings nothing of its own to the menu.
+	 *
+	 * @param array<string, RestrictionsAvailabilityState> $states State by the wire value of the policy.
+	 */
+	private function buildRestrictionsMenuEntry(array $states): ?array
+	{
+		$path = $this->buildPathToDiskRestrictions();
+		if ($path === '' || !CurrentUser::get()->isAdmin())
+		{
+			return null;
+		}
+
+		if (in_array(RestrictionsAvailabilityState::Applied, $states, true))
+		{
+			return [
+				'URL' => $path,
+				'LIMIT_CODE' => null,
+			];
+		}
+
+		if (in_array(RestrictionsAvailabilityState::TariffRestricted, $states, true))
+		{
+			return [
+				'URL' => null,
+				'LIMIT_CODE' => Bitrix24Manager::getFeatureRestrictionMap()['disk_restrictions'],
+			];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Whether the hint about the employee limits has already been shown to this administrator,
+	 * or null where there is nothing for the hint to be about.
+	 *
+	 * The hint lives on this page, so whether to draw it is decided before the page is drawn and
+	 * not by a request of its own on every load. The answer follows the entry of the menu, which
+	 * has asked already both who is here and what the portal applies: an administrator offered no
+	 * section is offered no hint about it either. The section opens on any applied policy, while
+	 * the hint speaks of the limits alone - and the mark of a hint shown is kept by the quota api,
+	 * which refuses everybody while the quotas are off.
+	 *
+	 * @param array<string, RestrictionsAvailabilityState> $states State by the wire value of the policy.
+	 */
+	private function isQuotaOnboardingShown(?array $restrictionsMenuEntry, array $states): ?bool
+	{
+		if (($restrictionsMenuEntry['URL'] ?? null) === null)
+		{
+			return null;
+		}
+
+		if (($states[RestrictionPolicy::Quota->value] ?? null) !== RestrictionsAvailabilityState::Applied)
+		{
+			return null;
+		}
+
+		return QuotaOnboarding::isShown((int)CurrentUser::get()->getId());
+	}
+
+	/**
+	 * @return array<string, RestrictionsAvailabilityState> state of every restriction the section
+	 * holds, by the wire value of its policy
+	 */
+	private function readRestrictionsAvailabilityStates(): array
+	{
+		$provider = ServiceLocator::getInstance()->get('disk.restrictionsAvailabilityProvider');
+
+		$states = [];
+
+		foreach (RestrictionPolicy::cases() as $policy)
+		{
+			$states[$policy->value] = $provider->getState($policy);
+		}
+
+		return $states;
+	}
+
+	/**
+	 * Address of the section for the page the menu is drawn on. The section is portal-wide, but
+	 * its address is not: it is registered by the complex component the page belongs to, and the
+	 * personal Disk and the common one are two different ones. The route the page has is the one
+	 * the menu offers.
+	 */
+	private function buildPathToDiskRestrictions(): string
+	{
+		$userPath = (string)($this->arParams['PATH_TO_USER_DISK_RESTRICTIONS'] ?? '');
+		if ($userPath !== '')
+		{
+			return CComponentEngine::MakePathFromTemplate(
+				$userPath,
+				['user_id' => CurrentUser::get()->getId()]
+			);
+		}
+
+		return (string)($this->arParams['PATH_TO_DISK_RESTRICTIONS'] ?? '');
+	}
+
 	private function getConnectedGroupObject()
 	{
 		$proxyType = $this->storage->getProxyType();
@@ -2548,7 +2927,28 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$this->errorCollection = new \Bitrix\Disk\Internals\Error\ErrorCollection();
 
-		foreach ($this->request->getPost('rows') as $rowId => $sourceData)
+		$this->applyGridAction($buttonValue, (array)$this->request->getPost('rows'), (array)$controlValues, $userId);
+
+		$gridActionsErrorCollection = $this->errorCollection;
+		$this->errorCollection = $backupErrorCollection;
+
+		return $gridActionsErrorCollection;
+	}
+
+	private function applyGridAction($buttonValue, array $rows, array $controlValues, $userId): void
+	{
+		if ($buttonValue === 'copy')
+		{
+			$copiedCount = $this->copyObjects(array_keys($rows), (int)($controlValues['destinationFolderId'] ?? 0));
+			if ($copiedCount > 0)
+			{
+				$this->information = Loc::getMessage('DISK_FOLDER_LIST_INF_AFTER_ACTION_COPY');
+			}
+
+			return;
+		}
+
+		foreach ($rows as $rowId => $sourceData)
 		{
 			if ($buttonValue === 'delete')
 			{
@@ -2575,26 +2975,102 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					$this->information = Loc::getMessage('DISK_FOLDER_LIST_INF_AFTER_ACTION_RENAME');
 				}
 			}
-			elseif ($buttonValue === 'copy')
-			{
-				if ($this->copyObject($rowId, $controlValues['destinationFolderId']))
-				{
-					$this->information = Loc::getMessage('DISK_FOLDER_LIST_INF_AFTER_ACTION_RENAME');
-				}
-			}
 			elseif ($buttonValue === 'move')
 			{
 				if ($this->moveObject($rowId, $controlValues['destinationFolderId']))
 				{
-					$this->information = Loc::getMessage('DISK_FOLDER_LIST_INF_AFTER_ACTION_RENAME');
+					$this->information = Loc::getMessage('DISK_FOLDER_LIST_INF_AFTER_ACTION_MOVE');
 				}
 			}
 		}
+	}
 
-		$gridActionsErrorCollection = $this->errorCollection;
-		$this->errorCollection = $backupErrorCollection;
+	/**
+	 * Copies the selection of the user into the target folder. The quota is asked before the first
+	 * object is copied, so a selection that does not fit leaves nothing copied at all.
+	 *
+	 * @param int[]|string[] $objectIds Objects the user selected.
+	 * @param int $targetFolderId Folder the selection is copied into.
+	 * @return int Objects the copy went through for.
+	 */
+	private function copyObjects(array $objectIds, int $targetFolderId): int
+	{
+		$quotaError = $this->findPersonalQuotaErrorForGroupCopy($objectIds, $targetFolderId);
+		if ($quotaError)
+		{
+			$this->errorCollection->addOne($quotaError);
 
-		return $gridActionsErrorCollection;
+			return 0;
+		}
+
+		$copiedCount = 0;
+		foreach ($objectIds as $objectId)
+		{
+			if ($this->copyObject($objectId, $targetFolderId))
+			{
+				$copiedCount++;
+			}
+		}
+
+		return $copiedCount;
+	}
+
+	/**
+	 * A group copy answers for the whole selection: the quota of the target disk is asked once about
+	 * everything being copied, so a selection that does not fit leaves nothing copied at all. Judging
+	 * every object on its own would copy the small files of the selection and drop the large ones.
+	 *
+	 * The write node keeps its own check for every file: this point only decides the group action.
+	 *
+	 * @param int[]|string[] $objectIds Objects the user selected in the grid.
+	 * @param int $targetFolderId Folder the selection is copied into.
+	 * @return \Bitrix\Disk\Internals\Error\Error|null
+	 */
+	private function findPersonalQuotaErrorForGroupCopy(array $objectIds, int $targetFolderId)
+	{
+		$targetFolder = Folder::loadById($targetFolderId, ['STORAGE']);
+		if (!$targetFolder)
+		{
+			return null;
+		}
+
+		$sizeToCopy = $this->calculateSizeOfCopiedObjects($objectIds);
+		if ($sizeToCopy <= 0)
+		{
+			return null;
+		}
+
+		return File::findPersonalQuotaErrorForSize(
+			$targetFolder->getStorage(),
+			$sizeToCopy,
+			[WriteOperationContext::OPTION_KEY => WriteOperationContext::UserUpload],
+		);
+	}
+
+	/**
+	 * Size the copy of this selection writes into the target storage. What the user cannot read and
+	 * what is not there at all is left out: the copy passes such an object by anyway.
+	 *
+	 * @param int[]|string[] $objectIds Objects the user selected in the grid.
+	 * @return int
+	 */
+	private function calculateSizeOfCopiedObjects(array $objectIds): int
+	{
+		$sizeToCopy = 0;
+		foreach ($objectIds as $objectId)
+		{
+			/** @var Folder|File $object */
+			$object = BaseObject::loadById((int)$objectId, ['STORAGE']);
+			if (!$object || !$object->canRead($object->getStorage()->getCurrentUserSecurityContext()))
+			{
+				continue;
+			}
+
+			// a link is copied by its real object, and it is the content of that object that is written
+			$sizeToCopy += (int)$object->getRealObject()?->getSize();
+		}
+
+		return $sizeToCopy;
 	}
 
 	private function copyObject($objectId, $targetFolderId)
@@ -2628,7 +3104,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			return false;
 		}
 
-		if ($object->copyTo($targetFolder, $this->getUser()->getId(), true))
+		if (!$object->copyTo($targetFolder, $this->getUser()->getId(), true))
 		{
 			$this->errorCollection->add($object->getErrors());
 
@@ -2664,7 +3140,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			return false;
 		}
 
-		if ($object->moveTo($targetFolder, $this->getUser()->getId(), true))
+		if (!$object->moveTo($targetFolder, $this->getUser()->getId(), true))
 		{
 			$this->errorCollection->add($object->getErrors());
 
@@ -2749,7 +3225,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			return false;
 		}
 
-		return $object->restore($userId);
+		// a folder restored in part keeps the refusals of the files left in the trash can
+		$isRestored = $object->restore($userId);
+		$this->errorCollection->add($object->getErrors());
+
+		return $isRestored;
 	}
 
 	private function destroyObject($objectId, $userId)
@@ -3107,6 +3587,48 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 	}
 
+	/**
+	 * Copies the objects the user selected into the folder they chose. A group copy answers over an
+	 * action of its own instead of a reload of the grid: in the tile view - the one the disk opens
+	 * in - the reload carries no place for a message, and the refusal of the quota was lost with it.
+	 * Here the user is told the same way a copy of a single object tells them.
+	 *
+	 * @param int[]|string[] $objectIds Objects the user selected.
+	 * @param int $destinationFolderId Folder the selection is copied into.
+	 * @return array|null
+	 */
+	public function copyObjectsAction(array $objectIds, int $destinationFolderId): ?array
+	{
+		$copiedCount = $this->copyObjects($this->filterObjectIds($objectIds), $destinationFolderId);
+		if ($this->errorCollection->hasErrors())
+		{
+			return null;
+		}
+
+		return [
+			'copied' => $copiedCount,
+			'message' => Loc::getMessage('DISK_FOLDER_LIST_INF_AFTER_ACTION_COPY'),
+		];
+	}
+
+	/**
+	 * @param int[]|string[] $objectIds Ids as the client sent them.
+	 * @return int[]
+	 */
+	private function filterObjectIds(array $objectIds): array
+	{
+		$filtered = [];
+		foreach ($objectIds as $objectId)
+		{
+			if (is_numeric($objectId) && (int)$objectId > 0)
+			{
+				$filtered[] = (int)$objectId;
+			}
+		}
+
+		return array_values(array_unique($filtered));
+	}
+
 	private function isCollaber(): bool
 	{
 		$user = $this->getUser();
@@ -3116,6 +3638,28 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		return false;
+	}
+
+	private function isDockedUploaderOwner(): bool
+	{
+		if (!$this->isTrashMode())
+		{
+			// A page opts in: a shell that does not know the docked uploader keeps the legacy one on the same drop zone.
+			return $this->arParams['DOCKED_UPLOADER_SUPPORTED'] === 'Y'
+				&& $this->uploadOwner->isDockedOwner($this->folder, $this->request)
+			;
+		}
+
+		// Trash mounts the widget only to show the queues, and a trash unified link keeps it out
+		// the same way a folder one does.
+		return Configuration::isEnabledDockedUploader() && !$this->isViewByUnifiedLink;
+	}
+
+	private function isDestinationPickerAvailable(): bool
+	{
+		// A view by unified link stays on the old modal tree: the picker takes no unified link token and
+		// resolves rights by the security context of the user, not of the link.
+		return Configuration::isDestinationPickerEnabled() && !$this->isViewByUnifiedLink;
 	}
 
 	private function isViewByUnifiedLink(): bool

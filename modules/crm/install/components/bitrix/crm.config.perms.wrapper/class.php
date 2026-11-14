@@ -24,6 +24,7 @@ class CrmConfigPermsWrapper extends Base
 	{
 		$this->arResult['componentParams'] = $this->arParams;
 		$this->arResult['backUrl'] = $this->getSliderBackUrl();
+		$this->arResult['isIframe'] = $this->isIframe();
 
 		$this->IncludeComponentTemplate();
 	}

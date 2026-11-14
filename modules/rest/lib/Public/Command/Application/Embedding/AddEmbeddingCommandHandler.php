@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Rest\Public\Command\Application\Embedding;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Rest\Internal\Entity\Application\Embedding\Embedding;
 use Bitrix\Rest\Internal\Entity\Application\Embedding\EmbeddingLanguage;
 use Bitrix\Rest\Internal\Entity\Application\Embedding\EmbeddingLanguageCollection;
 use Bitrix\Rest\Internal\Service\Application\Embedding\EmbeddingInstaller;
+use Bitrix\Rest\RestException;
 
 class AddEmbeddingCommandHandler
 {
@@ -18,7 +18,7 @@ class AddEmbeddingCommandHandler
 	}
 
 	/**
-	 * @throws PersistenceException
+	 * @throws RestException
 	 * @throws ArgumentException
 	 */
 	public function __invoke(AddEmbeddingCommand $command): bool

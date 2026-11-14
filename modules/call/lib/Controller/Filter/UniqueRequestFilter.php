@@ -53,6 +53,17 @@ class UniqueRequestFilter extends Base
 
 	public function onBeforeAction(Event $event)
 	{
+		// The engine runs every prefilter even after an earlier one has refused the request. A refused request
+		// must not claim the key, and its arguments must not be bound: the JWT autowiring would add a second
+		// WRONG_JWT and fail the binding on top of the refusal. Like the engine, any result but SUCCESS is a refusal.
+		foreach ($event->getResults() as $result)
+		{
+			if ($result->getType() !== EventResult::SUCCESS)
+			{
+				return null;
+			}
+		}
+
 		$requestId = $this->resolveRequestId($this->getAction()->getArguments());
 
 		if ($requestId !== null)
@@ -95,7 +106,14 @@ class UniqueRequestFilter extends Base
 	 * Resolves the idempotency key for the current action.
 	 *
 	 * Track delivery has no caller-supplied requestId and is keyed by its
-	 * stable external track id instead.
+	 * stable external track id instead. An operator-driven resend is a
+	 * different event from a media retransmit and is keyed separately: the
+	 * daily track key of a delivered callback must not short-circuit it.
+	 *
+	 * A restart of the analysis is keyed by its requestId as it arrives, like
+	 * the rest: telling one ask from another belongs to the sender, which
+	 * derives the id from the operation of the operator and puts the marks of
+	 * the mode into it {@see \Bitrix\CallController\Track\EventResender}.
 	 */
 	private function resolveRequestId(array $arguments): ?string
 	{
@@ -113,6 +131,7 @@ class UniqueRequestFilter extends Base
 					|| $argument instanceof DTO\CallUserRequest
 					|| $argument instanceof DTO\UserRequest
 					|| $argument instanceof DTO\PingTracksRequest
+					|| $argument instanceof DTO\FollowUpRestartRequest
 				)
 				&& $argument->requestId !== ''
 			)
@@ -122,7 +141,18 @@ class UniqueRequestFilter extends Base
 
 			if ($argument instanceof DTO\TrackFileRequest && $argument->trackId)
 			{
-				return 'track:' . $argument->trackId;
+				if (!$argument->manualRetry)
+				{
+					return 'track:' . $argument->trackId;
+				}
+
+				// A resend without a requestId comes from an older controller: an operator
+				// action is rate-limited by the human behind it, and a silent replay of it
+				// is worse than no deduplication at all.
+				return $argument->requestId === ''
+					? null
+					: 'track:' . $argument->trackId . ':manual:' . $argument->requestId
+				;
 			}
 		}
 

@@ -2,9 +2,8 @@
 
 namespace Bitrix\Mobile\Profile\Tab;
 
+use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
-use Bitrix\Disk\UrlManager;
-use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Profile\Enum\TabContextType;
@@ -40,7 +39,7 @@ class FilesTab extends BaseProfileTab
 			return false;
 		}
 
-		return $this->isFolderPathResolved();
+		return $this->hasRootFolder();
 	}
 
 	/**
@@ -61,20 +60,20 @@ class FilesTab extends BaseProfileTab
 		];
 	}
 
-	private function isFolderPathResolved(): bool
+	/**
+	 * The root folder of the owner's storage, taken straight from the driver. Reading it is not what the
+	 * tab stands on: a viewer reached by a shared folder inside a storage they may not read at the root
+	 * still gets the tab (mantis 0221728), and the list behind it answers only what they are allowed.
+	 */
+	private function hasRootFolder(): bool
 	{
-		if (!method_exists(UrlManager::class, 'resolveFolderPath'))
+		$folder = Driver::getInstance()->getStorageByUserId($this->ownerId)?->getRootObject();
+		if (!$folder instanceof Folder)
 		{
 			return false;
 		}
 
-		$result = (new UrlManager())->resolveFolderPath('user', $this->ownerId, '/');
-		if (!$result->isSuccess())
-		{
-			return false;
-		}
-
-		$this->folder = $result->getData()['targetFolder'];
+		$this->folder = $folder;
 
 		return true;
 	}

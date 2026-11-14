@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Integration\Baas;
 
-use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Baas\Entity\Service;
+use Bitrix\Disk\Internal\Service\Document\OfficeEditorAvailability;
 
 class BaasAvailableServices
 {
@@ -23,7 +23,7 @@ class BaasAvailableServices
 				?->getByCode(BaasSessionBoostService::SERVICE_CODE)
 		;
 
-		if ($service?->isAvailable() && OnlyOfficeHandler::isEnabled())
+		if ($service?->isAvailable() && OfficeEditorAvailability::isAvailable())
 		{
 			$availableServices[$service->getCode()] = $service;
 		}

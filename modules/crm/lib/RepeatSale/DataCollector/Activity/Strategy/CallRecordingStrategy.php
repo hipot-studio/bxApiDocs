@@ -5,9 +5,10 @@ namespace Bitrix\Crm\RepeatSale\DataCollector\Activity\Strategy;
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\RepeatSale\DataCollector\Activity\ActivityType;
+use Bitrix\Crm\RepeatSale\DataCollector\Activity\PreselectedActivitiesInterface;
 use Bitrix\Crm\RepeatSale\DataCollector\Activity\StrategyBase;
 
-class CallRecordingStrategy extends StrategyBase
+class CallRecordingStrategy extends StrategyBase implements PreselectedActivitiesInterface
 {
 	public function getType(): ActivityType
 	{
@@ -27,6 +28,16 @@ class CallRecordingStrategy extends StrategyBase
 			->fetchCollection()
 			?->getIdList()
 		;
+
+		return $this->collectByActivityIds($activityIds ?? []);
+	}
+
+	/**
+	 * The transcripts are taken out of the repository of the AI jobs and not out of the activities, so
+	 * the calls are enough to answer and their rows are never read here.
+	 */
+	public function collectByActivityIds(array $activityIds): array
+	{
 		if (empty($activityIds))
 		{
 			return [];

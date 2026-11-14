@@ -75,14 +75,22 @@ final class AiReportDrawer extends Base
 		int $ownerId,
 		?int $jobId = null,
 		?int $assessmentSettingsId = null,
+		?string $targetBlock = null,
 	): ?array
 	{
 		$result = $this->loadScenario(
 			ScenarioCode::CALL_ASSESSMENT,
-			new DrawerRequest($activityId, $ownerTypeId, $ownerId, $jobId, $assessmentSettingsId),
+			new DrawerRequest(
+				$activityId,
+				$ownerTypeId,
+				$ownerId,
+				$jobId,
+				$assessmentSettingsId,
+				in_array($targetBlock, ['summary', 'transcription'], true) ? $targetBlock : null,
+			),
 			true,
 		);
-		if ($result === null)
+		if ($result === null && $this->getErrorByCode(ErrorCode::NOT_FOUND) === null)
 		{
 			$this->addError(ErrorCode::getNotFoundError());
 		}
@@ -314,6 +322,7 @@ final class AiReportDrawer extends Base
 				$jobRepository,
 				$settingsProvider,
 				$callRecordDataProvider,
+				$activityBadgeCleaner,
 			),
 			new SummaryHistoryScenarioBuilder(
 				$presentationResolver,

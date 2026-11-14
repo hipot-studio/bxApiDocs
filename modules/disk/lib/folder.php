@@ -7,6 +7,7 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\FileHelper;
 use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\FolderTable;
+use Bitrix\Disk\Internals\ObjectNameKey;
 use Bitrix\Disk\Internals\ObjectNameService;
 use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -15,16 +16,30 @@ use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Internals\UniqueCode;
 use Bitrix\Disk\Internals\VersionTable;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditObjectEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
+use Bitrix\Disk\Internal\Service\Audit\AuditSnapshotBuilder;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionException;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionResult;
 use Bitrix\Disk\Internal\Service\Folder\DeletionRestriction;
+use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
+use Bitrix\Disk\Internal\Service\Restrictions\ContentHeadReader;
+use Bitrix\Disk\Internal\Service\Restrictions\FormatPolicyService;
 use Bitrix\Disk\Internal\Service\Sync\Access\PlacementAccessPublisher;
 use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeRecord;
 use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
+use Bitrix\Disk\Internal\Service\Sync\Journal\DescendantTombstonePublisher;
 use Bitrix\Disk\Internal\Service\Sync\Journal\TombstoneReason;
 use Bitrix\Disk\ProxyType\Group;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\DuplicateEntryException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
@@ -33,6 +48,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ORM\Query\Query as OrmQuery;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Type\DateTime;
@@ -51,10 +67,15 @@ class Folder extends BaseObject
 
 	/** Operations of \CSQLWhere holding a field to a value or a set of them: "FIELD", "=FIELD", "==FIELD", "@FIELD". */
 	private const NARROWING_OPERATIONS = ['E', 'I', 'SE', 'IN'];
+	// files whose content is judged by one query of their rows and one of their rows of b_file
+	private const CONTENT_CHECK_CHUNK_SIZE = 500;
 
 	/** @var bool */
 	protected $hasSubFolders;
+	// what the check of a move has judged, carried to the copy step of the same move
+	private array $signatureCheckOptionsOfMove = [];
 	private static ?DeletionRestriction $deletionRestriction = null;
+	private ?DescendantTombstonePublisher $descendantTombstonePublisher = null;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -152,7 +173,11 @@ class Folder extends BaseObject
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @internal
 	 */
-	public static function add(array $data, ErrorCollection $errorCollection)
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		if (!isset($data['UNIQUE_CODE']))
 		{
@@ -163,9 +188,20 @@ class Folder extends BaseObject
 		$folder = parent::add($data, $errorCollection);
 		if($folder && !$folder->isDeleted())
 		{
-			$driver = Driver::getInstance();
-			$driver->getIndexManager()->indexFolder($folder);
-			$driver->sendChangeStatusToSubscribers($folder);
+			$afterCommit = static function () use ($folder): void {
+				$driver = Driver::getInstance();
+				$driver->getIndexManager()->indexFolder($folder);
+				$driver->sendChangeStatusToSubscribers($folder);
+			};
+
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($afterCommit);
+			}
+			else
+			{
+				$afterCommit();
+			}
 		}
 
 		return $folder;
@@ -216,10 +252,11 @@ class Folder extends BaseObject
 	 * @param array $data Contains additional fields (CREATED_BY, NAME, etc).
 	 * @param array $rights Rights (@see \Bitrix\Disk\RightsManager).
 	 * @param bool  $generateUniqueName Generates unique name for object in directory.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return File|null
 	 */
-	public function uploadFile(array $fileArray, array $data, array $rights = array(), $generateUniqueName = false)
+	public function uploadFile(array $fileArray, array $data, array $rights = array(), $generateUniqueName = false, array $options = [])
 	{
 		$this->errorCollection->clear();
 
@@ -248,6 +285,27 @@ class Folder extends BaseObject
 			return null;
 		}
 
+		$formatPolicyError = File::findFormatPolicyErrorForUpload(
+			$fileArray,
+			(string)$data['NAME'],
+			(int)$data['CREATED_BY'],
+			$options,
+		);
+		if ($formatPolicyError)
+		{
+			$this->errorCollection->add([$formatPolicyError]);
+
+			return null;
+		}
+
+		$personalQuotaError = File::findPersonalQuotaErrorForUpload($fileArray, $this->getStorage(), $options);
+		if ($personalQuotaError)
+		{
+			$this->errorCollection->add([$personalQuotaError]);
+
+			return null;
+		}
+
 		$fileId = CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);
 		if(!$fileId)
 		{
@@ -268,11 +326,11 @@ class Folder extends BaseObject
 			'CREATED_BY' => $data['CREATED_BY'],
 			'UPDATE_TIME' => isset($data['UPDATE_TIME'])? $data['UPDATE_TIME'] : null,
 			'CODE' => isset($data['CODE'])? $data['CODE'] : null,
-		), $rights, $generateUniqueName);
+			File::FILE_OWNERSHIP_DATA_KEY => File::FILE_OWNERSHIP_OWNED,
+		), $rights, $generateUniqueName, $options);
 
 		if(!$fileModel)
 		{
-			CFile::delete($fileId);
 			return null;
 		}
 		return $fileModel;
@@ -298,10 +356,11 @@ class Folder extends BaseObject
 	 * @param array $data Contains additional fields (CREATED_BY, NAME, MIME_TYPE).
 	 * @param array $rights Rights (@see \Bitrix\Disk\RightsManager).
 	 * @param bool  $generateUniqueName Generates unique name for object in directory.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @return File|null
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function addBlankFile(array $data, array $rights = array(), $generateUniqueName = false)
+	public function addBlankFile(array $data, array $rights = array(), $generateUniqueName = false, array $options = [])
 	{
 		$this->errorCollection->clear();
 
@@ -317,7 +376,7 @@ class Folder extends BaseObject
 			'NAME' => $data['NAME'],
 			'SIZE' => isset($data['SIZE'])? $data['SIZE'] : null, //for im. We should show future!
 			'CREATED_BY' => $data['CREATED_BY'],
-		), $rights, $generateUniqueName);
+		), $rights, $generateUniqueName, $options);
 	}
 
 	/**
@@ -325,16 +384,90 @@ class Folder extends BaseObject
 	 * @param array $data Contains additional fields (CREATED_BY, NAME, etc).
 	 * @param array $rights Rights (@see \Bitrix\Disk\RightsManager).
 	 * @param bool  $generateUniqueName Generates unique name for object in directory.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return null|static|File
 	 */
-	public function addFile(array $data, array $rights = array(), $generateUniqueName = false)
+	public function addFile(
+		array $data,
+		array $rights = [],
+		$generateUniqueName = false,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->errorCollection->clear();
 
-		static::checkRequiredInputParams($data, array(
-			'NAME'
-		));
+		if ($auditTransaction !== null)
+		{
+			return $auditTransaction
+				->join(function (AuditTransaction $transaction) use ($data, $rights, $generateUniqueName, $options) {
+					$file = $this->addFileInsideTransaction(
+						$data,
+						$rights,
+						(bool)$generateUniqueName,
+						$options,
+						$transaction,
+					);
+
+					return $file instanceof File
+						? AuditTransactionOutcome::success($file)
+						: AuditTransactionOutcome::failure();
+				})
+				->getValue()
+			;
+		}
+
+		if (AuditTransaction::isActive())
+		{
+			return AuditTransaction::run(
+				fn() => $this->addFileInsideTransaction($data, $rights, (bool)$generateUniqueName, $options),
+			);
+		}
+
+		$transaction = new AuditTransaction(Application::getConnection());
+		$result = $transaction->execute(
+			function (AuditTransaction $transaction) use ($data, $rights, $generateUniqueName, $options) {
+				$file = $this->addFileInsideTransaction(
+					$data,
+					$rights,
+					(bool)$generateUniqueName,
+					$options,
+					$transaction,
+				);
+
+				return $file instanceof File
+					? AuditTransactionOutcome::success($file)
+					: AuditTransactionOutcome::failure();
+			},
+		);
+
+		return $this->unwrapCreateTransactionResult($result);
+	}
+
+	private function addFileInsideTransaction(
+		array $data,
+		array $rights,
+		bool $generateUniqueName,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	): ?File
+	{
+		$fileOwnership = $data[File::FILE_OWNERSHIP_DATA_KEY] ?? File::FILE_OWNERSHIP_BORROWED;
+		unset($data[File::FILE_OWNERSHIP_DATA_KEY]);
+
+		if ($auditTransaction !== null && $fileOwnership === File::FILE_OWNERSHIP_OWNED)
+		{
+			$fileId = (int)($data['FILE_ID'] ?? 0);
+			if ($fileId > 0)
+			{
+				$auditTransaction->addCompensation(static function () use ($fileId): void {
+					CFile::delete($fileId);
+				});
+			}
+		}
+
+		static::checkRequiredInputParams($data, ['NAME']);
 
 		$nameService = new ObjectNameService($data['NAME'], $this->id, ObjectTable::TYPE_FILE);
 		if ($generateUniqueName)
@@ -354,15 +487,45 @@ class Folder extends BaseObject
 		$data['PARENT_ID'] = $this->id;
 		$data['STORAGE_ID'] = $this->storageId;
 		$data['PARENT'] = $this;
+		$data[File::DEFER_CREATED_AUDIT_DATA_KEY] = true;
 
 		/** @var File $fileModel */
-		$fileModel = $this->processAdd($data, $this->errorCollection, ObjectTable::TYPE_FILE, $generateUniqueName);
-		if ($fileModel)
+		$fileModel = $this->processAdd(
+			$data,
+			$this->errorCollection,
+			ObjectTable::TYPE_FILE,
+			$generateUniqueName,
+			$options,
+			auditTransaction: $auditTransaction,
+		);
+		if (!$fileModel)
 		{
-			Driver::getInstance()->getRightsManager()->setAsNewLeaf($fileModel, $rights);
-			// after the rights of the new object are written: they are what its audience is read from
-			$fileModel->publishToJournal(ChangeType::Created, $fileModel->getCreatedBy());
+			return null;
+		}
 
+		$rightsManager = Driver::getInstance()->getRightsManager();
+		if (!$rightsManager->setAsNewLeaf($fileModel, $rights, $auditTransaction))
+		{
+			$this->errorCollection->add($rightsManager->getErrors());
+
+			return null;
+		}
+
+		// after the rights of the new object are written: they are what its audience is read from
+		$fileModel->publishToJournal(ChangeType::Created, $fileModel->getCreatedBy());
+
+		$auditResult = (new AuditObjectEventProducer())->publishCreated(
+			$fileModel,
+			(int)$fileModel->getCreatedBy(),
+		);
+		if (!$fileModel->applyAuditResult($auditResult))
+		{
+			$this->errorCollection->add($fileModel->getErrors());
+
+			return null;
+		}
+
+		$afterCommit = function () use ($fileModel): void {
 			$objectEvent = $this->makeObjectEvent(
 				'objectAdded',
 				[
@@ -377,6 +540,15 @@ class Folder extends BaseObject
 				]
 			);
 			$objectEvent->sendToObjectChannel();
+		};
+
+		if ($auditTransaction !== null)
+		{
+			$auditTransaction->addAfterCommit($afterCommit);
+		}
+		else
+		{
+			$afterCommit();
 		}
 
 		return $fileModel;
@@ -387,7 +559,9 @@ class Folder extends BaseObject
 		ErrorCollection $errorCollection,
 		int $type,
 		bool $generateUniqueName = false,
-		int $countStepsToGenerateName = 0
+		array $options = [],
+		int $countStepsToGenerateName = 0,
+		?AuditTransaction $auditTransaction = null,
 	): BaseObject|null
 	{
 		$connection = Application::getConnection();
@@ -404,8 +578,8 @@ class Folder extends BaseObject
 		{
 			$objectModel = match ($type)
 			{
-				ObjectTable::TYPE_FOLDER => Folder::add($data, $errorCollection),
-				ObjectTable::TYPE_FILE => File::add($data, $errorCollection),
+				ObjectTable::TYPE_FOLDER => Folder::add($data, $errorCollection, $auditTransaction),
+				ObjectTable::TYPE_FILE => $this->addFileModel($data, $errorCollection, $options, $auditTransaction),
 				default => throw new ArgumentException("Unknown object type {$type}"),
 			};
 		}
@@ -435,12 +609,17 @@ class Folder extends BaseObject
 					$data['NAME'] = $result->getName();
 				}
 
+				// The name is new, the content is not, and the attempt that collided has left in
+				// $options whether it got as far as judging that content. Only what was judged there
+				// is taken for judged here: a content the node never reached is judged on this attempt.
 				return $this->processAdd(
 					$data,
 					$errorCollection,
 					$type,
 					$generateUniqueName,
-					$countStepsToGenerateName
+					$options,
+					$countStepsToGenerateName,
+					$auditTransaction,
 				);
 			}
 
@@ -474,6 +653,56 @@ class Folder extends BaseObject
 		return new Error(Loc::getMessage('DISK_FOLDER_MODEL_ERROR_NON_UNIQUE_NAME'), self::ERROR_NON_UNIQUE_NAME);
 	}
 
+	private function unwrapCreateTransactionResult(AuditTransactionResult $result): mixed
+	{
+		$callbackException = $result->getCallbackException();
+		if (
+			$callbackException !== null
+			&& $result->isRollbackConfirmed()
+			&& count($result->getCallbackExceptions()) === 1
+			&& $result->getCompensationExceptions() === []
+		)
+		{
+			throw $callbackException;
+		}
+
+		if (
+			$result->isRollbackConfirmed()
+			&& $result->getCallbackExceptions() === []
+			&& $result->getCompensationExceptions() === []
+		)
+		{
+			return $result->getOutcome()->getValue();
+		}
+
+		if ($result->isSuccess())
+		{
+			return $result->getOutcome()->getValue();
+		}
+
+		throw new AuditTransactionException($result);
+	}
+
+	/**
+	 * The write node of the file, entered from this one place: the whole retry of the unique name
+	 * turns on this call refusing the name the database already holds.
+	 *
+	 * @param array $data Fields of the file being written.
+	 * @param ErrorCollection $errorCollection Errors of the write.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
+	 *                       The node marks them with what it has judged of this write.
+	 * @return File|null
+	 */
+	protected function addFileModel(
+		array $data,
+		ErrorCollection $errorCollection,
+		array &$options,
+		?AuditTransaction $auditTransaction = null,
+	): ?File
+	{
+		return File::add($data, $errorCollection, $options, $auditTransaction);
+	}
+
 	/**
 	 * Adds link on file in folder.
 	 * @param File  $sourceFile Source file.
@@ -495,7 +724,11 @@ class Folder extends BaseObject
 		$data['SIZE'] = $sourceFile->getSize();
 
 		/** @var FileLink $fileLinkModel */
-		$fileLinkModel = FileLink::add($data, $this->errorCollection);
+		$fileLinkModel = FileLink::add(
+			$data,
+			$this->errorCollection,
+			hasUploadCleanupMarker: $sourceFile->getRealObject()->getUploadCleanupMarkerPresenceHint(),
+		);
 		if(!$fileLinkModel)
 		{
 			return null;
@@ -630,7 +863,12 @@ class Folder extends BaseObject
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return null|static|Folder
 	 */
-	public function addSubFolder(array $data, array $rights = array(), bool $generateUniqueName = false)
+	public function addSubFolder(
+		array $data,
+		array $rights = [],
+		bool $generateUniqueName = false,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		$this->errorCollection->clear();
 
@@ -658,13 +896,39 @@ class Folder extends BaseObject
 
 		try
 		{
-			/** @var Folder $folderModel */
-			$folderModel = $this->processAdd(
-				$data,
-				$this->errorCollection,
-				ObjectTable::TYPE_FOLDER,
-				$generateUniqueName
+			if ($auditTransaction !== null)
+			{
+				return $auditTransaction
+					->join(
+						fn(AuditTransaction $transaction) => $this->buildSubFolderCreateOutcome(
+							$data,
+							$rights,
+							$generateUniqueName,
+							$transaction,
+						),
+					)
+					->getValue()
+				;
+			}
+
+			if (AuditTransaction::isActive())
+			{
+				return AuditTransaction::run(
+					fn() => $this->addSubFolderInsideTransaction($data, $rights, $generateUniqueName),
+				);
+			}
+
+			$transaction = new AuditTransaction(Application::getConnection());
+			$result = $transaction->execute(
+				fn(AuditTransaction $transaction) => $this->buildSubFolderCreateOutcome(
+					$data,
+					$rights,
+					$generateUniqueName,
+					$transaction,
+				),
 			);
+
+			return $this->unwrapCreateTransactionResult($result);
 		}
 		catch (DuplicateEntryException)
 		{
@@ -672,30 +936,108 @@ class Folder extends BaseObject
 
 			return null;
 		}
+	}
 
-		if(!$folderModel)
+	private function buildSubFolderCreateOutcome(
+		array $data,
+		array $rights,
+		bool $generateUniqueName,
+		AuditTransaction $auditTransaction,
+	): AuditTransactionOutcome
+	{
+		try
+		{
+			$folder = $this->addSubFolderInsideTransaction(
+				$data,
+				$rights,
+				$generateUniqueName,
+				$auditTransaction,
+			);
+		}
+		catch (DuplicateEntryException)
+		{
+			$this->errorCollection[] = $this->createNonUniqueNameError();
+
+			return AuditTransactionOutcome::success();
+		}
+
+		return $folder instanceof Folder
+			? AuditTransactionOutcome::success($folder)
+			: AuditTransactionOutcome::failure();
+	}
+
+	private function addSubFolderInsideTransaction(
+		array $data,
+		array $rights,
+		bool $generateUniqueName,
+		?AuditTransaction $auditTransaction = null,
+	): ?Folder
+	{
+		/** @var Folder|null $folderModel */
+		$folderModel = $this->processAdd(
+			$data,
+			$this->errorCollection,
+			ObjectTable::TYPE_FOLDER,
+			$generateUniqueName,
+			auditTransaction: $auditTransaction,
+		);
+		if (!$folderModel)
 		{
 			return null;
 		}
-		$this->changeSelfUpdateTime();
-		Driver::getInstance()->getRightsManager()->setAsNewLeaf($folderModel, $rights);
+
+		if (!$this->changeSelfUpdateTime())
+		{
+			return null;
+		}
+
+		$rightsManager = Driver::getInstance()->getRightsManager();
+		if (!$rightsManager->setAsNewLeaf($folderModel, $rights, $auditTransaction))
+		{
+			$this->errorCollection->add($rightsManager->getErrors());
+
+			return null;
+		}
+
 		// after the rights of the new object are written: they are what its audience is read from
 		$folderModel->publishToJournal(ChangeType::Created, $folderModel->getCreatedBy());
 
-		$objectEvent = $this->makeObjectEvent(
-			'objectAdded',
-			[
-				'object' => [
-					'id' => (int)$this->getId(),
-					'type' => FolderTable::TYPE,
-					'name' => $this->getName(),
-				],
-				'addedObject' => [
-					'id' => (int)$folderModel->getId(),
-				],
-			]
+		$auditResult = (new AuditObjectEventProducer())->publishCreated(
+			$folderModel,
+			(int)$folderModel->getCreatedBy(),
 		);
-		$objectEvent->sendToObjectChannel();
+		if (!$folderModel->applyAuditResult($auditResult))
+		{
+			$this->errorCollection->add($folderModel->getErrors());
+
+			return null;
+		}
+
+		$afterCommit = function () use ($folderModel): void {
+			$objectEvent = $this->makeObjectEvent(
+				'objectAdded',
+				[
+					'object' => [
+						'id' => (int)$this->getId(),
+						'type' => FolderTable::TYPE,
+						'name' => $this->getName(),
+					],
+					'addedObject' => [
+						'id' => (int)$folderModel->getId(),
+					],
+				]
+			);
+			$objectEvent->sendToObjectChannel();
+		};
+
+		if ($auditTransaction !== null)
+		{
+			$auditTransaction->addAfterCommit($afterCommit);
+		}
+		else
+		{
+			$afterCommit();
+		}
 
 		return $folderModel;
 	}
@@ -815,6 +1157,16 @@ class Folder extends BaseObject
 
 	/**
 	 * Copies object to target folder.
+	 *
+	 * A copy answers for the tree as a whole: the quota of the target disk is asked once about
+	 * everything under this folder, before the folder itself is created there. A tree that does not
+	 * fit leaves neither the folder nor a file of it in the target, instead of the user finding a
+	 * folder copied and empty.
+	 *
+	 * The format policy of the one copying judges the tree the same way: a restricted file, or content
+	 * the read budget leaves unchecked, refuses the copy before anything of it is written. The content
+	 * judged here is not read again by the write of each file, which still judges the name.
+	 *
 	 * @param Folder $targetFolder Target folder.
 	 * @param int    $updatedBy Id of user.
 	 * @param bool   $generateUniqueName Generates unique name for object in directory.
@@ -824,12 +1176,369 @@ class Folder extends BaseObject
 	{
 		$this->errorCollection->clear();
 
+		if (AuditOperationContextStack::current() === null)
+		{
+			return AuditOperationContextStack::runWithContext(
+				AuditOperationContext::create(
+					actionKind: AuditOperationContext::ACTION_EXPLICIT_COPY,
+					selectedTargetIds: [(string)$this->getId()],
+				),
+				fn() => $this->copyTo($targetFolder, $updatedBy, $generateUniqueName),
+			);
+		}
+
 		if($this->getId() == $targetFolder->getId())
 		{
 			return $this;
 		}
 
-		$newRoot = $this->copyToInternal($targetFolder, $updatedBy, $generateUniqueName);
+		$quotaError = $this->findPersonalQuotaErrorForCopy($targetFolder);
+		if ($quotaError)
+		{
+			$this->errorCollection->addOne($quotaError);
+
+			return null;
+		}
+
+		// a link carries no content of its own, so it is not judged, as its move is not
+		$options = [];
+		if (!$this->isLink())
+		{
+			$formatPolicyError = $this->judgeDescendantsByFormatPolicy(
+				File::getFormatPolicyService(),
+				(int)$updatedBy,
+				null,
+				$checkedFileIds,
+			);
+			if ($formatPolicyError)
+			{
+				$this->errorCollection->addOne($formatPolicyError);
+
+				return null;
+			}
+
+			$options = self::createSignatureCheckOptions($checkedFileIds);
+		}
+
+		$transaction = new AuditTransaction(Application::getConnection());
+		$result = $transaction->execute(
+			function (AuditTransaction $transaction) use ($targetFolder, $updatedBy, $generateUniqueName, $options) {
+				$folder = $this->copyToInsideAuditTransaction(
+					$targetFolder,
+					$updatedBy,
+					(bool)$generateUniqueName,
+					$transaction,
+					true,
+					$options,
+				);
+
+				return $folder instanceof self
+					? AuditTransactionOutcome::success($folder)
+					: AuditTransactionOutcome::failure();
+			},
+		);
+
+		/** @var Folder|null $folder */
+		$folder = $this->unwrapAuditCommandResult($result);
+
+		return $folder;
+	}
+
+	/**
+	 * The copy step of a cross-storage move of a whole tree. The files inside travel as moved
+	 * content, judged by the format policy of the one moving, the same as a file moved on its own.
+	 * The room for it is answered for where the files themselves are moved, so the quota of the whole
+	 * tree is not asked here.
+	 *
+	 * @param Folder $targetFolder Destination folder.
+	 * @param int    $movedBy User id of user, which moves folder.
+	 * @param AuditTransaction $auditTransaction Transaction of the move the copy is made inside.
+	 * @return BaseObject|null
+	 */
+	protected function copyForMove(Folder $targetFolder, $movedBy, AuditTransaction $auditTransaction)
+	{
+		// what the move has judged of the tree before the copy (@see self::findFormatPolicyErrorForMove())
+		$signatureCheckOptions = $this->signatureCheckOptionsOfMove;
+		$this->signatureCheckOptionsOfMove = [];
+
+		return $this->copyToInsideAuditTransaction($targetFolder, $movedBy, false, $auditTransaction, false, [
+			WriteOperationContext::OPTION_KEY => WriteOperationContext::StoredContentMove,
+			...$signatureCheckOptions,
+		]);
+	}
+
+	/**
+	 * A folder is moved whole or not at all, so a file under it the policy of the one moving
+	 * restricts refuses the move of the folder.
+	 */
+	protected function findFormatPolicyErrorForMove(int $movedBy): ?Error
+	{
+		$this->signatureCheckOptionsOfMove = [];
+		if ($this->isLink())
+		{
+			return null;
+		}
+
+		$error = $this->judgeDescendantsByFormatPolicy(File::getFormatPolicyService(), $movedBy, null, $checkedFileIds);
+		if ($error === null)
+		{
+			$this->signatureCheckOptionsOfMove = self::createSignatureCheckOptions($checkedFileIds);
+		}
+
+		return $error;
+	}
+
+	/**
+	 * What the copy of the tree is told about the content the check has judged: the files judged, with
+	 * the content each of them was judged by, or the whole tree when the check needs no content at all.
+	 *
+	 * @param array<int, int>|null $checkedFileIds Content judged by the object id, null when none is needed.
+	 */
+	private static function createSignatureCheckOptions(?array $checkedFileIds): array
+	{
+		if ($checkedFileIds === null)
+		{
+			return [WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED => true];
+		}
+
+		return [WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED_FILES => $checkedFileIds];
+	}
+
+	/**
+	 * A file of the tree is written as checked only while it keeps the content the check has judged.
+	 * A file put under the tree or given a new version after the check has its content read by the
+	 * write, and content the spent budget leaves unread refuses it.
+	 */
+	private static function resolveCopyOptionsOfFile(array $options, File $file): array
+	{
+		if (!array_key_exists(WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED_FILES, $options))
+		{
+			return $options;
+		}
+
+		$checkedFileIds = $options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED_FILES];
+		unset($options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED_FILES]);
+
+		if (($checkedFileIds[(int)$file->getId()] ?? null) === (int)$file->getFileId())
+		{
+			$options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED] = true;
+
+			return $options;
+		}
+
+		unset($options[WriteOperationContext::OPTION_KEY_SIGNATURE_CHECKED]);
+		$options[WriteOperationContext::OPTION_KEY_CONTENT_CHECK_REQUIRED] = true;
+
+		return $options;
+	}
+
+	/**
+	 * Returns the refusal of the format policy of the user for a file under this folder, or null when
+	 * the policy restricts none of them. The files of the subtree are read by one query, together with
+	 * the kind of the storage their content lies in, and judged a chunk at a time: the names of the
+	 * chunk first, and a restricted name refuses at once; then, when the content can change the
+	 * verdict, the rows of b_file of the files whose kind is still read are loaded by one query and the
+	 * content of each file is read, and restricted content refuses at once. The kinds stop apart: the
+	 * spent cloud budget or a cloud storage given up on stops the cloud files alone, and the local ones
+	 * are read on in the time of the operation. Content the spent budget of its kind leaves unread does
+	 * not stop the walk: it is counted, and a tree with no restricted file is refused as not verified
+	 * when anything was left unread. Content the storage refuses to give is left to the name. Links are
+	 * not judged: they carry no content of their own.
+	 *
+	 * @internal
+	 * @param FormatPolicyService $policyService Service judging the names of the files.
+	 * @param int $actorId User moving or copying the folder; none gets the global rule.
+	 * @param ContentHeadReader|null $contentHeadReader Reader whose budget the walk spends, a new one by default.
+	 * @return Error|null Refusal with the id of the restricted file in customData['objectId'], or the
+	 * refusal File::ERROR_FORMAT_NOT_VERIFIED with the number of files left unread in
+	 * customData['notVerifiedCount'].
+	 */
+	public function findFormatPolicyErrorForDescendants(
+		FormatPolicyService $policyService,
+		int $actorId,
+		?ContentHeadReader $contentHeadReader = null,
+	): ?Error
+	{
+		return $this->judgeDescendantsByFormatPolicy($policyService, $actorId, $contentHeadReader, $checkedFileIds);
+	}
+
+	/**
+	 * @see self::findFormatPolicyErrorForDescendants()
+	 * @param array<int, int>|null $checkedFileIds Receives the files whose content was judged and
+	 * found allowed, the id of the object to the id of the content judged; null when the policy needs
+	 * no content of the tree.
+	 */
+	private function judgeDescendantsByFormatPolicy(
+		FormatPolicyService $policyService,
+		int $actorId,
+		?ContentHeadReader $contentHeadReader,
+		?array &$checkedFileIds,
+	): ?Error
+	{
+		$checkedFileIds = null;
+		$policyActorId = $actorId > 0 ? $actorId : null;
+		$context = WriteOperationContext::StoredContentMove;
+		if (!$policyService->isPolicyApplied($context, $policyActorId))
+		{
+			return null;
+		}
+
+		if ($policyService->needsContentHead($context, $policyActorId))
+		{
+			$contentHeadReader ??= new ContentHeadReader();
+			$checkedFileIds = [];
+		}
+		else
+		{
+			$contentHeadReader = null;
+		}
+
+		$notVerifiedCount = 0;
+		$rows = $this->queryOwnFilesUnder()->exec();
+		foreach ($this->readRowsInChunks($rows, self::CONTENT_CHECK_CHUNK_SIZE) as $chunk)
+		{
+			foreach ($chunk as $row)
+			{
+				$name = Ui\Text::cleanTrashCanSuffix((string)$row['NAME']);
+				if (!$policyService->isAllowed($name, $context, $policyActorId)->isSuccess())
+				{
+					return $this->findFormatPolicyErrorForDescendant($row, $actorId);
+				}
+			}
+
+			if ($contentHeadReader === null)
+			{
+				continue;
+			}
+
+			$contentHeadReader->preloadFileRows(array_column(
+				array_filter(
+					$chunk,
+					static fn (array $row): bool => !$contentHeadReader->isStopped(
+						ContentHeadReader::isCloudHandler($row['HANDLER_ID']),
+					),
+				),
+				'FILE_ID',
+			));
+			foreach ($chunk as $row)
+			{
+				$error = $this->findFormatPolicyErrorForDescendant($row, $actorId, $contentHeadReader);
+				if ($error === null)
+				{
+					$checkedFileIds[(int)$row['ID']] = (int)$row['FILE_ID'];
+
+					continue;
+				}
+
+				if ($error->getCode() !== File::ERROR_FORMAT_NOT_VERIFIED)
+				{
+					return $error;
+				}
+
+				$notVerifiedCount++;
+			}
+		}
+
+		if ($notVerifiedCount > 0)
+		{
+			return new Error(
+				Loc::getMessage('DISK_FOLDER_MODEL_ERROR_FORMAT_NOT_VERIFIED'),
+				File::ERROR_FORMAT_NOT_VERIFIED,
+				['notVerifiedCount' => $notVerifiedCount],
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Files of this subtree that keep content of their own, links left out.
+	 */
+	private function queryOwnFilesUnder(): OrmQuery
+	{
+		return self::queryOwnFiles()->where('PATH_CHILD.PARENT_ID', $this->id);
+	}
+
+	/**
+	 * Files that keep content of their own, links left out, wherever they lie.
+	 */
+	private static function queryOwnFiles(): OrmQuery
+	{
+		return ObjectTable::query()
+			->setSelect([
+				'ID',
+				'NAME',
+				'TYPE',
+				'REAL_OBJECT_ID',
+				'FILE_ID',
+				'STORAGE_ID',
+				'PARENT_ID',
+				'HANDLER_ID' => 'FILE_CONTENT.HANDLER_ID',
+			])
+			->where('TYPE', ObjectTable::TYPE_FILE)
+			->where('DELETED_TYPE', ObjectTable::DELETED_TYPE_NONE)
+			->whereColumn('REAL_OBJECT_ID', 'ID')
+		;
+	}
+
+	private function findFormatPolicyErrorForDescendant(
+		array $row,
+		int $actorId,
+		?ContentHeadReader $contentHeadReader = null,
+	): ?Error
+	{
+		$file = BaseObject::buildFromArray($row);
+		if (!$file instanceof File)
+		{
+			return null;
+		}
+
+		$error = $file->findFormatPolicyErrorForStored(
+			$actorId,
+			$contentHeadReader,
+			ContentHeadReader::isCloudHandler($row['HANDLER_ID']),
+		);
+
+		return $error === null ? null : self::createFormatPolicyErrorForObject($error, $file->getId());
+	}
+
+	private static function createFormatPolicyErrorForObject(Error $error, int $objectId): Error
+	{
+		return new Error($error->getMessage(), $error->getCode(), ['objectId' => $objectId]);
+	}
+
+	/**
+	 * Copies the folder with everything under it. What the descendants are written as comes from the
+	 * caller through $options; a descendant left behind fails the whole tree, and the transaction
+	 * takes back what was copied before it.
+	 */
+	protected function copyToInsideAuditTransaction(
+		Folder $targetFolder,
+		$updatedBy,
+		bool $generateUniqueName,
+		AuditTransaction $auditTransaction,
+		bool $publishRootAudit,
+		array $options = [],
+	): ?BaseObject
+	{
+		if ($this instanceof FolderLink)
+		{
+			return parent::copyToInsideAuditTransaction(
+				$targetFolder,
+				$updatedBy,
+				$generateUniqueName,
+				$auditTransaction,
+				$publishRootAudit,
+				$options,
+			);
+		}
+
+		$newRoot = $this->copyFolderNodeInsideAuditTransaction(
+			$targetFolder,
+			$updatedBy,
+			$generateUniqueName,
+			$auditTransaction,
+		);
 		if(!$newRoot)
 		{
 			return null;
@@ -859,6 +1568,11 @@ class Folder extends BaseObject
 			}
 
 			$item = BaseObject::buildFromArray($objectRow);
+			if ($item->isLink())
+			{
+				continue;
+			}
+
 			if(!isset($mapParentToNewParent[$item->getParentId()]))
 			{
 				return null;
@@ -868,22 +1582,89 @@ class Folder extends BaseObject
 			$newParentFolder = $mapParentToNewParent[$item->getParentId()];
 			if($item instanceof File)
 			{
-				/** @var \Bitrix\Disk\File $item */
-				$item->copyTo($newParentFolder, $updatedBy, $generateUniqueName);
+				$newFile = $item->copyToInsideAuditTransaction(
+					$newParentFolder,
+					$updatedBy,
+					$generateUniqueName,
+					$auditTransaction,
+					false,
+					self::resolveCopyOptionsOfFile($options, $item),
+				);
+				if(!$newFile)
+				{
+					$this->errorCollection->add($item->getErrors());
+
+					return null;
+				}
 			}
 			elseif ($item instanceof Folder)
 			{
-				/** @var \Bitrix\Disk\Folder $item */
-				$newFolder = $item->copyToInternal($newParentFolder, $updatedBy, $generateUniqueName);
+				$newFolder = $item->copyFolderNodeInsideAuditTransaction(
+					$newParentFolder,
+					$updatedBy,
+					$generateUniqueName,
+					$auditTransaction,
+				);
 				if(!$newFolder)
 				{
-					continue;
+					$this->errorCollection->add($item->getErrors());
+
+					return null;
 				}
 				$mapParentToNewParent[$item->getId()] = $newFolder;
 			}
 		}
 
+		if ($publishRootAudit)
+		{
+			$auditResult = (new AuditObjectEventProducer())->publishCopied($this, $newRoot, (int)$updatedBy);
+			if (!$this->applyAuditResult($auditResult))
+			{
+				return null;
+			}
+		}
+
 		return $newRoot;
+	}
+
+	/**
+	 * The refusal of the personal quota for the copy of this tree, or null when the copy is allowed.
+	 * The size is the one the copy writes into the target storage - the head versions of every file
+	 * under the folder - so the quota is asked once about the whole tree instead of file by file.
+	 *
+	 * The write node keeps its own check for every file: this point only spares the user a folder
+	 * copied without the files it was copied for.
+	 *
+	 * @param Folder $targetFolder Folder the tree is copied into.
+	 * @return Error|null
+	 */
+	private function findPersonalQuotaErrorForCopy(Folder $targetFolder): ?Error
+	{
+		$sizeToCopy = (int)$this->getSize();
+		if ($sizeToCopy <= 0)
+		{
+			return null;
+		}
+
+		// the target may be a link to a folder, and the copy is written into the storage it points at
+		return File::findPersonalQuotaErrorForSize(
+			$targetFolder->getRealObject()->getStorage(),
+			$sizeToCopy,
+			[WriteOperationContext::OPTION_KEY => WriteOperationContext::UserUpload],
+		);
+	}
+
+	private function copyFolderNodeInsideAuditTransaction(
+		Folder $targetFolder,
+		$updatedBy,
+		bool $generateUniqueName,
+		AuditTransaction $auditTransaction,
+	): ?Folder
+	{
+		return $targetFolder->addSubFolder([
+			'NAME' => $this->getName(),
+			'CREATED_BY' => $updatedBy,
+		], [], $generateUniqueName, $auditTransaction);
 	}
 
 	protected function copyToInternal(Folder $targetFolder, $updatedBy, $generateUniqueName = false)
@@ -1077,6 +1858,42 @@ class Folder extends BaseObject
 	}
 
 	/**
+	 * Returns the file of the folder with the same name: the case does not matter, diacritics do.
+	 */
+	public function getChildFileWithSameName(string $name): ?File
+	{
+		$id = $this->findChildIdWithSameName($name, ObjectTable::TYPE_FILE);
+
+		return $id ? File::loadById($id) : null;
+	}
+
+	/**
+	 * Returns the sub-folder of the folder with the same name: the case does not matter, diacritics do.
+	 */
+	public function getChildFolderWithSameName(string $name): ?Folder
+	{
+		$id = $this->findChildIdWithSameName($name, ObjectTable::TYPE_FOLDER);
+
+		return $id ? Folder::loadById($id) : null;
+	}
+
+	private function findChildIdWithSameName(string $name, int $type): ?int
+	{
+		$row = ObjectNameKey::findSameName(
+			[
+				'select' => ['ID', 'NAME'],
+				'filter' => [
+					'=PARENT_ID' => $this->getRealObjectId(),
+					'=TYPE' => $type,
+				],
+			],
+			$name,
+		);
+
+		return $row ? (int)$row['ID'] : null;
+	}
+
+	/**
 	 * Checks if folder has children.
 	 * @return bool
 	 * @throws ArgumentException
@@ -1166,6 +1983,30 @@ class Folder extends BaseObject
 	 */
 	public function markDeleted($deletedBy)
 	{
+		$context = AuditOperationContext::create(
+			actionKind: AuditOperationContext::ACTION_CASCADE_OPERATION,
+			cascadeRootTargetId: (string)$this->getId(),
+		);
+
+		return AuditOperationContextStack::runWithContext(
+			$context,
+			fn(): bool => $this->markDeletedTree($deletedBy),
+		);
+	}
+
+	protected function markDeletedInsideAuditTransaction(
+		$movedBy,
+		AuditTransaction $auditTransaction,
+	): bool
+	{
+		return $this->markDeletedTree($movedBy, $auditTransaction);
+	}
+
+	private function markDeletedTree(
+		$deletedBy,
+		?AuditTransaction $auditTransaction = null,
+	): bool
+	{
 		if ($this->deletedType == ObjectTable::DELETED_TYPE_ROOT)
 		{
 			return true;
@@ -1184,6 +2025,41 @@ class Folder extends BaseObject
 		$driver = Driver::getInstance();
 		$driver->getSubscriberManager()->preloadSharingsForSubtree($this);
 
+		//the root goes to the trash can first: a failure below never leaves descendants without a root
+		$success = $this->markDeletedNonRecursiveInternal(
+			$deletedBy,
+			ObjectTable::DELETED_TYPE_ROOT,
+			$auditTransaction,
+		);
+		if ($success)
+		{
+			$success = $this->markDeletedDescendants($deletedBy, $auditTransaction);
+		}
+
+		$finalizeDeletion = static function () use ($driver): void {
+			$driver->getDeletedLogManager()->finalize();
+			$driver->getDeletionNotifyManager()->send();
+		};
+		if ($auditTransaction !== null)
+		{
+			if ($success)
+			{
+				$auditTransaction->addAfterCommit($finalizeDeletion);
+			}
+		}
+		else
+		{
+			$finalizeDeletion();
+		}
+
+		return $success;
+	}
+
+	private function markDeletedDescendants(
+		$deletedBy,
+		?AuditTransaction $auditTransaction,
+	): bool
+	{
 		$parameters = array(
 			'select' => array(
 				'*',
@@ -1192,7 +2068,9 @@ class Folder extends BaseObject
 			'filter' => array(
 				'PATH_CHILD.PARENT_ID' => $this->id,
 			),
-			'order' => array('DEPTH_LEVEL' => 'DESC')
+			//a parent goes to the trash can before its children, so subscribers are taken from the cache of the
+			//parent instead of a query for parents, which skips the ones already marked deleted
+			'order' => array('DEPTH_LEVEL' => 'ASC')
 		);
 
 		$success = true;
@@ -1201,49 +2079,67 @@ class Folder extends BaseObject
 		{
 			if ($objectRow['ID'] == $this->id)
 			{
-				//to modify current object. Don't make another instance of $this->id
-				$object = $this;
+				continue;
+			}
+
+			/** @var Folder|File $object */
+			$object = BaseObject::buildFromArray($objectRow);
+			if ($object instanceof Folder)
+			{
+				/** @see \Bitrix\Disk\Folder::markDeletedNonRecursiveInternal */
+				$isMarked = $object->markDeletedNonRecursiveInternal(
+					$deletedBy,
+					ObjectTable::DELETED_TYPE_CHILD,
+					$auditTransaction,
+				);
+			}
+			elseif ($object instanceof File)
+			{
+				$isMarked = $object->markDeletedInternal(
+					$deletedBy,
+					ObjectTable::DELETED_TYPE_CHILD,
+					$auditTransaction,
+				);
 			}
 			else
 			{
-				$object = BaseObject::buildFromArray($objectRow);
+				continue;
 			}
 
-			/** @var Folder|File */
-			if($object instanceof Folder)
+			//one broken descendant must not stop the cascade, otherwise the rest of the subtree stays outside the trash can
+			if (!$isMarked)
 			{
-				$deleteType = ObjectTable::DELETED_TYPE_CHILD;
-				if ($objectRow['ID'] == $this->id)
+				$this->addDistinctErrors($object->getErrors());
+				$success = false;
+
+				//an audit transaction rolls the whole cascade back, so there is nothing left to mark
+				if ($auditTransaction !== null)
 				{
-					$deleteType = ObjectTable::DELETED_TYPE_ROOT;
+					break;
 				}
-
-				/** @see \Bitrix\Disk\Folder::markDeletedNonRecursiveInternal */
-				$success = $object->markDeletedNonRecursiveInternal($deletedBy, $deleteType);
-			}
-			elseif($object instanceof File)
-			{
-				$success = $object->markDeletedInternal($deletedBy, ObjectTable::DELETED_TYPE_CHILD);
-			}
-
-			if (!$success)
-			{
-				if ($object !== $this)
-				{
-					$this->errorCollection->add($object->getErrors());
-				}
-
-				break;
 			}
 		}
-
-		$driver->getDeletedLogManager()->finalize();
-		$driver->getDeletionNotifyManager()->send();
 
 		return $success;
 	}
 
-	protected function markDeletedNonRecursiveInternal($deletedBy, $deletedType = ObjectTable::DELETED_TYPE_ROOT)
+	//keeps one error per code: hundreds of descendants failing the same way must not fill the answer with copies
+	private function addDistinctErrors(array $errors): void
+	{
+		foreach ($errors as $error)
+		{
+			if ($this->errorCollection->getErrorByCode($error->getCode()) === null)
+			{
+				$this->errorCollection->setError($error);
+			}
+		}
+	}
+
+	protected function markDeletedNonRecursiveInternal(
+		$deletedBy,
+		$deletedType = ObjectTable::DELETED_TYPE_ROOT,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		if ($this->isDeletionRestricted($this->normalizeDeletedBy($deletedBy)))
 		{
@@ -1253,10 +2149,20 @@ class Folder extends BaseObject
 		}
 
 		$alreadyDeleted = $this->isDeleted();
-		$success = parent::markDeletedInternal($deletedBy, $deletedType);
+		$success = parent::markDeletedInternal($deletedBy, $deletedType, $auditTransaction);
 		if ($success && !$alreadyDeleted)
 		{
-			Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
+			$markDeletedLog = function () use ($deletedBy): void {
+				Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
+			};
+			if ($auditTransaction !== null)
+			{
+				$auditTransaction->addAfterCommit($markDeletedLog);
+			}
+			else
+			{
+				$markDeletedLog();
+			}
 		}
 
 		return $success;
@@ -1275,61 +2181,198 @@ class Folder extends BaseObject
 		}
 
 		$this->errorCollection->clear();
-
-		$parameters = array(
-			'select' => array(
-				'*',
-				'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL',
-			),
-			'filter' => array(
-				'PATH_CHILD.PARENT_ID' => $this->id,
-				'!==DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
-			),
-			'order' => array('DEPTH_LEVEL' => 'DESC')
+		$context = AuditOperationContext::create(
+			actionKind: AuditOperationContext::ACTION_CASCADE_OPERATION,
+			cascadeRootTargetId: (string)$this->getId(),
 		);
 
-		$objectIterator = FolderTable::getList(static::prepareGetListParameters($parameters));
-		foreach ($objectIterator as $objectRow)
+		return AuditOperationContextStack::runWithContext(
+			$context,
+			function () use ($restoredBy): bool {
+				$parameters = array(
+					'select' => array(
+						'*',
+						'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL',
+						'HANDLER_ID' => 'FILE_CONTENT.HANDLER_ID',
+					),
+					'filter' => array(
+						'PATH_CHILD.PARENT_ID' => $this->id,
+						'!==DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
+					),
+					'order' => array('DEPTH_LEVEL' => 'DESC')
+				);
+
+				$objectIterator = FolderTable::getList(static::prepareGetListParameters($parameters));
+				$formatPolicyErrors = [];
+				$notVerifiedCount = 0;
+				$contentHeadReader = $this->createContentHeadReaderForRestore((int)$restoredBy);
+				foreach ($this->readRowsInChunks($objectIterator, self::CONTENT_CHECK_CHUNK_SIZE) as $objectRows)
+				{
+					$contentHeadReader?->preloadFileRows(array_column(
+						array_filter(
+							$objectRows,
+							static fn (array $row): bool => (int)$row['TYPE'] === ObjectTable::TYPE_FILE
+								&& $row['ID'] == $row['REAL_OBJECT_ID']
+								&& !$contentHeadReader->isStopped(
+									ContentHeadReader::isCloudHandler($row['HANDLER_ID']),
+								),
+						),
+						'FILE_ID',
+					));
+
+					foreach ($objectRows as $objectRow)
+					{
+						$this->restoreDescendantRow(
+							$objectRow,
+							$restoredBy,
+							$contentHeadReader,
+							$formatPolicyErrors,
+							$notVerifiedCount,
+						);
+					}
+				}
+
+				if ($notVerifiedCount > 0)
+				{
+					$formatPolicyErrors[] = new Error(
+						Loc::getMessage('DISK_FOLDER_MODEL_ERROR_FORMAT_NOT_VERIFIED_LEFT_IN_TRASH'),
+						File::ERROR_FORMAT_NOT_VERIFIED,
+						['notVerifiedCount' => $notVerifiedCount],
+					);
+				}
+
+				$needRecalculate = $this->deletedType == ObjectTable::DELETED_TYPE_CHILD;
+				$statusRestoreNonRecursive = $this->restoreInternal($restoredBy);
+				if($statusRestoreNonRecursive && $needRecalculate)
+				{
+					$this->recalculateDeletedTypeAfterRestore($restoredBy);
+				}
+
+				if($statusRestoreNonRecursive)
+				{
+					Driver::getInstance()->sendChangeStatusToSubscribers($this);
+				}
+
+				// added last: the restore of the folder itself starts from a clean collection
+				$this->errorCollection->add($formatPolicyErrors);
+
+				return $statusRestoreNonRecursive;
+			},
+		);
+	}
+
+	/**
+	 * A file the format policy of the one restoring restricts stays in the trash can as a root of its
+	 * own, and its refusal is collected; everything else under the folder is restored. A file whose
+	 * content the spent read budget of its kind of storage leaves unchecked stays there the same way
+	 * and is only counted: the files left unchecked are told of by one error of the whole restore.
+	 *
+	 * @param Error[] $formatPolicyErrors
+	 */
+	private function restoreDescendantRow(
+		array $objectRow,
+		$restoredBy,
+		?ContentHeadReader $contentHeadReader,
+		array &$formatPolicyErrors,
+		int &$notVerifiedCount,
+	): void
+	{
+		if ($objectRow['ID'] == $this->id)
 		{
-			if ($objectRow['ID'] == $this->id)
+			return;
+		}
+
+		$object = BaseObject::buildFromArray($objectRow);
+		// the journal takes one record on the root of the restore, below
+		$object->journalCascadeChild = true;
+
+		/** @var Folder|File */
+		if($object instanceof Folder)
+		{
+			/** @see \Bitrix\Disk\Folder::restoreNonRecursive */
+			$object->restoreNonRecursive($restoredBy);
+		}
+		elseif($object instanceof File)
+		{
+			$formatPolicyError = $object->isLink()
+				? null
+				: $object->findFormatPolicyErrorForStored(
+					(int)$restoredBy,
+					$contentHeadReader,
+					ContentHeadReader::isCloudHandler($objectRow['HANDLER_ID'] ?? null),
+				)
+			;
+			if ($formatPolicyError)
 			{
-				continue;
+				if ($formatPolicyError->getCode() === File::ERROR_FORMAT_NOT_VERIFIED)
+				{
+					$notVerifiedCount++;
+				}
+				else
+				{
+					$formatPolicyErrors[] = self::createFormatPolicyErrorForObject(
+						$formatPolicyError,
+						(int)$object->getId(),
+					);
+				}
+				// the file stays in the trash can as a root of its own, the folder above it is restored
+				if (!$object->keepInTrashCanAsRoot())
+				{
+					array_push($formatPolicyErrors, ...$object->getErrors());
+				}
+
+				return;
 			}
 
-			$object = BaseObject::buildFromArray($objectRow);
-			// the journal takes one record on the root of the restore, below
-			$object->journalCascadeChild = true;
+			$object->restoreInternal($restoredBy);
+		}
+	}
 
-			/** @var Folder|File */
-			if($object instanceof Folder)
+	/**
+	 * The content of the restored files is read by one reader for the whole restore, so the files
+	 * share its budget and their rows of b_file are loaded a chunk at a time. No reader is needed
+	 * when the policy of the one restoring is decided by the names alone.
+	 */
+	protected function createContentHeadReaderForRestore(int $restoredBy): ?ContentHeadReader
+	{
+		$needsContentHead = File::getFormatPolicyService()->needsContentHead(
+			WriteOperationContext::StoredContentMove,
+			$restoredBy > 0 ? $restoredBy : null,
+		);
+
+		return $needsContentHead ? new ContentHeadReader() : null;
+	}
+
+	/**
+	 * @return \Generator<array[]> Rows of the iterator, this many at a time.
+	 */
+	private function readRowsInChunks(iterable $rows, int $chunkSize): \Generator
+	{
+		$chunk = [];
+		foreach ($rows as $row)
+		{
+			$chunk[] = $row;
+			if (count($chunk) >= $chunkSize)
 			{
-				/** @see \Bitrix\Disk\Folder::restoreNonRecursive */
-				$object->restoreNonRecursive($restoredBy);
-			}
-			elseif($object instanceof File)
-			{
-				$object->restoreInternal($restoredBy);
+				yield $chunk;
+				$chunk = [];
 			}
 		}
 
-		$needRecalculate = $this->deletedType == ObjectTable::DELETED_TYPE_CHILD;
-		$statusRestoreNonRecursive = $this->restoreInternal($restoredBy);
-		if($statusRestoreNonRecursive && $needRecalculate)
+		if ($chunk)
 		{
-			$this->recalculateDeletedTypeAfterRestore($restoredBy);
+			yield $chunk;
 		}
-
-		if($statusRestoreNonRecursive)
-		{
-			Driver::getInstance()->sendChangeStatusToSubscribers($this);
-		}
-
-		return $statusRestoreNonRecursive;
 	}
 
 	protected function restoreNonRecursive($restoredBy)
 	{
 		return parent::restoreInternal($restoredBy);
+	}
+
+	private static function getStorageUsageCounter(): StorageUsageCounter
+	{
+		return ServiceLocator::getInstance()->get(StorageUsageCounter::class);
 	}
 
 	/**
@@ -1355,93 +2398,140 @@ class Folder extends BaseObject
 			}
 		}
 
-		$parameters = array(
-			'select' => array(
-				'*',
-				'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL',
-			),
-			'filter' => array(
-				'PATH_CHILD.PARENT_ID' => $this->id,
-			),
-			'order' => array('DEPTH_LEVEL' => 'DESC')
+		$context = AuditOperationContext::create(
+			actionKind: AuditOperationContext::ACTION_CASCADE_OPERATION,
+			cascadeRootTargetId: (string)$this->getId(),
 		);
+		$rootSnapshot = (new AuditSnapshotBuilder())->buildObjectSnapshot($this);
 
-		// One record on the root of the cascade. Its audience is taken here, because the rights it is
-		// read from are torn down object by object below; the record itself is published after the
-		// loop, once the tree is provably gone. A cascade that broke halfway would otherwise order the
-		// client to forget a folder the portal goes on holding; what such a cascade did take away is
-		// buried object by object instead, with the same audience.
-		$publishesTombstone = !$this->isLink();
-		$tombstoneAudience = $publishesTombstone ? $this->captureTombstoneAudience() : null;
+		return AuditOperationContextStack::runWithContext(
+			$context,
+			function () use ($deletedBy, $bypassDeletionRestriction, $rootSnapshot): bool {
+				$parameters = array(
+					'select' => array(
+						'*',
+						'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL',
+					),
+					'filter' => array(
+						'PATH_CHILD.PARENT_ID' => $this->id,
+					),
+					'order' => array('DEPTH_LEVEL' => 'DESC')
+				);
 
-		// What the loop did take away, remembered for the records a broken cascade owes them below.
-		$goneFolderIds = [];
-		$goneFileIds = [];
+				// One record on the root of the cascade, and one more on every descendant someone outside the
+				// audience of the root holds by a right of the descendant itself. Both audiences are taken
+				// here, because the rights they are read from are torn down object by object below; the
+				// records are published after the loop, once the tree is provably gone. A cascade that broke
+				// halfway would otherwise order the client to forget a folder the portal goes on holding;
+				// what such a cascade did take away is buried object by object instead, for the audience of
+				// the root joined by the own codes of the object.
+				$publishesTombstone = !$this->isLink();
+				$tombstoneAudience = $publishesTombstone ? $this->captureTombstoneAudience() : null;
+				$descendantAudience = $publishesTombstone
+					? $this->getDescendantTombstonePublisher()->capture($this, $tombstoneAudience)
+					: []
+				;
 
-		$success = true;
-		$objectIterator = FolderTable::getList(static::prepareGetListParameters($parameters));
-		foreach ($objectIterator as $objectRow)
-		{
-			if ($objectRow['ID'] == $this->id)
-			{
-				//to modify current object. Don't make another instance of $this->id
-				$object = $this;
-			}
-			else
-			{
-				$object = BaseObject::buildFromArray($objectRow);
-			}
-			$object->journalCascadeChild = true;
+				// What the loop did take away, remembered for the records a broken cascade owes them below.
+				$goneFolderIds = [];
+				$goneFileIds = [];
 
-			/** @var Folder|File */
-			if($object instanceof Folder)
-			{
-				/** @see \Bitrix\Disk\Folder::deleteNonRecursive */
-				$success = $object->deleteNonRecursive($deletedBy, $bypassDeletionRestriction);
-				if ($success && !$object->isLink())
+				$success = true;
+				$objectIterator = FolderTable::getList(static::prepareGetListParameters($parameters));
+				// Every file of the subtree counts the versions it takes away, so the whole tree moves the
+				// counter of the employee by a single update instead of one per file. This is the operation
+				// the refusal of the quota sends them to do, so it is the one that must not cost a read and
+				// a write of the counter row per file.
+				$usageCounter = self::getStorageUsageCounter();
+				$usageCounter->openAccumulator();
+				try
 				{
-					$goneFolderIds[] = (int)$object->getId();
+					foreach ($objectIterator as $objectRow)
+					{
+						if ($objectRow['ID'] == $this->id)
+						{
+							//to modify current object. Don't make another instance of $this->id
+							$object = $this;
+						}
+						else
+						{
+							$object = BaseObject::buildFromArray($objectRow);
+						}
+						$object->journalCascadeChild = true;
+
+						/** @var Folder|File */
+						if($object instanceof Folder)
+						{
+							if ($object instanceof FolderLink)
+							{
+								// as the direct deletion of the link does, whatever the restriction
+								$object->declineSharingOfTheLink($deletedBy);
+							}
+							/** @see \Bitrix\Disk\Folder::deleteNonRecursive */
+							$success = $object->deleteNonRecursive(
+								$deletedBy,
+								$bypassDeletionRestriction,
+								$object === $this ? $rootSnapshot : null,
+							);
+							if ($success && !$object->isLink())
+							{
+								$goneFolderIds[] = (int)$object->getId();
+							}
+						}
+						elseif($object instanceof File)
+						{
+							/** @see \Bitrix\Disk\File::delete */
+							$success = $object->delete($deletedBy);
+							if ($success && !$object->isLink())
+							{
+								$goneFileIds[] = (int)$object->getId();
+							}
+						}
+
+						if (!$success)
+						{
+							if ($object !== $this)
+							{
+								$this->errorCollection->add($object->getErrors());
+							}
+
+							break;
+						}
+					}
+
 				}
-			}
-			elseif($object instanceof File)
-			{
-				/** @see \Bitrix\Disk\File::delete */
-				$success = $object->delete($deletedBy);
-				if ($success && !$object->isLink())
+				finally
 				{
-					$goneFileIds[] = (int)$object->getId();
+					// The scope is closed on a failure of the tree as well: what it summed reaches the
+					// database only on the closing, so a tree that broke halfway still counts what it took.
+					$usageCounter->flushAccumulator();
 				}
-			}
 
-			if (!$success)
-			{
-				if ($object !== $this)
+				if (!$success)
 				{
-					$this->errorCollection->add($object->getErrors());
+					$this->publishTombstonesOfTheCascadeThatBroke(
+						$goneFolderIds,
+						$goneFileIds,
+						$deletedBy,
+						$tombstoneAudience,
+						$descendantAudience,
+					);
+
+					return false;
 				}
 
-				break;
-			}
-		}
+				if ($publishesTombstone)
+				{
+					$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
+					$this->getDescendantTombstonePublisher()->publishGone(
+						$descendantAudience,
+						$this->normalizeDeletedBy($deletedBy),
+					);
+				}
 
-		if (!$success)
-		{
-			$this->publishTombstonesOfTheCascadeThatBroke(
-				$goneFolderIds,
-				$goneFileIds,
-				$deletedBy,
-				$tombstoneAudience,
-			);
-
-			return false;
-		}
-
-		if ($publishesTombstone)
-		{
-			$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
-		}
-
-		return true;
+				return true;
+			},
+		);
 	}
 
 	/**
@@ -1452,25 +2542,32 @@ class Folder extends BaseObject
 	 * the client to forget a folder the portal goes on holding - while everything the loop had reached
 	 * by then is gone all the same, and nothing else in the contour goes looking for it.
 	 *
-	 * The audience is the one taken on the root before the loop: the rights these objects were visible
-	 * by are torn down together with them, so by now there is nothing left to read. A descendant that
-	 * carried rights of its own is therefore reached only as far as the audience of the root goes.
+	 * The audiences are the ones taken before the loop: the rights these objects were visible by are
+	 * torn down together with them, so by now there is nothing left to read. Every object is addressed
+	 * to the audience of the root, and a descendant that carried rights of its own is addressed to the
+	 * codes of those rights as well, captured over the closure of the subtree
+	 * ({@see \Bitrix\Disk\Internal\Service\Sync\Journal\DescendantTombstonePublisher}). What the portal
+	 * still holds is buried for nobody.
 	 * Whoever held a file of the subtree by an interaction alone is buried by a record of their own,
 	 * published row by row while the rows were still there
 	 * ({@see \Bitrix\Disk\Internal\Service\Sync\Journal\TrackedSetCleanupPublisher}).
 	 *
 	 * @param int[] $goneFolderIds
 	 * @param int[] $goneFileIds
-	 * @param string[]|null $audienceCodes
+	 * @param string[]|null $audienceCodes the audience of the root
+	 * @param array<int, array{resourceType: string, codes: list<string>}> $descendantAudience the own
+	 *        codes of descendants outside the audience of the root
 	 */
 	private function publishTombstonesOfTheCascadeThatBroke(
 		array $goneFolderIds,
 		array $goneFileIds,
 		$deletedBy,
 		?array $audienceCodes,
+		array $descendantAudience,
 	): void
 	{
 		$writer = $this->getJournalWriter();
+		$descendantPublisher = $this->getDescendantTombstonePublisher();
 		$gone = [
 			ChangeRecord::RESOURCE_FOLDER => $goneFolderIds,
 			ChangeRecord::RESOURCE_FILE => $goneFileIds,
@@ -1485,13 +2582,24 @@ class Folder extends BaseObject
 					$objectId,
 					TombstoneReason::Deleted,
 					$this->normalizeDeletedBy($deletedBy),
-					$audienceCodes,
+					$descendantPublisher->audienceOfGoneObject($descendantAudience, $objectId, $audienceCodes),
 				);
 			}
 		}
 	}
 
-	protected function deleteNonRecursive($deletedBy, bool $bypassDeletionRestriction = false)
+	protected function getDescendantTombstonePublisher(): DescendantTombstonePublisher
+	{
+		return $this->descendantTombstonePublisher ??= new DescendantTombstonePublisher(
+			journal: $this->getJournalWriter(),
+		);
+	}
+
+	protected function deleteNonRecursive(
+		$deletedBy,
+		bool $bypassDeletionRestriction = false,
+		$rootSnapshot = null,
+	)
 	{
 		if (!$bypassDeletionRestriction && $this->isDeletionRestricted($this->normalizeDeletedBy($deletedBy)))
 		{
@@ -1513,44 +2621,73 @@ class Folder extends BaseObject
 			: []
 		;
 
-		foreach($this->getSharingsAsReal() as $sharing)
-		{
-			$sharing->delete($deletedBy);
-		}
+		$rootSnapshot ??= (new AuditSnapshotBuilder())->buildObjectSnapshot($this);
+		$deleted = $this->runAuditCoveredMutation(function () use (
+			$deletedBy,
+			$bypassDeletionRestriction,
+			$rootSnapshot,
+			$publishesTombstone,
+			$tombstoneAudience,
+		): bool {
+			foreach($this->getSharingsAsReal() as $sharing)
+			{
+				$sharing->delete($deletedBy);
+			}
 
-		//with status unreplied, declined (not approved)
-		$success = SharingTable::deleteByFilter(array(
-			'REAL_OBJECT_ID' => $this->id,
-		));
+			//with status unreplied, declined (not approved)
+			$success = SharingTable::deleteByFilter(array(
+				'REAL_OBJECT_ID' => $this->id,
+			));
 
-		if(!$success)
+			if(!$success)
+			{
+				return false;
+			}
+
+			SimpleRightTable::deleteBatch(array('OBJECT_ID' => $this->id));
+
+			$success = RightTable::deleteByFilter(array(
+				'OBJECT_ID' => $this->id,
+			));
+
+			if(!$success)
+			{
+				return false;
+			}
+
+			$resultDelete = FolderTable::delete($this->id);
+			if(!$resultDelete->isSuccess())
+			{
+				return false;
+			}
+
+			if ($publishesTombstone)
+			{
+				$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
+			}
+
+			$auditResult = (new AuditObjectEventProducer())->publishPermanentlyDeleted(
+				$this,
+				(int)$deletedBy,
+				$bypassDeletionRestriction ? 'bypass' : 'object',
+				$rootSnapshot,
+			);
+			if (!$auditResult->isSuccess())
+			{
+				$this->errorCollection->add($auditResult->getErrors());
+
+				return false;
+			}
+
+			return true;
+		});
+		if(!$deleted)
 		{
 			return false;
 		}
 
-		SimpleRightTable::deleteBatch(array('OBJECT_ID' => $this->id));
-
-		$success = RightTable::deleteByFilter(array(
-			'OBJECT_ID' => $this->id,
-		));
-
-		if(!$success)
-		{
-			return false;
-		}
 		Driver::getInstance()->getIndexManager()->dropIndex($this);
 		Driver::getInstance()->getDeletedLogManager()->mark($this, $deletedBy);
-
-		$resultDelete = FolderTable::delete($this->id);
-		if(!$resultDelete->isSuccess())
-		{
-			return false;
-		}
-
-		if ($publishesTombstone)
-		{
-			$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
-		}
 
 		if($this->isLink())
 		{

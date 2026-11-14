@@ -177,7 +177,10 @@ class Provider
 					{
 						$errorList[] = $res->getErrorMessages();
 					}
-					else if (ElementCodeType::IN_WEBHOOK->value === $integration['ELEMENT_CODE'])
+					else if (
+						ElementCodeType::IN_WEBHOOK->value === $integration['ELEMENT_CODE']
+						&& $integration['PASS'] !== null
+					)
 					{
 						if (HoldEntity::is(HoldEntity::TYPE_WEBHOOK, $integration['PASS']))
 						{
@@ -1388,42 +1391,21 @@ class Provider
 
 	private static function deleteWebHook($id)
 	{
-		$result = false;
-		$passData = PasswordTable::getList(
+		$permData = PermissionTable::getList(
 			[
 				'filter' => [
-					'=ID' => $id,
+					'=PASSWORD_ID' => $id
 				],
 				'select' => [
-					'PASSWORD',
-					'USER_ID',
 					'ID'
-				],
-				'limit' => 1
+				]
 			]
 		);
-		if ($passwordData = $passData->fetch())
+		while ($scopeItem = $permData->fetch())
 		{
-			$permData = PermissionTable::getList(
-				[
-					'filter' => [
-						'=PASSWORD_ID' => $passwordData['ID']
-					],
-					'select' => [
-						'ID'
-					]
-				]
-			);
-			while ($scopeItem = $permData->fetch())
-			{
-				PermissionTable::delete($scopeItem['ID']);
-			}
-			$deleteResult = PasswordTable::delete($passwordData['ID']);
-			if ($deleteResult->isSuccess())
-			{
-				$result = true;
-			}
+			PermissionTable::delete($scopeItem['ID']);
 		}
-		return $result;
+
+		return !PasswordTable::getRowById($id) || PasswordTable::delete($id)->isSuccess();
 	}
 }

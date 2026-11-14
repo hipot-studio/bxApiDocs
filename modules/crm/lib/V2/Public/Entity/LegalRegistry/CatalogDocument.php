@@ -23,6 +23,8 @@ final readonly class CatalogDocument
 	 * @param ?DateTimeImmutable $createdAt
 	 * @param ?int $createdBy
 	 * @param list<CatalogVersion> $versions
+	 * @param ?CatalogMetadata $metadata
+	 * @param ?int $revision
 	 * @throws InvalidArgumentException
 	 */
 	public function __construct(
@@ -34,9 +36,11 @@ final readonly class CatalogDocument
 		public ?DateTimeImmutable $createdAt = null,
 		public ?int $createdBy = null,
 		array $versions = [],
+		public ?CatalogMetadata $metadata = null,
+		public ?int $revision = null,
 	)
 	{
-		foreach ([$id, $originId, $createdBy] as $value)
+		foreach ([$id, $originId, $createdBy, $revision] as $value)
 		{
 			if ($value !== null && ($value <= 0 || $value > 2147483647))
 			{
@@ -70,5 +74,29 @@ final readonly class CatalogDocument
 			$snapshot[] = $version;
 		}
 		$this->versions = $snapshot;
+	}
+
+	/** A monotone, JavaScript-safe token for one document/version card. */
+	public function cardRevision(?CatalogVersion $version = null): int
+	{
+		if ($this->id === null || $this->revision === null
+			|| ($version !== null && ($version->documentId !== $this->id || $version->revision === null)))
+		{
+			throw new InvalidArgumentException('Invalid catalog card revision.');
+		}
+
+		if ($version === null)
+		{
+			return $this->revision + (int)$this->archived;
+		}
+
+		$state = match ($version->state)
+		{
+			'draft' => 0,
+			'published' => 1,
+			'archived' => 2,
+		};
+
+		return $this->revision + $version->revision + $state + (int)$this->archived - 1;
 	}
 }

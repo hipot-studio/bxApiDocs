@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class OpenedSetting extends AbstractSetting
 {
-	public const CODE = 'crm.lead.opened';
+	public const ID = 'crm.lead.opened';
 
 	private readonly LeadSettings $leadSettings;
 
@@ -26,18 +26,20 @@ final class OpenedSetting extends AbstractSetting
 		$this->leadSettings = $leadSettings ?? LeadSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'lead_opened_flag',
 		);
 	}
 

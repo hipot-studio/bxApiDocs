@@ -5,6 +5,8 @@ use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
 use Bitrix\Bizproc\Internal\Service\Pilot\StartFormParameters;
 use Bitrix\Bizproc\Public\Provider\PilotVisibilityProvider;
 use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
+use Bitrix\Bizproc\Public\Dto\ManualStartContext;
+use Bitrix\Bizproc\Public\Service\WorkflowTemplate\ManualStartPolicyService;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Enum\Face;
@@ -76,16 +78,42 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 	protected function processBeforeAction($actionName)
 	{
 		parent::processBeforeAction($actionName);
-		if (!CBPDocument::canUserOperateDocument(
-			CBPCanUserOperateOperation::StartWorkflow,
-			$this->getUser()->getID(),
-			$this->arResult['DOCUMENT_DATA']['DISK']['DOCUMENT_ID'],
-			array()))
+		if (!$this->canReachStartsOfFile())
 		{
 			$this->showAccessDenied();
 			return false;
 		}
 		return true;
+	}
+
+	private function canReachStartsOfFile(): bool
+	{
+		$diskDocument = $this->arResult['DOCUMENT_DATA']['DISK'];
+		$currentUserId = (int)$this->getUser()->getID();
+
+		if (CBPDocument::canUserOperateDocument(
+			CBPCanUserOperateOperation::StartWorkflow,
+			$currentUserId,
+			$diskDocument['DOCUMENT_ID'],
+			array()))
+		{
+			return true;
+		}
+
+		$manualStartAccess = $this->createManualStartAccess();
+		if ($manualStartAccess === null)
+		{
+			return false;
+		}
+
+		return $manualStartAccess
+			->canReachManualStarts(
+				$currentUserId,
+				$diskDocument['DOCUMENT_TYPE'],
+				$diskDocument['DOCUMENT_ID'],
+				ManualStartContext::webEntry(Driver::INTERNAL_MODULE_ID, ManualStartSurface::DiskFile),
+			)
+		;
 	}
 
 	protected function processActionDefault()
@@ -114,27 +142,77 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 		$currentUserId = (int)$this->getUser()->getID();
 		$visibilityFilter = (new PilotVisibilityProvider())->getVisibilityFilter($currentUserId);
 		$startFormParameters = new StartFormParameters();
+		$manualStartAccess = $this->createManualStartAccess();
 
 		foreach($this->arResult['DOCUMENT_DATA'] as $nameModule => $data)
 		{
 			$manualStartSurface = $this->getManualStartSurface($nameModule);
+			$templateFilter = array_merge(
+				array('DOCUMENT_TYPE' => $data['DOCUMENT_TYPE'], 'ACTIVE' => 'Y'),
+				$visibilityFilter
+			);
+
+			$context = $manualStartAccess !== null
+				? ManualStartContext::webEntry(Driver::INTERNAL_MODULE_ID, $manualStartSurface)
+				: null
+			;
+
+			// the rights of the whole list are warmed up by a light query, so the full rows are still read by a stream
+			if ($manualStartAccess !== null && $manualStartAccess->isModelActiveOn($data['DOCUMENT_TYPE'], $context))
+			{
+				$templateTypes = array();
+				$templateTypeObject = CBPWorkflowTemplateLoader::getList(
+					array(),
+					$templateFilter,
+					false,
+					false,
+					array('ID', 'TYPE')
+				);
+				while ($templateType = $templateTypeObject->fetch())
+				{
+					$templateTypes[$templateType['ID']] = $templateType['TYPE'];
+				}
+
+				$manualStartAccess->prewarm(
+					$currentUserId,
+					$templateTypes,
+					$data['DOCUMENT_TYPE'],
+					$context,
+				);
+			}
+
 			$workflowTemplateObject = CBPWorkflowTemplateLoader::getList(
 				array(),
-				array_merge(
-					array('DOCUMENT_TYPE' => $data['DOCUMENT_TYPE'], 'ACTIVE' => 'Y'),
-					$visibilityFilter
-				),
+				$templateFilter,
 				false,
 				false,
-				array('ID', 'NAME', 'DESCRIPTION', 'MODIFIED', 'USER_ID', 'PARAMETERS')
+				array('ID', 'NAME', 'DESCRIPTION', 'MODIFIED', 'USER_ID', 'PARAMETERS', 'TYPE')
 			);
 			while ($workflowTemplate = $workflowTemplateObject->getNext())
 			{
-				if (!CBPDocument::canUserOperateDocument(
-					CBPCanUserOperateOperation::StartWorkflow,
-					$currentUserId,
-					$data['DOCUMENT_ID'],
-					array())):
+				$templateId = (int)$workflowTemplate['ID'];
+				$isPolicyApplied = $manualStartAccess !== null && $manualStartAccess->isPolicyApplied(
+					$templateId,
+					$data['DOCUMENT_TYPE'],
+					$context,
+					(string)($workflowTemplate['TYPE'] ?? ''),
+				);
+				$canStart = $isPolicyApplied
+					? $manualStartAccess->canStart(
+						$currentUserId,
+						$templateId,
+						$data['DOCUMENT_TYPE'],
+						$data['DOCUMENT_ID'],
+						array('WorkflowTemplateId' => $templateId),
+					)
+					: CBPDocument::canUserOperateDocument(
+						CBPCanUserOperateOperation::StartWorkflow,
+						$currentUserId,
+						$data['DOCUMENT_ID'],
+						array(),
+					)
+				;
+				if (!$canStart):
 					continue;
 				endif;
 				$workflowTemplate['PARAMETERS'] = $startFormParameters->forInitiator(
@@ -186,8 +264,11 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 			$canStartWorkflow = false;
 
 			if (
-				count($workflowTemplate['PARAMETERS']) <= 0
-				|| ($this->request->isPost() && $this->request->getPost('DoStartParamWorkflow') <> '' && check_bitrix_sessid())
+				check_bitrix_sessid()
+				&& (
+					count($workflowTemplate['PARAMETERS']) <= 0
+					|| ($this->request->isPost() && $this->request->getPost('DoStartParamWorkflow') <> '')
+				)
 			)
 			{
 				$prepareResponse = (new WorkflowTemplateService())->prepareStartParameters(
@@ -221,7 +302,27 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 
 			if ($canStartWorkflow)
 			{
-				if (class_exists(StarterService::class))
+				$isManualStartRefused =
+					$manualStartAccess !== null
+					&& $manualStartAccess->isPolicyApplied(
+						(int)$this->arParams['TEMPLATE_ID'],
+						$documentParameters['DOCUMENT_TYPE'],
+						ManualStartContext::webEntry(Driver::INTERNAL_MODULE_ID, $manualStartSurface),
+					)
+					&& !$manualStartAccess->canStart(
+						$currentUserId,
+						(int)$this->arParams['TEMPLATE_ID'],
+						$documentParameters['DOCUMENT_TYPE'],
+						$documentParameters['DOCUMENT_ID'],
+						['WorkflowTemplateId' => (int)$this->arParams['TEMPLATE_ID']],
+					)
+				;
+
+				if ($isManualStartRefused)
+				{
+					$startErrors = [['code' => 'ACCESS_DENIED', 'message' => 'Access Denied!']];
+				}
+				elseif (class_exists(StarterService::class))
 				{
 					$starter = (new StarterService())->getStarterForManualDocumentScenario(
 						templateIds: [$this->arParams['TEMPLATE_ID']],
@@ -314,6 +415,14 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 		{
 			$this->arResult['SHOW_MODE'] = 'SelectWorkflow';
 		}
+	}
+
+	/**
+	 * The launch rights model ships with bizproc 26.2100.0; an older bizproc keeps the plain document right.
+	 */
+	private function createManualStartAccess(): ?ManualStartPolicyService
+	{
+		return class_exists(ManualStartPolicyService::class) ? new ManualStartPolicyService() : null;
 	}
 
 	private function getManualStartSurface(string $nameModule): ManualStartSurface

@@ -310,7 +310,30 @@ class FileCollection extends EntityCollection implements DateFilterable
 
 	public function loadParams(): void
 	{
-		ParamCollection::loadByFileIds($this->getIds());
+		ParamCollection::loadByFileIds($this->getParamFileIds());
+	}
+
+	/**
+	 * A symlink carries the params of its real object, so a batch warmed by the ids of the elements alone
+	 * would leave every link out of it and cost a query per link.
+	 *
+	 * @return int[]
+	 */
+	private function getParamFileIds(): array
+	{
+		$fileIds = $this->getIds();
+
+		foreach ($this as $file)
+		{
+			$realFileId = (int)$file->getDiskFile()?->getRealObjectId();
+
+			if ($realFileId > 0)
+			{
+				$fileIds[$realFileId] = $realFileId;
+			}
+		}
+
+		return $fileIds;
 	}
 
 	public function fillTranscriptions(): self

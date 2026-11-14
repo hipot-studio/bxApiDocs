@@ -7,11 +7,14 @@ namespace Bitrix\Crm\V2\Internal\Service\LegalRegistry;
 use Bitrix\Crm\V2\Public\Entity\LegalRegistry\CatalogVersion;
 use Bitrix\Crm\V2\Public\Entity\LegalRegistry\ExpiryRule;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\UserConsent\Agreement;
 use Bitrix\Main\UserConsent\ConsentUrl;
+use Bitrix\Main\UserConsent\DataProvider;
+use Bitrix\Main\UserConsent\Intl;
 use Bitrix\Main\UserConsent\Text;
 
-/** Sanctioned one-time snapshot of current Main content; never copies consent history. */
+/** In-memory snapshots of Main agreement content; never copies consent history. */
 class MainAgreementSnapshotGateway
 {
 	public static function getInstance(): self
@@ -42,46 +45,7 @@ class MainAgreementSnapshotGateway
 		$schema = [];
 		if ($data['TYPE'] === Agreement::TYPE_STANDARD)
 		{
-			$snapshot = $this->standardSnapshot($agreement);
-			$static = [];
-			foreach ($snapshot['values'] as $key => $value)
-			{
-				$key = mb_strtolower((string)$key);
-				if ($key !== 'fields') { $static[$key] = $value; }
-			}
-			$staticSchema = [];
-			foreach ($static as $key => $value)
-			{
-				$staticSchema[$key] = match (true)
-				{
-					is_array($value) => 'string[]', is_bool($value) => 'boolean',
-					is_int($value) => 'integer', is_float($value) => 'number',
-					default => 'string',
-				};
-			}
-			(new VersionRenderer())->validateAgainstSchema($staticSchema, $static);
-			foreach ($static as $value)
-			{
-				foreach (is_array($value) ? $value : [$value] as $literal)
-				{
-					if (preg_match('/%(?:fields|cut\.fields\.(?:start|end))%/', (string)$literal) === 1)
-					{
-						// A static literal cannot become an indistinguishable frozen runtime token.
-						throw new \InvalidArgumentException('Ambiguous static snapshot.');
-					}
-				}
-			}
-
-			[$protected, $tokens] = $this->protectRuntime($snapshot['template']);
-			$template = strtr(trim(Text::replace($protected, $static, true)), $tokens);
-			$rawLabel = Text::replace($snapshot['label'], $static);
-			$hasRuntimeLabel = preg_match('/%(?:fields|cut\.fields\.(?:start|end))%/', $rawLabel) === 1;
-			$label = $this->freezeLabel($agreement, $rawLabel);
-			if ($hasRuntimeLabel || preg_match('/%(?:fields|cut\.fields\.(?:start|end))%/', $template) === 1)
-			{
-				$schema = ['fields' => 'string[]'];
-			}
-			if ($agreement->isAgreementTextHtml()) { $template = VersionRenderer::sanitizeHtml($template); }
+			[$template, $label, $schema] = $this->freezeStandard($agreement);
 		}
 		else
 		{
@@ -93,6 +57,101 @@ class MainAgreementSnapshotGateway
 		(new VersionRenderer())->validateContent($version);
 
 		return ['name' => (string)$data['NAME'], 'version' => $version];
+	}
+
+	public function captureDraft(CatalogVersion $draft): CatalogVersion
+	{
+		$settings = $draft->draftSettings;
+		if ($settings?->type !== Agreement::TYPE_STANDARD)
+		{
+			throw new \InvalidArgumentException('Standard draft settings required.');
+		}
+		if ($settings->provider !== null && DataProvider::getByCode($settings->provider) === null)
+		{
+			throw new \InvalidArgumentException('Unknown consent provider.');
+		}
+		if ($draft->displayUrl !== null && !ConsentUrl::isAllowed($draft->displayUrl))
+		{
+			throw new \InvalidArgumentException('Invalid snapshot URL.');
+		}
+		$agreement = new class($draft) extends Agreement {
+			private array $draftFields;
+
+			public function __construct(CatalogVersion $draft)
+			{
+				$this->errors = new ErrorCollection();
+				$this->intl = new Intl();
+				$this->intl->load($draft->languageId);
+				$this->draftFields = $draft->draftSettings->templateFields;
+				$this->setData([
+					'TYPE' => self::TYPE_STANDARD,
+					'LANGUAGE_ID' => $draft->languageId,
+					'DATA_PROVIDER' => $draft->draftSettings->provider,
+					'IS_AGREEMENT_TEXT_HTML' => $draft->draftSettings->html ? 'Y' : 'N',
+					'USE_URL' => $draft->displayUrl === null ? 'N' : 'Y',
+					'URL' => $draft->displayUrl,
+				]);
+			}
+
+			public function getFieldValues(): array { return $this->draftFields; }
+
+			public function registrySnapshot(): array
+			{
+				return ['template' => $this->intl->getText(), 'label' => $this->intl->getLabelText(),
+					'values' => $this->getDataProviderValues() + $this->getReplaceFieldValues()];
+			}
+		};
+		[$template, $label, $schema] = $this->freezeStandard($agreement);
+		if ($template === '') { throw new \InvalidArgumentException('Standard language template unavailable.'); }
+		$frozen = new CatalogVersion($draft->id, $draft->documentId, $draft->number, $draft->revision,
+			'draft', $draft->languageId, $template, $label, $schema, hash('sha256', $template),
+			$draft->expiryRule, $draft->validFrom, $draft->validTo, $draft->displayUrl,
+			null, null, $settings);
+		(new VersionRenderer())->validateContent($frozen);
+
+		return $frozen;
+	}
+
+	private function freezeStandard(Agreement $agreement): array
+	{
+		$snapshot = $this->standardSnapshot($agreement);
+		$static = [];
+		foreach ($snapshot['values'] as $key => $value)
+		{
+			$key = mb_strtolower((string)$key);
+			if ($key !== 'fields') { $static[$key] = $value; }
+		}
+		$staticSchema = [];
+		foreach ($static as $key => $value)
+		{
+			$staticSchema[$key] = match (true)
+			{
+				is_array($value) => 'string[]', is_bool($value) => 'boolean',
+				is_int($value) => 'integer', is_float($value) => 'number',
+				default => 'string',
+			};
+		}
+		(new VersionRenderer())->validateAgainstSchema($staticSchema, $static);
+		foreach ($static as $value)
+		{
+			foreach (is_array($value) ? $value : [$value] as $literal)
+			{
+				if (preg_match('/%(?:fields|cut\.fields\.(?:start|end))%/', (string)$literal) === 1)
+				{
+					throw new \InvalidArgumentException('Ambiguous static snapshot.');
+				}
+			}
+		}
+		[$protected, $tokens] = $this->protectRuntime($snapshot['template']);
+		$template = strtr(trim(Text::replace($protected, $static, true)), $tokens);
+		$rawLabel = Text::replace($snapshot['label'], $static);
+		$hasRuntimeLabel = preg_match('/%(?:fields|cut\.fields\.(?:start|end))%/', $rawLabel) === 1;
+		$label = $this->freezeLabel($agreement, $rawLabel);
+		$schema = ($hasRuntimeLabel || preg_match('/%(?:fields|cut\.fields\.(?:start|end))%/', $template) === 1)
+			? ['fields' => 'string[]'] : [];
+		if ($agreement->isAgreementTextHtml()) { $template = VersionRenderer::sanitizeHtml($template); }
+
+		return [$template, $label, $schema];
 	}
 
 	protected function createAgreement(int $id): Agreement

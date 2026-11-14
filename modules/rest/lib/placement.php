@@ -56,6 +56,7 @@ class PlacementTable extends Main\Entity\DataManager
 	];
 
 	private const OWNER_VALUE_MAX_LENGTH = 50;
+	private const OPTIONS_MAX_LENGTH = 2048;
 
 	const PLACEMENT_DEFAULT = 'DEFAULT';
 
@@ -135,7 +136,18 @@ class PlacementTable extends Main\Entity\DataManager
 			'ADDITIONAL' => array(
 				'data_type' => 'string',
 			),
-			'OPTIONS' => new ArrayField('OPTIONS'),
+			'OPTIONS' => (new ArrayField('OPTIONS'))
+				->configureUnserializeCallback(static function (string $value): array {
+					try
+					{
+						return (array)Main\Web\Json::decode($value);
+					}
+					catch (Main\ArgumentException)
+					{
+						return [];
+					}
+				})
+				->addValidator(static fn($value): bool|string => self::validateOptionsLength($value)),
 			'REST_APP' => array(
 				'data_type' => 'Bitrix\Rest\AppTable',
 				'reference' => array('=this.APP_ID' => 'ref.ID'),
@@ -149,6 +161,16 @@ class PlacementTable extends Main\Entity\DataManager
 			'ENTITY_TYPE' => new StringField('ENTITY_TYPE'),
 			'ENTITY_ID' => new StringField('ENTITY_ID'),
 		);
+	}
+
+	public static function validateOptionsLength(mixed $options): bool|string
+	{
+		if (strlen(Main\Web\Json::encode($options, 0)) <= self::OPTIONS_MAX_LENGTH)
+		{
+			return true;
+		}
+
+		return 'OPTIONS exceeds ' . self::OPTIONS_MAX_LENGTH . ' characters after JSON encoding';
 	}
 
 	/**

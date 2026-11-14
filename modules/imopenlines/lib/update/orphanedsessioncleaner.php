@@ -30,10 +30,12 @@ final class OrphanedSessionCleaner extends Stepper
 			return Stepper::FINISH_EXECUTION;
 		}
 
+		// only CONFIG_ID tells the current line of a session: USER_CODE keeps the line the chat was
+		// started in forever, so a session transferred to another line is not orphaned
 		$sessions = SessionTable::getList([
 			'select' => ['ID', 'CHAT_ID', 'CLOSED'],
 			'filter' => [
-				'USER_CODE' => '%|' . $configId . '|%|%',
+				'=CONFIG_ID' => $configId,
 			],
 			'limit' => self::SESSION_LIMIT,
 			'order' => [

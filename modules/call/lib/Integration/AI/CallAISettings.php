@@ -77,6 +77,20 @@ class CallAISettings
 	;
 
 	/**
+	 * Expectation window of a follow-up: check interval, attempt budget and the deadline counted
+	 * from the end of the call.
+	 * @see \Bitrix\Call\Integration\AI\CallAIService::expectCallAiTask()
+	 */
+	private const
+		FOLLOWUP_EXPECTATION_INTERVAL = 3600,
+		FOLLOWUP_EXPECTATION_INTERVAL_MIN = 60,
+		FOLLOWUP_EXPECTATION_MAX_ATTEMPTS = 12,
+		FOLLOWUP_EXPECTATION_MAX_ATTEMPTS_MIN = 1,
+		FOLLOWUP_EXPECTATION_MAX_WAIT = 43200,
+		FOLLOWUP_EXPECTATION_MAX_WAIT_MIN = 3600
+	;
+
+	/**
 	 * License regions where the legal department allows per-speaker evaluation of a call.
 	 * @see self::isSpeakerEvaluationAvailable()
 	 */
@@ -304,6 +318,39 @@ class CallAISettings
 	}
 
 	/**
+	 * Portal side of the autostart condition: everything in it that does not depend on a particular
+	 * call. The caller adds its own part, the user count against self::getRecordMinUsers().
+	 *
+	 * Not memoized, unlike the gates it asks: a test portal that drops call_record_min_users to zero
+	 * within one process must see the answer turn false.
+	 * @return bool
+	 */
+	public static function isAutoStartRecordingAvailable(): bool
+	{
+		return self::isCallAIEnable()
+			&& self::isAutoStartRecordingEnable()
+			&& self::getRecordMinUsers() > 0
+		;
+	}
+
+	/**
+	 * The whole autostart rule except the participants: the portal gates above plus the threshold
+	 * and its sign. Callers bring their own count of real participants, which
+	 * Integration\Chat::getActiveRealUserIds() produces, so neither the comparison nor the
+	 * threshold ever exists in a second copy.
+	 *
+	 * @param int $realUserCount participants of the chat that count, bots and other external
+	 *   account types already left out
+	 * @return bool
+	 */
+	public static function isAutoStartRecordingAvailableFor(int $realUserCount): bool
+	{
+		return self::isAutoStartRecordingAvailable()
+			&& $realUserCount >= self::getRecordMinUsers()
+		;
+	}
+
+	/**
 	 * Returns slider code for market subscription promotion.
 	 * @return string
 	 */
@@ -369,6 +416,61 @@ class CallAISettings
 	public static function getRecordMinDuration(): int
 	{
 		return (int)Option::get('call', 'call_record_min_length', self::CALL_RECORD_MIN_LENGTH);
+	}
+
+	/**
+	 * Seconds between two checks of the expectation agent: a lower bound of the schedule, not a
+	 * guaranteed rate. The agent is non-periodic, so on a cron portal it runs only when cron runs.
+	 * @see self::getFollowUpExpectationMaxWait()
+	 */
+	public static function getFollowUpExpectationInterval(): int
+	{
+		return self::getIntOption(
+			'call_followup_expectation_interval',
+			self::FOLLOWUP_EXPECTATION_INTERVAL,
+			self::FOLLOWUP_EXPECTATION_INTERVAL_MIN
+		);
+	}
+
+	/**
+	 * How many checks the expectation agent of one call may spend.
+	 */
+	public static function getFollowUpExpectationMaxAttempts(): int
+	{
+		return self::getIntOption(
+			'call_followup_expectation_max_attempts',
+			self::FOLLOWUP_EXPECTATION_MAX_ATTEMPTS,
+			self::FOLLOWUP_EXPECTATION_MAX_ATTEMPTS_MIN
+		);
+	}
+
+	/**
+	 * Seconds the whole wait may last, counted from the end of the call. Ends the wait whatever
+	 * checks are left, so repeatedly deferred checks still stop.
+	 */
+	public static function getFollowUpExpectationMaxWait(): int
+	{
+		return self::getIntOption(
+			'call_followup_expectation_max_wait',
+			self::FOLLOWUP_EXPECTATION_MAX_WAIT,
+			self::FOLLOWUP_EXPECTATION_MAX_WAIT_MIN
+		);
+	}
+
+	/**
+	 * Option value if a positive int is configured, otherwise $default: empty, zero or garbage
+	 * means "use the default", not "degrade to $min".
+	 * {@see \Bitrix\Call\Track\Downloader\DownloadAgent::getIntOption()}
+	 */
+	private static function getIntOption(string $name, int $default, int $min): int
+	{
+		$value = (int)Option::get('call', $name, $default);
+		if ($value <= 0)
+		{
+			return $default;
+		}
+
+		return max($value, $min);
 	}
 
 	public static function getFeedBackLink(): string

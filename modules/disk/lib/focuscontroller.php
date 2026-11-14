@@ -10,8 +10,6 @@ use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Entity\ExpressionField;
-use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 
@@ -269,47 +267,13 @@ final class FocusController extends Internals\Controller
 
 	private function getPageWithObject(BaseObject $object, FolderListOptions $gridOptions, array $filter)
 	{
-		$storage = $object->getStorage();
-		$securityContext = $storage->getCurrentUserSecurityContext();
-		$pageSize = $gridOptions->getPageSize() ?: FolderListOptions::COUNT_ON_PAGE;
-
-		$parameters = array(
-			'select' => array('ID'),
-			'filter' => $filter,
-			'order' => $gridOptions->getOrderForOrm(),
-			'limit' => $pageSize,
+		return (new Internals\Grid\ObjectPageLocator())->getPage(
+			(int)$object->getId(),
+			$gridOptions->getOrderForOrm(),
+			$filter,
+			$object->getStorage()->getCurrentUserSecurityContext(),
+			(int)($gridOptions->getPageSize() ?: FolderListOptions::COUNT_ON_PAGE),
 		);
-
-		$countQuery = new Query(ObjectTable::getEntity());
-		$countQuery->addSelect(new ExpressionField('CNT', 'COUNT(1)'));
-		$countQuery->setFilter($parameters['filter']);
-		$totalCount = $countQuery->setLimit(null)->setOffset(null)->exec()->fetch();
-		$totalCount = $totalCount['CNT'];
-
-		$pageCount = ceil($totalCount / $pageSize);
-
-		$driver = Driver::getInstance();
-		$finalPage = null;
-		for($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++)
-		{
-			$fullParameters = $driver->getRightsManager()->addRightsCheck($securityContext, $parameters, array('ID', 'CREATED_BY'));
-			$fullParameters['offset'] = $pageSize * ($pageNumber - 1);
-			$query = ObjectTable::getList($fullParameters);
-			while($row = $query->fetch())
-			{
-				if($row['ID'] == $object->getId())
-				{
-					$finalPage = $pageNumber;
-					break;
-				}
-			}
-			if($finalPage !== null)
-			{
-				break;
-			}
-		}
-
-		return $finalPage?: 1;
 	}
 
 	protected function processActionOpenFileDetail()

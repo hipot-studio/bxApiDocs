@@ -308,7 +308,7 @@ final class AttachmentService
 
 	public static function publicUrl(string $path): string
 	{
-		return UrlManager::getInstance()->getHostUrl() . self::API_PATH . $path;
+		return UrlManager::getInstance()->getHostUrl() . self::API_PATH . $path . '/';
 	}
 
 	/**
@@ -344,6 +344,10 @@ final class AttachmentService
 		}
 
 		$attachment = substr($path, strlen(self::API_PATH));
+		if (str_ends_with($attachment, '/'))
+		{
+			$attachment = substr($attachment, 0, -1);
+		}
 
 		return preg_match(self::ATTACHMENT_PATH_PATTERN, $attachment) === 1 ? $attachment : null;
 	}

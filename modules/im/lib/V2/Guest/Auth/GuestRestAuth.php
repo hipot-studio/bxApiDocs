@@ -82,6 +82,7 @@ class GuestRestAuth
 		// Call (guest scenario)
 		'call.call.getcalltoken',
 		'call.call.tryjoincall',
+		'call.call.invite',
 		'call.call.answer',
 		'call.call.decline',
 		'call.call.userstatus',
@@ -89,10 +90,16 @@ class GuestRestAuth
 		'call.call.onsharescreen',
 		'call.call.onstartrecord',
 
-		// Call runtime (guest scenario): join/answer/finish paths for the call:calls runtime.
-		// getUserState is the pre-connect guard for the push cold-start branch. Call-start
-		// methods (create/createChildCall/invite) are deliberately excluded — a guest never
-		// initiates a call.
+		// Call runtime (guest scenario): start/join/answer/finish paths for the call:calls runtime.
+		// getUserState is the pre-connect guard for the push cold-start branch. Whether a guest may
+		// start a call at all, and whom they may ring, is decided at the action itself
+		// ({@see \Bitrix\Call\Service\GuestCallPolicy}); that check also covers ajax.php, which
+		// this list never sees. createChildCall stays out: a guest never turns a call into a group one.
+		// Both invites are open because the scheme picks the one the client uses: the JWT providers
+		// ring through call.Call.invite, the classic ones through call.CallManager.invite. Either way
+		// the invitee list is held to the chat members by GuestCallPolicy::canInviteUsers().
+		'call.callmanager.create',
+		'call.callmanager.invite',
 		'call.callmanager.getuserstate',
 		'call.callmanager.getusers',
 		'call.callmanager.finish',

@@ -28,6 +28,16 @@ final class ServerRuntimeService
 		return $this->buildServerResult($server, $saveResult);
 	}
 
+	public function issueGenerationIfMissing(Server $server, string $generation): Result
+	{
+		$result = new Result();
+		$result->setData([
+			'generationIssued' => $this->repository->issueGenerationIfMissing($server, $generation),
+		]);
+
+		return $this->buildServerResult($server, $result);
+	}
+
 	public function delete(Server $server): Result
 	{
 		$result = $this->repository->deleteWithUsers($server);

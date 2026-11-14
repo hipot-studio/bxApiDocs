@@ -4455,21 +4455,48 @@ class ComponentHelper
 				static fn(int $userId): bool => $userId > 0,
 			)));
 			$newExtranetUserIdList = [];
+			$adminUserIdList = [];
 			$extranetUserGroupId = (int)\CExtranet::getExtranetUserGroupID();
 
 			if ($extranetUserGroupId > 0 && !empty($targetUserIdList))
 			{
 				$relationResult = \Bitrix\Main\UserGroupTable::getList([
 					'filter' => [
-						'=GROUP_ID' => $extranetUserGroupId,
+						[
+							'LOGIC' => 'OR',
+							['=GROUP_ID' => $extranetUserGroupId],
+							[
+								'=GROUP_ID' => 1,
+								'=GROUP.ACTIVE' => 'Y',
+								[
+									'LOGIC' => 'OR',
+									['=DATE_ACTIVE_FROM' => null],
+									['<=DATE_ACTIVE_FROM' => new \Bitrix\Main\Type\DateTime()],
+								],
+								[
+									'LOGIC' => 'OR',
+									['=DATE_ACTIVE_TO' => null],
+									['>=DATE_ACTIVE_TO' => new \Bitrix\Main\Type\DateTime()],
+								],
+							],
+						],
 						'@USER_ID' => $targetUserIdList,
+						'USER.UF_DEPARTMENT_SINGLE' => false,
 					],
-					'select' => [ 'USER_ID' ],
+					'select' => [ 'USER_ID', 'GROUP_ID' ],
 				]);
 				while ($relationFields = $relationResult->fetch())
 				{
-					$newExtranetUserIdList[] = (int)$relationFields['USER_ID'];
+					if ((int)$relationFields['GROUP_ID'] === 1)
+					{
+						$adminUserIdList[] = (int)$relationFields['USER_ID'];
+					}
+					else
+					{
+						$newExtranetUserIdList[] = (int)$relationFields['USER_ID'];
+					}
 				}
+				$newExtranetUserIdList = array_diff($newExtranetUserIdList, $adminUserIdList);
 			}
 
 			if (!empty($newExtranetUserIdList))

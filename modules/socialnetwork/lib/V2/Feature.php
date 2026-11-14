@@ -15,7 +15,7 @@ class Feature
 {
 	public static function isNewProjectsOn(): bool
 	{
-		return Option::get('socialnetwork', 'new_projects', 'N') === 'Y';
+		return true;
 	}
 
 	/**

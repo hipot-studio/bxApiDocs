@@ -567,6 +567,15 @@ class EntityRequisite
 					? $options['FIELD_CHECK_OPTIONS']
 					: []
 			;
+			$presetId = (int)($fieldCheckOptions['PRESET_ID'] ?? 0);
+			if ($presetId <= 0)
+			{
+				$presetId = $this->getPresetIdByFields($requisiteId, $fields);
+				if ($presetId > 0)
+				{
+					$fieldCheckOptions['PRESET_ID'] = $presetId;
+				}
+			}
 
 			$requiredFields = FieldAttributeManager::getRequiredFields(
 				CCrmOwnerType::Requisite,
@@ -575,6 +584,8 @@ class EntityRequisite
 				FieldOrigin::UNDEFINED,
 				$fieldCheckOptions
 			);
+			$presetFieldMap = $this->getPresetFieldMap($presetId);
+			$requiredFields = $this->filterRequiredFieldsByPreset($requiredFields, $presetFieldMap);
 
 			$checkErrors = [];
 
@@ -606,14 +617,39 @@ class EntityRequisite
 			}
 
 			$requiredUserFields = $requiredFields[FieldOrigin::CUSTOM] ?? [];
+			$checkedUserFields = null;
+			$userFieldValues = $fields;
+			$userFieldValuesForTypeCheck = [];
+			if ($presetFieldMap !== null)
+			{
+				$presetUserFieldMap = array_filter(
+					$presetFieldMap,
+					static fn(string $fieldName): bool => str_starts_with($fieldName, 'UF_'),
+					ARRAY_FILTER_USE_KEY,
+				);
+				$userFieldValues = array_intersect_key($fields, $presetUserFieldMap);
+				$userFieldValuesForTypeCheck = array_diff_key(
+					array_filter(
+						$fields,
+						static fn(string $fieldName): bool => str_starts_with($fieldName, 'UF_'),
+						ARRAY_FILTER_USE_KEY,
+					),
+					$presetUserFieldMap,
+				);
+				if (!$isUpdate)
+				{
+					$checkedUserFields = array_keys($presetUserFieldMap);
+				}
+			}
 			if (
 				!$USER_FIELD_MANAGER->CheckFields(
 					static::$sUFEntityID,
 					$requisiteId,
-					$fields,
+					$userFieldValues,
 					false,
 					$enableRequiredUserFieldCheck,
-					$requiredUserFields
+					$requiredUserFields,
+					$checkedUserFields,
 				)
 			)
 			{
@@ -628,6 +664,31 @@ class EntityRequisite
 						$checkErrors[] = new Main\Error($error['text'], $error['id']);
 					}
 				}
+				$APPLICATION->ResetException();
+			}
+			if (
+				$userFieldValuesForTypeCheck !== []
+				&& !$USER_FIELD_MANAGER->CheckFields(
+					static::$sUFEntityID,
+					$requisiteId,
+					$userFieldValuesForTypeCheck,
+					false,
+					false,
+				)
+			)
+			{
+				/** @var \CAdminException $e */
+				$e = $APPLICATION->GetException();
+				$errors = $e->GetMessages() ?? [];
+				if (is_array($errors))
+				{
+					foreach ($errors as $error)
+					{
+						$result->addError(new Main\Error($error['text'], static::ERR_FIELD_REQUIRED));
+						$checkErrors[] = new Main\Error($error['text'], $error['id']);
+					}
+				}
+				$APPLICATION->ResetException();
 			}
 
 			if (!empty($checkErrors))
@@ -635,8 +696,88 @@ class EntityRequisite
 				$result->setData(['CHECK_ERRORS' => $checkErrors]);
 			}
 		}
+		elseif ($enableUserFieldCheck)
+		{
+			// The web form may skip mandatory fields, but values it supplied still need type validation.
+			if (!$USER_FIELD_MANAGER->CheckFields(static::$sUFEntityID, $requisiteId, $fields, false, false))
+			{
+				/** @var \CAdminException $e */
+				$e = $APPLICATION->GetException();
+				$checkErrors = [];
+				foreach ($e->GetMessages() ?? [] as $error)
+				{
+					$result->addError(new Main\Error($error['text'], static::ERR_FIELD_REQUIRED));
+					$checkErrors[] = new Main\Error($error['text'], $error['id']);
+				}
+				if ($checkErrors !== [])
+				{
+					$result->setData(['CHECK_ERRORS' => $checkErrors]);
+				}
+				$APPLICATION->ResetException();
+			}
+		}
 
 		return $result;
+	}
+
+	/**
+	 * A field attribute can outlive the preset entry it was configured for. The current composition is
+	 * authoritative for both system and user fields, while a missing preset keeps the legacy behaviour.
+	 *
+	 * @param array<int, string[]> $requiredFields
+	 * @param array<string, true>|null $presetFieldMap
+	 * @return array<int, string[]>
+	 */
+	private function filterRequiredFieldsByPreset(
+		array $requiredFields,
+		?array $presetFieldMap
+	): array
+	{
+		if ($presetFieldMap === null)
+		{
+			return $requiredFields;
+		}
+
+		foreach ([FieldOrigin::SYSTEM, FieldOrigin::CUSTOM] as $fieldOrigin)
+		{
+			if (isset($requiredFields[$fieldOrigin]))
+			{
+				$requiredFields[$fieldOrigin] = array_values(array_filter(
+					$requiredFields[$fieldOrigin],
+					static fn(string $fieldName): bool => isset($presetFieldMap[$fieldName]),
+				));
+			}
+		}
+
+		return $requiredFields;
+	}
+
+	/** @return array<string, true>|null */
+	private function getPresetFieldMap(int $presetId): ?array
+	{
+		if ($presetId <= 0)
+		{
+			return null;
+		}
+
+		$preset = EntityPreset::getSingleInstance();
+		$presetInfo = $preset->getById($presetId);
+		if (!is_array($presetInfo) || !is_array($presetInfo['SETTINGS'] ?? null))
+		{
+			return null;
+		}
+
+		$fieldMap = array_fill_keys(array_keys(self::getBasicFieldsInfo()), true);
+		foreach ($preset->settingsGetFields($presetInfo['SETTINGS']) as $fieldInfo)
+		{
+			$fieldName = (string)($fieldInfo['FIELD_NAME'] ?? '');
+			if ($fieldName !== '')
+			{
+				$fieldMap[$fieldName] = true;
+			}
+		}
+
+		return $fieldMap;
 	}
 
 	public function checkRqFieldsBeforeSave($requisiteId, $fields)
@@ -794,24 +935,6 @@ class EntityRequisite
 			// check data
 			RequisiteTable::checkFields($result, null, $fields);
 
-			// check uf data
-			if (!empty($userFields))
-			{
-				if (!$USER_FIELD_MANAGER->CheckFields($entity->getUfId(), false, $userFields))
-				{
-					if (is_object($APPLICATION) && $APPLICATION->getException())
-					{
-						$e = $APPLICATION->getException();
-						$result->addError(new Entity\EntityError($e->getString()));
-						$APPLICATION->resetException();
-					}
-					else
-					{
-						$result->addError(new Entity\EntityError("Unknown error while checking userfields"));
-					}
-				}
-			}
-
 			// check if there is still some data
 			if (!count($fields + $userFields))
 			{
@@ -837,6 +960,8 @@ class EntityRequisite
 
 	public function add($fields, $options = [])
 	{
+		global $APPLICATION;
+
 		unset($fields['ID'], $fields['DATE_MODIFY'], $fields['MODIFY_BY_ID']);
 
 		$allowSetSystemFields = $options['ALLOW_SET_SYSTEM_FIELDS'] ?? false;
@@ -882,11 +1007,12 @@ class EntityRequisite
 		$writeResult = $this->getWriteService()->addForLegacyFacade(
 			$writeData,
 			$fields,
+			new RequisiteLegacyUserFieldValidationContext(Main\Application::getUserTypeManager(), $APPLICATION),
 			function ($id) use ($fields, $addresses)
 			{
 				$this->registerNestedAddresses($id, $fields, $addresses);
 			},
-			$valuesOutsideTheArea
+			$valuesOutsideTheArea,
 		);
 
 		$result = new Main\ORM\Data\AddResult();
@@ -1157,24 +1283,6 @@ class EntityRequisite
 			// check data
 			RequisiteTable::checkFields($result, $id, $fields);
 
-			// check uf data
-			if (!empty($ufdata))
-			{
-				if (!$USER_FIELD_MANAGER->CheckFields($entity->getUfId(), end($id), $ufdata))
-				{
-					if (is_object($APPLICATION) && $APPLICATION->getException())
-					{
-						$e = $APPLICATION->getException();
-						$result->addError(new Entity\EntityError($e->getString()));
-						$APPLICATION->resetException();
-					}
-					else
-					{
-						$result->addError(new Entity\EntityError("Unknown error while checking userfields"));
-					}
-				}
-			}
-
 			// check if there is still some data
 			if (!count($fields + $ufdata))
 			{
@@ -1200,6 +1308,8 @@ class EntityRequisite
 
 	public function update($id, $fields, $options = array())
 	{
+		global $APPLICATION;
+
 		$id = intval($id);
 		// The owner is read along with the rest so that the write of the area does not read the same row
 		// a second time. The preset goes with it only because the typed target of that write takes three
@@ -1271,11 +1381,12 @@ class EntityRequisite
 			),
 			$writeData,
 			$fields,
+			new RequisiteLegacyUserFieldValidationContext(Main\Application::getUserTypeManager(), $APPLICATION),
 			function ($requisiteId) use ($addressOnly, $addresses, $fields, $requisite)
 			{
 				$this->applyNestedChangesAfterUpdate($requisiteId, $addressOnly, $addresses, $fields, $requisite);
 			},
-			$valuesOutsideTheArea
+			$valuesOutsideTheArea,
 		);
 
 		$result = new Main\ORM\Data\UpdateResult();

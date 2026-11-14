@@ -365,6 +365,7 @@ class SessionTable extends DataManager
 			new StringField('EXTRA_DEVICE_TYPE', [
 				'validation' => [__CLASS__, 'validateExtraDeviceType'],
 			]),
+			new IntegerField('PORTAL_ID'),
 			new StringField('SEND_FORM', [
 				'validation' => [__CLASS__, 'validateSendForm'],
 				'default_value' => 'none',

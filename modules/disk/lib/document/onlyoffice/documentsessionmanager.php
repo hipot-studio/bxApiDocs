@@ -12,7 +12,7 @@ final class DocumentSessionManager extends SessionManager
 	protected function buildFields(): array
 	{
 		$filter = parent::buildFields();
-		$filter['TYPE'] = $this->sessionType;
+		$filter['TYPE'] = $this->getEffectiveSessionType();
 
 		return $filter;
 	}

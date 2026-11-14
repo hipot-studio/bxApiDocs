@@ -7,13 +7,21 @@ use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
+use Bitrix\Bizproc\Starter\Parameters;
 use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Bizproc\Public\Service\Trigger\TriggerService;
 use Bitrix\Disk\Internals\FileHelper;
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditCaptureService;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditRightsChangeAuditService;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Result;
 use CBPArgumentNullException;
 use CBPArgumentOutOfRangeException;
 use CBPCanUserOperateOperation;
@@ -737,6 +745,62 @@ class BizProcDocument implements \IBPWorkflowDocument
 		}
 	}
 
+	/**
+	 * @throws \Exception the file was not added
+	 */
+	public static function createTestDocument(string $documentType, array $fields, int $createdById): string
+	{
+		$name = trim((string)($fields['NAME'] ?? ''));
+		if ($name !== '' && pathinfo($name, PATHINFO_EXTENSION) === '')
+		{
+			$name .= '.txt';
+		}
+
+		$storage = Storage::loadById((int)static::getStorageIdByType($documentType));
+		if ($storage && !$storage->getRootObject()?->canAdd($storage->getSecurityContext($createdById)))
+		{
+			throw new \Exception(Loc::getMessage('DISK_BZ_D_TEST_DOCUMENT_ACCESS_DENIED') ?? '');
+		}
+
+		$file = $storage && $name !== '' ? self::addEmptyFile($storage, $name, $createdById) : null;
+		if (!$file)
+		{
+			throw new \Exception(Loc::getMessage('DISK_BZ_D_TEST_DOCUMENT_CREATE_FAILED') ?? '');
+		}
+
+		return (string)$file->getId();
+	}
+
+	/**
+	 * Storage::addBlankFile() refuses empty content, an empty file on disk passes.
+	 */
+	private static function addEmptyFile(Storage $storage, string $name, int $createdById): ?File
+	{
+		$emptyFilePath = (string)tempnam(sys_get_temp_dir(), 'disk');
+
+		try
+		{
+			return $storage->uploadFile(
+				[
+					'tmp_name' => $emptyFilePath,
+					'type' => TypeFile::getMimeTypeByFilename($name),
+					// clouds reads the size of a zero-length file from this key only
+					'file_size' => 0,
+				],
+				['NAME' => $name, 'CREATED_BY' => $createdById],
+				[],
+				true,
+			);
+		}
+		finally
+		{
+			if (is_file($emptyFilePath))
+			{
+				unlink($emptyFilePath);
+			}
+		}
+	}
+
 	public static function lockDocument($documentId, $workflowId)
 	{
 		return true;
@@ -792,7 +856,12 @@ class BizProcDocument implements \IBPWorkflowDocument
 		}
 		elseif($operation === CBPCanUserOperateOperation::CreateWorkflow)
 		{
-			return CBPDocument::canUserOperateDocumentType(CBPCanUserOperateOperation::CreateWorkflow, $userId, self::generateDocumentComplexType($file->getStorageId()), $parameters);
+			return CBPDocument::canUserOperateDocumentType(
+				CBPCanUserOperateOperation::CreateWorkflow,
+				$userId,
+				self::generateDocumentComplexType($file->getStorageId()),
+				$parameters
+			) && $file->canStartBizProc($securityContext);
 		}
 
 		return false;
@@ -856,38 +925,10 @@ class BizProcDocument implements \IBPWorkflowDocument
 
 	public static function publishDocument($documentId)
 	{
-		$documentId = intval($documentId);
-		if($documentId <= 0)
-		{
-			throw new \CBPArgumentNullException("documentId");
-		}
-
-		/** @var File $file */
-		$file = File::loadById($documentId, array('STORAGE'));
-		if(!$file)
-		{
-			return false;
-		}
-
-		$rightsManager = Driver::getInstance()->getRightsManager();
-		$rights = $rightsManager->getAllListNormalizeRights($file);
-		if(count($rights) != 1)
-		{
-			//we have many rights (not only CR). And it means that document already published.
-			return $file->getId();
-		}
-		$aloneRight = array_pop($rights);
-		if($aloneRight['ACCESS_CODE'] != 'CR')
-		{
-			return $file->getId();
-		}
-		//delete single right with ACCESS_CODE "CR". And file will become inherited rights.
-		$rightsManager->set($file, array());
-
-		return $file->getId();
+		return self::publishDocumentWithContext($documentId, []);
 	}
 
-	public static function unPublishDocument($documentId)
+	public static function publishDocumentWithContext($documentId, array $executionContext)
 	{
 		$documentId = intval($documentId);
 		if($documentId <= 0)
@@ -902,28 +943,101 @@ class BizProcDocument implements \IBPWorkflowDocument
 			return false;
 		}
 
-		$rightsManager = Driver::getInstance()->getRightsManager();
-		$specificRights = $rightsManager->getSpecificRights($file);
-		if(!empty($specificRights))
+		return AuditTransaction::run(static function (AuditTransaction $owner) use ($file, $executionContext) {
+			$rightsManager = Driver::getInstance()->getRightsManager();
+			$rights = $rightsManager->getAllListNormalizeRights($file);
+			if (count($rights) != 1)
+			{
+				return $file->getId();
+			}
+			$aloneRight = array_pop($rights);
+			if ($aloneRight['ACCESS_CODE'] != 'CR')
+			{
+				return $file->getId();
+			}
+			$successful = self::setDocumentRights($file, [], $executionContext, $owner);
+
+			return $owner->join(static fn(): AuditTransactionOutcome => $successful
+				? AuditTransactionOutcome::success($file->getId())
+				: AuditTransactionOutcome::failure($file->getId()))->getValue();
+		});
+	}
+
+	public static function unPublishDocument($documentId)
+	{
+		return self::unpublishDocumentWithContext($documentId, []);
+	}
+
+	public static function unpublishDocumentWithContext($documentId, array $executionContext)
+	{
+		$documentId = intval($documentId);
+		if($documentId <= 0)
+		{
+			throw new \CBPArgumentNullException("documentId");
+		}
+
+		/** @var File $file */
+		$file = File::loadById($documentId, array('STORAGE'));
+		if(!$file)
 		{
 			return false;
 		}
-		$newNegativeRights = array();
-		//we have only inherited rights. Now we will set alone right CR.
-		foreach($rightsManager->getAllListNormalizeRights($file) as $right)
+
+		return AuditTransaction::run(static function (AuditTransaction $owner) use ($file, $executionContext): bool {
+			$rightsManager = Driver::getInstance()->getRightsManager();
+			$specificRights = $rightsManager->getSpecificRights($file);
+			if (!empty($specificRights))
+			{
+				return false;
+			}
+			$newNegativeRights = [];
+			foreach ($rightsManager->getAllListNormalizeRights($file) as $right)
+			{
+				$newNegativeRights[] = [
+					'ACCESS_CODE' => $right['ACCESS_CODE'],
+					'TASK_ID' => $right['TASK_ID'],
+					'NEGATIVE' => 1,
+				];
+			}
+			$newNegativeRights[] = [
+				'ACCESS_CODE' => 'CR',
+				'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_FULL),
+			];
+
+			return self::setDocumentRights($file, $newNegativeRights, $executionContext, $owner);
+		});
+	}
+
+	private static function setDocumentRights(
+		File $file,
+		array $rights,
+		array $executionContext,
+		AuditTransaction $owner,
+	): bool
+	{
+		$audit = new AuditRightsChangeAuditService();
+		$before = $audit->capture($file);
+		$context = null;
+		AuditCaptureService::runFailOpen(static function () use ($executionContext, &$context): Result {
+			$context = AuditOperationContext::create(actionContext:
+				(new AuditActionContextResolver())->resolveForBizproc($executionContext['initiatorId'] ?? null, [
+					'type' => 'bizproc', 'entityType' => 'workflow',
+					'entityId' => $executionContext['workflowId'] ?? null,
+					'entityName' => $executionContext['templateName'] ?? null,
+				]));
+
+			return new Result();
+		});
+		if (!Driver::getInstance()->getRightsManager()->set($file, $rights, $owner))
 		{
-			$newNegativeRights[] = array(
-				'ACCESS_CODE' => $right['ACCESS_CODE'],
-				'TASK_ID' => $right['TASK_ID'],
-				'NEGATIVE' => 1,
-			);
+			return false;
 		}
-		unset($right);
-		$newNegativeRights[] = array(
-			'ACCESS_CODE' => 'CR',
-			'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_FULL),
-		);
-		return $rightsManager->set($file, $newNegativeRights);
+		if ($context !== null)
+		{
+			$audit->schedule($file, $before, $context, $owner);
+		}
+
+		return true;
 	}
 
 	public static function getAllowableUserGroups($documentType)
@@ -2285,14 +2399,15 @@ class BizProcDocument implements \IBPWorkflowDocument
 	 * @deprecated
 	 * @internal
 	 */
-	public static function runAfterEditWithInputParameters($storageId, $fileId, $workflowParameters, $parametersAreSigned = false)
+	public static function runAfterEditWithInputParameters($storageId, $fileId, $workflowParameters, $parametersAreSigned = false, int $userId = 0)
 	{
 		static::startAutoBizProc(
 			(int)$storageId,
 			(int)$fileId,
 			\CBPDocumentEventType::Edit,
 			(array)$workflowParameters,
-			(bool)$parametersAreSigned
+			(bool)$parametersAreSigned,
+			$userId
 		);
 	}
 
@@ -2303,14 +2418,15 @@ class BizProcDocument implements \IBPWorkflowDocument
 	 * @deprecated
 	 * @internal
 	 */
-	public static function runAfterCreateWithInputParameters($storageId, $fileId, $workflowParameters, bool $parametersAreSigned = false)
+	public static function runAfterCreateWithInputParameters($storageId, $fileId, $workflowParameters, bool $parametersAreSigned = false, int $userId = 0)
 	{
 		static::startAutoBizProc(
 			(int)$storageId,
 			(int)$fileId,
 			\CBPDocumentEventType::Create,
 			(array)$workflowParameters,
-			$parametersAreSigned
+			$parametersAreSigned,
+			$userId
 		);
 	}
 
@@ -2320,13 +2436,16 @@ class BizProcDocument implements \IBPWorkflowDocument
 	 * @param $autoExecuteType
 	 * @param array $workflowParameters When we want to run bizproc without parameters use empty array.
 	 * @param bool $parametersAreSigned
+	 * @param int $userId Explicit workflow initiator; 0 falls back to the current user
+	 *   (agent/cron contexts have no current user, so callers there must pass it).
 	 */
 	private static function startAutoBizProc(
 		int $storageId,
 		int $fileId,
 		int $autoExecuteType,
 		array $workflowParameters = [],
-		bool $parametersAreSigned = false
+		bool $parametersAreSigned = false,
+		int $userId = 0
 	): void
 	{
 		if (
@@ -2362,7 +2481,10 @@ class BizProcDocument implements \IBPWorkflowDocument
 			],
 		];
 
-		$userId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			$userId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
+		}
 
 		foreach ($documentData as $data)
 		{
@@ -2401,20 +2523,29 @@ class BizProcDocument implements \IBPWorkflowDocument
 		}
 	}
 
-	private static function runCreateTrigger(int $storageId, int $fileId): void
+	/**
+	 * The start-trigger half of {@see self::runAfterCreate()}, exposed for callers that
+	 * suppress the domain-level after-create effects and emit them themselves (the docked
+	 * upload raises them after its own durable commit point).
+	 *
+	 * @param int $userId Explicit workflow initiator; 0 falls back to the current user
+	 *   (agent/cron contexts have no current user, so callers there must pass it).
+	 * @internal
+	 */
+	public static function runCreateTrigger(int $storageId, int $fileId, int $userId = 0): void
 	{
-		if (!class_exists(TriggerService::class))
+		if (!static::hasFileCreateTrigger($storageId))
 		{
 			return;
+		}
+
+		if ($userId <= 0)
+		{
+			$userId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
 		}
 
 		$documentId = self::getDocumentComplexId($fileId);
 		$documentType = self::generateDocumentComplexType($storageId);
-
-		if (!(new TriggerService())->hasStartTrigger('DiskFileCreateTrigger', $documentType))
-		{
-			return;
-		}
 
 		(new Starter(new StarterDto(
 			process: new StarterConfigDto(
@@ -2426,7 +2557,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 				complexDocumentType: $documentType,
 			))
 			->setContext(new ContextDto(Driver::INTERNAL_MODULE_ID))
-			->setUser((int)\Bitrix\Main\Engine\CurrentUser::get()->getId())
+			->setUser($userId)
 			->addEvent(
 				'DiskFileCreateTrigger',
 				[
@@ -2443,6 +2574,28 @@ class BizProcDocument implements \IBPWorkflowDocument
 			)
 			->start()
 		;
+	}
+
+	/**
+	 * Whether an active start trigger listens for file creation in this storage.
+	 *
+	 * Separate from {@see self::runCreateTrigger()} so a caller committing a whole batch
+	 * into one storage can take the answer once instead of per file; the start itself
+	 * re-asks it, so a memoized verdict can never start a trigger that is already gone.
+	 *
+	 * @internal
+	 */
+	public static function hasFileCreateTrigger(int $storageId): bool
+	{
+		if (!class_exists(TriggerService::class))
+		{
+			return false;
+		}
+
+		return (new TriggerService())->hasStartTrigger(
+			'DiskFileCreateTrigger',
+			self::generateDocumentComplexType($storageId)
+		);
 	}
 
 	private static function getAutoStartTemplateIds(
@@ -2481,6 +2634,87 @@ class BizProcDocument implements \IBPWorkflowDocument
 		}
 
 		return $templateIds;
+	}
+
+	/**
+	 * Whether an active parameterized autostart workflow exists for this
+	 * (storage, event) whose required parameters the given set does not satisfy.
+	 *
+	 * Closes the silent-skip gap in {@see self::startAutoBizProc()}: with an empty
+	 * or partial parameter set, getAutoStartTemplateIds() filters parameterized
+	 * templates out (PARAMETERS = null), so a required-parameter workflow never
+	 * starts - and for a docked upload that would happen only after the irreversible
+	 * commit. The docked commit path calls this BEFORE the durable write to fail such
+	 * an item instead. It reuses the autostart's own parameter resolution
+	 * ({@see \Bitrix\Bizproc\Starter\Parameters::getValidatedValues()} ->
+	 * checkWorkflowParameters), so the accepted parameter format cannot diverge from
+	 * what the real autostart consumes.
+	 *
+	 * Signed parameters are trusted (the real autostart runs with
+	 * validateParameters=false for them), so nothing is enforced in that case.
+	 */
+	public static function hasUnmetRequiredAutoStartParameters(
+		int $storageId,
+		int $autoExecuteType,
+		array $workflowParameters,
+		bool $parametersAreSigned = false
+	): bool
+	{
+		if ($parametersAreSigned)
+		{
+			return false;
+		}
+
+		if (
+			$autoExecuteType !== \CBPDocumentEventType::Create
+			&& $autoExecuteType !== \CBPDocumentEventType::Edit
+		)
+		{
+			return false;
+		}
+
+		$documentTypes = [
+			self::generateDocumentComplexType($storageId),
+			BizProcDocumentCompatible::generateDocumentComplexType($storageId),
+		];
+
+		foreach ($documentTypes as $documentType)
+		{
+			$iterator = \CBPWorkflowTemplateLoader::getList(
+				[],
+				[
+					'DOCUMENT_TYPE' => $documentType,
+					'AUTO_EXECUTE' => $autoExecuteType,
+					'ACTIVE' => 'Y',
+					'!PARAMETERS' => null,
+				],
+				false,
+				false,
+				['ID', 'PARAMETERS']
+			);
+
+			while ($template = $iterator->fetch())
+			{
+				$templateParameters = $template['PARAMETERS'] ?? null;
+				if (!is_array($templateParameters) || $templateParameters === [])
+				{
+					continue;
+				}
+
+				$validated = (new Parameters($workflowParameters))->getValidatedValues(
+					(int)$template['ID'],
+					$templateParameters,
+					$documentType
+				);
+
+				if (!$validated->isSuccess())
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	private static function startAutoBizProcByLegacyApi(

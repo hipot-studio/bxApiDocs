@@ -6,8 +6,9 @@ use Bitrix\Main\Localization\LocalizableMessage;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Main\Validation\Rule\PropertyValidationAttributeInterface;
+use Bitrix\Rest\V3\Dto\Meta\FieldMetaInterface;
 
-class DtoField implements Arrayable
+class DtoField implements Arrayable, FieldMetaInterface
 {
 	public const DTO_FIELD_TYPE_PROPERTY = 'property';
 	public const DTO_FIELD_TYPE_USER_FIELD = 'userField';

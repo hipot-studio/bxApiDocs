@@ -4,10 +4,15 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class CrmVolumeNavigationItem implements SettingsHubWrappedNavigationItem
 {
@@ -29,9 +34,19 @@ final class CrmVolumeNavigationItem implements SettingsHubWrappedNavigationItem
 		return $permissions->isCrmAdmin() && !$this->isPgsqlConnection;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $this->isVisible($permissions) && !$this->isCrmPgsqlDb;
+		if ($this->isCrmPgsqlDb)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_CRMVOLUME_DATABASE_UNAVAILABLE'),
+					'CRMVOLUME_DATABASE_UNAVAILABLE',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

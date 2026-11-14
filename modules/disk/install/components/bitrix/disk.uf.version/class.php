@@ -6,6 +6,7 @@ use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Ui\FileAttributes;
+use Bitrix\Disk\Uf\UserFieldManager;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 
@@ -59,6 +60,10 @@ class CDiskUfVersionComponent extends BaseComponent
 		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
 
 		$attachedModels = $this->loadAttachedObjects($values);
+		$attachedModels = $this->filterReadableAttachedObjects(
+			$attachedModels,
+			$this->getForeignCheckUserId((int)$userId),
+		);
 		$this->preloadDownloadAccessForAttachedObjects($attachedModels);
 
 		$versions = array();
@@ -186,6 +191,53 @@ class CDiskUfVersionComponent extends BaseComponent
 	protected function loadAttachedObject(int $attachedObjectId): ?AttachedObject
 	{
 		return AttachedObject::loadById($attachedObjectId, ['OBJECT', 'VERSION.OBJECT']);
+	}
+
+	/**
+	 * Drops attached objects of other entities which the viewer cannot read. Keys are preserved.
+	 * Only fields whose connector supports foreign connectors may hold such objects, others are kept as is.
+	 *
+	 * @param array<int, AttachedObject> $attachedObjects
+	 * @return array<int, AttachedObject>
+	 */
+	protected function filterReadableAttachedObjects(array $attachedObjects, int $viewerId): array
+	{
+		$userField = $this->arParams['PARAMS']['arUserField'];
+		$entityType = (string)($userField['ENTITY_ID'] ?? '');
+		$userFieldManager = $this->getUserFieldManager();
+		if (!$userFieldManager->supportsForeignAttachedObjects($entityType))
+		{
+			return $attachedObjects;
+		}
+
+		$entityId = (int)($userField['ENTITY_VALUE_ID'] ?? 0);
+		$readableAttachedObjects = [];
+		foreach ($attachedObjects as $key => $attachedObject)
+		{
+			if (
+				$attachedObject instanceof AttachedObject
+				&& $userFieldManager->canUseAttachedObject($attachedObject, $entityType, $entityId, $viewerId)
+			)
+			{
+				$readableAttachedObjects[$key] = $attachedObject;
+			}
+		}
+
+		return $readableAttachedObjects;
+	}
+
+	/**
+	 * Returns the user whose rights are checked for attached objects of other entities:
+	 * the recipient for the mail template, otherwise the current user.
+	 */
+	protected function getForeignCheckUserId(int $currentUserId): int
+	{
+		return UserFieldManager::resolveViewerId((string)$this->getTemplateName(), $this->arParams, $currentUserId);
+	}
+
+	protected function getUserFieldManager(): UserFieldManager
+	{
+		return \Bitrix\Disk\Driver::getInstance()->getUserFieldManager();
 	}
 
 	protected function preloadDownloadAccessForAttachedObjects(array $attachedObjects): void

@@ -280,11 +280,14 @@ class EntityActivities
 			return $this->getStatusIdByCategoryId(self::STAGE_IDLE, $this->categoryId);
 		}
 
+		$deadline ??= CCrmDateTimeHelper::getMaxDatabaseDateObject();
+
 		$userDeadline = Datetime::createFromTimestamp($deadline->getTimestamp());
 		$userDeadline->toUserTime();
 		$userDeadlineDate = Date::createFromTimestamp($userDeadline->getTimestamp());
 
-		$dateTime = $this->getUserCurrentDateTime(new DateTime());
+		$now = new DateTime();
+		$dateTime = $this->getUserCurrentDateTime($now);
 		$userCurrentDate = Date::createFromTimestamp($dateTime->getTimestamp());
 		if ($userCurrentDate->getTimestamp() > $userDeadlineDate->getTimestamp())
 		{
@@ -292,14 +295,14 @@ class EntityActivities
 		}
 
 		// today
-		$userTomorrowDate = $this->getTomorrowDay($dateTime);
+		$userTomorrowDate = $this->getTomorrowDay($now);
 		if (($userTomorrowDate->getTimestamp() > $userDeadlineDate->getTimestamp()) || $hasAnyIncomingChannel)
 		{
 			return $this->getStatusIdByCategoryId(self::STAGE_PENDING, $this->categoryId);
 		}
 
 		// this week
-		$userThisWeekDate = $this->getLastWeekDay($dateTime);
+		$userThisWeekDate = $this->getLastWeekDay($now);
 		if ($userThisWeekDate->getTimestamp() >= $userDeadlineDate->getTimestamp())
 		{
 			return $this->getStatusIdByCategoryId(self::STAGE_THIS_WEEK, $this->categoryId);
@@ -324,6 +327,17 @@ class EntityActivities
 		}
 
 		$entity = EntityManager::resolveByTypeID($this->entityTypeId);
+		if (
+			$this->entityTypeId === \CCrmOwnerType::Deal
+			&& $this->isIdleByEntityResponsible($stage, $filter)
+		)
+		{
+			$filter['=IS_RECURRING'] = 'N';
+			if ($this->categoryId !== null && $this->categoryId >= 0)
+			{
+				$filter['=CATEGORY_ID'] = $this->categoryId;
+			}
+		}
 
 		$responsibleFieldName = $this->getActivityResponsibleFieldName();
 
@@ -352,7 +366,7 @@ class EntityActivities
 			'EXCLUDE_USERS' => $excludeUsers,
 		];
 
-		$stageSemanticFilter = $this->getStageSemanticFilter($filter);
+		$stageSemanticFilter = $this->getStageSemanticFilter($filter, $stage);
 		if ($stageSemanticFilter !== null)
 		{
 			$counterFilterParams['STAGE_SEMANTIC_ID'] = $stageSemanticFilter;
@@ -364,9 +378,9 @@ class EntityActivities
 		);
 	}
 
-	private function getStageSemanticFilter(array $filter): array|string|null
+	private function getStageSemanticFilter(array $filter, ?string $stageId = null): array|string|null
 	{
-		if ($this->hasActivityFilter($filter))
+		if ($this->hasActivityFilter($filter, $stageId))
 		{
 			return null;
 		}
@@ -390,7 +404,10 @@ class EntityActivities
 
 		if (
 			\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId)
-			&& ($filter[self::SHOW_ALL_STAGE_SEMANTICS] ?? false) === true
+			&& (
+				($filter[self::SHOW_ALL_STAGE_SEMANTICS] ?? false) === true
+				|| $this->isIdleByEntityResponsible($stageId, $filter)
+			)
 		)
 		{
 			return PhaseSemantics::ALLOWED_SEMANTICS;
@@ -399,16 +416,33 @@ class EntityActivities
 		return $this->getDefaultStageSemanticFilter();
 	}
 
-	private function hasActivityFilter(array $filter): bool
+	private function hasActivityFilter(array $filter, ?string $stageId = null): bool
 	{
 		if (!empty($filter['ACTIVITY_COUNTER']))
 		{
 			return true;
 		}
 
+		if ($this->isIdleByEntityResponsible($stageId, $filter))
+		{
+			return false;
+		}
+
 		$responsibleFieldName = $this->getActivityResponsibleFieldName();
 
 		return isset($filter[$responsibleFieldName]) || isset($filter['!' . $responsibleFieldName]);
+	}
+
+	private function isIdleByEntityResponsible(?string $stageId, array $filter): bool
+	{
+		return (
+			$this->entityTypeId === \CCrmOwnerType::Lead
+			|| $this->entityTypeId === \CCrmOwnerType::Deal
+			|| \CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId)
+		)
+			&& $stageId === $this->getStatusIdByCategoryId(self::STAGE_IDLE, $this->categoryId)
+			&& !CounterSettings::getInstance()->useActivityResponsible()
+			&& empty($filter['ACTIVITY_COUNTER']);
 	}
 
 	private function getActivityResponsibleFieldName(): string
@@ -780,6 +814,38 @@ class EntityActivities
 	 */
 	public function getEntityIdsForStage(string $stageId, array $filter): ?array
 	{
+		$queries = $this->getEntityQueriesForStage($stageId, $filter);
+		if ($queries === null)
+		{
+			return null;
+		}
+
+		$entityIds = [];
+		foreach ($queries as $query)
+		{
+			$result = $query->exec();
+			while ($row = $result->fetch())
+			{
+				// ORM counter queries use 'ENTY' as the alias for the entity ID column
+				// (see CounterQueryBuilder\QueryParts\SelectFields::applyForUncompleted/applyForCountable)
+				$entityId = $row['ENTY'] ?? $row['ID'] ?? null;
+				if ($entityId !== null)
+				{
+					$entityIds[] = (int)$entityId;
+				}
+			}
+		}
+
+		return array_values(array_unique($entityIds));
+	}
+
+	/**
+	 * Returns counter queries selecting entity IDs for the requested stage, or null if it is not applicable.
+	 *
+	 * @return \Bitrix\Main\ORM\Query\Query[]|null
+	 */
+	public function getEntityQueriesForStage(string $stageId, array $filter): ?array
+	{
 		$activityCounterFilter = $this->getActivityCounterFilterValue($filter);
 		$counter = $this->getEntityCounterForStage($stageId, $activityCounterFilter);
 		if ($counter === null)
@@ -811,31 +877,12 @@ class EntityActivities
 			'USER_IDS' => $counterUserIds,
 			'EXCLUDE_USERS' => $excludeUsers,
 		];
-		$stageSemanticFilter = $this->getStageSemanticFilter($filter);
+		$stageSemanticFilter = $this->getStageSemanticFilter($filter, $stageId);
 		if ($stageSemanticFilter !== null)
 		{
 			$counterParams['STAGE_SEMANTIC_ID'] = $stageSemanticFilter;
 		}
 
-		// Use ORM query objects (SELECT_TYPE = ENTY) to get entity IDs directly
-		$queries = $counter->getActivityFilterParam($counterParams);
-
-		$entityIds = [];
-		foreach ($queries as $query)
-		{
-			$result = $query->exec();
-			while ($row = $result->fetch())
-			{
-				// ORM counter queries use 'ENTY' as the alias for the entity ID column
-				// (see CounterQueryBuilder\QueryParts\SelectFields::applyForUncompleted/applyForCountable)
-				$entityId = $row['ENTY'] ?? $row['ID'] ?? null;
-				if ($entityId !== null)
-				{
-					$entityIds[] = (int)$entityId;
-				}
-			}
-		}
-
-		return array_values(array_unique($entityIds));
+		return $counter->getActivityFilterParam($counterParams);
 	}
 }

@@ -14,12 +14,14 @@ use Bitrix\Crm\StatusTable;
 use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\DataProvider\Filterable;
 use Bitrix\DocumentGenerator\DataProviderManager;
+use Bitrix\Main\IO\Path;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ScalarField;
 
 abstract class Dynamic extends ProductsDataProvider implements Filterable
 {
 	protected $contacts;
+	protected $contactIds;
 	protected $myCompanyId;
 
 	public function getCrmOwnerType(): int
@@ -48,6 +50,7 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 
 		if ($factory->isCategoriesSupported())
 		{
+			Container::getInstance()->getLocalization()->loadMessages();
 			$this->fields['CATEGORY'] = [
 				'TITLE' => Loc::getMessage('CRM_COMMON_CATEGORY'),
 				'VALUE' => [$this, 'getCategory'],
@@ -76,9 +79,11 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 
 		if ($factory->isClientEnabled() && !$this->isLightMode())
 		{
+			Loc::loadMessages(Path::combine(__DIR__, 'deal.php'));
 			$this->fields['CONTACTS'] = [
 				'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_CONTACTS_TITLE'),
 				'PROVIDER' => ArrayDataProvider::class,
+				'ITEM_IDS' => 'getContactIds',
 				'OPTIONS' => [
 					'ITEM_PROVIDER' => Contact::class,
 					'ITEM_NAME' => 'CONTACT',
@@ -136,6 +141,7 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 
 		if ($factory->isSourceEnabled())
 		{
+			Loc::loadMessages(Path::combine(__DIR__, 'deal.php'));
 			$this->fields['SOURCE'] = [
 				'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_SOURCE_TITLE'),
 				'VALUE' => [$this, 'getSourceValue'],
@@ -437,8 +443,8 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 					$contact = DataProviderManager::getInstance()->getDataProvider(
 						Contact::class,
 						$contactId, [
-							'isLightMode' => true,
 							'DISABLE_MY_COMPANY' => true,
+							'isLightMode' => true,
 						],
 						$this
 					);
@@ -448,6 +454,29 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 		}
 
 		return $this->contacts;
+	}
+
+	/**
+	 * Returns contact IDs in binding order.
+	 *
+	 * @return list<int>
+	 */
+	public function getContactIds(): array
+	{
+		if ($this->contactIds === null)
+		{
+			$this->contactIds = [];
+			if ($this->isLoaded())
+			{
+				$contactIds = EntityContactTable::getContactIds($this->getCrmOwnerType(), (int)$this->source);
+				foreach ($contactIds as $contactId)
+				{
+					$this->contactIds[] = (int)$contactId;
+				}
+			}
+		}
+
+		return $this->contactIds;
 	}
 
 	public function getMyCompanyId($defaultMyCompanyId = null)

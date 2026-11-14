@@ -277,6 +277,12 @@ class Reader
 
 	public function readChildren(Chat $chat, int $userId): void
 	{
+		// most chats have no children: skip the subtree queries below
+		if (!$this->hasChildren($chat->getId()))
+		{
+			return;
+		}
+
 		$scope = $this->chatTreeScopeFactory->forParent($chat->getId());
 
 		$counterResult = $this->counterUpdater->delete()->byTreeScope($scope)->forUser($userId)->execute();
@@ -301,6 +307,16 @@ class Reader
 
 		(new Pull\ReadChildren($chat, $userId))->send();
 		$this->sendAfterReadChatsByTypeBatchEvents($userId, $affectedChatIds);
+	}
+
+	private function hasChildren(int $chatId): bool
+	{
+		return ChatTable::query()
+			->setSelect(['ID'])
+			->where('PARENT_ID', $chatId)
+			->setLimit(1)
+			->fetch() !== false
+		;
 	}
 
 	private function deleteChildrenNotifications(ChatTreeScope $scope, int $userId): void
@@ -354,15 +370,13 @@ class Reader
 	 */
 	private function getChildChatIdsWithRelation(ChatTreeScope $scope, int $userId): array
 	{
-		$query = RelationTable::query()
-			->setSelect(['CHAT_ID'])
-			->setDistinct()
-			->where('USER_ID', $userId)
-		;
-
-		$this->chatTreeFilterFactory->forTreeScope($scope)->apply($query);
-
-		return Normalize::uniquePositiveIntegers(array_column($query->fetchAll(), 'CHAT_ID'));
+		return $this->chatTreeFilterFactory->forTreeScope($scope)->fetchChatIds(
+			static fn () => RelationTable::query()
+				->setSelect(['CHAT_ID'])
+				->setDistinct()
+				->where('USER_ID', $userId),
+			'CHAT_ID',
+		);
 	}
 
 	/**

@@ -125,15 +125,11 @@ class SettingsHubNavigationFactory
 			return new Item\ContactCenterNavigationItem($router);
 		});
 		$registry->register('mail-client', function(): Item\MailClientNavigationItem {
-			$isIntranetAvailable = $this->intranetTools->isIntranetAvailable();
 			$isMailAvailable = $this->mailSettings->isMailAvailable();
 
 			return new Item\MailClientNavigationItem(
-				$isIntranetAvailable,
-				$isIntranetAvailable && $this->intranetTools->isExternalMailAvailable(),
 				$isMailAvailable,
-				$isIntranetAvailable
-					&& $isMailAvailable
+				$isMailAvailable
 					&& $this->mailSettings->isMailToolAvailable(),
 				$this->mailSettings->getMailClientUrl(),
 			);
@@ -176,6 +172,7 @@ class SettingsHubNavigationFactory
 			$isMarketOrRestAvailable = $isMarketAvailable || $isRestAvailable;
 
 			return new Item\SmsMarketplaceNavigationItem(
+				$this->smsSettings->hasConfigurableSenders(),
 				$this->smsSettings->isSmsAvailable(),
 				$isMarketOrRestAvailable,
 				$this->marketplace,
@@ -302,6 +299,7 @@ class SettingsHubNavigationFactory
 			);
 		});
 		$registry->register('sms-integrations', function(): Item\SmsIntegrationsNavigationItem {
+			$router = $this->settingsHubFactory->getRouter();
 			$isMessageServiceAvailable = $this->smsSettings->isMessageServiceAvailable();
 			$hasConfigurableSmsSenders = $this->smsSettings->hasConfigurableSenders();
 
@@ -309,7 +307,7 @@ class SettingsHubNavigationFactory
 				$hasConfigurableSmsSenders,
 				$isMessageServiceAvailable,
 				$isMessageServiceAvailable && $this->smsSettings->isAdmin(),
-				$this->smsSettings->getManageUrl(),
+				$router->getMessageSenderConnectionsUrl(),
 			);
 		});
 		$registry->register('locations', function(): Item\LocationsNavigationItem {
@@ -324,7 +322,11 @@ class SettingsHubNavigationFactory
 			);
 		});
 		$registry->register('directories', function(): Item\DirectoriesNavigationItem {
-			return new Item\DirectoriesNavigationItem();
+			return new Item\DirectoriesNavigationItem(
+				$this->catalogSettings->isCurrencyAvailable()
+					&& $this->catalogSettings->isCatalogAvailable()
+					&& $this->catalogSettings->isSaleAvailable(),
+			);
 		});
 		$registry->register('pipelines', function(): Item\PipelinesNavigationItem {
 			$router = $this->settingsHubFactory->getRouter();

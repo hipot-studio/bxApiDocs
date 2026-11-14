@@ -293,13 +293,19 @@ class Chat
 			'filter' => Array('=CHAT_ID' => $chatId, '=USER_ID' => $userId)
 		))->fetch();
 
-		if (!$relationData || $relationData['START_ID'] == 0)
+		// The border of a history cleared for everyone lives on the chat, see getMessages().
+		$startId = max(
+			(int)($relationData['START_ID'] ?? 0),
+			\Bitrix\Im\V2\Chat::getInstance($chatId)->getHistoryStartId()
+		);
+
+		if ($startId === 0)
 		{
 			$counter = \Bitrix\Im\Model\MessageTable::getCount(['=CHAT_ID' => $chatId]);
 		}
 		else
 		{
-			$counter = \Bitrix\Im\Model\MessageTable::getCount(['=CHAT_ID' => $chatId, '>=ID' => $relationData['START_ID']]);
+			$counter = \Bitrix\Im\Model\MessageTable::getCount(['=CHAT_ID' => $chatId, '>=ID' => $startId]);
 		}
 
 		return $counter > 0 ? $counter : 0;
@@ -365,7 +371,12 @@ class Chat
 		$countersProvider = ServiceLocator::getInstance()->get(CountersProvider::class);
 		$chatData['RELATION_UNREAD_ID'] = $unreadPositionProvider->getForChat($chatId, $userId);
 		$chatData['RELATION_COUNTER'] = $countersProvider->getForUser($chatId, $userId);
-		$chatData['RELATION_START_ID'] = (int)$chatData['RELATION_START_ID'];
+		// A history cleared for everyone leaves its border on the chat: a reader of an open chat may
+		// have no relation to carry it, and the content stays in the database until the scheduled cleanup.
+		$chatData['RELATION_START_ID'] = max(
+			(int)$chatData['RELATION_START_ID'],
+			\Bitrix\Im\V2\Chat::getInstance((int)$chatId)->getHistoryStartId()
+		);
 
 		if (isset($options['LIMIT']))
 		{

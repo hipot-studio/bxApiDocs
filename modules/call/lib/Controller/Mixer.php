@@ -33,11 +33,7 @@ class Mixer extends JwtController implements IdempotentReplayable
 	public function configureActions()
 	{
 		return [
-			'processingStatus' => [
-				'+prefilters' => [
-					new UniqueRequestFilter(),
-				],
-			],
+			'processingStatus' => $this->configureJwtAction([new UniqueRequestFilter()]),
 		];
 	}
 

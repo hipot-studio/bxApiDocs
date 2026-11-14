@@ -47,6 +47,7 @@ use Bitrix\Main\SiteTable;
 use Bitrix\Main\Type;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
+use Bitrix\Calendar\Internal\GuestLink;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -72,7 +73,6 @@ class CCalendar
 	public const EDIT_PREFIX = 'EDIT';
 	public const DEFAULT_MAX_PLANNER_USERS = 50;
 	private const DESTINATION_NODE_BATCH_SIZE = 500;
-	private static ?\WeakMap $nativeDeletionContexts = null;
 
 	private static
 		$id = false,
@@ -466,6 +466,10 @@ class CCalendar
 			'locationFeatureEnabled' => !$isCollabUser && Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_LOCATION),
 			'plannerFeatureEnabled' => Bitrix24Manager::isPlannerFeatureEnabled(),
 			'eventWithEmailGuestEnabled' => Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS),
+			'guestLinkAvailable' => !$isExtranetUser
+				&& !$isCollabUser
+				&& ServiceLocator::getInstance()->get(GuestLink\AvailabilityService::class)->isAvailable(),
+			'guestLinkUrl' => null,
 			'sharingFeatureLimitEnable' => Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_SHARING),
 			'projectFeatureEnabled' => SocialNetwork\FeatureService::isProjectFeatureEnabled(),
 			'teamsAsAttendeeEnabled' => HumanResources\FeatureService::isTeamsAsAttendeeEnabled(),
@@ -1063,18 +1067,6 @@ class CCalendar
 	 */
 	public static function DeleteEvent($id, $doExternalSync = true, $params = [])
 	{
-		try
-		{
-			return self::deleteEventWithOccupancyBoundary($id, $doExternalSync, $params);
-		}
-		catch (Rooms\OccupancyLockedException)
-		{
-			return false;
-		}
-	}
-
-	private static function deleteEventWithOccupancyBoundary($id, $doExternalSync = true, $params = [])
-	{
 		global $CACHE_MANAGER;
 
 		$id = (int)$id;
@@ -1088,11 +1080,6 @@ class CCalendar
 		$originalFrom = $params['originalFrom'] ?? null;
 		$recursionMode = $params['recursionMode'] ?? null;
 		$checkPermissions = $params['checkPermissions'] ?? true;
-		$nativeDeletionContext = self::consumeNativeDeletionContext($id, $params);
-		$nativeReadParams = $nativeDeletionContext === null ? [] : [
-			'userId' => $nativeDeletionContext['readActorId'],
-			'skipCache' => true,
-		];
 
 		if (!isset(self::$userId))
 		{
@@ -1106,7 +1093,6 @@ class CCalendar
 			'setDefaultLimit' => false,
 			'fetchAttendees' => true,
 			'checkPermissions' => $checkPermissions,
-			...$nativeReadParams,
 		]);
 
 		if (!empty($res[0]) && $event = $res[0])
@@ -1128,21 +1114,15 @@ class CCalendar
 				return Loc::getMessage('EC_ACCESS_DENIED');
 			}
 
-			if (
-				$nativeDeletionContext !== null
-				&& !self::isEventInNativeDeletionTraversal($event, $nativeDeletionContext['rootIds'])
-			)
+			try
 			{
-				$nativeDeletionContext = null;
-			}
-			$nativeDeletionTraversal = $nativeDeletionContext;
-			$ownsNativeDeletionTraversal = $nativeDeletionTraversal === null;
 			$deletionBoundary = CCalendarEvent::prepareDeletionOccupancyBoundary($event, [
 				'originalFrom' => $originalFrom,
 				'readActorId' => self::$userId,
 				'occupancyLock' => $params['occupancyLock'] ?? null,
 				'lockDeletionFamily' => true,
-				'deletionScopeRootIds' => $nativeDeletionContext['rootIds'] ?? null,
+				'deleteParentFromCopy' => true,
+				'deleteRecurrenceChildren' => true,
 				'recursionMode' => $recursionMode,
 			]);
 			try
@@ -1152,37 +1132,15 @@ class CCalendar
 				return false;
 			}
 			$event = $deletionBoundary['event'];
-			if (
-				$nativeDeletionTraversal !== null
-				&& !self::isEventInNativeDeletionTraversal($event, $nativeDeletionTraversal['rootIds'])
-			)
-			{
-				throw new Rooms\OccupancyLockedException();
-			}
 			if ($deletionBoundary['lock'] !== null && $checkPermissions)
 			{
-				$eventModel = CCalendarEvent::getEventModelForPermissionCheck(
-					(int)$event['ID'], $event, self::$userId,
-				);
+				$eventModel = CCalendarEvent::getEventModelForPermissionCheck((int)$event['ID'], $event, self::$userId);
 				if (!$accessController->check(ActionDictionary::ACTION_EVENT_DELETE, $eventModel))
 				{
 					return Loc::getMessage('EC_ACCESS_DENIED');
 				}
 			}
-			if ($ownsNativeDeletionTraversal && $deletionBoundary['familyScopeChecked'])
-			{
-				$rootIds = [(int)$event['ID']];
-				if (!empty($event['RECURRENCE_ID']) && !in_array($recursionMode, ['this', 'false'], true))
-				{
-					$rootIds[] = (int)$event['RECURRENCE_ID'];
-				}
-				$nativeDeletionTraversal = [
-					'lifetime' => (object)['active' => true],
-					'rootIds' => array_values(array_unique($rootIds)),
-				];
-			}
 
-			$nestedActorParams = ['occupancyLock' => $deletionBoundary['lock']];
 			CCalendarSect::UpdateModificationLabel($event['SECT_ID']);
 
 			if ($doExternalSync !== false && $event['SECT_ID'])
@@ -1212,23 +1170,21 @@ class CCalendar
 			$res = CCalendarEvent::Delete([
 				'id' => $id,
 				'Event' => $event,
-				'occupancyLock' => $deletionBoundary['lock'],
 				'bMarkDeleted' => $markDeleted,
 				'originalFrom' => $originalFrom,
 				'userId' => $userId,
 				'sendNotification' => $sendNotification,
 				'requestUid' => $params['requestUid'] ?? null,
+				'occupancyLock' => $deletionBoundary['lock'],
 			]);
 
 			if (!empty($event['RECURRENCE_ID']) && !in_array($recursionMode, ['this', 'false'], true))
 			{
-				$nestedParams = [
+				self::DeleteEvent($event['RECURRENCE_ID'], $doExternalSync, [
 					'sendNotification' => $sendNotification,
 					'originalFrom' => $originalFrom,
-				] + $nestedActorParams;
-				self::deleteNativeTraversalEvent(
-					(int)$event['RECURRENCE_ID'], $doExternalSync, $nestedParams, $nativeDeletionTraversal,
-				);
+					'occupancyLock' => $deletionBoundary['lock'],
+				]);
 			}
 
 			if (CCalendarEvent::CheckRecurcion($event))
@@ -1237,13 +1193,11 @@ class CCalendar
 
 				foreach ($events as $ev)
 				{
-					$nestedParams = [
+					self::DeleteEvent($ev['ID'], $doExternalSync, [
 						'sendNotification' => $sendNotification,
 						'originalFrom' => $originalFrom,
-					] + $nestedActorParams;
-					self::deleteNativeTraversalEvent(
-						(int)$ev['ID'], $doExternalSync, $nestedParams, $nativeDeletionTraversal,
-					);
+						'occupancyLock' => $deletionBoundary['lock'],
+					]);
 				}
 			}
 
@@ -1271,94 +1225,19 @@ class CCalendar
 			}
 			finally
 			{
-				if ($ownsNativeDeletionTraversal && $nativeDeletionTraversal !== null)
-				{
-					$nativeDeletionTraversal['lifetime']->active = false;
-				}
 				if ($deletionBoundary['ownsLock'])
 				{
 					EventSaveEffects::releaseOccupancyLock($id, $deletionBoundary['lock']);
 				}
 			}
-		}
-
-		return false;
-	}
-
-	private static function consumeNativeDeletionContext(int $id, array $params): ?array
-	{
-		$token = $params['nativeDeletionContext'] ?? null;
-		if (
-			!is_object($token)
-			|| self::$nativeDeletionContexts === null
-			|| !isset(self::$nativeDeletionContexts[$token])
-		)
-		{
-			return null;
-		}
-		$context = self::$nativeDeletionContexts[$token];
-		unset(self::$nativeDeletionContexts[$token]);
-		$readActorId = self::$userId ?? self::GetCurUserId();
-		$userId = !empty($params['userId']) ? (int)$params['userId'] : $readActorId;
-		if (
-			!$context['lifetime']->active
-			|| $context['eventId'] !== $id
-			|| $context['readActorId'] !== (int)$readActorId
-			|| $context['userId'] !== (int)$userId
-			|| $context['lock'] !== ($params['occupancyLock'] ?? null)
-		)
-		{
-			return null;
-		}
-
-		return $context;
-	}
-
-	private static function isEventInNativeDeletionTraversal(array $event, array $rootIds): bool
-	{
-		foreach (['ID', 'PARENT_ID', 'RECURRENCE_ID'] as $field)
-		{
-			if (in_array((int)($event[$field] ?? 0), $rootIds, true))
+			}
+			catch (Rooms\OccupancyLockedException)
 			{
-				return true;
+				return false;
 			}
 		}
 
 		return false;
-	}
-
-	private static function deleteNativeTraversalEvent(
-		int $id,
-		mixed $doExternalSync,
-		array $params,
-		?array $traversal,
-	): mixed
-	{
-		if ($traversal === null)
-		{
-			return self::DeleteEvent($id, $doExternalSync, $params);
-		}
-		$readActorId = self::$userId ?? self::GetCurUserId();
-		$userId = !empty($params['userId']) ? (int)$params['userId'] : $readActorId;
-		$token = new \stdClass();
-		self::$nativeDeletionContexts ??= new \WeakMap();
-		self::$nativeDeletionContexts[$token] = [
-			'lifetime' => $traversal['lifetime'],
-			'rootIds' => $traversal['rootIds'],
-			'eventId' => $id,
-			'readActorId' => (int)$readActorId,
-			'userId' => (int)$userId,
-			'lock' => $params['occupancyLock'] ?? null,
-		];
-		$params['nativeDeletionContext'] = $token;
-		try
-		{
-			return self::DeleteEvent($id, $doExternalSync, $params);
-		}
-		finally
-		{
-			unset(self::$nativeDeletionContexts[$token]);
-		}
 	}
 
 	public static function SetOffset($userId = false, $value = 0)
@@ -2122,6 +2001,10 @@ class CCalendar
 	public static function SaveEvent($params = [])
 	{
 		$res = self::SaveEventEx($params);
+		if ($res === false)
+		{
+			return false;
+		}
 
 		if (is_array($res) && isset($res['originalDavXmlId']))
 		{
@@ -2140,109 +2023,6 @@ class CCalendar
 	 * @throws Main\ObjectException
 	 */
 	public static function SaveEventEx($params = [])
-	{
-		$eventId = (int)($params['arFields']['ID'] ?? 0);
-		$occupancyLock = $params['occupancyLock'] ?? null;
-		$ownsOccupancyLock = false;
-		$silentErrorMode = self::$silentErrorMode;
-		$propagateEventNotAvailable = ExclusionSaveTransaction::shouldPropagateEventNotAvailable($params);
-		try
-		{
-			if ($eventId > 0)
-			{
-				$userId = (int)($params['userId'] ?? self::GetCurUserId());
-				$checkPermission = ($params['checkPermission'] ?? null) !== false;
-				$currentEvent = self::getCurrentEventForSaving($eventId, $userId, $checkPermission, true);
-				if (!is_array($currentEvent) || empty($currentEvent['ID']))
-				{
-					throw Core\Event\EventSaveStateException::eventNotAvailable(
-						empty(self::getCurrentEventForSaving($eventId, $userId, false, true)),
-					);
-				}
-
-				$oldLocation = $currentEvent['LOCATION'] ?? null;
-				$oldReservation = Rooms\Util::parseLocation($oldLocation);
-				$isOrganizerEvent = ($currentEvent['CAL_TYPE'] ?? null) !== Rooms\Manager::TYPE
-					&& (int)($currentEvent['PARENT_ID'] ?? 0) === $eventId;
-				if ($isOrganizerEvent && $oldReservation['room_event_id'])
-				{
-					$newLocation = $params['arFields']['LOCATION'] ?? $oldLocation;
-					if (is_array($newLocation))
-					{
-						$newLocation = $newLocation['NEW'] ?? $oldLocation;
-					}
-					if (
-						Main\Config\Option::get('calendar', 'isOccupancyCheckerEnabled', 'Y', '-') !== 'N'
-						&& !CCalendarEvent::isConfirmedSyncSource($params['originalFrom'] ?? null)
-					)
-					{
-						if (!($occupancyLock instanceof Rooms\OccupancyLock))
-						{
-							$occupancyLock = new Rooms\OccupancyLock();
-							$ownsOccupancyLock = true;
-						}
-						$occupancyLock->acquire($occupancyLock->resolveRoomIdsUsingCache($oldLocation, $newLocation));
-						$currentEvent = self::getCurrentEventForSaving($eventId, $userId, $checkPermission, true);
-						if (!is_array($currentEvent) || empty($currentEvent['ID']))
-						{
-							throw Core\Event\EventSaveStateException::eventNotAvailable(
-								empty(self::getCurrentEventForSaving($eventId, $userId, false, true)),
-							);
-						}
-						$requiredRoomIds = $occupancyLock->resolveRoomIdsUsingCache(
-							$currentEvent['LOCATION'] ?? null,
-							$newLocation,
-						);
-						if (!$occupancyLock->hasAcquiredRoomIds($requiredRoomIds))
-						{
-							throw new Rooms\OccupancyLockedException();
-						}
-						$params['occupancyLock'] = $occupancyLock;
-						$oldReservation = Rooms\Util::parseLocation($currentEvent['LOCATION'] ?? null);
-					}
-					if ($oldReservation['room_event_id'])
-					{
-						Rooms\Manager::assertReservationAvailable(
-							(int)$oldReservation['room_event_id'],
-							(int)$oldReservation['room_id'],
-							$checkPermission,
-							$userId,
-							$checkPermission,
-							$newLocation,
-						);
-					}
-				}
-				$params['preflightCurrentEvent'] = $currentEvent;
-			}
-
-			$params['propagateEventNotAvailable'] = true;
-
-			return self::saveEventExLegacy($params);
-		}
-		catch (Core\Event\EventSaveStateException $exception)
-		{
-			if (
-				$propagateEventNotAvailable
-				|| !$exception->isEventMissing()
-				|| $exception->getErrorCode() !== Core\Event\EventSaveStateException::EVENT_NOT_AVAILABLE
-			)
-			{
-				throw $exception;
-			}
-
-			return false;
-		}
-		finally
-		{
-			self::SetSilentErrorMode($silentErrorMode);
-			if ($ownsOccupancyLock)
-			{
-				EventSaveEffects::releaseOccupancyLock($eventId, $occupancyLock);
-			}
-		}
-	}
-
-	private static function saveEventExLegacy($params = [])
 	{
 		$arFields = $params['arFields'];
 		if (is_string($arFields['RRULE'] ?? null))
@@ -2306,621 +2086,628 @@ class CCalendar
 
 		$bPersonal = self::IsPersonal($arFields['CAL_TYPE'] ?? null, $arFields['OWNER_ID'] ?? null, $userId);
 		$checkPermission = !isset($params['checkPermission']) || $params['checkPermission'] !== false;
+		$incomingOccupancyLock = $params['occupancyLock'] ?? null;
+		$ownRecurrenceOccupancyLock = null;
 		$silentErrorModePrev = self::$silentErrorMode;
 		self::SetSilentErrorMode();
-
-		if (
-			isset($arFields['DT_FROM'], $arFields['DT_TO'])
-			&& !isset($arFields['DATE_FROM'])
-			&& !isset($arFields['DATE_TO'])
-		)
+		try
 		{
-			$arFields['DATE_FROM'] = $arFields['DT_FROM'];
-			$arFields['DATE_TO'] = $arFields['DT_TO'];
-			unset($arFields['DT_FROM'], $arFields['DT_TO']);
-		}
-
-		// Fetch current event
-		$curEvent = false;
-		$bNew = !isset($arFields['ID']) || !$arFields['ID'];
-		if (!$bNew)
-		{
-			$curEvent = $params['preflightCurrentEvent']
-				?? self::getCurrentEventForSaving((int)$arFields['ID'], $userId, $checkPermission);
-			if (!is_array($curEvent) || empty($curEvent['ID']))
-			{
-				throw Core\Event\EventSaveStateException::eventNotAvailable(
-					empty(self::getCurrentEventForSaving((int)$arFields['ID'], $userId, false, true)),
-				);
-			}
-
 			if (
-				in_array(
-					$curEvent['EVENT_TYPE'] ?? '',
-					Sharing\SharingEventManager::getSharingEventTypes(),
-					true
-				)
+				isset($arFields['DT_FROM'], $arFields['DT_TO'])
+				&& !isset($arFields['DATE_FROM'])
+				&& !isset($arFields['DATE_TO'])
 			)
 			{
-				unset(
-					$arFields['SECTIONS'],
-					$arFields['DATE_FROM'],
-					$arFields['DATE_TO'],
-					$arFields['SKIP_TIME'],
-					$arFields['TZ_FROM'],
-					$arFields['TZ_TO'],
-				);
-				$arFields['RRULE'] = [
-					'FREQ' => 'NONE',
-					'INTERVAL' => 1,
-				];
+				$arFields['DATE_FROM'] = $arFields['DT_FROM'];
+				$arFields['DATE_TO'] = $arFields['DT_TO'];
+				unset($arFields['DT_FROM'], $arFields['DT_TO']);
 			}
 
-			if (!isset($arFields['DATE_FROM']) && isset($curEvent['DATE_FROM']))
+			// Fetch current event
+			$curEvent = false;
+			$bNew = !isset($arFields['ID']) || !$arFields['ID'];
+			if (!$bNew)
 			{
-				$arFields['DATE_FROM'] = $curEvent['DATE_FROM'];
-			}
-			if (!isset($arFields['DATE_TO']) && isset($curEvent['DATE_TO']))
-			{
-				$arFields['DATE_TO'] = $curEvent['DATE_TO'];
-			}
+				$curEvent = self::getCurrentEventForSaving((int)$arFields['ID'], $userId, $checkPermission);
 
-			$isSkipTime = isset($arFields['SKIP_TIME']) || isset($arFields['DT_SKIP_TIME'])
-				? (
-					($arFields['SKIP_TIME'] ?? null) === true
-					|| ($arFields['SKIP_TIME'] ?? null) === 'Y'
-					|| ($arFields['DT_SKIP_TIME'] ?? null) === 'Y'
+				if (
+					in_array(
+						$curEvent['EVENT_TYPE'] ?? '',
+						Sharing\SharingEventManager::getSharingEventTypes(),
+						true
+					)
 				)
-				: (($curEvent['DT_SKIP_TIME'] ?? null) === 'Y')
-			;
-
-			$eventModel = CCalendarEvent::getEventModelForPermissionCheck((int)($curEvent['ID'] ?? 0), $curEvent, $userId);
-
-			$accessCheckParams = ($params['checkCurrentEventPermission'] ?? false)
-				? ['checkCurrentEvent' => 'Y']
-				: null
-			;
-			$accessCheckResult = $accessController->check(
-				ActionDictionary::ACTION_EVENT_EDIT,
-				$eventModel,
-				$accessCheckParams,
-			);
-			$bChangeMeeting = !$checkPermission || $accessCheckResult;
-
-			if (!$bChangeMeeting)
-			{
-				return Loc::getMessage('EC_ACCESS_DENIED');
-			}
-
-			$canChangeDateRecurrenceEvent = isset($params['recursionEditMode'])
-				&& in_array($params['recursionEditMode'], ['all', ''], true)
-				&& (($arFields['DATE_FROM'] ?? null) !== ($curEvent['DATE_FROM'] ?? null))
-				&& ($arFields['RRULE']['FREQ'] ?? null) !== 'NONE'
-			;
-
-			if ($canChangeDateRecurrenceEvent)
-			{
-				if (($params['recursionEditMode'] ?? null) === 'all')
 				{
-					$recurrentDateDelta = self::getRecurrentEventTimestampDelta(
-						$params['currentEventDateFrom'] ?? null,
+					unset(
+						$arFields['SECTIONS'],
 						$arFields['DATE_FROM'],
-						$curEvent['DATE_FROM'],
-						$isSkipTime
-					);
-					$params['recurrentDateDelta'] = $recurrentDateDelta;
-					$recurrentDayDelta = self::getRecurrentEventDayDelta(
-						$params['currentEventDateFrom'] ?? null,
-						$arFields['DATE_FROM'],
-						$curEvent['DATE_FROM']
-					);
-					$params['recurrentDayDelta'] = $recurrentDayDelta;
-					$arFields['EXDATE'] = self::shiftRecurrentExDatesByDays(
-						$arFields['EXDATE'] ?? $curEvent['EXDATE'] ?? null,
-						$recurrentDayDelta
-					);
-					$newDuration = self::Timestamp($arFields['DATE_TO'], false)
-						- self::Timestamp($arFields['DATE_FROM'], false)
-					;
-					$newDurationDays = self::getRecurrentEventDayDuration(
-						$arFields['DATE_FROM'],
-						$arFields['DATE_TO']
-					);
-
-					if ($isSkipTime)
-					{
-						$arFields['DATE_FROM'] = self::shiftRecurrentDateByDays(
-							$curEvent['DATE_FROM'],
-							$recurrentDayDelta,
-							false
-						);
-						$arFields['DATE_TO'] = self::shiftRecurrentDateByDays(
-							$arFields['DATE_FROM'],
-							$newDurationDays,
-							false
-						);
-					}
-					else
-					{
-						$newDateFromTimestamp = self::Timestamp(
-							self::shiftRecurrentDateByDays(
-								$curEvent['DATE_FROM'],
-								$recurrentDayDelta,
-								true
-							),
-							false
-						);
-						$newDateFromTimestamp = self::DateWithNewTime(
-							self::Timestamp($arFields['DATE_FROM'], false),
-							$newDateFromTimestamp
-						);
-
-						$arFields['DATE_FROM'] = self::Date($newDateFromTimestamp);
-						$arFields['DATE_TO'] = self::Date($newDateFromTimestamp + $newDuration);
-					}
-				}
-				else
-				{
-					$arFields['DATE_FROM'] = self::GetOriginalDate(
-						$arFields['DATE_FROM'],
-						$curEvent['DATE_FROM'],
-						$arFields['TZ_FROM'] ?? null
-					);
-					$arFields['DATE_TO'] = self::GetOriginalDate(
 						$arFields['DATE_TO'],
-						$curEvent['DATE_TO'],
-						$arFields['TZ_TO'] ?? null
+						$arFields['SKIP_TIME'],
+						$arFields['TZ_FROM'],
+						$arFields['TZ_TO'],
 					);
+					$arFields['RRULE'] = [
+						'FREQ' => 'NONE',
+						'INTERVAL' => 1,
+					];
 				}
-			}
 
-			$bPersonal = $bPersonal && self::IsPersonal($curEvent['CAL_TYPE'], $curEvent['OWNER_ID'], $userId);
-
-			$arFields['CAL_TYPE'] = $curEvent['CAL_TYPE'];
-			$arFields['OWNER_ID'] = $curEvent['OWNER_ID'];
-			$arFields['CREATED_BY'] = $curEvent['CREATED_BY'];
-			$arFields['ACTIVE'] = $curEvent['ACTIVE'] ?? null;
-
-			if (!isset($arFields['NAME']))
-			{
-				$arFields['NAME'] = $curEvent['NAME'];
-			}
-			if (!isset($arFields['DESCRIPTION']))
-			{
-				$arFields['DESCRIPTION'] = $curEvent['DESCRIPTION'];
-			}
-			if (!isset($arFields['COLOR']) && $curEvent['COLOR'])
-			{
-				$arFields['COLOR'] = $curEvent['COLOR'];
-			}
-			if (!isset($arFields['TEXT_COLOR']) && !empty($curEvent['TEXT_COLOR']))
-			{
-				$arFields['TEXT_COLOR'] = $curEvent['TEXT_COLOR'];
-			}
-			if (!isset($arFields['SECTIONS']))
-			{
-				$arFields['SECTIONS'] = [$curEvent['SECT_ID']];
-				$sectionId = !empty($arFields['SECTIONS']) ? $arFields['SECTIONS'][0] : 0;
-			}
-			if (!isset($arFields['IS_MEETING']))
-			{
-				$arFields['IS_MEETING'] = $curEvent['IS_MEETING'];
-			}
-			if (!isset($arFields['MEETING_HOST']))
-			{
-				$arFields['MEETING_HOST'] = $curEvent['MEETING_HOST'];
-			}
-			if (!isset($arFields['MEETING_STATUS']))
-			{
-				$arFields['MEETING_STATUS'] = $curEvent['MEETING_STATUS'];
-			}
-			if (!isset($arFields['ACTIVE']) && isset($curEvent['ACTIVE']))
-			{
-				$arFields['ACTIVE'] = $curEvent['ACTIVE'];
-			}
-			if (!isset($arFields['PRIVATE_EVENT']))
-			{
-				$arFields['PRIVATE_EVENT'] = $curEvent['PRIVATE_EVENT'];
-			}
-			if (!isset($arFields['ACCESSIBILITY']))
-			{
-				$arFields['ACCESSIBILITY'] = $curEvent['ACCESSIBILITY'];
-			}
-			if (!isset($arFields['IMPORTANCE']))
-			{
-				$arFields['IMPORTANCE'] = $curEvent['IMPORTANCE'];
-			}
-			if (!isset($arFields['SKIP_TIME']))
-			{
-				$arFields['SKIP_TIME'] = $curEvent['DT_SKIP_TIME'] === 'Y';
-			}
-			if (!isset($arFields['TZ_FROM']))
-			{
-				$arFields['TZ_FROM'] = $curEvent['TZ_FROM'];
-			}
-			if (!isset($arFields['TZ_TO']))
-			{
-				$arFields['TZ_TO'] = $curEvent['TZ_TO'];
-			}
-			if (!isset($arFields['RELATIONS']))
-			{
-				$arFields['RELATIONS'] = $curEvent['RELATIONS'];
-			}
-			if (!isset($arFields['MEETING']))
-			{
-				$arFields['MEETING'] = $curEvent['MEETING'];
-			}
-			if (!isset($arFields['SYNC_STATUS']) && $curEvent['SYNC_STATUS'])
-			{
-				$arFields['SYNC_STATUS'] = $curEvent['SYNC_STATUS'];
-			}
-			if (!isset($arFields['EVENT_TYPE']) && $curEvent['EVENT_TYPE'])
-			{
-				$arFields['EVENT_TYPE'] = $curEvent['EVENT_TYPE'];
-			}
-			$arFields['MEETING']['LANGUAGE_ID'] = self::getUserLanguageId((int)$userId);
-
-			if (
-				!isset($arFields['ATTENDEES']) && !isset($arFields['ATTENDEES_CODES'])
-				&& $arFields['IS_MEETING']
-				&& !empty($curEvent['ATTENDEE_LIST'])
-				&& is_array($curEvent['ATTENDEE_LIST'])
-			)
-			{
-				$arFields['ATTENDEES'] = [];
-				foreach ($curEvent['ATTENDEE_LIST'] as $attendee)
+				if (!isset($arFields['DATE_FROM']) && isset($curEvent['DATE_FROM']))
 				{
-					$arFields['ATTENDEES'][] = $attendee['id'];
+					$arFields['DATE_FROM'] = $curEvent['DATE_FROM'];
 				}
-			}
-			if (!isset($arFields['ATTENDEES_CODES']) && $arFields['IS_MEETING'])
-			{
-				$arFields['ATTENDEES_CODES'] = $curEvent['ATTENDEES_CODES'];
-			}
-
-			if (!isset($arFields['LOCATION']) && $curEvent['LOCATION'] !== "")
-			{
-				$arFields['LOCATION'] = [
-					'OLD' => $curEvent['LOCATION'],
-					'NEW' => $curEvent['LOCATION'],
-				];
-
-				//if location wasn't change when updating event
-				$parsedLoc = Bitrix\Calendar\Rooms\Util::parseLocation($curEvent['LOCATION']);
-				if ($parsedLoc['room_event_id'])
+				if (!isset($arFields['DATE_TO']) && isset($curEvent['DATE_TO']))
 				{
-					$arFields['LOCATION']['NEW'] = 'calendar_' . $parsedLoc['room_id'];
+					$arFields['DATE_TO'] = $curEvent['DATE_TO'];
 				}
-			}
 
-			if ($arFields['IS_MEETING'] && !$bPersonal && $arFields['CAL_TYPE'] === 'user')
-			{
-				$arFields['SECTION_ID'] = $curEvent['SECT_ID'];
-				$arFields['SECTIONS'] = [$curEvent['SECT_ID']];
-			}
-
-			// If it's attendee but modifying called from CalDav methods
-			if (
-				(!empty($params['bSilentAccessMeeting'])
-					|| (isset($params['fromWebservice']) && $params['fromWebservice'] === true)
-				)
-				&& !empty($curEvent['IS_MEETING'])
-				&& ($curEvent['PARENT_ID'] !== $curEvent['ID'])
-			)
-			{
-				// TODO: It called when changes caused in google/webservise side but can't be
-				// TODO: implemented because user is only attendee, not the owner of the event
-				//Todo: we have to update such events back to revert changes from google
-				return true; // CalDav will return 204
-			}
-
-			if (!isset($arFields["RRULE"]) && $curEvent["RRULE"] !== '' && ($params['fromWebservice'] ?? null) !== true)
-			{
-				$arFields["RRULE"] = CCalendarEvent::ParseRRULE($curEvent["RRULE"]);
-			}
-
-			if (
-				(($params['fromWebservice'] ?? null) === true)
-				&& $arFields["RRULE"] === -1
-				&& CCalendarEvent::CheckRecurcion($curEvent)
-			)
-			{
-				$arFields["RRULE"] = CCalendarEvent::ParseRRULE($curEvent['RRULE']);
-			}
-
-			if (!isset($arFields['EXDATE']) && !empty($arFields["RRULE"]))
-			{
-				$arFields['EXDATE'] = $curEvent['EXDATE'];
-			}
-
-			else if (
-				isset($arFields['EXDATE'], $curEvent['EXDATE'])
-				&& $arFields['EXDATE']
-				&& $curEvent['EXDATE']
-				&& !empty($arFields["RRULE"])
-			)
-			{
-				$arFields['EXDATE'] = self::mergeExcludedDates($curEvent['EXDATE'], $arFields['EXDATE']);
-			}
-
-			if ($curEvent)
-			{
-				$params['currentEvent'] = $curEvent;
-			}
-		}
-
-		if ($params['autoDetectSection'] && $sectionId <= 0)
-		{
-			$sectionId = false;
-			if ($arFields['CAL_TYPE'] === 'user')
-			{
-				$autoCreateUserSection = array_key_exists('autoCreateSection', $params)
-					? (bool)$params['autoCreateSection']
-					: true
+				$isSkipTime = isset($arFields['SKIP_TIME']) || isset($arFields['DT_SKIP_TIME'])
+					? (
+						($arFields['SKIP_TIME'] ?? null) === true
+						|| ($arFields['SKIP_TIME'] ?? null) === 'Y'
+						|| ($arFields['DT_SKIP_TIME'] ?? null) === 'Y'
+					)
+					: (($curEvent['DT_SKIP_TIME'] ?? null) === 'Y')
 				;
 
-				$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], false);
-				if (
-					!$sectionId
-					&& $autoCreateUserSection
-				)
-				{
-					if (
-						$checkPermission
-						&& !self::canAutoCreateSectionForEvent($arFields, (int)$userId)
-					)
-					{
-						return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
-					}
+				$eventModel = CCalendarEvent::getEventModelForPermissionCheck((int)($curEvent['ID'] ?? 0), $curEvent, $userId);
 
-					$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], true);
+				$accessCheckParams = ($params['checkCurrentEventPermission'] ?? false)
+					? ['checkCurrentEvent' => 'Y']
+					: null
+				;
+				$accessCheckResult = $accessController->check(
+					ActionDictionary::ACTION_EVENT_EDIT,
+					$eventModel,
+					$accessCheckParams,
+				);
+				$bChangeMeeting = !$checkPermission || $accessCheckResult;
+
+				if (!$bChangeMeeting)
+				{
+					return Loc::getMessage('EC_ACCESS_DENIED');
 				}
 
-				if ($sectionId)
-				{
-					$res = CCalendarSect::GetList(
-						[
-							'arFilter' => [
-								'CAL_TYPE' => $arFields['CAL_TYPE'],
-								'OWNER_ID' => $arFields['OWNER_ID'],
-								'ID' => $sectionId,
-							],
-						]
-					);
-
-
-					if (!$res || !$res[0] || CCalendarSect::CheckGoogleVirtualSection($res[0]['GAPI_CALENDAR_ID']))
-					{
-						$sectionId = false;
-					}
-				}
-				else
-				{
-					$sectionId = false;
-				}
-
-				if ($sectionId)
-				{
-					$arFields['SECTIONS'] = [$sectionId];
-				}
-			}
-
-			if (!$sectionId)
-			{
-				if (empty($arFields['CAL_TYPE']) || empty($arFields['OWNER_ID']))
+				if ($curEvent && Rooms\Manager::hasMissingReservation(self::collectReservationSourceIds($params, $curEvent)))
 				{
 					return false;
 				}
 
-				$sectRes = CCalendarSect::GetSectionForOwner(
-					$arFields['CAL_TYPE'],
-					$arFields['OWNER_ID'],
-					false
-				);
+				$canChangeDateRecurrenceEvent = isset($params['recursionEditMode'])
+					&& in_array($params['recursionEditMode'], ['all', ''], true)
+					&& (($arFields['DATE_FROM'] ?? null) !== ($curEvent['DATE_FROM'] ?? null))
+					&& ($arFields['RRULE']['FREQ'] ?? null) !== 'NONE'
+				;
+
+				if ($canChangeDateRecurrenceEvent)
+				{
+					if (($params['recursionEditMode'] ?? null) === 'all')
+					{
+						$recurrentDateDelta = self::getRecurrentEventTimestampDelta(
+							$params['currentEventDateFrom'] ?? null,
+							$arFields['DATE_FROM'],
+							$curEvent['DATE_FROM'],
+							$isSkipTime
+						);
+						$params['recurrentDateDelta'] = $recurrentDateDelta;
+						$recurrentDayDelta = self::getRecurrentEventDayDelta(
+							$params['currentEventDateFrom'] ?? null,
+							$arFields['DATE_FROM'],
+							$curEvent['DATE_FROM']
+						);
+						$params['recurrentDayDelta'] = $recurrentDayDelta;
+						$arFields['EXDATE'] = self::shiftRecurrentExDatesByDays(
+							$arFields['EXDATE'] ?? $curEvent['EXDATE'] ?? null,
+							$recurrentDayDelta
+						);
+						$newDuration = self::Timestamp($arFields['DATE_TO'], false)
+							- self::Timestamp($arFields['DATE_FROM'], false)
+						;
+						$newDurationDays = self::getRecurrentEventDayDuration(
+							$arFields['DATE_FROM'],
+							$arFields['DATE_TO']
+						);
+
+						if ($isSkipTime)
+						{
+							$arFields['DATE_FROM'] = self::shiftRecurrentDateByDays(
+								$curEvent['DATE_FROM'],
+								$recurrentDayDelta,
+								false
+							);
+							$arFields['DATE_TO'] = self::shiftRecurrentDateByDays(
+								$arFields['DATE_FROM'],
+								$newDurationDays,
+								false
+							);
+						}
+						else
+						{
+							$newDateFromTimestamp = self::Timestamp(
+								self::shiftRecurrentDateByDays(
+									$curEvent['DATE_FROM'],
+									$recurrentDayDelta,
+									true
+								),
+								false
+							);
+							$newDateFromTimestamp = self::DateWithNewTime(
+								self::Timestamp($arFields['DATE_FROM'], false),
+								$newDateFromTimestamp
+							);
+
+							$arFields['DATE_FROM'] = self::Date($newDateFromTimestamp);
+							$arFields['DATE_TO'] = self::Date($newDateFromTimestamp + $newDuration);
+						}
+					}
+					else
+					{
+						$arFields['DATE_FROM'] = self::GetOriginalDate(
+							$arFields['DATE_FROM'],
+							$curEvent['DATE_FROM'],
+							$arFields['TZ_FROM'] ?? null
+						);
+						$arFields['DATE_TO'] = self::GetOriginalDate(
+							$arFields['DATE_TO'],
+							$curEvent['DATE_TO'],
+							$arFields['TZ_TO'] ?? null
+						);
+					}
+				}
+
+				$bPersonal = $bPersonal && self::IsPersonal($curEvent['CAL_TYPE'], $curEvent['OWNER_ID'], $userId);
+
+				$arFields['CAL_TYPE'] = $curEvent['CAL_TYPE'];
+				$arFields['OWNER_ID'] = $curEvent['OWNER_ID'];
+				$arFields['CREATED_BY'] = $curEvent['CREATED_BY'];
+				$arFields['ACTIVE'] = $curEvent['ACTIVE'] ?? null;
+
+				if (!isset($arFields['NAME']))
+				{
+					$arFields['NAME'] = $curEvent['NAME'];
+				}
+				if (!isset($arFields['DESCRIPTION']))
+				{
+					$arFields['DESCRIPTION'] = $curEvent['DESCRIPTION'];
+				}
+				if (!isset($arFields['COLOR']) && $curEvent['COLOR'])
+				{
+					$arFields['COLOR'] = $curEvent['COLOR'];
+				}
+				if (!isset($arFields['TEXT_COLOR']) && !empty($curEvent['TEXT_COLOR']))
+				{
+					$arFields['TEXT_COLOR'] = $curEvent['TEXT_COLOR'];
+				}
+				if (!isset($arFields['SECTIONS']))
+				{
+					$arFields['SECTIONS'] = [$curEvent['SECT_ID']];
+					$sectionId = !empty($arFields['SECTIONS']) ? $arFields['SECTIONS'][0] : 0;
+				}
+				if (!isset($arFields['IS_MEETING']))
+				{
+					$arFields['IS_MEETING'] = $curEvent['IS_MEETING'];
+				}
+				if (!isset($arFields['MEETING_HOST']))
+				{
+					$arFields['MEETING_HOST'] = $curEvent['MEETING_HOST'];
+				}
+				if (!isset($arFields['MEETING_STATUS']))
+				{
+					$arFields['MEETING_STATUS'] = $curEvent['MEETING_STATUS'];
+				}
+				if (!isset($arFields['ACTIVE']) && isset($curEvent['ACTIVE']))
+				{
+					$arFields['ACTIVE'] = $curEvent['ACTIVE'];
+				}
+				if (!isset($arFields['PRIVATE_EVENT']))
+				{
+					$arFields['PRIVATE_EVENT'] = $curEvent['PRIVATE_EVENT'];
+				}
+				if (!isset($arFields['ACCESSIBILITY']))
+				{
+					$arFields['ACCESSIBILITY'] = $curEvent['ACCESSIBILITY'];
+				}
+				if (!isset($arFields['IMPORTANCE']))
+				{
+					$arFields['IMPORTANCE'] = $curEvent['IMPORTANCE'];
+				}
+				if (!isset($arFields['SKIP_TIME']))
+				{
+					$arFields['SKIP_TIME'] = $curEvent['DT_SKIP_TIME'] === 'Y';
+				}
+				if (!isset($arFields['TZ_FROM']))
+				{
+					$arFields['TZ_FROM'] = $curEvent['TZ_FROM'];
+				}
+				if (!isset($arFields['TZ_TO']))
+				{
+					$arFields['TZ_TO'] = $curEvent['TZ_TO'];
+				}
+				if (!isset($arFields['RELATIONS']))
+				{
+					$arFields['RELATIONS'] = $curEvent['RELATIONS'];
+				}
+				if (!isset($arFields['MEETING']))
+				{
+					$arFields['MEETING'] = $curEvent['MEETING'];
+				}
+				if (!isset($arFields['SYNC_STATUS']) && $curEvent['SYNC_STATUS'])
+				{
+					$arFields['SYNC_STATUS'] = $curEvent['SYNC_STATUS'];
+				}
+				if (!isset($arFields['EVENT_TYPE']) && $curEvent['EVENT_TYPE'])
+				{
+					$arFields['EVENT_TYPE'] = $curEvent['EVENT_TYPE'];
+				}
+				$arFields['MEETING']['LANGUAGE_ID'] = self::getUserLanguageId((int)$userId);
+
 				if (
-					!($sectRes['sectionId'] > 0)
-					&& ($params['autoCreateSection'] ?? false)
+					!isset($arFields['ATTENDEES']) && !isset($arFields['ATTENDEES_CODES'])
+					&& $arFields['IS_MEETING']
+					&& !empty($curEvent['ATTENDEE_LIST'])
+					&& is_array($curEvent['ATTENDEE_LIST'])
 				)
 				{
+					$arFields['ATTENDEES'] = [];
+					foreach ($curEvent['ATTENDEE_LIST'] as $attendee)
+					{
+						$arFields['ATTENDEES'][] = $attendee['id'];
+					}
+				}
+				if (!isset($arFields['ATTENDEES_CODES']) && $arFields['IS_MEETING'])
+				{
+					$arFields['ATTENDEES_CODES'] = $curEvent['ATTENDEES_CODES'];
+				}
+
+				if (!isset($arFields['LOCATION']) && $curEvent['LOCATION'] !== "")
+				{
+					$arFields['LOCATION'] = [
+						'OLD' => $curEvent['LOCATION'],
+						'NEW' => $curEvent['LOCATION'],
+					];
+
+					//if location wasn't change when updating event
+					$parsedLoc = Bitrix\Calendar\Rooms\Util::parseLocation($curEvent['LOCATION']);
+					if ($parsedLoc['room_event_id'])
+					{
+						$arFields['LOCATION']['NEW'] = 'calendar_' . $parsedLoc['room_id'];
+					}
+				}
+
+				if ($arFields['IS_MEETING'] && !$bPersonal && $arFields['CAL_TYPE'] === 'user')
+				{
+					$arFields['SECTION_ID'] = $curEvent['SECT_ID'];
+					$arFields['SECTIONS'] = [$curEvent['SECT_ID']];
+				}
+
+				// If it's attendee but modifying called from CalDav methods
+				if (
+					(!empty($params['bSilentAccessMeeting'])
+						|| (isset($params['fromWebservice']) && $params['fromWebservice'] === true)
+					)
+					&& !empty($curEvent['IS_MEETING'])
+					&& ($curEvent['PARENT_ID'] !== $curEvent['ID'])
+				)
+				{
+					// TODO: It called when changes caused in google/webservise side but can't be
+					// TODO: implemented because user is only attendee, not the owner of the event
+					//Todo: we have to update such events back to revert changes from google
+					return true; // CalDav will return 204
+				}
+
+				if (!isset($arFields["RRULE"]) && $curEvent["RRULE"] !== '' && ($params['fromWebservice'] ?? null) !== true)
+				{
+					$arFields["RRULE"] = CCalendarEvent::ParseRRULE($curEvent["RRULE"]);
+				}
+
+				if (
+					(($params['fromWebservice'] ?? null) === true)
+					&& $arFields["RRULE"] === -1
+					&& CCalendarEvent::CheckRecurcion($curEvent)
+				)
+				{
+					$arFields["RRULE"] = CCalendarEvent::ParseRRULE($curEvent['RRULE']);
+				}
+
+				if (!isset($arFields['EXDATE']) && !empty($arFields["RRULE"]))
+				{
+					$arFields['EXDATE'] = $curEvent['EXDATE'];
+				}
+
+				else if (
+					isset($arFields['EXDATE'], $curEvent['EXDATE'])
+					&& $arFields['EXDATE']
+					&& $curEvent['EXDATE']
+					&& !empty($arFields["RRULE"])
+				)
+				{
+					$arFields['EXDATE'] = self::mergeExcludedDates($curEvent['EXDATE'], $arFields['EXDATE']);
+				}
+
+				if ($curEvent)
+				{
+					$params['currentEvent'] = $curEvent;
+				}
+			}
+
+			if ($params['autoDetectSection'] && $sectionId <= 0)
+			{
+				$sectionId = false;
+				if ($arFields['CAL_TYPE'] === 'user')
+				{
+					$autoCreateUserSection = array_key_exists('autoCreateSection', $params)
+						? (bool)$params['autoCreateSection']
+						: true
+					;
+
+					$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], false);
 					if (
-						$checkPermission
-						&& !self::canAutoCreateSectionForEvent($arFields, (int)$userId)
+						!$sectionId
+						&& $autoCreateUserSection
 					)
 					{
-						return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+						if (
+							$checkPermission
+							&& !self::canAutoCreateSectionForEvent($arFields, (int)$userId)
+						)
+						{
+							return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+						}
+
+						$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], true);
+					}
+
+					if ($sectionId)
+					{
+						$res = CCalendarSect::GetList(
+							[
+								'arFilter' => [
+									'CAL_TYPE' => $arFields['CAL_TYPE'],
+									'OWNER_ID' => $arFields['OWNER_ID'],
+									'ID' => $sectionId,
+								],
+							]
+						);
+
+
+						if (!$res || !$res[0] || CCalendarSect::CheckGoogleVirtualSection($res[0]['GAPI_CALENDAR_ID']))
+						{
+							$sectionId = false;
+						}
+					}
+					else
+					{
+						$sectionId = false;
+					}
+
+					if ($sectionId)
+					{
+						$arFields['SECTIONS'] = [$sectionId];
+					}
+				}
+
+				if (!$sectionId)
+				{
+					if (empty($arFields['CAL_TYPE']) || empty($arFields['OWNER_ID']))
+					{
+						return false;
 					}
 
 					$sectRes = CCalendarSect::GetSectionForOwner(
 						$arFields['CAL_TYPE'],
 						$arFields['OWNER_ID'],
-						true
+						false
 					);
-				}
-
-				if ($sectRes['sectionId'] > 0)
-				{
-					$sectionId = $sectRes['sectionId'];
-					$arFields['SECTIONS'] = [$sectionId];
-					if ($sectRes['autoCreated'])
+					if (
+						!($sectRes['sectionId'] > 0)
+						&& ($params['autoCreateSection'] ?? false)
+					)
 					{
-						$params['bAffectToDav'] = false;
+						if (
+							$checkPermission
+							&& !self::canAutoCreateSectionForEvent($arFields, (int)$userId)
+						)
+						{
+							return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+						}
+
+						$sectRes = CCalendarSect::GetSectionForOwner(
+							$arFields['CAL_TYPE'],
+							$arFields['OWNER_ID'],
+							true
+						);
 					}
+
+					if ($sectRes['sectionId'] > 0)
+					{
+						$sectionId = $sectRes['sectionId'];
+						$arFields['SECTIONS'] = [$sectionId];
+						if ($sectRes['autoCreated'])
+						{
+							$params['bAffectToDav'] = false;
+						}
+					}
+					else
+					{
+						return false;
+					}
+				}
+			}
+
+			if (
+				$bNew
+				&& $checkPermission
+				&& $sectionId > 0
+			)
+			{
+				$section = is_array($sectRes['section'] ?? null) ? $sectRes['section'] : null;
+				if ($section === null || (int)($section['ID'] ?? 0) !== (int)$sectionId)
+				{
+					$section = self::normalizeEventSectionFields((int)$sectionId, $arFields);
 				}
 				else
 				{
-					return false;
+					$arFields['CAL_TYPE'] = $section['CAL_TYPE'];
+					$arFields['OWNER_ID'] = $section['OWNER_ID'];
+				}
+
+				if (
+					$section === null
+					|| !self::checkSectionAddPermission((int)$sectionId, $section, $accessController, $userId)
+				)
+				{
+					return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
 				}
 			}
-		}
 
-		if (
-			$bNew
-			&& $checkPermission
-			&& $sectionId > 0
-		)
-		{
-			$section = is_array($sectRes['section'] ?? null) ? $sectRes['section'] : null;
-			if ($section === null || (int)($section['ID'] ?? 0) !== (int)$sectionId)
+			if (isset($arFields["RRULE"]))
 			{
-				$section = self::normalizeEventSectionFields((int)$sectionId, $arFields);
-			}
-			else
-			{
-				$arFields['CAL_TYPE'] = $section['CAL_TYPE'];
-				$arFields['OWNER_ID'] = $section['OWNER_ID'];
+				$arFields["RRULE"] = CCalendarEvent::CheckRRULE($arFields["RRULE"]);
 			}
 
-			if (
-				$section === null
-				|| !self::checkSectionAddPermission((int)$sectionId, $section, $accessController, $userId)
-			)
+			if (!empty($arFields['TZ_FROM']) && is_string($arFields['TZ_FROM']))
 			{
-				return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
-			}
-		}
+				$tzFrom = Util::prepareTimezone($arFields['TZ_FROM']);
 
-		if (isset($arFields["RRULE"]))
-		{
-			$arFields["RRULE"] = CCalendarEvent::CheckRRULE($arFields["RRULE"]);
-		}
+				if (
+					!empty($arFields['TZ_TO'])
+					&& is_string($arFields['TZ_TO'])
+					&& $arFields['TZ_TO'] !== $arFields['TZ_FROM']
+				)
+				{
+					$tzTo = Util::prepareTimezone($arFields['TZ_TO']);
+					$arFields['TZ_TO'] = $tzTo->getName();
+				}
+				else
+				{
+					$arFields['TZ_TO'] = $tzFrom->getName();
+				}
 
-		if (!empty($arFields['TZ_FROM']) && is_string($arFields['TZ_FROM']))
-		{
-			$tzFrom = Util::prepareTimezone($arFields['TZ_FROM']);
-
-			if (
-				!empty($arFields['TZ_TO'])
-				&& is_string($arFields['TZ_TO'])
-				&& $arFields['TZ_TO'] !== $arFields['TZ_FROM']
-			)
-			{
-				$tzTo = Util::prepareTimezone($arFields['TZ_TO']);
-				$arFields['TZ_TO'] = $tzTo->getName();
-			}
-			else
-			{
-				$arFields['TZ_TO'] = $tzFrom->getName();
+				$arFields['TZ_FROM'] = $tzFrom->getName();
 			}
 
-			$arFields['TZ_FROM'] = $tzFrom->getName();
-		}
-
-		if ($bNew && !$params['editInstance'] && !($arFields['DAV_XML_ID'] ?? null))
-		{
-			$arFields['DAV_XML_ID'] = UidGenerator::createInstance()
-				->setDate(
-					new Date(
-						Util::getDateObject(
-							$arFields['DATE_FROM'],
-							$arFields['SKIP_TIME'] ?? null,
-							$arFields['TZ_FROM'] ?? null,
+			if ($bNew && !$params['editInstance'] && !($arFields['DAV_XML_ID'] ?? null))
+			{
+				$arFields['DAV_XML_ID'] = UidGenerator::createInstance()
+					->setDate(
+						new Date(
+							Util::getDateObject(
+								$arFields['DATE_FROM'],
+								$arFields['SKIP_TIME'] ?? null,
+								$arFields['TZ_FROM'] ?? null,
+							)
 						)
 					)
-				)
-				->setPortalName(Util::getServerName())
-				->setUserId((int)$arFields['OWNER_ID'])
-				->getUidWithDate();
-		}
-		elseif ($params['editInstance'])
-		{
-			$arFields['DAV_XML_ID'] = $params['currentEvent']['DAV_XML_ID'];
-		}
-
-		// Set version
-		if (!isset($arFields['VERSION']) || ($arFields['VERSION'] <= ($curEvent['VERSION'] ?? null)))
-		{
-			$arFields['VERSION'] = ($curEvent['VERSION'] ?? null)
-				? $curEvent['VERSION'] + 1
-				: 1
-			;
-		}
-
-		$bExchange = self::IsExchangeEnabled() && $arFields['CAL_TYPE'] === 'user';
-		$bCalDav = self::IsCalDAVEnabled() && $arFields['CAL_TYPE'] === 'user';
-
-		if (
-			(($params['editNextEvents'] ?? null) === false && ($params['recursionEditMode'] ?? null) === 'next')
-			|| (in_array($params['recursionEditMode'] ?? null, ['this', 'skip'])
-				&& ($params['editInstance'] ?? null) === false)
-		)
-		{
-			$params['modeSync'] = false;
-
-			if (($params['editParentEvents'] ?? null) === true)
-			{
-				$params['modeSync'] = true;
+					->setPortalName(Util::getServerName())
+					->setUserId((int)$arFields['OWNER_ID'])
+					->getUidWithDate();
 			}
-		}
+			elseif ($params['editInstance'])
+			{
+				$arFields['DAV_XML_ID'] = $params['currentEvent']['DAV_XML_ID'];
+			}
 
-		if (
-			(
-				($params['bAffectToDav'] ?? null) !== false
-				&& ($bExchange || $bCalDav)
-				&& $sectionId > 0
-				&& !(isset($params['dontSyncParent']) && $params['dontSyncParent'])
-				&& ($params['overSaving'] ?? false) !== true
+			// Set version
+			if (!isset($arFields['VERSION']) || ($arFields['VERSION'] <= ($curEvent['VERSION'] ?? null)))
+			{
+				$arFields['VERSION'] = ($curEvent['VERSION'] ?? null)
+					? $curEvent['VERSION'] + 1
+					: 1
+				;
+			}
+
+			$bExchange = self::IsExchangeEnabled() && $arFields['CAL_TYPE'] === 'user';
+			$bCalDav = self::IsCalDAVEnabled() && $arFields['CAL_TYPE'] === 'user';
+
+			if (
+				(($params['editNextEvents'] ?? null) === false && ($params['recursionEditMode'] ?? null) === 'next')
+				|| (in_array($params['recursionEditMode'] ?? null, ['this', 'skip'])
+					&& ($params['editInstance'] ?? null) === false)
 			)
-			|| $params['syncCaldav']
-		)
-		{
-			$davParams = [
-				'bCalDav' => $bCalDav,
-				'bExchange' => $bExchange,
-				'sectionId' => $sectionId,
-				'modeSync' => $params['modeSync'],
-				'editInstance' => $params['editInstance'],
-				'originalDavXmlId' => $params['originalDavXmlId'],
-				'instanceTz' => $params['instanceTz'],
-				'editParentEvents' => $params['editParentEvents'],
-				'editNextEvents' => $params['editNextEvents'],
-				'syncCaldav' => $params['syncCaldav'],
-				'parentDateFrom' => ($params['parentDateFrom'] ?? null),
-				'parentDateTo' => ($params['parentDateTo'] ?? null),
-			];
-
-			$deferredDavSync = EventSaveEffects::prepareDav($arFields, $davParams, $curEvent ?: null, $res);
-			if ($res !== true && self::$silentErrorMode === true)
 			{
-				self::ThrowError($res);
-			}
-		}
+				$params['modeSync'] = false;
 
-		$params['arFields'] = $arFields;
-		$params['userId'] = $userId;
-		$params['path'] = self::GetPath($arFields['CAL_TYPE'], $arFields['OWNER_ID'], 1);
-
-		$isSharingEvent =
-			isset($curEvent['EVENT_TYPE'])
-			&& in_array($curEvent['EVENT_TYPE'], SharingEventManager::getSharingEventTypes(), true)
-		;
-
-		$params['isSharingEvent'] = $isSharingEvent;
-
-		if (!empty($arFields['ID']) && $isSharingEvent)
-		{
-			SharingEventManager::onSharingEventEdit($arFields);
-		}
-
-		if (
-			$curEvent
-			&& in_array(($params['recursionEditMode'] ?? null), ['this', 'next'], true)
-			&& CCalendarEvent::CheckRecurcion($curEvent)
-		)
-		{
-			$recurrenceOccupancyLock = null;
-			if (($params['recursionEditMode'] ?? null) === 'this')
-			{
-				$recurrenceOccupancyLock = self::checkRecurrenceLocationOccupancy(
-					$arFields,
-					$params,
-					$curEvent,
-					$userId,
-				);
-				$params['occupancyLock'] = $recurrenceOccupancyLock;
+				if (($params['editParentEvents'] ?? null) === true)
+				{
+					$params['modeSync'] = true;
+				}
 			}
 
-			try
+			if (
+				(
+					($params['bAffectToDav'] ?? null) !== false
+					&& ($bExchange || $bCalDav)
+					&& $sectionId > 0
+					&& !(isset($params['dontSyncParent']) && $params['dontSyncParent'])
+					&& ($params['overSaving'] ?? false) !== true
+				)
+				|| $params['syncCaldav']
+			)
 			{
+				$davParams = [
+					'bCalDav' => $bCalDav,
+					'bExchange' => $bExchange,
+					'sectionId' => $sectionId,
+					'modeSync' => $params['modeSync'],
+					'editInstance' => $params['editInstance'],
+					'originalDavXmlId' => $params['originalDavXmlId'],
+					'instanceTz' => $params['instanceTz'],
+					'editParentEvents' => $params['editParentEvents'],
+					'editNextEvents' => $params['editNextEvents'],
+					'syncCaldav' => $params['syncCaldav'],
+					'parentDateFrom' => ($params['parentDateFrom'] ?? null),
+					'parentDateTo' => ($params['parentDateTo'] ?? null),
+				];
+
+				$deferredDavSync = EventSaveEffects::prepareDav($arFields, $davParams, $curEvent ?: null, $res);
+				if ($res !== true && self::$silentErrorMode === true)
+				{
+					self::ThrowError($res);
+				}
+			}
+
+			$params['arFields'] = $arFields;
+			$params['userId'] = $userId;
+			$params['path'] = self::GetPath($arFields['CAL_TYPE'], $arFields['OWNER_ID'], 1);
+
+			$isSharingEvent =
+				isset($curEvent['EVENT_TYPE'])
+				&& in_array($curEvent['EVENT_TYPE'], SharingEventManager::getSharingEventTypes(), true)
+			;
+
+			$params['isSharingEvent'] = $isSharingEvent;
+
+			if (!empty($arFields['ID']) && $isSharingEvent)
+			{
+				SharingEventManager::onSharingEventEdit($arFields);
+			}
+
+			if (
+				$curEvent
+				&& in_array(($params['recursionEditMode'] ?? null), ['this', 'next'], true)
+				&& CCalendarEvent::CheckRecurcion($curEvent)
+			)
+			{
+				$recurrenceOccupancyLock = null;
+				if (($params['recursionEditMode'] ?? null) === 'this')
+				{
+					$recurrenceOccupancyLock = self::checkRecurrenceLocationOccupancy(
+						$arFields,
+						$params,
+						$curEvent,
+						$userId,
+					);
+					if (
+						$recurrenceOccupancyLock instanceof Rooms\OccupancyLock
+						&& $recurrenceOccupancyLock !== $incomingOccupancyLock
+					)
+					{
+						$ownRecurrenceOccupancyLock = $recurrenceOccupancyLock;
+					}
+
+					$params['occupancyLock'] = $recurrenceOccupancyLock;
+				}
+
 				// Edit only current instance of the set of recurrent events
 				if ($params['recursionEditMode'] === 'this')
 				{
@@ -2933,7 +2720,6 @@ class CCalendar
 					$excludeDates[] = $excludeDate;
 
 					$saveEventData = [
-						'propagateEventNotAvailable' => true,
 						'checkLocationOccupancy' => $params['checkLocationOccupancy'] ?? null,
 						'recursionEditMode' => 'skip',
 						'internalSeriesResave' => true,
@@ -2966,10 +2752,20 @@ class CCalendar
 
 					// Save current event
 					$id = self::SaveEvent($saveEventData);
-					if ($id === false)
+					$masterSave = self::recognizeRecurrenceSaveResult($id);
+					if ($masterSave['kind'] === 'failure')
 					{
 						return false;
 					}
+					if ($masterSave['kind'] === 'ack')
+					{
+						$masterSave = self::recognizeRecurrenceSaveResult($arFieldsCurrent['ID'] ?? null);
+						if ($masterSave['kind'] !== 'id')
+						{
+							return true;
+						}
+					}
+					$id = $masterSave['id'];
 
 					// 2. Copy event with new changes, but without recursion
 					$newParams = $params;
@@ -3067,11 +2863,16 @@ class CCalendar
 					}
 
 					$newParams['occupancyAuditSourceEventId'] = (int)$curEvent['ID'];
-					$result['recEventId'] = self::SaveEvent($newParams);
-					if ($result['recEventId'] === false)
+					$exceptionSave = self::recognizeRecurrenceSaveResult(self::SaveEvent($newParams));
+					if ($exceptionSave['kind'] === 'failure')
 					{
 						return false;
 					}
+					if ($exceptionSave['kind'] === 'ack')
+					{
+						return true;
+					}
+					$result['recEventId'] = $exceptionSave['id'];
 					(new Core\Managers\EventOriginalRecursion())->add(
 						$result['recEventId'] ?? 0,
 						$newParams['arFields']['ORIGINAL_RECURSION_ID'] ?? 0,
@@ -3255,6 +3056,14 @@ class CCalendar
 						$relatedRoomEventIds,
 						$hasOccupancyConflict,
 					);
+					if (
+						$recurrenceOccupancyLock instanceof Rooms\OccupancyLock
+						&& $recurrenceOccupancyLock !== $incomingOccupancyLock
+					)
+					{
+						$ownRecurrenceOccupancyLock = $recurrenceOccupancyLock;
+					}
+
 					if ($recurrenceOccupancyLock instanceof Rooms\OccupancyLock)
 					{
 						self::assertRecurrenceRelatedMasterEventsUnchanged(
@@ -3310,7 +3119,6 @@ class CCalendar
 
 						// Save current event
 						$id = self::SaveEvent([
-							'propagateEventNotAvailable' => true,
 							'arFields' => $arFieldsCurrent,
 							'internalSeriesResave' => true,
 							'occupancyLock' => $recurrenceOccupancyLock,
@@ -3329,10 +3137,20 @@ class CCalendar
 							'occupancyExcludedEventIds' => $relatedRoomEventIds,
 							'occupancySnapshots' => $newParams['occupancySnapshots'] ?? [],
 						]);
-						if ($id === false)
+						$masterSave = self::recognizeRecurrenceSaveResult($id);
+						if ($masterSave['kind'] === 'failure')
 						{
 							return false;
 						}
+						if ($masterSave['kind'] === 'ack')
+						{
+							$masterSave = self::recognizeRecurrenceSaveResult($arFieldsCurrent['ID'] ?? null);
+							if ($masterSave['kind'] !== 'id')
+							{
+								return true;
+							}
+						}
+						$id = $masterSave['id'];
 
 						unset(
 							$newParams['arFields']['ID'],
@@ -3363,29 +3181,57 @@ class CCalendar
 					$newParams['occupancyAuditSourceEventId'] = (int)$curEvent['ID'];
 
 					$result = self::SaveEvent($newParams);
-					if ($result === false)
+					$continuationSave = self::recognizeRecurrenceSaveResult($result);
+					if ($continuationSave['kind'] === 'failure')
 					{
 						return false;
 					}
+					if ($continuationSave['kind'] === 'ack')
+					{
+						$continuationSave = self::recognizeRecurrenceSaveResult($newParams['arFields']['ID'] ?? null);
+						$currentSave = self::recognizeRecurrenceSaveResult($curEvent['ID'] ?? null);
+						if (
+							$continuationSave['kind'] !== 'id'
+							|| $currentSave['kind'] !== 'id'
+							|| $continuationSave['id'] !== $currentSave['id']
+						)
+						{
+							return true;
+						}
+						$result = [
+							'id' => $continuationSave['id'],
+							'recEventId' => $continuationSave['id'],
+							'originalDavXmlId' => $curEvent['DAV_XML_ID'] ?? null,
+							'instanceTz' => $curEvent['TZ_FROM'] ?? null,
+						];
+					}
 					unset($newParams['occupancyConflictDetected']);
 
+					$continuationId = $continuationSave['id'];
 					if (!is_array($result))
 					{
 						$result = [
-							'id' => $result,
-							'recEventId' => $result,
+							'id' => $continuationId,
+							'recEventId' => $continuationId,
 						];
 					}
+					$result['recEventId'] = $continuationId;
+					$continuationXmlId = $result['originalDavXmlId'] ?? null;
+					$continuationTz = $result['instanceTz'] ?? null;
 					(new Core\Managers\EventOriginalRecursion())->add(
-						$result['id'] ?? 0,
+						$continuationId,
 						$newParams['arFields']['ORIGINAL_RECURSION_ID'] ?? 0,
 					);
+					if (!is_string($continuationXmlId) || $continuationXmlId === '')
+					{
+						return true;
+					}
 
 					if ($recId)
 					{
 						foreach($recRelatedEvents as $recRelatedEvent)
 						{
-							if ($recRelatedEvent['ID'] === $result['id'])
+							if ($recRelatedEvent['ID'] === $continuationId)
 							{
 								continue;
 							}
@@ -3429,17 +3275,17 @@ class CCalendar
 								/*
 								 * Set additional params
 								 */
-								$newParams['arFields']['RECURRENCE_ID'] = $result['id'];
-								$newParams['originalDavXmlId'] = $result['originalDavXmlId'];
+								$newParams['arFields']['RECURRENCE_ID'] = $continuationId;
+								$newParams['originalDavXmlId'] = $continuationXmlId;
 
 								$parentDateTime = self::Date($currentFromTs);
 								$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate(
 									$parentDateTime,
 									$recRelatedEvent['ORIGINAL_DATE_FROM'] ?? $newParams['currentEventDateFrom'],
-									$result['instanceTz']
+									$continuationTz
 								);
 
-								$newParams['instanceTz'] = $result['instanceTz'];
+								$newParams['instanceTz'] = $continuationTz;
 								$newParams['editInstance'] = true;
 
 								unset($newParams['arFields']['EXDATE']);
@@ -3449,10 +3295,7 @@ class CCalendar
 									unset($newParams['arFields']['RELATIONS']);
 								}
 
-								if (self::SaveEvent($newParams) === false)
-								{
-									return false;
-								}
+								self::SaveEvent($newParams);
 
 								if ($newRecurrentLocation !== null)
 								{
@@ -3463,41 +3306,42 @@ class CCalendar
 					}
 				}
 			}
-			finally
-			{
-				self::releaseRecurrenceOccupancyLock($recurrenceOccupancyLock);
-			}
-		}
-		else
-		{
-			$recurrenceOccupancyLock = null;
-			if (
-				$curEvent
-				&& ($params['recursionEditMode'] ?? null) === 'all'
-			)
-			{
-				$recurrenceOccupancyLock = self::checkRecurrenceAllLocationOccupancy(
-					$params,
-					$curEvent,
-					$userId,
-				);
-				if ($recurrenceOccupancyLock instanceof Rooms\OccupancyLock)
-				{
-					$params['occupancyLock'] = $recurrenceOccupancyLock;
-				}
-			}
-
-			if (($params['recursionEditMode'] ?? null) !== 'all')
-			{
-				$params['recursionEditMode'] = 'skip';
-			}
 			else
 			{
-				$params['recursionEditMode'] = '';
-			}
+				$recurrenceOccupancyLock = null;
+				if (
+					$curEvent
+					&& ($params['recursionEditMode'] ?? null) === 'all'
+				)
+				{
+					$recurrenceOccupancyLock = self::checkRecurrenceAllLocationOccupancy(
+						$params,
+						$curEvent,
+						$userId,
+					);
+					if (
+						$recurrenceOccupancyLock instanceof Rooms\OccupancyLock
+						&& $recurrenceOccupancyLock !== $incomingOccupancyLock
+					)
+					{
+						$ownRecurrenceOccupancyLock = $recurrenceOccupancyLock;
+					}
 
-			try
-			{
+					if ($recurrenceOccupancyLock instanceof Rooms\OccupancyLock)
+					{
+						$params['occupancyLock'] = $recurrenceOccupancyLock;
+					}
+				}
+
+				if (($params['recursionEditMode'] ?? null) !== 'all')
+				{
+					$params['recursionEditMode'] = 'skip';
+				}
+				else
+				{
+					$params['recursionEditMode'] = '';
+				}
+
 				$id = CCalendarEvent::Edit($params);
 				if ($id === false)
 				{
@@ -3675,41 +3519,108 @@ class CCalendar
 						$newParams['internalSeriesResave'] = true;
 						unset($newParams['occupancyConflictDetected']);
 
-						if (self::SaveEvent($newParams) === false)
-						{
-							return false;
-						}
+						self::SaveEvent($newParams);
 					}
 				}
 
+				self::releaseRecurrenceOccupancyLock($ownRecurrenceOccupancyLock);
+
+				if ($id)
+				{
+					EventSaveEffects::scheduleDav((int)$id, $arFields, $deferredDavSync ?? null);
+
+					self::scheduleSavedEventSync($id, $arFields, $params, $curEvent ?: null);
+				}
+
+				$arFields['ID'] = $id;
+				if (($params['overSaving'] ?? false) !== true)
+				{
+					foreach(GetModuleEvents("calendar", "OnAfterCalendarEventEdit", true) as $arEvent)
+					{
+						self::scheduleEventEditHandler($arEvent, $arFields, $bNew, $userId);
+					}
+				}
+			}
+
+			$result['id'] = $id ?? null;
+
+			return $result;
+		}
+		finally
+		{
+			try
+			{
+				self::releaseRecurrenceOccupancyLock($ownRecurrenceOccupancyLock);
 			}
 			finally
 			{
-				self::releaseRecurrenceOccupancyLock($recurrenceOccupancyLock);
+				self::SetSilentErrorMode($silentErrorModePrev);
 			}
+		}
+	}
 
-			if ($id)
+	private static function recognizeRecurrenceSaveResult(mixed $raw): array
+	{
+		if ($raw === true)
+		{
+			return ['kind' => 'ack', 'id' => null];
+		}
+
+		$id = is_array($raw) ? ($raw['id'] ?? null) : $raw;
+		if (is_int($id) && $id > 0)
+		{
+			return ['kind' => 'id', 'id' => $id];
+		}
+
+		if (is_string($id) && preg_match('/\A[1-9][0-9]*\z/', $id))
+		{
+			$max = (string)PHP_INT_MAX;
+			if (
+				strlen($id) < strlen($max)
+				|| (strlen($id) === strlen($max) && strcmp($id, $max) <= 0)
+			)
 			{
-				EventSaveEffects::scheduleDav((int)$id, $arFields, $deferredDavSync ?? null);
-
-				self::scheduleSavedEventSync($id, $arFields, $params, $curEvent ?: null);
-			}
-
-			$arFields['ID'] = $id;
-			if (($params['overSaving'] ?? false) !== true)
-			{
-				foreach(GetModuleEvents("calendar", "OnAfterCalendarEventEdit", true) as $arEvent)
-				{
-					self::scheduleEventEditHandler($arEvent, $arFields, $bNew, $userId);
-				}
+				return ['kind' => 'id', 'id' => (int)$id];
 			}
 		}
 
-		self::SetSilentErrorMode($silentErrorModePrev);
+		return ['kind' => 'failure', 'id' => null];
+	}
 
-		$result['id'] = $id ?? null;
+	private static function collectReservationSourceIds(array $params, array $curEvent): array
+	{
+		$sourceId = (int)($curEvent['ID'] ?? 0);
+		$sourceIds = $sourceId > 0 ? [$sourceId => $sourceId] : [];
+		$mode = $params['recursionEditMode'] ?? null;
+		if (
+			!CCalendarEvent::CheckRecurcion($curEvent)
+			|| !in_array($mode, ['all', 'next'], true)
+			|| ($mode === 'all' && !empty($params['arFields']['RECURRENCE_ID']))
+		)
+		{
+			return array_values($sourceIds);
+		}
 
-		return $result;
+		$recId = (int)($curEvent['RECURRENCE_ID'] ?: $sourceId);
+		$currentDateTimestamp = $mode === 'next'
+			? self::Timestamp($params['currentEventDateFrom'] ?? null)
+			: null
+		;
+		foreach (CCalendarEvent::GetEventsByRecId($recId, false) as $event)
+		{
+			$eventId = (int)($event['ID'] ?? 0);
+			if (
+				$eventId <= 0
+				|| $eventId !== (int)($event['PARENT_ID'] ?? 0)
+				|| ($mode === 'next' && self::Timestamp($event['DATE_FROM'] ?? null, false) <= $currentDateTimestamp)
+			)
+			{
+				continue;
+			}
+			$sourceIds[$eventId] = $eventId;
+		}
+
+		return array_values($sourceIds);
 	}
 
 	private static function canAutoCreateSectionForEvent(array $arFields, int $userId): bool
@@ -6567,7 +6478,7 @@ class CCalendar
 		}
 
 		$currentUser = \CUser::GetByID($currentUserId)->Fetch();
-		if (!is_array($currentUser))
+		if ($currentUser === null)
 		{
 			return;
 		}
@@ -7974,6 +7885,7 @@ class CCalendar
 		int $userId,
 	): ?Rooms\OccupancyLock
 	{
+		$incomingOccupancyLock = $params['occupancyLock'] ?? null;
 		if (!CCalendarEvent::CheckRecurcion($curEvent))
 		{
 			return null;
@@ -8084,7 +7996,10 @@ class CCalendar
 		}
 		catch (\Throwable $exception)
 		{
-			self::releaseRecurrenceOccupancyLock($occupancyLock);
+			if ($occupancyLock !== $incomingOccupancyLock)
+			{
+				self::releaseRecurrenceOccupancyLock($occupancyLock);
+			}
 			throw $exception;
 		}
 	}
@@ -8456,15 +8371,12 @@ class CCalendar
 		try
 		{
 			$currentEventIds = array_fill_keys(array_map('intval', $additionalCurrentEventIds), true);
-			$newLocationsByEventId = [];
 			foreach ($candidates as $candidate)
 			{
 				$eventId = (int)($candidate['event']['ID'] ?? 0);
 				if ($eventId > 0)
 				{
 					$currentEventIds[$eventId] = true;
-					$location = $candidate['fields']['LOCATION'] ?? null;
-					$newLocationsByEventId[$eventId] = is_array($location) ? ($location['NEW'] ?? null) : $location;
 				}
 			}
 			$currentEventIds = array_values(array_filter(array_map('intval', array_keys($currentEventIds))));
@@ -8487,7 +8399,6 @@ class CCalendar
 			{
 				throw new Rooms\OccupancyLockedException();
 			}
-			$reservations = [];
 			foreach ($currentEventsById as $currentEvent)
 			{
 				$requiredRoomIds = Rooms\OccupancyLock::resolveRoomIds(
@@ -8499,22 +8410,7 @@ class CCalendar
 				{
 					throw new Rooms\OccupancyLockedException();
 				}
-				$reservation = Rooms\Util::parseLocation($currentEvent['LOCATION'] ?? null);
-				if ($reservation['room_event_id'])
-				{
-					$reservations[] = [
-						'bookingId' => (int)$reservation['room_event_id'],
-						'roomId' => (int)$reservation['room_id'],
-						'newLocation' => $newLocationsByEventId[(int)$currentEvent['ID']] ?? null,
-					];
-				}
 			}
-			Rooms\Manager::assertReservationsAvailable(
-				$reservations,
-				($firstParams['checkPermission'] ?? null) !== false,
-				$userId,
-				($firstParams['checkPermission'] ?? null) !== false,
-			);
 
 			$occupancyCheckParams = [
 				'checkPermission' => $firstParams['checkPermission'] ?? null,
@@ -8798,7 +8694,7 @@ class CCalendar
 		return $noEditAccessedCalendars;
 	}
 
-	public static function getCurrentEventForSaving(int $eventId, $userId, $checkPermission, bool $skipCache = false)
+	public static function getCurrentEventForSaving(int $eventId, $userId, $checkPermission)
 	{
 		$result = CCalendarEvent::GetList(
 			[
@@ -8812,7 +8708,6 @@ class CCalendar
 				'userId' => $userId,
 				'checkPermissions' => $checkPermission,
 				'loadOriginalRecursion' => true,
-				'skipCache' => $skipCache,
 			]
 		);
 

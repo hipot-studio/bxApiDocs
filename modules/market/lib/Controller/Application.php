@@ -2,6 +2,7 @@
 
 namespace Bitrix\Market\Controller;
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\AjaxJson;
@@ -9,6 +10,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Application\Installed;
+use Bitrix\Market\Internal\Services\AiSearch\SearchTelemetryTracker;
 use Bitrix\Market\Rest\Actions;
 use Bitrix\Market\Rest\Transport;
 use Bitrix\Rest\AppTable;
@@ -34,7 +36,16 @@ class Application extends Controller
 		];
 	}
 
-	public function installAction(string $code, int $version = 0, string $checkHash = null, string $installHash = null, $from = null): array
+	public function installAction(
+		string $code,
+		int $version = 0,
+		string $checkHash = null,
+		string $installHash = null,
+		$from = null,
+		bool $createSystemUser = false,
+		string $searchContext = '',
+		?SearchTelemetryTracker $searchTelemetryTracker = null,
+	): array
 	{
 		if (!Loader::includeModule('rest')) {
 			return [
@@ -43,10 +54,20 @@ class Application extends Controller
 			];
 		}
 
-		$installResult = \Bitrix\Rest\Marketplace\Application::install($code, $version, $checkHash, $installHash, $from);
+		$installResult = \Bitrix\Rest\Marketplace\Application::install(
+			$code,
+			$version,
+			$checkHash,
+			$installHash,
+			$from,
+			$createSystemUser,
+		);
 		if (isset($installResult['success']) && $installResult['success']) {
 			Client::getNumUpdates();
 		}
+
+		$searchTelemetryTracker ??= ServiceLocator::getInstance()->get(SearchTelemetryTracker::class);
+		$searchTelemetryTracker->trackInstallCompleted($code, $installResult, $searchContext);
 
 		return $installResult;
 	}

@@ -23,6 +23,8 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Idempotence;
 use Bitrix\Call\ControllerClient;
 use Bitrix\Call\Logger\Logger;
+use Bitrix\Call\Model\CallTable;
+use Bitrix\Call\Model\CallUserTable;
 
 /**
  * @internal
@@ -151,18 +153,6 @@ class CallManager extends Engine\Controller
 			else
 			{
 				$isNew = true;
-
-				// Only starting a call follows the portal switch: the same action also joins a call already
-				// running in the chat ($joinExisting), which is why the check sits here and not in a prefilter.
-				if (!(new GuestCallPolicy())->canStartCall((int)$currentUserId))
-				{
-					$this->addError(
-						new Error('Starting a call is not available for guest users on this portal', 'guest_access_denied')
-					);
-					Application::getConnection()->unlock($lockName);
-
-					return null;
-				}
 
 				// Terminate any stuck 1-1 calls of the initiator before creating a new one.
 				// Skipped when the target is already known to be busy: in that case we only
@@ -487,15 +477,40 @@ class CallManager extends Engine\Controller
 	 * @param string $repeated
 	 * @return true|null
 	 */
-	public function inviteAction(int $callId, array $userIds, $video = "N", $show = "Y", $legacyMobile = "N", $repeated = "N"): ?bool
+	public function inviteAction(
+		int $callId,
+		array $userIds,
+		$video = "N",
+		$show = "Y",
+		$legacyMobile = "N",
+		$repeated = "N",
+		$manualInvite = "N",
+		$inviteGenerationId = '',
+	): ?bool
 	{
 		$isVideo = ($video === "Y");
 		$isShow = ($show === "Y");
 		$isLegacyMobile = ($legacyMobile === "Y");
 		$isRepeated = ($repeated === "Y");
+		$isManualInvite = ($manualInvite === "Y");
+		$inviteGenerationId = is_string($inviteGenerationId) ? $inviteGenerationId : null;
 		$userIds = array_map('intVal', $userIds);
 
-		// Acquire lock first to prevent race conditions
+		$call = Registry::getCallWithId($callId);
+		if (!$call)
+		{
+			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+			return null;
+		}
+
+		// Access first, state second, and both before the lock: a stranger must neither
+		// learn the state of the call nor hold its named lock.
+		$currentUserId = $this->getCurrentUser()->getId();
+		if (!$this->checkCallAccess($call, $currentUserId))
+		{
+			return null;
+		}
+
 		$lockName = static::getLockNameWithCallId('invite', $callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
@@ -503,64 +518,101 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
-		Registry::clearCache($callId);
-		$call = Registry::getCallWithId($callId);
-		if (!$call)
+		// try/finally per incident #421808: an exception between lock and unlock skips the
+		// unlock and the named lock survives until the DB connection closes, so every later
+		// invite into this call answers `could_not_lock`. Same shape as Call::inviteAction.
+		try
+		{
+			// Re-read under the lock: the call could have been finished while we waited for it.
+			Registry::clearCache($callId);
+			$call = Registry::getCallWithId($callId);
+			if (!$call)
+			{
+				$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+				return null;
+			}
+
+			if (!$this->checkCallAccess($call, $currentUserId))
+			{
+				return null;
+			}
+
+			// checkCallAccess() also lets in a user who only sees the associated chat (any intranet
+			// user for an open one). Only a participant of the call may invite into it.
+			$callUser = $call->getUser($currentUserId);
+			if (!$callUser)
+			{
+				$this->addError(new Error(
+					"You are not a participant of the call " . $call->getId() . "; (current user id: " . $currentUserId . ")",
+					'access_denied'
+				));
+				return null;
+			}
+
+			// Check if call is already finished
+			if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
+			{
+				$this->addError(new Error('Call is already finished', 'call_finished'));
+				return null;
+			}
+
+			if (!(new GuestCallPolicy())->canInviteUsersNow((int)$currentUserId, $call->getChatId(), $userIds))
+			{
+				$this->addError(new Error('Guests can only call members of their own chat', 'guest_access_denied'));
+				return null;
+			}
+
+			if ($call->hasErrors())
+			{
+				$this->addErrors($call->getErrors());
+				return null;
+			}
+
+			$callUser->update([
+				'LAST_SEEN' => new DateTime(),
+				'IS_MOBILE' => ($isLegacyMobile ? 'Y' : 'N')
+			]);
+
+			if ($call->getState() !== \Bitrix\Call\Call::STATE_FINISHED)
+			{
+				$this->inviteUsers(
+					$call,
+					$userIds,
+					$isLegacyMobile,
+					$isVideo,
+					$isShow,
+					$isRepeated,
+					$isManualInvite,
+					$inviteGenerationId,
+				);
+			}
+		}
+		finally
 		{
 			Application::getConnection()->unlock($lockName);
-			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
-			return null;
 		}
-
-		// Check if call is already finished
-		if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
-		{
-			Application::getConnection()->unlock($lockName);
-			return null;
-		}
-
-		$currentUserId = $this->getCurrentUser()->getId();
-		if (!$this->checkCallAccess($call, $currentUserId))
-		{
-			Application::getConnection()->unlock($lockName);
-			return null;
-		}
-
-		if (!(new GuestCallPolicy())->canInviteUsersNow((int)$currentUserId, $call->getChatId(), $userIds))
-		{
-			Application::getConnection()->unlock($lockName);
-			$this->addError(new Error('Guests can only call members of their own chat', 'guest_access_denied'));
-
-			return null;
-		}
-
-		if ($call->hasErrors())
-		{
-			$this->addErrors($call->getErrors());
-			Application::getConnection()->unlock($lockName);
-			return null;
-		}
-
-		$call->getUser($currentUserId)->update([
-			'LAST_SEEN' => new DateTime(),
-			'IS_MOBILE' => ($isLegacyMobile ? 'Y' : 'N')
-		]);
-
-		if ($call->getState() !== \Bitrix\Call\Call::STATE_FINISHED)
-		{
-			$this->inviteUsers($call, $userIds, $isLegacyMobile, $isVideo, $isShow, $isRepeated);
-		}
-
-		Application::getConnection()->unlock($lockName);
 
 		return true;
 	}
 
-	protected function inviteUsers(\Bitrix\Call\Call $call, $userIds, $isLegacyMobile, $isVideo, $isShow, $isRepeated): void
+	protected function inviteUsers(
+		\Bitrix\Call\Call $call,
+		$userIds,
+		$isLegacyMobile,
+		$isVideo,
+		$isShow,
+		$isRepeated,
+		bool $isManualInvite = false,
+		?string $inviteGenerationId = null,
+	): void
 	{
-		if (\Bitrix\Im\User::getInstance()->isExtranet())
+		// im counts a guest as extranet, and the extranet filter keeps only the people of the caller's
+		// extranet groups - a guest has none, so it would drop every invitee. The invite of a guest is
+		// already held to the members of the chat of the call (inviteAction), which is the narrower rule.
+		$caller = \Bitrix\Im\User::getInstance();
+		if ($caller->isExtranet() && !(new GuestCallPolicy())->isGuest((int)$caller->getId()))
 		{
-			$userIds = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($userIds, \Bitrix\Im\User::getInstance()->getId()) ?: [];
+			$userIds = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($userIds, $caller->getId()) ?: [];
 		}
 
 		$usersToInvite = [];
@@ -602,6 +654,16 @@ class CallManager extends Engine\Controller
 			}
 		}
 
+		// The finish takes another lock, so it may have landed after inviteAction checked the
+		// state: the finish has already reset CALLING, and the rows written above would revive
+		// the call for the invited users.
+		if ($usersToInvite && $this->isCallFinishedInStorage($call->getId()))
+		{
+			$this->rollBackInviteIntoFinishedCall($call->getId(), $usersToInvite);
+			$this->addError(new Error('Call is already finished', 'call_finished'));
+			return;
+		}
+
 		if (!empty($existingUsers))
 		{
 			$call->getAssociatedEntity()->onExistingUsersInvite($existingUsers);
@@ -630,6 +692,8 @@ class CallManager extends Engine\Controller
 			video: $isVideo,
 			sendPush: $sendPush,
 			isRepeated: $isRepeated,
+			isManualInvite: $isManualInvite,
+			inviteGenerationId: $inviteGenerationId,
 		);
 
 		// send userInvited to everyone else.
@@ -644,8 +708,56 @@ class CallManager extends Engine\Controller
 
 		if ($call->getState() === \Bitrix\Call\Call::STATE_NEW)
 		{
-			$call->updateState(\Bitrix\Call\Call::STATE_INVITING);
+			// Only from NEW: a finish that raced with the invite must not be overwritten.
+			$call->updateState(\Bitrix\Call\Call::STATE_INVITING, \Bitrix\Call\Call::STATE_NEW);
 		}
+	}
+
+	/**
+	 * The finish may still hold these users in its CALLING snapshot and not have flipped them yet;
+	 * whoever wins the CALLING->IDLE compare-and-set owns the "missed" trail, exactly as
+	 * finishSideEffects does, so the finish never loses it to this rollback. The journal row and
+	 * its counter are keyed by call and user, so a trail from both sides stays a single record.
+	 *
+	 * @param int[] $userIds
+	 */
+	private function rollBackInviteIntoFinishedCall(int $callId, array $userIds): void
+	{
+		$rolledBackUserIds = CallUserTable::transitionState($callId, $userIds, CallUser::STATE_IDLE, CallUser::STATE_CALLING);
+		if ($rolledBackUserIds === [])
+		{
+			return;
+		}
+
+		$changes = [];
+		foreach ($rolledBackUserIds as $userId)
+		{
+			$changes[] = [
+				'callId' => $callId,
+				'userId' => $userId,
+				'oldState' => CallUser::STATE_CALLING,
+				'newState' => CallUser::STATE_IDLE,
+			];
+		}
+
+		Application::getInstance()->addBackgroundJob(
+			[\Bitrix\Call\EventHandler::class, 'dispatchUserStateChangeEventsBatch'],
+			[$changes],
+			Application::JOB_PRIORITY_NORMAL,
+		);
+	}
+
+	/**
+	 * Reads the state from the table, bypassing Registry and the loaded call object.
+	 */
+	private function isCallFinishedInStorage(int $callId): bool
+	{
+		$row = CallTable::getRow([
+			'select' => ['STATE'],
+			'filter' => ['=ID' => $callId],
+		]);
+
+		return ($row['STATE'] ?? null) === \Bitrix\Call\Call::STATE_FINISHED;
 	}
 
 	/**
@@ -747,9 +859,10 @@ class CallManager extends Engine\Controller
 	 * @param int $callId
 	 * @param int $callInstanceId
 	 * @param int $code
+	 * @param string $ringingDeviceId
 	 * @return void|null
 	 */
-	public function declineAction(int $callId, $callInstanceId, int $code = 603)
+	public function declineAction(int $callId, $callInstanceId, int $code = 603, string $ringingDeviceId = '')
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
 		$call = Registry::getCallWithId($callId);
@@ -792,6 +905,11 @@ class CallManager extends Engine\Controller
 		// Clear cache to force fresh DB load
 		Registry::clearCache($callId);
 		$call = Registry::getCallWithId($callId);
+		if (!$call)
+		{
+			Application::getConnection()->unlock($lockName);
+			return null;
+		}
 
 		// Check if call is already finished
 		if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
@@ -815,32 +933,23 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
-		// Device-aware decline for private 1-1 calls (parity with the JWT
-		// transport): drop the declining device from the ringing registry and,
-		// while the user still has other fresh ringing devices, stop here — the
-		// CallUser stays CALLING, no hangup broadcast and no finish. Empty/unknown
-		// registry (older clients) is a no-op -> legacy decline -> finish. Group
-		// calls (TYPE_INSTANT is not a 1-1 signal) are decided by chat privacy.
-		$callInstanceIdStr = (string)$callInstanceId;
-		if ($this->isDeviceScopedCall($call) && $callInstanceIdStr !== '')
+		// The registry tracks private ringing devices for cleanup. A decline is a
+		// user-level decision though: it must settle a 1:1 call even while another
+		// platform has a fresh registry entry.
+		$decliningDeviceId = $this->getRingingDeviceId($callInstanceId, $ringingDeviceId);
+		if ($this->isDeviceScopedCall($call) && $decliningDeviceId !== '')
 		{
 			// The legacy transport releases $lockName manually at each return, so a
 			// storage exception inside remove() must not leave the named lock held
 			// until the DB session ends (blocking parallel decline/register).
 			try
 			{
-				$hasFreshDevices = (new RingingDeviceRegistry())->remove($callId, $currentUserId, $callInstanceIdStr);
+				(new RingingDeviceRegistry())->remove($callId, $currentUserId, $decliningDeviceId);
 			}
 			catch (\Throwable $exception)
 			{
 				Application::getConnection()->unlock($lockName);
 				throw $exception;
-			}
-
-			if ($hasFreshDevices)
-			{
-				Application::getConnection()->unlock($lockName);
-				return null;
 			}
 		}
 
@@ -863,6 +972,20 @@ class CallManager extends Engine\Controller
 		{
 			$call->setActionUserId($currentUserId)->finish();
 		}
+	}
+
+	/**
+	 * Keep registration and decline aligned for clients that do not send the
+	 * optional browser-wide id.
+	 */
+	protected function getRingingDeviceId($callInstanceId, string $ringingDeviceId): string
+	{
+		if ($ringingDeviceId !== '')
+		{
+			return $ringingDeviceId;
+		}
+
+		return (string)$callInstanceId;
 	}
 
 	/**
@@ -1079,6 +1202,11 @@ class CallManager extends Engine\Controller
 
 		$currentUserId = $this->getCurrentUser()->getId();
 		$call = Registry::getCallWithId($callId);
+		if (!$call)
+		{
+			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+			return null;
+		}
 
 		if (!$this->checkCallAccess($call, $currentUserId))
 		{
@@ -1112,40 +1240,81 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
-		$call = Registry::getCallWithId($callId);
-		if (!$call)
+		$inviteLockName = null;
+		try
 		{
-			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
-			return null;
-		}
+			$call = Registry::getCallWithId($callId);
+			if (!$call)
+			{
+				$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+				return null;
+			}
 
-		if (!$this->checkCallAccess($call, $currentUserId))
+			if (!$this->checkCallAccess($call, $currentUserId))
+			{
+				return null;
+			}
+
+			// A group call takes different locks for invite and hangup: wait for an in-flight
+			// invite, otherwise it sends Call::incoming after our finish and revives the call.
+			if (!static::isPlainCall($call))
+			{
+				$inviteLockName = static::getLockNameWithCallId('invite', $callId);
+				if (!Application::getConnection()->lock($inviteLockName, static::LOCK_TTL))
+				{
+					$inviteLockName = null;
+				}
+
+				// Re-read even when the lock timed out: the call and its members may have changed while we waited.
+				// Not through Registry: a classic call would fire call:onCallStarted again.
+				$call = \Bitrix\Call\Call::loadWithoutInit($callId);
+				if (!$call)
+				{
+					$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+					return null;
+				}
+
+				if (!$this->checkCallAccess($call, $currentUserId))
+				{
+					return null;
+				}
+			}
+
+			$callUser = $call->getUser($currentUserId);
+			if ($callUser)
+			{
+				$callUser->updateState(CallUser::STATE_IDLE);
+				$callUser->updateLastSeen(new DateTime());
+			}
+
+			if (
+				is_bool($retransmit) && $retransmit===true
+				|| is_string($retransmit) && in_array($retransmit, ['true', 'Y', '1'], true)
+			)
+			{
+				$userIds = $call->getUsers();
+				$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId);
+			}
+
+			if (!$this->hasActiveUsers($call) && $call->setActionUserId($currentUserId)->commitFinish())
+			{
+				// Once FINISHED is stored a waiting invite sees it, so it must not wait for the media server.
+				if ($inviteLockName)
+				{
+					Application::getConnection()->unlock($inviteLockName);
+					$inviteLockName = null;
+				}
+				$call->finishSideEffects();
+			}
+		}
+		finally
 		{
-			return null;
+			if ($inviteLockName)
+			{
+				Application::getConnection()->unlock($inviteLockName);
+			}
+			Application::getConnection()->unlock($lockName);
 		}
-
-		$callUser = $call->getUser($currentUserId);
-		if ($callUser)
-		{
-			$callUser->updateState(CallUser::STATE_IDLE);
-			$callUser->updateLastSeen(new DateTime());
-		}
-
-		if (
-			is_bool($retransmit) && $retransmit===true
-			|| is_string($retransmit) && in_array($retransmit, ['true', 'Y', '1'], true)
-		)
-		{
-			$userIds = $call->getUsers();
-			$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId);
-		}
-
-		if (!$this->hasActiveUsers($call))
-		{
-			$call->setActionUserId($currentUserId)->finish();
-		}
-
-		Application::getConnection()->unlock($lockName);
 	}
 
 	private function hasActiveUsers(\Bitrix\Call\Call $call)
@@ -1584,12 +1753,12 @@ class CallManager extends Engine\Controller
 	 * Check if call is 1-on-1 (direct call between two users)
 	 * For 1-on-1 calls, we use call-level locking instead of per-user locking
 	 *
-	 * @param \Bitrix\Call\Call $call
+	 * @param \Bitrix\Call\Call|null $call Registry returns null for a call the portal no longer has.
 	 * @return bool
 	 */
-	private static function isPlainCall(\Bitrix\Call\Call $call): bool
+	private static function isPlainCall(?\Bitrix\Call\Call $call): bool
 	{
-		return $call->getProvider() === \Bitrix\Call\Call::PROVIDER_PLAIN;
+		return $call?->getProvider() === \Bitrix\Call\Call::PROVIDER_PLAIN;
 	}
 
 	public function configureActions(): array
@@ -1605,8 +1774,8 @@ class CallManager extends Engine\Controller
 			// is recognised by its cookie alone (@see ActionFilter\SameOrigin). POST takes away the GET
 			// navigation, Origin takes away the cross-site form; native clients send no Origin or a bare
 			// portal host and pass.
-			// The guest checks of this action are inside createAction: it also joins a running call, which
-			// the portal switch does not govern.
+			// The guest check of this action sits inside createAction, ahead of every lookup: it reads the
+			// entity the request names (@see \Bitrix\Call\Service\GuestCallPolicy::canStartCallInEntity).
 			'create' => [
 				'+prefilters' => [
 					new Engine\ActionFilter\HttpMethod([Engine\ActionFilter\HttpMethod::METHOD_POST]),

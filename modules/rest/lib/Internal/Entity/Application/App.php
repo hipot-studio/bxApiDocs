@@ -28,6 +28,10 @@ class App implements EntityInterface, RestApplicationInterface
 
 	private ?DateTime $dateInstall = null;
 
+	private bool $accessChanged = false;
+
+	private bool $embeddingAccessChanged = false;
+
 	private bool $statusChanged = false;
 
 	public function __construct(
@@ -325,6 +329,26 @@ class App implements EntityInterface, RestApplicationInterface
 		}
 
 		$this->access = $access;
+		$this->accessChanged = true;
+		$this->embeddingAccessChanged = true;
+
+		return $this;
+	}
+
+	public function isAccessChanged(): bool
+	{
+		return $this->accessChanged;
+	}
+
+	public function isEmbeddingAccessChanged(): bool
+	{
+		return $this->embeddingAccessChanged;
+	}
+
+	public function markAccessChangesSaved(): self
+	{
+		$this->accessChanged = false;
+		$this->embeddingAccessChanged = false;
 
 		return $this;
 	}
@@ -538,6 +562,11 @@ class App implements EntityInterface, RestApplicationInterface
 			));
 		}
 
+		if ($code === AppAttributeCode::OwnerUserId->value)
+		{
+			$this->embeddingAccessChanged = true;
+		}
+
 		return $this;
 	}
 
@@ -546,6 +575,11 @@ class App implements EntityInterface, RestApplicationInterface
 		$this->attributes = $this->getAttributes()->filter(
 			fn(AppAttribute $attr) => $attr->getCode() !== $code,
 		);
+
+		if ($code === AppAttributeCode::OwnerUserId->value)
+		{
+			$this->embeddingAccessChanged = true;
+		}
 
 		return $this;
 	}

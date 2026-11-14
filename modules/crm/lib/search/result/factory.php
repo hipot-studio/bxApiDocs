@@ -23,6 +23,10 @@ class Factory
 				return new \Bitrix\Crm\Search\Result\Provider\InvoiceProvider();
 			default:
 				$factory = Container::getInstance()->getFactory($entityTypeId);
+				if ($factory instanceof \Bitrix\Crm\Service\Factory\Order)
+				{
+					return new \Bitrix\Crm\Search\Result\Provider\OrderProvider($factory);
+				}
 				if ($factory)
 				{
 					return new \Bitrix\Crm\Search\Result\Provider\FactoryBased($factory);

@@ -18,7 +18,9 @@ class Agent
 	{
 		$moduleId = 'imopenlines';
 
-		$agentName = 'Bitrix\ImOpenLines\Crm\ReplacementUserCode::bind(0, [\'' . $oldUserCode . '\',\'' . $newUserCode . '\']);';
+		// the name must match the one Stepper::bindClass() creates: user codes are escaped arguments of execAgent()
+		$agentArguments = ReplacementUserCode::makeArguments([$oldUserCode, $newUserCode]);
+		$agentName = ReplacementUserCode::class . '::execAgent(' . $agentArguments . ');';
 
 		$isAgent = \CAgent::getList([], [
 			'MODULE_ID' => $moduleId,
@@ -32,7 +34,7 @@ class Agent
 
 			if (empty($params))
 			{
-				\CAgent::AddAgent($agentName, $moduleId, 'N', 60);
+				ReplacementUserCode::bind(ReplacementUserCode::AGENT_DELAY, [$oldUserCode, $newUserCode]);
 			}
 		}
 	}

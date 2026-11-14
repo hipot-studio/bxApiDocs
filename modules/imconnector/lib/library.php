@@ -43,7 +43,8 @@ class Library
 		ID_OK_CONNECTOR = 'ok',
 		ID_AVITO_CONNECTOR = 'avito',
 		ID_MAX_CONNECTOR = 'max',
-		ID_TELEGRAMBOT_CONNECTOR = 'telegrambot';
+		ID_TELEGRAMBOT_CONNECTOR = 'telegrambot',
+		ID_YANDEXTRAVEL_CONNECTOR = 'yandextravel';
 
 	// Rest
 	public const
@@ -129,6 +130,7 @@ class Library
 		ERROR_IMCONNECTOR_COULD_NOT_GET_PROVIDER_OBJECT = 'IMCONNECTOR_COULD_NOT_GET_PROVIDER_OBJECT',
 		ERROR_IMCONNECTOR_PROVIDER_DOES_NOT_SUPPORT_THIS_METHOD_CALL = 'PROVIDER_DOES_NOT_SUPPORT_THIS_METHOD_CALL',
 		ERROR_IMCONNECTOR_PROVIDER_UNSUPPORTED_TYPE_INCOMING_MESSAGE = 'PROVIDER_UNSUPPORTED_TYPE_INCOMING_MESSAGE',
+		ERROR_IMCONNECTOR_MESSAGE_NOT_ACCEPTED = 'IMCONNECTOR_MESSAGE_NOT_ACCEPTED',
 
 		ERROR_IMCONNECTOR_PUBLIC_URL_EMPTY = 'PUBLIC_URL_EMPTY',
 		ERROR_IMCONNECTOR_PUBLIC_URL_MALFORMED = 'PUBLIC_URL_MALFORMED',
@@ -242,8 +244,12 @@ class Library
 			'allow' => ['ru'],
 			'deny' => [],
 		],
+		self::ID_YANDEXTRAVEL_CONNECTOR => [
+			'allow' => ['ru'],
+			'deny' => [],
+		],
 		self::ID_MAX_CONNECTOR => [
-			'allow' => ['ru', 'by','az', 'am', 'kz', 'kg', 'md', 'tj', 'uz'],
+			'allow' => ['ru', 'by', 'kz', 'kg', 'tj', 'uz'],
 			'deny' => [],
 		],
 	];
@@ -251,8 +257,61 @@ class Library
 	public const ENABLE_SETSTATUSREADING = [
 		self::ID_VKGROUP_CONNECTOR,
 		self::ID_AVITO_CONNECTOR,
+		self::ID_YANDEXTRAVEL_CONNECTOR,
 	];
 
+	/**
+	 * Connectors trusted to mark an incoming message as a service/system message (message.system='Y').
+	 * Only these may render a message as a system one in the open line — protects against arbitrary
+	 * (incl. custom REST) connectors spoofing user messages as service ones.
+	 */
+	public const ENABLE_SYSTEM_MESSAGE = [
+		self::ID_YANDEXTRAVEL_CONNECTOR,
+	];
+
+	/**
+	 * Connectors that send the operator's text and the attachment as one message, so a message without
+	 * text of its own must not be signed: a lone «Name:» would go out as a separate text message, which
+	 * the channel then confirms as delivered — and the operator sees a read mark on a message whose
+	 * attachment the channel refused. Everywhere else the signature of an attachment stays as it was.
+	 */
+	public const SIGN_ONLY_MESSAGES_WITH_TEXT = [
+		self::ID_YANDEXTRAVEL_CONNECTOR,
+	];
+
+	/**
+	 * Connectors whose answer to receivingMessage keeps the per-message result instead of the empty one
+	 * everybody else gets.
+	 *
+	 * A message refused here — the open line would not take it — is deliberately left out of the overall
+	 * result of the command ({@see \Bitrix\ImConnector\Provider\Base\Input::receivingMessage()}): it goes
+	 * into RESULT[n].SUCCESS, and the command as a whole stays successful. A connector that acknowledges
+	 * its provider's webhook on its own and guards against redeliveries needs that detail: without it a
+	 * message the portal never created is acknowledged as delivered and never sent again.
+	 *
+	 * @see \Bitrix\ImConnector\Provider\ImConnectorServer\Input::receivingMessage()
+	 */
+	public const ENABLE_RECEIVING_MESSAGE_RESULT = [
+		self::ID_YANDEXTRAVEL_CONNECTOR,
+	];
+
+	/**
+	 * Connectors whose incoming message is matched by its external id before the open line writes it.
+	 *
+	 * A connector that acknowledges its provider only for a delivery the portal confirmed asks for the
+	 * message again whenever that confirmation is lost — a write that ran past the transport's read
+	 * timeout is the usual reason, and the message the portal did write is in the chat all the same.
+	 * Nothing downstream matches an incoming message by its external id, so the redelivery would add a
+	 * second copy of one guest message.
+	 *
+	 * The list is what limits the matching: it holds only the connectors whose external message id is
+	 * unique within the external chat.
+	 *
+	 * @see \Bitrix\ImOpenLines\Connector::getDeliveredMessageId()
+	 */
+	public const ENABLE_INCOMING_IDEMPOTENCY = [
+		self::ID_YANDEXTRAVEL_CONNECTOR,
+	];
 
 	/** @var array A list of connectors, where it is not necessary to send system messages.*/
 	public static $listNotNeedSystemMessages = [

@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Disk\Internals;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Type\DateTime;
 
@@ -20,6 +21,7 @@ use Bitrix\Main\Type\DateTime;
  * <li> ENTITY_ID int optional
  * <li> CREATE_TIME datetime mandatory
  * <li> CREATED_BY int
+ * <li> OWNER_PARAMETERS string(512) optional
  * </ul>
  *
  * @package Bitrix\Disk
@@ -40,6 +42,8 @@ use Bitrix\Main\Type\DateTime;
 
 final class AttachedObjectTable extends DataManager
 {
+	public const ERROR_OWNER_PARAMETERS_IMMUTABLE = 'DISK_AO_OWNER_PARAMETERS_IMMUTABLE';
+
 	public static function getTableName()
 	{
 		return 'b_disk_attached_object';
@@ -118,6 +122,9 @@ final class AttachedObjectTable extends DataManager
 					'=this.CREATED_BY' => 'ref.ID'
 				),
 			),
+			'OWNER_PARAMETERS' => [
+				'data_type' => 'string',
+			],
 		);
 	}
 
@@ -136,13 +143,44 @@ final class AttachedObjectTable extends DataManager
 	}
 
 	/**
+	 * Refuses any change of the owner parameters: they are written only by the INSERT that creates the attachment.
+	 * @param Entity\Event $event Event.
+	 * @return Entity\EventResult
+	 */
+	public static function onBeforeUpdate(Entity\Event $event)
+	{
+		$result = new Entity\EventResult();
+		/** @var array $fields */
+		$fields = $event->getParameter('fields');
+		if (array_key_exists('OWNER_PARAMETERS', $fields))
+		{
+			$result->addError(new Entity\EntityError(
+				'Owner parameters of an attached object cannot be changed after creation.',
+				self::ERROR_OWNER_PARAMETERS_IMMUTABLE
+			));
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Updates rows by filter (simple format).
 	 * Filter support only column = value. Only =.
 	 * @param array $fields Fields.
 	 * @param array $filter Filter.
+	 * @throws ArgumentException When the fields contain the owner parameters.
 	 */
 	public static function updateBatch(array $fields, array $filter)
 	{
+		// raw UPDATE without ORM events: onBeforeUpdate does not guard it
+		if (array_key_exists('OWNER_PARAMETERS', $fields))
+		{
+			throw new ArgumentException(
+				'Owner parameters of an attached object cannot be changed after creation.',
+				'fields'
+			);
+		}
+
 		parent::updateBatch($fields, $filter);
 	}
 }

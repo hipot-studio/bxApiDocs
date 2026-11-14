@@ -51,6 +51,7 @@ class Toolbar
 			'MARKET_LOGO_TITLE' => $marketLogoTitle,
 			'MARKET_TOOLBAR_TITLE' => $marketToolbarTitle,
 			'MARKET_NAME_MESSAGE_CODE' => $totalAppsResponse['MARKET_NAME_MESSAGE_CODE'] ?? '',
+			'AI_SEARCH_ENABLED' => ($totalAppsResponse['AI_SEARCH']['ENABLED'] ?? null) === 'Y' ? 'Y' : 'N',
 		];
 	}
 

@@ -17,20 +17,22 @@ use Bitrix\Main\Result;
  */
 final class AutomaticCallProcessingEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.copilot.call_processing.automatic.enabled';
+	public const ID = 'crm.copilot.call_processing.automatic.enabled';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'AI_CALL_PROCESSING_ALLOWED_AUTO_V2',
 		);
 	}
 

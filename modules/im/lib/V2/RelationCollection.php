@@ -36,6 +36,8 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 		'IS_HIDDEN',
 	];
 
+	private const START_ID_PREFETCH_CHUNK = 300;
+
 	protected static array $startIdStaticCache = [];
 
 	protected array $relationsByUserId = [];
@@ -125,6 +127,75 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 		}
 
 		return $relation->getStartId() ?? 0;
+	}
+
+	/**
+	 * The same border for a whole list of chats, in one range over IX_IM_REL_9 (USER_ID, CHAT_ID): read one
+	 * by one, every chat a caller names costs a select of its own. Fills the very cache {@see self::getStartId()}
+	 * reads, so the per-chat calls that follow stay in memory.
+	 *
+	 * A chat the selection brings no relation for is cached as 0 - the answer a single read gives a reader
+	 * without one. Otherwise the prefetch would miss exactly the chats it was made for: an open chat is
+	 * read by people who are not members of it, and every one of those would fall back to a select. The
+	 * remembered 0 lives by the rules of any other cached border - a relation added through the collection
+	 * overwrites it, deleting one drops it.
+	 *
+	 * @param int[] $chatIds
+	 */
+	public static function fillStartIds(array $chatIds, int $userId): void
+	{
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		$chatIds = array_filter(
+			array_unique(array_map('intval', $chatIds)),
+			static fn (int $chatId) => $chatId > 0 && !isset(self::$startIdStaticCache[$chatId][$userId])
+		);
+
+		if (empty($chatIds))
+		{
+			return;
+		}
+
+		foreach (array_chunk($chatIds, self::START_ID_PREFETCH_CHUNK) as $chunk)
+		{
+			$startIds = array_fill_keys($chunk, 0);
+
+			$rows = RelationTable::query()
+				->setSelect(['CHAT_ID', 'START_ID'])
+				->where('USER_ID', $userId)
+				->whereIn('CHAT_ID', $chunk)
+				->fetchAll()
+			;
+
+			foreach ($rows as $row)
+			{
+				$startIds[(int)$row['CHAT_ID']] = (int)$row['START_ID'];
+			}
+
+			foreach ($startIds as $chatId => $startId)
+			{
+				self::$startIdStaticCache[$chatId][$userId] = $startId;
+			}
+		}
+	}
+
+	/**
+	 * Drops the cached START_ID after it was changed outside of the collection.
+	 * Without $userId the whole chat is invalidated.
+	 */
+	public static function clearStartIdCache(int $chatId, ?int $userId = null): void
+	{
+		if ($userId === null)
+		{
+			unset(self::$startIdStaticCache[$chatId]);
+
+			return;
+		}
+
+		unset(self::$startIdStaticCache[$chatId][$userId]);
 	}
 
 	public function getByUserId(int $userId, int $chatId): ?Relation

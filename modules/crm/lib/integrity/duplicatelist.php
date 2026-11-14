@@ -597,6 +597,7 @@ class DuplicateList
 		);
 		if (!empty($typeIDs))
 		{
+			$typeIDs = array_map('intval', $typeIDs);
 			$indexJoinConditions['@ref.TYPE_ID'] = new Main\DB\SqlExpression(implode(', ', $typeIDs));
 		}
 

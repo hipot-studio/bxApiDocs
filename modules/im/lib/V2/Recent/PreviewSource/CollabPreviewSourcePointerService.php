@@ -40,6 +40,31 @@ readonly class CollabPreviewSourcePointerService
 		$this->writePointer($collabChatId, [$userId => $source]);
 	}
 
+	public function recomputeForSourceChatMute(int $sourceChatId, int $userId): void
+	{
+		if (!Features::isCollabPreviewSourceEnabled() || $sourceChatId <= 0 || $userId <= 0)
+		{
+			return;
+		}
+
+		$collabChatId = $this->resolveCollabAncestorId($sourceChatId);
+		if ($collabChatId === null)
+		{
+			return;
+		}
+
+		if (!$this->recomputeUserPointerIfChanged($collabChatId, $userId))
+		{
+			return;
+		}
+
+		$collab = Chat::getInstance($collabChatId);
+		if ($collab instanceof Chat\CollabChat)
+		{
+			(new RecentUpdateMeta($collab, [$userId]))->send();
+		}
+	}
+
 	/**
 	 * Recompute the parent collab row pointer after a source chat left the user's recent (hideUser/leave).
 	 * No-op unless the chat is a direct, non-thread child of a collab.
@@ -102,6 +127,11 @@ readonly class CollabPreviewSourcePointerService
 			return null;
 		}
 
+		return $this->recomputeUserPointerIfChanged($collabChatId, $userId) ? $collabChatId : null;
+	}
+
+	private function recomputeUserPointerIfChanged(int $collabChatId, int $userId): bool
+	{
 		$row = RecentTable::query()
 			->setSelect(['PREVIEW_SOURCE_CID', 'PREVIEW_SOURCE_MID'])
 			->where('USER_ID', $userId)
@@ -112,7 +142,7 @@ readonly class CollabPreviewSourcePointerService
 		{
 			// No own recent row in the collab: there is nothing to rewrite, and pushing a collab
 			// recentUpdate would leak the project into the user's chat list.
-			return null;
+			return false;
 		}
 
 		$source = $this->resolver->resolve($collabChatId, $userId);
@@ -122,15 +152,12 @@ readonly class CollabPreviewSourcePointerService
 			&& (int)($row['PREVIEW_SOURCE_MID'] ?? 0) === $messageColumn
 		)
 		{
-			// A partial read keeps the same freshest unread message as the pointer. Skip the write and
-			// the push: a self-addressed recentUpdate here would deliver the still-unread tail message
-			// to the reading client as a bare preview payload.
-			return null;
+			return false;
 		}
 
 		$this->writePointer($collabChatId, [$userId => $source]);
 
-		return $collabChatId;
+		return true;
 	}
 
 	/**
@@ -249,6 +276,72 @@ readonly class CollabPreviewSourcePointerService
 		{
 			(new RecentUpdateMeta($collab, $userIds))->send();
 		}
+	}
+
+	/**
+	 * Recomputes the collab rows whose preview still points at a message the source chat has just cleared
+	 * for everyone - one batch of them, ordered by member, so a collab the size of the portal is walked
+	 * instead of fanned out at once. A recomputed pointer leaves the range on its own: the resolver no
+	 * longer offers a message behind the border ({@see OwnMessageQuery}), so the rows this batch handled
+	 * drop out of the selection.
+	 *
+	 * Dropping out of the selection is not enough to move on, though: IX_IM_REC_7 is (ITEM_CID, USER_ID)
+	 * and knows nothing of the preview columns, so without a cursor every batch reads the collab from its
+	 * first member again and walks over everyone already recomputed. The cursor carries the walk forward
+	 * inside that same index, and a batch that starts over on the next pass costs one scan, not one per
+	 * batch.
+	 *
+	 * @param int $userIdCursor the last member handled, carried on by the caller between its batches and,
+	 *                          for the scheduled cleanup, between its passes as well
+	 * @return bool whether the batch came out full, meaning more rows may be waiting
+	 */
+	public function recomputeForClearedSource(
+		int $collabChatId,
+		int $sourceChatId,
+		int $border,
+		int $limit,
+		int &$userIdCursor = 0
+	): bool
+	{
+		if (
+			!Features::isCollabPreviewSourceEnabled()
+			|| $collabChatId <= 0
+			|| $sourceChatId <= 0
+			|| $border <= 0
+			|| $limit <= 0
+		)
+		{
+			return false;
+		}
+
+		$rows = RecentTable::query()
+			->setSelect(['USER_ID'])
+			->where('ITEM_CID', $collabChatId)
+			->where('PREVIEW_SOURCE_CID', $sourceChatId)
+			->where('PREVIEW_SOURCE_MID', '<=', $border)
+			->where('USER_ID', '>', max(0, $userIdCursor))
+			->setOrder(['USER_ID' => 'ASC'])
+			->setLimit($limit)
+			->fetchAll()
+		;
+		if (empty($rows))
+		{
+			return false;
+		}
+
+		$userIds = array_map('intval', array_column($rows, 'USER_ID'));
+		$userIdCursor = max($userIds);
+		$this->recomputeForUsers($collabChatId, $userIds);
+
+		// The cleanup emits no pull of the collab itself, so the refreshed preview reaches the clients
+		// as an info-only event that leaves the row where it stands - the same way a deletion does.
+		$collab = Chat::getInstance($collabChatId);
+		if ($collab instanceof Chat\CollabChat)
+		{
+			(new RecentUpdateMeta($collab, $userIds))->send();
+		}
+
+		return count($rows) === $limit;
 	}
 
 	/**

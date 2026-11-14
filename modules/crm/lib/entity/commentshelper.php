@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Entity;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Model\FieldContentTypeTable;
@@ -120,10 +121,12 @@ final class CommentsHelper
 			$entityName = $factory ? strtolower($factory->getEntityName()) : '';
 			$fieldId = strtolower($field);
 			$contextId = "crm_editor-{$entityName}-{$entityId}-{$fieldId}";
+			$feature = $factory !== null ? CopilotFeatureCode::buildEditorFieldCode($entityTypeId, $field) : null;
 			$copilotOptions = [
 				'copilotOptions' => [
 					'moduleId' => 'crm',
 					'contextId' => $contextId,
+					...($feature === null ? [] : ['feature' => $feature]),
 					'category' => 'crm_comment_field',
 					'autoHide' => true,
 				],

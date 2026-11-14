@@ -2,7 +2,9 @@
 
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
@@ -10,6 +12,8 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\Helper\Workgroup;
+use Bitrix\Socialnetwork\Helper\ScrumProjectLimit;
+use Bitrix\Socialnetwork\Helper\ScrumProjectLimitException;
 use Bitrix\Socialnetwork\Helper\Path;
 use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
 use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
@@ -914,7 +918,7 @@ class CAllSocNetGroup
 	/***************************************/
 	/************  ACTIONS  ****************/
 	/***************************************/
-	public static function createGroup($ownerID, $arFields, $bAutoSubscribe = true)
+	public static function createGroup($ownerID, $arFields, $bAutoSubscribe = true, ?array $tagNames = null)
 	{
 		global $APPLICATION, $DB;
 
@@ -933,7 +937,7 @@ class CAllSocNetGroup
 
 		if (!empty($arFields['SCRUM_MASTER_ID']) && CModule::includeModule("tasks"))
 		{
-			$isScrumLimitExceeded = ScrumLimit::isLimitExceeded() || !ScrumLimit::isFeatureEnabled();
+			$isScrumLimitExceeded = !ScrumLimit::isFeatureEnabled();
 			if (ScrumLimit::canTurnOnTrial())
 			{
 				$isScrumLimitExceeded = false;
@@ -969,116 +973,206 @@ class CAllSocNetGroup
 			}
 		}
 
-		$DB->StartTransaction();
-
-		if (!isset($arFields["DATE_CREATE"]))
+		$connection = $DB->getConnection();
+		$limit = new ScrumProjectLimit($connection);
+		$inputFields = $arFields;
+		$equalityFields = \Bitrix\Socialnetwork\Util::getEqualityFields($inputFields);
+		$protected = static::hasCountedScrumMaster($inputFields, $equalityFields) && $limit->isProtectionRequired();
+		$pool = Application::getInstance()->getConnectionPool();
+		$transactionStarted = false;
+		if ($protected)
 		{
-			$arFields["=DATE_CREATE"] = CDatabase::currentTimeFunction();
+			$pool->useMasterOnly(true);
 		}
-
-		if (!isset($arFields["DATE_UPDATE"]))
+		try
 		{
-			$arFields["=DATE_UPDATE"] = CDatabase::currentTimeFunction();
-		}
-
-		if (!isset($arFields["DATE_ACTIVITY"]))
-		{
-			$arFields["=DATE_ACTIVITY"] = CDatabase::currentTimeFunction();
-		}
-
-		if (!isset($arFields['TYPE']))
-		{
-			$arFields['TYPE'] = static::getTypeByFields($arFields);
-		}
-
-		$arFields["ACTIVE"] = "Y";
-		$arFields["OWNER_ID"] = $ownerID;
-
-		if (!is_set($arFields, "SPAM_PERMS") || $arFields["SPAM_PERMS"] == '')
-		{
-			$arFields["SPAM_PERMS"] = SONET_ROLES_OWNER;
-		}
-
-		$groupID = CSocNetGroup::add($arFields);
-
-		if (
-			!$groupID
-			|| $groupID <= 0
-		)
-		{
-			$errorMessage = $errorID = "";
-			if ($e = $APPLICATION->getException())
+			$DB->StartTransaction();
+			$transactionStarted = true;
+			if ($protected)
 			{
-				$errorMessage = $e->GetString();
-				$errorID = $e->GetID();
-
-				if (
-					$errorID == ''
-					&& isset($e->messages)
-					&& is_array($e->messages)
-					&& is_array($e->messages[0])
-					&& array_key_exists("id", $e->messages[0])
-				)
+				try
 				{
-					$errorID = $e->messages[0]["id"];
+					$limit->lock();
+				}
+				catch (ScrumProjectLimitException $exception)
+				{
+					$APPLICATION->ThrowException($exception->getMessage(), $exception->getErrorCode());
+					$transactionStarted = false;
+					$DB->Rollback();
+
+					return false;
+				}
+				if ((ScrumLimit::isLimitExceeded() || !ScrumLimit::isFeatureEnabled()) && !ScrumLimit::canTurnOnTrial())
+				{
+					$APPLICATION->ThrowException('Scrum limit exceeded');
+					$transactionStarted = false;
+					$DB->Rollback();
+
+					return false;
 				}
 			}
 
-			if ($errorMessage == '')
+			if (!isset($arFields["DATE_CREATE"]))
 			{
-				$errorMessage = GetMessage("SONET_UR_ERROR_CREATE_GROUP").". ";
+				$arFields["=DATE_CREATE"] = CDatabase::currentTimeFunction();
 			}
 
-			if ($errorID == '')
+			if (!isset($arFields["DATE_UPDATE"]))
 			{
-				$errorID = "ERROR_CREATE_GROUP";
+				$arFields["=DATE_UPDATE"] = CDatabase::currentTimeFunction();
 			}
 
-			$APPLICATION->ThrowException($errorMessage, $errorID);
-			$DB->Rollback();
+			if (!isset($arFields["DATE_ACTIVITY"]))
+			{
+				$arFields["=DATE_ACTIVITY"] = CDatabase::currentTimeFunction();
+			}
 
-			return false;
+			if (!isset($arFields['TYPE']))
+			{
+				$arFields['TYPE'] = static::getTypeByFields($arFields);
+			}
+
+			$arFields["ACTIVE"] = "Y";
+			$arFields["OWNER_ID"] = $ownerID;
+
+			if (!is_set($arFields, "SPAM_PERMS") || $arFields["SPAM_PERMS"] == '')
+			{
+				$arFields["SPAM_PERMS"] = SONET_ROLES_OWNER;
+			}
+
+			$groupID = CSocNetGroup::add($arFields, $tagNames);
+
+			if (
+				!$groupID
+				|| $groupID <= 0
+			)
+			{
+				$errorMessage = $errorID = "";
+				if ($e = $APPLICATION->getException())
+				{
+					$errorMessage = $e->GetString();
+					$errorID = $e->GetID();
+
+					if (
+						$errorID == ''
+						&& isset($e->messages)
+						&& is_array($e->messages)
+						&& is_array($e->messages[0])
+						&& array_key_exists("id", $e->messages[0])
+					)
+					{
+						$errorID = $e->messages[0]["id"];
+					}
+				}
+
+				if ($errorMessage == '')
+				{
+					$errorMessage = GetMessage("SONET_UR_ERROR_CREATE_GROUP").". ";
+				}
+
+				if ($errorID == '')
+				{
+					$errorID = "ERROR_CREATE_GROUP";
+				}
+
+				if ($errorID === ScrumProjectLimitException::LIMIT_EXCEEDED)
+				{
+					$APPLICATION->ThrowException($errorMessage);
+				}
+				else
+				{
+					$APPLICATION->ThrowException($errorMessage, $errorID);
+				}
+				$transactionStarted = false;
+				$DB->Rollback();
+
+				return false;
+			}
+
+			$arFields1 = array(
+				"USER_ID" => $ownerID,
+				"GROUP_ID" => $groupID,
+				"ROLE" => SONET_ROLES_OWNER,
+				"=DATE_CREATE" => $DB->CurrentTimeFunction(),
+				"=DATE_UPDATE" => $DB->CurrentTimeFunction(),
+				"INITIATED_BY_TYPE" => SONET_INITIATED_BY_USER,
+				"INITIATED_BY_USER_ID" => $ownerID,
+				"MESSAGE" => false
+			);
+
+			if (!CSocNetUserToGroup::Add($arFields1))
+			{
+				$errorMessage = "";
+				if ($e = $APPLICATION->GetException())
+				{
+					$errorMessage = $e->GetString();
+				}
+
+				if ($errorMessage == '')
+				{
+					$errorMessage = GetMessage("SONET_UR_ERROR_CREATE_U_GROUP").". ";
+				}
+
+				$APPLICATION->ThrowException($errorMessage, "ERROR_CREATE_GROUP");
+				$transactionStarted = false;
+				$DB->Rollback();
+				return false;
+			}
+
+			if ($bAutoSubscribe)
+			{
+				CSocNetLogEvents::AutoSubscribe($ownerID, SONET_ENTITY_GROUP, $groupID);
+			}
+
+			CSocNetSubscription::Set($ownerID, "SG".$groupID, "Y");
+
+			$transactionStarted = false;
+			$DB->Commit();
+
+			return $groupID;
 		}
-
-		$arFields1 = array(
-			"USER_ID" => $ownerID,
-			"GROUP_ID" => $groupID,
-			"ROLE" => SONET_ROLES_OWNER,
-			"=DATE_CREATE" => $DB->CurrentTimeFunction(),
-			"=DATE_UPDATE" => $DB->CurrentTimeFunction(),
-			"INITIATED_BY_TYPE" => SONET_INITIATED_BY_USER,
-			"INITIATED_BY_USER_ID" => $ownerID,
-			"MESSAGE" => false
-		);
-
-		if (!CSocNetUserToGroup::Add($arFields1))
+		catch (\Throwable $exception)
 		{
-			$errorMessage = "";
-			if ($e = $APPLICATION->GetException())
+			if ($transactionStarted)
 			{
-				$errorMessage = $e->GetString();
+				$transactionStarted = false;
+				try
+				{
+					$connection->rollbackTransaction();
+				}
+				catch (TransactionException)
+				{
+				}
 			}
 
-			if ($errorMessage == '')
-			{
-				$errorMessage = GetMessage("SONET_UR_ERROR_CREATE_U_GROUP").". ";
-			}
-
-			$APPLICATION->ThrowException($errorMessage, "ERROR_CREATE_GROUP");
-			$DB->Rollback();
-			return false;
+			throw $exception;
 		}
-
-		if ($bAutoSubscribe)
+		finally
 		{
-			CSocNetLogEvents::AutoSubscribe($ownerID, SONET_ENTITY_GROUP, $groupID);
+			if ($protected)
+			{
+				$pool->useMasterOnly(false);
+			}
+		}
+	}
+
+	protected static function hasCountedScrumMaster(array $fields, array $equalityFields): bool
+	{
+		foreach (array_keys($equalityFields) as $name)
+		{
+			if (preg_match('#^\s*(?:SCRUM_MASTER_ID|`SCRUM_MASTER_ID`|"SCRUM_MASTER_ID")(?:\s|/\*|$)#i', $name))
+			{
+				return true;
+			}
 		}
 
-		CSocNetSubscription::Set($ownerID, "SG".$groupID, "Y");
+		// PrepareInsert/Update prefer a set literal, including false (SQL NULL), over the tilde RHS.
+		if (isset($fields['SCRUM_MASTER_ID']))
+		{
+			return $fields['SCRUM_MASTER_ID'] !== false;
+		}
 
-		$DB->Commit();
-
-		return $groupID;
+		return array_key_exists('~SCRUM_MASTER_ID', $fields);
 	}
 
 	/***************************************/

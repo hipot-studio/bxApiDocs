@@ -34,7 +34,9 @@ class Params extends Registry
 		COPILOT_ENGINE_CODE = 'COPILOT_ENGINE_CODE',
 		USER_DELETE_MESSAGE_DISABLED = 'USER_DELETE_MESSAGE_DISABLED',
 		COPILOT_TITLE_IS_CUSTOM = 'COPILOT_TITLE_IS_CUSTOM',
-		IS_COPILOT_DRAFT = 'IS_COPILOT_DRAFT'
+		IS_COPILOT_DRAFT = 'IS_COPILOT_DRAFT',
+		HISTORY_START_ID = 'HISTORY_START_ID',
+		SELF_HISTORY_START_ID = 'SELF_HISTORY_START_ID'
 	;
 
 	public const CHAT_PARAMS = [
@@ -52,6 +54,8 @@ class Params extends Registry
 		self::USER_DELETE_MESSAGE_DISABLED,
 		self::COPILOT_TITLE_IS_CUSTOM,
 		self::IS_COPILOT_DRAFT,
+		self::HISTORY_START_ID,
+		self::SELF_HISTORY_START_ID,
 	];
 
 	protected int $chatId;
@@ -96,6 +100,8 @@ class Params extends Registry
 			self::USER_DELETE_MESSAGE_DISABLED,
 			self::COPILOT_TITLE_IS_CUSTOM,
 			self::IS_COPILOT_DRAFT => (new Param())->setType(Param::TYPE_BOOL),
+			self::HISTORY_START_ID,
+			self::SELF_HISTORY_START_ID => (new Param())->setType(Param::TYPE_INT),
 			default => (new Param())->setType(Param::TYPE_STRING),
 		};
 	}
@@ -217,13 +223,9 @@ class Params extends Registry
 	protected function getParams(): Params
 	{
 		$chatId = $this->getChatId();
+		$params = self::readCachedParams($chatId);
 
-		$cache = Application::getInstance()->getCache();
-		if ($cache->initCache(self::CACHE_TTL, $this->getCacheId(), $this->getCacheDir()))
-		{
-			$params = $cache->getVars();
-		}
-		else
+		if ($params === null)
 		{
 			$params = Param::getDataClass()::query()
 				->setSelect(['ID', 'CHAT_ID', 'PARAM_NAME', 'PARAM_VALUE', 'PARAM_JSON'])
@@ -231,13 +233,54 @@ class Params extends Registry
 				->fetchAll()
 				;
 
-			$cache->startDataCache();
-			$cache->endDataCache($params);
+			self::writeCachedParams($chatId, $params);
 		}
 
 		$this->load($params);
 
 		return $this;
+	}
+
+	/**
+	 * Null stands for a chat the cache says nothing about, an empty array for a chat it knows has no
+	 * parameters: the caller has to tell the two apart to decide what still has to be selected.
+	 */
+	private static function readCachedParams(int $chatId): ?array
+	{
+		$cache = Application::getInstance()->getCache();
+
+		if (!$cache->initCache(self::CACHE_TTL, self::getCacheIdByChatId($chatId), self::getCacheDirByChatId($chatId)))
+		{
+			return null;
+		}
+
+		$params = $cache->getVars();
+
+		return is_array($params) ? $params : [];
+	}
+
+	private static function writeCachedParams(int $chatId, array $params): void
+	{
+		$cache = Application::getInstance()->getCache();
+
+		if ($cache->startDataCache(self::CACHE_TTL, self::getCacheIdByChatId($chatId), self::getCacheDirByChatId($chatId)))
+		{
+			$cache->endDataCache($params);
+		}
+	}
+
+	/**
+	 * Re-reads the parameters from the database, dropping the cached copy first. A caller that has to see
+	 * a value written after this process loaded the chat cannot trust either of them: the parameters are
+	 * read once per hit, and the cache they came from is filled by whichever process got there first.
+	 * The values in the database win; a parameter loaded earlier and deleted since is not dropped from
+	 * the copy, because this re-read exists for values that move, not for ones that disappear.
+	 */
+	public function reload(): Params
+	{
+		self::cleanCache($this->getChatId());
+
+		return $this->getParams();
 	}
 
 	protected function initByEntitiesCollection(ORM\Objectify\Collection $entitiesCollection): Params
@@ -636,14 +679,9 @@ class Params extends Registry
 		$this->isCreated = $isCreated;
 	}
 
-	private function getCacheId(): string
+	private static function getCacheIdByChatId(int $chatId): string
 	{
-		return "chat_params_{$this->chatId}";
-	}
-
-	private function getCacheDir(): string
-	{
-		return static::getCacheDirByChatId($this->chatId);
+		return "chat_params_{$chatId}";
 	}
 
 	private static function getCacheDirByChatId(int $chatId): string

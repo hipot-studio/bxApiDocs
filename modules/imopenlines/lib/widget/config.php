@@ -116,11 +116,16 @@ class Config
 				$phrase = (string)$phrase;
 			}
 
+			$consentUrl = $config['AGREEMENT_MESSAGE'] === 'Y' && (int)$config['AGREEMENT_ID']
+				? \Bitrix\ImOpenLines\Common::getAgreementLink((int)$config['AGREEMENT_ID'], $config['LANGUAGE_ID'], true)
+				: ''
+			;
+
 			$data = [
 				'CONFIG_ID' => (int)$config['ID'],
 				'CONFIG_NAME' => $config['LINE_NAME'],
 				'VOTE_ENABLE' => $config['VOTE_MESSAGE'] === 'Y',
-				'CONSENT_URL' => $config['AGREEMENT_ID'] && $config['AGREEMENT_MESSAGE'] == 'Y' ? \Bitrix\ImOpenLines\Common::getAgreementLink($config['AGREEMENT_ID'], $config['LANGUAGE_ID'], true) : '',
+				'CONSENT_URL' => $consentUrl,
 				'OPERATORS' => $queue,
 				'ONLINE' => $config['CHECK_AVAILABLE'] === 'Y' ? $hasOnlineOperator === true : $config['QUEUE_ONLINE'] === 'Y',
 				'CONNECTORS' => $connectors,
@@ -142,7 +147,7 @@ class Config
 					'USE_WELCOME_FORM' => $config['USE_WELCOME_FORM'],
 					'WELCOME_FORM_ID' => $config['WELCOME_FORM_ID'],
 					'WELCOME_FORM_DELAY' => $config['WELCOME_FORM_DELAY']
-				]
+				],
 			];
 
 			$cache->endDataCache($data);
@@ -169,6 +174,34 @@ class Config
 	{
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
 		$cache->cleanDir(self::CACHE_DIR);
+	}
+
+	/**
+	 * An agreement write changes the consent link of the lines that use this very agreement only,
+	 * so the cache of every other line is left alone: dropping the whole directory would make the
+	 * widgets of a portal rebuild queues, operators and connectors after any agreement is edited.
+	 */
+	public static function clearCacheByAgreement(\Bitrix\Main\ORM\Event $event): void
+	{
+		$primary = $event->getParameter('id');
+		$agreementId = (int)(is_array($primary) ? ($primary['ID'] ?? 0) : $primary);
+		if ($agreementId <= 0)
+		{
+			return;
+		}
+
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+		$lines = \Bitrix\ImOpenLines\Model\LivechatTable::getList([
+			'select' => ['URL_CODE'],
+			'filter' => [
+				'=CONFIG.AGREEMENT_MESSAGE' => 'Y',
+				'=CONFIG.AGREEMENT_ID' => $agreementId,
+			],
+		]);
+		while ($line = $lines->fetch())
+		{
+			$cache->clean(self::CACHE_ID_PREFIX_ . $line['URL_CODE'], self::CACHE_DIR);
+		}
 	}
 
 	/**

@@ -59,6 +59,26 @@ class DepartmentProvider
 		return InternalDepartmentProvider::getSubordinateIds($userId);
 	}
 
+	/**
+	 * Returns the team of the user the presence list, the card and the map are built about: the ids
+	 * getSubordinateIds() gives, kept between processes until the structure is reset. A check of access reads
+	 * getSubordinateIds() or isAccessibleEmployee() instead.
+	 *
+	 * @return int[]
+	 */
+	public static function getTeamIds(int $userId): array
+	{
+		return InternalDepartmentProvider::getTeamScope($userId)->userIds;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public static function getPeerHeadIds(int $userId): array
+	{
+		return InternalDepartmentProvider::getPeerHeadIds($userId);
+	}
+
 	public static function getManagedDepartmentIds(int $userId): array
 	{
 		return InternalDepartmentProvider::getManagedDepartmentIds($userId);
@@ -66,7 +86,7 @@ class DepartmentProvider
 
 	public static function hasSubordinates(int $userId): bool
 	{
-		return !empty(self::getSubordinateIds($userId));
+		return !empty(self::getTeamIds($userId));
 	}
 
 	public static function isHeadOrDeputyOfDepartment(int $userId): bool

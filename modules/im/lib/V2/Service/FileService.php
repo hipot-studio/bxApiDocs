@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Entity\File\DownloadType;
 use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Entity\File\PreviewSource;
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -274,6 +275,17 @@ class FileService
 		if ($diskFile === null)
 		{
 			return $result->addError(new Error('File not found', 'FILE_NOT_FOUND'));
+		}
+
+		// Ahead of the branching on purpose: the ajax branch takes the address from the serialization, where
+		// a restricted video note already has an empty urlDownload, and the refusal would degrade into an
+		// empty string instead of a public error code.
+		if (
+			$file->isActualVideoNote()
+			&& !Locator::getVideoNoteDownloadPolicy()->isAllowed(User::getCurrent())
+		)
+		{
+			return $result->addError(new FileError(FileError::VIDEO_NOTE_DOWNLOAD_RESTRICTED));
 		}
 
 		if ($restServer === null)

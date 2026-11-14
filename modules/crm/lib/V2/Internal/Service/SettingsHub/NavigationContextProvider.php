@@ -7,6 +7,7 @@ namespace Bitrix\Crm\V2\Internal\Service\SettingsHub;
 use Bitrix\Crm\Automation;
 use Bitrix\Crm\DbHelper;
 use Bitrix\Crm\Exclusion;
+use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Settings\InvoiceSettings;
 use Bitrix\Main\Application;
@@ -27,6 +28,12 @@ class NavigationContextProvider
 	}
 
 	public function isDocumentGeneratorAvailable(): bool
+	{
+		return $this->isDocumentGeneratorModuleAvailable()
+			&& DocumentGeneratorManager::getInstance()->isEnabled();
+	}
+
+	protected function isDocumentGeneratorModuleAvailable(): bool
 	{
 		return Loader::includeModule('documentgenerator');
 	}

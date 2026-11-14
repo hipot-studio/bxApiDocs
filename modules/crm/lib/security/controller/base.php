@@ -22,6 +22,23 @@ abstract class Base extends Crm\Security\Controller
 	protected $cachedAttrs = [];
 	protected array $cachedCategoryIds = [];
 
+	/** @var array<int, array<int, true>>|null ids found to have no row, by entity type; null while not kept */
+	private static ?array $rememberedMisses = null;
+
+	/**
+	 * From now on an id found to have no row is not asked again until stopRememberingMisses().
+	 * For a batch reading only: outside of it a miss is read again on every question.
+	 */
+	public static function startRememberingMisses(): void
+	{
+		self::$rememberedMisses ??= [];
+	}
+
+	public static function stopRememberingMisses(): void
+	{
+		self::$rememberedMisses = null;
+	}
+
 	public function isEntityTypeSupported(int $entityTypeId): bool
 	{
 		return ($this->getEntityTypeID() === $entityTypeId);
@@ -58,16 +75,27 @@ abstract class Base extends Crm\Security\Controller
 		$notCachedIds = [];
 		foreach ($entityIDs as $entityId)
 		{
-			if (!array_key_exists($entityId, $this->cachedAttrs[$entityTypeId]))
+			if (
+				!array_key_exists($entityId, $this->cachedAttrs[$entityTypeId])
+				&& !isset(self::$rememberedMisses[$entityTypeId][$entityId])
+			)
 			{
 				$notCachedIds[] = $entityId;
 			}
 		}
 		if (!empty($notCachedIds))
 		{
-			foreach ($this->loadPermissionAttributes($notCachedIds) as $loadedEntityId => $loadedEntityAttrs)
+			$loadedAttrs = $this->loadPermissionAttributes($notCachedIds);
+			foreach ($notCachedIds as $entityId)
 			{
-				$this->cachedAttrs[$entityTypeId][$loadedEntityId] = $loadedEntityAttrs;
+				if (array_key_exists($entityId, $loadedAttrs))
+				{
+					$this->cachedAttrs[$entityTypeId][$entityId] = $loadedAttrs[$entityId];
+				}
+				elseif (self::$rememberedMisses !== null)
+				{
+					self::$rememberedMisses[$entityTypeId][$entityId] = true;
+				}
 			}
 		}
 		foreach ($entityIDs as $entityId)
@@ -86,10 +114,23 @@ abstract class Base extends Crm\Security\Controller
 		return $this->cachedCategoryIds[$entityId] ?? null;
 	}
 
+	/**
+	 * Whether the permission attributes of the entity are kept, so that asking for them reads nothing.
+	 */
+	public function hasPermissionAttributesCached(int $entityId): bool
+	{
+		return array_key_exists($entityId, $this->cachedAttrs[$this->getEntityTypeId()] ?? []);
+	}
+
 	public function clearPermissionAttributesCache(int $entityId): void
 	{
 		$entityTypeId = $this->getEntityTypeId();
-		unset($this->cachedAttrs[$entityTypeId][$entityId]);
+		unset($this->cachedAttrs[$entityTypeId][$entityId], self::$rememberedMisses[$entityTypeId][$entityId]);
+		if (self::$rememberedMisses !== null)
+		{
+			// a batch reading drops what it preloaded; outside of it the category is kept as it has been
+			unset($this->cachedCategoryIds[$entityId]);
+		}
 	}
 
 	abstract public function getEntityTypeId(): int;

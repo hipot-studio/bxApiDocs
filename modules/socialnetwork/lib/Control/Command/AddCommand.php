@@ -19,6 +19,7 @@ use Bitrix\Socialnetwork\Control\Mapper\Field\AvatarMapper;
 use Bitrix\Socialnetwork\Control\Mapper\Field\ViewModeMapper;
 use Bitrix\Socialnetwork\Control\Mapper\Attribute\Map;
 use Bitrix\Socialnetwork\Control\Mapper\Field\DepartmentMapper;
+use Bitrix\Socialnetwork\Control\Mapper\Field\TagNamesMapper;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 
 /**
@@ -54,6 +55,8 @@ use Bitrix\Socialnetwork\Item\Workgroup\Type;
  * @method null|array getInvitedMembers()
  * @method self setModeratorMembers(?array $members)
  * @method null|array getModeratorMembers()
+ * @method self setTagNames(?array $tagNames)
+ * @method null|array getTagNames()
  */
 
 #[AccessController(GroupAccessController::class)]
@@ -113,4 +116,7 @@ class AddCommand extends InitiatedCommand implements DefaultValueCommandInterfac
 
 	#[AccessCode]
 	protected ?array $moderatorMembers;
+
+	#[Map('KEYWORDS', TagNamesMapper::class)]
+	protected ?array $tagNames;
 }

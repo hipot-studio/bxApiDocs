@@ -41,7 +41,7 @@ final class CopilotFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_COPILOT_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return CopilotChat::isActive();
 	}

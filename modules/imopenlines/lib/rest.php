@@ -1,7 +1,6 @@
 <?php
 namespace Bitrix\ImOpenLines;
 
-use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Type\DateTime;
@@ -711,12 +710,44 @@ class Rest extends \IRestService
 			throw new RestException('Unable to determine session ID from provided parameters', 'INVALID_SESSION_ID', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
+		$limit = self::clampSessionHistoryLimit((int)($arParams['LIMIT'] ?? 0));
+		$lastId = max(0, (int)($arParams['LAST_ID'] ?? 0));
+		// Compound cursor: LAST_DATE pairs with LAST_ID so the keyset does not depend on the boundary
+		// message still existing (it can be physically deleted between pages). Absent/0 => first page.
+		$lastDate = max(0, (int)($arParams['LAST_DATE'] ?? 0));
+
+		// The pagination capability lives in `im` (CIMChat::GetLastMessageLimit). Load the module before
+		// probing its signature: the REST service description is cached, so on a warm-cache request by
+		// SESSION_ID `im` is not guaranteed loaded yet, and the probe would otherwise read as "unsupported"
+		// and silently disable pagination. The endpoint hard-requires `im` anyway (Operator loads it).
+		Loader::includeModule('im');
+
+		// Capability probe: pass pagination params to the read-path only when the installed `im`
+		// ships the keyset/limit read-path. On older `im` the method answers as before (no crash, full range).
+		$paginationSupported = self::isSessionHistoryPaginationSupported();
+		$appliedLimit = $paginationSupported ? $limit : 0;
+		$appliedLastId = $paginationSupported ? $lastId : 0;
+		$appliedLastDate = $paginationSupported ? $lastDate : 0;
+
 		$control = new \Bitrix\ImOpenLines\Operator(0);
-		$result = $control->getSessionHistory($sessionId);
+		$result = $control->getSessionHistory($sessionId, $appliedLimit, $appliedLastId, $appliedLastDate);
 
 		if (!$result)
 		{
 			throw new RestException($control->getError()->msg, $control->getError()->code, \CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		$messages = (isset($result['message']) && is_array($result['message'])) ? $result['message'] : [];
+		$pageMeta = SessionHistoryPagination::computeMeta(array_keys($messages), $appliedLimit);
+		$nextId = $pageMeta['nextId'];
+		$hasNextPage = $pageMeta['hasNextPage'];
+
+		// NEXT_DATE is the boundary (oldest, DESC) message date paired with NEXT_ID; the caller sends it
+		// back as LAST_DATE so the next page's keyset does not have to re-resolve the date from the row.
+		$nextDate = null;
+		if ($nextId !== null && isset($messages[$nextId]['date']) && $messages[$nextId]['date'] instanceof DateTime)
+		{
+			$nextDate = $messages[$nextId]['date']->getTimestamp();
 		}
 
 		return self::objectEncode([
@@ -737,7 +768,24 @@ class Rest extends \IRestService
 			'USER_BLOCK_CHAT' => isset($result['userChatBlockStatus']) ? $result['userChatBlockStatus'] : [],
 			'USER_IN_CHAT' => isset($result['userInChat']) ? $result['userInChat'] : [],
 			'FILES' => isset($result['files']) ? $result['files'] : [],
+			'NEXT_ID' => $nextId,
+			'NEXT_DATE' => $nextDate,
+			'HAS_NEXT_PAGE' => $hasNextPage,
 		]);
+	}
+
+	public static function clampSessionHistoryLimit(int $limit): int
+	{
+		return SessionHistoryPagination::clampLimit($limit);
+	}
+
+	/**
+	 * True when the installed `im` module ships the keyset/limit read-path in CIMChat::GetLastMessageLimit
+	 * (detected by method signature, not by version).
+	 */
+	public static function isSessionHistoryPaginationSupported(): bool
+	{
+		return SessionHistoryPagination::isReadPathPaginated();
 	}
 
 	public static function messageSaveToQuickAnswer($arParams, $n, \CRestServer $server)
@@ -1301,7 +1349,10 @@ class Rest extends \IRestService
 			throw new RestException('Messenger is not installed.', 'IM_NOT_INSTALLED', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
-		if ($config['AGREEMENT_MESSAGE'] != 'Y')
+		if (
+			$config['AGREEMENT_MESSAGE'] != 'Y'
+			|| !Common::isAgreementAvailable((int)$config['AGREEMENT_ID'])
+		)
 		{
 			return false;
 		}
@@ -1344,9 +1395,22 @@ class Rest extends \IRestService
 			throw new RestException('Session id is not specified.', 'SESSION_ID_EMPTY', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
+		global $USER;
+		if (!$USER->IsAuthorized())
+		{
+			throw new RestException('Access for this method allowed only for authorized users.', 'USER_NOT_AUTHORIZED', \CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$action = mb_strtolower($params['ACTION']);
 
-		Session::voteAsUser($params['SESSION_ID'], $action);
+		$result = Session::voteAsUser($params['SESSION_ID'], $action, (int)$USER->GetID());
+		// A refusal (an alien session, a closed vote window, a write that could not be serialised)
+		// must not travel inside a successful response: the widget applies the chosen mark
+		// optimistically and rolls it back only on a rejected request, never on result = false.
+		if (!$result)
+		{
+			throw new RestException('Vote failed.', 'VOTE_ERROR', \CRestServer::STATUS_WRONG_REQUEST);
+		}
 
 		return true;
 	}
@@ -1710,6 +1774,11 @@ class Rest extends \IRestService
 			throw new RestException('Config ID can\'t be empty', 'CONFIG_ID_EMPTY', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
+		if (!Config::canViewLine($arParams['CONFIG_ID']))
+		{
+			throw new RestException('Permission denied', 'CONFIG_WRONG_USER_PERMISSION', \CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$arParams['WITH_QUEUE'] = isset($arParams['WITH_QUEUE']) ? $arParams['WITH_QUEUE'] == 'Y' : true;
 		$arParams['SHOW_OFFLINE'] = isset($arParams['SHOW_OFFLINE']) ? $arParams['SHOW_OFFLINE'] == 'Y' : true;
 
@@ -1720,6 +1789,13 @@ class Rest extends \IRestService
 
 	public static function configListGet($arParams, $n, \CRestServer $server)
 	{
+		// the denial comes before the validation: its texts name the fields of the entity, and the
+		// check itself reads no client parameter
+		if (!Permissions::createWithCurrentUser()->canViewLines())
+		{
+			throw new RestException('Permission denied', 'CONFIG_WRONG_USER_PERMISSION', \CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$config = new Config();
 
 		$arParams['PARAMS'] = !empty($arParams['PARAMS']) && is_array($arParams['PARAMS']) ? $arParams['PARAMS'] : [];
@@ -1728,7 +1804,21 @@ class Rest extends \IRestService
 		self::validateConfigListParams($arParams['PARAMS']);
 		self::validateConfigListOptions($arParams['OPTIONS']);
 
-		return $config->getList($arParams['PARAMS'], $arParams['OPTIONS']);
+		$options = $arParams['OPTIONS'];
+
+		// no client parameter takes part in the scope of the answer
+		unset($options['CHECK_PERMISSION']);
+
+		$accessFilter = Security\LineScope::buildCondition(
+			Security\Helper::getCurrentUserId(),
+			Permissions::ACTION_VIEW
+		);
+		if ($accessFilter !== null)
+		{
+			$options['ACCESS_FILTER'] = $accessFilter;
+		}
+
+		return $config->getList($arParams['PARAMS'], $options);
 	}
 
 	/**
@@ -1736,7 +1826,8 @@ class Rest extends \IRestService
 	 */
 	private static function validateConfigListParams(array $params): void
 	{
-		$unknownParams = array_diff(array_keys($params), ['select', 'filter', 'order', 'limit', 'offset']);
+		// the admission layer allows no more than Config::getList() supports with an access filter
+		$unknownParams = array_diff(array_keys($params), Config::ACCESS_FILTER_SUPPORTED_PARAMS);
 		if (!empty($unknownParams))
 		{
 			throw new RestException(
@@ -2143,9 +2234,15 @@ class Rest extends \IRestService
 	 * @param $n
 	 * @param \CRestServer $server
 	 * @return array|bool|int
+	 * @throws RestException
 	 */
 	public static function configAdd($arParams, $n, \CRestServer $server)
 	{
+		if (!Security\Helper::canCurrentUserModifyLine())
+		{
+			throw new RestException('Permission denied', 'CONFIG_WRONG_USER_PERMISSION', \CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$arParams['PARAMS'] = !empty($arParams['PARAMS']) && is_array($arParams['PARAMS']) ? $arParams['PARAMS'] : [];
 		$config = new Config();
 

@@ -35,6 +35,7 @@ use Bitrix\Im\V2\Common\ActiveRecordImplementation;
 use Bitrix\Im\V2\Common\RegistryEntryImplementation;
 use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\Url\UrlItem;
+use Bitrix\Im\V2\Link\PersonalPin\PersonalPinService;
 use Bitrix\Im\V2\Link\Pin\PinService;
 use Bitrix\Im\V2\Link\Favorite\FavoriteService;
 use Bitrix\Im\V2\Message\Param;
@@ -543,13 +544,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	public function isViewedByOthers(): bool
 	{
 		return $this->isNotifyRead() ?? false;
-	}
-
-	public function setViewedCount(int $viewedCount): self
-	{
-		$this->viewedCount = $viewedCount;
-
-		return $this;
 	}
 
 	public function getViewedCount(): int
@@ -1698,6 +1692,22 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $pinService->unpinMessage($this);
 	}
 
+	public function pinPersonal(): Result
+	{
+		$personalPinService = new PersonalPinService();
+		$personalPinService->setContext($this->context);
+
+		return $personalPinService->pinMessage($this);
+	}
+
+	public function unpinPersonal(): Result
+	{
+		$personalPinService = new PersonalPinService();
+		$personalPinService->setContext($this->context);
+
+		return $personalPinService->unpinMessage($this);
+	}
+
 	public function mark(): Result
 	{
 		$result = new Result();
@@ -2092,11 +2102,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 				'unread' => $this->isUnread(),
 				'viewed' => $this->isViewed(),
 			]);
-
-			if (!$messageShortInfo)
-			{
-				$rest['viewedCount'] = $this->getViewedCount();
-			}
 		}
 
 		return $rest;

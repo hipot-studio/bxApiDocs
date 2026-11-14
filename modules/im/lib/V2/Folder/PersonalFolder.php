@@ -103,18 +103,22 @@ class PersonalFolder extends BaseFolder
 
 	/**
 	 * @param array $option supported keys:
-	 *  - 'dialogIdMap' array<int, string> chatId => dialogId — batch-resolved map injected by
-	 *    {@see FolderCollection::toRestFormat} to avoid N+1. When absent, this folder resolves
-	 *    its own chat ids via {@see ChatDialogIdResolver} (single-folder path: add/get/update/pull).
+	 *  - 'dialogIdMap' array<int, string> chatId => dialogId — resolved once for the whole
+	 *    collection ({@see FolderCollection::buildDialogIdMap}) to avoid N+1. When absent, this folder
+	 *    resolves its own chat ids via {@see ChatDialogIdResolver} (single-folder path: add/get/update).
 	 */
 	public function toRestFormat(array $option = []): array
 	{
+		$visibility = $this->getPublishedVisibility();
+
 		return [
 			'id' => $this->getId(),
 			'type' => self::TYPE,
 			'title' => $this->getTitle(),
 			'sort' => $this->getSort(),
-			'visible' => $this->isVisible(),
+			'hiddenBySystem' => $this->isHiddenBySystem(),
+			'hiddenByUser' => $visibility['hiddenByUser'],
+			'canHide' => $visibility['canHide'],
 			'description' => $this->getDescription(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
 			'definition' => (new ChatListDefinition($this->getChatIds(), $this->resolveDialogIdMap($option)))->toRestFormat(),

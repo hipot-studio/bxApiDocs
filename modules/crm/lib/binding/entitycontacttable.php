@@ -160,4 +160,29 @@ class EntityContactTable extends DataManager
 			],
 		])->fetchCollection()->getEntityIdList();
 	}
+
+	/**
+	 * Prepares SQL join that restricts a contact list to contacts bound to the specified item.
+	 *
+	 * @param int $entityTypeId Owner entity type ID.
+	 * @param int $entityId Owner entity ID.
+	 * @param string $tableAlias Alias of the contact table in the main query.
+	 * @return string
+	 * @throws Main\ArgumentException
+	 */
+	public static function prepareFilterJoinSql(int $entityTypeId, int $entityId, string $tableAlias): string
+	{
+		if ($entityTypeId <= 0)
+		{
+			throw new Main\ArgumentException('Must be greater than zero', 'entityTypeId');
+		}
+
+		if ($entityId <= 0)
+		{
+			throw new Main\ArgumentException('Must be greater than zero', 'entityId');
+		}
+
+		return "INNER JOIN b_crm_entity_contact EC ON EC.ENTITY_TYPE_ID = {$entityTypeId}"
+			. " AND EC.ENTITY_ID = {$entityId} AND EC.CONTACT_ID = {$tableAlias}.ID";
+	}
 }

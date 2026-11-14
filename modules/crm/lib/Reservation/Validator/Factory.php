@@ -10,6 +10,7 @@ class Factory
 {
 	public const VALIDATOR_CUSTOM_PRODUCT_RESERVE = 'CUSTOM_PRODUCT_RESERVE';
 	public const VALIDATOR_AVAILABLE_PRODUCT = 'AVAILABLE_PRODUCT';
+	public const VALIDATOR_EXISTING_STORE = 'EXISTING_STORE';
 
 	public static function getInstance(): static
 	{
@@ -22,6 +23,7 @@ class Factory
 		{
 			self::VALIDATOR_AVAILABLE_PRODUCT => new AvailableProduct(),
 			self::VALIDATOR_CUSTOM_PRODUCT_RESERVE => new CustomProductReserve(),
+			self::VALIDATOR_EXISTING_STORE => new ExistingStore(),
 			default => throw new ArgumentException('Unknown validator code: ' . $validatorCode)
 		};
 	}

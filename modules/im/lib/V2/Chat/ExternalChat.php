@@ -163,6 +163,12 @@ class ExternalChat extends GroupChat
 		$userIds = $event->getNewUserIds() ?? $userIds;
 		$config = $event->getNewAddUsersConfig() ?? $config;
 
+		$notifyBlockUserIds = $event->getNotifyBlockUserIds();
+		if (!empty($notifyBlockUserIds))
+		{
+			$config = $config->addMutedUserIds($notifyBlockUserIds);
+		}
+
 		return parent::addUsers($userIds, $config);
 	}
 

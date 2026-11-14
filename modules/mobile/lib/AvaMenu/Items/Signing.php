@@ -5,18 +5,27 @@ namespace Bitrix\Mobile\AvaMenu\Items;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Mobile\AvaMenu\AbstractMenuItem;
+use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Tab\Preset\Service\ActiveTabProvider;
 use Bitrix\SignMobile\Config\Feature;
 
 class Signing extends AbstractMenuItem
 {
+	public function __construct(
+		Context $context,
+		private readonly ActiveTabProvider $activeTabProvider,
+	)
+	{
+		parent::__construct($context);
+	}
+
 	/**
 	 * @return bool
 	 * @throws LoaderException
 	 */
 	public function isAvailable(): bool
 	{
-		$activeTabs = ActiveTabProvider::forContext($this->context)->getActiveTabs();
+		$activeTabs = $this->activeTabProvider->getActiveTabs();
 
 		if (isset($activeTabs['sign']))
 		{

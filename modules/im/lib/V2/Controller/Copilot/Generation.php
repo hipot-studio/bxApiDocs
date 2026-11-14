@@ -13,9 +13,9 @@ class Generation extends BaseController
 	/**
 	 * @restMethod im.v2.Copilot.Generation.stop
 	 */
-	public function stopAction(Chat $chat, GenerationStopService $service): ?array
+	public function stopAction(Chat $chat, GenerationStopService $service, ?int $messageId = null): ?array
 	{
-		$result = $service->stop($chat, (int)$this->getCurrentUser()->getId());
+		$result = $service->stop($chat, (int)$this->getCurrentUser()->getId(), $messageId);
 
 		if (!$result->isSuccess())
 		{

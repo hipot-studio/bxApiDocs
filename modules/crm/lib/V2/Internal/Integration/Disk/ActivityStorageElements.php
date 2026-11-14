@@ -25,10 +25,10 @@ use CFile;
  * about them.
  *
  * TWO DIRECTIONS, ONE BOUNDARY. The step of the delete pipeline that removes the files of an activity calls
- * {@see deleteElements()} once, exactly where legacy calls its counterpart; {@see getFiles()} answers a read
- * and writes nothing whatever. The gate of the delete step - the option that keeps the files, and the
- * activity moved to the recycle bin that raises it - stays in the pipeline, because it is a condition of the
- * operation rather than knowledge about a storage. The rows of `b_crm_act_elem` are not here either: they
+ * {@see deleteElements()} once, exactly where legacy calls its counterpart; {@see getFilesOfActivities()}
+ * answers a read and writes nothing whatever. The gate of the delete step - the option that keeps the files,
+ * and the activity moved to the recycle bin that raises it - stays in the pipeline, because it is a condition
+ * of the operation rather than knowledge about a storage. The rows of `b_crm_act_elem` are not here either: they
  * are a table of CRM and belong to its repository.
  *
  * WHICH FILE MAY BE DELETED AT ALL. A file of the disk is removed only when it sits in a service folder of
@@ -49,7 +49,7 @@ use CFile;
  * the branch is unreachable rather than working - and why the guard below is a guard and not a change of
  * behaviour. THE CLASS IS NOT FINAL for that branch: {@see isDiskAvailable()} is the seam its test needs,
  * and it is the form the sample of this layer uses (`Internal\Integration\Sale\LocationDictionary`). The two
- * readers of a storage, {@see readFilesOfTheDisk()} and {@see readFilesOfTheCore()}, are seams of the same
+ * readers of a storage, {@see readNamesOfTheDisk()} and {@see readFilesOfTheCore()}, are seams of the same
  * kind: what a read makes of what a storage answered is pinned without a portal behind it.
  *
  * @internal
@@ -91,7 +91,9 @@ class ActivityStorageElements
 	}
 
 	/**
-	 * Metadata of the files of an activity, in the order of the given elements.
+	 * Metadata of the files of a set of activities: for each activity, in the order of its elements. Every
+	 * storage is read once for the whole set, whatever its size, and each activity is answered exactly as a read
+	 * of it alone would answer it.
 	 *
 	 * THE RIGHT OVER THE FILES IS THE RIGHT OVER THE ACTIVITY, as it is in legacy. Whoever reads the activity
 	 * reads its files: `ActivityAccess` has settled that right before this layer is reached, and no second right
@@ -102,35 +104,53 @@ class ActivityStorageElements
 	 * AN ELEMENT THE STORAGE NO LONGER HAS IS LEFT OUT: a read answers with the files that are there rather
 	 * than with placeholders for the rest, because a name and an address are exactly what the caller asked for.
 	 * Nothing is written on the way - no storage is migrated and no element is created - so a read of the files
-	 * of an activity leaves the activity as it was.
+	 * of an activity leaves the activity as it was. A storage of the WebDav era, or none at all, is read by
+	 * neither legacy nor this, and its activities are answered with no files.
 	 *
-	 * @param int $activityId the activity the elements belong to; it is the owner its addresses name.
-	 * @param int $storageTypeId storage the elements belong to, {@see StorageType}.
-	 * @param int[] $storageElementIds elements of that storage, as the activity carries them.
-	 * @return ActivityFile[]
+	 * @param array<int, int> $storageTypeIds storage of the elements by activity id, {@see StorageType}; the
+	 *     activity id is the owner the addresses of its files of the disk name.
+	 * @param array<int, int[]> $storageElementIds elements by activity id, as the activities carry them.
+	 * @return array<int, ActivityFile[]> by activity id, for every activity of $storageTypeIds.
 	 */
-	public function getFiles(int $activityId, int $storageTypeId, array $storageElementIds): array
+	public function getFilesOfActivities(array $storageTypeIds, array $storageElementIds): array
 	{
-		$elementIds = self::positiveIdsOf($storageElementIds);
-		if ($elementIds === [])
+		$elementIdsByActivity = [];
+		$elementIdsByStorage = [];
+		foreach ($storageTypeIds as $activityId => $storageTypeId)
 		{
-			return [];
+			$elementIds = self::positiveIdsOf($storageElementIds[$activityId] ?? []);
+			$elementIdsByActivity[$activityId] = $elementIds;
+			foreach ($elementIds as $elementId)
+			{
+				$elementIdsByStorage[$storageTypeId][$elementId] = $elementId;
+			}
 		}
 
-		$metadata = match ($storageTypeId)
-		{
-			StorageType::File => $this->readFilesOfTheCore($elementIds),
-			StorageType::Disk => $this->readFilesOfTheDisk($elementIds, $activityId),
-			// A storage of the WebDav era, or none at all: legacy reads nothing there and neither does this.
-			default => [],
-		};
+		$coreFiles = isset($elementIdsByStorage[StorageType::File])
+			? $this->readFilesOfTheCore(array_values($elementIdsByStorage[StorageType::File]))
+			: [];
+		$diskNames = isset($elementIdsByStorage[StorageType::Disk])
+			? $this->readNamesOfTheDisk(array_values($elementIdsByStorage[StorageType::Disk]))
+			: [];
 
 		$files = [];
-		foreach ($elementIds as $elementId)
+		foreach ($elementIdsByActivity as $activityId => $elementIds)
 		{
-			if (isset($metadata[$elementId]))
+			$files[$activityId] = [];
+			foreach ($elementIds as $elementId)
 			{
-				$files[] = $metadata[$elementId];
+				$file = match ($storageTypeIds[$activityId])
+				{
+					StorageType::File => $coreFiles[$elementId] ?? null,
+					StorageType::Disk => isset($diskNames[$elementId])
+						? self::fileOfTheDisk($elementId, $diskNames[$elementId], $activityId)
+						: null,
+					default => null,
+				};
+				if ($file !== null)
+				{
+					$files[$activityId][] = $file;
+				}
 			}
 		}
 
@@ -146,34 +166,33 @@ class ActivityStorageElements
 	}
 
 	/**
-	 * The files of the disk by element id, in one query whatever the number of the files. No right of the disk
-	 * is asked: the right over these files is the right over the activity, and it is settled already.
+	 * The names of the files of the disk by element id, in one query whatever the number of the files. No right
+	 * of the disk is asked: the right over these files is the right over the activity, and it is settled already.
 	 *
 	 * @param int[] $elementIds
-	 * @return array<int, ActivityFile>
+	 * @return array<int, string>
 	 */
-	protected function readFilesOfTheDisk(array $elementIds, int $activityId): array
+	protected function readNamesOfTheDisk(array $elementIds): array
 	{
 		if (!$this->isDiskAvailable())
 		{
 			return [];
 		}
 
-		$files = [];
+		$names = [];
 		foreach (File::loadBatchById($elementIds) as $file)
 		{
-			$elementId = (int)$file->getId();
-			$address = self::addressOfTheFileOfTheDisk($elementId, $activityId);
-
-			$files[$elementId] = new ActivityFile(
-				$elementId,
-				(string)$file->getName(),
-				$address,
-				$address,
-			);
+			$names[(int)$file->getId()] = (string)$file->getName();
 		}
 
-		return $files;
+		return $names;
+	}
+
+	private static function fileOfTheDisk(int $elementId, string $name, int $activityId): ActivityFile
+	{
+		$address = self::addressOfTheFileOfTheDisk($elementId, $activityId);
+
+		return new ActivityFile($elementId, $name, $address, $address);
 	}
 
 	/**

@@ -47,10 +47,8 @@ final class ActivityServiceFactory
 	{
 		$activityRepository = new RememberingActivityRepository(new ActivityRepository());
 		$bindingRepository = new ActivityBindingRepository($activityRepository);
-		$providerVerdictResolver = new ProviderVerdictResolver(
-			$activityRepository,
-			$this->createActivityPermissionCapabilityLocator($providerRegistry),
-		);
+		$capabilityLocator = $this->createActivityPermissionCapabilityLocator($providerRegistry);
+		$providerVerdictResolver = new ProviderVerdictResolver($activityRepository, $capabilityLocator);
 
 		return new ActivityAccess(
 			$activityRepository,
@@ -59,6 +57,8 @@ final class ActivityServiceFactory
 			new CallDeletionRestrictionRule($bindingRepository),
 			new DecisionCache(),
 			new BindingAttributeLoader($activityRepository, $bindingRepository),
+			static fn(Activity $activity): bool => $capabilityLocator($activity) !== null,
+			$providerVerdictResolver,
 		);
 	}
 

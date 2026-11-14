@@ -2,8 +2,8 @@
 
 namespace Bitrix\Call\Analytics;
 
+use Bitrix\Call\Background\JobDispatcher;
 use Bitrix\Call\Call;
-use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 
 /**
@@ -18,6 +18,11 @@ abstract class AbstractAnalytics
 		$this->call = $call;
 	}
 
+	/**
+	 * Telemetry is work nobody reads the outcome of, so it goes to the dispatcher in the mode
+	 * without one: on a hit into the queue of the core as before, in a console process inline,
+	 * where that queue would never be run.
+	 */
 	protected function async(callable $job): void
 	{
 		if ($this->call === null)
@@ -25,7 +30,7 @@ abstract class AbstractAnalytics
 			return;
 		}
 
-		Application::getInstance()->addBackgroundJob($job);
+		JobDispatcher::getInstance()->enqueue($job);
 	}
 
 	/**

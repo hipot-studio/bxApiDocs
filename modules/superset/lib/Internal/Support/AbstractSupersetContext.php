@@ -58,6 +58,22 @@ abstract class AbstractSupersetContext
 		return $this->resultFactory->createRequestErrorResult($requestResult, $fallbackMessage);
 	}
 
+	protected function createDatasetRequestErrorResult(
+		RequestResult $requestResult,
+		string $fallbackMessage,
+	): Main\Result
+	{
+		$refusal = $this->createActAsRefusalResult($requestResult);
+		if ($refusal !== null)
+		{
+			return $refusal;
+		}
+
+		return RequestRejection::fromResponse($requestResult, $this->decode($requestResult->getAnswer()))
+			?? $this->resultFactory->createRequestErrorResult($requestResult, $fallbackMessage)
+		;
+	}
+
 	/**
 	 * @return SupersetInstance connector bound to the user, or the plain one when no user is named
 	 */

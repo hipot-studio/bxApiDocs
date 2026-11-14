@@ -5,6 +5,8 @@ namespace Bitrix\Rest\V3\Structure;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
+use Bitrix\Rest\V3\Dto\DtoFieldsCollection;
+use Bitrix\Rest\V3\Dto\Meta\FieldMetaInterface;
 use Bitrix\Rest\V3\Dto\PropertyHelper;
 use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Exception\InvalidSelectException;
@@ -65,12 +67,17 @@ final class SelectStructure extends Structure
 				{
 					if (strpos($item, '.') === false)
 					{
-						if (!isset($fields[$item]))
+						$fieldMeta = $fields->getMeta($item);
+						if ($fieldMeta === null)
 						{
 							throw new UnknownDtoPropertyException($dto->getShortName(), $item);
 						}
 
-						if (!empty($availableFields) && !in_array($item, $availableFields, true))
+						if (
+							!empty($availableFields)
+							&& !in_array($item, $availableFields, true)
+							&& !in_array($item, self::getGrantFreeFields($dto), true)
+						)
 						{
 							throw new UnknownDtoPropertyException($dto->getShortName(), $item);
 						}
@@ -86,14 +93,14 @@ final class SelectStructure extends Structure
 						// ORM relations ([RelationToOne]/[RelationToMany]) go through
 						// ResponseWithRelations; embedded DTOs (no FK attribute) stay
 						// in nestedStructures for MappedBy / inline mapping.
-						if (self::isOrmRelationField($fields[$item]))
+						if (self::isOrmRelationField($fieldMeta))
 						{
 							self::processRelationField($item, $structure, $request);
 
 							continue;
 						}
 
-						if (self::isNestedDtoField($fields[$item]))
+						if (self::isNestedDtoField($fieldMeta))
 						{
 							self::processEmbeddedDtoField($item, $structure, $request);
 
@@ -122,9 +129,43 @@ final class SelectStructure extends Structure
 					throw new InvalidSelectException($item);
 				}
 			}
+
+			// under a grant restricted to fields, scalar fields always come with the id
+			if (!empty($availableFields) && !empty($structure->items))
+			{
+				foreach (self::getGrantFreeFields($dto) as $grantFreeField)
+				{
+					if (!in_array($grantFreeField, $structure->items, true))
+					{
+						$structure->items[] = $grantFreeField;
+					}
+				}
+			}
 		}
 
 		return $structure;
+	}
+
+	/**
+	 * Fields a grant restricted to fields does not hide: the scalar id is returned under any grant,
+	 * so the client may also name it in the select and read by it.
+	 *
+	 * @return list<string>
+	 */
+	public static function getGrantFreeFields(Dto $dto): array
+	{
+		$idField = $dto->getFields()->getMeta('id');
+
+		return $idField !== null && self::isScalarIdField($idField) ? ['id'] : [];
+	}
+
+	private static function isScalarIdField(FieldMetaInterface $field): bool
+	{
+		return $field->getType() === DtoField::DTO_FIELD_TYPE_PROPERTY
+			&& $field->getPropertyType() !== DtoCollection::class
+			&& !self::isNestedDtoField($field)
+			&& !self::isOrmRelationField($field)
+		;
 	}
 
 	public function getList(): array
@@ -133,10 +174,22 @@ final class SelectStructure extends Structure
 	}
 
 	/**
+	 * True when nothing is selected: no scalars, user fields, relations or embedded DTOs.
+	 */
+	public function isEmpty(): bool
+	{
+		return empty($this->items)
+			&& empty($this->userFields)
+			&& empty($this->relationFields)
+			&& empty($this->nestedStructures)
+		;
+	}
+
+	/**
 	 * True when the field is an ORM-style relation with #[RelationToOne] / #[RelationToMany].
 	 * Only these participate in ResponseWithRelations sub-requests.
 	 */
-	private static function isOrmRelationField(DtoField $field): bool
+	private static function isOrmRelationField(FieldMetaInterface $field): bool
 	{
 		return $field->getRelation() !== null;
 	}
@@ -144,7 +197,7 @@ final class SelectStructure extends Structure
 	/**
 	 * Nested DTO / DtoCollection property — with or without FK relation metadata.
 	 */
-	private static function isNestedDtoField(DtoField $field): bool
+	private static function isNestedDtoField(FieldMetaInterface $field): bool
 	{
 		$type = $field->getPropertyType();
 		if (TypeHelper::isDto($type))
@@ -162,32 +215,30 @@ final class SelectStructure extends Structure
 		return false;
 	}
 
-	/**
-	 * @param \ArrayAccess<string, DtoField>|array<string, DtoField> $fields
-	 */
 	private static function processNestedSelectPath(
 		string $field,
 		self $structure,
 		Request $request,
-		\ArrayAccess|array $fields,
+		DtoFieldsCollection $fields,
 	): void
 	{
 		$root = explode('.', $field, 2)[0];
-		if (!isset($fields[$root]))
+		$rootField = $fields->getMeta($root);
+		if ($rootField === null)
 		{
 			$parentDto = self::getDto($request->getDtoClass());
 
 			throw new UnknownDtoPropertyException($parentDto->getShortName(), $root);
 		}
 
-		if (self::isOrmRelationField($fields[$root]))
+		if (self::isOrmRelationField($rootField))
 		{
 			self::processRelationField($field, $structure, $request);
 
 			return;
 		}
 
-		if (self::isNestedDtoField($fields[$root]))
+		if (self::isNestedDtoField($rootField))
 		{
 			self::processEmbeddedDtoField($field, $structure, $request);
 
@@ -210,13 +261,12 @@ final class SelectStructure extends Structure
 		$remaining = $parts[1] ?? null;
 
 		$parentDto = self::getDto($request->getDtoClass());
-		if (!isset($parentDto->getFields()[$embeddedName]))
+		$embeddedDtoField = $parentDto->getFields()->getMeta($embeddedName);
+		if ($embeddedDtoField === null)
 		{
 			throw new UnknownDtoPropertyException($parentDto->getShortName(), $embeddedName);
 		}
 
-		/** @var DtoField $embeddedDtoField */
-		$embeddedDtoField = $parentDto->getFields()[$embeddedName];
 		if (!self::isNestedDtoField($embeddedDtoField) || self::isOrmRelationField($embeddedDtoField))
 		{
 			throw new UnknownDtoPropertyException($parentDto->getShortName(), $field);
@@ -246,23 +296,23 @@ final class SelectStructure extends Structure
 			return;
 		}
 
-		$childFields = $childDto->getFields();
 		$remainingParts = explode('.', $remaining, 2);
 		$next = $remainingParts[0];
 
-		if (!isset($childFields[$next]))
+		$nextField = $childDto->getFields()->getMeta($next);
+		if ($nextField === null)
 		{
 			throw new UnknownDtoPropertyException($childDto->getShortName(), $next);
 		}
 
-		if (self::isOrmRelationField($childFields[$next]))
+		if (self::isOrmRelationField($nextField))
 		{
 			// ORM relations under an embedded DTO are not part of the executable
 			// request graph (childRequest is synthetic / not dispatched).
 			throw new InvalidSelectException($field);
 		}
 
-		if (self::isNestedDtoField($childFields[$next]))
+		if (self::isNestedDtoField($nextField))
 		{
 			self::processEmbeddedDtoField($remaining, $subSelect, $childRequest);
 
@@ -293,7 +343,7 @@ final class SelectStructure extends Structure
 		return $this->nestedRequests[$name];
 	}
 
-	private static function resolveNestedDtoClass(DtoField $field): string
+	private static function resolveNestedDtoClass(FieldMetaInterface $field): string
 	{
 		$type = $field->getPropertyType();
 		if ($type === DtoCollection::class)
@@ -317,13 +367,12 @@ final class SelectStructure extends Structure
 
 		if ($relation === null)
 		{
-			if (!isset($parentDto->getFields()[$relationName]))
+			$relationDtoField = $parentDto->getFields()->getMeta($relationName);
+			if ($relationDtoField === null)
 			{
 				throw new UnknownDtoPropertyException($parentDto->getShortName(), $relationName);
 			}
 
-			/** @var DtoField $relationDtoField */
-			$relationDtoField = $parentDto->getFields()[$relationName];
 			$relationMeta = $relationDtoField->getRelation();
 
 			// Nested DTO without FK relation metadata — MappedBy / inline path.
@@ -441,7 +490,7 @@ final class SelectStructure extends Structure
 		}
 		else
 		{
-			if (!isset($childDto->getFields()[$remaining]))
+			if ($childDto->getFields()->getMeta($remaining) === null)
 			{
 				throw new UnknownDtoPropertyException($childDto->getShortName(), $remaining);
 			}
@@ -463,7 +512,7 @@ final class SelectStructure extends Structure
 		}
 
 		$names = [];
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			// Only class-declared scalar properties — user fields (UF_*) and
 			// other dynamic fields are not part of "expand all". A caller can
@@ -484,6 +533,21 @@ final class SelectStructure extends Structure
 	public function getRelationFields(): array
 	{
 		return $this->relationFields;
+	}
+
+	/**
+	 * Top-level keys of a response item allowed by this select: scalar fields,
+	 * names of relations and embedded DTOs, user fields. The id is not added here.
+	 *
+	 * @return string[]
+	 */
+	public function getResponseKeys(): array
+	{
+		return array_values(array_unique(array_merge(
+			$this->items,
+			array_keys($this->nestedStructures),
+			$this->userFields,
+		)));
 	}
 
 	/**

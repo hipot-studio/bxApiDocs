@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Public\Service\UnifiedLink\Render;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\RenderResult;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\Version;
@@ -36,6 +37,54 @@ class MobileUnifiedLinkRenderer
 		);
 
 		return $renderer->render();
+	}
+
+	/**
+	 * The entry of the html viewer, for a page that serves that one kind of target: a target outside the
+	 * viewer policy is refused before a handler is chosen. Editing is closed by the policy itself, not by
+	 * a level - it admits only TypeFile::KNOWN, and for those the factory hands out HtmlFileHandler,
+	 * whose edit() is its view().
+	 *
+	 * No access level is passed on: the renderer is given one INSTEAD of the level of the reader, not as
+	 * a cap over it, so naming a level here would answer a reader the file is closed to as if it were
+	 * open. This entry has no prefilter in front of it - the refusal by rights is the renderer's own.
+	 *
+	 * @param File $file
+	 * @param CurrentUser $currentUser
+	 * @return RenderResult
+	 */
+	public static function renderHtmlViewer(File $file, CurrentUser $currentUser): RenderResult
+	{
+		if (!HtmlViewerPolicy::isViewable($file))
+		{
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
+		}
+
+		$renderer = new UnifiedLinkRenderer(
+			baseObject: $file,
+			attachedObject: null,
+			version: null,
+			currentUser: $currentUser,
+		);
+
+		return $renderer->render();
+	}
+
+	/**
+	 * @param string $uniqueCode
+	 * @param CurrentUser $currentUser
+	 * @return RenderResult
+	 */
+	public static function renderHtmlViewerByUniqueCode(string $uniqueCode, CurrentUser $currentUser): RenderResult
+	{
+		$file = File::loadByUniqueCode($uniqueCode);
+
+		if (!$file)
+		{
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
+		}
+
+		return self::renderHtmlViewer($file, $currentUser);
 	}
 
 	/**

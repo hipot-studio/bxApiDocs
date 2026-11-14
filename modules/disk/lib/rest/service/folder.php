@@ -2,6 +2,9 @@
 
 namespace Bitrix\Disk\Rest\Service;
 
+use Bitrix\Disk\Internal\Entity\Audit\AuditChannel;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Rest\AccessException;
@@ -31,6 +34,37 @@ final class Folder extends BaseObject
 	protected function getWorkObjectById($id)
 	{
 		return $this->getFolderById($id);
+	}
+
+	protected function copyTo($id, $targetFolderId)
+	{
+		return AuditOperationContextStack::runWithContext(
+			AuditOperationContext::create(
+				actionKind: AuditOperationContext::ACTION_EXPLICIT_COPY,
+				channel: AuditChannel::API,
+				actionContext: $this->createAuditRestActionContext(),
+				selectedTargetIds: [(string)$id],
+			),
+			fn() => parent::copyTo($id, $targetFolderId),
+		);
+	}
+
+	protected function moveTo($id, $targetFolderId)
+	{
+		$object = $this->getWorkObjectById($id);
+		$targetFolder = $this->getFolderById($targetFolderId);
+
+		return AuditOperationContextStack::runWithContext(
+			AuditOperationContext::create(
+				actionKind: $object->getStorageId() == $targetFolder->getStorageId()
+					? AuditOperationContext::ACTION_EXPLICIT_MOVE
+					: AuditOperationContext::ACTION_CROSS_STORAGE_MOVE,
+				channel: AuditChannel::API,
+				actionContext: $this->createAuditRestActionContext(),
+				selectedTargetIds: [(string)$id],
+			),
+			fn() => parent::moveTo($id, $targetFolderId),
+		);
 	}
 
 	/**

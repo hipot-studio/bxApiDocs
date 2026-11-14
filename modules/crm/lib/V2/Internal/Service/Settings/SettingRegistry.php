@@ -10,6 +10,7 @@ use Bitrix\Crm\V2\Internal\Entity\Settings\SettingRegistration;
 use Bitrix\Crm\V2\Internal\Exception\Settings\DuplicateSettingException;
 use Bitrix\Crm\V2\Internal\Exception\Settings\SettingNotFoundException;
 use LogicException;
+use Bitrix\Main\Result;
 
 /**
  * @internal
@@ -23,7 +24,7 @@ final class SettingRegistry implements SettingRegistryInterface
 	private readonly array $registrationsByClass;
 
 	/** @var array<string, SettingRegistration> */
-	private readonly array $registrationsByCode;
+	private readonly array $registrationsById;
 
 	/** @var array<class-string<SettingInterface>, SettingInterface> */
 	private array $settingsByClass = [];
@@ -32,7 +33,7 @@ final class SettingRegistry implements SettingRegistryInterface
 	{
 		$registrations = [];
 		$registrationsByClass = [];
-		$registrationsByCode = [];
+		$registrationsById = [];
 
 		foreach ($factory->getDefinitions() as $registration)
 		{
@@ -42,20 +43,20 @@ final class SettingRegistry implements SettingRegistryInterface
 				throw new DuplicateSettingException($settingClass);
 			}
 
-			$code = $registration->code;
-			if (isset($registrationsByCode[$code]))
+			$id = $registration->id;
+			if (isset($registrationsById[$id]))
 			{
-				throw new DuplicateSettingException($code);
+				throw new DuplicateSettingException($id);
 			}
 
 			$registrations[] = $registration;
 			$registrationsByClass[$settingClass] = $registration;
-			$registrationsByCode[$code] = $registration;
+			$registrationsById[$id] = $registration;
 		}
 
 		$this->registrations = $registrations;
 		$this->registrationsByClass = $registrationsByClass;
-		$this->registrationsByCode = $registrationsByCode;
+		$this->registrationsById = $registrationsById;
 	}
 
 	public function getAll(): array
@@ -79,14 +80,14 @@ final class SettingRegistry implements SettingRegistryInterface
 		return $this->registrationsByClass[$settingClass];
 	}
 
-	public function getRegistrationByCode(string $code): SettingRegistration
+	public function getRegistrationById(string $id): SettingRegistration
 	{
-		if (!isset($this->registrationsByCode[$code]))
+		if (!isset($this->registrationsById[$id]))
 		{
-			throw new SettingNotFoundException($code);
+			throw new SettingNotFoundException($id);
 		}
 
-		return $this->registrationsByCode[$code];
+		return $this->registrationsById[$id];
 	}
 
 	public function getReadableRegistrations(UserPermissions $permissions): array
@@ -105,6 +106,11 @@ final class SettingRegistry implements SettingRegistryInterface
 
 	public function canRead(SettingRegistration $registration, UserPermissions $permissions): bool
 	{
+		return $this->checkReadAccess($registration, $permissions)->isSuccess();
+	}
+
+	public function checkReadAccess(SettingRegistration $registration, UserPermissions $permissions): Result
+	{
 		return SettingPolicyEvaluator::evaluateAll(
 			$registration->readPolicies,
 			$this->get($registration->settingClass),
@@ -113,6 +119,11 @@ final class SettingRegistry implements SettingRegistryInterface
 	}
 
 	public function canWrite(SettingRegistration $registration, UserPermissions $permissions): bool
+	{
+		return $this->checkWriteAccess($registration, $permissions)->isSuccess();
+	}
+
+	public function checkWriteAccess(SettingRegistration $registration, UserPermissions $permissions): Result
 	{
 		return SettingPolicyEvaluator::evaluateAll(
 			$registration->writePolicies,
@@ -139,12 +150,12 @@ final class SettingRegistry implements SettingRegistryInterface
 			);
 		}
 
-		$actualCode = $setting->getCode();
-		$expectedCode = $registration->code;
-		if ($actualCode !== $expectedCode)
+		$actualId = $setting->getId();
+		$expectedId = $registration->id;
+		if ($actualId !== $expectedId)
 		{
 			throw new LogicException(
-				"CRM setting '{$settingClass}' has code '{$actualCode}', expected '{$expectedCode}'.",
+				"CRM setting '{$settingClass}' has id '{$actualId}', expected '{$expectedId}'.",
 			);
 		}
 
@@ -153,9 +164,9 @@ final class SettingRegistry implements SettingRegistryInterface
 		return $setting;
 	}
 
-	public function getByCode(string $code): SettingInterface
+	public function getById(string $id): SettingInterface
 	{
-		return $this->get($this->getRegistrationByCode($code)->settingClass);
+		return $this->get($this->getRegistrationById($id)->settingClass);
 	}
 
 	public function getValue(string $settingClass): mixed

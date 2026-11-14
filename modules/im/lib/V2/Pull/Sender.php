@@ -75,7 +75,7 @@ class Sender
 		}
 		if ($chat->getType() === Chat::IM_TYPE_COMMENT)
 		{
-			$results[] = $this->sendByTag('IM_PUBLIC_COMMENT_' . $chat->getParentChatId(), $pull);
+			$results[] = $this->sendCommentPullByTag($chat, $pull);
 		}
 
 		return $results;
@@ -98,6 +98,15 @@ class Sender
 	protected function sendByTag(string $tag, array $pull): Result
 	{
 		return self::getPullEventResult(\CPullWatch::AddToStack($tag, $pull));
+	}
+
+	/**
+	 * The comments of a channel go out on the tag of the channel, so the delivery is filtered by the post
+	 * they hang on ({@see CommentTagPublisher}) instead of being sent to everyone watching it.
+	 */
+	protected function sendCommentPullByTag(Chat $chat, array $pull): Result
+	{
+		return self::getPullEventResult(CommentTagPublisher::addToStack($chat, $pull));
 	}
 
 	protected function sendSharedPull(array $pull): Result

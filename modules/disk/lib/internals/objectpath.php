@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Disk\Internals;
 
+use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -162,6 +163,10 @@ final class ObjectPathTable extends DataManager
 		";
 
 		$connection->queryExecute($sql);
+
+		// The subtrees on both sides of the move are made of other objects now, and a verdict folded over
+		// either one was resolved on the composition this statement has just replaced.
+		DiskSecurityContext::invalidateSubtreeVerdicts();
 	}
 
 	/**
@@ -337,6 +342,10 @@ final class ObjectPathTable extends DataManager
 
 			$currentDepth++;
 		}
+
+		// Every subtree of the portal is enumerated anew, so no verdict folded before this stands on a
+		// composition that was read from this table.
+		DiskSecurityContext::invalidateSubtreeVerdicts();
 	}
 
 	/**
@@ -399,5 +408,9 @@ final class ObjectPathTable extends DataManager
 
 			$currentDepth++;
 		}
+
+		// The subtrees of this storage are enumerated anew, and a verdict is folded per subtree with no
+		// storage of its own to compare against - so the drop is of all of them, as everywhere else here.
+		DiskSecurityContext::invalidateSubtreeVerdicts();
 	}
 }

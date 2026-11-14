@@ -16,6 +16,8 @@ use Bitrix\Pull\Model\PushTable;
 
 class Notification extends Base
 {
+	public const PUSH_SCHEDULE_VERSION = 1;
+
 	public const SITE = 'site';
 	public const MAIL = 'mail';
 	public const XMPP = 'xmpp';
@@ -368,8 +370,17 @@ class Notification extends Base
 					isset($notifyType['NOTIFY'], $notifyType['NAME'])
 						? $notifyType['NAME']
 						: '';
+				if (!isset(self::$defaultSettings[$moduleId]['NOTIFY']))
+				{
+					self::$defaultSettings[$moduleId]['NOTIFY'] = [];
+				}
+				if (isset($notifyType['PRODUCT_SOURCE']) && is_array($notifyType['PRODUCT_SOURCE']))
+				{
+					self::$defaultSettings[$moduleId]['PRODUCT_SOURCE'] = $notifyType['PRODUCT_SOURCE'];
+				}
 
 				$notify = $notifyType['NOTIFY'] ?? $notifyType;
+				unset($notify['PRODUCT_SOURCE']);
 
 				foreach ($notify as $notifyEvent => $config)
 				{
@@ -416,7 +427,7 @@ class Notification extends Base
 
 		foreach ($notifySettings as $moduleId => $moduleSchema)
 		{
-			foreach ($moduleSchema['NOTIFY'] as $eventName => $eventSchema)
+			foreach ($moduleSchema['NOTIFY'] ?? [] as $eventName => $eventSchema)
 			{
 				foreach (self::$typeKeys as $type)
 				{
@@ -690,7 +701,7 @@ class Notification extends Base
 				$moduleObject = \CModule::CreateModuleObject($moduleId);
 				$names[$moduleId]['NAME'] = $moduleObject->MODULE_NAME;
 			}
-			foreach ($notifyTypes['NOTIFY'] as $eventId => $event)
+			foreach ($notifyTypes['NOTIFY'] ?? [] as $eventId => $event)
 			{
 				$names[$moduleId]['NOTIFY'][$eventId] = $event['NAME'];
 			}
@@ -758,9 +769,9 @@ class Notification extends Base
 				continue;
 			}
 
-			foreach ($notifies as $notify)
+			foreach ($notifies as $notifyKey => $notify)
 			{
-				if (!is_array($notify))
+				if ($notifyKey === 'PRODUCT_SOURCE' || !is_array($notify))
 				{
 					continue;
 				}

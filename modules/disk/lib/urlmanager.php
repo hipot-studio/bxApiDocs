@@ -11,6 +11,7 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
 use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\FolderTable;
+use Bitrix\Disk\Internals\ObjectNameKey;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\ParameterSigner;
 use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
@@ -28,6 +29,15 @@ use CBitrix24;
 
 class UrlManager implements IErrorable
 {
+	public const ERROR_ACCESS_DENIED = 'ACCESS_DENIED';
+
+	/**
+	 * Every refusal of resolveFolderPath() reads the same. A storage that does not exist, one the visitor
+	 * may not read and a path that is not in it are told apart by nobody who is not allowed in anyway, and
+	 * telling them apart is what let a caller walk foreign entity ids and names (mantis 253279).
+	 */
+	private const RESOLVE_FOLDER_PATH_DENIED = 'Access denied.';
+
 	/** @var  ErrorCollection */
 	protected $errorCollection;
 	/** @var  BaseComponent */
@@ -777,6 +787,21 @@ class UrlManager implements IErrorable
 		;
 	}
 
+	/**
+	 * Gets url to open a board on one of its comment threads.
+	 * @param File $file Board file.
+	 * @param string $commentId Identifier of the comment thread the board opens.
+	 * @param bool $absolute Generate absolute url with host url.
+	 * @return string
+	 */
+	public function getUrlForViewBoardComment(File $file, string $commentId, bool $absolute = true): string
+	{
+		$uri = new Uri($this->getUrlForViewBoard($file, $absolute));
+		$uri->addParams(['commentId' => $commentId]);
+
+		return $uri->getUri();
+	}
+
 	public function getUrlForViewBoardVersion(File $file, int $versionId, $absolute = false): string
 	{
 		if ($file->supportsUnifiedLink())
@@ -888,6 +913,24 @@ class UrlManager implements IErrorable
 			'disk.file.showHtml',
 			['fileId' => $fileId]
 		);
+	}
+
+	/**
+	 * Gets an absolute portal address of the HTML editor shell.
+	 *
+	 * The generic unified-link generator intentionally opens HTML files in view mode without an edit
+	 * suffix. The editor transition is explicit, so it appends the suffix to the already selected local
+	 * HTML route and keeps all binding query parameters.
+	 */
+	public function getUrlForHtmlEditor(File $file, ?int $attachedObjectId = null): string
+	{
+		$uri = new Uri($this->getUnifiedLink($file, [
+			'absolute' => true,
+			'attachedId' => $attachedObjectId,
+		]));
+		$uri->setPath(rtrim($uri->getPath(), '/') . '/edit');
+
+		return (string)$uri;
 	}
 
 	/**
@@ -1213,7 +1256,7 @@ class UrlManager implements IErrorable
 	public function resolveFileIdFromPath(Storage $storage, $path)
 	{
 		$data = $this->resolvePath($storage, $path, $storage->getRootObjectId(), ObjectTable::TYPE_FILE);
-		return $data['OBJECT_ID'];
+		return $data['OBJECT_ID'] ?? null;
 	}
 
 	/**
@@ -1248,12 +1291,17 @@ class UrlManager implements IErrorable
 	 *
 	 * @param BaseObject $rootObject Root object.
 	 * @param string     $path Path to file or folder.
-	 * @return array
+	 * @return array|null Null when no object of the path is under the root object.
 	 * @internal
 	 */
 	public function resolvePathUnderRootObject(BaseObject $rootObject, $path)
 	{
 		$data = $this->resolvePath($rootObject->getStorage(), $path, $rootObject->getId(), null);
+		if ($data === null)
+		{
+			return null;
+		}
+
 		if($data['RELATIVE_PATH'] === '/' && $data['OBJECT_ID'] == $rootObject->getStorage()->getId())
 		{
 			return array(
@@ -1523,11 +1571,13 @@ class UrlManager implements IErrorable
 				}
 			}
 
-			$filter['=NAME'] = $pieceOfPath;
-			$folder = ObjectTable::getList(array(
-				'filter' => $filter,
-				'select' => array('ID', 'NAME', 'REAL_OBJECT_ID', 'STORAGE_ID', 'PARENT_ID'),
-			))->fetch();
+			$folder = ObjectNameKey::findSameName(
+				[
+					'filter' => $filter,
+					'select' => ['ID', 'NAME', 'REAL_OBJECT_ID', 'STORAGE_ID', 'PARENT_ID'],
+				],
+				$pieceOfPath,
+			);
 
 			if(!$folder)
 			{
@@ -1640,9 +1690,10 @@ class UrlManager implements IErrorable
 		$result = new Result();
 
 		$storage = $this->getStorageByType($entityType, $entityId);
-		if (!$storage)
+		$rootObject = $storage?->getRootObject();
+		if (!$rootObject)
 		{
-			$result->addError(new Error('Could not find storage.'));
+			$result->addError(new Error(self::RESOLVE_FOLDER_PATH_DENIED, self::ERROR_ACCESS_DENIED));
 
 			return $result;
 		}
@@ -1651,18 +1702,25 @@ class UrlManager implements IErrorable
 
 		if ($path === '/')
 		{
+			if (!$rootObject->canRead($securityContext))
+			{
+				$result->addError(new Error(self::RESOLVE_FOLDER_PATH_DENIED, self::ERROR_ACCESS_DENIED));
+
+				return $result;
+			}
+
 			$result->setData([
-				'targetFolder' => $storage->getRootObject(),
+				'targetFolder' => $rootObject,
 				'breadcrumbs' => [],
 			]);
 
 			return $result;
 		}
 
-		$resolvedData = $this->resolvePathUnderRootObject($storage->getRootObject(), $path);
+		$resolvedData = $this->resolvePathUnderRootObject($rootObject, $path);
 		if (empty($resolvedData['RELATIVE_ITEMS']))
 		{
-			$result->addError(new Error('Could not resolve path.'));
+			$result->addError(new Error(self::RESOLVE_FOLDER_PATH_DENIED, self::ERROR_ACCESS_DENIED));
 
 			return $result;
 		}
@@ -1673,16 +1731,9 @@ class UrlManager implements IErrorable
 		] = $resolvedData;
 
 		$folder = Folder::loadById($currentFolderId);
-		if (!$folder)
+		if (!$folder || !$folder->canRead($securityContext))
 		{
-			$result->addError(new Error('Could not find folder by id.'));
-
-			return $result;
-		}
-
-		if (!$folder->canRead($securityContext))
-		{
-			$result->addError(new Error('Access denied.'));
+			$result->addError(new Error(self::RESOLVE_FOLDER_PATH_DENIED, self::ERROR_ACCESS_DENIED));
 
 			return $result;
 		}

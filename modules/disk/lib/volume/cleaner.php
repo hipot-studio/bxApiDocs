@@ -3,9 +3,9 @@
 namespace Bitrix\Disk\Volume;
 
 use Bitrix\Main;
-use Bitrix\Main\Entity;
 use Bitrix\Disk;
 use Bitrix\Disk\Volume;
+use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
 use Bitrix\Disk\Internals\VolumeTable;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
@@ -98,6 +98,15 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 		return ($task->getId() > 0);
 	}
 
+
+	/**
+	 * The counter the deltas of the version rows a portion moves are accumulated in.
+	 * @return StorageUsageCounter
+	 */
+	private static function getStorageUsageCounter(): StorageUsageCounter
+	{
+		return Main\DI\ServiceLocator::getInstance()->get(StorageUsageCounter::class);
+	}
 
 	/**
 	 * Returns the fully qualified name of this class.
@@ -273,41 +282,22 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 
 		// run subTask
 		$taskDone = false;
-		switch ($subTask)
+		// One accumulator scope per portion of the worker: it deletes the objects one by one over
+		// several runs, and the counter follows its progress by a single update per portion.
+		$usageCounter = self::getStorageUsageCounter();
+		$usageCounter->openAccumulator();
+		try
 		{
-			case Volume\Task::DROP_TRASHCAN:
+			switch ($subTask)
 			{
-				if ($task->getStatusSubTask($subTask) != Volume\Task::TASK_STATUS_RUNNING)
+				case Volume\Task::DROP_TRASHCAN:
 				{
-					$task->setStatusSubTask($subTask, Volume\Task::TASK_STATUS_RUNNING);
-				}
+					if ($task->getStatusSubTask($subTask) != Volume\Task::TASK_STATUS_RUNNING)
+					{
+						$task->setStatusSubTask($subTask, Volume\Task::TASK_STATUS_RUNNING);
+					}
 
-				if($this->deleteTrashcanByFilter($indicator))
-				{
-					$repeatMeasure();
-					$taskDone = $task->hasTaskFinished($subTask);
-				}
-				elseif ($task->hasFatalError())
-				{
-					$taskDone = true;
-				}
-
-				break;
-			}
-
-			case Volume\Task::EMPTY_FOLDER:
-			case Volume\Task::DROP_FOLDER:
-			{
-				if ($task->getStatusSubTask($subTask) != Volume\Task::TASK_STATUS_RUNNING)
-				{
-					$task->setStatusSubTask($subTask, Volume\Task::TASK_STATUS_RUNNING);
-				}
-
-				$folderId = $task->getParam('FOLDER_ID');
-				$folder = Disk\Folder::getById($folderId);
-				if ($folder instanceof Disk\Folder)
-				{
-					if ($this->deleteFolder($folder, ($subTask === Volume\Task::EMPTY_FOLDER)))
+					if($this->deleteTrashcanByFilter($indicator))
 					{
 						$repeatMeasure();
 						$taskDone = $task->hasTaskFinished($subTask);
@@ -316,41 +306,71 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 					{
 						$taskDone = true;
 					}
+
+					break;
 				}
-				else
+
+				case Volume\Task::EMPTY_FOLDER:
+				case Volume\Task::DROP_FOLDER:
 				{
-					$task->setLastError('Can not found folder #'.$folderId);
-					$task->raiseFatalError();
+					if ($task->getStatusSubTask($subTask) != Volume\Task::TASK_STATUS_RUNNING)
+					{
+						$task->setStatusSubTask($subTask, Volume\Task::TASK_STATUS_RUNNING);
+					}
+
+					$folderId = $task->getParam('FOLDER_ID');
+					$folder = Disk\Folder::getById($folderId);
+					if ($folder instanceof Disk\Folder)
+					{
+						if ($this->deleteFolder($folder, ($subTask === Volume\Task::EMPTY_FOLDER)))
+						{
+							$repeatMeasure();
+							$taskDone = $task->hasTaskFinished($subTask);
+						}
+						elseif ($task->hasFatalError())
+						{
+							$taskDone = true;
+						}
+					}
+					else
+					{
+						$task->setLastError('Can not found folder #'.$folderId);
+						$task->raiseFatalError();
+						$taskDone = true;
+					}
+
+					break;
+				}
+
+				case Volume\Task::DROP_UNNECESSARY_VERSION:
+				{
+					if ($task->getStatusSubTask($subTask) != Volume\Task::TASK_STATUS_RUNNING)
+					{
+						$task->setStatusSubTask($subTask, Volume\Task::TASK_STATUS_RUNNING);
+					}
+
+					if($this->deleteUnnecessaryVersionByFilter($indicator))
+					{
+						$repeatMeasure();
+						$taskDone = $task->hasTaskFinished($subTask);
+					}
+					elseif ($task->hasFatalError())
+					{
+						$taskDone = true;
+					}
+
+					break;
+				}
+
+				default:
+				{
 					$taskDone = true;
 				}
-
-				break;
 			}
-
-			case Volume\Task::DROP_UNNECESSARY_VERSION:
-			{
-				if ($task->getStatusSubTask($subTask) != Volume\Task::TASK_STATUS_RUNNING)
-				{
-					$task->setStatusSubTask($subTask, Volume\Task::TASK_STATUS_RUNNING);
-				}
-
-				if($this->deleteUnnecessaryVersionByFilter($indicator))
-				{
-					$repeatMeasure();
-					$taskDone = $task->hasTaskFinished($subTask);
-				}
-				elseif ($task->hasFatalError())
-				{
-					$taskDone = true;
-				}
-
-				break;
-			}
-
-			default:
-			{
-				$taskDone = true;
-			}
+		}
+		finally
+		{
+			$usageCounter->flushAccumulator();
 		}
 
 		if($taskDone)
@@ -379,6 +399,8 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 	 * 		bool DROP_TRASHCAN - set job to empty trashcan.
 	 * 		bool DROP_FOLDER - set job to drop everything.
 	 * 		bool EMPTY_FOLDER - set job to empty folder structure.
+	 * 		bool countProgress - recount the progress bar of the owner, true by default;
+	 * 			pass false while queuing a batch and call countWorker() once after it.
 	 * </pre>
 	 * @return boolean
 	 */
@@ -424,6 +446,7 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 				if (isset($params['manual']))
 				{
 					$task->resetFail();
+					self::resetDroppedCount($task);
 				}
 			}
 			else
@@ -435,7 +458,7 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 			$task->fixState();
 		}
 
-		if ($ownerId > 0)
+		if ($ownerId > 0 && ($params['countProgress'] ?? true) !== false)
 		{
 			// count statistic for progress bar
 			self::countWorker($ownerId);
@@ -468,6 +491,19 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 		return $agentAdded;
 	}
 
+
+	/**
+	 * Starts counting the dropped objects of the task queued again from zero,
+	 * otherwise the progress takes the objects of the previous cleaning for the new one.
+	 * @param Volume\Task $task Task queued again.
+	 * @return void
+	 */
+	private static function resetDroppedCount(Volume\Task $task): void
+	{
+		$task->increaseDroppedFileCount(-$task->getDroppedFileCount());
+		$task->increaseDroppedVersionCount(-$task->getDroppedVersionCount());
+		$task->increaseDroppedFolderCount(-$task->getDroppedFolderCount());
+	}
 
 	/**
 	 * Checks ability agent to use Crontab.
@@ -529,17 +565,9 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 			$filter['=OWNER_ID'] = $ownerId;
 		}
 		$workerResult = VolumeTable::getList([
-			'runtime' => [
-				new Entity\ExpressionField('CNT', 'COUNT(*)'),
-				new Entity\ExpressionField('FILE_COUNT', 'SUM(FILE_COUNT)'),
-				new Entity\ExpressionField('UNNECESSARY_VERSION_COUNT', 'SUM(UNNECESSARY_VERSION_COUNT)'),
-				new Entity\ExpressionField('DROPPED_FILE_COUNT', 'SUM(DROPPED_FILE_COUNT)'),
-				new Entity\ExpressionField('DROPPED_VERSION_COUNT', 'SUM(DROPPED_VERSION_COUNT)'),
-				new Entity\ExpressionField('FAIL_COUNT', 'SUM(FAIL_COUNT)'),
-			],
 			'select' => [
+				'ID',
 				'OWNER_ID',
-				'CNT',
 				'FILE_COUNT',
 				'UNNECESSARY_VERSION_COUNT',
 				'DROPPED_FILE_COUNT',
@@ -550,56 +578,186 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 				Volume\Task::EMPTY_FOLDER,
 				Volume\Task::DROP_FOLDER,
 			],
-			'group' => [
-				'OWNER_ID',
-				Volume\Task::DROP_UNNECESSARY_VERSION,
-				Volume\Task::DROP_TRASHCAN,
-				Volume\Task::EMPTY_FOLDER,
-				Volume\Task::DROP_FOLDER,
-			],
-			'filter' => $filter
+			'filter' => $filter,
+			'order' => ['ID' => 'ASC'],
 		]);
 
-		$totalFilesToDrop = 0;
-		$droppedFilesCount = 0;
 		$workerCount = 0;
-		$failCount = 0;
-
-		if ($workerResult->getSelectedRowsCount() > 0)
+		$subTasksByOwner = [];
+		$failCountByOwner = [];
+		foreach ($workerResult as $row)
 		{
-			foreach ($workerResult as $row)
+			$workerCount++;
+			$rowOwnerId = (int)$row['OWNER_ID'];
+			$failCountByOwner[$rowOwnerId] = ($failCountByOwner[$rowOwnerId] ?? 0) + (int)$row['FAIL_COUNT'];
+			$subTasksByOwner[$rowOwnerId] ??= [];
+			foreach (self::collectSubTaskProgress($row) as $key => $counter)
 			{
-				$workerCount += $row['CNT'];
-				$failCount += $row['FAIL_COUNT'];
-				if (Volume\Task::isRunningMode($row[Volume\Task::DROP_UNNECESSARY_VERSION]))
-				{
-					$totalFilesToDrop += $row['UNNECESSARY_VERSION_COUNT'];
-					$droppedFilesCount += $row['DROPPED_VERSION_COUNT'];
-				}
-				if (Volume\Task::isRunningMode($row[Volume\Task::DROP_TRASHCAN]))
-				{
-					$totalFilesToDrop += $row['FILE_COUNT'];
-					$droppedFilesCount += $row['DROPPED_FILE_COUNT'];
-				}
-				if (Volume\Task::isRunningMode($row[Volume\Task::DROP_FOLDER]))
-				{
-					$totalFilesToDrop += $row['FILE_COUNT'];
-					$droppedFilesCount += $row['DROPPED_FILE_COUNT'];
-				}
-				if (Volume\Task::isRunningMode($row[Volume\Task::EMPTY_FOLDER]))
-				{
-					$totalFilesToDrop += $row['FILE_COUNT'];
-					$droppedFilesCount += $row['DROPPED_FILE_COUNT'];
-				}
+				$subTasksByOwner[$rowOwnerId][$key] = $counter;
 			}
-			self::setProgressInfo((int)$row['OWNER_ID'], (int)$totalFilesToDrop, (int)$droppedFilesCount, (int)$failCount);
 		}
-		else
+
+		foreach ($subTasksByOwner as $rowOwnerId => $subTasks)
 		{
-			self::clearProgressInfo($ownerId);
+			self::saveOwnerProgress($rowOwnerId, $subTasks, $failCountByOwner[$rowOwnerId]);
+		}
+
+		$ownersToClear = $ownerId > 0 ? [$ownerId] : self::getProgressOwnerIds();
+		foreach ($ownersToClear as $idleOwnerId)
+		{
+			if (!isset($subTasksByOwner[$idleOwnerId]))
+			{
+				self::deleteProgressOption($idleOwnerId);
+			}
 		}
 
 		return $workerCount;
+	}
+
+	/**
+	 * Returns counters of running sub tasks of the worker row keyed by the row and the sub task.
+	 * @param array $row Worker row.
+	 * @return array<string, array{total: int, done: int}>
+	 */
+	private static function collectSubTaskProgress(array $row): array
+	{
+		$counters = [
+			Volume\Task::DROP_UNNECESSARY_VERSION => ['UNNECESSARY_VERSION_COUNT', 'DROPPED_VERSION_COUNT'],
+			Volume\Task::DROP_TRASHCAN => ['FILE_COUNT', 'DROPPED_FILE_COUNT'],
+			Volume\Task::DROP_FOLDER => ['FILE_COUNT', 'DROPPED_FILE_COUNT'],
+			Volume\Task::EMPTY_FOLDER => ['FILE_COUNT', 'DROPPED_FILE_COUNT'],
+		];
+
+		$subTasks = [];
+		foreach ($counters as $subTask => [$totalField, $doneField])
+		{
+			if (Volume\Task::isRunningMode($row[$subTask]))
+			{
+				$subTasks[$row['ID'] . ':' . $subTask] = [
+					'total' => (int)$row[$totalField],
+					'done' => (int)$row[$doneField],
+				];
+			}
+		}
+
+		return $subTasks;
+	}
+
+	/**
+	 * Saves the progress of the owner, keeping the scope of sub tasks the progress bar started with.
+	 * The repeated measure after a portion leaves only the rest in the total of the row
+	 * while the dropped count keeps growing, so the total of a sub task is fixed when it is seen first.
+	 * Finished sub tasks are folded into the done total to keep the option small.
+	 * @param int $ownerId Owner of the running sub tasks.
+	 * @param array<string, array{total: int, done: int}> $runningSubTasks Counters of the running sub tasks.
+	 * @param int $failCount Failed deletion count of the running tasks.
+	 * @return void
+	 */
+	private static function saveOwnerProgress(int $ownerId, array $runningSubTasks, int $failCount): void
+	{
+		$progress = self::getProgressInfo($ownerId) ?? [];
+		if (isset($progress['count']) && !isset($progress['subTasks']))
+		{
+			$subTasks = self::adoptFormerProgress($runningSubTasks, (int)$progress['count']);
+			$doneTotal = 0;
+		}
+		else
+		{
+			$knownSubTasks = $progress['subTasks'] ?? [];
+			$doneTotal = (int)($progress['doneTotal'] ?? 0);
+
+			$subTasks = [];
+			foreach ($runningSubTasks as $key => $counter)
+			{
+				$total = isset($knownSubTasks[$key])
+					? max((int)$knownSubTasks[$key]['total'], $counter['done'])
+					: $counter['total'] + $counter['done']
+				;
+				$subTasks[$key] = ['total' => $total, 'done' => min($counter['done'], $total)];
+			}
+			foreach ($knownSubTasks as $key => $counter)
+			{
+				if (!isset($subTasks[$key]))
+				{
+					$doneTotal += (int)$counter['total'];
+				}
+			}
+		}
+
+		$count = $doneTotal + array_sum(array_column($subTasks, 'total'));
+		if ($count <= 0)
+		{
+			self::deleteProgressOption($ownerId);
+
+			return;
+		}
+
+		$steps = min($doneTotal + array_sum(array_column($subTasks, 'done')) + $failCount, $count);
+
+		Main\Config\Option::set(
+			self::STEPPER_OPTION_ID,
+			self::className() . $ownerId,
+			serialize(['steps' => $steps, 'count' => $count, 'doneTotal' => $doneTotal, 'subTasks' => $subTasks])
+		);
+	}
+
+	/**
+	 * Fixes the totals of the running sub tasks by the progress written before sub tasks were kept.
+	 * The former total is the scope the owner started with, so the part of it the rows no longer show
+	 * is shared between the sub tasks. After the repeated measure the scope of a sub task is at most
+	 * its rest plus its dropped objects, so no sub task takes more, and the part left over goes to the last one.
+	 * @param array<string, array{total: int, done: int}> $runningSubTasks Counters of the running sub tasks.
+	 * @param int $formerCount Total of the former progress of the owner.
+	 * @return array<string, array{total: int, done: int}>
+	 */
+	private static function adoptFormerProgress(array $runningSubTasks, int $formerCount): array
+	{
+		$subTasks = [];
+		foreach ($runningSubTasks as $key => $counter)
+		{
+			$subTasks[$key] = ['total' => max($counter['total'], $counter['done']), 'done' => $counter['done']];
+		}
+
+		$missingTotal = $formerCount - array_sum(array_column($subTasks, 'total'));
+		foreach ($runningSubTasks as $key => $counter)
+		{
+			if ($missingTotal <= 0)
+			{
+				break;
+			}
+			$share = min($missingTotal, $counter['total'] + $counter['done'] - $subTasks[$key]['total']);
+			$subTasks[$key]['total'] += $share;
+			$missingTotal -= $share;
+		}
+
+		$lastKey = array_key_last($subTasks);
+		if ($missingTotal > 0 && $lastKey !== null)
+		{
+			$subTasks[$lastKey]['total'] += $missingTotal;
+		}
+
+		return $subTasks;
+	}
+
+	/**
+	 * Returns owners having the progress bar of the cleaner.
+	 * @return int[]
+	 */
+	private static function getProgressOwnerIds(): array
+	{
+		// option names are stored in lower case
+		$pattern = '/^' . preg_quote(self::className(), '/') . '(\d+)$/i';
+
+		$ownerIds = [];
+		foreach (array_keys(Main\Config\Option::getForModule(self::STEPPER_OPTION_ID)) as $name)
+		{
+			if (preg_match($pattern, $name, $matches))
+			{
+				$ownerIds[] = (int)$matches[1];
+			}
+		}
+
+		return $ownerIds;
 	}
 
 
@@ -1770,16 +1928,25 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 	{
 		if ($ownerId > 0)
 		{
-			Main\Config\Option::delete(self::STEPPER_OPTION_ID, ['name' => self::className() . $ownerId]);
+			self::deleteProgressOption($ownerId);
 		}
 		else
 		{
-			$optionList = Main\Config\Option::getForModule(self::STEPPER_OPTION_ID);
-			foreach ($optionList as $name => $value)
+			foreach (self::getProgressOwnerIds() as $progressOwnerId)
 			{
-				Main\Config\Option::delete(self::STEPPER_OPTION_ID, ['name' => $name]);
+				self::deleteProgressOption($progressOwnerId);
 			}
 		}
+	}
+
+	/**
+	 * Removes stepper progress bar of the exact owner, including the system user.
+	 * @param int $ownerId Whom will mark as deleted by.
+	 * @return void
+	 */
+	private static function deleteProgressOption(int $ownerId): void
+	{
+		Main\Config\Option::delete(self::STEPPER_OPTION_ID, ['name' => self::className() . $ownerId]);
 	}
 
 	//endregion

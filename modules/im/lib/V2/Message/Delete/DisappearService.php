@@ -7,12 +7,15 @@ use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Integration\Search\HygieneRegistry;
+use Bitrix\Im\V2\Integration\Search\IndexService;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Pull\Event\MessagesAutoDeleteDelayChanged;
 use Bitrix\Im\V2\Pull\Event\UpdateFeature;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -88,7 +91,14 @@ class DisappearService
 		if (!$addResult->isSuccess())
 		{
 			$result->addErrors($addResult->getErrors());
+
+			return $result;
 		}
+
+		ServiceLocator::getInstance()
+			->get(HygieneRegistry::class)
+			->deindexOnTransition(HygieneRegistry::TRANSITION_MARKED_DISAPPEARING, (int)$message->getId())
+		;
 
 		return $result;
 	}
@@ -141,6 +151,7 @@ class DisappearService
 		self::sendPull($chat);
 		self::sendMessage($chat, $prevDelay, $delay);
 		self::sendAnalytics($chat, $prevDelay, $delay);
+		self::deindexOnAutoDelete($chat->getId() ?? 0, $prevDelay, $delay);
 
 		return $result;
 	}
@@ -153,6 +164,7 @@ class DisappearService
 	public static function disappearCollab(Chat\CollabChat $chat, int $delay): Result
 	{
 		$chatId = $chat->getId() ?? 0;
+		$prevDelay = $chat->getMessagesAutoDeleteDelay();
 		$result = Collab::updateCollabOption(
 			$chat,
 			'messagesAutoDeleteDelay',
@@ -166,7 +178,27 @@ class DisappearService
 			;
 		}
 
+		self::deindexOnAutoDelete($chatId, $prevDelay, $delay);
+
 		return self::formatResult($chatId);
+	}
+
+	/**
+	 * A chat with auto-deletion switched on indexes no message at all, so the entries it collected while
+	 * the setting was off may not stay in the index: the search facade does not re-check that rule, and
+	 * the text would go on being found after the messages themselves have gone.
+	 */
+	private static function deindexOnAutoDelete(int $chatId, int $prevDelay, int $delay): void
+	{
+		if ($chatId <= 0 || $prevDelay > 0 || $delay <= 0)
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()
+			->get(IndexService::class)
+			->onMessagesAutoDeleteEnabled($chatId)
+		;
 	}
 
 	/**

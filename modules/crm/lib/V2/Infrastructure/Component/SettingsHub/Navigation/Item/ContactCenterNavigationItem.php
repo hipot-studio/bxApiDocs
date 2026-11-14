@@ -3,8 +3,9 @@
 namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
 use Bitrix\Crm\Service\Router;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
 
 final class ContactCenterNavigationItem implements SettingsHubUrlNavigationItem
@@ -23,9 +24,9 @@ final class ContactCenterNavigationItem implements SettingsHubUrlNavigationItem
 		return true;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return true;
+		return new Result();
 	}
 
 	public function url(): ?Uri

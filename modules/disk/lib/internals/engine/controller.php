@@ -2,6 +2,9 @@
 
 namespace Bitrix\Disk\Internals\Engine;
 
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internals\Diag;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
@@ -38,6 +41,19 @@ class Controller extends Engine\Controller
 		Diag::getInstance()->collectDebugInfo(get_called_class());
 
 		return parent::processBeforeAction($action);
+	}
+
+	protected function getActionResponse(Action $action)
+	{
+		$userId = $this->getCurrentUser()?->getId();
+		$actionContext = (new AuditActionContextResolver())->resolveForWeb(
+			is_numeric($userId) ? (int)$userId : null,
+		);
+
+		return AuditOperationContextStack::runWithContextIfEmpty(
+			AuditOperationContext::create(actionContext: $actionContext),
+			fn() => parent::getActionResponse($action),
+		);
 	}
 
 	protected function processAfterAction(Engine\Action $action, $result)

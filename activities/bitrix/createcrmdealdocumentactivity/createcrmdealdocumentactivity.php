@@ -89,6 +89,11 @@ class CBPCreateCrmDealDocumentActivity extends CBPCreateDocumentActivity
 
 	protected function getCreatedDocumentType(): array
 	{
+		return static::resolveCreatedDocumentType() ?? [];
+	}
+
+	protected static function resolveCreatedDocumentType(): ?array
+	{
 		return \CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Deal);
 	}
 

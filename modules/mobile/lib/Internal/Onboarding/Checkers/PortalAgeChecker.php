@@ -4,6 +4,7 @@ namespace Bitrix\Mobile\Internal\Onboarding\Checkers;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Mobile\Internal\Onboarding\Schedule\SeriesCalendar;
 
 class PortalAgeChecker
 {
@@ -19,19 +20,19 @@ class PortalAgeChecker
 		return $this->getPortalCreatedAt() !== null;
 	}
 
-	public function isEligible(int $maxDays): bool
+	public function isEligible(int $maxDays, ?DateTime $now = null, ?SeriesCalendar $calendar = null): bool
 	{
 		if (!$this->isPortalDateKnown())
 		{
 			return false;
 		}
 
-		$age = $this->getPortalAgeDays();
+		$age = $this->getPortalAgeDays($now, $calendar);
 
 		return $age <= $maxDays;
 	}
 
-	public function getPortalAgeDays(): int
+	public function getPortalAgeDays(?DateTime $now = null, ?SeriesCalendar $calendar = null): int
 	{
 		$createdAt = $this->getPortalCreatedAt();
 		if ($createdAt === null)
@@ -39,8 +40,9 @@ class PortalAgeChecker
 			return 0;
 		}
 
-		$createdDay = (clone $createdAt)->setTime(0, 0, 0);
-		$today = (new DateTime())->setTime(0, 0, 0);
+		$now ??= new DateTime();
+		$createdDay = ($calendar?->toCalendarTime($createdAt) ?? clone $createdAt)->setTime(0, 0, 0);
+		$today = ($calendar?->toCalendarTime($now) ?? clone $now)->setTime(0, 0, 0);
 
 		return (int)round(($today->getTimestamp() - $createdDay->getTimestamp()) / 86400);
 	}

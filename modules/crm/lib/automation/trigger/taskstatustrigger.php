@@ -147,6 +147,7 @@ class TaskStatusTrigger extends BaseTrigger
 			$conditionGroup = new ConditionGroup($trigger['APPLY_RULES']['taskCondition']);
 			$documentType = ['tasks', Tasks\Integration\Bizproc\Document\Task::class, 'TASK'];
 			$documentId = Tasks\Integration\Bizproc\Document\Task::resolveDocumentId($task['ID']);
+			$this->resolveCrmUserConditions($conditionGroup, $documentType);
 
 			return $conditionGroup->evaluateByDocument(
 				$documentType,
@@ -154,6 +155,51 @@ class TaskStatusTrigger extends BaseTrigger
 			);
 		}
 		return true;
+	}
+
+	private function resolveCrmUserConditions(ConditionGroup $conditionGroup, array $documentType): void
+	{
+		$documentService = \CBPRuntime::getRuntime(true)->getDocumentService();
+		$documentFields = $documentService->getDocumentFields($documentType);
+		$target = $this->getTarget();
+		$crmDocumentId = $target->getDocumentType();
+		$crmDocumentId[2] = $target->getDocumentId();
+
+		foreach ($conditionGroup->getItems() as [$condition])
+		{
+			$property = $documentFields[$condition->getField()] ?? null;
+			if (
+				!$property
+				|| $documentService->getFieldTypeObject($documentType, $property)?->getBaseType() !== FieldType::USER
+				|| in_array($condition->getOperator(), ['empty', '!empty'], true)
+			)
+			{
+				continue;
+			}
+
+			$values = [];
+			$resolved = false;
+			foreach ((array)$condition->getValue() as $value)
+			{
+				$expression = \CBPActivity::parseExpression($value);
+				if (($expression['object'] ?? null) === 'Document')
+				{
+					foreach (\CBPHelper::extractUsers($value, $crmDocumentId) as $userId)
+					{
+						$values[] = 'user_' . $userId;
+					}
+					$resolved = true;
+				}
+				else
+				{
+					$values[] = $value;
+				}
+			}
+			if ($resolved)
+			{
+				$condition->setValue($values);
+			}
+		}
 	}
 
 	protected static function getPropertiesMap(): array

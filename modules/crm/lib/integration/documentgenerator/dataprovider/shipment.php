@@ -93,6 +93,9 @@ class Shipment extends CrmEntityDataProvider
 	{
 		if ($this->fields === null)
 		{
+			Loc::loadMessages(Path::combine(__DIR__, 'payment.php'));
+			Loc::loadMessages(Path::combine(__DIR__, 'order.php'));
+			Loc::loadMessages(Path::combine(__DIR__, 'quote.php'));
 			$this->fields = [
 				'ID' => [
 					'TITLE' => Loc::getMessage('CRM_DOCUMENTGENERATOR_DATAPROVIDER_SHIPMENT_ID'),

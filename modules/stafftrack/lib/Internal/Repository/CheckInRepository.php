@@ -4,7 +4,9 @@ namespace Bitrix\StaffTrack\Internal\Repository;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
@@ -486,6 +488,65 @@ class CheckInRepository
 	}
 
 	/**
+	 * When the check-ins of the period were made and with which offset, and nothing else: no coordinates, no
+	 * address, nothing encrypted. Enough to tell whose check-ins fall on a local date before any row is read
+	 * whole. The rows come one at a time and in no particular order.
+	 *
+	 * @param int[] $userIds
+	 * @return \Generator<int, array{ID: int|string, USER_ID: int|string, DATE_CREATE: DateTime, USER_TIMEZONE: int|string|null}>
+	 */
+	public function iterateAllUsersCheckInMomentsByPeriod(array $userIds, DateTime $dateStart, DateTime $dateEnd): \Generator
+	{
+		$userIds = array_map('intval', $userIds);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		$rows = CheckInTable::query()
+			->setSelect(['ID', 'USER_ID', 'DATE_CREATE', 'USER_TIMEZONE'])
+			->whereIn('USER_ID', $userIds)
+			->whereBetween('DATE_CREATE', $dateStart, $dateEnd)
+			->exec()
+		;
+
+		while ($row = $rows->fetch())
+		{
+			yield $row;
+		}
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return \Generator<int, array{ID: int|string, USER_ID: int|string, DATE_CREATE: DateTime, USER_TIMEZONE: int|string|null}>
+	 */
+	public function iterateAllUsersManualCheckInMomentsByPeriod(
+		array $userIds,
+		DateTime $dateStart,
+		DateTime $dateEnd,
+	): \Generator
+	{
+		$userIds = array_map('intval', $userIds);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		$rows = CheckInTable::query()
+			->setSelect(['ID', 'USER_ID', 'DATE_CREATE', 'USER_TIMEZONE'])
+			->whereIn('USER_ID', $userIds)
+			->where('ENTITY_TYPE', self::ENTITY_TYPE['MANUAL'])
+			->whereBetween('DATE_CREATE', $dateStart, $dateEnd)
+			->exec()
+		;
+
+		while ($row = $rows->fetch())
+		{
+			yield $row;
+		}
+	}
+
+	/**
 	 * Rows of the period a marker can come out of: a manual check-in or an event of a stay. Technical
 	 * movement points are left to {@see getUserTechnicalCheckInsInIntervals()}, which raises them only
 	 * for the spans the merge of a manual check-in with a stay has to look at.
@@ -668,6 +729,37 @@ class CheckInRepository
 	}
 
 	/**
+	 * Whether a raw row of the employee exists at all. The question is answered by the leading column of
+	 * ix_st_check_in_user_date and stops at the first row: no count walks the tail of the employee, and
+	 * nothing of the point itself - two CryptoFields among the columns - is raised.
+	 */
+	public function hasCheckInRows(int $userId): bool
+	{
+		return CheckInTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->setLimit(1)
+			->exec()
+			->fetch() !== false
+		;
+	}
+
+	/**
+	 * The other half of the history: past the aggregation the raw rows of a day are deleted and the day
+	 * lives on as one folded row. GEO_DATA stays out of the select - it holds the whole route of the day.
+	 */
+	public function hasAggregatedDays(int $userId): bool
+	{
+		return CheckInByDayTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->setLimit(1)
+			->exec()
+			->fetch() !== false
+		;
+	}
+
+	/**
 	 * @param int $userId
 	 * @param DateTime $dateStart
 	 * @param DateTime $dateEnd
@@ -681,6 +773,25 @@ class CheckInRepository
 	public function getUserAggregatedManualPointsByPeriod(int $userId, DateTime $dateStart, DateTime $dateEnd): array
 	{
 		return $this->fetchAggregatedPoints([$userId], $dateStart, $dateEnd, self::ENTITY_TYPE['MANUAL']);
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return \Generator<int, array>
+	 */
+	public function iterateAllUsersAggregatedManualPointsByPeriod(
+		array $userIds,
+		DateTime $dateStart,
+		DateTime $dateEnd,
+	): \Generator
+	{
+		$userIds = array_map('intval', $userIds);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		yield from $this->walkAggregatedPoints($userIds, $dateStart, $dateEnd, self::ENTITY_TYPE['MANUAL']);
 	}
 
 	/**
@@ -700,8 +811,57 @@ class CheckInRepository
 		return $this->fetchAggregatedPoints($userIds, $dateStart, $dateEnd);
 	}
 
+	/**
+	 * The points {@see getAllUsersAggregatedPointsByPeriod()} answers, handed over as each folded day is decoded:
+	 * a day is let go before the next one is decoded, so what stays in memory is what the caller keeps of them.
+	 *
+	 * @param int[] $userIds
+	 * @param bool $latestDayFirst the days from the latest one back, for a caller who looks for a few points and
+	 *     stops once he has them; in the order of {@see getAllUsersAggregatedPointsByPeriod()} otherwise
+	 * @return \Generator<int, array>
+	 */
+	public function iterateAllUsersAggregatedPointsByPeriod(
+		array $userIds,
+		DateTime $dateStart,
+		DateTime $dateEnd,
+		bool $latestDayFirst = false,
+	): \Generator
+	{
+		$userIds = array_map('intval', $userIds);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		yield from $this->walkAggregatedPoints($userIds, $dateStart, $dateEnd, latestDayFirst: $latestDayFirst);
+	}
+
 	private function fetchAggregatedPoints(array $userIds, DateTime $dateStart, DateTime $dateEnd, ?int $entityType = null): array
 	{
+		return iterator_to_array($this->walkAggregatedPoints($userIds, $dateStart, $dateEnd, $entityType), false);
+	}
+
+	/**
+	 * A day reaching into the window began no earlier than AGGREGATED_DAY_MAX_LENGTH_SEC before the window opens,
+	 * so the lower bound drops no day. It keeps the range over ix_st_check_in_by_day_user_date to the days around
+	 * the window: open on the left, the range of an employee runs back to his first day, and read backwards it
+	 * loses the check of DATE_END inside the index on MariaDB, so every day of it is read whole.
+	 *
+	 * @param int[] $userIds
+	 * @return \Generator<int, array>
+	 */
+	private function walkAggregatedPoints(
+		array $userIds,
+		DateTime $dateStart,
+		DateTime $dateEnd,
+		?int $entityType = null,
+		bool $latestDayFirst = false,
+	): \Generator
+	{
+		$earliestStart = DateTime::createFromTimestamp(
+			$dateStart->getTimestamp() - self::AGGREGATED_DAY_MAX_LENGTH_SEC,
+		);
+
 		$routes = CheckInByDayTable::query()
 			->setSelect([
 				'ID',
@@ -711,12 +871,12 @@ class CheckInRepository
 				'GEO_DATA',
 			])
 			->whereIn('USER_ID', $userIds)
+			->where('DATE_CREATE', '>=', $earliestStart)
 			->where('DATE_CREATE', '<=', $dateEnd)
 			->where('DATE_END', '>=', $dateStart)
-			->setOrder(['DATE_CREATE' => 'ASC'])
+			->setOrder(['DATE_CREATE' => $latestDayFirst ? 'DESC' : 'ASC'])
 			->exec();
 
-		$points = [];
 		$startTs = $dateStart->getTimestamp();
 		$endTs = $dateEnd->getTimestamp();
 
@@ -747,11 +907,9 @@ class CheckInRepository
 					continue;
 				}
 
-				$points[] = $point;
+				yield $point;
 			}
 		}
-
-		return $points;
 	}
 
 	/**
@@ -945,6 +1103,42 @@ class CheckInRepository
 			->setSelect(['USER_ID', 'CNT', 'HAS_OPEN_ENTER', 'LAST_CHECK_IN_ID'])
 			->whereIn('USER_ID', $userIds)
 			->where('LOCAL_DATE', $localDate)
+			->exec()
+			->fetchAll()
+		;
+	}
+
+	/**
+	 * The stamp of the last point of the date of every employee, off his daily statistics: the offset from the
+	 * server zone his check-ins of that date were written with. One query over the index of the date and the
+	 * primary key of the point - the day itself is never read. A point already folded into an archived day is
+	 * out of the table, and a point written without a stamp has none to give: neither answers here.
+	 *
+	 * @param int[] $userIds
+	 * @return array<int, array{USER_ID: int|string, USER_TIMEZONE: int|string}>
+	 */
+	public function getLastCheckInZoneStampsByUsers(array $userIds, Date $localDate): array
+	{
+		$userIds = array_map('intval', $userIds);
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		return CheckInDailyStatsTable::query()
+			->registerRuntimeField(
+				'LAST_CHECK_IN',
+				new Reference(
+					'LAST_CHECK_IN',
+					CheckInTable::class,
+					Join::on('this.LAST_CHECK_IN_ID', 'ref.ID'),
+					['join_type' => Join::TYPE_INNER],
+				),
+			)
+			->setSelect(['USER_ID', 'USER_TIMEZONE' => 'LAST_CHECK_IN.USER_TIMEZONE'])
+			->whereIn('USER_ID', $userIds)
+			->where('LOCAL_DATE', $localDate)
+			->whereNotNull('LAST_CHECK_IN.USER_TIMEZONE')
 			->exec()
 			->fetchAll()
 		;

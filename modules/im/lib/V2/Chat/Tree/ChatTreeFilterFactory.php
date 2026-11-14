@@ -7,6 +7,7 @@ class ChatTreeFilterFactory
 {
 	public function __construct(
 		private readonly ChatAncestorNavigator $navigator,
+		private readonly ChatTreeLevelParents $levelParents,
 	) {}
 
 	public function forUnread(int $userId, int $maxDepth = ChatAncestorNavigator::DEFAULT_DEPTH): SubtreeUnreadFilter
@@ -21,6 +22,7 @@ class ChatTreeFilterFactory
 			parentId: $scope->parentId,
 			typeCondition: $scope->typeCondition,
 			maxDepth: $scope->maxDepth,
+			levelParents: $this->levelParents,
 		);
 	}
 
@@ -32,6 +34,7 @@ class ChatTreeFilterFactory
 			typeCondition: $scope->typeCondition,
 			maxDepth: $scope->maxDepth,
 			origin: TreeOrigin::forUnreadCounters(),
+			levelParents: $this->levelParents,
 		);
 	}
 }

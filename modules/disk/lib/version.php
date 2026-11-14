@@ -4,10 +4,12 @@
 namespace Bitrix\Disk;
 
 
+use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\View\VersionViewManager;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\Type\DateTime;
 
@@ -68,10 +70,23 @@ final class Version extends Internals\Model
 
 	public static function add(array $data, ErrorCollection $errorCollection)
 	{
+		// The object is handed over by the caller holding it: the counter of the used size below
+		// resolves the storage over it, and the model on its own would load the very file the
+		// caller is holding.
+		$object = $data['OBJECT'] ?? null;
+		unset($data['OBJECT']);
+
 		$model = parent::add($data, $errorCollection);
 
 		if($model)
 		{
+			if($object instanceof File)
+			{
+				$model->setAttributes(array('OBJECT' => $object));
+			}
+
+			$model->applyUsageDelta((int)$model->getSize());
+
 			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterAddVersion", array($model));
 			$event->send();
 		}
@@ -154,6 +169,9 @@ final class Version extends Internals\Model
 			return null;
 		}
 
+		// The new file is a file of its own, wherever the revision it was made of came from, so the
+		// write node judges its content as it judges any other: a revision stored before the policy
+		// may carry a format the policy names now.
 		$newFile = $targetFolder->addFile([
 			'NAME' => $this->getName(),
 			'FILE_ID' => $forkFileId,
@@ -348,7 +366,9 @@ final class Version extends Internals\Model
 	 */
 	public function joinData(array $data)
 	{
-		return $this->update(array_intersect_key($data, array(
+		$previousSize = (int)$this->size;
+
+		$success = $this->update(array_intersect_key($data, array(
 			'CREATE_TIME' => true,
 
 			'FILE_ID' => true,
@@ -364,6 +384,17 @@ final class Version extends Internals\Model
 
 			'VIEW_ID' => true,
 		)));
+
+		if(!$success)
+		{
+			return false;
+		}
+
+		// No row is created by a join: the last one is rewritten, so the used size moves by the
+		// difference of the sizes rather than by the whole of the new one.
+		$this->applyUsageDelta((int)$this->size - $previousSize);
+
+		return true;
 	}
 
 	/**
@@ -408,37 +439,91 @@ final class Version extends Internals\Model
 	 */
 	public function delete($deletedBy)
 	{
-		$success = parent::deleteInternal();
-		if(!$success)
-		{
-			return false;
-		}
-		\CFile::delete($this->fileId);
-		if ($this->viewId)
-		{
-			\CFile::delete($this->viewId);
-		}
+		$this->errorCollection->clear();
+		$size = (int)$this->size;
 
+		// The file is switched onto the previous version before anything of this one is removed:
+		// a refused switch must leave the version and its content in place, not a file pointing at nothing.
 		$file = $this->getObject();
 		if($file && $file->getCurrentState() !== $file::STATE_DELETE_PROCESS && $this->isHead())
 		{
 			$previous = $this->getPrevious();
 			if($previous)
 			{
-				if($file->updateContent(array(
-						'ID' => $previous->getFileId(),
-						'FILE_SIZE' => $previous->getSize(),
-					), $deletedBy)
-				)
+				if(!$file->switchToContentOfVersion($previous, $deletedBy))
 				{
-					$previous->update(array(
-						'GLOBAL_CONTENT_VERSION' => $file->getGlobalContentVersion()
-					));
+					$this->errorCollection->add($file->getErrors());
+
+					return false;
 				}
+
+				$previous->update(array(
+					'GLOBAL_CONTENT_VERSION' => $file->getGlobalContentVersion()
+				));
 			}
 		}
 
+		$success = parent::deleteInternal();
+		if(!$success)
+		{
+			return false;
+		}
+
+		// The row has left the table, so SUM(b_disk_version.SIZE) is already lower by its size.
+		$this->applyUsageDelta(-$size);
+
+		\CFile::delete($this->fileId);
+		if ($this->viewId)
+		{
+			\CFile::delete($this->viewId);
+		}
+
 		return true;
+	}
+
+	/**
+	 * Moves the used size counter by the movement of this version row.
+	 *
+	 * The delta belongs to the owner of the personal storage the object of the version lies in, not
+	 * to the author of the operation: an attachment to the task of another employee spends the disk
+	 * of the one whose storage is written.
+	 *
+	 * @param int $deltaBytes Movement of the source of truth, bytes.
+	 * @return void
+	 */
+	private function applyUsageDelta(int $deltaBytes): void
+	{
+		if ($deltaBytes === 0)
+		{
+			return;
+		}
+
+		$ownerId = $this->findPersonalStorageOwnerId();
+		if ($ownerId === null)
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()->get(StorageUsageCounter::class)->applyDelta($ownerId, $deltaBytes);
+	}
+
+	/**
+	 * Owner of the personal storage this version belongs to, or null for everything the quota says
+	 * nothing about: a group storage, the common one, the storage of an application.
+	 *
+	 * @return int|null
+	 */
+	private function findPersonalStorageOwnerId(): ?int
+	{
+		$storage = $this->getObject()?->getStorage();
+		if (!($storage?->getProxyType() instanceof ProxyType\User))
+		{
+			return null;
+		}
+
+		$ownerId = (int)$storage->getEntityId();
+
+		return $ownerId > 0 ? $ownerId : null;
 	}
 
 	/**

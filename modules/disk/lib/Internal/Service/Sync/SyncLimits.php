@@ -28,8 +28,32 @@ final class SyncLimits
 	public const OPTION_JOURNAL_RETENTION_DAYS = 'disk_sync_journal_retention_days';
 	public const OPTION_SAFE_WINDOW_SECONDS = 'disk_sync_safe_window_seconds';
 	public const OPTION_INTERACTION_WINDOW_DAYS = 'disk_sync_interaction_window_days';
+	public const OPTION_RELATION_LIMIT = 'disk_sync_relation_limit';
 
 	public const DEFAULT_JOURNAL_RETENTION_DAYS = 30;
+
+	/**
+	 * How many relations of one object a provider is asked for, and the temporary value of it.
+	 *
+	 * Temporary like the retention beside it: the final number is measured on the providers of the first
+	 * wave, and what the code fixes is that it is a setting of the portal and that it stays under the
+	 * ceiling below.
+	 */
+	public const DEFAULT_RELATION_LIMIT = 10;
+
+	/**
+	 * The ceiling of the limit: intdiv(500, 6) - 1.
+	 *
+	 * Disk passes a provider up to relationLimit + 1 candidates per object and connector class, and no
+	 * provider may be passed more than the 500 candidates of a page (4.5 of the contract of the
+	 * providers), so the limit has to leave the classes of every provider inside that 500.
+	 *
+	 * The six is an assumption rather than a measurement: it is the number of connector classes the
+	 * worst provider known today declares, tasks. A provider declaring more classes lowers the ceiling
+	 * with it, and counting the ceiling against the registry instead of against this assumption belongs
+	 * to the ADR of the parent feature.
+	 */
+	public const MAX_RELATION_LIMIT = 82;
 
 	/**
 	 * How long an object a user touched stays visible to them on that interaction alone.
@@ -181,6 +205,24 @@ final class SyncLimits
 	public function getPollIntervalMaxSeconds(): int
 	{
 		return intdiv($this->getJournalRetentionSeconds(), self::MAX_INTERVAL_RETENTION_DIVISOR);
+	}
+
+	/**
+	 * How many relations of one object the contour asks a provider for and publishes.
+	 *
+	 * A limit of nothing would leave every object of a page without relations while the section was asked
+	 * for, so a configured zero is read as one; above the ceiling the number is read as the ceiling,
+	 * because a wider limit would hand a provider more candidates than the contract allows on a page.
+	 */
+	public function getRelationLimit(): int
+	{
+		$configured = (int)Option::get(
+			Driver::INTERNAL_MODULE_ID,
+			self::OPTION_RELATION_LIMIT,
+			(string)self::DEFAULT_RELATION_LIMIT,
+		);
+
+		return min(max(1, $configured), self::MAX_RELATION_LIMIT);
 	}
 
 	public function getPageSizeMax(): int

@@ -10,7 +10,7 @@ use Bitrix\Mobile\Tab\Preset\Service\MobileMenuCacheInvalidator;
 final class MenuCacheInvalidationReceiver extends AbstractReceiver
 {
 	public function __construct(
-		private readonly MobileMenuCacheInvalidator $cacheInvalidator = new MobileMenuCacheInvalidator(),
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 	)
 	{
 	}

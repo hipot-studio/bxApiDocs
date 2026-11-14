@@ -16,6 +16,12 @@ use Bitrix\Main\ORM\Query\Query;
 
 readonly class ParentChainForUserFilter
 {
+	/**
+	 * @param string|null $userIdColumn when set, the ancestor relations are matched against this column
+	 *        of the query instead of the constant $userId, so one statement can serve many users.
+	 *        $userId then only resolves the open-chat exemption, and every user the query can return
+	 *        must share it ({@see ParentChainFilterFactory::forUsersColumn()}).
+	 */
 	public function __construct(
 		private ChatAncestorNavigator $navigator,
 		private SingleLevelAccessFilterFactory $singleLevelFilterFactory,
@@ -23,6 +29,7 @@ readonly class ParentChainForUserFilter
 		private int $userId,
 		private TreeOrigin $origin,
 		private int $maxDepth,
+		private ?string $userIdColumn = null,
 	) {}
 
 	public function apply(Query $query): void
@@ -50,24 +57,36 @@ readonly class ParentChainForUserFilter
 
 	private function registerRelationJoin(Query $query, TreeLevel $level): void
 	{
-		$relAlias = "PARENT_REL_{$this->userId}_{$level->depth}";
+		$relAlias = $this->relationAlias($level);
+		$condition = Join::on('ref.CHAT_ID', "this.{$level->idExpression}");
+
+		if ($this->userIdColumn === null)
+		{
+			$condition->where('ref.USER_ID', $this->userId);
+		}
+		else
+		{
+			$condition->whereColumn('ref.USER_ID', $this->userIdColumn);
+		}
+
 		$query->registerRuntimeField(
 			$relAlias,
-			new Reference(
-				$relAlias,
-				RelationTable::class,
-				Join::on('ref.CHAT_ID', "this.{$level->idExpression}")
-					->where('ref.USER_ID', $this->userId),
-				['join_type' => Join::TYPE_LEFT],
-			),
+			new Reference($relAlias, RelationTable::class, $condition, ['join_type' => Join::TYPE_LEFT]),
 		);
+	}
+
+	private function relationAlias(TreeLevel $level): string
+	{
+		return $this->userIdColumn === null
+			? "PARENT_REL_{$this->userId}_{$level->depth}"
+			: "PARENT_REL_COL_{$level->depth}";
 	}
 
 	private function buildLevelAccessCondition(TreeLevel $level): ConditionTree
 	{
 		$singleLevelFilter = $this->singleLevelFilterFactory->forUser(
 			userId: $this->userId,
-			relationAlias: "PARENT_REL_{$this->userId}_{$level->depth}",
+			relationAlias: $this->relationAlias($level),
 			chatAlias: $level->alias,
 		);
 

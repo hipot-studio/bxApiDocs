@@ -68,13 +68,6 @@ final class StateCheckRequest extends StrictRequest
 	 */
 	public ?SectionsStructure $sections = null;
 
-	/**
-	 * The sections whose assembly is expensive enough to halve a page, as
-	 * {@see SyncLimits::getPageSizeMaxHeavy()} is published for. The same set the fetch and the
-	 * journal weigh their pages by.
-	 */
-	private const HEAVY_SECTIONS = [SectionsStructure::SECTION_LOCATION];
-
 	private const PARAMETER_OBJECT_IDS = 'objectIds';
 	private const PARAMETER_SCOPE_ROOT_ID = 'scopeRootId';
 	private const PARAMETER_CHECK_TOKEN = 'checkToken';
@@ -177,16 +170,9 @@ final class StateCheckRequest extends StrictRequest
 	 */
 	private function pageCeiling(SyncLimits $limits): int
 	{
-		$sections = $this->getSections();
-		foreach (self::HEAVY_SECTIONS as $section)
-		{
-			if ($sections->has($section))
-			{
-				return $limits->getPageSizeMaxHeavy();
-			}
-		}
-
-		return $limits->getPageSizeMax();
+		return $this->getSections()->hasHeavySection()
+			? $limits->getPageSizeMaxHeavy()
+			: $limits->getPageSizeMax();
 	}
 
 	/**

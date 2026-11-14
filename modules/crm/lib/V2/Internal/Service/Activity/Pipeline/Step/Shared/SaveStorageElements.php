@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\Step\Shared;
 
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityChangeSet;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityStorageElement;
 use Bitrix\Crm\V2\Internal\Entity\Activity\StorageFieldTransit;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityStorageElementRepository;
@@ -39,6 +40,11 @@ use CCrmActivity;
  * personal one of the user (`CCrmActivity::GetDefaultStorageTypeID()`), which on the path of an add is
  * unreachable. Without that chain the rows of an update would go under a storage of zero, which is why the mode
  * is a parameter of the step rather than something derived from the run.
+ *
+ * WHAT AN UPDATE LEAVES BEHIND BESIDES THE WRITE. The pair of the change set
+ * ({@see ActivityChangeSet::storageElements}) has this step as its one producer, the way the bindings have
+ * {@see SaveBindings}: the ids the previous state listed and the ids being written. An update that names no files
+ * leaves no pair at all - "the files are none of this update's business" rather than "unchanged".
  *
  * @internal
  */
@@ -114,11 +120,17 @@ final class SaveStorageElements implements PipelineStepInterface
 			));
 		}
 
-		$this->repository->save(
-			$context->getActivityId(),
-			$storageTypeId,
-			self::elementIdsOf($context),
-		);
+		$elementIds = self::elementIdsOf($context);
+		if ($this->isUpdate() && $context->hasPreviousState())
+		{
+			$context->getChanges()->set(
+				ActivityChangeSet::storageElements,
+				self::elementIdsOfThePreviousState($context),
+				$elementIds,
+			);
+		}
+
+		$this->repository->save($context->getActivityId(), $storageTypeId, $elementIds);
 
 		return $result;
 	}
@@ -199,9 +211,24 @@ final class SaveStorageElements implements PipelineStepInterface
 	 */
 	private static function elementIdsOf(PipelineContext $context): array
 	{
-		return array_map(
-			static fn(ActivityStorageElement $element): int => $element->getElementId(),
-			$context->getActivity()->getFiles() ?? [],
-		);
+		return self::idsOf($context->getActivity()->getFiles() ?? []);
+	}
+
+	/**
+	 * @return int[] the files the activity had before the update, as the step loading that state put them into
+	 *         its model.
+	 */
+	private static function elementIdsOfThePreviousState(PipelineContext $context): array
+	{
+		return self::idsOf($context->getPreviousActivity()->getFiles() ?? []);
+	}
+
+	/**
+	 * @param ActivityStorageElement[] $files
+	 * @return int[]
+	 */
+	private static function idsOf(array $files): array
+	{
+		return array_map(static fn(ActivityStorageElement $element): int => $element->getElementId(), $files);
 	}
 }

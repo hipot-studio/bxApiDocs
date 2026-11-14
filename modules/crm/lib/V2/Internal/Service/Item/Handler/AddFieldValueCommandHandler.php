@@ -38,7 +38,6 @@ use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\ItemId;
 use Bitrix\Crm\V2\Public\Provider\Item\ItemProvider;
 use Bitrix\Crm\V2\Public\Provider\Item\Param\ItemSelect;
-use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Result;
@@ -53,7 +52,6 @@ final class AddFieldValueCommandHandler
 {
 	private const MAX_VALUES_PER_FIELD = 50;
 	private const MAX_VALUES_TOTAL = 100;
-	private const MAX_COMPANIES_FOR_CONTACT = 50;
 
 	private const MULTIFIELDS = [
 		'phone' => [
@@ -89,16 +87,19 @@ final class AddFieldValueCommandHandler
 	private readonly ItemOperationRunner $operationRunner;
 	private readonly CustomFieldRegistry $customFieldRegistry;
 	private readonly FileCustomFieldWriteService $fileWriteService;
+	private readonly ClientBindingSupport $clientBindingSupport;
 
 	public function __construct(
 		?ItemOperationRunner $operationRunner = null,
 		?CustomFieldRegistry $customFieldRegistry = null,
 		?FileCustomFieldWriteService $fileWriteService = null,
+		?ClientBindingSupport $clientBindingSupport = null,
 	)
 	{
 		$this->operationRunner = $operationRunner ?? new ItemOperationRunner();
 		$this->customFieldRegistry = $customFieldRegistry ?? CustomFieldRegistry::getInstance();
 		$this->fileWriteService = $fileWriteService ?? new FileCustomFieldWriteService();
+		$this->clientBindingSupport = $clientBindingSupport ?? new ClientBindingSupport();
 	}
 
 	public function handle(AddFieldValueCommand $command): Result
@@ -109,17 +110,10 @@ final class AddFieldValueCommandHandler
 			return $target;
 		}
 
-		$lockKey = $this->getLockKey($command->getItemId(), $target['fieldName']);
-		try
+		$lockResult = $this->clientBindingSupport->lock($command->getItemId(), $target['fieldName']);
+		if ($lockResult !== null)
 		{
-			if (!Application::getConnection()->lock($lockKey, 10))
-			{
-				return $this->error('The field is being changed by another operation.', 'CRM_FIELD_VALUE_LOCKED');
-			}
-		}
-		catch (\Throwable)
-		{
-			return $this->error('The field change could not be serialized.', 'CRM_FIELD_VALUE_LOCK_FAILED');
+			return $lockResult;
 		}
 
 		try
@@ -194,7 +188,7 @@ final class AddFieldValueCommandHandler
 		}
 		finally
 		{
-			Application::getConnection()->unlock($lockKey);
+			$this->clientBindingSupport->unlock($command->getItemId(), $target['fieldName']);
 		}
 	}
 
@@ -261,18 +255,15 @@ final class AddFieldValueCommandHandler
 	 */
 	private function loadItem(ItemId $itemId, int $userId, array $target, bool $checkPermissions): Item
 	{
+		if (in_array($target['kind'], [ClientBindingSupport::KIND_CONTACTS, ClientBindingSupport::KIND_COMPANIES], true))
+		{
+			return $this->clientBindingSupport->loadOwner($itemId, $userId, $target['kind'], $checkPermissions);
+		}
+
 		$select = new ItemSelect($target['itemField']);
 		if ($target['kind'] === 'multifield')
 		{
 			$select->withMultifields();
-		}
-		elseif ($target['kind'] === 'contacts')
-		{
-			$select->withContactBindings();
-		}
-		elseif ($target['kind'] === 'companies')
-		{
-			$select->withCompanyBindings();
 		}
 		elseif ($target['kind'] === 'observers')
 		{
@@ -414,7 +405,7 @@ final class AddFieldValueCommandHandler
 			$bindings->add(new CompanyBinding($binding->getCompanyId(), $binding->getSort(), $binding->isPrimary()));
 			$sort = max($sort, $binding->getSort() + 1);
 		}
-		if (($entityType === null || $entityType->equals(EntityType::contact())) && count($bindings) >= self::MAX_COMPANIES_FOR_CONTACT)
+		if (($entityType === null || $entityType->equals(EntityType::contact())) && count($bindings) >= ClientBindingSupport::MAX_COMPANIES_FOR_CONTACT)
 		{
 			return $this->error('Too many company bindings.', 'CRM_FIELD_VALUE_LIMIT_EXCEEDED');
 		}
@@ -577,11 +568,10 @@ final class AddFieldValueCommandHandler
 		bool $checkPermissions,
 	): ?Result
 	{
-		$entityTypeId = match ($target['kind'])
+		$childEntityType = match ($target['kind'])
 		{
-			'contacts' => EntityType::contact()->getId(),
-			'companies' => EntityType::company()->getId(),
-			'observers' => null,
+			ClientBindingSupport::KIND_CONTACTS => EntityType::contact(),
+			ClientBindingSupport::KIND_COMPANIES => EntityType::company(),
 			default => null,
 		};
 		if ($target['kind'] === 'observers')
@@ -594,11 +584,11 @@ final class AddFieldValueCommandHandler
 					true,
 				);
 		}
-		elseif ($entityTypeId !== null)
+		elseif ($childEntityType !== null)
 		{
 			$exists = is_int($value)
 				&& $value > 0
-				&& $this->crmItemExists($userId, $entityTypeId, $value, $checkPermissions)
+				&& $this->clientBindingSupport->filterExisting($childEntityType, [$value], $userId, $checkPermissions) === [$value]
 			;
 		}
 		else

@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Analytics\MessageContent;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Integration\Search\HygieneRegistry;
 use Bitrix\Im\V2\Link\Task\TaskService;
 use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
@@ -26,6 +27,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Pull\Event;
 
 class DeleteService
@@ -193,6 +195,11 @@ class DeleteService
 		{
 			MessageIndexTable::deleteByFilter(['=MESSAGE_ID' => $this->messages->getPrimaryIds()]);
 		}
+
+		ServiceLocator::getInstance()
+			->get(HygieneRegistry::class)
+			->deindexOnTransition(HygieneRegistry::TRANSITION_DELETE, ...$this->messages->getPrimaryIds())
+		;
 
 		(new UrlService())->deleteUrlsByMessages($this->messages);
 
@@ -447,7 +454,7 @@ class DeleteService
 
 			if ($this->chat->getType() === Chat::IM_TYPE_COMMENT)
 			{
-				\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $this->chat->getParentChatId(), $pullMessage);
+				CommentTagPublisher::addToStack($this->chat, $pullMessage);
 			}
 
 			if ($this->chat->needToSendPublicPull())

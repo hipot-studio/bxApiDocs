@@ -2,16 +2,18 @@
 
 namespace Bitrix\Call\Controller;
 
-use Bitrix\Call\Settings;
 use Bitrix\Call\Error;
+use Bitrix\Call\Controller\Filter\JwtAuthentication;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
-use Bitrix\Main\Web\JWT;
 
 
 /**
+ * Every action requires a user unless it is declared a server-to-server one with configureJwtAction().
+ *
  * @internal
  */
 abstract class JwtController extends Controller
@@ -22,6 +24,26 @@ abstract class JwtController extends Controller
 			new HttpMethod([HttpMethod::METHOD_POST]),
 			new Csrf(false),
 			new CloseSession(),
+			new Authentication(),
+		];
+	}
+
+	/**
+	 * Configures an action the call server calls without a user session: the request is let in by a token
+	 * signed with the portal key instead of a user. The token is checked ahead of the given prefilters.
+	 *
+	 * @param array $prefilters Prefilters the action carries on top of the defaults.
+	 */
+	protected function configureJwtAction(array $prefilters = []): array
+	{
+		return [
+			'-prefilters' => [
+				Authentication::class,
+			],
+			'+prefilters' => [
+				new JwtAuthentication(),
+				...$prefilters,
+			],
 		];
 	}
 
@@ -57,37 +79,28 @@ abstract class JwtController extends Controller
 	{
 		return function ($className, string $jwt = '')
 		{
+			$reader = new JwtReader();
 			if ($jwt === '')
 			{
-				// Parse jwt out of the raw body when Content-Type is JSON
-				$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-				if (str_contains($contentType, 'application/json'))
+				$jwt = $reader->read($this->getSourceParametersList());
+			}
+
+			$payload = $reader->decode($jwt);
+			if ($payload !== null)
+			{
+				try
 				{
-					try
-					{
-						$body = (string)file_get_contents('php://input');
-						$decoded = $body !== '' ? \Bitrix\Main\Web\Json::decode($body) : null;
-						if (is_array($decoded) && isset($decoded['jwt']) && is_string($decoded['jwt']))
-						{
-							$jwt = $decoded['jwt'];
-						}
-					}
-					catch (\Throwable $e) {}
+					return new $className($payload);
+				}
+				catch (\Exception $e)
+				{
+					// A payload the DTO refuses is answered the same way as a bad signature
 				}
 			}
 
-			try
-			{
-				$payload = JWT::decode($jwt, base64_decode(Settings::getPrivateKey()), ['HS256']);
+			$this->addError(new Error(Error::WRONG_JWT));
 
-				return new $className($payload);
-			}
-			catch (\Exception $e)
-			{
-				$this->addError(new Error(Error::WRONG_JWT));
-
-				return null;
-			}
+			return null;
 		};
 	}
 }

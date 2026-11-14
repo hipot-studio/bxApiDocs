@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Folder;
 
 use Bitrix\Im\Model\FolderChatTable;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Error;
@@ -58,7 +59,17 @@ class FolderChatLinker
 		$folderId = (int)$folder->getId();
 
 		$this->persistMembership($folderId, $chatIds);
-		$this->pinService->syncShadowsOnFolderAttach($folder, $chatIds);
+
+		// Attaching a chat no longer carries its pin into the folder: with the flag on a pin belongs
+		// to the folder it was made in, and a set of another folder is nobody else's to fill. The
+		// call stays under the flag because personal folders already read their pins through the
+		// folder REST, so dropping the carry-over unconditionally would change what users see before
+		// the feature is even on.
+		if (!Features::isFolderScopedPinsAvailable($userId))
+		{
+			$this->pinService->syncShadowsOnFolderAttach($folder, $chatIds);
+		}
+
 		$this->mergeChatIdsIntoFolder($folder, $chatIds);
 		$this->folderCache->clearByUser($userId);
 

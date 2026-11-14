@@ -16,6 +16,7 @@ use Bitrix\Market\Menu;
 use Bitrix\Market\Subscription\Status;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
+use Bitrix\Rest\Internal\Integration\Bitrix24\UpsellHelperCodeProvider;
 use Bitrix\Rest\Marketplace\Client;
 use Bitrix\Rest\Marketplace\Url;
 use Bitrix\Market\Internal;
@@ -86,6 +87,9 @@ class RestMarketDetail extends CBitrixComponent implements Loadable
 
 	private function loadDetailResult(): void
 	{
+		$this->arResult['SEARCH_CONTEXT'] = Internal\Services\AiSearch\Context::fromToken(
+			$this->getRequestValue('search_context'),
+		)?->toToken() ?? '';
 		$this->prepareInfo();
 		$this->arResult['VIBE_PLUS_APPLICATION_LIMIT'] = (new ApplicationLimit())->getProjection();
 
@@ -244,7 +248,9 @@ class RestMarketDetail extends CBitrixComponent implements Loadable
 			&& !$canInstallApp
 		)
 		{
-			$this->arResult['ACCESS_HELPER_CODE'] = self::MARKET_APPLICATION_LIMIT_HELPER_CODE;
+			$this->arResult['ACCESS_HELPER_CODE'] = (new UpsellHelperCodeProvider())->getHelperCode(
+				self::MARKET_APPLICATION_LIMIT_HELPER_CODE,
+			);
 		}
 
 		$this->arResult['PRICE_POLICY_SLIDER'] = $appBySubscription ? Status::getSlider() : '';

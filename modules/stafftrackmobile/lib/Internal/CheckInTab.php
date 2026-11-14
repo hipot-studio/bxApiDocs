@@ -13,10 +13,9 @@ use Bitrix\Mobile\Tab\Utils;
 use Bitrix\MobileApp\Janative\Manager;
 use Bitrix\StaffTrack\Feature as StaffTrackFeature;
 use Bitrix\StaffTrack\Public\Provider\CheckInSettingsProvider;
+use Bitrix\StaffTrackMobile\Internal\WorkReport\WorkReportCounter;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 use Bitrix\StaffTrackMobile\Public\Features\OfficesTabFlag;
-use Bitrix\TimemanMobile\Public\Features\WorkReportsFeature;
-use Bitrix\TimemanMobile\Public\Features\WorkReportsWithAiFeature;
 use Bitrix\Main\Config\Option;
 
 class CheckInTab implements Tabable
@@ -28,6 +27,7 @@ class CheckInTab implements Tabable
 	private ?bool $isNewCheckInGeneration = null;
 	private ?bool $isGeoFeaturesAvailableByRegion = null;
 	private ?CheckInSettingsProvider $settingsProvider = null;
+	private ?WorkReportCounter $workReportCounter = null;
 
 	public static function onBeforeTabsGet(): array
 	{
@@ -66,6 +66,7 @@ class CheckInTab implements Tabable
 			'section_code' => 'teamwork',
 			'params' => [
 				'id' => 'stafftrack_check_in',
+				'counter' => WorkReportCounter::CODE,
 				'onclick' => Utils::getComponentJSCode($this->getDataInternal()['component']),
 				'analytics' => [
 					'tool' => 'checkin',
@@ -95,6 +96,17 @@ class CheckInTab implements Tabable
 			&& Loader::includeModule('stafftrackmobile')
 			&& Feature::isEnabled(CheckInFeature::class)
 			&& $this->hasVisibleTabs();
+	}
+
+	/**
+	 * Whether the tabs of the check-in have the offices tab for the person of the context, by the rule the
+	 * tab is built under. A link to an office opens the tab for those who have it and the web card for the rest.
+	 *
+	 * @throws LoaderException
+	 */
+	public function hasOfficesTab(): bool
+	{
+		return $this->getOfficesTab() !== [] && $this->isAvailable();
 	}
 
 	public function getId(): string
@@ -145,6 +157,7 @@ class CheckInTab implements Tabable
 		$this->isNewCheckInGeneration = null;
 		$this->isGeoFeaturesAvailableByRegion = null;
 		$this->settingsProvider = null;
+		$this->workReportCounter = null;
 	}
 
 	public function getIconId(): string
@@ -228,7 +241,7 @@ class CheckInTab implements Tabable
 			$this->timemanDependentTabs = $this->hasTimemanDependentTabs()
 				? array_values(array_filter([
 					$this->getWorkDaysTab(),
-					$this->getWorkReportsTab($this->hasPendingDraftReport()),
+					$this->getWorkReportsTab($this->getWorkReportCounter()->isReportReadyForLabel()),
 				]))
 				: [];
 		}
@@ -244,16 +257,7 @@ class CheckInTab implements Tabable
 
 	private function isTimemanAvailable(): bool
 	{
-		if ($this->isTimemanAvailable === null)
-		{
-			$settingsProvider = $this->getSettingsProvider();
-
-			$this->isTimemanAvailable = $settingsProvider->isTimemanAvailable()
-				&& Loader::includeModule('timemanmobile')
-				&& $settingsProvider->isWorkTimeToolAvailable();
-		}
-
-		return $this->isTimemanAvailable;
+		return $this->isTimemanAvailable ??= $this->getWorkReportCounter()->isTimemanAvailableAsTab();
 	}
 
 	private function getSettingsProvider(): CheckInSettingsProvider
@@ -261,17 +265,12 @@ class CheckInTab implements Tabable
 		return $this->settingsProvider ??= new CheckInSettingsProvider();
 	}
 
-	private function hasPendingDraftReport(): bool
+	/**
+	 * The rule the label of the work reports tab and the counter of the item share.
+	 */
+	protected function getWorkReportCounter(): WorkReportCounter
 	{
-		if (
-			!Feature::isEnabled(WorkReportsFeature::class)
-			|| !Feature::isEnabled(WorkReportsWithAiFeature::class)
-		)
-		{
-			return false;
-		}
-
-		return $this->getSettingsProvider()->hasReportReadyForSubmit();
+		return $this->workReportCounter ??= new WorkReportCounter();
 	}
 
 	private function getShiftsTab(): array

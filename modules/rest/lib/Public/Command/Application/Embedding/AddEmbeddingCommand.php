@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Rest\Public\Command\Application\Embedding;
 
 use Bitrix\Main;
-use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Rest\Exceptions\ArgumentException;
 use Bitrix\Rest\Internal\Entity\Application\App;
+use Bitrix\Rest\RestException;
 
 class AddEmbeddingCommand extends Main\Command\AbstractCommand
 {
@@ -29,7 +29,7 @@ class AddEmbeddingCommand extends Main\Command\AbstractCommand
 
 	/**
 	 * @throws ArgumentException
-	 * @throws PersistenceException
+	 * @throws RestException
 	 * @throws Main\ArgumentException
 	 */
 	protected function execute(): Main\Result

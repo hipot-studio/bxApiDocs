@@ -112,6 +112,11 @@ class LinkFileTable extends DataManager
 				FileTable::class,
 				Join::on('this.DISK_FILE_ID', 'ref.ID')
 			))->configureJoinType(Join::TYPE_INNER),
+			'CHAT' => (new Reference(
+				'CHAT',
+				ChatTable::class,
+				Join::on('this.CHAT_ID', 'ref.ID')
+			))->configureJoinType(Join::TYPE_INNER),
 		];
 	}
 

@@ -6,18 +6,12 @@ namespace Bitrix\BIConnectorMobile\Service;
 
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnectorMobile\AccessManager;
-use Bitrix\BIConnectorMobile\Public\Features\MobileBIFeature;
 use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Mobile\Config\Feature;
 
 /**
- * Answers whether an entry point of the mobile BI feature is visible, one predicate per kind of entry point.
- * The only place the feature flag is read on the server side: controllers, menu and tab providers ask a predicate.
- *
- * The predicates are not interchangeable. isFeatureEnabled() tells the transport refusal by the flag apart from
- * a refusal by rights and from an empty scope, isRootEntryVisible() serves the menu item, isScopeVisible() the
- * scope tabs.
+ * Answers whether an entry point of the mobile BI feature is visible, one predicate per kind of entry point:
+ * isRootEntryVisible() serves the menu item, isScopeVisible() the scope tabs.
  */
 class ScopeVisibilityService
 {
@@ -31,9 +25,15 @@ class ScopeVisibilityService
 	 */
 	private static array $scopeVisibility = [];
 
+	/**
+	 * The mobile BI feature flag is gone, the feature is always on.
+	 *
+	 * @deprecated The answer is constant. Still called by mobile/biconnector/dashboard-embedded.php of mobile
+	 * up to 26.1700.0, which is already on portals; remove once biconnectormobile requires mobile 26.1800.0.
+	 */
 	public static function isFeatureEnabled(): bool
 	{
-		return Feature::isEnabled(MobileBIFeature::class);
+		return true;
 	}
 
 	/**
@@ -42,7 +42,7 @@ class ScopeVisibilityService
 	 */
 	public static function isRootEntryVisible(): bool
 	{
-		return self::isFeatureEnabled() && AccessManager::canViewDashboards();
+		return AccessManager::canViewDashboards();
 	}
 
 	public static function isScopeVisible(string $scopeCode): bool

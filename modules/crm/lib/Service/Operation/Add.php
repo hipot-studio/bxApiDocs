@@ -196,8 +196,17 @@ class Add extends Operation
 
 			if ($deadline)
 			{
+				$ceilDeadlineTime = true;
+				$userDeadline = (clone $deadline)->toUserTime();
+				if ($userDeadline->format('H') === '23')
+				{
+					$deadline = \CCrmDateTimeHelper::getServerTime($userDeadline->setTime(23, 59));
+					$ceilDeadlineTime = false;
+				}
+
 				(new Entity\ToDo($this->getItemIdentifier(), new ToDo\ToDo()))
-					->createWithDefaultSubjectAndDescription($deadline);
+					->createWithDefaultSubjectAndDescription($deadline, $ceilDeadlineTime)
+				;
 			}
 		}
 	}

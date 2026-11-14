@@ -28,6 +28,7 @@ use Bitrix\Crm\Integration\AI\Dto\FillItemFieldsFromCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\MultipleFieldFillPayload;
 use Bitrix\Crm\Integration\AI\Dto\Scoring\ScoreCallV2Payload;
 use Bitrix\Crm\Integration\AI\Dto\SingleFieldFillPayload;
+use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\ErrorCode as AIErrorCode;
 use Bitrix\Crm\Integration\AI\Feedback;
 use Bitrix\Crm\Integration\AI\Field\MultipleValueMerger;
@@ -165,12 +166,16 @@ class AI extends Activity
 		if (
 			AIManager::isAiCallProcessingEnabled()
 			&& (
-				// Non-fill scenarios (transcribe/summarize/scoring/analyze/full) stay limited to the
-				// classic Deal/Lead types; the extended Factory-based target set is allowed only for
-				// the fill-fields scenario. See fill-fields-any-entity.
+				// Summarize/scoring/analyze/full stay limited to the classic Deal/Lead types; the extended
+				// Factory-based target set is allowed for fill-fields and for transcription, which targets
+				// the call activity itself rather than its owner. See fill-fields-any-entity.
 				in_array($ownerTypeId, AIManager::SUPPORTED_ENTITY_TYPE_IDS, true)
 				|| (
-					$scenario === Scenario::FILL_FIELDS_SCENARIO
+					in_array(
+						$scenario,
+						[Scenario::FILL_FIELDS_SCENARIO, Scenario::TRANSCRIBE_RECORD_SCENARIO],
+						true,
+					)
 					&& AIManager::isEntityTypeSupported($ownerTypeId)
 				)
 			)
@@ -247,6 +252,25 @@ class AI extends Activity
 					// Return a soft success so the client keeps showing the in-progress state.
 					if ($this->isCallScoringV2PipelineInProgress($activityId))
 					{
+						return [
+							'numberOfManualStarts' => $this->processNumberOfManualStarts(),
+						];
+					}
+
+					$summaryResult = $this->jobRepository->getSummarizeCallTranscriptionResultByActivity($activityId);
+					if (
+						AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize)
+						&& ($summaryResult === null || $summaryResult->isPending())
+					)
+					{
+						$launchResult = $this->launchCallScoringV2Prerequisites($activityId, $activityProvider);
+						if (!$launchResult?->isSuccess())
+						{
+							$this->addErrors($launchResult?->getErrors() ?: [AIErrorCode::getAIEngineNotFoundError()]);
+
+							return null;
+						}
+
 						return [
 							'numberOfManualStarts' => $this->processNumberOfManualStarts(),
 						];
@@ -913,7 +937,6 @@ class AI extends Activity
 			SelectCallScoreScript::TYPE_ID,
 			ScoreCallV2::TYPE_ID,
 		];
-
 		foreach ($pipelineTypeIds as $typeId)
 		{
 			if ($this->jobRepository->getPendingJobByActivity($activityId, $typeId) !== null)
@@ -923,6 +946,33 @@ class AI extends Activity
 		}
 
 		return false;
+	}
+
+	private function launchCallScoringV2Prerequisites(int $activityId, ?string $activityProvider): ?Result
+	{
+		$userId = Container::getInstance()->getContext()->getUserId();
+		if ($this->jobRepository->getTranscribeCallRecordingResultByActivity($activityId) === null)
+		{
+			return AIManager::launchCallRecordingTranscription(
+				$activityId,
+				Scenario::CALL_SCORING_V2_SCENARIO,
+				$userId,
+				isManualLaunch: true,
+				contextExtra: ['manualCallAssessment' => true],
+			);
+		}
+
+		$context = new StepContext(
+			activityId: $activityId,
+			userId: $userId,
+			scenarioName: Scenario::CALL_SCORING_V2_SCENARIO,
+			isManualLaunch: true,
+			activityProvider: $activityProvider,
+		);
+
+		return ServiceLocator::getInstance()->get(PipelineExecutor::class)->startOrResume(
+			$context->withExtra('manualCallAssessment', true),
+		);
 	}
 
 	/**

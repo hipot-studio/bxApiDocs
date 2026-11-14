@@ -10,8 +10,8 @@ use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Structure\SelectStructure;
 
 /**
- * What every REST get of an activity does around {@see ActivityProvider}: turns the select of the client into the
- * names the provider and the mappers of the contract take, and a refusal of the provider into the answer of REST.
+ * What every REST read of activities does around {@see ActivityProvider}: turns the select of the client into the
+ * names the provider and the mappers of the contract take, and a refusal of a get into the answer of REST.
  */
 final class ActivityReadingMapper
 {

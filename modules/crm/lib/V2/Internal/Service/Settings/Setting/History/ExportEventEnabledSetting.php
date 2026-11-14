@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class ExportEventEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.history.export_event.enabled';
+	public const ID = 'crm.history.export_event.enabled';
 
 	private readonly HistorySettings $historySettings;
 
@@ -26,18 +26,20 @@ final class ExportEventEnabledSetting extends AbstractSetting
 		$this->historySettings = $historySettings ?? HistorySettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'history_enable_export_event',
 		);
 	}
 

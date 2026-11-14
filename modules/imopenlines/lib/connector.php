@@ -20,6 +20,7 @@ use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
+use Bitrix\Imbot\Bot\CopilotChatBot;
 
 Loc::loadMessages(__FILE__);
 
@@ -29,9 +30,26 @@ class Connector
 	public const TYPE_NETWORK = 'network';
 
 	public const EVENT_IMOPENLINE_MESSAGE_SEND = 'OnImopenlineMessageSend';
+	public const EVENT_IMOPENLINE_MESSAGE_BEFORE_DELIVER = 'OnBeforeImopenlineMessageDeliver';
 	public const EVENT_IMOPENLINE_MESSAGE_RECEIVE = 'OnImopenlineMessageReceive';
 
+	/** The message goes to the external channel for the first time */
+	public const DELIVER_OPERATION_SEND = 'send';
+	/** The message is already in the external channel and its text is being changed there */
+	public const DELIVER_OPERATION_UPDATE = 'update';
+
 	public const LOCK_MAX_ITERATIONS = 3;
+
+	/** Session fields an external connector is allowed to update through `extra`, kept as a map */
+	private const SESSION_EXTRA_ALLOWED_FIELDS = [
+		'PORTAL_ID' => true,
+		'EXTRA_URL' => true,
+		'EXTRA_TARIFF' => true,
+		'EXTRA_USER_LEVEL' => true,
+		'EXTRA_PORTAL_TYPE' => true,
+		'EXTRA_REGISTER' => true,
+		'EXTRA_DEVICE_TYPE' => true,
+	];
 
 	public static $noVote = [
 		self::TYPE_LIVECHAT,
@@ -42,6 +60,9 @@ class Connector
 
 	/** @var Result */
 	protected $result;
+
+	// the session a send loaded, reported by getSession() to the handler that ordered the send
+	private ?Session $session = null;
 
 	/**
 	 * Connector constructor.
@@ -121,7 +142,39 @@ class Connector
 
 		if (!empty($params))
 		{
+			// PORTAL_ID is a trusted client identifier accepted only from the network connector.
+			// Strip it from extra (case-insensitive key) for other sources to prevent spoofing
+			// via the generic extra loop and the multidialog block.
 			if (
+				($params['connector']['connector_id'] ?? null) !== self::TYPE_NETWORK
+				&& isset($params['extra'])
+				&& is_array($params['extra'])
+			)
+			{
+				foreach (array_keys($params['extra']) as $extraKey)
+				{
+					if (strtoupper((string)$extraKey) === 'PORTAL_ID')
+					{
+						unset($params['extra'][$extraKey]);
+					}
+				}
+			}
+
+			// A connector may mark an incoming message as a system/service message (e.g. a booking
+			// status update from the Yandex.Travel connector) — render it as a system message.
+			// Restricted to a trusted connectors whitelist (Library::ENABLE_SYSTEM_MESSAGE) so
+			// arbitrary/custom connectors cannot spoof a user message as a service one.
+			// A service message must not trigger the client-message side effects below (auto-replies/robots,
+			// reply blocks, session counters, agreement and message triggers), must not be read as a vote of
+			// the client and must not open a new session in a closed dialog, so the flag is needed first.
+			$isSystemMessage =
+				($params['message']['system'] ?? '') === 'Y'
+				&& self::isConnectorOnList('ENABLE_SYSTEM_MESSAGE', (string)($params['connector']['connector_id'] ?? ''))
+			;
+
+			if (
+				!$isSystemMessage
+				&&
 				!in_array($params['connector']['connector_id'], self::$noVote)
 				&&
 				(
@@ -143,6 +196,10 @@ class Connector
 				"PARAMS" => $params['message']['params'] ?? [],
 				"SKIP_USER_CHECK" => "Y",
 			];
+			if ($isSystemMessage)
+			{
+				$addMessage["SYSTEM"] = 'Y';
+			}
 			//if (is_object($params['message']['date']))
 			//{
 			//	$addMessage["MESSAGE_DATE"] = $params['message']['date']->toString();
@@ -225,10 +282,24 @@ class Connector
 					|| Tools\Lock::getInstance()->set($keyLock)
 				)
 				{
-					if (
+					// A redelivery of the same external message must not be written twice: the connector asks for
+					// the message again whenever its portal confirmation is lost, and what the portal did write
+					// stays in the chat. Answering with the message already written lets the connector confirm
+					// the delivery and stop asking.
+					$deliveredMessageId = $this->getDeliveredMessageId($params, $userCode);
+					if ($deliveredMessageId > 0)
+					{
+						// No session is reported: this delivery neither opened a session nor moved one.
+						$result = [
+							'SESSION_ID' => 0,
+							'MESSAGE_ID' => $deliveredMessageId,
+						];
+					}
+					elseif (
 						!empty($params['message']['files'])
 						|| !empty($addMessage['ATTACH'])
 						|| $addMessage['MESSAGE'] <> ''
+						|| !empty($params['message']['params']['IMOL_STICKER'])
 					)
 					{
 						$userViewChat = false;
@@ -246,17 +317,26 @@ class Connector
 							$sourceLang = $sourceSession['USER_LANG'];
 						}
 
-						$session = new Session();
-						$resultLoadSession = $session->load([
+						$sessionLoadParams = [
 							'USER_CODE' => self::getUserCode($params['connector']),
 							'CRM_SKIP_PHONE_VALIDATE' => ($params['extra']['skip_phone_validate'] ?? ''),
 							'CONNECTOR' => $params,
 							'DEFERRED_JOIN' => 'Y',
 							'VOTE_SESSION' => $voteSession? 'Y': 'N',
-							'OPERATOR_ID' => $params['message']['params']['IMOL_FORCE_OPERATOR'] ?? 0,
+							'OPERATOR_ID' => self::resolveOperatorId($params),
 							'USER_LANG' => $sourceLang ?? '',
 							'CRM_TRACKER_REF' => $params['ref']['source'] ?? '',
-						]);
+							// A service message may arrive long after the dialog was closed: it must be able
+							// to reach the existing chat, but never open a new session in the queue.
+							'SKIP_CREATE' => $isSystemMessage ? 'Y' : 'N',
+						];
+						if (!empty($params['extra']['PORTAL_ID']))
+						{
+							$sessionLoadParams['PORTAL_ID'] = (int)$params['extra']['PORTAL_ID'];
+						}
+
+						$session = new Session();
+						$resultLoadSession = $session->load($sessionLoadParams);
 						if (
 							$resultLoadSession ||
 							$session->isCloseVote()
@@ -322,7 +402,7 @@ class Connector
 										'SKIP_COMMAND' => 'Y',
 										'PARAMS' => [
 											'CLASS' => 'bx-messenger-content-item-system',
-											'COMPONENT_ID' => 'HiddenMessage',
+											'COMPONENT_ID' => SilentMode\PersonalSilentMode::MESSAGE_COMPONENT_ID,
 										],
 									]);
 								}
@@ -338,7 +418,7 @@ class Connector
 									'URL_PREVIEW' => 'N',
 									'PARAMS' => [
 										'CLASS' => 'bx-messenger-content-item-system',
-										'COMPONENT_ID' => 'HiddenMessage',
+										'COMPONENT_ID' => SilentMode\PersonalSilentMode::MESSAGE_COMPONENT_ID,
 									],
 								]);
 								unset($params['message']['description']);
@@ -494,15 +574,25 @@ class Connector
 									(string)$session->getData('USER_CODE')
 								);
 
+								$childUpdate = [];
+
 								if (!empty($sourceSession['EXTRA_TARIFF']))
 								{
-									$session->update([
-										'EXTRA_REGISTER' => $sourceSession['EXTRA_REGISTER'],
-										'EXTRA_TARIFF' => $sourceSession['EXTRA_TARIFF'],
-										'EXTRA_USER_LEVEL' => $sourceSession['EXTRA_USER_LEVEL'],
-										'EXTRA_PORTAL_TYPE' => $sourceSession['EXTRA_PORTAL_TYPE'],
-										'EXTRA_URL' => $sourceSession['EXTRA_URL'],
-									]);
+									$childUpdate['EXTRA_REGISTER'] = $sourceSession['EXTRA_REGISTER'];
+									$childUpdate['EXTRA_TARIFF'] = $sourceSession['EXTRA_TARIFF'];
+									$childUpdate['EXTRA_USER_LEVEL'] = $sourceSession['EXTRA_USER_LEVEL'];
+									$childUpdate['EXTRA_PORTAL_TYPE'] = $sourceSession['EXTRA_PORTAL_TYPE'];
+									$childUpdate['EXTRA_URL'] = $sourceSession['EXTRA_URL'];
+								}
+
+								if (!empty($params['extra']['PORTAL_ID']))
+								{
+									$childUpdate['PORTAL_ID'] = (int)$params['extra']['PORTAL_ID'];
+								}
+
+								if ($childUpdate)
+								{
+									$session->update($childUpdate);
 								}
 
 								$result = [
@@ -571,7 +661,32 @@ class Connector
 								}
 							}
 
-							if ($addMessage)
+							$networkSticker = $params['message']['params']['IMOL_STICKER'] ?? null;
+							if ($addMessage && is_array($networkSticker) && !empty($networkSticker['uri']))
+							{
+								// A carrier without hasText comes from a peer that left the text empty for a sticker-only message.
+								$hasText = isset($networkSticker['hasText'])
+									? (bool)$networkSticker['hasText']
+									: ($addMessage['MESSAGE'] ?? '') !== ''
+								;
+								if (!$hasText)
+								{
+									$addMessage['MESSAGE'] = \Bitrix\Im\V2\Message\Sticker\StickerService::getPlaceholder();
+								}
+								$addMessage['PARAMS']['COMPONENT_ID'] = 'NetworkStickerMessage';
+								$addMessage['PARAMS']['COMPONENT_PARAMS'] = [
+									'uri' => (string)$networkSticker['uri'],
+									'width' => (int)($networkSticker['width'] ?? 0),
+									'height' => (int)($networkSticker['height'] ?? 0),
+									'hasText' => $hasText,
+								];
+							}
+
+							// A service message with no open session is delivered by
+							// addSystemMessageWithoutSession() below, which knows the chat to write it into and
+							// marks it NO_SESSION_OL. This block is also entered during the close-vote window
+							// (see the condition above), where adding it here as well would post it twice.
+							if ($addMessage && !($isSystemMessage && !$resultLoadSession))
 							{
 								$messageId = ImOpenLines\Im::addMessage($addMessage);
 							}
@@ -615,6 +730,7 @@ class Connector
 
 							if (
 								$addMessage["MESSAGE"]
+								&& !$isSystemMessage
 								&& (empty($params['extra']['disable_tracker']) || $params['extra']['disable_tracker'] !== 'Y')
 								&& $isGroupChatAllowed
 							)
@@ -678,7 +794,10 @@ class Connector
 							}
 
 							//Automatic messages
-							(new AutomaticAction($session))->automaticAddMessage($messageId, $finishSession, $voteSession);
+							if (!$isSystemMessage)
+							{
+								(new AutomaticAction($session))->automaticAddMessage($messageId, $finishSession, $voteSession);
+							}
 
 							$channelType = null;
 							$connectorId = $params['connector']['connector_id'];
@@ -695,6 +814,7 @@ class Connector
 							$limit = ImConnector\Connector::getReplyLimit($params['connector']['connector_id'], $channelType);
 							$chat = $session->getChat();
 							if (
+								!$isSystemMessage &&
 								!empty($limit['BLOCK_DATE']) &&
 								!empty($limit['BLOCK_REASON']) &&
 								$chat
@@ -703,7 +823,7 @@ class Connector
 								$limit['BLOCK_DATE'] = (new DateTime())->add($limit['BLOCK_DATE'].' SECONDS');
 								ReplyBlock::add($session->getData('ID'), $chat, $limit);
 							}
-							elseif (ImConnector\Connector::isNeedToAutoDeleteBlock($params['connector']['connector_id']))
+							elseif (!$isSystemMessage && ImConnector\Connector::isNeedToAutoDeleteBlock($params['connector']['connector_id']))
 							{
 								ReplyBlock::delete($session->getData('ID'), $chat);
 							}
@@ -723,7 +843,7 @@ class Connector
 
 							if (isset($params['extra']))
 							{
-								foreach($params['extra'] as $field => $value)
+								foreach (self::filterSessionExtraFields((array)$params['extra']) as $field => $value)
 								{
 									$oldValue = $session->getData($field);
 									if ($oldValue != $value)
@@ -733,11 +853,16 @@ class Connector
 								}
 							}
 
-							$session->update($updateSession);
+							// A system service message must not bump client session state (counters/last-message/INPUT_MESSAGE).
+							if (!$isSystemMessage)
+							{
+								$session->update($updateSession);
+							}
 
 							if (
-								$session->getConfig('AGREEMENT_MESSAGE') == 'Y'
-								&& !$session->chat->isNowCreated()
+								!$isSystemMessage
+								&& $session->getConfig('AGREEMENT_MESSAGE') == 'Y'
+								&& $session->isAgreementWarningShownEarlier()
 								&& $session->getUser()
 								&& $session->getUser('USER_ID') == $params['message']['user_id']
 								&& $session->getUser('USER_CODE')
@@ -754,20 +879,23 @@ class Connector
 							}
 
 							$queueManager = Queue::initialization($session);
-							if ($queueManager)
+							if ($queueManager && !$isSystemMessage)
 							{
 								$queueManager->automaticActionAddMessage($finishSession, $voteSession);
 							}
 
-							if (!$session->isNowCreated() && $finishSession === true)
+							if (!$session->isNowCreated() && $finishSession === true && !$isSystemMessage)
 							{
 								$session->finish(true);
 							}
 
-							$this->callMessageTrigger($session, $messageId, $addMessage);
+							if (!$isSystemMessage)
+							{
+								$this->callMessageTrigger($session, $messageId, $addMessage);
+							}
 
 							//In case it's not a vote message or system message we make a new record
-							if (!$voteSession && $params['message']['user_id'] != 0 && !UserV2::getInstance((int)$params['message']['user_id'])->isBot())
+							if (!$voteSession && !$isSystemMessage && $params['message']['user_id'] != 0 && !UserV2::getInstance((int)$params['message']['user_id'])->isBot())
 							{
 								$kpi = new KpiManager($session->getData('ID'));
 								$kpi->addMessage([
@@ -791,8 +919,11 @@ class Connector
 							}
 						}
 
+						// Not for a service message: the vote invitation answers the client, and a service
+						// message is neither sent by the client nor read as a vote of theirs.
 						if (
 							!$resultLoadSession
+							&& !$isSystemMessage
 							&& $session->isCloseVote()
 						)
 						{
@@ -801,6 +932,26 @@ class Connector
 								$session->getConfig('VOTE_TIME_LIMIT'),
 								$session->getData('USER_LANG')
 							);
+						}
+
+						// Including the close-vote window: the notice is addressed to the operator and is
+						// written with NO_SESSION_OL, so it neither answers the vote nor reopens the dialog.
+						if ($isSystemMessage && !$resultLoadSession)
+						{
+							$result = $this->addSystemMessageWithoutSession($session, $addMessage);
+						}
+
+						// The close-vote window writes the message into the chat with no session open, so
+						// the block above filled nothing. A connector that reads the per-message result
+						// (@see \Bitrix\ImConnector\Library::ENABLE_RECEIVING_MESSAGE_RESULT) would take the
+						// empty result for a refusal and ask its provider for the message again, and every
+						// redelivery would add it to the chat once more.
+						if ($result === false && !$isSystemMessage && !empty($messageId))
+						{
+							$result = [
+								'SESSION_ID' => 0,
+								'MESSAGE_ID' => $messageId,
+							];
 						}
 					}
 
@@ -816,6 +967,41 @@ class Connector
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Delivers a service message of a connector into the already existing chat of the dialog when there is
+	 * no open session: the notice must be visible to the operator, but must not put the dialog back into
+	 * the queue. The chat is the one loaded by @see Session::load() from `UserRelationTable`.
+	 *
+	 * @param Session $session Session loaded with `SKIP_CREATE`, so without an open session.
+	 * @param array $addMessage Message fields prepared for @see Im::addMessage().
+	 * @return array|false
+	 */
+	protected function addSystemMessageWithoutSession(Session $session, array $addMessage)
+	{
+		$chat = $session->getChat();
+		$chatId = $chat instanceof Chat ? (int)$chat->getData('ID') : 0;
+		if ($chatId <= 0)
+		{
+			Log::write($addMessage, 'CONNECTOR - SYSTEM MESSAGE WITHOUT CHAT');
+
+			return false;
+		}
+
+		$addMessage['TO_CHAT_ID'] = $chatId;
+		$addMessage['NO_SESSION_OL'] = 'Y';
+
+		$messageId = ImOpenLines\Im::addMessage($addMessage);
+		if (!$messageId)
+		{
+			return false;
+		}
+
+		return [
+			'SESSION_ID' => 0,
+			'MESSAGE_ID' => $messageId,
+		];
 	}
 
 	/**
@@ -853,12 +1039,38 @@ class Connector
 				$activities,
 				[
 					'CONFIG_ID' => $session->getData('CONFIG_ID'),
+					'CHAT_ID' => $session->getData('CHAT_ID'),
+					'USER_ID' => $session->getData('USER_ID'),
+					'OPERATOR_ID' => $session->getData('OPERATOR_ID'),
 					'MESSAGE' => $message
 				]
 			);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @param array $params
+	 * @return int
+	 */
+	private static function resolveOperatorId(array $params): int
+	{
+		$forcedOperatorId = (int)($params['message']['params']['IMOL_FORCE_OPERATOR'] ?? 0);
+
+		return $forcedOperatorId ?: (int)($params['message']['extraData']['OPERATOR_ID'] ?? 0);
+	}
+
+	/**
+	 * Keeps only the session fields an external connector may update: `extra` must not reach
+	 * identity and routing fields of the session, such as USER_ID or USER_CODE.
+	 *
+	 * @param array $extra
+	 * @return array
+	 */
+	private static function filterSessionExtraFields(array $extra): array
+	{
+		return array_intersect_key($extra, self::SESSION_EXTRA_ALLOWED_FIELDS);
 	}
 
 	//region Output
@@ -1017,6 +1229,10 @@ class Connector
 				{
 					$result->addError(new Error('Failed to load session', 'IMOPENLINES_ERROR_LOAD_SESSION', __METHOD__));
 				}
+				else
+				{
+					$this->session = $session;
+				}
 
 				if (
 					$result->isSuccess()
@@ -1113,6 +1329,17 @@ class Connector
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The open line session the last send of this instance touched, when it touched one: absent for a
+	 * send that must not touch the session and for a session that failed to load. A send that loaded
+	 * its session and then failed still reports it, so a caller reads this only for a send that
+	 * succeeded.
+	 */
+	public function getSession(): ?Session
+	{
+		return $this->session;
 	}
 
 	/**
@@ -1341,7 +1568,12 @@ class Connector
 				],
 				'message' => [
 					'id' => $messageFields['PARAMS']['CONNECTOR_MID'],
-					'text' => $flags['TEXT'],
+					'text' => self::prepareTextForDeliver(
+						(int)$messageId,
+						(string)($flags['TEXT'] ?? ''),
+						(array)($messageFields['PARAMS'] ?? []),
+						self::DELIVER_OPERATION_UPDATE
+					),
 				],
 				'chat' => [
 					'id' => $connectorChatId
@@ -1474,11 +1706,19 @@ class Connector
 			}
 		}
 
+		if (self::isHiddenCopilotMessage($messageFields))
+		{
+			self::markAsHiddenMessage($messageId);
+			return false;
+		}
+
 		if (
 			$messageFields['IMPORTANT_CONNECTOR'] !== 'Y'
 			&&
 			(
 				$messageFields['SILENT_CONNECTOR'] === 'Y'
+				// Preserve the message's privacy decision across deferred delivery and mode resets.
+				|| ($messageFields['PARAMS']['COMPONENT_ID'] ?? null) === SilentMode\PersonalSilentMode::MESSAGE_COMPONENT_ID
 				|| SilentMode\PersonalSilentMode::isEnabled(
 					(int)($messageFields['AUTHOR_ID'] ?? 0),
 					(int)($messageFields['CHAT_ID'] ?? 0)
@@ -1486,8 +1726,7 @@ class Connector
 			)
 		)
 		{
-			\CIMMessageParam::Set($messageId, ['CLASS' => 'bx-messenger-content-item-system', 'COMPONENT_ID' => 'HiddenMessage']);
-			\CIMMessageParam::SendPull($messageId, ['CLASS', 'COMPONENT_ID']);
+			self::markAsHiddenMessage($messageId);
 			return false;
 		}
 
@@ -1510,6 +1749,10 @@ class Connector
 
 		//TODO: Replace with the method ImOpenLines\Chat::parseLinesChatEntityId or ImOpenLines\Chat::parseLiveChatEntityId
 		[$connectorId, $lineId, $connectorChatId, $connectorUserId] = explode('|', $messageFields['CHAT_ENTITY_ID']);
+
+		// The CRM side must see the message as the employee typed it: captured before the extending
+		// event, the operator signature and the transport conversions made below.
+		$sourceMessage = $messageFields;
 
 		$event = new Event('imopenlines', self::EVENT_IMOPENLINE_MESSAGE_SEND, $messageFields);
 		$event->send();
@@ -1534,6 +1777,7 @@ class Connector
 			}
 
 			$params = [];
+			$liveChatFileIds = [];
 			$allowedFields = ['CLASS', 'TYPE', 'COMPONENT_ID', 'CRM_FORM_ID', 'CRM_FORM_SEC', 'CRM_FORM_FILLED', 'url', 'fromSalescenterApplication', 'richUrlPreview', 'isPaymentLink'];
 
 			foreach ($messageFields['PARAMS'] as $key => $value)
@@ -1552,9 +1796,25 @@ class Connector
 				}
 				elseif ($key === 'FILE_ID')
 				{
+					if (($messageFields['PARAMS'][MessageParameter::OL_ROBOT_SEND] ?? null) === 'Y')
+					{
+						$liveChatFileIds = self::copyRobotFilesToLiveChat(
+							(int)($messageFields['CHAT_ID'] ?? 0),
+							(int)$connectorChatId,
+							(int)$messageFields['AUTHOR_ID'],
+							(array)$value
+						);
+					}
 					foreach ($value as $fileId)
 					{
-						$messageFields['MESSAGE'] .= ' [DISK='.$fileId.']';
+						if (isset($liveChatFileIds[(int)$fileId]))
+						{
+							$params['FILE_ID'][] = $liveChatFileIds[(int)$fileId];
+						}
+						else
+						{
+							$messageFields['MESSAGE'] .= ' [DISK='.$fileId.']';
+						}
 					}
 				}
 			}
@@ -1713,6 +1973,10 @@ class Connector
 			}
 
 			$mid = ImOpenLines\Im::addMessage($message);
+			if (!$mid && !empty($liveChatFileIds))
+			{
+				self::deleteLiveChatFileCopies($liveChatFileIds, (int)$messageFields['AUTHOR_ID']);
+			}
 			if (
 				$messageId
 				&& $mid
@@ -1755,6 +2019,16 @@ class Connector
 			)
 			{
 				ImOpenLines\Mail::addSessionToMailQueue($session->getData('ID'), false);
+			}
+
+			if ($resultLoadSession && isset($session) && $session instanceof Session)
+			{
+				Crm::onOutgoingMessageMirroredToClient(
+					$session,
+					(int)$messageId,
+					$sourceMessage,
+					(int)$mid
+				);
 			}
 		}
 		else
@@ -1871,30 +2145,53 @@ class Connector
 					;
 					if ($stickerItem !== null && !empty($stickerItem->uri))
 					{
-						$stickerPath = parse_url($stickerItem->uri, PHP_URL_PATH) ?: '';
-						$stickerExt = strtolower(pathinfo($stickerPath, PATHINFO_EXTENSION)) ?: 'png';
-						$stickerMime = match ($stickerExt) {
-							'png' => 'image/png',
-							'webp' => 'image/webp',
-							'gif' => 'image/gif',
-							'jpg', 'jpeg' => 'image/jpeg',
-							default => 'application/octet-stream',
-						};
-						$stickerFsPath = \Bitrix\Main\Application::getDocumentRoot() . $stickerPath;
-						$stickerSize = is_file($stickerFsPath) ? (int)@filesize($stickerFsPath) : 0;
-						$stickerLink = \Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl() . $stickerItem->uri;
-						$stickerName = "sticker_{$stickerItem->packId}_{$stickerItem->id}.{$stickerExt}";
-						$files[] = [
-							'name' => $stickerName,
-							'type' => 'image',
-							'mime' => $stickerMime,
-							'link' => $stickerLink,
-							'downloadLink' => $stickerLink,
-							'size' => $stickerSize,
-							'sizef' => $stickerSize > 0 ? \CFile::FormatSize($stickerSize) : '',
-							'width' => $stickerItem->width,
-							'height' => $stickerItem->height,
-						];
+						if (self::isNetwork($connectorId))
+						{
+							// The network peer renders the sticker itself: send the IMOL_STICKER carrier
+							// (passes the bot-controller whitelist) instead of the image-file fallback.
+							$hasText = ($messageFields['MESSAGE'] ?? '') !== '';
+							$params['IMOL_STICKER'] = [
+								'id' => $stickerItem->id,
+								'packId' => $stickerItem->packId,
+								'packType' => $stickerPackType->value,
+								'uri' => self::getStickerAbsoluteUrl((string)$stickerItem->uri),
+								'width' => $stickerItem->width,
+								'height' => $stickerItem->height,
+								'hasText' => $hasText,
+							];
+							if (!$hasText)
+							{
+								// A peer that cannot render the carrier still needs non-empty text to accept the message.
+								$messageFields['MESSAGE'] = \Bitrix\Im\V2\Message\Sticker\StickerService::getPlaceholder();
+							}
+						}
+						else
+						{
+							$stickerPath = parse_url($stickerItem->uri, PHP_URL_PATH) ?: '';
+							$stickerExt = strtolower(pathinfo($stickerPath, PATHINFO_EXTENSION)) ?: 'png';
+							$stickerMime = match ($stickerExt) {
+								'png' => 'image/png',
+								'webp' => 'image/webp',
+								'gif' => 'image/gif',
+								'jpg', 'jpeg' => 'image/jpeg',
+								default => 'application/octet-stream',
+							};
+							$stickerFsPath = \Bitrix\Main\Application::getDocumentRoot() . $stickerPath;
+							$stickerSize = is_file($stickerFsPath) ? (int)@filesize($stickerFsPath) : 0;
+							$stickerLink = self::getStickerAbsoluteUrl((string)$stickerItem->uri);
+							$stickerName = "sticker_{$stickerItem->packId}_{$stickerItem->id}.{$stickerExt}";
+							$files[] = [
+								'name' => $stickerName,
+								'type' => 'image',
+								'mime' => $stickerMime,
+								'link' => $stickerLink,
+								'downloadLink' => $stickerLink,
+								'size' => $stickerSize,
+								'sizef' => $stickerSize > 0 ? \CFile::FormatSize($stickerSize) : '',
+								'width' => $stickerItem->width,
+								'height' => $stickerItem->height,
+							];
+						}
 					}
 				}
 			}
@@ -1905,25 +2202,32 @@ class Connector
 				&& empty($messageFields['MESSAGE'])
 				&& $messageFields['MESSAGE'] !== "0"
 				&& empty($params['url'])
+				&& empty($params['IMOL_STICKER'])
 			)
 			{
 				return false;
 			}
 
-			// Skip operator-name signature for a sticker-only message: the sticker is the whole payload.
+			// Skip operator-name signature only when the sticker travels as a network carrier: there the peer
+			// renders the image alone, while other connectors still send the sticker as a signed image file.
 			if (
-				(empty($messageFields['SYSTEM']) || $messageFields['SYSTEM'] !== 'Y')
-				&& isset($messageFields['AUTHOR_ID'], $messageFields['MESSAGE'])
-				&& (int)$messageFields['AUTHOR_ID'] > 0
+				self::isMessageToSign($messageFields, (string)$connectorId)
 				&& self::isEnableSendMessageWithSignature($connectorId, $lineId)
 				&& !self::isNeedRichLinkData($connectorId, $messageFields['MESSAGE'])
-				&& empty($messageFields['PARAMS']['STICKER_PARAMS'])
+				&& empty($params['IMOL_STICKER'])
 			)
 			{
 				$messageFields['MESSAGE'] =
-					'[b]' . htmlspecialchars_decode(self::getOperatorName($lineId, $messageFields['AUTHOR_ID'], $messageFields['CHAT_ENTITY_ID'])) . ':[/b] '.
-					($messageFields['MESSAGE'] !== '' ? '[br]'. $messageFields['MESSAGE'] : '');
+					'[b]' . htmlspecialchars_decode(self::getOperatorName($lineId, $messageFields['AUTHOR_ID'], $messageFields['CHAT_ENTITY_ID'])) . ':[/b] '
+					. ($messageFields['MESSAGE'] !== '' ? '[br]' . $messageFields['MESSAGE'] : '');
 			}
+
+			$messageFields['MESSAGE'] = self::prepareTextForDeliver(
+				(int)$messageId,
+				(string)($messageFields['MESSAGE'] ?? ''),
+				(array)($messageFields['PARAMS'] ?? []),
+				self::DELIVER_OPERATION_SEND
+			);
 
 			$fields = [
 				'connector' => [
@@ -1959,10 +2263,14 @@ class Connector
 				}
 			}
 
-			$resultSendMessage = (new self())->sendMessage($fields);
+			$connector = new self();
+			$resultSendMessage = $connector->sendMessage($fields);
 			if (!$resultSendMessage->isSuccess())
 			{
-				$isErrorLineDeactivated = $resultSendMessage->getErrorCollection()->get('IMOPENLINES_ERROR_LINE_DEACTIVATED');
+				$isErrorLineDeactivated = $resultSendMessage
+					->getErrorCollection()
+					->getErrorByCode('IMOPENLINES_ERROR_LINE_DEACTIVATED')
+				;
 				if (!$isErrorLineDeactivated)
 				{
 					ImOpenLines\Im::addMessage([
@@ -1975,9 +2283,225 @@ class Connector
 				return false;
 			}
 
+			$sessionOfSend = $connector->getSession();
+			if ($sessionOfSend !== null)
+			{
+				Crm::onOutgoingMessageAcceptedByChannel(
+					$sessionOfSend,
+					(int)$messageId,
+					$sourceMessage,
+					$resultSendMessage
+				);
+			}
 		}
 
 		return true;
+	}
+
+	private static function markAsHiddenMessage(int $messageId): void
+	{
+		\CIMMessageParam::Set($messageId, [
+			'CLASS' => 'bx-messenger-content-item-system',
+			'COMPONENT_ID' => SilentMode\PersonalSilentMode::MESSAGE_COMPONENT_ID,
+		]);
+		\CIMMessageParam::SendPull($messageId, ['CLASS', 'COMPONENT_ID']);
+	}
+
+	private static function getCopilotBotId(): int
+	{
+		if (
+			!Loader::includeModule('imbot')
+			|| !class_exists(CopilotChatBot::class)
+		)
+		{
+			return 0;
+		}
+
+		return CopilotChatBot::getBotId();
+	}
+
+	private static function isHiddenCopilotMessage(array $messageFields): bool
+	{
+		$copilotBotId = self::getCopilotBotId();
+		if ($copilotBotId <= 0)
+		{
+			return false;
+		}
+
+		if ((int)($messageFields['AUTHOR_ID'] ?? 0) === $copilotBotId)
+		{
+			return true;
+		}
+
+		if (preg_match('/\[USER=' . $copilotBotId . '( REPLACE)?](.*?)\[\/USER]/i', (string)($messageFields['MESSAGE'] ?? '')))
+		{
+			return true;
+		}
+
+		$replyAuthorId = (int)($messageFields['REPLY_MESSAGE']['AUTHOR_ID'] ?? 0);
+		if ($replyAuthorId === $copilotBotId)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	private static function isCopilotWritingUser(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$copilotBotId = self::getCopilotBotId();
+
+		return $copilotBotId > 0 && $userId === $copilotBotId;
+	}
+
+	/**
+	 * Lets the messenger change the text right before it goes to the external channel: the operator
+	 * signature and the conversions for the transport are already made here, so a handler sees exactly
+	 * what the channel is about to get.
+	 *
+	 * The contract is the one of @see self::EVENT_IMOPENLINE_MESSAGE_SEND: a handler puts the text it
+	 * wants into `MESSAGE` of the parameters of the event, an empty one is ignored.
+	 */
+	private static function prepareTextForDeliver(int $messageId, string $text, array $params, string $operation): string
+	{
+		$event = new Event(
+			'imopenlines',
+			self::EVENT_IMOPENLINE_MESSAGE_BEFORE_DELIVER,
+			[
+				'MESSAGE_ID' => $messageId,
+				'MESSAGE' => $text,
+				'PARAMS' => $params,
+				'OPERATION' => $operation,
+			]
+		);
+		$event->send();
+
+		$preparedText = (string)($event->getParameters()['MESSAGE'] ?? '');
+
+		return $preparedText !== '' ? $preparedText : $text;
+	}
+
+	/**
+	 * Copies attachments of the open line robot from the operator chat into the client chat of a livechat.
+	 *
+	 * The robot sends on behalf of the responsible person, who is often not a member of the operator chat
+	 * and cannot read its folder, so its files are read without the rights of the author. Only files lying
+	 * in the folder of the operator chat are taken. The copy still belongs to the author, as a copy made
+	 * with the rights of the author does, so deleting the message removes it.
+	 *
+	 * @param int $operatorChatId
+	 * @param int $liveChatId
+	 * @param int $authorId
+	 * @param array $fileIds
+	 * @return array<int, int> id of a source file => id of its copy in the client chat
+	 */
+	private static function copyRobotFilesToLiveChat(
+		int $operatorChatId,
+		int $liveChatId,
+		int $authorId,
+		array $fileIds
+	): array
+	{
+		if ($operatorChatId <= 0 || $liveChatId <= 0 || $authorId <= 0 || empty($fileIds))
+		{
+			return [];
+		}
+
+		$operatorFolder = \CIMDisk::GetFolderModel($operatorChatId, false);
+		$liveChatFolder = \CIMDisk::GetFolderModel($liveChatId);
+		if (!$operatorFolder || !$liveChatFolder)
+		{
+			return [];
+		}
+
+		$copies = [];
+		foreach (Disk\File::loadBatchById(array_map('intval', $fileIds)) as $file)
+		{
+			if ((int)$file->getParentId() !== (int)$operatorFolder->getId())
+			{
+				continue;
+			}
+
+			$source = $file instanceof Disk\FileLink ? $file->getRealObject() : $file;
+			$copy = $source?->copyTo($liveChatFolder, $authorId, true);
+			if ($copy)
+			{
+				$copy->increaseGlobalContentVersion();
+				$copies[(int)$file->getId()] = (int)$copy->getId();
+			}
+			else
+			{
+				Log::write(
+					[
+						'FILE_ID' => $file->getId(),
+						'CHAT_ID' => $liveChatId,
+						'ERRORS' => array_map(
+							static fn(\Bitrix\Main\Error $error) => $error->getMessage(),
+							$source?->getErrors() ?? []
+						),
+					],
+					'CONNECTOR - LIVECHAT FILE COPY FAILED'
+				);
+			}
+		}
+
+		return $copies;
+	}
+
+	/**
+	 * Deletes copies made by copyRobotFilesToLiveChat() for a message the client chat did not accept.
+	 * @param array<int, int> $copyIds id of a source file => id of its copy in the client chat
+	 * @param int $deletedBy
+	 * @return void
+	 */
+	private static function deleteLiveChatFileCopies(array $copyIds, int $deletedBy): void
+	{
+		foreach (Disk\File::loadBatchById(array_values($copyIds)) as $copy)
+		{
+			$copy->delete($deletedBy);
+		}
+	}
+
+	/**
+	 * Absolute url of a sticker image by the uri of \Bitrix\Im\V2\Message\Sticker\StickerItem.
+	 *
+	 * A remote uri is recognized before the portal host is added: //static.host/path starts
+	 * with a slash too, and the opposite order gives https://portal.host//static.host/path.
+	 */
+	private static function getStickerAbsoluteUrl(string $uri): string
+	{
+		$hostUrl = \Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl();
+
+		if (!self::isRemoteStickerUri($uri))
+		{
+			return $hostUrl . $uri;
+		}
+
+		if (!str_starts_with($uri, '//'))
+		{
+			return $uri;
+		}
+
+		$scheme = (new \Bitrix\Main\Web\Uri($hostUrl))->getScheme();
+
+		return $scheme === '' ? $uri : $scheme . ':' . $uri;
+	}
+
+	/**
+	 * Sticker uri already carries a host and must not get the portal one: an absolute url of
+	 * a cloud storage file or a protocol relative url of a portal with `BX_IMG_SERVER`.
+	 *
+	 * @param string $uri
+	 * @return bool
+	 */
+	private static function isRemoteStickerUri(string $uri): bool
+	{
+		return preg_match('#^(https?:)?//#i', $uri) === 1;
 	}
 
 	/**
@@ -2043,6 +2567,7 @@ class Connector
 				if (
 					SilentMode\PersonalSilentMode::isEnabled((int)$params['USER_ID'], (int)$params['CHAT']['ID'])
 					|| $params['LINES_SILENT_MODE']
+					|| self::isCopilotWritingUser((int)($params['USER_ID'] ?? 0))
 				)
 				{
 					$result = true;
@@ -2637,6 +3162,29 @@ class Connector
 			return false;
 		}
 
+		if (!self::isChatOfConnectorLine($chat, $params['connector'] ?? null, $params['line'] ?? null))
+		{
+			return false;
+		}
+
+		// A message that is no longer being sent is done with: the confirmation is either a repeat, or it
+		// has been overtaken by a report that cleared SENDING — an undelivered report, or a moderation
+		// verdict of a connector that blocked the message after it was sent. Both cases used to reach the
+		// read mark below before this check, which put back a read mark the report had just taken off and
+		// left a message the guest never received shown as read.
+		//
+		// Only the connectors whose outgoing messages carry the mark are judged by it: a connector outside
+		// that list never gets SENDING set (@see self::onMessageSend()), so for it a cleared flag says
+		// nothing about the message and its confirmation is processed as before.
+		$messageParams = $message->getParams();
+		if (
+			in_array((string)($params['connector'] ?? ''), self::getListShowDeliveryStatus())
+			&& !$messageParams->get(Im\V2\Message\Params::SENDING)->getValue()
+		)
+		{
+			return false;
+		}
+
 		// set read message
 		$messages = new Im\V2\MessageCollection();
 		$messages->add($message);
@@ -2647,12 +3195,6 @@ class Connector
 			->withContextUser((int)$connectorUserId)
 			->readMessages($messages, true)
 		;
-
-		$messageParams = $message->getParams();
-		if (!$messageParams->get(Im\V2\Message\Params::SENDING)->getValue())
-		{
-			return false;
-		}
 
 		$pullParams = [
 			Im\V2\Message\Params::SENDING => false,
@@ -2673,6 +3215,29 @@ class Connector
 		}
 
 		return true;
+	}
+
+	private static function isChatOfConnectorLine(Im\V2\Chat\OpenLineChat $chat, mixed $connector, mixed $line): bool
+	{
+		if (!is_string($connector) || $connector === '')
+		{
+			return false;
+		}
+
+		$connectorRealId = ImConnector\Connector::getConnectorRealId($connector);
+		if ($connectorRealId === '')
+		{
+			return false;
+		}
+
+		$entity = $chat->getEntityData()['entityId'] ?? [];
+		$lineId = (int)($entity['lineId'] ?? 0);
+
+		return
+			ImConnector\Connector::getConnectorRealId((string)($entity['connectorId'] ?? '')) === $connectorRealId
+			&& $lineId > 0
+			&& $lineId === (int)$line
+		;
 	}
 
 	/**
@@ -2833,8 +3398,10 @@ class Connector
 		$connectorList = [];
 		if (Loader::includeModule('imconnector'))
 		{
-			//$connectorList = ImConnector\Connector::getListConnectorShowDeliveryStatus();
-			$connectorList = array_keys(ImConnector\Connector::getListConnector()); // TODO change method to getListConnectorShowDeliveryStatus()
+			// The list a connector is dropped from when it is merely hidden (a rollout flag, a region
+			// filter) is not the list of connectors that report delivery: a hidden connector still serves
+			// the lines already connected to it, and their messages keep their sending/delivered/read marks.
+			$connectorList = ImConnector\Connector::getListConnectorShowDeliveryStatus();
 			foreach ($connectorList as $key => $connectorId)
 			{
 				if (self::isLiveChat($connectorId))
@@ -2894,6 +3461,94 @@ class Connector
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Whether the connector is named on one of imconnector's lists of connectors.
+	 *
+	 * The lists are constants of {@see \Bitrix\ImConnector\Library}, and this module can reach a portal
+	 * before imconnector does: reading a constant that is not there yet is a fatal error, and both callers
+	 * are on the path of every connector, not only of the one a list was added for. A list that does not
+	 * exist yet names nobody, which for both callers is the behaviour of the version before it appeared.
+	 *
+	 * @param string $listName    Name of the Library constant holding the list.
+	 * @param string $connectorId Connector to look for in it.
+	 * @return bool
+	 */
+	private static function isConnectorOnList(string $listName, string $connectorId): bool
+	{
+		$list = Library::class . '::' . $listName;
+
+		return $connectorId !== '' && defined($list) && in_array($connectorId, constant($list), true);
+	}
+
+	/**
+	 * Returns the message of this dialog already written for the incoming external message, 0 when there is none.
+	 *
+	 * A connector that acknowledges its provider only for a delivery the portal confirmed asks for the message
+	 * again whenever that confirmation is lost — a write that ran past the transport's read timeout is the usual
+	 * reason — and the provider then sends the same external message a second time. Nothing downstream matches an
+	 * incoming message by its external id, so without this lookup the dialog keeps two copies of one guest message.
+	 *
+	 * The lookup is limited to the connectors that ask for it (@see \Bitrix\ImConnector\Library::ENABLE_INCOMING_IDEMPOTENCY),
+	 * where the external message id is unique within the external chat, and to the chat of this dialog. It reads
+	 * CONNECTOR_MID — the parameter addMessage() writes for the message it creates, and updateMessage() and
+	 * deleteMessage() already find the message by.
+	 *
+	 * @param array $params Incoming message parameters.
+	 * @param string $userCode User code of the dialog.
+	 * @return int
+	 */
+	private function getDeliveredMessageId(array $params, string $userCode): int
+	{
+		$externalMessageId = (string)($params['message']['id'] ?? '');
+		if (
+			$externalMessageId === ''
+			|| !self::isConnectorOnList('ENABLE_INCOMING_IDEMPOTENCY', (string)($params['connector']['connector_id'] ?? ''))
+		)
+		{
+			return 0;
+		}
+
+		$chat = new Chat();
+		if (!$chat->load(['USER_CODE' => $userCode, 'ONLY_LOAD' => 'Y']))
+		{
+			return 0;
+		}
+
+		$messageIds = \CIMMessageParam::GetMessageIdByParam('CONNECTOR_MID', $externalMessageId, $chat->getData('ID'));
+
+		return empty($messageIds) ? 0 : (int)current($messageIds);
+	}
+
+	/**
+	 * Whether the operator's name may be prepended to an outgoing message.
+	 *
+	 * A message without text of its own is signed as before, except on the channels listed in
+	 * Library::SIGN_ONLY_MESSAGES_WITH_TEXT, where the lone «Name:» would go out as a separate text
+	 * message and be confirmed as delivered even when the attachment itself was refused. Stickers are
+	 * not judged here at all: the caller leaves a network-carried sticker unsigned, and for every other
+	 * connector a sticker travels as an image file and is signed the way it always was.
+	 *
+	 * @param array  $messageFields Message fields of the outgoing message.
+	 * @param string $connectorId   Connector the message is going to.
+	 * @return bool
+	 */
+	private static function isMessageToSign(array $messageFields, string $connectorId): bool
+	{
+		if (
+			(!empty($messageFields['SYSTEM']) && $messageFields['SYSTEM'] === 'Y')
+			|| !isset($messageFields['AUTHOR_ID'], $messageFields['MESSAGE'])
+			|| (int)$messageFields['AUTHOR_ID'] <= 0
+		)
+		{
+			return false;
+		}
+
+		return
+			$messageFields['MESSAGE'] !== ''
+			|| !self::isConnectorOnList('SIGN_ONLY_MESSAGES_WITH_TEXT', $connectorId)
+		;
 	}
 
 	/**

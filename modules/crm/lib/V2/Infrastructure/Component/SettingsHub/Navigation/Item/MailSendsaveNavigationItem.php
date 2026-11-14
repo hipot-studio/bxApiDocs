@@ -4,10 +4,15 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class MailSendsaveNavigationItem implements SettingsHubWrappedNavigationItem
 {
@@ -27,15 +32,32 @@ final class MailSendsaveNavigationItem implements SettingsHubWrappedNavigationIt
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return $permissions->isCrmAdmin()
-			&& $this->isMailAvailable
-			&& $this->mailBoxId > 0
-			&& $this->mailBoxExists;
+		return $permissions->isCrmAdmin() && $this->mailBoxId > 0;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return true;
+		if (!$this->isMailAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_NAVIGATION_MAIL_SENDSAVE_MAIL'),
+					'CRM_SETTINGS_HUB_NAVIGATION_MAIL_SENDSAVE_MAIL',
+				),
+			);
+		}
+
+		if (!$this->mailBoxExists)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_NAVIGATION_MAIL_SENDSAVE_MAILBOX'),
+					'CRM_SETTINGS_HUB_NAVIGATION_MAIL_SENDSAVE_MAILBOX',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

@@ -5,12 +5,11 @@ namespace Bitrix\Im\V2\Folder;
 
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Definition\Selection;
+use Bitrix\Im\V2\Folder\Definition\SelectionResolver;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Pin\FolderPinState;
 use Bitrix\Im\V2\Folder\Pin\PinProvider;
-use Bitrix\Im\V2\Folder\Pin\PinService;
 use Bitrix\Im\V2\Folder\Query\FolderProviderParams;
-use Bitrix\Im\V2\Folder\System\ChatFolder;
 use Bitrix\Im\V2\Folder\System\SystemFolder;
 use Bitrix\Im\V2\Recent\PortalRecentProvider;
 use Bitrix\Im\V2\Recent\Query\RecentFilter;
@@ -61,6 +60,14 @@ class FolderRecentProvider
 		$items = $folder instanceof PersonalFolder
 			? $this->getTailForPersonal($folder, $params, $limit, $pinState)
 			: $this->getTailForSystem($folder, $definition->toSelection(), $params, $limit, $pinState);
+
+		// API-02. Once per page and over the whole collection, the pinned block and the tail alike: a
+		// project row must show the freshest message of its child chats, and the folder read is the one
+		// caller of {@see RecentProvider::getList()} that never passes through
+		// {@see RecentProvider::getSection()}, where every other list endpoint gets the same overlay.
+		// The feature gate lives inside the method ({@see Recent::enrichCollabPreviewSources()}), so no
+		// second check of it is made here.
+		$items->enrichCollabPreviewSources($userId);
 
 		return $result->setResult($items);
 	}
@@ -132,7 +139,7 @@ class FolderRecentProvider
 		// ALG-02 and ALG-03, resolved once for the whole page. The order is load-bearing: a composition
 		// that does not cover the chat section has no private rows to decide anything about, so it must
 		// not cost a settings read, let alone the partition query.
-		$hasChatSection = $this->hasChatSection($selection);
+		$hasChatSection = SelectionResolver::hasChatSection($selection);
 		$areColleaguesShown = $hasChatSection && Recent::areColleaguesShownTo($userId);
 		$hideJoinedPortalRows = $hasChatSection && !$areColleaguesShown;
 		// The partition holds people the reader has no conversation with, so it carries nothing unread -
@@ -144,9 +151,9 @@ class FolderRecentProvider
 		{
 			// Pinned block through the resolver: the pin lookup is constrained by the
 			// same composition Selection that builds the tail (its branches carry the
-			// root frame). A stale shadow of a disabled source no longer matches any
-			// branch, so it cannot float to the top - the architectural guard behind
-			// {@see PinService::syncShadowsOnSourcesRemove()} shadow hygiene.
+			// root frame). A pin row outside the composition matches no branch and so
+			// cannot float to the top. The write leans on this cut - it writes rows
+			// outside the visible composition ({@see \Bitrix\Im\V2\Folder\Pin\PinService::pinChatPerFolder()}).
 			$pinnedItems = (array)$this->recentProvider->getList(
 				new RecentParams(
 					filter: new RecentFilter(
@@ -157,7 +164,7 @@ class FolderRecentProvider
 						hideInvisibleCompanions: $hasChatSection,
 						hideJoinedPortalRows: $hideJoinedPortalRows,
 					),
-					limit: PinService::LIMIT_PINS_PER_FOLDER,
+					limit: FolderLimits::MAX_PINNED_CHATS,
 					order: self::ORDER,
 				),
 			);
@@ -211,19 +218,6 @@ class FolderRecentProvider
 		// DTO-02: an open gate is what the clients need the sections of a row without a chat for, page
 		// content aside - the birthday greeting they synthesize themselves has no row in the response.
 		return $isPortalStreamAllowed ? $recent->markPortalStreamAllowed() : $recent;
-	}
-
-	private function hasChatSection(Selection $selection): bool
-	{
-		foreach ($selection->getBranches() as $branch)
-		{
-			if ($branch->typeCondition === ChatFolder::RECENT_SECTION)
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**

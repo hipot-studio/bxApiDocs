@@ -455,5 +455,29 @@ class CCalendarType
 
 		return $result;
 	}
+
+	public static function getLocationPersonalGrantDecision(
+		string $calendarType,
+		int $userId,
+		array $accessCodes,
+		array $permissions,
+		callable $getDeniedTaskId,
+		callable $isValidGrantTask,
+	): ?array
+	{
+		$personalCode = 'U' . $userId;
+		if ($calendarType !== 'location' || $userId <= 0
+			|| !in_array($personalCode, $accessCodes, true) || !isset($permissions[$personalCode]))
+		{
+			return null;
+		}
+		$taskId = (int)$permissions[$personalCode];
+		$deniedTaskId = (int)$getDeniedTaskId();
+
+		return [
+			'hasDeniedTask' => $deniedTaskId > 0,
+			'allowed' => $deniedTaskId > 0 ? $taskId !== $deniedTaskId : $isValidGrantTask($taskId),
+		];
+	}
 }
 ?>

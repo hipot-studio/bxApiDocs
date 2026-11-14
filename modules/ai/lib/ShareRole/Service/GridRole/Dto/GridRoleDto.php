@@ -9,6 +9,7 @@ class GridRoleDto implements Arrayable
 	protected string $code = '';
 	protected string $title = '';
 	protected string $author = '';
+	protected int $authorId = 0;
 	protected string $authorPhoto = '';
 	protected string $editor = '';
 	protected string $editorPhoto = '';
@@ -54,6 +55,11 @@ class GridRoleDto implements Arrayable
 		if (array_key_exists('AUTHOR', $data) && is_string($data['AUTHOR']))
 		{
 			$this->author = $data['AUTHOR'];
+		}
+
+		if (array_key_exists('AUTHOR_ID', $data))
+		{
+			$this->authorId = (int)$data['AUTHOR_ID'];
 		}
 
 		if (array_key_exists('AUTHOR_PHOTO_URL', $data) && is_string($data['AUTHOR_PHOTO_URL']))
@@ -132,6 +138,11 @@ class GridRoleDto implements Arrayable
 	public function getAuthor(): string
 	{
 		return $this->author;
+	}
+
+	public function getAuthorId(): int
+	{
+		return $this->authorId;
 	}
 
 	public function getEditor(): string

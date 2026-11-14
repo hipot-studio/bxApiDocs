@@ -812,7 +812,7 @@ class CMobileHelper
 
 						if ($taskId > 0)
 						{
-							return self::getTaskLink($taskId, true);
+							return self::getTaskLink($taskId);
 						}
 					}
 				}
@@ -900,7 +900,7 @@ class CMobileHelper
 			$params = explode("|", $tag);
 			if (!empty(($taskId = $params[2]) && Loader::includeModule('tasks')))
 			{
-				return self::getTaskLink($taskId, ($params[1] === 'COMMENT'));
+				return self::getTaskLink($taskId);
 			}
 
 			// after task detail page supports reloading only by TASK_ID, use the following:
@@ -935,6 +935,27 @@ class CMobileHelper
 				$result = SITE_DIR . 'company/personal/bizproc/' . (int)$params[2]. '/';
 			}
 		}
+		else if (
+			mb_strpos($tag, 'TIMEMAN|REPORT|') === 0
+		)
+		{
+			// the format is:
+			// for a new report and for a comment: TIMEMAN|REPORT|%report_id%
+			// for an approval: TIMEMAN|REPORT|%report_id%_%mark%
+
+			$params = explode("|", $tag);
+			$reportId = (int)($params[2] ?? 0);
+
+			if ($reportId > 0 && self::isReportOpenSupportedByTimemanMobile())
+			{
+				$reportsPage = CUtil::JSEscape(
+					\Bitrix\Main\Config\Option::get('timeman', 'WORK_REPORT_PATH', '/timeman/work_report.php')
+				);
+
+				return "BXMobileApp.Events.postToComponent('timemanbackground::report::open',"
+					. " [{reportId: {$reportId}, url: '{$reportsPage}'}], 'background');";
+			}
+		}
 
 		if ($result)
 		{
@@ -948,6 +969,17 @@ class CMobileHelper
 			}
 		}
 		return $result;
+	}
+
+	/**
+	 * The command is answered by timemanmobile, and the action below ships together with the listener of
+	 * the command. On a module that has neither, the command would have no receiver, so the notification
+	 * block is left inert, the way it was before the command.
+	 */
+	private static function isReportOpenSupportedByTimemanMobile(): bool
+	{
+		return Loader::includeModule('timemanmobile')
+			&& method_exists(\Bitrix\TimemanMobile\Infrastructure\Controllers\FullReport::class, 'getReportAction');
 	}
 
 	public static function getUserInfo($userId)
@@ -984,10 +1016,9 @@ class CMobileHelper
 
 	/**
 	 * @param $taskId
-	 * @param boolean $shouldOpenComments
 	 * @return string
 	 */
-	public static function getTaskLink($taskId, bool $shouldOpenComments = false): string
+	public static function getTaskLink($taskId): string
 	{
 		if (!Loader::includeModule('tasks'))
 		{
@@ -1004,12 +1035,11 @@ class CMobileHelper
 			$title = addslashes(htmlspecialcharsbx($taskData['TITLE']));
 
 			$taskInfoParameter = "{title: '$title', creatorIcon: '$creatorIcon', responsibleIcon: '$responsibleIcon'}";
-			$shouldOpenComments = ($shouldOpenComments ? 'true' : 'false');
 
 			return "BXMobileApp.Events.postToComponent('taskbackground::task::open',"
 				. '['
 					. "{id: $taskId, taskId: $taskId, title: 'TASK', taskInfo: $taskInfoParameter},"
-					. "{taskId: $taskId, getTaskInfo: true, shouldOpenComments: $shouldOpenComments}"
+					. "{taskId: $taskId, getTaskInfo: true}"
 				. ']'
 			. ');';
 		}

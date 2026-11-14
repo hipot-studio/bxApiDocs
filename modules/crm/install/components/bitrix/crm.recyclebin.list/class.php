@@ -33,6 +33,15 @@ class CCrmRecyclebinListComponent extends \CBitrixComponent
 			return;
 		}
 
+		if (!$this->isRecyclebinModuleInstalled())
+		{
+			// the template keeps the CRM menu and shows the message in place of the grid
+			$this->arResult['ERROR_MESSAGE'] = Loc::getMessage('CRM_RECYCLEBIN_MODULE_NOT_INSTALLED');
+			$this->includeComponentTemplate();
+
+			return;
+		}
+
 		$entityTypeName = $this->resolveEntityTypeName();
 		if ($entityTypeName === null)
 		{
@@ -62,6 +71,15 @@ class CCrmRecyclebinListComponent extends \CBitrixComponent
 			? $this->arParams['~PATH_TO_USER_PROFILE'] : '';
 
 		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * Every decision of the screen is made of the storage units of the recyclebin module, so without
+	 * it the screen can only say so.
+	 */
+	protected function isRecyclebinModuleInstalled(): bool
+	{
+		return Main\Loader::includeModule('recyclebin');
 	}
 
 	/**

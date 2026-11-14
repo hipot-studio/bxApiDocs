@@ -60,6 +60,7 @@ final class Dictionary
 	public const EVENT_GENERATE_CALL_SCRIPT_FROM_DIALOG = 'generate_call_script_from_dialog';
 	public const EVENT_GENERATE_CALL_SCRIPT_DESCRIPTION = 'generate_call_script_description';
 	public const EVENT_GENERATE_MANAGER_SUMMARY = 'generate_manager_summary';
+	public const EVENT_GENERATE_CLIENT_SUMMARY = 'generate_client_summary';
 	public const EVENT_FILL_REPEAT_SALE_TIPS = 'fill_repeat_sale_tips';
 	public const EVENT_SCREENING_REPEAT_SALE_ITEM = 'screening_repeat_sale_item';
 	public const EVENT_ANALYZE_COMMUNICATION = 'analyze_communication';

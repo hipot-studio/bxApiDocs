@@ -21,6 +21,8 @@ final class ServerRuntimeStateDto
 		private readonly string $token = '',
 		private readonly string $refreshToken = '',
 		private readonly ?string $dateStartAttempt = null,
+		private readonly string $generation = '',
+		private readonly bool $protocolRequired = false,
 	)
 	{
 	}
@@ -37,11 +39,13 @@ final class ServerRuntimeStateDto
 			instanceUsername: (string)($data['instanceUsername'] ?? $data['instance_username'] ?? ''),
 			startJobId: (string)($data['startJobId'] ?? $data['start_job_id'] ?? ''),
 			version: (int)($data['version'] ?? 0),
-			isPortalIdVerified: self::normalizeVerifiedFlag($data['isPortalIdVerified'] ?? $data['is_portal_id_verified'] ?? false),
+			isPortalIdVerified: self::normalizeFlag($data['isPortalIdVerified'] ?? $data['is_portal_id_verified'] ?? false),
 			accessPassword: (string)($data['accessPassword'] ?? $data['access_password'] ?? ''),
 			token: (string)($data['token'] ?? ''),
 			refreshToken: (string)($data['refreshToken'] ?? $data['refresh_token'] ?? ''),
 			dateStartAttempt: self::normalizeDate($data['dateStartAttempt'] ?? $data['date_start_attempt'] ?? null),
+			generation: (string)($data['generation'] ?? ''),
+			protocolRequired: self::normalizeFlag($data['protocolRequired'] ?? $data['protocol_required'] ?? false),
 		);
 	}
 
@@ -93,6 +97,16 @@ final class ServerRuntimeStateDto
 	public function isPortalIdVerified(): bool
 	{
 		return $this->isPortalIdVerified;
+	}
+
+	public function getGeneration(): string
+	{
+		return $this->generation;
+	}
+
+	public function isProtocolRequired(): bool
+	{
+		return $this->protocolRequired;
 	}
 
 	public function getAccessPassword(): string
@@ -155,10 +169,12 @@ final class ServerRuntimeStateDto
 			'token' => $this->token,
 			'refreshToken' => $this->refreshToken,
 			'dateStartAttempt' => $this->dateStartAttempt,
+			'generation' => $this->generation,
+			'protocolRequired' => $this->protocolRequired,
 		];
 	}
 
-	private static function normalizeVerifiedFlag(mixed $value): bool
+	private static function normalizeFlag(mixed $value): bool
 	{
 		if (is_bool($value))
 		{

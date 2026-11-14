@@ -7,7 +7,6 @@ use Bitrix\Calendar\Core\Builders\EventBuilderFromArray;
 use Bitrix\Calendar\Core\Builders\OccupancyAwareRecurringEventRules;
 use Bitrix\Calendar\Internals\EO_Event;
 use Bitrix\Calendar\Internals\EventTable;
-use Bitrix\Calendar\Internal\Event\ExclusionSaveTransaction;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ObjectException;
@@ -99,7 +98,6 @@ class Event extends Mapper
 				?? ($entity->getOwner() ? $entity->getOwner()->getId() : null),
 		]);
 
-		$params = $this->prepareEventSaveTransactionParams($params);
 		$result = CCalendar::SaveEvent($params);
 		$id = (is_array($result) && isset($result['id']))
 			? (int)$result['id']
@@ -179,7 +177,6 @@ class Event extends Mapper
 			'userId' => $event->getOwner() ? $event->getOwner()->getId() : null, // todo how get userId ?
 		]);
 
-		$params = $this->prepareEventSaveTransactionParams($params);
 		$id = CCalendar::SaveEvent($params);
 
 		$result = new AddResult();
@@ -193,29 +190,6 @@ class Event extends Mapper
 		}
 
 		return $result;
-	}
-
-	private function prepareEventSaveTransactionParams(array $params): array
-	{
-		if (($params['joinEventSaveTransaction'] ?? false) === true)
-		{
-			if (!ExclusionSaveTransaction::isActive())
-			{
-				throw new \LogicException('Event save requires an active transaction.');
-			}
-			if (ExclusionSaveTransaction::hasNativeManager())
-			{
-				$params = array_merge($params, ExclusionSaveTransaction::saveParameters());
-			}
-			else
-			{
-				$params['propagateEventNotAvailable'] = true;
-			}
-		}
-
-		unset($params['joinEventSaveTransaction']);
-
-		return $params;
 	}
 
 	/**

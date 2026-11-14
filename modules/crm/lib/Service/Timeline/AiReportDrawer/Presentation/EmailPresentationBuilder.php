@@ -433,7 +433,7 @@ final class EmailPresentationBuilder implements ActivityPresentationBuilderInter
 
 	private function isVisibleSummary(array $summary): bool
 	{
-		$jobId = (int)($summary['jobId'] ?? 0);
+		$jobId = (int)($summary['originalJobId'] ?? $summary['jobId'] ?? 0);
 		$text = (string)($summary['summary'] ?? '');
 
 		return $jobId > 0 && $text !== '';

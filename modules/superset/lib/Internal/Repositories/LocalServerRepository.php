@@ -2,6 +2,8 @@
 
 namespace Bitrix\Superset\Internal\Repositories;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Superset\Internal\Entities\Server;
@@ -179,6 +181,27 @@ final class LocalServerRepository
 		return $this->save($server);
 	}
 
+	public function issueGenerationIfMissing(Server $server, string $generation): bool
+	{
+		$serverId = $server->getId();
+		if ($serverId === null || $generation === '')
+		{
+			return false;
+		}
+
+		$connection = Application::getConnection();
+		$connection->queryExecute($this->buildGenerationIssueQuery($serverId, $generation));
+		$issued = $connection->getAffectedRowsCount() > 0;
+
+		$stored = $this->findById($serverId);
+		if ($stored)
+		{
+			$this->synchronizeEntity($server, $stored);
+		}
+
+		return $issued;
+	}
+
 	public function deleteWithUsers(Server $server): Result
 	{
 		$result = new Result();
@@ -215,6 +238,27 @@ final class LocalServerRepository
 		}
 
 		return $result;
+	}
+
+	private function buildGenerationIssueQuery(int $serverId, string $generation): string
+	{
+		$assignments = [
+			(new SqlExpression('?# = ?s', 'GENERATION', $generation))->compile(),
+			(new SqlExpression('?# = ?', 'DATE_UPDATE', new DateTime()))->compile(),
+		];
+
+		$condition = (new SqlExpression(
+			'?# = ?i AND (?# IS NULL OR ?# = ?s)',
+			'ID',
+			$serverId,
+			'GENERATION',
+			'GENERATION',
+			'',
+		))->compile();
+
+		$table = Application::getConnection()->getSqlHelper()->quote(ServerTable::getTableName());
+
+		return 'UPDATE ' . $table . ' SET ' . implode(', ', $assignments) . ' WHERE ' . $condition;
 	}
 
 	private function findOne(array $filter, array $order = []): ?Server
@@ -268,8 +312,18 @@ final class LocalServerRepository
 		if (array_key_exists('isPortalIdVerified', $fields))
 		{
 			$server->setIsPortalIdVerified(
-				$this->normalizeVerifiedFlag($fields['isPortalIdVerified'])
+				$this->normalizeFlag($fields['isPortalIdVerified'])
 			);
+		}
+
+		if (array_key_exists('generation', $fields))
+		{
+			$this->applyNullableStringField($server, 'Generation', $fields['generation']);
+		}
+
+		if ($this->normalizeFlag($fields['protocolRequired'] ?? false))
+		{
+			$server->setProtocolRequired(true);
 		}
 
 		if (!empty($fields['clearInstanceState']))
@@ -417,7 +471,9 @@ final class LocalServerRepository
 			->setStartJobId($source->getStartJobId())
 			->setAccountId($source->getAccountId())
 			->setVersion($source->getVersion())
+			->setGeneration($source->getGeneration())
 			->setIsPortalIdVerified($source->isPortalIdVerified())
+			->setProtocolRequired($source->isProtocolRequired())
 			->setPortalId($source->getPortalId())
 			->setPortalUrl($source->getPortalUrl() !== '' ? $source->getPortalUrl() : null)
 			->setJwtSecret($source->getJwtSecret())
@@ -429,7 +485,7 @@ final class LocalServerRepository
 		}
 	}
 
-	private function normalizeVerifiedFlag(mixed $value): bool
+	private function normalizeFlag(mixed $value): bool
 	{
 		if (is_bool($value))
 		{

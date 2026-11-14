@@ -1,13 +1,7 @@
 <?php
 namespace Bitrix\StaffTrack\Internal\Integration\HumanResources;
 
-use Bitrix\HumanResources\Builder\Structure\Filter\Column\IdFilter;
-use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
-use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
-use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
-use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Public\Service\Container as HrPublicContainer;
-use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\Loader;
 use Bitrix\StaffTrack\Item\Department;
@@ -21,6 +15,10 @@ class DepartmentProvider
 	private static ?SubordinateResolver $subordinateResolver = null;
 
 	private static ?BranchManagerResolver $branchManagerResolver = null;
+
+	private static ?DepartmentMemberReader $departmentMemberReader = null;
+
+	private static ?ManagedEmployeeResolver $managedEmployeeResolver = null;
 
 	/**
 	 * Heads of an employee, looked up once per request: one check-in of theirs asks for them from three
@@ -174,6 +172,20 @@ class DepartmentProvider
 		return self::getSubordinateResolver()->resolve($userId, true);
 	}
 
+	/**
+	 * Returns the team of the user without a filter: the ids getSubordinateIds() gives, kept between processes until
+	 * the structure is reset. Whom the user may see is never decided by it.
+	 */
+	public static function getTeamScope(int $userId): TeamScope
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return new TeamScope([], true, false);
+		}
+
+		return self::getSubordinateResolver()->resolveTeam($userId);
+	}
+
 	public static function getAllSubordinateIds(int $userId): array
 	{
 		if (!Loader::includeModule('humanresources'))
@@ -182,6 +194,19 @@ class DepartmentProvider
 		}
 
 		return self::getSubordinateResolver()->resolve($userId, false);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public static function getPeerHeadIds(int $userId): array
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return [];
+		}
+
+		return self::getSubordinateResolver()->resolvePeerHeadIds($userId);
 	}
 
 	private static function getSubordinateResolver(): SubordinateResolver
@@ -214,11 +239,13 @@ class DepartmentProvider
 
 	/**
 	 * @param array<int, int> $compositionMap
+	 * @param array<int, int> $managedMap
 	 */
 	private static function isAccessibleWithinComposition(
 		int $viewerUserId,
 		int $employeeUserId,
 		array $compositionMap,
+		array $managedMap,
 	): bool
 	{
 		$guardResult = self::resolveAccessibilityGuard($viewerUserId, $employeeUserId);
@@ -227,8 +254,7 @@ class DepartmentProvider
 			return $guardResult;
 		}
 
-		return isset($compositionMap[$employeeUserId])
-			|| self::isManagerForEmployee($viewerUserId, $employeeUserId);
+		return isset($compositionMap[$employeeUserId]) || isset($managedMap[$employeeUserId]);
 	}
 
 	private static function resolveAccessibilityGuard(int $viewerUserId, int $employeeUserId): ?bool
@@ -284,7 +310,45 @@ class DepartmentProvider
 		$normalizedEntities = SelectorEntityNormalizer::normalize($entities);
 		$userIds = self::resolveNormalizedDepartmentSelectorEntities($normalizedEntities, self::MAX_SELECTOR_USER_IDS);
 
-		return self::filterManagedUserIds($userIds, $userId);
+		return self::filterManagedUserIds($userIds, $userId, self::MAX_SELECTOR_USER_IDS);
+	}
+
+	/**
+	 * The same composition without the ceiling of the map, for a caller that may not lose anybody.
+	 *
+	 * @return int[]|null null when the selector has more codes than the parse reads or names more than $limit
+	 *     users
+	 */
+	public static function resolveCompleteDepartmentSelectorEntitiesForUser(
+		array $entities,
+		int $userId,
+		int $limit,
+	): ?array
+	{
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		if (count($entities) > SelectorEntityNormalizer::MAX_SELECTOR_ENTITIES)
+		{
+			return null;
+		}
+
+		[$userIds, $flatDepartmentIds, $recursiveDepartmentIds] = SelectorEntityNormalizer::normalize($entities);
+
+		// each read gets the whole budget: the people it shares with the other one are not known in advance
+		$userIds = IdNormalizer::normalize([
+			...$userIds,
+			...self::getDistinctUserIdsByDepartments($flatDepartmentIds, true, $limit + 1),
+			...self::getDistinctUserIdsByDepartments($recursiveDepartmentIds, false, $limit + 1),
+		]);
+		if (count($userIds) > $limit)
+		{
+			return null;
+		}
+
+		return self::filterManagedUserIds($userIds, $userId, $limit);
 	}
 
 	private static function resolveNormalizedDepartmentSelectorEntities(array $entities, int $limit): array
@@ -314,7 +378,7 @@ class DepartmentProvider
 		return array_slice(IdNormalizer::normalize($userIds), 0, $limit);
 	}
 
-	private static function filterManagedUserIds(array $userIds, int $managerUserId): array
+	private static function filterManagedUserIds(array $userIds, int $managerUserId, int $limit): array
 	{
 		$userIds = IdNormalizer::normalize($userIds);
 		if (empty($userIds))
@@ -329,15 +393,30 @@ class DepartmentProvider
 
 		$filteredUserIds = [];
 		$compositionMap = array_flip(self::getAllSubordinateIds($managerUserId));
+		// one batch: the manager check per employee costs a query each, and a selector holds up to 1500 people
+		$managedMap = array_flip(
+			self::getManagedEmployeeResolver()->resolve(
+				$managerUserId,
+				array_filter(
+					$userIds,
+					static fn (int $userId): bool => $userId !== $managerUserId && !isset($compositionMap[$userId]),
+				),
+			),
+		);
 		foreach ($userIds as $userId)
 		{
-			if (self::isAccessibleWithinComposition($managerUserId, $userId, $compositionMap))
+			if (self::isAccessibleWithinComposition($managerUserId, $userId, $compositionMap, $managedMap))
 			{
 				$filteredUserIds[] = $userId;
 			}
 		}
 
-		return array_slice(IdNormalizer::normalize($filteredUserIds), 0, self::MAX_SELECTOR_USER_IDS);
+		return array_slice(IdNormalizer::normalize($filteredUserIds), 0, $limit);
+	}
+
+	private static function getManagedEmployeeResolver(): ManagedEmployeeResolver
+	{
+		return self::$managedEmployeeResolver ??= new ManagedEmployeeResolver();
 	}
 
 	private static function getUserIdsByDepartments(array $departmentIds, bool $isFlat, int $limit): array
@@ -348,22 +427,28 @@ class DepartmentProvider
 			return [];
 		}
 
-		$userIds = [
-			...NodeMemberDataBuilder::createWithFilter(
-				new NodeMemberFilter(
-					entityType: MemberEntityType::USER,
-					nodeFilter: new NodeFilter(
-						idFilter: IdFilter::fromIds($departmentIds),
-						depthLevel: $isFlat ? DepthLevel::NONE : DepthLevel::FULL,
-					),
-				),
-			)
-				->setLimit($limit)
-				->getAll()
-				->getEntityIds()
-		];
+		$userIds = self::getDepartmentMemberReader()->readUserIds($departmentIds, $isFlat, $limit);
 
 		return array_slice(IdNormalizer::normalize($userIds), 0, $limit);
+	}
+
+	/**
+	 * @return int[] at most $limit people, each once
+	 */
+	private static function getDistinctUserIdsByDepartments(array $departmentIds, bool $isFlat, int $limit): array
+	{
+		$departmentIds = IdNormalizer::normalize($departmentIds);
+		if (empty($departmentIds) || !Loader::includeModule('humanresources'))
+		{
+			return [];
+		}
+
+		return self::getDepartmentMemberReader()->readDistinctUserIds($departmentIds, $isFlat, $limit);
+	}
+
+	private static function getDepartmentMemberReader(): DepartmentMemberReader
+	{
+		return self::$departmentMemberReader ??= new DepartmentMemberReader();
 	}
 
 	/**
@@ -394,7 +479,12 @@ class DepartmentProvider
 		return HrPublicContainer::getUserDepartmentService()->isHeadOrDeputyOfDepartment($userId);
 	}
 
-	private static function getAdminIds(): array
+	/**
+	 * Administrators of the portal.
+	 *
+	 * @return int[]
+	 */
+	public static function getAdminIds(): array
 	{
 		$adminIds = [];
 		if (Loader::includeModule('bitrix24'))

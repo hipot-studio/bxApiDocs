@@ -64,6 +64,17 @@ abstract class AbstractDownloader
 				$log && $logger->error("AbstractDownloader::complete: Finalization reported failure. TrackId: {$track->getId()}");
 				$result->addError(new TrackError(TrackError::FINALIZE_FAILED, 'Track finalization failed'));
 
+				// What the finalization failed at travels with its verdict: the agent writes the
+				// row of the download by the class of the failure, and a delivery of a recording
+				// that did not go through must not enter it as a file that never landed
+				// {@see DownloadAgent::reportFailedDownload()}. The code above stays the first
+				// error of the result - it is the one the agent reports and the pipeline reads.
+				$finalizeErrors = $eventResult->getParameters()['errors'] ?? [];
+				if (is_array($finalizeErrors) && $finalizeErrors !== [])
+				{
+					$result->addErrors($finalizeErrors);
+				}
+
 				return $this->fail($result);
 			}
 		}

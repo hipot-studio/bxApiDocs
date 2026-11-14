@@ -145,7 +145,8 @@ class MultipleMessagesCreator extends AbstractCreator
 			$this->message,
 			$userId,
 			$launchType,
-			$this->isPartialResult()
+			$this->isPartialResult(),
+			$sourceText,
 		);
 	}
 

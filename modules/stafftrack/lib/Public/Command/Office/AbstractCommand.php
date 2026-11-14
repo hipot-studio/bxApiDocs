@@ -8,6 +8,11 @@ use Bitrix\StaffTrack\Access\Model\OfficeModel;
 use Bitrix\StaffTrack\Access\OfficeAccessController;
 use Bitrix\StaffTrack\Dictionary\OfficeErrorCode;
 use Bitrix\StaffTrack\Internal\Repository\OfficeRepository;
+use Bitrix\StaffTrack\Internal\Service\Office\GeoProviderAddressGeocoder;
+use Bitrix\StaffTrack\Internal\Service\Office\GeoZoneOverlapService;
+use Bitrix\StaffTrack\Internal\Service\Office\OfficeAddress;
+use Bitrix\StaffTrack\Internal\Service\Office\OfficeAddressResolver;
+use Bitrix\StaffTrack\Internal\Service\Office\OfficeChangeNotifier;
 use Bitrix\StaffTrack\Internal\Service\Office\PhotoService;
 use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 
@@ -25,6 +30,9 @@ abstract class AbstractCommand
 
 	protected OfficeRepository $officeRepository;
 	protected PhotoService $photoService;
+	protected GeoZoneOverlapService $geoZoneOverlapService;
+	protected OfficeChangeNotifier $changeNotifier;
+	protected OfficeAddressResolver $addressResolver;
 
 	public function __construct(protected readonly int $userId)
 	{
@@ -37,15 +45,17 @@ abstract class AbstractCommand
 	{
 		$this->officeRepository = new OfficeRepository();
 		$this->photoService = new PhotoService();
+		$this->geoZoneOverlapService = new GeoZoneOverlapService($this->officeRepository);
+		$this->changeNotifier = new OfficeChangeNotifier();
+		$this->addressResolver = new OfficeAddressResolver(new GeoProviderAddressGeocoder());
 	}
 
 	/**
 	 * Photos are hung on a card that is already written: the transaction of the card is committed by
 	 * the time they arrive, and nothing that happens here undoes it. Both forms a failure takes - a
 	 * refusal of the domain and an exception of the disk, the uploader or the storage - are logged and
-	 * handed back, and what to do with them is the business of the command: {@see Add} carries on
-	 * rather than send the client into a second attempt that would leave two offices behind, while
-	 * {@see Update} answers with them.
+	 * handed back, and both {@see Add} and {@see Update} report them beside a successful result: the
+	 * card is saved, and a second attempt would leave two offices behind or run into its own version.
 	 *
 	 * @param string[] $photoTokens
 	 */
@@ -117,6 +127,21 @@ abstract class AbstractCommand
 	}
 
 	/**
+	 * The office the card runs into rides along with the refusal: the client names it to the person
+	 * deciding whether to save the office anyway.
+	 *
+	 * @param array{officeId: int, title: string, distance: int} $overlap
+	 */
+	protected function getGeoZoneOverlapError(array $overlap): Error
+	{
+		return new Error(
+			'The zone of the office overlaps the zone of another one',
+			OfficeErrorCode::GEO_ZONE_OVERLAP,
+			$overlap,
+		);
+	}
+
+	/**
 	 * {@see OfficeDto} raises its exceptions with a machine code of the card contract as the message.
 	 */
 	protected function getInvalidDtoError(InvalidDtoException $exception): Error
@@ -127,6 +152,20 @@ abstract class AbstractCommand
 	protected function logFailure(string $operation, string $reason): void
 	{
 		AddMessage2Log(static::class . '::' . $operation . ' failed: ' . $reason, 'stafftrack');
+	}
+
+	/**
+	 * A log that cannot be written, an unreachable directory of it for one, must not change the answer.
+	 */
+	protected function logFailureQuietly(string $operation, string $reason): void
+	{
+		try
+		{
+			$this->logFailure($operation, $reason);
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 
 	/**
@@ -141,14 +180,14 @@ abstract class AbstractCommand
 	/**
 	 * The card as the storage keeps it. Who wrote it and when is added by the command doing the write.
 	 */
-	protected function buildCardFields(OfficeDto $officeDto): array
+	protected function buildCardFields(OfficeDto $officeDto, OfficeAddress $address): array
 	{
 		return [
 			'TITLE' => $officeDto->title,
 			'LATITUDE' => $officeDto->latitude,
 			'LONGITUDE' => $officeDto->longitude,
 			'GEO_RADIUS' => $officeDto->geoRadius,
-			'ADDRESS' => $officeDto->address,
+			'ADDRESS' => $address->address,
 			'WORK_TIME_FROM' => $officeDto->workTimeFrom,
 			'WORK_TIME_TO' => $officeDto->workTimeTo,
 		];

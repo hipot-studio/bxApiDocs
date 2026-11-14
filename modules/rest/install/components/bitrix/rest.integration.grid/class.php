@@ -317,15 +317,12 @@ class RestIntegrationGridComponent extends CBitrixComponent implements Controlle
 		{
 			$integrationEntity = $mapper->mapArrayToEntity($item);
 			$item['TITLE'] = htmlspecialcharsbx($item['TITLE']);
-			$item['USER_DATA_NAME'] = htmlspecialcharsbx(
-				implode(
-					' ',
-					[
-						$item['USER_DATA_NAME'],
-						$item['USER_DATA_LAST_NAME'],
-					]
-				)
-			);
+			$owner = [];
+			foreach (['ID', 'TITLE', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL'] as $field)
+			{
+				$owner[$field] = $item['USER_DATA_' . $field];
+			}
+			$item['USER_DATA_NAME'] = \CUser::FormatName(\CSite::GetNameFormat(), $owner, true, true);
 
 			$item['SCOPE'] = array_map(
 				function ($value)

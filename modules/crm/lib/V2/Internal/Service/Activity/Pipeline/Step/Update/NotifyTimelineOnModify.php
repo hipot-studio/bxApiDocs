@@ -12,6 +12,7 @@ use Bitrix\Crm\V2\Internal\Entity\Activity\StorageFieldTransit;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityFieldMap;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityRepository;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityRepositoryInterface;
+use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityStorageElementRepository;
 use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\PipelineContext;
 use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\PipelineStepInterface;
 use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\Step\Shared\DeadlineSentinelGuard;
@@ -59,6 +60,11 @@ use Bitrix\Main\Type\DateTime;
  * out of the settings. So the state of the row is read once more, through the boundary of the storage - the same
  * second reading row 34 makes, and the same one a payload carried out of row 17 would spare both rows.
  *
+ * SO ARE THE FILES OF THE CURRENT STATE, as the serialized list of their identifiers legacy has in its re-read row.
+ * The model of the run carries the files only where the operation named them, while the item of the scheduled
+ * stream builds its list of files - and the link changing them - out of this key alone: an update that moved
+ * the deadline of an activity with files would otherwise take the files off the timeline.
+ *
  * @internal
  */
 final class NotifyTimelineOnModify implements PipelineStepInterface
@@ -85,9 +91,13 @@ final class NotifyTimelineOnModify implements PipelineStepInterface
 
 	private const PARAM_MOVE_BINDINGS_MAP = 'MOVE_BINDINGS_MAP';
 
+	private const COLUMN_STORAGE_ELEMENT_IDS = 'STORAGE_ELEMENT_IDS';
+
 	private readonly ActivityController $timeline;
 
 	private readonly ActivityRepositoryInterface $repository;
+
+	private readonly ActivityStorageElementRepository $storageElements;
 
 	/**
 	 * @param ActivityController|null $timeline the timeline of the activities.
@@ -98,6 +108,7 @@ final class NotifyTimelineOnModify implements PipelineStepInterface
 	{
 		$this->timeline = $timeline ?? ActivityController::getInstance();
 		$this->repository = $repository ?? new ActivityRepository();
+		$this->storageElements = new ActivityStorageElementRepository();
 	}
 
 	public function getName(): string
@@ -163,7 +174,7 @@ final class NotifyTimelineOnModify implements PipelineStepInterface
 
 	/**
 	 * The re-read state in the legacy shape, plus the moment the counter of the activity turns light at - which no
-	 * column of the table holds and the run carries.
+	 * column of the table holds and the run carries - and the files the activity now has.
 	 *
 	 * @return array<string, mixed>
 	 */
@@ -174,6 +185,7 @@ final class NotifyTimelineOnModify implements PipelineStepInterface
 			$this->repository->getProviderPayload($activityId) ?? new ProviderPayload(),
 			$context->getTransit(),
 		);
+		$fields[self::COLUMN_STORAGE_ELEMENT_IDS] = serialize($this->storageElements->getElementIds($activityId));
 
 		if ($context->hasRunValue(PipelineContext::RUN_VALUE_LIGHT_COUNTER_AT))
 		{

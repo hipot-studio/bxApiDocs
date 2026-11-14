@@ -277,6 +277,7 @@ class PromptService
 			if (empty($promptData['ID']))
 			{
 				$result[] = [null, null];
+				continue;
 			}
 
 			$result[] = [(int)$promptData['ID'], $promptData['IS_SYSTEM'] === 'Y'];

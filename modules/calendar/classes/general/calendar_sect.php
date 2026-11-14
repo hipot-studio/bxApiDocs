@@ -1589,13 +1589,9 @@ class CCalendarSect
 			self::$arOp[$key] = [];
 			if (is_array($perms))
 			{
-				foreach ($perms as $code => $taskId)
-				{
-					if (in_array($code, $codes, true))
-					{
-						self::$arOp[$key] = array_merge(self::$arOp[$key], CTask::GetOperations($taskId, true));
-					}
-				}
+				self::$arOp[$key] = self::collectPermissionOperations(
+					$perms, $codes, static fn($taskId) => CTask::GetOperations($taskId, true),
+				);
 			}
 		}
 
@@ -1608,6 +1604,40 @@ class CCalendarSect
 		self::$bClearOperationCache = false;
 
 		return self::$arOp[$key];
+	}
+
+	public static function collectPermissionOperations(
+		array $permissions,
+		array $accessCodes,
+		callable $getTaskOperations,
+	): array
+	{
+		$operations = [];
+		foreach ($permissions as $code => $taskId)
+		{
+			if (in_array($code, $accessCodes, true))
+			{
+				$operations = array_merge($operations, $getTaskOperations($taskId));
+			}
+		}
+
+		return $operations;
+	}
+
+	public static function addOwnerPermission(
+		array $permissions,
+		string $calendarType,
+		int $ownerId,
+		int|false $accessTaskId,
+	): array
+	{
+		if ($ownerId > 0)
+		{
+			$code = $calendarType === 'group' ? 'SG' . $ownerId . '_A' : 'U' . $ownerId;
+			$permissions[$code] = $accessTaskId;
+		}
+
+		return $permissions;
 	}
 
 	public static function GetCalDAVConnectionId($section = 0)
@@ -2289,18 +2319,15 @@ class CCalendarSect
 				self::$Permissions[$sectionId] = $section['ACCESS'];
 			}
 
-			if ($section['CAL_TYPE'] !== 'group' && (int)$section['OWNER_ID'] > 0) // Owner for user or other calendar types
+			if ((int)$section['OWNER_ID'] > 0)
 			{
-				self::$Permissions[$sectionId]['U'.$section['OWNER_ID']] = CCalendar::GetAccessTasksByName('calendar_section', 'calendar_access');
-			}
-
-			if ($section['CAL_TYPE'] === 'group' && (int)$section['OWNER_ID'] > 0) // Owner for group
-			{
-				self::$Permissions[$sectionId]['SG'.$section['OWNER_ID'].'_A'] = CCalendar::GetAccessTasksByName('calendar_section', 'calendar_access');
+				self::$Permissions[$sectionId] = self::addOwnerPermission(
+					self::$Permissions[$sectionId], (string)$section['CAL_TYPE'], (int)$section['OWNER_ID'],
+					CCalendar::GetAccessTasksByName('calendar_section', 'calendar_access'),
+				);
 			}
 		}
 	}
-
 
 	public static function CleanAccessTable(string $sectionId)
 	{

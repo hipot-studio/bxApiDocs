@@ -8,6 +8,7 @@ use Bitrix\Calendar\Application\Command\CreateEventCommand;
 use Bitrix\Calendar\Application\Command\CreateEventHandler;
 use Bitrix\Calendar\Application\Command\UpdateEventCommand;
 use Bitrix\Calendar\Application\Command\UpdateEventHandler;
+use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Managers\Accessibility;
 use Bitrix\Calendar\Core\Mappers;
@@ -19,6 +20,7 @@ use Bitrix\Calendar\OpenEvents\Exception\MaxAttendeesReachedException;
 use Bitrix\Calendar\Relation\Item\Relation;
 use Bitrix\Calendar\Relation\RelationProvider;
 use Bitrix\Calendar\Integration\Tasks\TaskQueryParameter;
+use Bitrix\Calendar\Internal\GuestLink\GuestLinkRequisite;
 use Bitrix\Calendar\Internals\Exception\InvalidDate;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Internals;
@@ -28,6 +30,7 @@ use Bitrix\Calendar\Util;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -52,6 +55,8 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 	protected const DIRECTION_PREVIOUS = 'previous';
 	protected const DIRECTION_NEXT = 'next';
 	protected const DIRECTION_BOTH = 'both';
+
+	private const GUEST_LINK_LOG_CHANNEL = 'card-ics';
 
 	public function configureActions(): array
 	{
@@ -603,11 +608,6 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 								'requestUid' => $requestUid,
 							]
 						);
-						if ($saveResult === false)
-						{
-							$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR'), 'edit_entry_save'));
-							$id = false;
-						}
 					}
 					else
 					{
@@ -620,11 +620,15 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 								'requestUid' => $requestUid,
 							]
 						);
+						$saveResult = $id;
 					}
-				}
-				catch (\Bitrix\Calendar\Core\Event\EventSaveStateException $e)
-				{
-					$this->addError(new Error($e->getMessage(), $e->getErrorCode()));
+
+					if ($saveResult === false)
+					{
+						$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR'), 'edit_entry_save'));
+
+						return null;
+					}
 				}
 				catch (Rooms\OccupancyCheckerException|Rooms\OccupancyLockedException)
 				{
@@ -702,10 +706,6 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		catch (Internals\Exception\EventNotFound)
 		{
 			$this->addError(new Error('Event not found', 'edit_entry_event_not_found'));
-		}
-		catch (\Bitrix\Calendar\Core\Event\EventSaveStateException $e)
-		{
-			$this->addError(new Error($e->getMessage(), $e->getErrorCode()));
 		}
 		catch (Rooms\OccupancyCheckerException $e)
 		{
@@ -1194,8 +1194,16 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		}
 
 		$event = (new Mappers\Event())->getById($eventId);
+		if (!$event)
+		{
+			$this->addError(new Error('Event not found'));
 
-		return IcalIcsBuilder::buildFromEvent($event)->getContent();
+			return null;
+		}
+
+		$guestLinkUrl = $this->prepareGuestLinkForIcs($event, (int)$currentUser->getId());
+
+		return IcalIcsBuilder::buildFromEvent($event, $guestLinkUrl)->getContent();
 	}
 
 	/**
@@ -1261,7 +1269,9 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			return null;
 		}
 
-		$fileContent = IcalIcsBuilder::buildFromEvent($event)->getContent();
+		$guestLinkUrl = $this->prepareGuestLinkForIcs($event, (int)$currentUser->getId());
+
+		$fileContent = IcalIcsBuilder::buildFromEvent($event, $guestLinkUrl)->getContent();
 
 		$fileType = 'ics';
 		$mimeType = MimeType::getByFileExtension($fileType);
@@ -1271,5 +1281,29 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			->addHeader('Content-Disposition', "attachment;filename=event.$fileType")
 			->setContent($fileContent)
 		;
+	}
+
+	/**
+	 * Returns the guest invite link the event already has, or null, and clears the legacy
+	 * link line from the description so the ics does not carry the two of them at once.
+	 *
+	 * Read-only by design: downloading the ics must not create the meeting chat and mint
+	 * a link as a side effect - the link is created by an explicit action in the event
+	 * card. No link yet means no requisite in the ics.
+	 *
+	 * The link is resolved for the current user, who has already passed the
+	 * ACTION_EVENT_VIEW_FULL check of the calling action. Normalization of an attendee
+	 * copy to the parent event, where the chat lives, is the resolver's job.
+	 */
+	private function prepareGuestLinkForIcs(Event $event, int $userId): ?string
+	{
+		$requisite = new GuestLinkRequisite(self::GUEST_LINK_LOG_CHANNEL);
+		$guestLinkUrl = $requisite->resolveExistingUrl((int)$event->getId(), $userId);
+		if ($guestLinkUrl !== null)
+		{
+			GuestLinkRequisite::stripLegacyLink($event);
+		}
+
+		return $guestLinkUrl;
 	}
 }

@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Rest\Api;
 
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\AuthTypeException;
@@ -177,19 +178,7 @@ class UserFieldType extends \IRestService
 		else
 		{
 			$placementId = $result->getId();
-			foreach ($langAll as $lang => $item)
-			{
-				$item['PLACEMENT_ID'] = $placementId;
-				$item['LANGUAGE_ID'] = $lang;
-				$res = PlacementLangTable::add($item);
-				if (!$res->isSuccess())
-				{
-					throw new RestException(
-						'Error: ' . implode(', ', $res->getErrorMessages()),
-						RestException::ERROR_CORE
-					);
-				}
-			}
+			static::addPlacementLanguages($placementId, $langAll);
 			Callback::bind(array(
 				'ID' => $placementId,
 				'APP_ID' => $appInfo['ID'],
@@ -275,19 +264,7 @@ class UserFieldType extends \IRestService
 				if($updateResult->isSuccess())
 				{
 					PlacementLangTable::deleteByPlacement($placementInfo['ID']);
-					foreach ($langAll as $lang => $item)
-					{
-						$item['PLACEMENT_ID'] = $placementInfo['ID'];
-						$item['LANGUAGE_ID'] = $lang;
-						$res = PlacementLangTable::add($item);
-						if (!$res->isSuccess())
-						{
-							throw new RestException(
-								'Error: ' . implode(', ', $res->getErrorMessages()),
-								RestException::ERROR_CORE
-							);
-						}
-					}
+					static::addPlacementLanguages((int)$placementInfo['ID'], $langAll);
 					// rebind handler for failover reasons
 					Callback::bind($placementInfo);
 				}
@@ -356,6 +333,30 @@ class UserFieldType extends \IRestService
 		}
 
 		return true;
+	}
+
+	private static function addPlacementLanguages(int $placementId, array $langAll): void
+	{
+		foreach ($langAll as $lang => $item)
+		{
+			$item['PLACEMENT_ID'] = $placementId;
+			$item['LANGUAGE_ID'] = $lang;
+			try
+			{
+				$res = PlacementLangTable::add($item);
+			}
+			catch (DuplicateEntryException)
+			{
+				continue;
+			}
+			if (!$res->isSuccess())
+			{
+				throw new RestException(
+					'Error: ' . implode(', ', $res->getErrorMessages()),
+					RestException::ERROR_CORE
+				);
+			}
+		}
 	}
 
 	protected static function checkPermission(\CRestServer $server)

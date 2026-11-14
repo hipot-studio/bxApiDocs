@@ -84,6 +84,7 @@ class Folder extends BaseObject
 	 * @param string $name Name of new folder.
 	 * @param CurrentUser $currentUser Current user, autowired automatically.
 	 * @param bool $generateUniqueName Should be true if you want to generate unique name for folder.
+	 * @param bool $autoCorrect Should be true if you want to replace invalid characters in name instead of a refusal.
 	 * @return array|null
 	 * @throws ArgumentTypeException
 	 * @throws CommandException
@@ -94,6 +95,7 @@ class Folder extends BaseObject
 		string $name,
 		CurrentUser $currentUser,
 		bool $generateUniqueName = false,
+		bool $autoCorrect = false,
 	): ?array
 	{
 		$result = (new AddSubFolderCommand(
@@ -101,6 +103,7 @@ class Folder extends BaseObject
 			name: $name,
 			createdBy: (int)$currentUser->getId(),
 			generateUniqueName: $generateUniqueName,
+			autoCorrect: $autoCorrect,
 		))->run();
 
 		if (!$result->isSuccess())

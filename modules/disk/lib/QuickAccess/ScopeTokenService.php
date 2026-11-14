@@ -6,6 +6,7 @@ namespace Bitrix\Disk\QuickAccess;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Internal\Service\AttachedObject\OwnerParametersCodec;
 use Bitrix\Disk\QuickAccess\FileInfo\ProviderFactory;
 use Bitrix\Disk\QuickAccess\FileInfo\ProviderInterface;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
@@ -22,6 +23,7 @@ class ScopeTokenService
 {
 	private const PROBABILITY_CLEANUP = 5; // % chance of cleanup on each request
 	private const MAX_MEMOIZED_DESCRIPTORS = 1000;
+	private const OWNER_PARAMETERS_HASH_LENGTH = 32;
 
 	private bool $cleanupTriggered = false;
 	private array $addedScopes = [];
@@ -102,6 +104,71 @@ class ScopeTokenService
 			'scopeId' => $scope,
 			'encryptedScope' => $encryptedScopeData,
 		];
+	}
+
+	/**
+	 * Grants access for current user to every given file within its scope, as grantAccessWithScope() does
+	 * for one file, but saves the metadata of all the files to the storage in one batch
+	 *
+	 * @param array<array-key, array{0: AttachedObject|BaseObject|int, 1: string}> $objectsWithScopes
+	 * File object or file ID and scope identifier, indexed by an arbitrary key
+	 * @return array<array-key, array|null> Result of grantAccessWithScope() for every key
+	 * @throws ArgumentException
+	 * @throws ArgumentTypeException
+	 * @throws SecurityException
+	 */
+	public function grantAccessWithScopes(array $objectsWithScopes): array
+	{
+		$results = array_fill_keys(array_keys($objectsWithScopes), null);
+
+		if (!$this->quickAccessReadinessChecker->isReady())
+		{
+			return $results;
+		}
+
+		$pendingMetadata = [];
+		$descriptorSources = [];
+
+		foreach ($objectsWithScopes as $key => [$object, $scope])
+		{
+			if ($this->grantAccessToScope($scope) === false)
+			{
+				continue;
+			}
+
+			$provider = $this->fileInfoProviderFactory->createProvider($object);
+			if ($provider === null)
+			{
+				continue;
+			}
+
+			$fileId = $provider->getBFileId();
+			if (!isset($this->savedFileMetadata[$fileId]) && !array_key_exists($fileId, $pendingMetadata))
+			{
+				$pendingMetadata[$fileId] = $provider->getFileInfo()?->toArray();
+			}
+
+			$descriptorSources[$key] = [$scope, $fileId, $provider->getFileName()];
+		}
+
+		$pendingMetadata = array_filter($pendingMetadata);
+		if (!empty($pendingMetadata))
+		{
+			foreach ($this->storage->saveFileMetadataBatch($pendingMetadata) as $fileId)
+			{
+				$this->savedFileMetadata[$fileId] = true;
+			}
+		}
+
+		foreach ($descriptorSources as $key => [$scope, $fileId, $fileName])
+		{
+			$results[$key] = [
+				'scopeId' => $scope,
+				'encryptedScope' => $this->encryptScopeData($scope, $fileId, $fileName),
+			];
+		}
+
+		return $results;
 	}
 
 	/**
@@ -276,10 +343,40 @@ class ScopeTokenService
 		$this->storage->cleanupExpiredScopes($this->userQuickAccessTokenManager->getUserToken());
 	}
 
-	public function getTokenScopeByAttachedObject(AttachedObject $attachedModel): string
+	/**
+	 * Scope of quick access to the attachment. Owner parameters add the hash of their canonical form,
+	 * so that owners with the same class and id do not share the scope.
+	 * The model must be loaded with the field OWNER_PARAMETERS: without it the scope is built
+	 * as for an attachment without parameters.
+	 *
+	 * @return string|null Null when the stored owner parameters do not decode or do not pass the current rules:
+	 * no quick access is granted to such an attachment
+	 */
+	public function getTokenScopeByAttachedObject(AttachedObject $attachedModel): ?string
 	{
 		$entityType = str_replace('\\', '', $attachedModel->getEntityType());
+		$scope = $entityType . '_' . $attachedModel->getEntityId();
 
-		return $entityType . '_' . $attachedModel->getEntityId();
+		if (!$attachedModel->hasOwnerParameters())
+		{
+			return $scope;
+		}
+
+		$ownerParameters = $attachedModel->getOwnerParameters();
+		if ($ownerParameters === null)
+		{
+			return null;
+		}
+
+		$codec = new OwnerParametersCodec();
+		$encodeResult = $codec->encode($ownerParameters);
+		if (!$encodeResult->isSuccess())
+		{
+			return null;
+		}
+
+		$hash = $codec->hash($encodeResult->getData()['value']);
+
+		return $scope . '_' . substr($hash, 0, self::OWNER_PARAMETERS_HASH_LENGTH);
 	}
 }

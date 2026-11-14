@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Timeline\Bizproc;
 
 use Bitrix\Bizproc\Integration\Intranet\Settings\Manager;
+use Bitrix\Bizproc\Public\Provider\Approval\AutoDecisionProvider;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Timeline;
@@ -177,6 +178,11 @@ final class Controller extends Timeline\Controller
 				'TASK_ID' => $changedTaskStatus->task->id,
 				'TASK_NAME' => $this->getTaskNameById($changedTaskStatus->task->id),
 			];
+			$autoDecision = $this->getAutoDecision($changedTaskStatus);
+			if ($autoDecision !== null)
+			{
+				$completeData['AUTO_DECISION'] = $autoDecision;
+			}
 			$authorId = (int)reset($completeData['USERS'])['ID'];
 			$data = $this->prepareWorkflowData($changedTaskStatus->workflow->id, $authorId, $completeData);
 			$this->createTimelineEntry($data, CategoryType::TASK_COMPLETED, $changedTaskStatus);
@@ -187,6 +193,20 @@ final class Controller extends Timeline\Controller
 		{
 			$this->updateFacesInTaskActivity($changedTaskStatus->workflow);
 		}
+	}
+
+	/**
+	 * @return 'yes'|'no'|null the decision the approval automation took for the only performer of the change
+	 */
+	private function getAutoDecision(ChangedTaskStatus $changedTaskStatus): ?string
+	{
+		$users = array_values($changedTaskStatus->users);
+		if (count($users) !== 1 || !class_exists(AutoDecisionProvider::class))
+		{
+			return null;
+		}
+
+		return (new AutoDecisionProvider())->getForUser($changedTaskStatus->task->id, (int)$users[0]);
 	}
 
 	public function markCompletedTaskActivity(ChangedTaskStatus $changedTaskStatus): void

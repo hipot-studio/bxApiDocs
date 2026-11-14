@@ -48,7 +48,10 @@ final class B24Documents extends Engine\Controller
 
 		if ($unregisterCloudClientResult->isSuccess())
 		{
-			Disk\Configuration::setDefaultViewerService(Document\BitrixHandler::getCode());
+			if (!Document\Vibeoffice\Feature::servesPortalEditing())
+			{
+				Disk\Configuration::setDefaultViewerService(Document\BitrixHandler::getCode());
+			}
 		}
 		else
 		{

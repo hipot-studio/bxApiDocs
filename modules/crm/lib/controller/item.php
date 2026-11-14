@@ -18,6 +18,7 @@ use Bitrix\Crm\Service\ItemList\CountCache;
 use Bitrix\Crm\Service\ItemList\ItemPagePreloader;
 use Bitrix\Crm\Settings\RestSettings;
 use Bitrix\Main\Component\ParameterSigner;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\Engine\Response\Component;
@@ -29,12 +30,18 @@ use Bitrix\Main\ORM\Fields\DateField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\Relations\Relation;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\ArgumentException;
 
 class Item extends Base
 {
 	public const MAX_IMPORT_BATCH_SIZE = 20;
+
+	/** YYYY-MM-DD with an optional THH:MM[:SS] and an optional Z|+HH:MM|-HH:MM offset. */
+	private const ISO_8601_FILTER_VALUE_PATTERN =
+		'/^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/';
 
 	public function configureActions(): array
 	{
@@ -150,6 +157,10 @@ class Item extends Base
 
 		$parameters['filter'] = $this->convertFieldNamesToUpper((array)$filter, $isUseOriginalFieldNames, true);
 		$parameters['filter'] = $this->prepareFilter($factory, $parameters['filter']);
+		if (!$this->errorCollection->isEmpty())
+		{
+			return null;
+		}
 
 		$allowedFields = $factory->getFieldsCollection()->getFieldNameList();
 
@@ -191,8 +202,20 @@ class Item extends Base
 		{
 			if ($hasContactIdsField && !empty($parameters['filter'][$contactIdsFilterFieldVariant]))
 			{
-				$parameters['filter']['CONTACT_BINDINGS.CONTACT_ID'] = (array)$parameters['filter'][$contactIdsFilterFieldVariant];
+				$contactIds = (array)$parameters['filter'][$contactIdsFilterFieldVariant];
 				unset($parameters['filter'][$contactIdsFilterFieldVariant]);
+
+				if ($contactIdsFilterFieldVariant === '!@CONTACT_IDS')
+				{
+					// a negated condition on the binding relation would drop binding rows, not items
+					$parameters['filter'][] = [
+						'!@ID' => $this->getItemIdsBoundToContactsSql($factory, $contactIds),
+					];
+				}
+				else
+				{
+					$parameters['filter']['CONTACT_BINDINGS.CONTACT_ID'] = $contactIds;
+				}
 			}
 		}
 
@@ -1088,8 +1111,144 @@ class Item extends Base
 		{
 			$this->convertDateTimeFilterValues($filter, $this->getDateTimeFilterFieldTypes($factory));
 		}
+		else
+		{
+			// the keys lose their dots first: '>=BEGIN.DATE' filters by BEGINDATE and must be checked as well
+			$filter = $this->removeDotsFromKeys($filter);
+			$this->normalizeDateTimeFilterValues($filter, $this->getDateTimeFilterFieldTypes($factory));
+
+			return $filter;
+		}
 
 		return $this->removeDotsFromKeys($filter);
+	}
+
+	/**
+	 * Brings date/datetime filter values to the site format: CSQLWhere understands only it and puts
+	 * anything else into SQL as an empty literal. Site format values are kept, strict ISO-8601 is
+	 * converted, any other value is refused with an error.
+	 *
+	 * @param array<string, string> $fieldTypesByName field name => Field::TYPE_DATE|Field::TYPE_DATETIME
+	 */
+	private function normalizeDateTimeFilterValues(array &$filter, array $fieldTypesByName): void
+	{
+		$inFilters = [];
+		foreach ($filter as $key => &$value)
+		{
+			$type = null;
+			$prefix = null;
+			foreach ($fieldTypesByName as $fieldName => $fieldType)
+			{
+				if (is_string($key) && $this->isCorrectFieldName($key, $fieldName))
+				{
+					$type = $fieldType;
+					$prefix = str_replace($fieldName, '', $key);
+					break;
+				}
+			}
+
+			if ($type === null)
+			{
+				if (is_array($value))
+				{
+					$this->normalizeDateTimeFilterValues($value, $fieldTypesByName);
+				}
+
+				continue;
+			}
+
+			if (is_array($value))
+			{
+				// an array under other prefixes is refused by Validator\Filter
+				if (!in_array($prefix, ['', '=', '!=', '@', '!@'], true))
+				{
+					continue;
+				}
+
+				$isValid = true;
+				foreach ($value as &$item)
+				{
+					$isValid = $this->normalizeDateTimeFilterValue($item, $type) && $isValid;
+				}
+				unset($item);
+			}
+			else
+			{
+				$isValid = $this->normalizeDateTimeFilterValue($value, $type);
+			}
+
+			if (!$isValid)
+			{
+				$this->addError(new Error(
+					"Invalid filter: field '{$key}' has invalid value",
+					ErrorCode::INVALID_ARG_VALUE,
+				));
+			}
+			elseif ($prefix === '@' && is_array($value))
+			{
+				$inFilters[$key] = $fieldName;
+			}
+		}
+		unset($value);
+
+		// CSQLWhere builds IN for a date field from an SQL expression only, an array there fails;
+		// '=' with an array is the same IN. A subfilter keeps the meaning under any LOGIC
+		foreach ($inFilters as $key => $fieldName)
+		{
+			$filter[] = ['=' . $fieldName => $filter[$key]];
+			unset($filter[$key]);
+		}
+	}
+
+	private function normalizeDateTimeFilterValue(mixed &$value, string $type): bool
+	{
+		if ($value === null || $value === '')
+		{
+			return true;
+		}
+
+		if (!is_string($value))
+		{
+			return false;
+		}
+
+		$siteFormats = [
+			Date::getFormat(),
+			DateTime::getFormat(),
+			str_replace(':s', '', DateTime::getFormat()),
+		];
+		foreach ($siteFormats as $format)
+		{
+			$parsed = \DateTime::createFromFormat($format, $value);
+			$errors = \DateTime::getLastErrors();
+			if ($parsed !== false && ($errors === false || $errors['warning_count'] + $errors['error_count'] === 0))
+			{
+				return true;
+			}
+		}
+
+		if (
+			!preg_match(self::ISO_8601_FILTER_VALUE_PATTERN, $value, $matches)
+			|| !checkdate((int)$matches[2], (int)$matches[3], (int)$matches[1])
+		)
+		{
+			return false;
+		}
+
+		if ($type === Field::TYPE_DATE)
+		{
+			// a calendar date: the time and the offset are dropped without any timezone shift
+			$value = (new Date("{$matches[1]}-{$matches[2]}-{$matches[3]}", 'Y-m-d'))->toString();
+		}
+		else
+		{
+			// the moment in user time, as CSQLWhere subtracts the user offset; the same as
+			// CRestUtil::unConvertDateTime($value, true) without depending on the rest module
+			$timestamp = (new \DateTimeImmutable($value))->getTimestamp() + \CTimeZone::GetOffset();
+			$value = ConvertTimeStamp($timestamp, 'FULL');
+		}
+
+		return true;
 	}
 
 	/**
@@ -1135,6 +1294,16 @@ class Item extends Base
 		return $fieldTypesByName;
 	}
 
+	private function getItemIdsBoundToContactsSql(Service\Factory $factory, array $contactIds): SqlExpression
+	{
+		$query = $factory->getDataClass()::query()
+			->setSelect([\Bitrix\Crm\Item::FIELD_NAME_ID])
+			->whereIn(\Bitrix\Crm\Item::FIELD_NAME_CONTACT_BINDINGS . '.CONTACT_ID', $contactIds)
+		;
+
+		return new SqlExpression($query->getQuery());
+	}
+
 	protected function prepareSelect(Service\Factory $factory, array $select): array
 	{
 		if (in_array('*', $select, true))
@@ -1165,9 +1334,29 @@ class Item extends Base
 			}
 		}
 
-		return array_filter($select, static function ($fieldName) use ($factory) {
+		$isFmSelected =
+			$factory->isMultiFieldsEnabled()
+			&& in_array(\Bitrix\Crm\Item::FIELD_NAME_FM, $select, true)
+		;
+
+		$select = array_values(array_filter($select, static function ($fieldName) use ($factory) {
 			return $factory->isFieldExists($fieldName);
-		});
+		}));
+
+		if ($isFmSelected)
+		{
+			if (empty($select))
+			{
+				// an empty select is read as '*' further down, so fm alone is returned with the item id
+				$select[] = \Bitrix\Crm\Item::FIELD_NAME_ID;
+			}
+			// fm is not an entity field, so it does not survive the check above
+			// it is safe in the orm select: Service\Factory::getItems() unsets it before the query
+			$select[] = \Bitrix\Crm\Item::FIELD_NAME_FM;
+			$select = array_values(array_unique($select));
+		}
+
+		return $select;
 	}
 
 	/**
@@ -1273,18 +1462,31 @@ class Item extends Base
 
 		if ((int)$value === $fileId && $fileId > 0)
 		{
-			return BFile::createByFileId($fileId);
+			return $this->createFileResponse($fileId);
 		}
 		if (is_array($value))
 		{
 			Collection::normalizeArrayValuesByInt($value);
 			if (in_array($fileId, $value, true))
 			{
-				return BFile::createByFileId($fileId);
+				return $this->createFileResponse($fileId);
 			}
 		}
 
 		return null;
+	}
+
+	private function createFileResponse(int $fileId): ?BFile
+	{
+		$file = \CFile::getFileArray($fileId);
+		if (!$file)
+		{
+			$this->addError(new Error(Loc::getMessage('FILE_NOT_FOUND'), ErrorCode::FILE_NOT_FOUND));
+
+			return null;
+		}
+
+		return BFile::createByFileData($file);
 	}
 
 	protected function getPermittedReadItem(
@@ -1400,13 +1602,16 @@ class Item extends Base
 
 		$isCheckSelect = (is_array($select) && !in_array('*', $select, true));
 		$isSelectAware = $select !== null;
-		// fm never survives the final intersection with an explicit select
 		$isSerializeSelectOnly = $isSelectAware && $isCheckSelect;
-		$isFmNeeded = $factory->isMultiFieldsEnabled() && !$isSerializeSelectOnly;
+		$isFmRequested =
+			!$isSerializeSelectOnly
+			|| in_array(\Bitrix\Crm\Item::FIELD_NAME_FM, $select, true)
+		;
+		$isFmNeeded = $factory->isMultiFieldsEnabled() && $isFmRequested;
 
 		if ($isSelectAware)
 		{
-			(new ItemPagePreloader())->preload($factory, $items, $isCheckSelect ? $select : null, !$isCheckSelect);
+			(new ItemPagePreloader())->preload($factory, $items, $isCheckSelect ? $select : null, $isFmNeeded);
 		}
 		$itemConverter = Container::getInstance()->getItemConverter();
 
@@ -1447,6 +1652,15 @@ class Item extends Base
 			if (!$useOriginalUfNames)
 			{
 				$select = $this->convertKeysToCamelCase($select);
+			}
+			if ($isFmNeeded)
+			{
+				// fm is not an entity field: it is stored under this key whatever the naming mode
+				$select['fm'] = true;
+				if (isset($select[\Bitrix\Crm\Item::FIELD_NAME_ID]))
+				{
+					$select['id'] = true;
+				}
 			}
 
 			foreach ($result as &$item)

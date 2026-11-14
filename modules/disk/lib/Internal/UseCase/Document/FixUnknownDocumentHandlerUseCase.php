@@ -8,6 +8,7 @@ use Bitrix\Disk\Public\Command\ChangeDefaultViewerServiceCommand;
 use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Application;
+use Bitrix\Main\SystemException;
 use CAdminNotify;
 use Throwable;
 
@@ -26,7 +27,17 @@ class FixUnknownDocumentHandlerUseCase
 	{
 		try
 		{
-			(new ChangeDefaultViewerServiceCommand(BitrixHandler::getCode()))->run();
+			$changeResult = (new ChangeDefaultViewerServiceCommand(BitrixHandler::getCode()))->run();
+
+			if (!$changeResult->isSuccess())
+			{
+				$this->exceptionHandler->writeToLog(new SystemException(
+					'Could not change the default viewer service: '
+					. implode('; ', $changeResult->getErrorMessages())
+				));
+
+				return;
+			}
 
 			$this->notifyPortalAdmin();
 		}

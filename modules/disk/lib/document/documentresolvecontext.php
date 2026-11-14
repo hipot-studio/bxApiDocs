@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Document;
 
+use Bitrix\Disk\File;
+
 /**
  * Immutable context carried into {@see DocumentHandlersManager::resolveEffectiveHandler()}.
  *
@@ -14,7 +16,7 @@ namespace Bitrix\Disk\Document;
  *
  * The resolver uses the context to narrow the engine by project: when a workgroup allowlist is
  * configured ({@see Vibeoffice\Configuration::getEnabledGroupIds()}) an office open is translated to
- * vibeoffice only if its `objectId` resolves to a file in the disk of an allowlisted workgroup
+ * vibeoffice only if its file or creation target folder belongs to the disk of an allowlisted workgroup
  * ({@see \Bitrix\Disk\ProxyType\Group} storage); with an empty allowlist the context does not affect
  * the result and the feature stays portal-wide. `isExternalAccess` is intentionally not consulted —
  * the engine is a property of the file's storage, identical on every access path — see
@@ -27,6 +29,8 @@ final class DocumentResolveContext
 		private readonly ?int $attachedObjectId,
 		private readonly ?int $externalLinkId,
 		private readonly bool $isExternalAccess,
+		private readonly ?File $loadedFile = null,
+		private readonly ?int $targetFolderId = null,
 	)
 	{
 	}
@@ -37,6 +41,16 @@ final class DocumentResolveContext
 	public static function forObject(?int $objectId, ?int $attachedObjectId): self
 	{
 		return new self($objectId, $attachedObjectId, null, false);
+	}
+
+	public static function forLoadedFile(File $file, ?int $attachedObjectId = null): self
+	{
+		return new self((int)$file->getId(), $attachedObjectId, null, false, $file);
+	}
+
+	public static function forCreate(?int $targetFolderId, ?int $attachedObjectId = null): self
+	{
+		return new self(null, $attachedObjectId, null, false, targetFolderId: $targetFolderId);
 	}
 
 	/**
@@ -50,6 +64,16 @@ final class DocumentResolveContext
 	public function getObjectId(): ?int
 	{
 		return $this->objectId;
+	}
+
+	public function getLoadedFile(): ?File
+	{
+		return $this->loadedFile;
+	}
+
+	public function getTargetFolderId(): ?int
+	{
+		return $this->targetFolderId;
 	}
 
 	public function getAttachedObjectId(): ?int

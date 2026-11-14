@@ -15,6 +15,7 @@ class ClientSummary
 	protected $description = '';
 	protected $withTracking = false;
 	protected $photoFileId;
+	protected string $infoAppendix = '';
 
 	public function __construct(int $entityTypeId, int $entityId)
 	{
@@ -57,12 +58,24 @@ class ClientSummary
 		return $this;
 	}
 
+	/**
+	 * Appends html under the title and the description, in the column of the text next to the photo.
+	 *
+	 * @param string $html Ready html, it is not escaped.
+	 */
+	public function withInfoAppendix(string $html): self
+	{
+		$this->infoAppendix = $html;
+
+		return $this;
+	}
+
 	public function render(): string
 	{
 		return <<<HTML
 			<div class="crm-client-summary-wrapper">
 				<div class="crm-client-photo-wrapper">{$this->renderPhoto()}</div>
-				<div class="crm-client-info-wrapper">{$this->renderTitle()}{$this->renderDescription()}</div>
+				<div class="crm-client-info-wrapper">{$this->renderTitle()}{$this->renderDescription()}{$this->infoAppendix}</div>
 			</div>
 		HTML;
 	}

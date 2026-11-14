@@ -11,6 +11,8 @@ use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Data\AddResult;
+use Bitrix\Main\ORM\Fields\DatetimeField;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
@@ -72,7 +74,8 @@ final class SyncSessionRepository
 	 *     EFFECTIVE_DEPTH_DAYS: int,
 	 *     PLANNED_POLL_INTERVAL: int,
 	 *     STORAGE_IDS: int[],
-	 *     CHECKPOINTS_BY_STORAGE: array<int, int[]>
+	 *     CHECKPOINTS_BY_STORAGE: array<int, int[]>,
+	 *     LAST_READ_AT: DateTime|null
 	 * }|null
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -105,7 +108,91 @@ final class SyncSessionRepository
 			'PLANNED_POLL_INTERVAL' => (int)$row['PLANNED_POLL_INTERVAL'],
 			'STORAGE_IDS' => $this->decodeStorageIds($row['STORAGE_IDS'] ?? null),
 			'CHECKPOINTS_BY_STORAGE' => $this->decodeCheckpointsByStorage($row['CHECKPOINTS_BY_STORAGE'] ?? null),
+			'LAST_READ_AT' => $row['LAST_READ_AT'] ?? null,
 		];
+	}
+
+	/**
+	 * Stamps the last read of the pair by the clock of the database, at most once per interval: the
+	 * condition sits in the statement itself, so the polls inside the interval cost no row write.
+	 *
+	 * @return bool Whether the stamp moved.
+	 * @throws SqlQueryException
+	 */
+	public function touchLastRead(int $userId, string $appId, int $thinSeconds = 60): bool
+	{
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		$now = $helper->getCurrentDateTimeFunction();
+
+		$connection->queryExecute(
+			'UPDATE ' . $helper->quote(SyncSessionTable::getTableName())
+			. ' SET ' . $helper->quote('LAST_READ_AT') . ' = ' . $now
+			. ' WHERE ' . $helper->quote('USER_ID') . ' = ' . $userId
+			. ' AND ' . $helper->quote('APP_ID') . " = '" . $helper->forSql($appId) . "'"
+			. ' AND (' . $helper->quote('LAST_READ_AT') . ' IS NULL'
+			. ' OR ' . $helper->quote('LAST_READ_AT') . ' < ' . $helper->addSecondsToDateTime(-$thinSeconds) . ')'
+		);
+
+		return $connection->getAffectedRowsCount() > 0;
+	}
+
+	/**
+	 * How long ago each live pair last read, a page at a time after the given identifier. A pair that has
+	 * not read since it opened the session has aged since the opening, even when it read in the session
+	 * the opening replaced. The age is counted against the clock of the database, the one both stamps
+	 * come from.
+	 *
+	 * Walks the primary key; the age of the session is a filter, not an access path.
+	 *
+	 * @return array<int, array{ID: int, AGE: int}>
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function findLiveReadAges(DateTime $createdSince, int $afterId, int $limit): array
+	{
+		$rows = SyncSessionTable::query()
+			->setSelect(['ID', 'READ_AT', 'NOW_AT'])
+			->registerRuntimeField(
+				new ExpressionField(
+					'READ_AT',
+					'GREATEST(COALESCE(%s, %s), %s)',
+					['LAST_READ_AT', 'CREATED_AT', 'CREATED_AT'],
+					['data_type' => DatetimeField::class],
+				),
+			)
+			->registerRuntimeField(
+				new ExpressionField(
+					'NOW_AT',
+					Application::getConnection()->getSqlHelper()->getCurrentDateTimeFunction(),
+					[],
+					['data_type' => DatetimeField::class],
+				),
+			)
+			// Wrapped so that IX_DISK_SS_3 cannot serve the condition and the page stays a range of the PK.
+			->registerRuntimeField(
+				new ExpressionField(
+					'LIVE_SINCE_AT',
+					'COALESCE(%s, %s)',
+					['CREATED_AT', 'CREATED_AT'],
+					['data_type' => DatetimeField::class],
+				),
+			)
+			->where('LIVE_SINCE_AT', '>=', $createdSince)
+			->where('ID', '>', $afterId)
+			->setOrder(['ID' => 'ASC'])
+			->setLimit($limit)
+			->fetchAll()
+		;
+
+		return array_map(
+			static fn (array $row): array => [
+				'ID' => (int)$row['ID'],
+				'AGE' => max(0, $row['NOW_AT']->getTimestamp() - $row['READ_AT']->getTimestamp()),
+			],
+			$rows,
+		);
 	}
 
 	/**

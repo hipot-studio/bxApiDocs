@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\AI;
 
+use Bitrix\Im\V2\Integration\AI\Queue\DuplicateCheckJob;
 use Bitrix\Im\V2\Integration\AI\Queue\MultipleMessageTaskCreationJob;
 use Bitrix\Im\V2\Integration\AI\Queue\SingleMessageTaskCreationJob;
 use Bitrix\Im\V2\Integration\AI\Queue\TranscriptionTaskCreationJob;
 use Bitrix\Im\V2\Integration\AI\Queue\TranscriptionJob;
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Duplicate\DuplicateCheckService;
 use Bitrix\Im\V2\Integration\AI\TaskCreation\SingleMessageCreator;
 use Bitrix\Im\V2\Integration\AI\TaskCreation\MultipleMessagesCreator;
 use Bitrix\Im\V2\Integration\AI\TaskCreation\TranscriptionCreator;
@@ -40,6 +42,7 @@ class QueueManager
 			self::isTaskCreationTranscriptionJob($contextId, $parameters) => (new TranscriptionTaskCreationJob($event))->processQueueJob(),
 			self::isTaskCreationMessageJob($contextId, $parameters) => (new SingleMessageTaskCreationJob($event))->processQueueJob(),
 			self::isTaskCreationMultiMessageJob($contextId, $parameters) => (new MultipleMessageTaskCreationJob($event))->processQueueJob(),
+			self::isDuplicateCheckJob($contextId, $parameters) => (new DuplicateCheckJob($event))->processQueueJob(),
 			default => null,
 		};
 	}
@@ -68,6 +71,7 @@ class QueueManager
 			self::isTaskCreationTranscriptionJob($contextId, $parameters) => (new TranscriptionTaskCreationJob($event))->processFailedJob(),
 			self::isTaskCreationMessageJob($contextId, $parameters) => (new SingleMessageTaskCreationJob($event))->processFailedJob(),
 			self::isTaskCreationMultiMessageJob($contextId, $parameters) => (new MultipleMessageTaskCreationJob($event))->processFailedJob(),
+			self::isDuplicateCheckJob($contextId, $parameters) => (new DuplicateCheckJob($event))->processFailedJob(),
 			default => null,
 		};
 	}
@@ -130,6 +134,23 @@ class QueueManager
 			|| $contextId !== MultipleMessagesCreator::CONTEXT_ID
 			|| empty($parameters)
 			|| empty($parameters['messageIds'])
+		)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	private static function isDuplicateCheckJob(string $contextId, mixed $parameters): bool
+	{
+		if (
+			empty($contextId)
+			|| $contextId !== DuplicateCheckService::CONTEXT_ID
+			|| empty($parameters)
+			|| empty($parameters['messageId'])
+			|| empty($parameters['userId'])
+			|| empty($parameters['operationId'])
 		)
 		{
 			return false;

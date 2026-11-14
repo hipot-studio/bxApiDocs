@@ -7,6 +7,7 @@ use Bitrix\Disk\Document;
 use Bitrix\Disk\Document\Models;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Save\DocumentChannelReporter;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Save\DocumentSaveService;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Save\KeptDocumentRecovery;
@@ -18,6 +19,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internal\Service\DocumentHeader\RenameService;
 use Bitrix\Disk\Internals\Engine;
+use Bitrix\Disk\Public\Service\Restrictions\WriteErrorTransportMap;
 use Bitrix\Disk\User;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
@@ -113,6 +115,13 @@ final class OnlyOffice extends Engine\Controller
 	 * save as done.
 	 */
 	private bool $saveFailed = false;
+	/**
+	 * The write node refused the very bytes the document server holds, and would refuse them again:
+	 * a format the portal forbids, or any other verdict {@see WriteErrorTransportMap} names as
+	 * final. Nothing is stored under such a refusal either, so it never travels alone - it only
+	 * tells apart a save that may yet succeed from one that may not.
+	 */
+	private bool $retryIsPointless = false;
 
 	public function __construct(?Request $request = null)
 	{
@@ -269,7 +278,10 @@ final class OnlyOffice extends Engine\Controller
 		{
 			$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 			$defaultHandlerForView = $documentHandlersManager->getDefaultHandlerForView();
-			if ($defaultHandlerForView instanceof Document\OnlyOffice\OnlyOfficeHandler)
+			if (
+				$defaultHandlerForView instanceof Document\OnlyOffice\OnlyOfficeHandler
+				&& !Document\Vibeoffice\Feature::servesPortalEditing()
+			)
 			{
 				Disk\Configuration::setDefaultViewerService(Document\BitrixHandler::getCode());
 			}
@@ -533,11 +545,13 @@ final class OnlyOffice extends Engine\Controller
 				}
 			}
 
+			$object = $session->getObject();
+
 			return [
 				'mode' => 'edit',
 				'file' => [
-					'id' => $session->getObject()->getId(),
-					'name' => $session->getObject()->getName(),
+					'id' => $object?->getId(),
+					'name' => $object?->getName(),
 				],
 				'documentSessionInfo' => [
 					'contentStatus' => $documentInfo? $documentInfo->getContentStatus() : null,
@@ -551,6 +565,7 @@ final class OnlyOffice extends Engine\Controller
 			'mode' => 'view',
 		];
 	}
+
 
 	public function downloadAction(Models\DocumentSession $documentSession): ?Response\BFile
 	{
@@ -672,14 +687,38 @@ final class OnlyOffice extends Engine\Controller
 	 * The answer the document server reads to learn whether it has to hand the document over again.
 	 * A save that stored nothing is answered with a non-zero code, so the editor keeps the document
 	 * instead of considering it saved and dropping it, and hands it over once more.
+	 *
+	 * That answer is worth giving only while a later attempt could end differently. A version the
+	 * write node refused by the content itself would be refused identically every time, and the
+	 * protocol of the callback has no third word for it: the document server hands the document
+	 * over for every answer but the zero. So the request is closed with the zero, and the refusal
+	 * is kept where the refusal belongs - the state of the content is an error, the session gains no
+	 * finally saved mark, the participants get no `saved` event and no comment is written for a
+	 * version that does not exist.
+	 *
+	 * The same shape as {@see \Bitrix\Disk\Document\Vibeoffice\Webhook\WebhookProcessor::answerRefusedWrite()},
+	 * where a delivery of a refused write is acknowledged and recorded as refused all the same.
 	 */
 	private function makeCallbackResponse(): Response\Json
 	{
-		$askAgain = $this->saveFailed;
+		$askAgain = $this->saveFailed && !$this->retryIsPointless;
 
 		return new Response\Json([
 			'error' => $askAgain ? self::CALLBACK_ERROR_SAVE_FAILED : self::CALLBACK_ERROR_NONE,
 		]);
+	}
+
+	/**
+	 * Remembers a refusal a second attempt at the same bytes could not get past. The verdict is not
+	 * spelled out here: {@see WriteErrorTransportMap} owns the answer to "would the very same
+	 * content be refused again", and a code it says nothing about leaves the save retryable.
+	 */
+	private function rememberRefusalOfTheWriteNode(Disk\File $file): void
+	{
+		if (WriteErrorTransportMap::findFinalRefusalCode($file->getErrors()) !== null)
+		{
+			$this->retryIsPointless = true;
+		}
 	}
 
 	protected function processRestrictionLogs(int $status, array $hookData): void
@@ -924,6 +963,12 @@ final class OnlyOffice extends Engine\Controller
 				$this->deactivateDocumentSessions($externalHash);
 				$this->commentAttachedObjectsOnBackground($documentSession);
 			}
+			elseif ($this->retryIsPointless)
+			{
+				// The request is closed with the zero, and the editor server drops the document it held:
+				// no kept key is left to come back to, and the next opening starts from the copy on Disk.
+				$documentInfo?->markAsSavedWithError();
+			}
 			else
 			{
 				// The sessions of the key stay active and the key stays the same: the editor server keeps
@@ -982,17 +1027,30 @@ final class OnlyOffice extends Engine\Controller
 		else
 		{
 			$this->saveFailed = true;
+			$object = $documentSession->getObject();
+			if ($object)
+			{
+				$this->rememberRefusalOfTheWriteNode($object);
+			}
 		}
 
 		return $saveResult;
 	}
 
 	/**
-	 * Options of the writing of a version coming out of an editing session.
+	 * Context of a write coming out of an editing session, with the time that session began: the
+	 * write node is told both what it is and when it started, and it is that mark which keeps the
+	 * quota and the policy of formats from taking the work of the user away mid-session. The version is
+	 * judged by the policy of the participant who opened the session, not of the author of the last edit.
 	 */
 	private function buildEditingSessionWriteOptions(DocumentSession $documentSession): array
 	{
-		return ['commentAttachedObjects' => false];
+		return [
+			'commentAttachedObjects' => false,
+			WriteOperationContext::OPTION_KEY => WriteOperationContext::EditingSession,
+			WriteOperationContext::OPTION_KEY_EDITING_SESSION_STARTED_AT => $documentSession->getCreateTime()->getTimestamp(),
+			WriteOperationContext::OPTION_KEY_EDITING_SESSION_OWNER_ID => $documentSession->getUserId(),
+		];
 	}
 
 	private function sendDocumentClosedWithChangesAnalytics(DocumentSession $documentSession): void
@@ -1253,7 +1311,14 @@ final class OnlyOffice extends Engine\Controller
 			return $this->showNotFoundPageAction();
 		}
 
-		return $this->loadDocumentEditor($object, null, $attachedObject, DocumentSession::TYPE_EDIT, $editorMode, $uls);
+		$file = $object ?? $attachedObject?->getFile();
+		$lock = Disk\Configuration::isEnabledObjectLock() ? $file?->getLock() : null;
+		$sessionType = $lock && $lock->isExclusive() && !$lock->canUnlock(User::resolveUserId($this->getCurrentUser()))
+			? DocumentSession::TYPE_VIEW
+			: DocumentSession::TYPE_EDIT
+		;
+
+		return $this->loadDocumentEditor($object, null, $attachedObject, $sessionType, $editorMode, $uls);
 	}
 
 	private function getUnifiedLinkSignatureForFile(Disk\File $object): ?string

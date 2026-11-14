@@ -106,11 +106,29 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity
 			if ($selfRelation !== null && $selfRelation->getStartId() > 0)
 			{
 				$this
-					->setStartCounter($selfRelation->getStartId())
 					->setLastFileId($selfRelation->getLastFileId())
 					->setStartCounter($selfRelation->getStartCounter())
 				;
 			}
+		}
+
+		return $this->applyHistoryBorder($chat);
+	}
+
+	/**
+	 * A chat cleared for everyone reports an empty history right away, but its messages stay in the
+	 * database until the scheduled cleanup takes them, so LAST_MESSAGE_ID alone would put a newcomer in
+	 * front of content nobody is supposed to reach anymore. The border stored on the chat covers that
+	 * window whatever the caller asked for, and it can never hide a message sent afterwards: message ids
+	 * only grow, so a stored border is below every id yet to be issued.
+	 */
+	private function applyHistoryBorder(Chat $chat): self
+	{
+		$historyStartId = $chat->getHistoryStartId();
+
+		if ($historyStartId > (int)$this->getStartId())
+		{
+			$this->setStartId($historyStartId);
 		}
 
 		return $this;

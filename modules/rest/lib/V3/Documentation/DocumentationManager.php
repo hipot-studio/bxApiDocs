@@ -3,6 +3,7 @@
 namespace Bitrix\Rest\V3\Documentation;
 
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LocalizableMessage;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
@@ -13,8 +14,8 @@ use Bitrix\Rest\V3\Documentation\Attributes\Deprecated;
 use Bitrix\Rest\V3\Documentation\Attributes\Hidden;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
-use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
+use Bitrix\Rest\V3\Dto\Meta\FieldMetaInterface;
 use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Interaction\Response\AddResponse;
@@ -248,7 +249,7 @@ class DocumentationManager
 
 		$dtoSchema = $this->getDtoProperties($dto);
 		$dtoSchemas[$dtoSchemaName] = $dtoSchema;
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			$type = $field->getPropertyType();
 			if (TypeHelper::isDto($type))
@@ -276,6 +277,11 @@ class DocumentationManager
 		{
 			if (!empty($moduleConfig->documentation['schemas']) && is_array($moduleConfig->documentation['schemas']))
 			{
+				if (!Loader::includeModule($moduleId))
+				{
+					continue;
+				}
+
 				foreach ($moduleConfig->documentation['schemas'] as $schemaObject => $schemaClass)
 				{
 					if (is_subclass_of($schemaClass, SchemaProvider::class))
@@ -298,6 +304,11 @@ class DocumentationManager
 		{
 			if (!empty($moduleConfig->documentation['methods']) && is_array($moduleConfig->documentation['methods']))
 			{
+				if (!Loader::includeModule($moduleId))
+				{
+					continue;
+				}
+
 				foreach ($moduleConfig->documentation['methods'] as $methodUri => $methodDocumentationClass)
 				{
 					if (is_subclass_of($methodDocumentationClass, MethodProvider::class))
@@ -514,7 +525,7 @@ class DocumentationManager
 		return $aggregationProperties;
 	}
 
-	private function getFieldTypeFormat(DtoField $field): array
+	private function getFieldTypeFormat(FieldMetaInterface $field): array
 	{
 		if ($field->isMultiple())
 		{
@@ -542,7 +553,7 @@ class DocumentationManager
 		return $result;
 	}
 
-	private function getFormatByType(DtoField $field): array
+	private function getFormatByType(FieldMetaInterface $field): array
 	{
 		if ($field->getDynamicEnumProvider() !== null)
 		{
@@ -596,7 +607,7 @@ class DocumentationManager
 		];
 	}
 
-	private function getDtoCollectionProperty(DtoField $field): array
+	private function getDtoCollectionProperty(FieldMetaInterface $field): array
 	{
 		if ($field->getElementType())
 		{
@@ -617,8 +628,7 @@ class DocumentationManager
 			'properties' => [],
 		];
 
-		/** @var DtoField $field */
-		foreach ($dto->getFields() as $field)
+		foreach ($dto->getFields()->getMetaList() as $field)
 		{
 			$result['properties'][$field->getPropertyName()] = $this->getFieldTypeFormat($field);
 		}
@@ -937,8 +947,7 @@ class DocumentationManager
 	{
 		$selectable = $editable = $sortable = $required = [];
 
-		/** @var DtoField $dtoField */
-		foreach ($dto->getFields() as $dtoField)
+		foreach ($dto->getFields()->getMetaList() as $dtoField)
 		{
 			if ($dtoField->getRelation() !== null)
 			{

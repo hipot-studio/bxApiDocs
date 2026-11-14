@@ -13,6 +13,7 @@ use Bitrix\Disk\Document\Flipchart\Comment\RequestValidator;
 use Bitrix\Disk\Document\Flipchart\Comment\Request\SetThreadFlagRequest;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
+use Bitrix\Main\Engine\ActionFilter\Cors;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Engine\AutoWire\Parameter;
@@ -128,6 +129,7 @@ final class Comments extends Controller
 				HttpMethod::class,
 			],
 			'+prefilters' => [
+				new Cors('*'),
 				new HttpMethod([HttpMethod::METHOD_GET]),
 			],
 		];

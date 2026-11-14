@@ -226,26 +226,20 @@ class GoogleHandler extends DocumentHandler implements IViewer, FileCreatable, C
 	 */
 	public function getAppId(): ?string
 	{
-		//123456789-xxxxxx.apps.googleusercontent.com
-		$clientId = $this->getClientId();
+		// client_id is stored as entered and starts with the project number:
+		// 123456789-xxxxxx.apps.googleusercontent.com or 798910771106.apps.googleusercontent.com
+		$clientId = trim((string)$this->getClientId());
 		if (!$clientId)
 		{
 			return null;
 		}
 
-		$parts = explode('-', $clientId);
-		if (empty($parts))
+		if (!preg_match('/^(\d+)(?:[-.]|$)/', $clientId, $matches))
 		{
 			return null;
 		}
 
-		$clientId = $parts[0];
-		if (!is_numeric($clientId))
-		{
-			return null;
-		}
-
-		return $clientId;
+		return $matches[1];
 	}
 
 

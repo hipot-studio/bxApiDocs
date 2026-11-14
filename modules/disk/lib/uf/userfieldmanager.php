@@ -10,6 +10,8 @@ use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\User;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\SystemException;
@@ -120,6 +122,176 @@ final class UserFieldManager implements IErrorable
 			$attachedObject->getModuleId()   === $moduleId &&
 			$attachedObject->getEntityType() === $connectorClass
 		;
+	}
+
+	/**
+	 * Resolves the user whose rights are checked for attached objects of another entity.
+	 * Unlike the activity user of the field types, there is no fallback to the system user.
+	 *
+	 * @internal
+	 * @param int|string|false|null $userId Id of user, false or null for the current authorized user.
+	 * @return int Id of user or 0 if there is no authorized user.
+	 */
+	public static function resolveCheckingUserId(int|string|false|null $userId): int
+	{
+		if ($userId === false || $userId === null)
+		{
+			return (int)User::resolveUserId(CurrentUser::get());
+		}
+
+		return (int)$userId;
+	}
+
+	/**
+	 * Checks whether the user field of the entity type may hold attached objects of other entities:
+	 * the connector of the entity type supports foreign connectors.
+	 *
+	 * @internal
+	 * @param string $entityType Entity type (ex. sonet_comment).
+	 * @return bool
+	 */
+	public function supportsForeignAttachedObjects(string $entityType): bool
+	{
+		[$connectorClass] = $this->getConnectorDataByEntityType($entityType);
+
+		return is_string($connectorClass) && is_a($connectorClass, ISupportForeignConnector::class, true);
+	}
+
+	/**
+	 * Resolves the user whose rights are checked when a component shows attached objects of other entities:
+	 * the recipient for the mail template, otherwise the current user.
+	 *
+	 * @internal
+	 * @param string $templateName Template name of the component.
+	 * @param array $componentParams Parameters of the component (arParams).
+	 * @param int $currentUserId Id of the current user.
+	 * @return int
+	 */
+	public static function resolveViewerId(string $templateName, array $componentParams, int $currentUserId): int
+	{
+		if ($templateName !== 'mail')
+		{
+			return $currentUserId;
+		}
+
+		$params = is_array($componentParams['PARAMS'] ?? null)
+			? array_change_key_case($componentParams['PARAMS'], CASE_UPPER)
+			: []
+		;
+		foreach ([$params['RECIPIENT_ID'] ?? 0, $componentParams['RECIPIENT_ID'] ?? 0] as $recipientId)
+		{
+			if (is_scalar($recipientId) && (int)$recipientId > 0)
+			{
+				return (int)$recipientId;
+			}
+		}
+
+		return $currentUserId;
+	}
+
+	/**
+	 * Checks whether the attached object may be used in the user field of the entity.
+	 * The own attached object of the entity is allowed, the attached object of another entity
+	 * requires read access of the user.
+	 * The access is asked from a new connector: the attached object and its connector may be kept
+	 * for the process, and connectors remember the answer of canRead regardless of the user.
+	 *
+	 * @internal
+	 * @param AttachedObject $attachedObject Attached object.
+	 * @param string $entityType Entity type (ex. sonet_comment).
+	 * @param int $entityId Id of entity.
+	 * @param int $userId Id of user.
+	 * @return bool
+	 */
+	public function canUseAttachedObject(
+		AttachedObject $attachedObject,
+		string $entityType,
+		int $entityId,
+		int $userId,
+	): bool
+	{
+		if ($this->belongsToEntity($attachedObject, $entityType, $entityId))
+		{
+			return true;
+		}
+
+		$connector = Connector::buildFromAttachedObject($attachedObject);
+		if (!$userId && !$connector->isAnonymousAllowed())
+		{
+			return false;
+		}
+
+		return (bool)$connector->canRead($userId);
+	}
+
+	/**
+	 * Deletes attached objects which belong to the entity. Attached objects of other entities are kept.
+	 *
+	 * @internal
+	 * @param array $attachedObjectIds List of attached objects id.
+	 * @param string $entityType Entity type (ex. sonet_comment).
+	 * @param int $entityId Id of entity.
+	 * @return void
+	 */
+	public function detachOwnAttachedObjects(array $attachedObjectIds, string $entityType, int $entityId): void
+	{
+		$ids = [];
+		foreach ($attachedObjectIds as $attachedObjectId)
+		{
+			if (!is_scalar($attachedObjectId))
+			{
+				continue;
+			}
+
+			$attachedObjectId = (int)$attachedObjectId;
+			if ($attachedObjectId > 0)
+			{
+				$ids[$attachedObjectId] = $attachedObjectId;
+			}
+		}
+
+		if (empty($ids))
+		{
+			return;
+		}
+
+		$attachedObjects = AttachedObject::getModelList([
+			'filter' => ['ID' => array_values($ids)],
+		]);
+		foreach ($attachedObjects as $attachedObject)
+		{
+			if ($this->belongsToEntity($attachedObject, $entityType, $entityId))
+			{
+				$attachedObject->delete();
+			}
+		}
+	}
+
+	/**
+	 * Checks whether the saved value of the user field contains the attached object.
+	 *
+	 * @internal
+	 * @param mixed $savedValue Saved value of the user field: scalar or array.
+	 * @param int $attachedObjectId Id of attached object.
+	 * @return bool
+	 */
+	public static function hasAttachedObjectIdInValue(mixed $savedValue, int $attachedObjectId): bool
+	{
+		if ($attachedObjectId <= 0)
+		{
+			return false;
+		}
+
+		$values = is_array($savedValue) ? $savedValue : [$savedValue];
+		foreach ($values as $value)
+		{
+			if (is_scalar($value) && (int)$value === $attachedObjectId)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function getAdditionalConnectors()

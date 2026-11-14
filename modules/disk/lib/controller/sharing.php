@@ -3,6 +3,12 @@
 namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditCaptureService;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
+use Bitrix\Disk\Internal\Service\Audit\AuditRightsChangeAuditService;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -36,10 +42,19 @@ final class Sharing extends Engine\Controller
 			return;
 		}
 
-		if (!$sharing->delete($currentUserId))
-		{
-			$this->errorCollection->add($sharing->getErrors());
-		}
+		AuditTransaction::run(function (AuditTransaction $transaction) use ($sharing, $currentUserId, $baseObject): bool {
+			$auditService = new AuditRightsChangeAuditService();
+			$before = $auditService->capture($baseObject);
+			if (!$sharing->delete($currentUserId, true, $transaction))
+			{
+				$this->errorCollection->add($sharing->getErrors());
+
+				return false;
+			}
+			$this->scheduleRightsAudit($baseObject, $before, $currentUserId, $transaction, $auditService);
+
+			return true;
+		});
 	}
 
 	public function changeTaskNameAction(Disk\Sharing $sharing, $newTaskName)
@@ -73,23 +88,70 @@ final class Sharing extends Engine\Controller
 		$rightsManager = Disk\Driver::getInstance()->getRightsManager();
 
 		$domain = $rightsManager->getSharingDomain($sharing->getId());
-		$rightsManager->deleteByDomain($baseObject->getRealObject(), $domain);
+		$realObject = $baseObject->getRealObject();
 
-		if (!$sharing->changeTaskName($newTaskName))
-		{
-			$this->errorCollection->add($sharing->getErrors());
+		// one transaction, so that the journal of sync compares the targets once and sees the role change
+		AuditTransaction::run(function (AuditTransaction $transaction) use (
+			$rightsManager,
+			$realObject,
+			$domain,
+			$sharing,
+			$newTaskName,
+			$currentUserId,
+		): bool {
+			$auditService = new AuditRightsChangeAuditService();
+			$before = $auditService->capture($realObject);
+			if (!$rightsManager->deleteByDomain($realObject, $domain, $transaction))
+			{
+				$this->errorCollection->add($rightsManager->getErrors());
 
-			return;
-		}
+				return false;
+			}
 
-		$newRights = [
-			[
-				'ACCESS_CODE' => $sharing->getToEntity(),
-				'TASK_ID' => $rightsManager->getTaskIdByName($sharing->getTaskName()),
-				'DOMAIN' => $domain,
-			]
-		];
+			if (!$sharing->changeTaskName($newTaskName))
+			{
+				$this->errorCollection->add($sharing->getErrors());
 
-		$rightsManager->append($baseObject->getRealObject(), $newRights);
+				return false;
+			}
+
+			$newRights = [
+				[
+					'ACCESS_CODE' => $sharing->getToEntity(),
+					'TASK_ID' => $rightsManager->getTaskIdByName($sharing->getTaskName()),
+					'DOMAIN' => $domain,
+				]
+			];
+
+			if (!$rightsManager->append($realObject, $newRights, $transaction))
+			{
+				$this->errorCollection->add($rightsManager->getErrors());
+
+				return false;
+			}
+			$this->scheduleRightsAudit($realObject, $before, $currentUserId, $transaction, $auditService);
+
+			return true;
+		});
+	}
+
+	private function scheduleRightsAudit(
+		Disk\BaseObject $object,
+		?array $before,
+		?int $currentUserId,
+		AuditTransaction $transaction,
+		AuditRightsChangeAuditService $auditService,
+	): void
+	{
+		AuditCaptureService::runFailOpen(static function () use (
+			$object, $before, $currentUserId, $transaction, $auditService,
+		): \Bitrix\Main\Result {
+			$context = AuditOperationContext::create(
+				operationId: AuditOperationContextStack::current()?->operationId,
+				actionContext: (new AuditActionContextResolver())->resolveForWeb($currentUserId),
+			);
+
+			return $auditService->schedule($object, $before, $context, $transaction);
+		});
 	}
 }

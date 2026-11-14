@@ -27,6 +27,7 @@ class DocumentSessionCheck extends ActionFilter\Base
 	private $strictCheckRight = false;
 	/** @var bool */
 	private $ownerCheck = false;
+	private bool $versionScopedUnifiedLink = false;
 
 	public function __construct()
 	{
@@ -48,6 +49,13 @@ class DocumentSessionCheck extends ActionFilter\Base
 	public function enableOwnerCheck(): self
 	{
 		$this->ownerCheck = true;
+
+		return $this;
+	}
+
+	public function enableVersionScopedUnifiedLink(): self
+	{
+		$this->versionScopedUnifiedLink = true;
 
 		return $this;
 	}
@@ -146,6 +154,31 @@ class DocumentSessionCheck extends ActionFilter\Base
 		if (!is_string($uls) || $uls === '')
 		{
 			return false;
+		}
+
+		return $this->validateUnifiedLink($documentSession, $uls);
+	}
+
+	private function validateUnifiedLink(DocumentSession $documentSession, string $uls): bool
+	{
+		$file = $documentSession->getFile();
+		if (!$file)
+		{
+			return false;
+		}
+
+		if ($this->versionScopedUnifiedLink && $documentSession->isVersion())
+		{
+			$version = $documentSession->getVersion();
+
+			return $version
+				&& (int)$version->getId() === (int)$documentSession->getVersionId()
+				&& (int)$version->getObjectId() === (int)$file->getRealObjectId()
+				&& $this->unifiedLinkAccessService->validateUlsForVersion(
+					objectId: $file->getId(),
+					versionId: $version->getId(),
+					uls: $uls,
+				);
 		}
 
 		return $this->unifiedLinkAccessService->validateUlsForObjectId($file->getId(), $uls);

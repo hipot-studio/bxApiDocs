@@ -86,6 +86,52 @@ final class RedisScopeStorage extends ScopeStorage
 	 * @param string $scope The scope to check
 	 * @return bool True if the user has the scope, false otherwise
 	 */
+	/**
+	 * Writes all keys in one pipeline. A cluster spreads the keys over nodes, so it keeps writing them one by one
+	 */
+	public function saveFileMetadataBatch(array $metadataByFileId, int $ttl = self::DEFAULT_FILE_METADATA_TTL): array
+	{
+		if (!$this->connection instanceof \Redis || \count($metadataByFileId) < 2)
+		{
+			return parent::saveFileMetadataBatch($metadataByFileId, $ttl);
+		}
+
+		$values = [];
+		foreach ($metadataByFileId as $fileId => $metadata)
+		{
+			$value = $this->encodeFileMetadata($metadata);
+			if ($value !== null)
+			{
+				$values[(int)$fileId] = $value;
+			}
+		}
+
+		try
+		{
+			$pipeline = $this->connection->multi(\Redis::PIPELINE);
+			foreach ($values as $fileId => $value)
+			{
+				$pipeline->setex($this->getInternalKey($this->getFileKey($fileId)), $ttl ?: 1, $value);
+			}
+			$replies = $pipeline->exec();
+		}
+		catch (\RedisException)
+		{
+			return [];
+		}
+
+		$savedFileIds = [];
+		foreach (array_keys($values) as $index => $fileId)
+		{
+			if (($replies[$index] ?? false) === true)
+			{
+				$savedFileIds[] = $fileId;
+			}
+		}
+
+		return $savedFileIds;
+	}
+
 	public function hasScope(string $userToken, string $scope): bool
 	{
 		$key = $this->getInternalKey($this->getUserScopesKey($userToken));

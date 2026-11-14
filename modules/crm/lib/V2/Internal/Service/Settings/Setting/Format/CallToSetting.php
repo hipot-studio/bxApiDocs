@@ -26,12 +26,12 @@ use Bitrix\Main\Result;
  */
 final class CallToSetting extends AbstractSetting
 {
-	public const CODE = 'crm.format.callto';
+	public const ID = 'crm.format.callto';
 	private const DEFAULT_URL_TEMPLATE = 'callto:[phone]';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -43,32 +43,48 @@ final class CallToSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new ObjectSchema(
 				CallToValue::class,
 				new ObjectField(
 					'format',
-					SettingTitleProvider::getTitle(self::CODE . '.field.format'),
+					SettingTitleProvider::getTitle(self::ID . '.field.format'),
 					new SelectSchema(...$formatOptions),
+					true,
+					SettingTitleProvider::getDescription(self::ID . '.field.format'),
+					SettingTitleProvider::getNote(self::ID . '.field.format'),
+					'callto_frmt',
 				),
 				new ObjectField(
 					'urlTemplate',
-					SettingTitleProvider::getTitle(self::CODE . '.field.url_template'),
+					SettingTitleProvider::getTitle(self::ID . '.field.url_template'),
 					new StringSchema(),
+					true,
+					SettingTitleProvider::getDescription(self::ID . '.field.url_template'),
+					SettingTitleProvider::getNote(self::ID . '.field.url_template'),
+					'callto_custom_settings',
 				),
 				new ObjectField(
 					'clickHandler',
-					SettingTitleProvider::getTitle(self::CODE . '.field.click_handler'),
+					SettingTitleProvider::getTitle(self::ID . '.field.click_handler'),
 					new StringSchema(),
+					true,
+					SettingTitleProvider::getDescription(self::ID . '.field.click_handler'),
+					SettingTitleProvider::getNote(self::ID . '.field.click_handler'),
+					'callto_custom_settings',
 				),
 				new ObjectField(
 					'normalizeNumber',
-					SettingTitleProvider::getTitle(self::CODE . '.field.normalize_number'),
+					SettingTitleProvider::getTitle(self::ID . '.field.normalize_number'),
 					new BooleanSchema(),
+					true,
+					SettingTitleProvider::getDescription(self::ID . '.field.normalize_number'),
+					SettingTitleProvider::getNote(self::ID . '.field.normalize_number'),
+					'callto_custom_settings',
 				),
 			),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

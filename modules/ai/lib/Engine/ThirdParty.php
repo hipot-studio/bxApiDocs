@@ -161,10 +161,11 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 		if (isset($rawResult['result']))
 		{
 			$result = is_array($rawResult['result']) ? $rawResult['result'] : [$rawResult['result']];
-			$result = $this->getCategory() === 'image'
-				? $result
-				: $result[0]
-			;
+			if ($this->getCategory() !== 'image')
+			{
+				// An object-shaped result is the answer itself and has no element 0
+				$result = array_is_list($result) ? ($result[0] ?? null) : $result;
+			}
 		}
 		else
 		{
@@ -174,7 +175,9 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 		return new Result(
 			$rawResult,
 			is_array($result) ? json_encode($result) : $result,
-			$cached
+			$cached,
+			// Consumers read an empty array as an already parsed empty answer, so a text answer goes as null
+			is_array($result) ? $result : null,
 		);
 	}
 
@@ -216,7 +219,7 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 	 */
 	public function completions(): void
 	{
-		$http = new HttpClient;
+		$http = $this->createHttpClient();
 		$http->setPrivateIp(false);
 		$http->setHeader('Content-Type', 'application/json');
 		$http->setTimeout(self::HTTP_TIMEOUT);
@@ -245,12 +248,9 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 		$this->params['errorCallbackUrl'] = $this->getQueueJob()->getErrorCallbackUrl();
 
 		$params = $this->getParameters();
-		$response = $http->post($this->item->getCompletionsUrl(), json_encode($params));
-		$responseDecode = $this->decodeResponse($response);
-		if (!$responseDecode)
-		{
-			return;
-		}
+		// The provider only acknowledges the request here and sends the answer to callbackUrl,
+		// so the body carries nothing to read and the status alone decides the outcome.
+		$http->post($this->item->getCompletionsUrl(), json_encode($params));
 		if ($http->getStatus() === self::HTTP_STATUS_OK)
 		{
 			if (is_callable($this->onSuccessCallback))
@@ -269,6 +269,11 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 				'unknown_error'
 			);
 		}
+	}
+
+	protected function createHttpClient(): HttpClient
+	{
+		return new HttpClient;
 	}
 
 	/**

@@ -102,12 +102,37 @@ final class DownloadPolicy
 			logUrl: true,
 			chunkSize: self::getTrackOption('call_download_chunk_size', self::DEFAULT_CHUNK_SIZE, self::TRACK_MIN_CHUNK_SIZE),
 			stepBudgetSeconds: self::getTrackOption('call_download_execution_time_limit', self::DEFAULT_STEP_BUDGET, self::TRACK_MIN_STEP_BUDGET),
-			connectTimeout: 20,
-			streamTimeout: 10,
+			connectTimeout: self::DEFAULT_CONNECT_TIMEOUT,
+			streamTimeout: self::DEFAULT_STREAM_TIMEOUT,
 			headers: [
 				'User-Agent' => 'Bitrix Call Client ' . Client::getPortalType(),
 				'Referer' => Client::getServerName(),
 			],
+		);
+	}
+
+	/**
+	 * The same policy with other timeouts: for a request somebody waits the answer of, such as the
+	 * HEAD probe of a delivery address {@see \Bitrix\Call\Track\TrackService::probeDeliveryAddress()}.
+	 * The timeouts are checked as the constructor checks them.
+	 *
+	 * @param int $connectTimeout Seconds to connect.
+	 * @param int $streamTimeout Seconds a response may stay silent.
+	 */
+	public function withTimeouts(int $connectTimeout, int $streamTimeout): self
+	{
+		return new self(
+			maxBodyBytes: $this->maxBodyBytes,
+			verifyTls: $this->verifyTls,
+			followRedirects: $this->followRedirects,
+			allowPrivateIp: $this->allowPrivateIp,
+			urlCheck: $this->urlCheck,
+			logUrl: $this->logUrl,
+			chunkSize: $this->chunkSize,
+			stepBudgetSeconds: $this->stepBudgetSeconds,
+			connectTimeout: $connectTimeout,
+			streamTimeout: $streamTimeout,
+			headers: $this->headers,
 		);
 	}
 

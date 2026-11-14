@@ -6,6 +6,7 @@ use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Type\DateTime;
 
 abstract class SecurityContext implements IErrorable
 {
@@ -152,6 +153,35 @@ abstract class SecurityContext implements IErrorable
 	 * @return string
 	 */
 	public function getSqlExpressionForRootObjectList(string $columnObjectId, string $columnCreatedBy): string
+	{
+		return $this->getSqlExpressionForList($columnObjectId, $columnCreatedBy);
+	}
+
+	/**
+	 * Returns rights check expression for a list bounded by the closure subtree of the given root.
+	 * Calling it is allowed only when every candidate row of the query provably lies inside that subtree,
+	 * the root itself included: the expression is free to resolve the rights of the whole subtree at once.
+	 * A filter on PATH_CHILD.PARENT_ID = <root> satisfies it, a filter on STORAGE_ID does not, and the root
+	 * given here must be the very same expression the closure filter of the query stands on.
+	 *
+	 * @param string $columnObjectId
+	 * @param string $columnCreatedBy
+	 * @param int $rootObjectId
+	 * @param DateTime|null $candidatesChangedSince the lower bound the query puts on SYNC_UPDATE_TIME of
+	 *        its candidates; the epoch when it puts none. Passing it declares the candidate set, and the
+	 *        expression is then free to weigh which of its two forms is cheaper on a set that size. Left
+	 *        out, it weighs nothing and answers as it did before the weighing existed. Either way the
+	 *        value is read by that choice alone and never by the expression it returns, so a bound wider
+	 *        or narrower than the filter of the query costs a worse choice of form and nothing besides:
+	 *        both forms select the same rows in the same order.
+	 * @return string
+	 */
+	public function getSqlExpressionForSubtreeList(
+		string $columnObjectId,
+		string $columnCreatedBy,
+		int $rootObjectId,
+		?DateTime $candidatesChangedSince = null,
+	): string
 	{
 		return $this->getSqlExpressionForList($columnObjectId, $columnCreatedBy);
 	}

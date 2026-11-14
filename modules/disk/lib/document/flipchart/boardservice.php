@@ -15,6 +15,8 @@ use Bitrix\Disk\Document\Flipchart\Messenger\DownloadBoardMessage;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
+use Bitrix\Disk\Public\Service\Restrictions\WriteErrorTransportMap;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\User;
 use Bitrix\Main\DI\ServiceLocator;
@@ -129,16 +131,78 @@ class BoardService
 		$tmpFileArray = \CFile::makeFileArray($tmpFile);
 
 		// Dunno what is it
-		$options = ['commentAttachedObjects' => false];
+		$options = [
+			'commentAttachedObjects' => false,
+			WriteOperationContext::OPTION_KEY => WriteOperationContext::EditingSession,
+			WriteOperationContext::OPTION_KEY_EDITING_SESSION_STARTED_AT => $this->session->getCreateTime()->getTimestamp(),
+		];
 		if (!$this->session->getObject()->uploadVersion($tmpFileArray, $this->session->getUserId(), $options))
 		{
-			return new Error('Could not upload new version of the file.');
+			return $this->refusalOfTheWriteNode($this->session->getObject());
 		}
 
 		// $this->sendEventToParticipants('saved');
 		return true;
 	}
 
+	/**
+	 * The refusal the write node left on the model, carried out under the domain code the node
+	 * named it by. The code is what tells a format the portal forbids from an obstacle of the
+	 * moment, and the channel above has no other way to learn it: it never sees the model.
+	 *
+	 * The model may leave more than one error behind, so the whole collection is read and the code
+	 * that decides is the one {@see WriteErrorTransportMap} calls final, wherever it stands among
+	 * them - the neighbouring channels read the errors of a refused write the same way.
+	 * uploadVersion() empties the collection before it writes, so what is found there belongs to
+	 * this write alone.
+	 *
+	 * A refusal the registry says nothing about carries the code of the model all the same: the
+	 * channel above decides on retry by asking the registry, which knows nothing of that code
+	 * either, so the answer does not change - but the code is the only thing that says what stopped
+	 * the write, and without it the backend of the boards and the journal of the portal are left
+	 * with one text for every obstacle there is.
+	 */
+	private function refusalOfTheWriteNode(File $file): WriteNodeRefusal
+	{
+		$message = 'Could not upload new version of the file.';
+
+		$errors = $file->getErrors();
+
+		$code = WriteErrorTransportMap::findFinalRefusalCode($errors) ?? $this->findFirstCode($errors);
+		if ($code === null)
+		{
+			return new WriteNodeRefusal($message);
+		}
+
+		return new WriteNodeRefusal($message, $code);
+	}
+
+	/**
+	 * The first code the model actually named the refusal by. An error left with the code every
+	 * Error carries by default counts as named by none: the refusal then travels the way it did
+	 * before any code was carried at all.
+	 *
+	 * @param \Bitrix\Disk\Internals\Error\Error[] $errors
+	 * @return string|null
+	 */
+	private function findFirstCode(array $errors): ?string
+	{
+		foreach ($errors as $error)
+		{
+			$code = (string)$error->getCode();
+			if ($code !== '' && $code !== '0')
+			{
+				return $code;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * A board is a document the user asks for: the write declares no product-generated context, so a
+	 * format the portal restricts is refused here exactly as it is refused on upload.
+	 */
 	public static function createNewDocument(User $user, Folder $folder, ?string $filename = null): Result
 	{
 		if (!$filename)
@@ -148,6 +212,15 @@ class BoardService
 
 		$result = new Result();
 
+		$formatRefusal = self::findFormatRefusal($filename, (int)$user->getId());
+		if ($formatRefusal)
+		{
+			$result->addError($formatRefusal);
+
+			return $result;
+		}
+
+		$downloadResult = (new BoardApiService())->downloadBlank();
 		// The object does not exist yet, so the destination folder decides the instance: the blank
 		// is requested before the file is created.
 		$profile = ServiceProfileResolver::createFromOptions()->resolveForDestination($folder);
@@ -202,7 +275,7 @@ class BoardService
 
 		if (!$file)
 		{
-			$result->addError(new Error('Cannot save file'));
+			$result->addErrors(static::errorsOfTheRefusedWrite($folder));
 
 			return $result;
 		}
@@ -212,6 +285,36 @@ class BoardService
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * The refusal of the write in the words the folder named it by. A format the portal forbids and
+	 * an exhausted personal disk are stated there under their own domain codes, and the creator of
+	 * the board learns the reason only through them: the caller never sees the folder.
+	 *
+	 * uploadFile() empties the collection before it writes, so everything found there belongs to
+	 * this write alone. A write the folder named nothing for keeps the refusal this method always
+	 * handed over - the general one, the only thing the caller had before the folder was read at all.
+	 *
+	 * @param Folder $folder Folder the board was to be written into.
+	 * @return Error[]
+	 */
+	private static function errorsOfTheRefusedWrite(Folder $folder): array
+	{
+		$writeErrors = $folder->getErrors();
+
+		return $writeErrors === [] ? [new Error('Cannot save file')] : $writeErrors;
+	}
+
+	/**
+	 * An early verdict by the name alone, before the blank of the board is fetched over the network.
+	 * The write node judges the same upload again anyway.
+	 */
+	private static function findFormatRefusal(string $filename, int $userId): ?Error
+	{
+		$options = [];
+
+		return File::findFormatPolicyErrorForUpload([], $filename, $userId, $options);
 	}
 
 	public static function kickUsers(File $file, array $userIds): void

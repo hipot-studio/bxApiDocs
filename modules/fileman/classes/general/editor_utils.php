@@ -9,8 +9,8 @@ class CEditorUtils
 		global $USER;
 		$bLPA = !$USER->CanDoOperation('edit_php');
 		$startCount = CEditorUtils::StartFetchCSS(); // Start fetch CSS files
-		$arParams['name'] = addslashes($arParams['name']);
-		$arParams['template'] = addslashes($arParams['template']);
+		$arParams['name'] = EscapePHPString($arParams['name']);
+		$arParams['template'] = EscapePHPString($arParams['template']);
 		$arParams['siteTemplateId'] = addslashes($arParams['siteTemplateId']);
 
 		if ($arParams['siteTemplateId'] && !defined("SITE_TEMPLATE_ID"))
@@ -49,22 +49,6 @@ class CEditorUtils
 			foreach($arProperties as $key => $Prop)
 				$arProps[$key] = $Prop['DEFAULT'];
 		}
-		else
-		{
-			if ($bLPA)
-			{
-				$arPHPparams = Array();
-				CMain::LPAComponentChecker($arProps, $arPHPparams);
-				$len = count($arPHPparams);
-
-				// Replace values from 'DEFAULT' field
-				for ($e = 0; $e < $len; $e++)
-				{
-					$par_name = $arPHPparams[$e];
-					$arProps[$par_name] = isset($arProperties[$par_name]['DEFAULT']) ? $arProperties[$par_name]['DEFAULT'] : '';
-				}
-			}
-		}
 
 		foreach($arProps as $key => $val)
 		{
@@ -100,6 +84,20 @@ class CEditorUtils
 			else
 			{
 				$arProps[$key] = addslashes($val);
+			}
+		}
+
+		if ($bLPA)
+		{
+			$arPHPparams = Array();
+			CMain::LPAComponentChecker($arProps, $arPHPparams);
+			$len = count($arPHPparams);
+
+			// Replace values from 'DEFAULT' field
+			for ($e = 0; $e < $len; $e++)
+			{
+				$par_name = $arPHPparams[$e];
+				$arProps[$par_name] = isset($arProperties[$par_name]['DEFAULT']) ? $arProperties[$par_name]['DEFAULT'] : '';
 			}
 		}
 

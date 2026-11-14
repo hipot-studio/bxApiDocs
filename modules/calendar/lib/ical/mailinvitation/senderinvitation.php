@@ -3,11 +3,16 @@
 namespace Bitrix\Calendar\ICal\MailInvitation;
 
 use Bitrix\Calendar\Core;
+use Bitrix\Calendar\ICal\IcsManager;
+use Bitrix\Calendar\Internal\GuestLink\GuestLinkRequisite;
+use Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver;
+use Bitrix\Calendar\Internals\Log\Logger;
 use Bitrix\Calendar\Public;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Calendar\SerializeObject;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Mail\Event;
 use Bitrix\Main\NotImplementedException;
@@ -29,6 +34,12 @@ abstract class SenderInvitation implements Serializable
 	public const CONTENT_TYPE = 'text/calendar';
 	protected const ATTACHMENT_NAME = 'invite.ics';
 	protected const MAIL_TEMPLATE = 'SEND_ICAL_INVENT';
+	private const MAX_GUEST_LINK_RESOLVE_ATTEMPTS = 2;
+	private const STABLE_GUEST_LINK_ERROR_CODES = [
+		GuestLinkResolver::ERROR_FEATURE_OFF,
+		GuestLinkResolver::ERROR_EVENT_NOT_SAVED,
+		GuestLinkResolver::ERROR_NO_RIGHTS,
+	];
 
 	/**
 	 * @var int
@@ -46,6 +57,16 @@ abstract class SenderInvitation implements Serializable
 	 * @var string|null
 	 */
 	protected ?string $uid = '';
+
+	/**
+	 * Per-request cache of resolved guest link URLs keyed by parent event id:
+	 * sender instances are created per recipient, the link is per event.
+	 *
+	 * @var array<int, string|null>
+	 */
+	private static array $guestLinkUrlCache = [];
+	/** @var array<int, int> */
+	private static array $guestLinkResolveAttempts = [];
 
 	abstract public function executeAfterSuccessfulInvitation();
 	abstract protected function getContent();
@@ -317,6 +338,170 @@ abstract class SenderInvitation implements Serializable
 		return \CCalendar::Date($timestamp);
 	}
 
+	/**
+	 * Builds the ICS description for the event.
+	 *
+	 * The guest invite link is resolved via GuestLinkResolver and added as a separate
+	 * requisite, the same way conferenceUrl is. Whether the event is in scope is decided
+	 * by the resolver. On resolver failure the description is built without the guest
+	 * link and the error is logged.
+	 */
+	private function buildIcsDescription(Core\Event\Event $event): string
+	{
+		if ($event->getMeetingDescription()?->getHideGuests())
+		{
+			$event->setAttendeesCollection(null);
+		}
+
+		$descriptionParams = ['eventUrl' => Public\PublicEvent::getDetailLinkFromEvent($event)];
+
+		$guestLinkUrl = $this->prepareGuestLinkForIcs($event);
+		if ($guestLinkUrl !== null)
+		{
+			$descriptionParams['guestLinkUrl'] = $guestLinkUrl;
+		}
+
+		$rawDescription = IcsManager::getInstance()->prepareEventDescription($event, $descriptionParams);
+
+		return str_replace("\\n", "\n", $rawDescription);
+	}
+
+	/**
+	 * Returns the guest invite link to put into the mail, or null, and clears the legacy
+	 * link line from the in-memory description when the new requisite replaces it.
+	 *
+	 * A call_sync event created before the migration, not yet through re-save or the
+	 * scrubber, may still carry the legacy line in its DESCRIPTION. The line is dropped
+	 * only together with adding the new requisite, the same way the ics channels do it:
+	 * an invitation is a one-shot mail to an external guest with no access to the event
+	 * card, so a failed resolve must not leave them without any link at all. Clearing the
+	 * line in the stored DESCRIPTION is the job of strip-on-save and of
+	 * {@see \Bitrix\Calendar\Infrastructure\Agent\GuestLink\DescriptionGuestLinkScrubber}.
+	 */
+	private function prepareGuestLinkForIcs(Core\Event\Event $event): ?string
+	{
+		if ($this->isCancellation())
+		{
+			// A cancellation notice carries no link to join: resolving one would create the
+			// meeting chat just to announce that the meeting is off, and the legacy line is
+			// as pointless there, so it goes regardless of the resolve.
+			GuestLinkRequisite::stripLegacyLink($event);
+
+			return null;
+		}
+
+		$guestLinkUrl = $this->resolveGuestLinkUrl($event);
+		if ($guestLinkUrl !== null)
+		{
+			GuestLinkRequisite::stripLegacyLink($event);
+		}
+
+		return $guestLinkUrl;
+	}
+
+	private function isCancellation(): bool
+	{
+		return $this->getMethod() === SenderCancelInvitation::METHOD;
+	}
+
+	/**
+	 * Resolves the guest invite link URL for the event via GuestLinkResolver::getOrCreate().
+	 *
+	 * The eligible event types are owned by the resolver: for an event out of scope
+	 * getOrCreate() returns an error and no link ends up in the description.
+	 *
+	 * Resolution goes through the organizer's parent event (PARENT_ID): the guest
+	 * chat lives there, while attendee child copies may not have CHAT_ID replicated
+	 * and the organizer is not guaranteed VIEW_FULL on them.
+	 *
+	 * Returns null on any error (feature off, event not found, no rights, chat/link failure).
+	 * Errors are logged under DEBUG_CALENDAR_EMAIL_NOTIFICATION; they do not block sending.
+	 * NO_RIGHTS is the exception, the way {@see GuestLinkRequisite} treats it: an organizer
+	 * outside the employee scope, or one without VIEW_FULL on the event, is a regular
+	 * outcome of this channel and would otherwise log a line for every event they own.
+	 * Successful outcomes and deterministic failures are cached per parent event for
+	 * the request. Transient failures get one bounded retry across the whole batch.
+	 */
+	private function resolveGuestLinkUrl(Core\Event\Event $event): ?string
+	{
+		$eventId = (int)($this->event['PARENT_ID'] ?? 0) ?: (int)$event->getId();
+
+		if ($eventId <= 0)
+		{
+			return null;
+		}
+
+		if (array_key_exists($eventId, self::$guestLinkUrlCache))
+		{
+			return self::$guestLinkUrlCache[$eventId];
+		}
+
+		$attempt = (self::$guestLinkResolveAttempts[$eventId] ?? 0) + 1;
+		self::$guestLinkResolveAttempts[$eventId] = $attempt;
+
+		try
+		{
+			/** @var GuestLinkResolver $resolver */
+			$resolver = ServiceLocator::getInstance()->get(GuestLinkResolver::class);
+			$result = $resolver->getOrCreateForTrustedOrganizer($eventId);
+			if ($result->isSuccess())
+			{
+				return self::$guestLinkUrlCache[$eventId] = $result->getData()['url'] ?? null;
+			}
+			if ($this->isStableGuestLinkFailure($result) || $attempt >= self::MAX_GUEST_LINK_RESOLVE_ATTEMPTS)
+			{
+				self::$guestLinkUrlCache[$eventId] = null;
+			}
+
+			$failures = array_filter(
+				$result->getErrors(),
+				static fn($e) => $e->getCode() !== GuestLinkResolver::ERROR_NO_RIGHTS,
+			);
+
+			if ($failures)
+			{
+				$logger = new Logger('DEBUG_CALENDAR_EMAIL_NOTIFICATION');
+				$logger->log(
+					'GuestLinkResolver::getOrCreate failed for event ' . $eventId
+					. ': ' . implode(', ', array_map(
+						static fn($e) => $e->getCode() . ' - ' . $e->getMessage(),
+						$failures,
+					))
+				);
+			}
+		}
+		catch (\Throwable $e)
+		{
+			if ($attempt >= self::MAX_GUEST_LINK_RESOLVE_ATTEMPTS)
+			{
+				self::$guestLinkUrlCache[$eventId] = null;
+			}
+
+			$logger = new Logger('DEBUG_CALENDAR_EMAIL_NOTIFICATION');
+			$logger->log($e);
+		}
+
+		return null;
+	}
+
+	private function isStableGuestLinkFailure(\Bitrix\Main\Result $result): bool
+	{
+		$errors = $result->getErrors();
+		if ($errors === [])
+		{
+			return false;
+		}
+
+		foreach ($errors as $error)
+		{
+			if (!in_array($error->getCode(), self::STABLE_GUEST_LINK_ERROR_CODES, true))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 
 	/**
 	 * @throws LoaderException
@@ -348,7 +533,7 @@ abstract class SenderInvitation implements Serializable
 		);
 
 		$event = (new Core\Mappers\Event())->getByArray($this->event);
-		$this->event['DESCRIPTION'] = Public\PublicEvent::prepareEventDescriptionForIcs($event);
+		$this->event['DESCRIPTION'] = $this->buildIcsDescription($event);
 
 		$attendees = \CCalendarEvent::GetAttendees([$this->event['PARENT_ID']], false)[$this->event['PARENT_ID']] ?? [];
 

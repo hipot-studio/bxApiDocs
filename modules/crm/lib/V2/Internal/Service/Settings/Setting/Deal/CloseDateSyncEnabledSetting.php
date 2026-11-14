@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class CloseDateSyncEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.deal.close_date_sync.enabled';
+	public const ID = 'crm.deal.close_date_sync.enabled';
 
 	private readonly DealSettings $dealSettings;
 
@@ -26,18 +26,20 @@ final class CloseDateSyncEnabledSetting extends AbstractSetting
 		$this->dealSettings = $dealSettings ?? DealSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'enable_close_date_sync',
 		);
 	}
 

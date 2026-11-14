@@ -8,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
+use Bitrix\Market\Application\Action;
 use Bitrix\Market\Application\Rights;
 USE Bitrix\Rest\Marketplace\Client;
 use Bitrix\Rest\AppTable;
@@ -109,6 +110,7 @@ class MarketInstallComponent extends CBitrixComponent
 			}
 
 			$result['APP'] = $appData;
+			$result['SYSTEM_USER_TOGGLE'] = Action::getSystemUserToggleInfo($result['APP']);
 		}
 
 		if (!$this->canInstall($result['APP']))

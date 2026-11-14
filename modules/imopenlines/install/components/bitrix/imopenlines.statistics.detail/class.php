@@ -10,6 +10,7 @@ use \Bitrix\Main\Loader,
 use \Bitrix\Imopenlines\Limit,
 	\Bitrix\ImOpenLines\Config,
 	\Bitrix\ImOpenLines\Session,
+	\Bitrix\ImOpenLines\Tools,
 	\Bitrix\ImOpenlines\Security,
 	\Bitrix\ImOpenLines\Model\SessionTable,
 	\Bitrix\ImOpenlines\Security\Permissions;
@@ -58,14 +59,16 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 
 		if ($this->enableExport)
 		{
+			$componentName = $this->getName();
 			$this->arResult['STEXPORT_PARAMS'] = [
 				'SITE_ID' => SITE_ID,
 				'EXPORT_TYPE' => 'excel',
-				'COMPONENT_NAME' => $this->getName(),
+				'COMPONENT_NAME' => $componentName,
 			];
-			if ($this->listKeysSignedParameters())
+			$signedParameters = $this->getExportSignedParameters($componentName);
+			if ($signedParameters !== null)
 			{
-				$this->arResult['STEXPORT_PARAMS']['signedParameters'] = $this->getSignedParameters();
+				$this->arResult['STEXPORT_PARAMS']['signedParameters'] = $signedParameters;
 			}
 
 			$this->arResult['BUTTON_EXPORT'] = 'BX.UI.StepProcessing.ProcessManager.get(\'OpenLinesExport\').showDialog()';
@@ -104,6 +107,21 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 		{
 			$this->arResult['UF_LIST_CONFIG_URL'] = \Bitrix\Intranet\Util::getUserFieldListConfigUrl('imopenlines', 'IMOPENLINES_SESSION');
 		}
+	}
+
+	/**
+	 * The controller of this export is declared in ajax.php of the component, so the pass is bound to
+	 * the component name instead of a controller class. On a kernel without the signer the export goes
+	 * on without a pass, as it does today.
+	 */
+	private function getExportSignedParameters(string $componentName): ?string
+	{
+		if (!method_exists(\Bitrix\Main\Component\ExportParameterSigner::class, 'signForComponent'))
+		{
+			return null;
+		}
+
+		return \Bitrix\Main\Component\ExportParameterSigner::signForComponent($componentName, []);
 	}
 
 	/**
@@ -460,37 +478,27 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 	 */
 	private static function formatVote($sessionId, $rating, $field = 'VOTE'): string
 	{
+		$sessionId = (int)$sessionId;
 		$rating = (int)$rating;
 
-		$result = '-';
-
-		if ($field === 'VOTE' && in_array($rating, [5,1]))
+		if ($field === 'VOTE')
 		{
-			$result = '<span class="ol-stat-rating ol-stat-rating-'.$rating.'" title=""></span>';
-		}
-		else if ($field === 'VOTE_HEAD' && $rating >= 1 && $rating <= 5)
-		{
-			$result = '<span class="ol-stat-rating-head" title="'.$rating.'/5"><span class="ol-stat-rating-head-wrap ol-stat-rating-head-'.$rating.'"></span></span>';
-		}
-		else if ($field === 'VOTE_HEAD_PERM')
-		{
-			$result = '<span id="ol-vote-head-placeholder-'.$sessionId.'" '.(Limit::canUseVoteHead()? 'style="display: inline-flex;"': 'style="display: inline-flex; cursor: pointer" onclick="BX.UI.InfoHelper.show(\'' . Limit::INFO_HELPER_LIMIT_CONTACT_CENTER_BOSS_RATE . '\');"').'>
-				'.(Limit::canUseVoteHead()? '': '<span style="margin-left: -5px;" class="tariff-lock"></span>').'
-				</span><script>BX.ready(function(){
-				if (typeof BX.MessengerCommon !== "undefined")
-				{
-					var voteChild = BX.MessengerCommon.linesVoteHeadNodes('.$sessionId.', '.$rating.', '.(Limit::canUseVoteHead() ? 'true': 'false').');
-				}
-				else 
-				{
-					var voteChild = BX.Dom.create("span", {attrs: {className: "bx-im-lines-rating"}});
-					voteChild.innerHTML = "<span class=\"bx-im-lines-rating-selected\" style=\"width: '.($rating*20).'%\">";
-				}
-				BX("ol-vote-head-placeholder-'.$sessionId.'").appendChild(voteChild);
-			})</script>';
+			return in_array($rating, [5, 1], true)
+				? '<span class="ol-stat-rating ol-stat-rating-' . $rating . '" title=""></span>'
+				: '-';
 		}
 
-		return $result;
+		if ($field === 'VOTE_HEAD_PERM')
+		{
+			return self::renderVoteHeadCell($sessionId, $rating, self::getVoteHeadModifier());
+		}
+
+		if ($rating >= 1 && $rating <= 5)
+		{
+			return self::renderVoteHeadCell($sessionId, $rating);
+		}
+
+		return '-';
 	}
 
 	/**
@@ -501,49 +509,104 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 	 */
 	private static function formatComment($sessionId, $comment, $field = 'COMMENT_HEAD')
 	{
-		$result = '-';
+		$sessionId = (int)$sessionId;
+		$comment = (string)$comment;
 
-		$comment = htmlspecialcharsbx($comment);
-
-		if(!empty($comment))
+		if ($field === 'COMMENT_HEAD_PERM')
 		{
-			$comment = str_replace(["\r\n", "\r", "\n"], '<br />', $comment);
+			return self::renderCommentHeadCell($sessionId, $comment, self::getVoteHeadModifier());
 		}
 
-		if ($field == 'COMMENT_HEAD' && $comment !== '')
+		if ($comment !== '')
 		{
-			$result = $comment;
-		}
-		else if ($field == 'COMMENT_HEAD_PERM')
-		{
-			if(Limit::canUseVoteHead())
-			{
-				$result = '
-				<div id="ol-comment-head-text-'.$sessionId.'" title="">' . $comment . '</div>
-				<div id="ol-comment-head-placeholder-'.$sessionId.'" title=""></div><script>BX.ready(function(){
-					// MessengerCommon.linesCommentHeadNodes synchronously dereferences BXIM.messenger;
-					// on pages without a messenger bootstrap (e.g. Contact Center -> Dialog list)
-					// keep the plain comment text visible to avoid a TypeError.
-					var textNode = BX("ol-comment-head-text-'.$sessionId.'");
-					if (typeof BX.MessengerCommon !== "undefined" && BX.MessengerCommon.BXIM && BX.MessengerCommon.BXIM.messenger)
-					{
-						var voteChild = BX.MessengerCommon.linesCommentHeadNodes('.$sessionId.', textNode.innerHTML.replace(/<br>/g, "\n"), true, "statistics");
-						BX("ol-comment-head-placeholder-'.$sessionId.'").appendChild(voteChild);
-						BX.style(textNode, \'display\', \'none\');
-					}
-			})</script>';
-			}
-			elseif($comment === '')
-			{
-				$result = '<span class = "bx-messenger-content-item-vote-comment-add"  onclick="BX.UI.InfoHelper.show(\'' . Limit::INFO_HELPER_LIMIT_CONTACT_CENTER_BOSS_RATE . '\');" title=""><span style="margin-top: 1px; margin-left: 5px;" class="tariff-lock"></span>' . Loc::getMessage('OL_STATS_COMMENT_HEAD_ADD') . '<span id="ol-comment-head-text-'.$sessionId.'"></span></span>';
-			}
-			else
-			{
-				$result = '<span id="ol-comment-head-text-'.$sessionId.'"  onclick="BX.UI.InfoHelper.show(\'' . Limit::INFO_HELPER_LIMIT_CONTACT_CENTER_BOSS_RATE . '\');" title=""><span style="margin-top: 1px; margin-left: 5px;" class="tariff-lock"></span>' . $comment . '</span>';
-			}
+			return self::renderCommentHeadCell($sessionId, $comment);
 		}
 
-		return $result;
+		return '-';
+	}
+
+	/**
+	 * Returns cell modifier for a user allowed to vote as head: empty modifier means read only cell.
+	 * @return string
+	 */
+	private static function getVoteHeadModifier(): string
+	{
+		return Limit::canUseVoteHead() ? 'editable' : 'locked';
+	}
+
+	/**
+	 * @param int $sessionId
+	 * @param int $rating
+	 * @param string $modifier
+	 * @return string
+	 */
+	private static function renderVoteHeadCell(int $sessionId, int $rating, string $modifier = ''): string
+	{
+		$stars = '<span class="ol-stat-rating-head"><span class="ol-stat-rating-head-wrap'
+			. ($rating > 0 ? ' ol-stat-rating-head-' . $rating : '')
+			. '"></span></span>';
+
+		return '<span id="ol-vote-head-' . $sessionId . '"'
+			. ' class="ol-stat-vote-head' . self::getCellModifierClass('ol-stat-vote-head', $modifier) . '"'
+			. ' title="' . ($rating > 0 ? $rating . '/5' : '') . '"'
+			. ' data-session-id="' . $sessionId . '"'
+			. ' data-rating="' . $rating . '"'
+			. self::getVoteHeadLimitAttribute($modifier)
+			. '>' . $stars . '</span>';
+	}
+
+	/**
+	 * @param int $sessionId
+	 * @param string $comment
+	 * @param string $modifier
+	 * @return string
+	 */
+	private static function renderCommentHeadCell(int $sessionId, string $comment, string $modifier = ''): string
+	{
+		$emptyText = $modifier === '' ? '-' : Loc::getMessage('OL_STATS_COMMENT_HEAD_ADD');
+		$text = $comment === ''
+			? htmlspecialcharsbx($emptyText)
+			: str_replace(["\r\n", "\r", "\n"], '<br />', htmlspecialcharsbx($comment));
+
+		return '<span id="ol-comment-head-' . $sessionId . '"'
+			. ' class="ol-stat-comment-head' . self::getCellModifierClass('ol-stat-comment-head', $modifier) . '"'
+			. ' data-session-id="' . $sessionId . '"'
+			. ' data-comment="' . htmlspecialcharsbx($comment) . '"'
+			. ' data-empty-text="' . htmlspecialcharsbx($emptyText) . '"'
+			. self::getVoteHeadLimitAttribute($modifier)
+			. '>' . $text . '</span>';
+	}
+
+	/**
+	 * @param string $baseClass
+	 * @param string $modifier
+	 * @return string
+	 */
+	private static function getCellModifierClass(string $baseClass, string $modifier): string
+	{
+		if ($modifier === '')
+		{
+			return '';
+		}
+
+		// ui-icon-set__scope exposes the lock icon path variable to the cell ::before
+		$scopeClass = $modifier === 'locked' ? ' ui-icon-set__scope' : '';
+
+		return ' ' . $baseClass . '--' . $modifier . $scopeClass;
+	}
+
+	/**
+	 * @param string $modifier
+	 * @return string
+	 */
+	private static function getVoteHeadLimitAttribute(string $modifier): string
+	{
+		if ($modifier !== 'locked')
+		{
+			return '';
+		}
+
+		return ' onclick="BX.UI.InfoHelper.show(\'' . Limit::INFO_HELPER_LIMIT_CONTACT_CENTER_BOSS_RATE . '\');"';
 	}
 
 	//endregion
@@ -1993,11 +2056,11 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 			{
 				if (!is_array($this->showHistory) || in_array($row["data"]["OPERATOR_ID"], $this->showHistory))
 				{
-					$newRow["ACTION"] = '<nobr><a href="#history" title="" onclick="BXIM.openHistory(\'imol|'.$row["data"]["ID"].'\'); return false;">'.Loc::getMessage('OL_COMPONENT_TABLE_ACTION_HISTORY').'</a></nobr> ';
+					$newRow["ACTION"] = '<nobr><a href="#history" title="" onclick="BX.Messenger.Public.Iframe.openLinesHistory(\'imol|'.$row["data"]["ID"].'\'); return false;">'.Loc::getMessage('OL_COMPONENT_TABLE_ACTION_HISTORY').'</a></nobr> ';
 				}
 				if ($configManager->canJoin($row["data"]["CONFIG_ID"]))
 				{
-					$newRow["ACTION"] .= '<nobr><a href="#startSession" title="" onclick="BXIM.openMessenger(\'imol|'.$row["data"]["USER_CODE"].'\'); return false;">'.Loc::getMessage('OL_COMPONENT_TABLE_ACTION_START').'</a></nobr>';
+					$newRow["ACTION"] .= '<nobr><a href="#startSession" title="" onclick="BX.Messenger.Public.Iframe.openLines(\'imol|'.$row["data"]["USER_CODE"].'\'); return false;">'.Loc::getMessage('OL_COMPONENT_TABLE_ACTION_START').'</a></nobr>';
 				}
 			}
 
@@ -2052,15 +2115,28 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 
 			if ($row["data"]["EXTRA_URL"])
 			{
-				$parsedUrl = parse_url($row["data"]["EXTRA_URL"]);
+				$extraUrl = (string)$row["data"]["EXTRA_URL"];
 				if ($this->excelMode)
 				{
-					$newRow["EXTRA_DOMAIN"] = $parsedUrl['host'];
-					$newRow["EXTRA_URL"] = $row["data"]["EXTRA_URL"];
+					$newRow["EXTRA_DOMAIN"] = $this->prepareExportCellValue(Tools\Url::getSafeHost($extraUrl));
+					$newRow["EXTRA_URL"] = $this->prepareExportCellValue($extraUrl);
 				}
 				else
 				{
-					$newRow["EXTRA_URL"] = '<a href="'.htmlspecialcharsbx($row["data"]["EXTRA_URL"]).'" title="" target="_blank">'.htmlspecialcharsbx($parsedUrl['host']).'</a>';
+					$safeExtraUrl = Tools\Url::getSafeExternalUrl($extraUrl);
+					if ($safeExtraUrl === null)
+					{
+						$newRow["EXTRA_URL"] = htmlspecialcharsbx($extraUrl);
+					}
+					else
+					{
+						$newRow["EXTRA_URL"] =
+							'<a href="'.htmlspecialcharsbx($safeExtraUrl).'"'
+							.' title="" target="_blank" rel="noopener noreferrer">'
+							.htmlspecialcharsbx(Tools\Url::getSafeHost($safeExtraUrl))
+							.'</a>'
+						;
+					}
 				}
 			}
 			else
@@ -2119,7 +2195,7 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 					$actions[] = $arActivityMenuItems[] = [
 						'TITLE' => Loc::getMessage('OL_COMPONENT_TABLE_ACTION_HISTORY'),
 						'TEXT' => Loc::getMessage('OL_COMPONENT_TABLE_ACTION_HISTORY'),
-						'ONCLICK' => "BXIM.openHistory('imol|{$row['data']['ID']}')",
+						'ONCLICK' => "BX.Messenger.Public.Iframe.openLinesHistory('imol|{$row['data']['ID']}')",
 						'DEFAULT' => true
 					];
 				}
@@ -2128,7 +2204,7 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 					$actions[] = $arActivityMenuItems[] = [
 						'TITLE' => Loc::getMessage('OL_COMPONENT_TABLE_ACTION_START'),
 						'TEXT' => Loc::getMessage('OL_COMPONENT_TABLE_ACTION_START'),
-						'ONCLICK' => "BXIM.openMessenger('imol|{$row['data']['USER_CODE']}')"
+						'ONCLICK' => "BX.Messenger.Public.Iframe.openLines('imol|{$row['data']['USER_CODE']}')"
 					];
 
 					if($this->isNotCloseSession($row['data']['STATUS'], $row['data']['CLOSED']))
@@ -2319,6 +2395,25 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 		}
 
 		return [$elements, $userId];
+	}
+
+	/**
+	 * The export template prints every cell into an HTML table as is, so the value is escaped here.
+	 * Only the EXTRA_DOMAIN and EXTRA_URL cells go through this method; the other columns of the
+	 * export are out of this ticket's scope.
+	 * A leading apostrophe keeps a spreadsheet from reading the cell as a formula. Spreadsheets skip
+	 * any leading control byte before the formula sign, so the check covers the whole 0x00-0x20 range.
+	 */
+	private function prepareExportCellValue(string $value): string
+	{
+		$cell = htmlspecialcharsbx($value);
+
+		if (preg_match('/^[\x00-\x20]*[=+\-@]/', $value))
+		{
+			$cell = "'".$cell;
+		}
+
+		return $cell;
 	}
 
 	private function buildRowCountHtml(string $gridId, string $paramsJson): string

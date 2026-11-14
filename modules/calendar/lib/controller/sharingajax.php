@@ -747,16 +747,16 @@ class SharingAjax extends \Bitrix\Main\Engine\Controller
 			return $result;
 		}
 
-		$conferenceLink = (new Sharing\SharingConference($eventLink))->getConferenceLink();
+		$joinLink = (new Sharing\JoinLink\JoinLinkProvider())->resolve($eventLink);
 
-		if (!$conferenceLink)
+		if (!$joinLink->isSuccess() || $joinLink->getUrl() === null)
 		{
 			$this->addError(new Error('Error while creating conference link'));
 
 			return $result;
 		}
 
-		$result['conferenceLink'] = $conferenceLink;
+		$result['conferenceLink'] = $joinLink->getUrl();
 
 		return $result;
 	}

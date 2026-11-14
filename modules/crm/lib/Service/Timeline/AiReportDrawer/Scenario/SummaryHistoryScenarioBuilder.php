@@ -9,6 +9,7 @@ use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\PresentationResolver;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ActivityBadgeCleaner;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\CallRecordDataProvider;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\JobIdNormalizer;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\MessageProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SettingsProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SummaryDataProvider;
@@ -95,7 +96,7 @@ final class SummaryHistoryScenarioBuilder implements ScenarioBuilderInterface
 		return array_values(array_filter(
 			$summaryHistory,
 			static function (array $summary): bool {
-				$jobId = (int)($summary['jobId'] ?? 0);
+				$jobId = (int)($summary['originalJobId'] ?? $summary['jobId'] ?? 0);
 				$text = (string)($summary['summary'] ?? '');
 
 				return $jobId > 0 && $text !== '';
@@ -112,14 +113,14 @@ final class SummaryHistoryScenarioBuilder implements ScenarioBuilderInterface
 
 		if ($requestedJobId === null)
 		{
-			$jobId = (int)($summaryHistory[0]['jobId'] ?? 0);
+			$jobId = (int)($summaryHistory[0]['originalJobId'] ?? $summaryHistory[0]['jobId'] ?? 0);
 
 			return $jobId > 0 ? $jobId : null;
 		}
 
 		foreach ($summaryHistory as $summary)
 		{
-			$jobId = (int)($summary['jobId'] ?? 0);
+			$jobId = (int)($summary['originalJobId'] ?? $summary['jobId'] ?? 0);
 			if ($jobId === $requestedJobId)
 			{
 				return $jobId;
@@ -141,14 +142,15 @@ final class SummaryHistoryScenarioBuilder implements ScenarioBuilderInterface
 				continue;
 			}
 
-			$jobId = (int)($summary['jobId'] ?? 0);
+			$resultJobId = JobIdNormalizer::normalize($summary['originalJobId'] ?? $summary['jobId'] ?? null);
+			$jobId = (int)($summary['originalJobId'] ?? $summary['jobId'] ?? 0);
 			if ($jobId <= 0)
 			{
 				continue;
 			}
 
 			$blocks[] = [
-				'jobId' => $jobId,
+				'jobId' => $resultJobId,
 				'blockId' => self::SUMMARY_BLOCK_ID . '-' . $jobId,
 				'blockType' => self::SUMMARY_BLOCK_ID,
 				'title' => MessageProvider::getSummaryBlockTitle(),
@@ -186,6 +188,7 @@ final class SummaryHistoryScenarioBuilder implements ScenarioBuilderInterface
 			if (($block['minimized'] ?? true) === false)
 			{
 				$activeBlock = $block;
+
 				break;
 			}
 		}

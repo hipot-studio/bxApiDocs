@@ -70,6 +70,8 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 	{
 		try
 		{
+			throw new SystemException('System error');
+
 			$this->checkModules();
 
 			if (Feature::isNewProjectsOn())
@@ -84,12 +86,8 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 				return;
 			}
 
-			$executiveUserId = $this->getUser()->getID();
-
-			if ($executiveUserId)
-			{
-				$this->checkAccess($executiveUserId, $this->arParams["GROUP_ID"]);
-			}
+			$executiveUserId = (int)$this->getUser()->getID();
+			$this->checkAccess($executiveUserId, $this->arParams["GROUP_ID"]);
 
 			$this->arParams["IS_PROJECT"] = $this->isProject($this->arParams["GROUP_ID"]);
 
@@ -106,6 +104,8 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 
 	public function copyGroupAction()
 	{
+		throw new SystemException('System error');
+
 		$this->checkModules();
 
 		if (!$this->isFeatureEnabled())
@@ -123,7 +123,7 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 			return null;
 		}
 
-		$executiveUserId = $this->getUser()->getID();
+		$executiveUserId = (int)$this->getUser()->getID();
 
 		$groupId = $post["id"];
 		$groupIdsToCopy = [$groupId];
@@ -134,6 +134,12 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 		}
 
 		$this->checkAccess($executiveUserId, $groupId);
+
+		if (is_array($post['image_id'] ?? null))
+		{
+			$this->errorCollection->setError(new Error('Invalid image_id field'));
+			return null;
+		}
 
 		$features = $this->getFeaturesFromRequest($post["features"]);
 
@@ -152,13 +158,14 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 		$this->setFeatures($copyManager, $executiveUserId, $features, $post);
 		$copyManager->setProjectTerm($this->getProjectTerm($post));
 
-		$inputImage = $postImage ?: ($post['image_id'] ?? null);
-		if (is_numeric($inputImage))
+		$inputImage = $postImage;
+		$postImageId = $post['image_id'] ?? null;
+		if (!$inputImage && is_scalar($postImageId) && is_numeric($postImageId) && (int)$postImageId > 0)
 		{
 			$group = CSocNetGroup::getByID($groupId);
-			if ((int) $group['IMAGE_ID'] === (int) $inputImage)
+			if ((int)$group['IMAGE_ID'] === (int)$postImageId)
 			{
-				$inputImage = CFile::makeFileArray($inputImage);
+				$inputImage = CFile::makeFileArray($postImageId);
 			}
 		}
 
@@ -257,10 +264,21 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 	{
 		try
 		{
+			if ($userId <= 0)
+			{
+				throw new AccessDeniedException();
+			}
+
 			$group = CSocNetGroup::getByID($groupId);
 			if ($group && $group['ACTIVE'] === 'Y')
 			{
-				if (!\Bitrix\Socialnetwork\Helper\Workgroup\Access::canCreate())
+				if (
+					!\Bitrix\Socialnetwork\Helper\Workgroup\Access::canCreate(['userId' => $userId])
+					|| !\Bitrix\Socialnetwork\Helper\Workgroup\Access::canView([
+						'groupId' => $groupId,
+						'userId' => $userId,
+					])
+				)
 				{
 					throw new AccessDeniedException();
 				}

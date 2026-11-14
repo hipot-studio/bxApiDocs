@@ -190,8 +190,11 @@ class TaskService
 	{
 		if ($taskId === null || $taskId <= 0)
 		{
-			// fallback for auto-task messages sent before the AI_TASK_ID param existed
-			$taskId = TaskItem::getByMessageId($triggerMessageId)?->getEntityId();
+			// fallback for auto-task messages sent before the AI_TASK_ID param existed, and those
+			// are one task per message; with several links there is no way to tell which card was
+			// deleted, and deleting a guessed task is worse than deleting none
+			$links = TaskItem::getAllByMessageId($triggerMessageId);
+			$taskId = count($links) === 1 ? $links[0]->getEntityId() : null;
 		}
 
 		if ($taskId === null || $taskId <= 0)

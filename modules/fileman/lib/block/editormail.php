@@ -72,11 +72,14 @@ class EditorMail
 	/**
 	 * Remove php from html.
 	 *
-	 * @param string $html Html.
-	 * @param string $previousHtml Previous html.
+	 * Content in an encoding invalid for the current mb_internal_encoding is normalized
+	 * when php blocks are present.
+	 *
+	 * @param string|null $html Html.
+	 * @param string|null $previousHtml Previous html.
 	 * @param bool $canEditPhp Can edit php.
 	 * @param bool $canUseLpa Can use LPA.
-	 * @return string
+	 * @return string|null
 	 */
 	public static function removePhpFromHtml($html, $previousHtml = null, $canEditPhp = false, $canUseLpa = false)
 	{
@@ -86,15 +89,32 @@ class EditorMail
 		}
 		else if (!$canEditPhp)
 		{
-			$phpList = \PHPParser::ParseFile($html);
-			foreach($phpList as $php)
+			$html = (string)$html;
+			$blocks = str_contains($html, '<?') ? \PHPParser::ParseFile($html) : [];
+			if ($blocks)
 			{
 				$surrogate = '<span class="bxhtmled-surrogate" title="">'
 					. htmlspecialcharsbx(Loc::getMessage('BLOCK_EDITOR_BLOCK_DYNAMIC_CONTENT'))
 					.'</span>';
-				$html = str_replace($php[2], $surrogate, $html);
+
+				$length = mb_strlen($html);
+				$result = '';
+				$position = 0;
+				foreach ($blocks as [$start, $end])
+				{
+					// Clamped into the unread tail: a stray overlapping block must not reach the output verbatim.
+					$blockStart = min(max($start, $position), $length);
+					$blockEnd = min(max($end, $blockStart), $length);
+
+					$result .= mb_substr($html, $position, $blockStart - $position) . $surrogate;
+					$position = $blockEnd;
+				}
+
+				$html = $result . mb_substr($html, $position);
 			}
 
+			// A stray opening or closing tag is not reported as a block, so it survives the loop.
+			// Masking stays outside the branch: a body without parsed blocks needs it too.
 			$html = str_replace(['<?', '?>'], ['< ?', '? >'], $html);
 		}
 

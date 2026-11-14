@@ -12,6 +12,7 @@ use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\FileLink;
+use Bitrix\Disk\Internal\Service\Document\OfficeEditorAvailability;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -105,15 +106,17 @@ final class MessengerCall extends Engine\Controller
 
 	protected function processBeforeAction(Action $action)
 	{
-		if (!Document\OnlyOffice\OnlyOfficeHandler::isEnabled() && !VibeofficeHandler::isEnabled())
+		if (!OfficeEditorAvailability::isAvailable())
 		{
 			$this->addError(new Error('Document editing service is not configured.'));
 
 			return false;
 		}
 
-		$bitrix24Scenario = new Document\OnlyOffice\Bitrix24Scenario();
-		if (!$bitrix24Scenario->canUseView())
+		if (
+			!Document\Vibeoffice\Feature::servesPortalEditing()
+			&& !(new Document\OnlyOffice\Bitrix24Scenario())->canUseView()
+		)
 		{
 			$this->addError(new Error('Feature is not available.'));
 

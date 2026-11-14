@@ -8,11 +8,16 @@ use Bitrix\Disk\Infrastructure\Rest\V3\Controller\Sync\ActionFilter\SyncFeatureE
 use Bitrix\Disk\Infrastructure\Rest\V3\Exception\SyncAccessDeniedException;
 use Bitrix\Disk\Infrastructure\Rest\V3\Exception\SyncRestException;
 use Bitrix\Disk\Internal\Service\Sync\CallingApplication;
+use Bitrix\Disk\Internal\Service\Sync\Metrics\CallMetrics;
 use Bitrix\Disk\Internal\Service\Sync\VisibilityReadGuard;
 use Bitrix\Main\Engine\Action;
+use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Controller\ActionFilter\IdempotencyFilter;
 use Bitrix\Rest\V3\Controller\RestController;
+use Bitrix\Rest\V3\Exception\Internal\InternalException;
+use Bitrix\Rest\V3\Exception\RestException;
+use Throwable;
 
 /**
  * Common base of the disk.sync.* contour.
@@ -46,7 +51,35 @@ abstract class BaseSyncController extends RestController
 		Changes::class => ['list'],
 		State::class => ['check'],
 		Content::class => [],
+		Index::class => [],
 	];
+
+	/**
+	 * Names of the methods of the contour in its metrics: the prefix of the controller and the action.
+	 */
+	private const METRIC_METHOD_PREFIXES = [
+		Capabilities::class => 'disk.sync.capabilities',
+		Session::class => 'disk.sync.session',
+		Snapshot::class => 'disk.sync.snapshot',
+		Changes::class => 'disk.sync.changes',
+		State::class => 'disk.sync.state',
+		Content::class => 'disk.sync.content',
+		Index::class => 'disk.sync.index',
+	];
+
+	/**
+	 * Actions whose successful call counts as a read of the pair and moves its last read.
+	 */
+	private const PAIR_READING_ACTIONS = [
+		Snapshot::class => ['list'],
+		Changes::class => ['list'],
+		State::class => ['check'],
+	];
+
+	private const OUTCOME_ERRORS = 'ERRORS';
+	private const OUTCOME_INTERNAL = 'INTERNAL';
+
+	private ?CallMetrics $callMetrics = null;
 
 	/**
 	 * The availability switch stands before idempotency: while the contour is off, the call is
@@ -111,6 +144,48 @@ abstract class BaseSyncController extends RestController
 	}
 
 	/**
+	 * The clock starts ahead of the filters, so the time of a call includes everything the portal did
+	 * for it before the body of the action.
+	 */
+	protected function processBeforeAction(Action $action)
+	{
+		$this->callMetrics()->start();
+
+		return parent::processBeforeAction($action);
+	}
+
+	protected function processAfterAction(Action $action, $result)
+	{
+		$this->finishCallMetrics(
+			$action,
+			$this->errorCollection->isEmpty() ? CallMetrics::OUTCOME_OK : self::OUTCOME_ERRORS,
+		);
+
+		return parent::processAfterAction($action, $result);
+	}
+
+	/**
+	 * The outcome is taken after the parent has turned the throwable into the answer, because a refused
+	 * binding of arguments only gets its published code there.
+	 */
+	protected function runProcessingThrowable(Throwable $throwable): void
+	{
+		parent::runProcessingThrowable($throwable);
+
+		try
+		{
+			$action = $this->getCurrentAction();
+		}
+		catch (SystemException)
+		{
+			// No action was created, so no call was started either.
+			return;
+		}
+
+		$this->finishCallMetrics($action, $this->outcomeOf($throwable));
+	}
+
+	/**
 	 * @throws SyncAccessDeniedException
 	 */
 	final protected function resolveUserId(): int
@@ -134,6 +209,49 @@ abstract class BaseSyncController extends RestController
 	final protected function resolveAppId(): string
 	{
 		return CallingApplication::nameOf($this->getServer()) ?? throw new SyncAccessDeniedException();
+	}
+
+	private function callMetrics(): CallMetrics
+	{
+		return $this->callMetrics ??= new CallMetrics();
+	}
+
+	private function finishCallMetrics(Action $action, string $outcome): void
+	{
+		$userId = (int)$this->getCurrentUser()?->getId();
+		$appId = CallingApplication::nameOf($this->getServer());
+
+		$this->callMetrics()->finish(
+			(self::METRIC_METHOD_PREFIXES[static::class] ?? 'disk.sync') . '.' . $action->getName(),
+			$outcome,
+			$userId,
+			$appId,
+			$outcome === CallMetrics::OUTCOME_OK
+				&& $userId > 0
+				&& $appId !== null
+				&& in_array($action->getName(), self::PAIR_READING_ACTIONS[static::class] ?? [], true),
+		);
+	}
+
+	private function outcomeOf(Throwable $throwable): string
+	{
+		if ($throwable instanceof RestException && !$throwable instanceof InternalException)
+		{
+			return $throwable->getRegistryCode();
+		}
+
+		if ($throwable instanceof BinderArgumentException)
+		{
+			$errors = $this->errorCollection->getValues();
+			$customData = ($errors === [] ? null : end($errors))?->getCustomData();
+			$publishedCode = is_array($customData) ? ($customData['code'] ?? null) : null;
+			if (is_string($publishedCode) && $publishedCode !== '')
+			{
+				return $publishedCode;
+			}
+		}
+
+		return self::OUTCOME_INTERNAL;
 	}
 
 	/**

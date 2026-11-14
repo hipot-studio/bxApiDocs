@@ -945,7 +945,7 @@ class PresenceAccessService
 		{
 			return $value > 0 ? $value : null;
 		}
-		if (!is_string($value) || !ctype_digit($value))
+		if (!is_string($value) || preg_match('/^[0-9]+$/D', $value) !== 1)
 		{
 			return null;
 		}

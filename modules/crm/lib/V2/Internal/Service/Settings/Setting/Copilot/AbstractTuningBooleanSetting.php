@@ -25,10 +25,12 @@ abstract class AbstractTuningBooleanSetting extends AbstractSetting
 	final public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			$this->getCode(),
-			SettingTitleProvider::getTitle($this->getCode()),
+			$this->getId(),
+			SettingTitleProvider::getTitle($this->getId()),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint($this->getCode()),
+			SettingTitleProvider::getDescription($this->getId()),
+			SettingTitleProvider::getNote($this->getId()),
+			$this->getGlobalSetting()->value,
 		);
 	}
 

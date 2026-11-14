@@ -7,8 +7,8 @@ use Bitrix\ImOpenLines\SilentMode\PersonalSilentMode;
 
 class SilentModeModifier implements MessageModifierInterface
 {
-	private const PARAM_NAME = 'COMPONENT_ID';
-	private const PARAM_VALUE = 'HiddenMessage';
+	private const PARAM_NAME = Message\Params::COMPONENT_ID;
+	private const PARAM_VALUE = PersonalSilentMode::MESSAGE_COMPONENT_ID;
 
 	public function supports(Message $message): bool
 	{

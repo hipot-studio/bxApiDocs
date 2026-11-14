@@ -82,6 +82,8 @@ class Params extends Registry
 		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID',
 		AI_TASK_ID = 'AI_TASK_ID',
 		COPILOT_TRIGGER_MESSAGE_ID = 'COPILOT_TRIGGER_MESSAGE_ID',
+		COPILOT_GENERATION_STOPPED = 'COPILOT_GENERATION_STOPPED',
+		COPILOT_CAN_REGENERATE = 'COPILOT_CAN_REGENERATE',
 		BLOCK = 'BLOCK'
 	;
 
@@ -97,6 +99,11 @@ class Params extends Registry
 	protected bool $isLoaded = false;
 
 	protected static array $typeMap = [
+		self::COPILOT_GENERATION_STOPPED => [
+			'type' => Param::TYPE_BOOL,
+			'default' => false,
+			'isHidden' => true,
+		],
 		self::FILE_ID => [
 			'type' => Param::TYPE_INT_ARRAY,
 		],
@@ -340,6 +347,12 @@ class Params extends Registry
 			'type' => Param::TYPE_INT,
 			'isHidden' => true,
 			'default' => 0,
+		],
+		// Owned by aiassistant, im only declares and delivers it. Not hidden: the flag has to reach
+		// clients in the REST history and in pull. Declared without a default on purpose - Param::setValue()
+		// drops a value equal to the default, so 'false' would vanish instead of revoking the flag.
+		self::COPILOT_CAN_REGENERATE => [
+			'type' => Param::TYPE_BOOL,
 		],
 		self::BLOCK => [
 			'className' => BlocksBuilderParam::class,

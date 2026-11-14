@@ -30,6 +30,8 @@ class SystemFolderRegistry
 			new SystemFolderPrototype(ChannelFolder::CODE, static fn (): SystemFolder => new ChannelFolder()),
 			new SystemFolderPrototype(TaskRootFolder::CODE, static fn (): SystemFolder => new TaskRootFolder()),
 			new SystemFolderPrototype(VibecodeAppFolder::CODE, static fn (): SystemFolder => new VibecodeAppFolder()),
+			new SystemFolderPrototype(MeetingFolder::CODE, static fn (): SystemFolder => new MeetingFolder()),
+			new SystemFolderPrototype(MeetingRootFolder::CODE, static fn (): SystemFolder => new MeetingRootFolder()),
 		];
 
 		return $this->prototypes;

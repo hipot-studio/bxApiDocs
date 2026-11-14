@@ -6,16 +6,15 @@ use Bitrix\Crm\CallList\CallList;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\CallList\CreateAndStartCallListAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\DeleteAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\EditAction;
+use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group\WhatsAppMessageChildAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\ItemGroupAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\MyCompanyItemGroupAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\RecurringItemGroupAction;
+use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\UnbindClientAction;
 use Bitrix\Crm\Component\EntityList\Grid\Settings\ItemSettings;
-use Bitrix\Crm\Integration\SmsManager;
-use Bitrix\Crm\MessageSender\MassWhatsApp\SendItem;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
-use Bitrix\Crm\Settings;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Grid\Panel\Action\DataProvider;
 use Bitrix\Main\Grid\Panel\Action\ForAllCheckboxAction;
@@ -45,12 +44,19 @@ final class ItemDataProvider extends DataProvider
 	{
 		$actions = [];
 
+		// the client tab offers unbinding even to those who can change nothing in the items themselves
+		if ($this->getSettings()->getClientTab()?->canUpdateOwner === true)
+		{
+			$actions[] = new UnbindClientAction($this->getGridId());
+		}
+
 		$canDelete = is_null($this->getCategoryId())
 			? $this->userPermissions->entityType()->canDeleteItems($this->factory->getEntityTypeId())
 			: $this->userPermissions->entityType()->canDeleteItemsInCategory($this->factory->getEntityTypeId(), $this->getCategoryId())
 		;
 
-		if ($canDelete)
+		// the client tab offers deletion in the group actions, its separate button is "Unbind"
+		if ($canDelete && !$this->isClientTab())
 		{
 			$actions[] = new DeleteAction($this->factory->getEntityTypeId(), $this->getGridId());
 		}
@@ -76,6 +82,7 @@ final class ItemDataProvider extends DataProvider
 
 			if (
 				!$this->getSettings()->isRecurring()
+				&& !$this->isClientTab()
 				&& ModuleManager::isModuleInstalled('voximplant')
 				&& CallList::isEntityTypeSupported($this->factory->getEntityTypeId())
 			)
@@ -85,18 +92,13 @@ final class ItemDataProvider extends DataProvider
 					$this->getGridId(),
 				);
 			}
-
-			if ($this->isShowWhatsAppMessageAction())
-			{
-				$actions[] = new WhatsAppMessageAction(
-					$this->factory->getEntityTypeId(),
-					$this->getCategoryId(),
-					$this->getGridId(),
-				);
-			}
 		}
 
-		if (!empty($actions))
+		if (
+			!empty($actions)
+			|| $canDelete
+			|| WhatsAppMessageChildAction::isAvailable($this->factory->getEntityTypeId(), $this->getSettings())
+		)
 		{
 			if ($this->getSettings()->isMyCompany())
 			{
@@ -123,42 +125,18 @@ final class ItemDataProvider extends DataProvider
 				);
 			}
 
-			$actions[] = new ForAllCheckboxAction();
+			if (!$this->isClientTab())
+			{
+				$actions[] = new ForAllCheckboxAction();
+			}
 		}
 
 		return $actions;
 	}
 
-	private function isShowWhatsAppMessageAction(): bool
+	private function isClientTab(): bool
 	{
-		if (!Settings\Crm::isWhatsAppScenarioEnabled())
-		{
-			return false;
-		}
-
-		$sender = SmsManager::getSenderById(SendItem::DEFAULT_PROVIDER);
-
-		if (!$sender)
-		{
-			return false;
-		}
-
-		if (!$sender::isSupported())
-		{
-			return false;
-		}
-
-		if ($this->factory->getEntityTypeId() === \CCrmOwnerType::Contact)
-		{
-			return true;
-		}
-
-		if ($this->factory->getEntityTypeId() === \CCrmOwnerType::Company && !$this->getSettings()->isMyCompany())
-		{
-			return true;
-		}
-
-		return false;
+		return $this->getSettings()->getClientTab() !== null;
 	}
 
 	private function getCategoryId(): ?int

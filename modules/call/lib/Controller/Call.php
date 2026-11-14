@@ -3,7 +3,6 @@
 namespace Bitrix\Call\Controller;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
@@ -89,34 +88,16 @@ class Call extends JwtController
 	public function configureActions()
 	{
 		return [
-			'startCall' => [
-				'+prefilters' => [
-					new UniqueRequestFilter(),
-				],
-			],
-			'finishCall' => [
-				'+prefilters' => [
-					new UniqueRequestFilter(),
-				],
-			],
+			'startCall' => $this->configureJwtAction([new UniqueRequestFilter()]),
+			'finishCall' => $this->configureJwtAction([new UniqueRequestFilter()]),
 			// Turning a one-to-one call into a group one means bringing in somebody from outside the
 			// chat, which a guest never does (@see \Bitrix\Call\Service\GuestCallPolicy).
-			'createChildCall' => [
-				'+prefilters' => [
-					new UniqueRequestFilter(),
-					new ActionFilter\DenyGuest(),
-				],
-			],
-			'userStatus' => [
-				'+prefilters' => [
-					new UniqueRequestFilter(),
-				],
-			],
-			'startPush' => [
-				'+prefilters' => [
-					new UniqueRequestFilter()
-				]
-			],
+			'createChildCall' => $this->configureJwtAction([
+				new UniqueRequestFilter(),
+				new ActionFilter\DenyGuest(),
+			]),
+			'userStatus' => $this->configureJwtAction([new UniqueRequestFilter()]),
+			'startPush' => $this->configureJwtAction([new UniqueRequestFilter()]),
 			'registerRingingDevice' => [
 				// Enforce CSRF for this state-mutating action. The filter applies
 				// only in AJAX scope (web client sends sessid via runAction) and
@@ -159,10 +140,10 @@ class Call extends JwtController
 			],
 			// The action creates a chat where the caller is the only member and mints a guest link for it.
 			// That is chat creation plus guest invites, not starting a call in a chat one already belongs
-			// to, so the denial does not follow the portal option - a guest never reaches it.
+			// to, so a guest is denied it outright.
+			// Authentication comes from the defaults of JwtController.
 			'createChatForCall' => [
 				'+prefilters' => [
-					new Authentication(),
 					new ActionFilter\DenyGuest(),
 				],
 			],
@@ -218,6 +199,40 @@ class Call extends JwtController
 	}
 
 	/**
+	 * Answers whether the portal would start the recording of a call in this chat by itself.
+	 *
+	 * The composition is counted from the raw non-hidden relations of the chat, not from the
+	 * membership a started call reads.
+	 *
+	 * @restMethod call.Call.isAutoStartRecordingAvailableInChat
+	 *
+	 * @param int $chatId
+	 * @return array
+	 */
+	public function isAutoStartRecordingAvailableInChatAction(int $chatId): array
+	{
+		Loader::includeModule('im');
+		$currentUserId = (int)$this->getCurrentUser()->getId();
+
+		if ($chatId <= 0 || $currentUserId <= 0)
+		{
+			return ['available' => false];
+		}
+
+		$chat = Chat::getInstance($chatId);
+		if (!$chat->getId() || !$chat->checkAccess($currentUserId)->isSuccess())
+		{
+			$this->addError(new Error('access_denied', 'Access to chat denied'));
+
+			return [];
+		}
+
+		$realUserCount = \Bitrix\Call\Integration\Chat::getRealUserCountInChat($chatId, $currentUserId);
+
+		return ['available' => CallAISettings::isAutoStartRecordingAvailableFor($realUserCount)];
+	}
+
+	/**
 	 * @restMethod call.Call.startCall
 	 *
 	 * @param DTO\CallRequest $callRequest
@@ -268,25 +283,11 @@ class Call extends JwtController
 			];
 		}
 
-		// The room is created on the media server before this webhook arrives, so a guest whose portal
-		// keeps guest outgoing calls switched off is stopped here: no call record, no invites, no push.
-		$guestPolicy = new GuestCallPolicy();
-		$initiatorUserId = (int)$callRequest->initiatorUserId;
-		if (!$guestPolicy->canStartCall($initiatorUserId))
-		{
-			$this->addError(new Error('guest_access_denied', 'Guests are not allowed to start calls'));
-
-			return [
-				'result' => false,
-				'errorCode' => 'guest_access_denied',
-				'errorMessage' => 'Guests are not allowed to start calls',
-			];
-		}
-
 		// Membership is checked here and nowhere else on this path: the entity check that holds a guest to
 		// their own chat belongs to the classic scheme (@see CallManager::createAction), and the chat named
-		// by this webhook never passes through it.
-		if (!$guestPolicy->canStartCallInChat($initiatorUserId, (int)$callRequest->chatId))
+		// by this webhook never passes through it. The room is created on the media server before this webhook
+		// arrives, so a guest outside the chat is stopped here: no call record, no invites, no push.
+		if (!(new GuestCallPolicy())->canStartCallInChat((int)$callRequest->initiatorUserId, (int)$callRequest->chatId))
 		{
 			$this->addError(new Error('guest_access_denied', 'Guests can only start a call in a chat of their own'));
 
@@ -978,11 +979,13 @@ class Call extends JwtController
 		bool $isLegacyMobile = false,
 		bool $isShow = true,
 		bool $isRepeated = false,
+		bool $isManualInvite = false,
 		string $sendMode = Signaling::MODE_ALL,
 		?array $usersInOtherCalls = null,
 		array $extraCacheUsers = [],
 		bool $earlyFlush = false,
-		?int $ttl = null
+		?int $ttl = null,
+		?string $inviteGenerationId = null,
 	): void
 	{
 		$payload = $this->prepareInviteUsers($call, $userIds, $isRepeated);
@@ -993,6 +996,8 @@ class Call extends JwtController
 			isLegacyMobile: $isLegacyMobile,
 			isShow: $isShow,
 			isRepeated: $isRepeated,
+			isManualInvite: $isManualInvite,
+			inviteGenerationId: $inviteGenerationId,
 			sendMode: $sendMode,
 			usersInOtherCalls: $usersInOtherCalls,
 			extraCacheUsers: $extraCacheUsers,
@@ -1010,9 +1015,13 @@ class Call extends JwtController
 		bool $isRepeated,
 	): array
 	{
-		if (\Bitrix\Im\User::getInstance()->isExtranet())
+		// im counts a guest as extranet, and the extranet filter keeps only the people of the caller's
+		// extranet groups - a guest has none, so it would drop every invitee. The invite of a guest is
+		// already held to the members of the chat of the call (inviteAction), which is the narrower rule.
+		$caller = \Bitrix\Im\User::getInstance();
+		if ($caller->isExtranet() && !(new GuestCallPolicy())->isGuest((int)$caller->getId()))
 		{
-			$userIds = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($userIds, \Bitrix\Im\User::getInstance()->getId()) ?: [];
+			$userIds = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($userIds, $caller->getId()) ?: [];
 		}
 		$userIds = array_values(array_unique(array_map('intval', $userIds)));
 
@@ -1079,11 +1088,13 @@ class Call extends JwtController
 		bool $isLegacyMobile,
 		bool $isShow,
 		bool $isRepeated,
+		bool $isManualInvite = false,
 		string $sendMode = Signaling::MODE_ALL,
 		?array $usersInOtherCalls = null,
 		array $extraCacheUsers = [],
 		bool $earlyFlush = false,
-		?int $ttl = null
+		?int $ttl = null,
+		?string $inviteGenerationId = null,
 	): void
 	{
 		$userIds = $payload['userIds'] ?? [];
@@ -1142,8 +1153,10 @@ class Call extends JwtController
 				sendPush: $sendPush,
 				sendMode: $sendMode,
 				isRepeated: $isRepeated,
+				isManualInvite: $isManualInvite,
 				usersInOtherCalls: $usersInOtherCalls,
-				ttl: $ttl
+				ttl: $ttl,
+				inviteGenerationId: $inviteGenerationId,
 			);
 
 			$call->markUsersCalling($usersToInvite);
@@ -1405,22 +1418,13 @@ class Call extends JwtController
 			];
 		}
 
-		// Device-aware decline for private 1-1 calls: drop the declining device
-		// from the ringing registry and, while the user still has other fresh
-		// ringing devices, stop here — the CallUser stays CALLING, no hangup
-		// broadcast and no finish, so the remaining devices keep ringing. When the
-		// registry is empty/unknown (older clients that never register a device)
-		// this is a no-op and the caller falls through to the legacy decline ->
-		// finish path.
-		if (
-			$this->isDeviceScopedCall($call)
-			&& $userRequest->callInstanceId !== ''
-		)
+		// The registry tracks private ringing devices for cleanup. A decline is a
+		// user-level decision though: it must settle a 1:1 call even while another
+		// platform has a fresh registry entry.
+		$ringingDeviceId = $this->getRingingDeviceId($userRequest);
+		if ($this->isDeviceScopedCall($call) && $ringingDeviceId !== '')
 		{
-			if ((new RingingDeviceRegistry())->remove($call->getId(), $currentUserId, $userRequest->callInstanceId))
-			{
-				return ['result' => true];
-			}
+			(new RingingDeviceRegistry())->remove($call->getId(), $currentUserId, $ringingDeviceId);
 		}
 
 		if ($userRequest->code === 486)
@@ -1450,6 +1454,20 @@ class Call extends JwtController
 	}
 
 	/**
+	 * A client that does not send the optional browser-wide id uses its call
+	 * instance id consistently for registration and decline.
+	 */
+	protected function getRingingDeviceId(DTO\UserRequest $userRequest): string
+	{
+		if ($userRequest->ringingDeviceId !== '')
+		{
+			return $userRequest->ringingDeviceId;
+		}
+
+		return $userRequest->callInstanceId;
+	}
+
+	/**
 	 * Registers the caller's ringing device in the device registry so the
 	 * decline/dial gates (Phase 2) can tell whether a user still has other
 	 * devices ringing. Idempotent: re-registering the same device refreshes
@@ -1466,18 +1484,18 @@ class Call extends JwtController
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
 		$callUuid = $userRequest->roomId ?: $userRequest->callUuid;
-		$callInstanceId = $userRequest->callInstanceId;
+		$ringingDeviceId = $this->getRingingDeviceId($userRequest);
 
-		// Reject out-of-range ids up front: the registry silently drops anything
+		// Reject out-of-range device ids up front: the registry silently drops anything
 		// over MAX_INSTANCE_ID_LENGTH, which would otherwise return {result:true}
 		// while leaving the device unregistered (device-aware decline broken for it).
-		if ($callInstanceId === '' || strlen($callInstanceId) > RingingDeviceRegistry::MAX_INSTANCE_ID_LENGTH)
+		if ($ringingDeviceId === '' || strlen($ringingDeviceId) > RingingDeviceRegistry::MAX_INSTANCE_ID_LENGTH)
 		{
-			$this->addError(new Error('invalid_request', 'callInstanceId must contain from 1 to ' . RingingDeviceRegistry::MAX_INSTANCE_ID_LENGTH . ' bytes'));
+			$this->addError(new Error('invalid_request', 'ringingDeviceId must contain from 1 to ' . RingingDeviceRegistry::MAX_INSTANCE_ID_LENGTH . ' bytes'));
 			return [
 				'result' => false,
 				'errorCode' => 'invalid_request',
-				'errorMessage' => 'callInstanceId must contain from 1 to ' . RingingDeviceRegistry::MAX_INSTANCE_ID_LENGTH . ' bytes',
+				'errorMessage' => 'ringingDeviceId must contain from 1 to ' . RingingDeviceRegistry::MAX_INSTANCE_ID_LENGTH . ' bytes',
 			];
 		}
 
@@ -1553,7 +1571,7 @@ class Call extends JwtController
 				return ['result' => true];
 			}
 
-			(new RingingDeviceRegistry())->register($call->getId(), $currentUserId, $callInstanceId);
+			(new RingingDeviceRegistry())->register($call->getId(), $currentUserId, $ringingDeviceId);
 		}
 		finally
 		{
@@ -1786,6 +1804,8 @@ class Call extends JwtController
 		$isShow = ($userRequest->show === "Y");
 		$isLegacyMobile = ($userRequest->legacyMobile === "Y");
 		$isRepeated = ($userRequest->repeated === "Y");
+		$isManualInvite = ($userRequest->manualInvite === "Y");
+		$inviteGenerationId = $userRequest->inviteGenerationId;
 		$userIds = array_map('intVal', $userRequest->users);
 		$callUuid = $userRequest->roomId ?: $userRequest->callUuid;
 
@@ -1801,6 +1821,14 @@ class Call extends JwtController
 		$currentUserId = $this->getCurrentUser()->getId();
 		if (!$call->checkAccess($currentUserId))
 		{
+			$this->addError(new Error('access_denied', 'Access to call denied'));
+			return null;
+		}
+
+		// Access first, state second: a stranger must not learn that the call is over.
+		if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
+		{
+			$this->addError(new Error('call_finished', 'Call already finished'));
 			return null;
 		}
 
@@ -1836,6 +1864,37 @@ class Call extends JwtController
 		// `could_not_lock`.
 		try
 		{
+			// The guards above ran on the Registry snapshot taken before the wait for the lock,
+			// which lasts up to LOCK_TTL and shares no lock with call finishing. Re-read and
+			// repeat them here, as the classic transport does: below this point nothing looks
+			// at the state again - prepareInviteUsers only raises NEW to INVITING and
+			// Call::addUsers ignores the state entirely.
+			Registry::clearCache($call->getId());
+			$call = Registry::getCallWithUuid($callUuid);
+			if (!$call)
+			{
+				$this->addError(new Error("call_not_found", "Call not found"));
+				return null;
+			}
+
+			if (!$call->checkAccess($currentUserId))
+			{
+				$this->addError(new Error('access_denied', 'Access to call denied'));
+				return null;
+			}
+
+			if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
+			{
+				$this->addError(new Error('call_finished', 'Call already finished'));
+				return null;
+			}
+
+			if ($call->hasErrors())
+			{
+				$this->addErrors($call->getErrors());
+				return null;
+			}
+
 			// An invitee could have left the chat while we waited for the lock.
 			if (!(new GuestCallPolicy())->canInviteUsersNow((int)$currentUserId, $call->getChatId(), $userIds))
 			{
@@ -1857,6 +1916,8 @@ class Call extends JwtController
 			isLegacyMobile: $isLegacyMobile,
 			isShow: $isShow,
 			isRepeated: $isRepeated,
+			isManualInvite: $isManualInvite,
+			inviteGenerationId: $inviteGenerationId,
 		);
 
 		return true;

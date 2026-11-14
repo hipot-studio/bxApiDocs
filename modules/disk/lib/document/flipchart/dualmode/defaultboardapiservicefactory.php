@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Document\Flipchart\DualMode;
 
 use Bitrix\Disk\Document\Flipchart\BoardApiService;
 use Bitrix\Disk\Document\Flipchart\Configuration;
+use Bitrix\Disk\Document\Flipchart\JwtService;
 use Bitrix\Main\ArgumentException;
 
 final class DefaultBoardApiServiceFactory implements BoardApiServiceFactory
@@ -49,5 +50,33 @@ final class DefaultBoardApiServiceFactory implements BoardApiServiceFactory
 			ServiceProfile::New => new BoardApiService(Configuration::getApiHost(ServiceProfile::New)),
 			ServiceProfile::Old => new BoardApiService(),
 		};
+	}
+
+	public function createForServerRead(?ServiceProfile $profile, JwtService $jwtService): BoardApiService
+	{
+		if ($profile === null)
+		{
+			throw new ArgumentException('Board service client must not be built for an unresolved profile');
+		}
+
+		$useDocumentProxy = Configuration::isUsingDocumentProxy();
+		if ($profile === ServiceProfile::New && $useDocumentProxy)
+		{
+			throw new ConfigurationException(
+				'boards_use_documentproxy is Y; the new service profile is not available on this portal',
+			);
+		}
+
+		$apiUrl = match ($profile)
+		{
+			ServiceProfile::Old => Configuration::getApiHost(ServiceProfile::Old),
+			ServiceProfile::New => Configuration::getApiHost(ServiceProfile::New),
+		};
+		if (!$useDocumentProxy && !ServiceAddress::isValid(rtrim($apiUrl, '/')))
+		{
+			throw new ConfigurationException('Board service profile has no valid API address');
+		}
+
+		return new BoardApiService($apiUrl, $jwtService, $profile);
 	}
 }

@@ -22,13 +22,22 @@ final class SqlLabService extends AbstractSupersetContext
 	];
 	private const ERROR_TYPE_TO_CODE = [
 		'SYNTAX_ERROR' => SqlLabErrorCode::INVALID_QUERY,
+		'COLUMN_DOES_NOT_EXIST_ERROR' => SqlLabErrorCode::INVALID_QUERY,
+		'TABLE_DOES_NOT_EXIST_ERROR' => SqlLabErrorCode::INVALID_QUERY,
+		'SCHEMA_DOES_NOT_EXIST_ERROR' => SqlLabErrorCode::INVALID_QUERY,
 		'QUERY_SECURITY_ACCESS_ERROR' => SqlLabErrorCode::ACCESS_DENIED,
 		'TABLE_SECURITY_ACCESS_ERROR' => SqlLabErrorCode::ACCESS_DENIED,
 		'QUERY_TIMEOUT_ERROR' => SqlLabErrorCode::TIMEOUT,
 	];
 	// Superset types every Trino failure as GENERIC_DB_ENGINE_ERROR; only the repr of the Trino client exception
 	// at the start of the message tells a fault of the query (USER_ERROR) from a failure of Trino itself.
-	private const TRINO_USER_ERROR_PATTERN = '/^TrinoUserError\(type=USER_ERROR, name=([A-Z_]+),/';
+	private const TRINO_USER_ERROR_PATTERN = '/^(?:trino error: )?TrinoUserError\(type=USER_ERROR, name=([A-Z_]+),/';
+	// The repr of the Trino client exception wraps the very text Trino refused the query with. The service refuses
+	// a query on a closed table with the same repr without query_id.
+	private const TRINO_USER_ERROR_TEXT_PATTERN = '/, message="(.*)"(?:, query_id=[^)]*)?\)$/s';
+	// A newer service keeps message and error_type as they were and adds the type and the text of a refused query
+	// under this key of extra.
+	private const QUERY_ERROR_EXTRA_KEY = 'query_error';
 	private const TRINO_ACCESS_DENIED_NAMES = [
 		'PERMISSION_DENIED',
 		'BX_TABLE_ACCESS_DENIED',
@@ -70,6 +79,7 @@ final class SqlLabService extends AbstractSupersetContext
 				SqlLabErrorCode::INVALID_QUERY,
 				HttpStatus::UNPROCESSABLE_ENTITY,
 				detail: 'SQL is required',
+				queryError: 'SQL is required',
 			);
 		}
 
@@ -80,6 +90,7 @@ final class SqlLabService extends AbstractSupersetContext
 				SqlLabErrorCode::INVALID_QUERY,
 				HttpStatus::UNPROCESSABLE_ENTITY,
 				detail: (string)$classification->reason,
+				queryError: (string)$classification->reason,
 			);
 		}
 
@@ -133,11 +144,14 @@ final class SqlLabService extends AbstractSupersetContext
 
 		if ($status === 'failed')
 		{
+			$code = $this->resolveErrorCode($decoded);
+
 			return $this->createSqlLabErrorResult(
-				$this->resolveErrorCode($decoded),
+				$code,
 				HttpStatus::UNPROCESSABLE_ENTITY,
 				$requestResult,
-				$this->extractSqlLabError($decoded),
+				$this->extractSqlLabError($decoded, $code),
+				$this->extractQueryError($decoded, $code),
 			);
 		}
 
@@ -156,7 +170,8 @@ final class SqlLabService extends AbstractSupersetContext
 				$code,
 				$httpStatus >= HttpStatus::BAD_REQUEST ? $httpStatus : HttpStatus::BAD_GATEWAY,
 				$requestResult,
-				$this->extractSqlLabError($decoded),
+				$this->extractSqlLabError($decoded, $code),
+				$this->extractQueryError($decoded, $code),
 			);
 		}
 
@@ -212,20 +227,31 @@ final class SqlLabService extends AbstractSupersetContext
 				continue;
 			}
 
-			$errorType = $error['error_type'] ?? null;
-			if (is_string($errorType) && isset(self::ERROR_TYPE_TO_CODE[$errorType]))
+			$code = $this->resolveSingleErrorCode($error);
+			if ($code !== null)
 			{
-				return self::ERROR_TYPE_TO_CODE[$errorType];
-			}
-
-			$trinoUserError = $this->resolveTrinoUserError($error['message'] ?? null);
-			if ($trinoUserError !== null)
-			{
-				return $trinoUserError;
+				return $code;
 			}
 		}
 
 		return SqlLabErrorCode::UNAVAILABLE;
+	}
+
+	private function resolveSingleErrorCode(array $error): ?string
+	{
+		$queryErrorType = $this->readQueryErrorExtra($error)['type'] ?? null;
+		if (is_string($queryErrorType) && isset(self::ERROR_TYPE_TO_CODE[$queryErrorType]))
+		{
+			return self::ERROR_TYPE_TO_CODE[$queryErrorType];
+		}
+
+		$errorType = $error['error_type'] ?? null;
+		if (is_string($errorType) && isset(self::ERROR_TYPE_TO_CODE[$errorType]))
+		{
+			return self::ERROR_TYPE_TO_CODE[$errorType];
+		}
+
+		return $this->resolveTrinoUserError($error['message'] ?? null);
 	}
 
 	/**
@@ -265,11 +291,18 @@ final class SqlLabService extends AbstractSupersetContext
 	/**
 	 * Pulls a human-readable error message out of a SQL Lab error payload.
 	 */
-	private function extractSqlLabError(?array $decoded): ?string
+	private function extractSqlLabError(?array $decoded, string $code): ?string
 	{
 		if (!is_array($decoded))
 		{
 			return null;
+		}
+
+		if ($code !== SqlLabErrorCode::UNAVAILABLE)
+		{
+			$message = $this->findResolvedError($decoded, $code)['message'] ?? null;
+
+			return is_string($message) && $message !== '' ? $message : null;
 		}
 
 		$errors = $decoded['errors'] ?? null;
@@ -291,21 +324,103 @@ final class SqlLabService extends AbstractSupersetContext
 	}
 
 	/**
+	 * The text of a refused query alone, the same whichever version of the service answered: a newer one hands it
+	 * in extra, an earlier one only inside the repr of the Trino client exception.
+	 */
+	private function extractQueryError(?array $decoded, string $code): ?string
+	{
+		if ($code !== SqlLabErrorCode::INVALID_QUERY || !is_array($decoded))
+		{
+			return null;
+		}
+
+		$error = $this->findResolvedError($decoded, $code);
+		if ($error === null)
+		{
+			return null;
+		}
+
+		$extraMessage = $this->readQueryErrorExtra($error)['message'] ?? null;
+		if (is_string($extraMessage) && $extraMessage !== '')
+		{
+			return $extraMessage;
+		}
+
+		$message = $error['message'] ?? null;
+		if (!is_string($message) || $message === '')
+		{
+			return null;
+		}
+
+		if (preg_match(self::TRINO_USER_ERROR_PATTERN, $message) !== 1)
+		{
+			return $message;
+		}
+
+		if (preg_match(self::TRINO_USER_ERROR_TEXT_PATTERN, $message, $matches) === 1 && $matches[1] !== '')
+		{
+			return $matches[1];
+		}
+
+		return null;
+	}
+
+	/**
+	 * The error of the answer the code was resolved by.
+	 */
+	private function findResolvedError(array $decoded, string $code): ?array
+	{
+		foreach (is_array($decoded['errors'] ?? null) ? $decoded['errors'] : [] as $error)
+		{
+			if (is_array($error) && $this->resolveSingleErrorCode($error) === $code)
+			{
+				return $error;
+			}
+		}
+
+		return null;
+	}
+
+	private function readQueryErrorExtra(array $error): array
+	{
+		$queryError = is_array($error['extra'] ?? null) ? ($error['extra'][self::QUERY_ERROR_EXTRA_KEY] ?? null) : null;
+
+		return is_array($queryError) ? $queryError : [];
+	}
+
+	/**
 	 * $httpStatus describes the transport and is read by the proxy controller; $detail keeps the
-	 * verbatim Superset text for the AI channel, while the REST boundary answers with $code alone.
+	 * verbatim Superset text for its earlier readers. $queryError is the reason of a refused query taken from
+	 * the very error the code was resolved by: the only field a caller may hand on as the reason of the query,
+	 * since an earlier version of this module put a text of another error into detail.
 	 */
 	private function createSqlLabErrorResult(
 		string $code,
 		int $httpStatus,
 		?RequestResult $requestResult = null,
 		?string $detail = null,
+		?string $queryError = null,
 	): Main\Result
 	{
+		$customData = null;
+		if ($code === SqlLabErrorCode::INVALID_QUERY)
+		{
+			$customData = ['detail' => $detail];
+			if ($queryError !== null && $queryError !== '')
+			{
+				$customData['queryError'] = $queryError;
+			}
+		}
+		elseif ($detail !== null && $detail !== '')
+		{
+			$customData = ['detail' => $detail];
+		}
+
 		$result = new Main\Result();
 		$result->addError(new Main\Error(
 			self::ERROR_MESSAGES[$code] ?? self::ERROR_MESSAGES[SqlLabErrorCode::UNAVAILABLE],
 			$code,
-			$detail === null || $detail === '' ? null : ['detail' => $detail],
+			$customData,
 		));
 
 		$data = ['httpStatus' => $httpStatus];

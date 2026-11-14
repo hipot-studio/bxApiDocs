@@ -15,14 +15,14 @@ final class Dates {
 
 	public static function endOfCurrentDay(QueryParams $params): DateTime
 	{
-		$date = DateTime::createFromTimestamp((new DateTime())->getTimestamp());
+		$date = CCrmDateTimeHelper::getUserTime(new DateTime(), $params->firstUserId());
 		$date->setTime(23, 59, 59);
 		return CCrmDateTimeHelper::getServerTime($date,$params->firstUserId())->disableUserTime();
 	}
 
 	public static function beginOfCurrentDay(QueryParams $params): DateTime
 	{
-		$date = DateTime::createFromTimestamp((new DateTime())->getTimestamp());
+		$date = CCrmDateTimeHelper::getUserTime(new DateTime(), $params->firstUserId());
 		$date->setTime(00, 00, 0);
 		return CCrmDateTimeHelper::getServerTime($date,$params->firstUserId())->disableUserTime();
 	}

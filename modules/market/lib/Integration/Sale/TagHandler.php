@@ -29,20 +29,25 @@ class TagHandler implements TagHandlerInterface
 		$oldFields = $event->getParameter('OLD_FIELDS');
 		$newFields = $event->getParameter('NEW_FIELDS');
 		if (
-			!isset($oldFields['ACTIVE']) ||
-			!isset($newFields['ACTIVE']) ||
-			$oldFields['ACTIVE'] == $newFields['ACTIVE']
+			!isset($oldFields['ACTIVE'])
+			|| !isset($newFields['ACTIVE'])
+			|| $oldFields['ACTIVE'] == $newFields['ACTIVE']
 		) {
 			return true;
 		}
 
+		return static::onChangePaySystem();
+	}
+
+	public static function onChangePaySystem(): bool
+	{
 		$tag = static::getCountPaySystemTag();
-		if ($tag['MODULE_ID'])
+		if (isset($tag['MODULE_ID']))
 		{
 			Manager::save(
 				$tag['MODULE_ID'],
 				$tag['CODE'],
-				(string)$tag['VALUE']
+				(string)$tag['VALUE'],
 			);
 		}
 
@@ -58,8 +63,8 @@ class TagHandler implements TagHandlerInterface
 				'MODULE_ID' => static::MODULE_ID,
 				'CODE' => static::TAG_PAYSYSTEM,
 				'VALUE' => PaySystemActionTable::getCount([
-						'=ACTIVE' => 'Y'
-					]
+					'=ACTIVE' => 'Y',
+				],
 				),
 			];
 		}

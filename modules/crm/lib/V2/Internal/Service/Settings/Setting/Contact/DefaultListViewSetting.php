@@ -18,7 +18,7 @@ use Bitrix\Main\Result;
  */
 final class DefaultListViewSetting extends AbstractSetting
 {
-	public const CODE = 'crm.contact.default_list_view';
+	public const ID = 'crm.contact.default_list_view';
 
 	private readonly ContactSettings $contactSettings;
 
@@ -27,9 +27,9 @@ final class DefaultListViewSetting extends AbstractSetting
 		$this->contactSettings = $contactSettings ?? ContactSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -41,10 +41,12 @@ final class DefaultListViewSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'contact_default_list_view',
 		);
 	}
 

@@ -20,7 +20,8 @@ class OnAfterDeleteAttachedObjectEvent extends AbstractEvent
 	 *     ENTITY_TYPE: string,
 	 *     ENTITY_ID: string,
 	 *     CREATE_TIME: DateTime,
-	 *     CREATED_BY: string
+	 *     CREATED_BY: string,
+	 *     OWNER_PARAMETERS: ?array<string, int|string|bool>
 	 * } $attachedObject
 	 */
 	public function __construct(array $attachedObject)

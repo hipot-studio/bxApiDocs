@@ -36,6 +36,7 @@ class CrmTypeDetailComponent extends Base
 	private const TAB_IDS = [
 		'custom-section',
 		'common',
+		'start-catalog',
 		'fields',
 		'relation',
 		'user-fields',

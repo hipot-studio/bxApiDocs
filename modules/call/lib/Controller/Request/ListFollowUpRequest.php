@@ -38,10 +38,11 @@ class ListFollowUpRequest extends Request
 	 *
 	 * @var array{
 	 *     startDate?: array{from?: string, to?: string},
-	 *     participantId?: int
+	 *     participantId?: int,
+	 *     chatId?: int
 	 * }|null
 	 */
-	#[Description('Filter. Shape: { startDate: { from: ISO-8601 string, to: ISO-8601 string } (required), participantId?: int (admin-only; ignored for non-admins) }. Missing or reversed date range → HTTP 400 (invalid_date_range).')]
+	#[Description('Filter. Shape: { startDate: { from: ISO-8601 string, to: ISO-8601 string } (required), participantId?: int (admin-only; ignored for non-admins), chatId?: int (restrict to calls of this chat) }. Missing or reversed date range → HTTP 400 (invalid_date_range).')]
 	public ?array $filter = null;
 
 	/**

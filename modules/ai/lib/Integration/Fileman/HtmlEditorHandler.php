@@ -40,7 +40,7 @@ CSS;
 	public static function onBeforeBuild(Event $event): void
 	{
 		$htmlEditor = $event->getParameter(0);
-		if (!($htmlEditor instanceof \CHTMLEditor))
+		if (!$htmlEditor instanceof \CHTMLEditor)
 		{
 			return;
 		}
@@ -56,10 +56,15 @@ CSS;
 			return;
 		}
 
-		$headHtml = is_string($config['headHtml'] ?? null) ? $config['headHtml'] : '';
+		$designTokens = is_string($config['designTokens'] ?? null) ? $config['designTokens'] : '';
 		$iframeCss = is_string($config['iframeCss'] ?? null) ? $config['iframeCss'] : '';
+		foreach (Extension::getAssets(self::DESIGN_TOKENS_EXTENSION)['css'] as $cssPath)
+		{
+			$cssUrl = htmlspecialcharsbx(\CUtil::GetAdditionalFileURL($cssPath));
+			$designTokens .= '<link rel="stylesheet" href="' . $cssUrl . '">';
+		}
 
-		$htmlEditor->setOption('headHtml', $headHtml . (string)Extension::getHtml(self::DESIGN_TOKENS_EXTENSION));
+		$htmlEditor->setOption('designTokens', $designTokens);
 		$htmlEditor->setOption('iframeCss', $iframeCss . "\n" . self::IFRAME_CSS);
 	}
 }

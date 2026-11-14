@@ -50,21 +50,21 @@ class GoToChat extends Base
 		return null;
 	}
 
-	public function sendAction(int $ownerTypeId, int $ownerId, array $params): Result
+	public function sendAction(int $ownerTypeId, int $ownerId, array $params): ?bool
 	{
-		$result = new Result();
-
 		if (!\Bitrix\Crm\Integration\ImOpenLines\GoToChat::isActive())
 		{
-			$result->addError(new Error('Feature is not available'));
+			$this->addError(new Error('Feature is not available'));
 
-			return $result;
+			return null;
 		}
 
 		$result = $this->validateEntity($ownerTypeId, $ownerId);
 		if (!$result->isSuccess())
 		{
-			return $result;
+			$this->addErrors($result->getErrors());
+
+			return null;
 		}
 
 		$senderType = (string)($params['senderType'] ?? '');
@@ -90,9 +90,11 @@ class GoToChat extends Base
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
+
+			return null;
 		}
 
-		return $result;
+		return true;
 	}
 
 	public function getConfigAction(Item $entity): ?array
@@ -397,9 +399,11 @@ class GoToChat extends Base
 		}
 
 		$item = $factory->getItem($entityId);
-		if($item === null)
+		if ($item === null)
 		{
 			$result->addError(ErrorCode::getNotFoundError());
+
+			return $result;
 		}
 
 		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))

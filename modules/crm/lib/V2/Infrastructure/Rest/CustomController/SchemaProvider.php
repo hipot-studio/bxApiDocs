@@ -10,6 +10,7 @@ use Bitrix\Crm\V2\Infrastructure\Rest\Controller;
 use Bitrix\Crm\V2\Infrastructure\Rest\Controller\Availability\ActivityEnabledProvider;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Activity\Mail;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Address\Address as OwnerAddressController;
+use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Address\PortalAddress;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Category\RouteBuilder;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Dictionary\AddressType;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Dictionary\StageSemantic;
@@ -26,12 +27,14 @@ use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Product\Product;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\Address as RequisiteAddress;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\BankRequisite;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\ClientRequisite;
+use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\MyCompanyRequisite;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\OwnerRequisite;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\Preset;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Requisite\Requisite;
 use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Timeline\Activity\Email\Email;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Activity\ActivityDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Address\OwnerAddressDtoGenerator;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Address\PortalAddressDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Dictionary\AddressTypeDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Dictionary\CommunicationTypeDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Dictionary\DictionaryValueDto;
@@ -57,13 +60,22 @@ use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Product\ProductDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Address\Requisite\RequisiteAddressDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite\BankRequisiteDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite\ClientRequisiteDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite\MyCompanyRequisiteDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite\OwnerRequisiteDtoGenerator;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite\PresetDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite\RequisiteDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Timeline\Activity\Email\EmailActivityDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\ChannelDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\AdAccountDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\AdOperationDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\AdTreeNodeDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\ExpensesPackDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\SourceAnalyticsDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\SourceDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Tracking\TraceDto;
 use Bitrix\Crm\V2\Internal\Entity\Dictionary\DictionaryType;
 use Bitrix\Crm\V2\Internal\Repository\ProductRow\ProductEnabledTypeRepository;
+use Bitrix\Crm\V2\Internal\Service\Item\Binding\PrimaryContactSupport;
 use Bitrix\Crm\V2\Internal\Service\Requisite\EntityLinkService;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\OwnerType;
@@ -157,6 +169,7 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 		'crm.contact.timeline.activity.email.send',
 		'crm.company.timeline.activity.email.list',
 		'crm.company.timeline.activity.email.send',
+		'crm.tracking.ad.expenses.getStatus',
 	];
 
 	/** @var array<string, class-string<Feature\BaseFeature|Feature\AbstractCrmFlag>> */
@@ -181,6 +194,9 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 		'crm.contact.addFieldValue' => RestV3CrudDeal::class,
 		'crm.company.addFieldValue' => RestV3CrudDeal::class,
 		'crm.mycompany.addFieldValue' => RestV3CrudDeal::class,
+		'crm.deal.setPrimaryContact' => RestV3CrudDeal::class,
+		'crm.lead.setPrimaryContact' => RestV3CrudDeal::class,
+		'crm.quote.setPrimaryContact' => RestV3CrudDeal::class,
 		'crm.deal.update' => RestV3CrudDeal::class,
 		'crm.contact.update' => RestV3CrudDeal::class,
 		'crm.lead.update' => RestV3CrudDeal::class,
@@ -249,6 +265,7 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 		'crm.dictionary.imType.list' => RestV3CrudDeal::class,
 		'crm.dictionary.webType.get' => RestV3CrudDeal::class,
 		'crm.dictionary.webType.list' => RestV3CrudDeal::class,
+		'crm.address.list' => RestV3CrudDeal::class,
 		'crm.contact.address.add' => RestV3CrudDeal::class,
 		'crm.contact.address.update' => RestV3CrudDeal::class,
 		'crm.contact.address.get' => RestV3CrudDeal::class,
@@ -333,6 +350,10 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 		'crm.quote.clientRequisite.set' => RestV3CrudDeal::class,
 		'crm.smartInvoice.clientRequisite.get' => RestV3CrudDeal::class,
 		'crm.smartInvoice.clientRequisite.set' => RestV3CrudDeal::class,
+		'crm.deal.requisite.getMyCompanyRequisite' => RestV3CrudDeal::class,
+		'crm.deal.requisite.setMyCompanyRequisite' => RestV3CrudDeal::class,
+		'crm.smartInvoice.requisite.getMyCompanyRequisite' => RestV3CrudDeal::class,
+		'crm.smartInvoice.requisite.setMyCompanyRequisite' => RestV3CrudDeal::class,
 		'crm.form.get' => RestV3WebForm::class,
 		'crm.form.list' => RestV3WebForm::class,
 		'crm.form.add' => RestV3WebForm::class,
@@ -355,6 +376,24 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 		'crm.tracking.trace.list' => RestV3Tracking::class,
 		'crm.tracking.trace.add' => RestV3Tracking::class,
 		'crm.tracking.trace.delete' => RestV3Tracking::class,
+		'crm.tracking.channel.list' => RestV3Tracking::class,
+		'crm.tracking.source.get' => RestV3Tracking::class,
+		'crm.tracking.source.list' => RestV3Tracking::class,
+		'crm.tracking.source.add' => RestV3Tracking::class,
+		'crm.tracking.source.update' => RestV3Tracking::class,
+		'crm.tracking.source.archive' => RestV3Tracking::class,
+		'crm.tracking.source.unarchive' => RestV3Tracking::class,
+		'crm.tracking.expenses.list' => RestV3Tracking::class,
+		'crm.tracking.expenses.add' => RestV3Tracking::class,
+		'crm.tracking.expenses.delete' => RestV3Tracking::class,
+		'crm.tracking.ad.account.authorization' => RestV3Tracking::class,
+		'crm.tracking.ad.account.list' => RestV3Tracking::class,
+		'crm.tracking.ad.account.connect' => RestV3Tracking::class,
+		'crm.tracking.ad.account.disconnect' => RestV3Tracking::class,
+		'crm.tracking.ad.tree.list' => RestV3Tracking::class,
+		'crm.tracking.ad.expenses.start' => RestV3Tracking::class,
+		'crm.tracking.ad.expenses.getStatus' => RestV3Tracking::class,
+		'crm.tracking.analytics.source.list' => RestV3Tracking::class,
 	];
 
 	/**
@@ -408,6 +447,42 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 	protected const CLIENT_REQUISITE_SCOPES = ['crm'];
 
 	/**
+	 * The scope of the group of the requisite of my company. Written out for the same reason the group
+	 * of the client writes its own out: the scopes built from the segments of the name would offer
+	 * `crm.deal.requisite` and `crm.deal.requisite.getMyCompanyRequisite` as scopes of the portal, and
+	 * the choice of a requisite is no resource of its own - the right it follows is the right on its
+	 * owner.
+	 */
+	protected const MY_COMPANY_REQUISITE_SCOPES = ['crm'];
+
+	/**
+	 * The scope of `crm.{entity}.setPrimaryContact`. Written out for the same reason the addresses and
+	 * the client requisite write theirs out: the primary contact is no resource of its own, and the
+	 * scopes built from the segments of the name would offer one to the portal as if it were.
+	 */
+	protected const SET_PRIMARY_CONTACT_SCOPES = ['crm'];
+
+	/**
+	 * The segment every type of an item is named by in `crm.{entity}.setPrimaryContact`; a smart process
+	 * is named after its own type code and needs no entry.
+	 *
+	 * The contact and the company are listed here although neither is published: each is kept out by a
+	 * reason of its own - the contact by the flag of the bindings being false for it, the company by the
+	 * exclusion of {@see PrimaryContactSupport} - and a segment missing here would hide both reasons
+	 * behind an absent name.
+	 */
+	protected const SET_PRIMARY_CONTACT_STATIC_ENTITY_SEGMENTS = [
+		OwnerType::LEAD => 'lead',
+		OwnerType::DEAL => 'deal',
+		OwnerType::CONTACT => 'contact',
+		OwnerType::COMPANY => 'company',
+		OwnerType::QUOTE => 'quote',
+		OwnerType::SMART_INVOICE => 'smartInvoice',
+		OwnerType::SMART_DOCUMENT => 'smartDocument',
+		OwnerType::SMART_B2E_DOCUMENT => 'smartB2eDocument',
+	];
+
+	/**
 	 * The scope of the global activity methods. Written out for the reason the addresses write theirs out:
 	 * the scopes built from the segments of the name would offer `crm.activity`, `crm.activity.get` and
 	 * `crm.activity.field` as scopes of the portal, and an activity is a resource of CRM rather than a
@@ -423,6 +498,7 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 	 */
 	protected const ACTIVITY_ACTIONS = [
 		'crm.activity.get' => 'get',
+		'crm.activity.list' => 'list',
 	];
 
 	/**
@@ -836,6 +912,45 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 				'export' => true,
 				'toolSetCode' => 'crm_rest_v3_my_company',
 				'descriptionOverride' => 'Add a value to a multiple-value field of an own company.',
+			],
+		],
+		// Only the three types whose answer never changes are written out - every smart-* type keeps the
+		// flag of the contact bindings in its own `Type` row, so those are built in
+		// {@see self::addSetPrimaryContactRoutesOfContactBoundTypes()} from the state of the portal.
+		'crm.deal.setPrimaryContact' => [
+			'controller' => Item::class,
+			'method' => 'setPrimaryContact',
+			'dtoGenerator' => ItemDtoGenerator::class,
+			'entityTypeId' => OwnerType::DEAL,
+			'scopes' => self::SET_PRIMARY_CONTACT_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => 'crm_rest_v3_contact_binding',
+				'descriptionOverride' => 'Set the primary contact of a CRM deal.',
+			],
+		],
+		'crm.lead.setPrimaryContact' => [
+			'controller' => Item::class,
+			'method' => 'setPrimaryContact',
+			'dtoGenerator' => ItemDtoGenerator::class,
+			'entityTypeId' => OwnerType::LEAD,
+			'scopes' => self::SET_PRIMARY_CONTACT_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => 'crm_rest_v3_contact_binding',
+				'descriptionOverride' => 'Set the primary contact of a CRM lead.',
+			],
+		],
+		'crm.quote.setPrimaryContact' => [
+			'controller' => Item::class,
+			'method' => 'setPrimaryContact',
+			'dtoGenerator' => ItemDtoGenerator::class,
+			'entityTypeId' => OwnerType::QUOTE,
+			'scopes' => self::SET_PRIMARY_CONTACT_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => 'crm_rest_v3_contact_binding',
+				'descriptionOverride' => 'Set the primary contact of a CRM quote.',
 			],
 		],
 		'crm.deal.update' => [
@@ -1581,6 +1696,23 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 				'export' => true,
 				'toolSetCode' => self::MCP_DICTIONARY_TOOL_SET_CODE,
 				'descriptionOverride' => 'List website address types.',
+			],
+		],
+		// The addresses of the whole portal, so the route names no owner and carries no service parameter.
+		// The scopes are written out rather than taken from `self::ADDRESS_SCOPES`: that constant justifies
+		// the scope of the module by the right on the owner of the address, and this method has the
+		// opposite ground - the right of a portal administrator. The scopes built from the segments of the
+		// name would offer `crm.address` and `crm.address.list`, and an application holding either would
+		// look like a caller this administrative method accepts.
+		'crm.address.list' => [
+			'controller' => PortalAddress::class,
+			'method' => 'list',
+			'dtoFqcn' => PortalAddressDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_REQUISITE_ADDRESS_TOOL_SET_CODE,
+				'descriptionOverride' => 'List all CRM addresses as a portal administrator.',
 			],
 		],
 		// The address group of a contact and a company: one controller, the entity type of the method
@@ -2565,6 +2697,58 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 				'descriptionOverride' => 'Set the client requisites of a CRM smart invoice.',
 			],
 		],
+		// The group of the requisite of my company: one controller, the entity type of the method name
+		// as its trusted invariant. Only the two types the specification publishes are served, so there
+		// is no route built per type here. The actions of {@see MyCompanyRequisite} are named after what
+		// they do to the pair, and the segment of the method name says which pair it is about.
+		'crm.deal.requisite.getMyCompanyRequisite' => [
+			'controller' => MyCompanyRequisite::class,
+			'method' => 'get',
+			'dtoFqcn' => MyCompanyRequisiteDto::class,
+			'entityTypeId' => OwnerType::DEAL,
+			'scopes' => self::MY_COMPANY_REQUISITE_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_REQUISITE_ADDRESS_TOOL_SET_CODE,
+				'descriptionOverride' => 'Get the own company requisites of a CRM deal.',
+			],
+		],
+		'crm.deal.requisite.setMyCompanyRequisite' => [
+			'controller' => MyCompanyRequisite::class,
+			'method' => 'set',
+			'dtoFqcn' => MyCompanyRequisiteDto::class,
+			'entityTypeId' => OwnerType::DEAL,
+			'scopes' => self::MY_COMPANY_REQUISITE_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_REQUISITE_ADDRESS_TOOL_SET_CODE,
+				'descriptionOverride' => 'Set the own company requisites of a CRM deal.',
+			],
+		],
+		'crm.smartInvoice.requisite.getMyCompanyRequisite' => [
+			'controller' => MyCompanyRequisite::class,
+			'method' => 'get',
+			'dtoFqcn' => MyCompanyRequisiteDto::class,
+			'entityTypeId' => OwnerType::SMART_INVOICE,
+			'scopes' => self::MY_COMPANY_REQUISITE_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_REQUISITE_ADDRESS_TOOL_SET_CODE,
+				'descriptionOverride' => 'Get the own company requisites of a CRM smart invoice.',
+			],
+		],
+		'crm.smartInvoice.requisite.setMyCompanyRequisite' => [
+			'controller' => MyCompanyRequisite::class,
+			'method' => 'set',
+			'dtoFqcn' => MyCompanyRequisiteDto::class,
+			'entityTypeId' => OwnerType::SMART_INVOICE,
+			'scopes' => self::MY_COMPANY_REQUISITE_SCOPES,
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_REQUISITE_ADDRESS_TOOL_SET_CODE,
+				'descriptionOverride' => 'Set the own company requisites of a CRM smart invoice.',
+			],
+		],
 		'crm.form.get' => [
 			'controller' => Controller\Form\Form::class,
 			'method' => 'get',
@@ -2816,6 +3000,221 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 					. ' it is bound to.',
 			],
 		],
+		// The dictionaries the traces are attributed by: the channels, the sources and their manual expenses.
+		// A source is named by exactly one of id and code, since a built-in source may have no record yet,
+		// and the expenses are read through their source, which is a required filter.
+		'crm.tracking.channel.list' => [
+			'controller' => Tracking\Channel::class,
+			'method' => 'list',
+			'dtoFqcn' => ChannelDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'List the base channels of the end-to-end analytics: site24, shop24,'
+					. ' crm-shop, site, call, mail and order, each with its name and whether it can be and is set up.'
+					. ' Takes no filter and no order.',
+			],
+		],
+		'crm.tracking.source.get' => [
+			'controller' => Tracking\Source::class,
+			'method' => 'get',
+			'dtoFqcn' => SourceDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Get a source of the end-to-end analytics by exactly one of id or code.'
+					. ' The id names a record; the code names a built-in source (google, yandex, vk, avito, ...),'
+					. ' also one never set up, which is answered without an id.',
+			],
+		],
+		'crm.tracking.source.list' => [
+			'controller' => Tracking\Source::class,
+			'method' => 'list',
+			'dtoFqcn' => SourceDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'List the sources of the end-to-end analytics: the built-in ones, then'
+					. ' the own ones. Without a filter it gives the active sources and the built-in ones not set up;'
+					. ' the filter [["isActive", "=", false]] gives the archived ones instead. No other filter,'
+					. ' no order. Pass select, e.g. ["id", "code", "kind", "name", "isActive", "isConfigured"]:'
+					. ' without it only id is answered, and a built-in source not set up has a null id.',
+			],
+		],
+		'crm.tracking.source.add' => [
+			'controller' => Tracking\Source::class,
+			'method' => 'add',
+			'dtoFqcn' => SourceDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Create an own source of the end-to-end analytics. fields.name is'
+					. ' required. Optional: color as #rgb or #rrggbb; refDomains and utmSources as lists of strings'
+					. ' the visits of the source are recognized by, at most 100 values each.',
+			],
+		],
+		'crm.tracking.source.update' => [
+			'controller' => Tracking\Source::class,
+			'method' => 'update',
+			'dtoFqcn' => SourceDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Change a source of the end-to-end analytics named by exactly one of id'
+					. ' or code. Only the passed fields change; refDomains and utmSources are replaced as a whole,'
+					. ' at most 100 values each.'
+					. ' The first change of a built-in source by code creates its record. The color of a built-in'
+					. ' source and the domains of google, yandex, fb, instagram, vk and vkads are not set.',
+			],
+		],
+		'crm.tracking.source.archive' => [
+			'controller' => Tracking\Source::class,
+			'method' => 'archive',
+			'dtoFqcn' => SourceDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Archive a source of the end-to-end analytics named by exactly one of id'
+					. ' or code: it leaves the default list, its traces and expenses stay. Archiving an archived'
+					. ' source changes nothing.',
+			],
+		],
+		'crm.tracking.source.unarchive' => [
+			'controller' => Tracking\Source::class,
+			'method' => 'unarchive',
+			'dtoFqcn' => SourceDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Return an archived source of the end-to-end analytics, named by exactly'
+					. ' one of id or code, to the default list. Returning an active source changes nothing.',
+			],
+		],
+		'crm.tracking.expenses.list' => [
+			'controller' => Tracking\Expenses::class,
+			'method' => 'list',
+			'dtoFqcn' => ExpensesPackDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'List the manual expenses of one source of the end-to-end analytics,'
+					. ' the latest first. The filter must be exactly [["sourceId", "=", <id>]]; no order. dateFrom'
+					. ' and dateTo are YYYY-MM-DD. Pass select, e.g. ["id", "dateFrom", "dateTo", "amount",'
+					. ' "currencyId", "actions", "comment"]: without it only id is answered.',
+			],
+		],
+		'crm.tracking.expenses.add' => [
+			'controller' => Tracking\Expenses::class,
+			'method' => 'add',
+			'dtoFqcn' => ExpensesPackDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Add manual expenses of a period to a source of the end-to-end analytics,'
+					. ' active or archived. Required: fields.sourceId, dateFrom and dateTo as YYYY-MM-DD (at most'
+					. ' 365 days), amount in units of the currency, not in cents (e.g. 1250.50), greater than zero'
+					. ' when rounded to cents (to the precision of the currency when it is coarser) and less than'
+					. ' 10^12, and currencyId. Optional: actions from 0 to 2147483647, comment.',
+			],
+		],
+		'crm.tracking.expenses.delete' => [
+			'controller' => Tracking\Expenses::class,
+			'method' => 'delete',
+			'dtoFqcn' => ExpensesPackDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Delete manual expenses by id together with their days. The expenses of'
+					. ' the advertising integrations are not deleted here; no filter is taken.',
+			],
+		],
+		'crm.tracking.ad.account.authorization' => [
+			'controller' => Tracking\Ad\Account::class,
+			'method' => 'authorization',
+			'dtoFqcn' => Tracking\Ad\AdAuthorizationDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Get the authorization URL for an advertising account source.',
+			],
+		],
+		'crm.tracking.ad.account.list' => [
+			'controller' => Tracking\Ad\Account::class,
+			'method' => 'list',
+			'dtoFqcn' => AdAccountDto::class,
+			'scopes' => ['crm'],
+			'mcp' => ['export' => true, 'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE],
+		],
+		'crm.tracking.ad.account.connect' => [
+			'controller' => Tracking\Ad\Account::class,
+			'method' => 'connect',
+			'dtoFqcn' => Tracking\Ad\AdBindingDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Connect an advertising account to a tracking source.',
+			],
+		],
+		'crm.tracking.ad.account.disconnect' => [
+			'controller' => Tracking\Ad\Account::class,
+			'method' => 'disconnect',
+			'dtoFqcn' => Tracking\Ad\AdBindingDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Disconnect an advertising account from a tracking source.',
+			],
+		],
+		'crm.tracking.ad.tree.list' => [
+			'controller' => Tracking\Ad\Tree::class,
+			'method' => 'list',
+			'dtoFqcn' => AdTreeNodeDto::class,
+			'scopes' => ['crm'],
+			'mcp' => ['export' => true, 'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE],
+		],
+		'crm.tracking.ad.expenses.start' => [
+			'controller' => Tracking\Ad\Expenses::class,
+			'method' => 'start',
+			'dtoFqcn' => AdOperationDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'descriptionOverride' => 'Build the next step of the existing advertising report for a source and period.',
+			],
+		],
+		'crm.tracking.ad.expenses.getStatus' => [
+			'controller' => Tracking\Ad\Expenses::class,
+			'method' => 'getStatus',
+			'dtoFqcn' => AdOperationDto::class,
+			'scopes' => ['crm'],
+			'mcp' => [
+				'export' => true,
+				'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE,
+				'nameOverride' => 'crm_tracking_ad_expenses_getstatus',
+				'descriptionOverride' => 'Read completion of the existing advertising report for a source and period.',
+			],
+		],
+		'crm.tracking.analytics.source.list' => [
+			'controller' => Tracking\Analytics\Source::class,
+			'method' => 'list',
+			'dtoFqcn' => SourceAnalyticsDto::class,
+			'scopes' => ['crm'],
+			'mcp' => ['export' => true, 'toolSetCode' => self::MCP_TRACKING_TOOL_SET_CODE],
+		],
 	];
 
 	/** @var array<string, array>|null */
@@ -3035,6 +3434,8 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 			$featureByRoute[$actionUri] = Activity\RouteBuilder::FEATURE;
 		}
 
+		$dynamicEntityTypeIds = [];
+
 		foreach ($this->getDynamicTypes() as $dynamicType)
 		{
 			$entityTypeId = $dynamicType->getEntityTypeId();
@@ -3042,6 +3443,8 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 			{
 				continue;
 			}
+
+			$dynamicEntityTypeIds[] = $entityTypeId;
 
 			if (EntityType::isPossibleSmartProcessTypeId($entityTypeId))
 			{
@@ -3147,6 +3550,11 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 			$featureByRoute[$actionUri] = RestV3CrudDeal::class;
 		}
 
+		$routesConfig = $this->addSetPrimaryContactRoutesOfContactBoundTypes(
+			$routesConfig,
+			$featureByRoute,
+			$dynamicEntityTypeIds,
+		);
 		$routesConfig = $this->addProductRowRoutesOfProductEnabledTypes($routesConfig, $featureByRoute);
 		$routesConfig = $this->addClientRequisiteRoutesOfLinkableTypes($routesConfig, $featureByRoute);
 		$routesConfig = $this->addDictionaryValueRoutes($routesConfig, $featureByRoute);
@@ -3405,6 +3813,117 @@ class SchemaProvider extends \Bitrix\Rest\V3\Schema\SchemaProvider
 				'list' => 'List entries in the ' . $dictionary . ' dictionary.',
 			},
 		];
+	}
+
+	/**
+	 * Routes of `crm.{entity}.setPrimaryContact` for the types contacts are bound to, beside the three
+	 * written out literally: every smart-* type - the static ones and the smart processes alike - keeps
+	 * the flag of the contact bindings in its own `Type` row, so which of them the method is published
+	 * for is a state of the portal and routes declared literally would drift away from it.
+	 *
+	 * This provider is built without dependency injection, is called with no exception handling around it
+	 * and is reachable before authorization, so a failed read of the flags would break the lookup of a
+	 * method for *every* module. It degrades to the routes built already instead - deal, lead and quote
+	 * among them, which is what keeps the method answering for the three types whose flag never changes.
+	 *
+	 * @param array<string, array> $routesConfig
+	 * @param int[] $dynamicEntityTypeIds the types of the map already walked in {@see self::buildRoutesConfig()}
+	 * @return array<string, array>
+	 */
+	protected function addSetPrimaryContactRoutesOfContactBoundTypes(
+		array $routesConfig,
+		array &$featureByRoute,
+		array $dynamicEntityTypeIds,
+	): array
+	{
+		$candidateEntityTypeIds = array_merge(
+			array_keys(static::SET_PRIMARY_CONTACT_STATIC_ENTITY_SEGMENTS),
+			$dynamicEntityTypeIds,
+		);
+
+		try
+		{
+			$entityTypeIds = array_values(array_filter(
+				$candidateEntityTypeIds,
+				fn(int $entityTypeId): bool => $this->hasSetPrimaryContactSupport($entityTypeId),
+			));
+		}
+		catch (\Throwable $exception)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+			return $routesConfig;
+		}
+
+		foreach ($entityTypeIds as $entityTypeId)
+		{
+			$entitySegment = $this->getSetPrimaryContactEntitySegment($entityTypeId);
+			if ($entitySegment === null)
+			{
+				continue;
+			}
+
+			$actionUri = 'crm.' . $entitySegment . '.setPrimaryContact';
+			if (isset($routesConfig[$actionUri]))
+			{
+				continue;
+			}
+
+			$routesConfig[$actionUri] = [
+				'controller' => Item::class,
+				'method' => 'setPrimaryContact',
+				'dtoGenerator' => ItemDtoGenerator::class,
+				'entityTypeId' => $entityTypeId,
+				'scopes' => static::SET_PRIMARY_CONTACT_SCOPES,
+				'mcp' => [
+					'export' => true,
+					'toolSetCode' => 'crm_rest_v3_contact_binding',
+					'descriptionOverride' => 'Set the primary contact of a CRM ' . match ($entityTypeId)
+					{
+						OwnerType::SMART_INVOICE => 'smart invoice',
+						OwnerType::SMART_DOCUMENT => 'smart document',
+						OwnerType::SMART_B2E_DOCUMENT => 'smart B2E document',
+						default => 'smart process item of type ' . $entityTypeId,
+					} . '.',
+				],
+			];
+			$featureByRoute[$actionUri] = RestV3CrudDeal::class;
+		}
+
+		return $routesConfig;
+	}
+
+	/**
+	 * Whether the method is published for a type. The rule of which types it applies to belongs to
+	 * {@see PrimaryContactSupport} and is asked for here rather than repeated: what this layer decides
+	 * is only that the identifier the portal named is a type of CRM at all.
+	 *
+	 * A method of its own so that a failing read of the state of the portal can be substituted in a test:
+	 * the degradation above is a requirement of the design and needs a way to be exercised.
+	 */
+	protected function hasSetPrimaryContactSupport(int $entityTypeId): bool
+	{
+		if (!EntityType::isValid($entityTypeId))
+		{
+			return false;
+		}
+
+		return PrimaryContactSupport::isSupported(EntityType::fromId($entityTypeId));
+	}
+
+	/**
+	 * The segment a type is named by in a method of the group, or null for a type the group publishes no
+	 * routes for.
+	 */
+	protected function getSetPrimaryContactEntitySegment(int $entityTypeId): ?string
+	{
+		return static::SET_PRIMARY_CONTACT_STATIC_ENTITY_SEGMENTS[$entityTypeId]
+			?? (
+				OwnerType::isPossibleSmartProcessTypeId($entityTypeId)
+					? 'smartProcess' . $entityTypeId
+					: null
+			)
+		;
 	}
 
 	/**

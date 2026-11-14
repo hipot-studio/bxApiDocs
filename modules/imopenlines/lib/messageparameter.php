@@ -23,8 +23,22 @@ class MessageParameter
 		IMOL_TIME_LIMIT_VOTE = 'IMOL_TIME_LIMIT_VOTE',
 		IMOL_VOTE_SID = 'IMOL_VOTE_SID',
 		IMOL_VOTE_USER = 'IMOL_VOTE_USER',
+		IMOL_VOTE_CHANGES = 'IMOL_VOTE_CHANGES',
 		IMOL_SID = 'IMOL_SID',
-		IMOL_FORCE_OPERATOR = 'IMOL_FORCE_OPERATOR'
+		IMOL_FORCE_OPERATOR = 'IMOL_FORCE_OPERATOR',
+		/**
+		 * Marks a send made by the "Message to the open line" robot on behalf of an employee. The text
+		 * of the robot carries the NO_SESSION_OL flag of the send itself, but its attachments travel
+		 * through \CIMDisk::UploadFileFromDisk(), which builds the fields of the message on its own and
+		 * has no way to pass that flag - hence the mark lives in the params.
+		 *
+		 * Deliberately without the IMOL_ prefix: the filters of Connector::onMessageSend() let only
+		 * their allowed fields and the IMOL_/IS_ prefixes through to the client, so a service mark of
+		 * one sender stays inside the portal. Its type is deliberately not registered below either: an
+		 * unregistered param is read as a string (@see \Bitrix\Im\V2\Message\Params::getType()), which
+		 * is all a mark needs, and the typed contract of the module stays as it is.
+		 */
+		OL_ROBOT_SEND = 'OL_ROBOT_SEND'
 	;
 
 	public static function onInitTypes(Event $event): EventResult
@@ -88,6 +102,12 @@ class MessageParameter
 			],
 			self::IMOL_VOTE_USER => [
 				'type' => Param::TYPE_INT,
+			],
+			// How many times the client has already changed the mark of this vote request.
+			// Internal bookkeeping of the vote limit, the client has no use for it.
+			self::IMOL_VOTE_CHANGES => [
+				'type' => Param::TYPE_INT,
+				'isHidden' => true,
 			],
 			// OL session Id
 			self::IMOL_SID => [

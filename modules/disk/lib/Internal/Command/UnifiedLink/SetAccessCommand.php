@@ -13,6 +13,7 @@ class SetAccessCommand extends AbstractCommand
 	public function __construct(
 		public readonly int $objectId,
 		public readonly UnifiedLinkAccessLevel $level,
+		public readonly ?int $changedBy = null,
 	) {
 	}
 
@@ -21,6 +22,7 @@ class SetAccessCommand extends AbstractCommand
 		return [
 			'objectId' => $this->objectId,
 			'level' => $this->level->value,
+			'changedBy' => $this->changedBy,
 		];
 	}
 

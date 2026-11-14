@@ -2,18 +2,12 @@
 
 namespace Bitrix\Market\Application;
 
-use Bitrix\Rest\AppTable;
+use Bitrix\Market\Internal\Integration\Rest;
 
 class Installed
 {
 	public static function getByCode(string $appCode): array
 	{
-		$result = AppTable::getRow([
-			'filter' => [
-				'=CODE' => $appCode,
-			]
-		]);
-
-		return $result ?: [];
+		return (new Rest\ApplicationProvider())->findByCode($appCode);
 	}
 }

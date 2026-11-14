@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\SupportPolicy;
 
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
 use Bitrix\Disk\TypeFile;
 
 /**
@@ -45,6 +46,10 @@ final readonly class SupportPolicyFactory
 		if ($baseObject instanceof File)
 		{
 			$fileType = (int)$baseObject->getTypeFile();
+			if (DocumentViewPolicy::isAdditionalVibeofficeSource($baseObject))
+			{
+				return $this->documentSupportPolicy;
+			}
 
 			return $this->registry[$fileType] ?? $this->fileSupportPolicy;
 		}

@@ -25,6 +25,20 @@ class ActivityQueryBuilder
 		;
 	}
 
+	/**
+	 * Activities named one by one, reached through the primary key and in no particular order: the
+	 * caller that names them has already chosen which ones it wants and in which order.
+	 *
+	 * @param int[] $activityIds
+	 */
+	public function buildActivityByIdsQuery(array $activityIds): Query
+	{
+		return ActivityTable::query()
+			->setSelect(['*'])
+			->whereIn('ID', $activityIds)
+		;
+	}
+
 	public function buildActivityWithBindingQuery(int $entityTypeId, int $entityId, string $providerId, int $limit): Query
 	{
 		return ActivityTable::query()

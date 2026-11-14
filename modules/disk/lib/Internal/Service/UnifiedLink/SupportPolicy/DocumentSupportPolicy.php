@@ -3,10 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\SupportPolicy;
 
-use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
-use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 
 class DocumentSupportPolicy extends FileSupportPolicy
 {
@@ -19,14 +17,6 @@ class DocumentSupportPolicy extends FileSupportPolicy
 			return true;
 		}
 
-		$documentHandler = DocumentViewPolicy::getDefaultHandlerForView();
-
-		return DocumentViewPolicy::isAllowedUseClouds($contentType)
-			&& $this->supportsDocumentHandler($documentHandler);
-	}
-
-	private function supportsDocumentHandler(DocumentHandler $documentHandler): bool
-	{
-		return Configuration::isDocumentHandlerAllowed($documentHandler);
+		return DocumentViewPolicy::isAllowedUseVibeofficeSource($file, null, $contentType);
 	}
 }

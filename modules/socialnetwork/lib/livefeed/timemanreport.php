@@ -99,7 +99,15 @@ final class TimemanReport extends Provider
 		$logId = $this->getLogId();
 		if ($logId)
 		{
-			$pathToLogEntry = Option::get('socialnetwork', 'log_entry_page', '', $this->getSiteId());
+			$siteId = $this->getSiteId();
+			$site = \CSite::GetByID($siteId)->Fetch();
+
+			$pathToLogEntry = Option::get(
+				'socialnetwork',
+				'log_entry_page',
+				($site['DIR'] ?? '/') . 'company/personal/log/#log_id#/',
+				$siteId,
+			);
 			if (!empty($pathToLogEntry))
 			{
 				$pathToLogEntry = \CComponentEngine::makePathFromTemplate($pathToLogEntry, array("log_id" => $logId));

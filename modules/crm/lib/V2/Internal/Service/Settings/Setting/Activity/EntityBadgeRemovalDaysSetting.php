@@ -18,7 +18,7 @@ use Bitrix\Main\Result;
  */
 final class EntityBadgeRemovalDaysSetting extends AbstractSetting
 {
-	public const CODE = 'crm.activity.entity_badge_removal_days';
+	public const ID = 'crm.activity.entity_badge_removal_days';
 
 	private readonly ActivitySettings $activitySettings;
 
@@ -27,9 +27,9 @@ final class EntityBadgeRemovalDaysSetting extends AbstractSetting
 		$this->activitySettings = $activitySettings ?? ActivitySettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -41,10 +41,12 @@ final class EntityBadgeRemovalDaysSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'activity_remove_entity_badges_interval_days',
 		);
 	}
 

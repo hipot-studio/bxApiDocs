@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Folder\System;
 
 use Bitrix\Im\Integration\Vibecodeconnector\Catalog;
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\Main\Loader;
 
 final class VibecodeAppFolder extends SystemFolder
 {
@@ -38,15 +39,27 @@ final class VibecodeAppFolder extends SystemFolder
 	}
 
 	/**
-	 * Portal gate plus a per-user rule: the folder is pointless for those who have no access
-	 * to the app catalog at all.
+	 * The catalog is not asked here: called with no user it answers for the current one.
 	 */
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
-		return Features::isVibecodeAppsFolderAvailable() && Catalog::isAvailableForUser($userId);
+		return Features::isVibecodeAppsFolderAvailable() && Loader::includeModule('vibecodeconnector');
+	}
+
+	/**
+	 * The folder is pointless for those who have no access to the app catalog at all.
+	 */
+	protected function isAvailableForUser(int $userId): bool
+	{
+		return Catalog::isAvailableForUser($userId);
 	}
 
 	public function displaysNestedInRoot(): bool
+	{
+		return true;
+	}
+
+	public function canBeHiddenWithoutSource(): bool
 	{
 		return true;
 	}

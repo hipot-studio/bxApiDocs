@@ -20,6 +20,7 @@ use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\FileTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\UserToGroupTable;
@@ -44,6 +45,7 @@ class AvailableStorageService
 	private array $groupTitles = [];
 	private array $groupAvatarUrls = [];
 	private array $storageTypeCache = [];
+	private array $filesFeatureCacheTags = [];
 	private readonly \Closure $projectStorageChecker;
 
 	public function __construct(?\Closure $projectStorageChecker = null)
@@ -61,11 +63,71 @@ class AvailableStorageService
 		$storages = $this->collectUniqueStorages([
 			...$this->getReadableUserStorages($userId),
 			...$this->getReadableCommonStorages($userId),
-			...$this->getReadableGroupStorages($userId),
+			...$this->dropStoragesOfGroupsWithoutFiles($this->getReadableGroupStorages($userId)),
 		]);
 		$this->warmUpGroupTypes($storages);
 
 		return $storages;
+	}
+
+	/**
+	 * Groups whose feature "files" is not switched off; a group without a record of the feature has it on.
+	 *
+	 * Read on every call and never cached: socialnetwork does not clear the tag of the group features when
+	 * an existing feature is switched, so a list cached under that tag would keep a group that has gone.
+	 *
+	 * @param int[] $groupIds
+	 * @return int[]
+	 */
+	public function filterGroupsWithActiveFiles(array $groupIds): array
+	{
+		$groupIds = array_values(array_unique(array_filter(
+			array_map(static fn(mixed $groupId): int => (int)$groupId, $groupIds),
+			static fn(int $groupId): bool => $groupId > 0,
+		)));
+		if (empty($groupIds) || !Loader::includeModule('socialnetwork'))
+		{
+			return $groupIds;
+		}
+
+		foreach ($groupIds as $groupId)
+		{
+			$this->filesFeatureCacheTags["sonet_features_G_{$groupId}"] = true;
+		}
+
+		if (!$this->isFilesFeatureAllowedForGroups())
+		{
+			return [];
+		}
+
+		$disabledGroupIds = [];
+		foreach (array_chunk($groupIds, self::GROUP_BATCH_SIZE) as $groupIdBatch)
+		{
+			foreach ($this->loadFilesFeatureRows($groupIdBatch) as $row)
+			{
+				$this->filesFeatureCacheTags['sonet_feature_' . (int)$row['ID']] = true;
+				if ($row['ACTIVE'] !== 'Y')
+				{
+					$disabledGroupIds[(int)$row['ENTITY_ID']] = true;
+				}
+			}
+		}
+
+		return array_values(array_filter(
+			$groupIds,
+			static fn(int $groupId): bool => !isset($disabledGroupIds[$groupId]),
+		));
+	}
+
+	/**
+	 * Tags a cache built from the lists of this service needs to drop once the feature "files" of one of
+	 * the checked groups is switched: the feature record of the group when it exists, its features otherwise.
+	 *
+	 * @return string[]
+	 */
+	public function getFilesFeatureCacheTags(): array
+	{
+		return array_keys($this->filesFeatureCacheTags);
 	}
 
 	public function resolveType(Storage $storage): ?StorageType
@@ -211,6 +273,51 @@ class AvailableStorageService
 		}
 
 		return $groupIds;
+	}
+
+	/**
+	 * @param Storage[] $storages
+	 * @return Storage[]
+	 */
+	private function dropStoragesOfGroupsWithoutFiles(array $storages): array
+	{
+		$groupIds = $this->collectGroupIds($storages);
+		if (empty($groupIds))
+		{
+			return $storages;
+		}
+
+		$activeGroupIds = array_flip($this->filterGroupsWithActiveFiles($groupIds));
+
+		return array_values(array_filter(
+			$storages,
+			static fn(mixed $storage): bool => !$storage instanceof Storage
+				|| !$storage->getProxyType() instanceof ProxyType\Group
+				|| isset($activeGroupIds[(int)$storage->getEntityId()]),
+		));
+	}
+
+	protected function isFilesFeatureAllowedForGroups(): bool
+	{
+		$allowedFeatures = \CSocNetAllowed::getAllowedFeatures();
+
+		return in_array(
+			FeatureTable::FEATURE_ENTITY_TYPE_GROUP,
+			$allowedFeatures['files']['allowed'] ?? [],
+			true,
+		);
+	}
+
+	protected function loadFilesFeatureRows(array $groupIds): iterable
+	{
+		return FeatureTable::getList([
+			'select' => ['ID', 'ENTITY_ID', 'ACTIVE'],
+			'filter' => [
+				'=ENTITY_TYPE' => FeatureTable::FEATURE_ENTITY_TYPE_GROUP,
+				'@ENTITY_ID' => $groupIds,
+				'=FEATURE' => 'files',
+			],
+		]);
 	}
 
 	private function collectUniqueStorages(array $storages): array

@@ -46,7 +46,7 @@ class QuickReply extends BaseController
 	/**
 	 * @restMethod imopenlines.v2.QuickReply.saveFromMessage
 	 */
-	public function saveFromMessageAction(string $dialogId, int $messageId): ?array
+	public function saveFromMessageAction(string $dialogId, int $messageId, int $lineId = 0): ?array
 	{
 		$chatId = \Bitrix\Im\Dialog::getChatId($dialogId);
 		if ($chatId <= 0)
@@ -58,7 +58,7 @@ class QuickReply extends BaseController
 
 		$currentUser = $this->getCurrentUser();
 		$service = new QuickReplyService();
-		$result = $service->saveFromMessage($chatId, $messageId, (int)$currentUser?->getId());
+		$result = $service->saveFromMessage($chatId, $messageId, (int)$currentUser?->getId(), $lineId);
 
 		if (!$result->isSuccess())
 		{

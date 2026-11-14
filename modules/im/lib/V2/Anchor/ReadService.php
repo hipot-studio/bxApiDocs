@@ -203,17 +203,13 @@ class ReadService
 		ChatTreeScope $scope,
 	): array
 	{
-		$query = AnchorTable::query()
-			->setSelect(['CHAT_ID'])
-			->setDistinct()
-			->where('USER_ID', $userId)
-		;
-
-		$this->treeFilterFactory->forTreeScope($scope)->apply($query);
-
-		$rows = $query->fetchAll();
-
-		return array_map('intval', array_column($rows, 'CHAT_ID'));
+		return $this->treeFilterFactory->forTreeScope($scope)->fetchChatIds(
+			static fn () => AnchorTable::query()
+				->setSelect(['CHAT_ID'])
+				->setDistinct()
+				->where('USER_ID', $userId),
+			'CHAT_ID',
+		);
 	}
 
 	public function readByChatId(int $chatId, ?int $userId = null): Result

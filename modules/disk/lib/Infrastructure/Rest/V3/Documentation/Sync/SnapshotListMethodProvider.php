@@ -141,20 +141,15 @@ final class SnapshotListMethodProvider extends SyncMethodProvider
 								'description' =>
 									'How many objects of the page are asked for, ' . $limits->getPageSizeMax()
 									. ' by default. A value above the ceiling is refused rather than trimmed. '
-									. 'A page that asks for a heavy section is served at most '
-									. $limits->getPageSizeMaxHeavy() . ' objects - a shorter page, not a '
-									. 'refusal. Both ceilings are published by disk.sync.capabilities.get.'
+									. self::describeHeavyCeiling('objects')
 								,
 							],
 							self::PARAMETER_SECTIONS => [
 								'type' => 'array',
 								'items' => ['type' => 'string', 'enum' => SectionsStructure::getDeclaredSections()],
-								'description' =>
-									'The sections of a card to fill. Everything this portal serves when the '
-									. 'parameter is absent. A section the portal declares but does not fill '
-									. 'is refused when asked for rather than answered empty, and so is a '
-									. 'parameter the schema does not declare at all.'
-								,
+								'description' => self::describeSectionsParameter(
+									'The sections of a card to fill.'
+								),
 							],
 						],
 					],
@@ -204,6 +199,81 @@ final class SnapshotListMethodProvider extends SyncMethodProvider
 			named it and the assembly that describes it arrives as a warning rather than as a card.
 			The identifier is part of it, because that is what lets a client read the object back
 			instead of discovering the gap by comparing counts.
+			TEXT
+			. "\n\n" . self::describeAccessSection();
+	}
+
+	/**
+	 * The ceiling of a page with heavy sections, shared by the three methods that assemble cards. The
+	 * number is not written into the text: it is published by disk.sync.capabilities.get and may change
+	 * without a change of the schema.
+	 */
+	public static function describeHeavyCeiling(string $unit): string
+	{
+		$heavy = array_values(array_intersect(
+			SectionsStructure::getHeavySections(),
+			SectionsStructure::getAvailableSections(),
+		));
+
+		return 'A page that asks for any of the heavy sections (' . implode(', ', $heavy) . '), alone or '
+			. 'together, is served at most pageSizeMaxHeavy ' . $unit . ' - a shorter page, not a refusal. '
+			. 'Both ceilings, pageSizeMax and pageSizeMaxHeavy, are published by disk.sync.capabilities.get.'
+		;
+	}
+
+	/**
+	 * The parameter of sections, shared by the three methods that assemble cards: what a request that
+	 * names none is served, and which sections reach only a request that names them.
+	 */
+	public static function describeSectionsParameter(string $purpose): string
+	{
+		$onDemand = SectionsStructure::getOnDemandSections();
+
+		return $purpose
+			. ' When the parameter is absent: ' . implode(', ', SectionsStructure::getDefaultSections()) . '; '
+			. implode(', ', $onDemand)
+			. (count($onDemand) > 1
+				? ' are filled only when the request names them'
+				: ' is filled only when the request names it')
+			. '. A section the portal declares but does not fill is '
+			. 'refused when asked for rather than answered empty, and so is a parameter the schema does not '
+			. 'declare at all.'
+		;
+	}
+
+	/**
+	 * The section of access, shared by the three methods that assemble cards.
+	 */
+	public static function describeAccessSection(): string
+	{
+		return <<<'TEXT'
+			The `access` section says who else the object is open to. It is filled only when the
+			request names it in `sections`: a request without `sections` goes without it. `canRead` is
+			always true: the object has already passed the check of visibility. `canDownload` is present
+			on a file only and equals the `contentAvailable` of the same card. `internalSharing.enabled` says that the object itself
+			carries explicit rights beyond the base rights of its storage, `internalSharing.inherited`
+			that a folder above it, below the root of the storage, carries them, and `targets` names the
+			recipients of the rights of the object itself as pairs of `type` and `id`: user, workgroup,
+			department and chat carry an id; allUsers (every authorised user), everyone (unauthorised
+			visitors included) and other carry none. `publicAccess.enabled` says that the object is
+			public by a manual external link that is still alive; while it is, the section names one
+			source - `effectiveSource` direct or inherited, `inheritedFromFolderId`, `permission` view
+			or edit, `expiresAt` and `passwordProtected` - and `hasOtherSources` says that more than one
+			link makes the object public. A link on the object itself comes before the links on its
+			versions, and those before the nearest public folder above.
+
+			What the section shows is never wider than the access interface of Disk shows the caller,
+			and it is shown whole or not at all. The flags - `internalSharing.enabled`,
+			`internalSharing.inherited`, `publicAccess.enabled`, `effectiveSource` and
+			`hasOtherSources` - reach every reader of the object. `targets` reaches a caller who may
+			change the rights of the object, and a caller who may only share it when every target comes
+			from sharing; an absent `targets` means "not shown", an empty array means "nobody". The
+			source folder and the parameters of an inherited link are shown when the caller reads that
+			folder and every folder between it and the object; a source above a folder the caller does
+			not read is told only as the fact of inherited public access. `expiresAt: null` means the
+			link never expires, an absent `expiresAt` means the parameters are not shown. Whether the
+			portal opens manual links at the moment is not a part of the section: it is
+			`publicLinkPolicy` of disk.sync.capabilities.get, and the client applies it itself.
 			TEXT;
 	}
 }

@@ -14,6 +14,7 @@ use Bitrix\Main\Type;
 class Quote extends ProductsDataProvider
 {
 	protected $contacts;
+	protected $contactIds;
 
 	/**
 	 * Returns list of value names for this Provider.
@@ -63,6 +64,7 @@ class Quote extends ProductsDataProvider
 				$this->fields['CONTACTS'] = [
 					'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_QUOTE_CONTACTS_TITLE'),
 					'PROVIDER' => ArrayDataProvider::class,
+					'ITEM_IDS' => 'getContactIds',
 					'OPTIONS' => [
 						'ITEM_PROVIDER' => Contact::class,
 						'ITEM_NAME' => 'CONTACT',
@@ -217,8 +219,8 @@ class Quote extends ProductsDataProvider
 				foreach($contactBindings as $binding)
 				{
 					$contact = DataProviderManager::getInstance()->getDataProvider(Contact::class, $binding['CONTACT_ID'], [
-						'isLightMode' => true,
 						'DISABLE_MY_COMPANY' => true,
+						'isLightMode' => true,
 					], $this);
 					$this->contacts[] = $contact;
 				}
@@ -226,6 +228,29 @@ class Quote extends ProductsDataProvider
 		}
 
 		return $this->contacts;
+	}
+
+	/**
+	 * Returns contact IDs in binding order.
+	 *
+	 * @return list<int>
+	 */
+	public function getContactIds(): array
+	{
+		if($this->contactIds === null)
+		{
+			$this->contactIds = [];
+			if(intval($this->source) > 0)
+			{
+				$contactBindings = QuoteContactTable::getQuoteBindings($this->source);
+				foreach($contactBindings as $binding)
+				{
+					$this->contactIds[] = (int)$binding['CONTACT_ID'];
+				}
+			}
+		}
+
+		return $this->contactIds;
 	}
 
 	protected function getStatusEntityId(): ?string

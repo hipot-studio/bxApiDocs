@@ -12,13 +12,25 @@ final readonly class NavigationTarget
 	private function __construct(
 		private bool $available,
 		private ?string $url,
+		private ?string $disabledReason,
+		private ?string $restrictionSliderCode,
 	)
 	{
 	}
 
-	public static function unavailable(): self
+	public static function unavailable(string $disabledReason, ?string $restrictionSliderCode = null): self
 	{
-		return new self(false, null);
+		if (trim($disabledReason) === '')
+		{
+			throw new InvalidArgumentException('Navigation disabled reason must not be empty.');
+		}
+
+		if ($restrictionSliderCode !== null && trim($restrictionSliderCode) === '')
+		{
+			throw new InvalidArgumentException('Navigation restriction slider code must not be empty.');
+		}
+
+		return new self(false, null, $disabledReason, $restrictionSliderCode);
 	}
 
 	public static function available(string $url): self
@@ -28,14 +40,21 @@ final readonly class NavigationTarget
 			throw new InvalidArgumentException('Navigation URL must not be empty.');
 		}
 
-		return new self(true, $url);
+		return new self(true, $url, null, null);
 	}
 
-	/** @return array{available: false}|array{available: true, url: string} */
+	/**
+	 * @return array{available: false, disabledReason: string, restrictionSliderCode: ?string}
+	 *  |array{available: true, url: string}
+	 */
 	public function toArray(): array
 	{
 		return $this->available
 			? ['available' => true, 'url' => $this->url]
-			: ['available' => false];
+			: [
+				'available' => false,
+				'disabledReason' => $this->disabledReason,
+				'restrictionSliderCode' => $this->restrictionSliderCode,
+			];
 	}
 }

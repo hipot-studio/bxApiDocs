@@ -14,6 +14,7 @@ class Contact extends CrmEntityDataProvider
 	protected $nameData = [];
 
 	protected $companies;
+	protected $companyIds;
 
 	private ?int $photoId = null;
 
@@ -124,6 +125,7 @@ class Contact extends CrmEntityDataProvider
 				$this->fields['COMPANIES'] = [
 					'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_COMPANIES_TITLE'),
 					'PROVIDER' => ArrayDataProvider::class,
+					'ITEM_IDS' => 'getCompanyIds',
 					'OPTIONS' => [
 						'ITEM_PROVIDER' => Company::class,
 						'ITEM_NAME' => 'COMPANY',
@@ -338,8 +340,8 @@ class Contact extends CrmEntityDataProvider
 				foreach($contactBindings as $binding)
 				{
 					$company = DataProviderManager::getInstance()->getDataProvider(Company::class, $binding['COMPANY_ID'], [
-						'isLightMode' => true,
 						'DISABLE_MY_COMPANY' => true,
+						'isLightMode' => true,
 					], $this);
 					$this->companies[] = $company;
 				}
@@ -347,6 +349,29 @@ class Contact extends CrmEntityDataProvider
 		}
 
 		return $this->companies;
+	}
+
+	/**
+	 * Returns company IDs in binding order.
+	 *
+	 * @return list<int>
+	 */
+	public function getCompanyIds(): array
+	{
+		if($this->companyIds === null)
+		{
+			$this->companyIds = [];
+			if(intval($this->source) > 0)
+			{
+				$companyBindings = \Bitrix\Crm\Binding\ContactCompanyTable::getContactBindings($this->source);
+				foreach($companyBindings as $binding)
+				{
+					$this->companyIds[] = (int)$binding['COMPANY_ID'];
+				}
+			}
+		}
+
+		return $this->companyIds;
 	}
 
 	public function getPhoto(): ?string

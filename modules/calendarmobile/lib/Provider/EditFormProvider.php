@@ -55,6 +55,8 @@ final class EditFormProvider
 			'user' => UserRepository::getByIds([$this->userId]),
 			'users' => $users,
 			'sections' => $this->getSections($baseInfoProvider),
+			// The guest link pre-gate travels inside settings (getCalendarSettings), the same
+			// way the list bootstrap carries it - one source for both payloads.
 			'settings' => $baseInfoProvider->getCalendarSettings(),
 			'meetSection' => $this->getMeetingSection(),
 			'firstWeekday' => $this->getFirstWeekday(),

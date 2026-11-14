@@ -10,6 +10,7 @@ use Bitrix\StaffTrack\Dictionary\OfficeEmployeeErrorCode;
 use Bitrix\StaffTrack\Dictionary\OfficeErrorCode;
 use Bitrix\StaffTrack\Internal\Integration\HumanResources\SelectorEntityNormalizer;
 use Bitrix\StaffTrack\Internal\Repository\OfficeEmployeeRepository;
+use Bitrix\StaffTrack\Internal\Service\Office\AccessRequest\AccessRequestCanceller;
 use Bitrix\StaffTrack\Internal\Service\Office\EmployeeSetResolver;
 use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 
@@ -23,6 +24,10 @@ use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
  * grounds for it are five: no right, too many codes, no structure to take every employee from, no
  * office, and an office held by another operation. Past that point everything is a report: how many
  * were assigned, which offices they were taken from and who was not accepted.
+ *
+ * Whoever the call assigns to the office sees its staff anyway, so their pending requests to see it are
+ * annulled past the answer: every requester costs a call to the messenger and one to the push channel, and
+ * neither the answer nor the lock of the office waits on them.
  */
 class AddEmployees extends AbstractCommand
 {
@@ -40,6 +45,7 @@ class AddEmployees extends AbstractCommand
 
 	protected OfficeEmployeeRepository $officeEmployeeRepository;
 	protected EmployeeSetResolver $employeeSetResolver;
+	protected AccessRequestCanceller $accessRequestCanceller;
 
 	protected function init(): void
 	{
@@ -47,6 +53,7 @@ class AddEmployees extends AbstractCommand
 
 		$this->officeEmployeeRepository = new OfficeEmployeeRepository();
 		$this->employeeSetResolver = new EmployeeSetResolver();
+		$this->accessRequestCanceller = new AccessRequestCanceller();
 	}
 
 	/**
@@ -110,7 +117,7 @@ class AddEmployees extends AbstractCommand
 
 		if (!$this->officeRepository->lock($officeId))
 		{
-			$this->logFailure(__FUNCTION__, 'office ' . $officeId . ' is held by another operation');
+			$this->logFailureQuietly(__FUNCTION__, 'office ' . $officeId . ' is held by another operation');
 
 			return $result->addError($this->getBusyError());
 		}
@@ -122,12 +129,30 @@ class AddEmployees extends AbstractCommand
 				return $result->addError($this->getNotFoundError());
 			}
 
-			return $result->setData($this->writeSet($officeId, $employees, $rejected));
+			$report = $this->writeSet($officeId, $employees, $rejected);
 		}
 		finally
 		{
 			$this->officeRepository->unlock($officeId);
 		}
+
+		if ($report['assigned'] > 0)
+		{
+			$this->addBackgroundJob(fn () => $this->settleAccessRequests($officeId));
+		}
+
+		return $result->setData($report);
+	}
+
+	/**
+	 * Annuls the pending requests of the people now on the staff of the office. Runs past the answer, the
+	 * assignment being committed by then, and finds the requesters from the side of the requests, which are
+	 * few, rather than from the people assigned, who may be the whole company; the requests are walked a
+	 * page at a time. A failure is logged by the canceller and takes nothing back.
+	 */
+	private function settleAccessRequests(int $officeId): void
+	{
+		$this->accessRequestCanceller->cancelForAssignedRequesters($officeId);
 	}
 
 	/**
@@ -294,6 +319,11 @@ class AddEmployees extends AbstractCommand
 	 * The one transaction of the write: the previous rows of the people being moved go first and the new
 	 * rows follow, so nobody is left with no office at all by a move done half way.
 	 *
+	 * The transaction is rolled back in one place only: a second rollback on the same connection would
+	 * push its level below zero and break every transaction after it until the end of the process.
+	 * A failed COMMIT leaves the call as an exception on purpose, the commit being outside the try: there is
+	 * nothing to roll back after it, and a rollback attempt would push the level below zero again.
+	 *
 	 * @param int[] $moverIds the people whose previous row has to go
 	 * @param int[] $userIds everybody a row is written for
 	 */
@@ -302,36 +332,46 @@ class AddEmployees extends AbstractCommand
 		$connection = Application::getConnection();
 		$connection->startTransaction();
 
+		$failure = $this->tryWriteRows($officeId, $moverIds, $userIds);
+		if ($failure === null)
+		{
+			$connection->commitTransaction();
+
+			return true;
+		}
+
+		$connection->rollbackTransaction();
+		$this->logFailureQuietly(__FUNCTION__, $failure);
+
+		return false;
+	}
+
+	/**
+	 * @param int[] $moverIds
+	 * @param int[] $userIds
+	 * @return string|null the reason the rows were not written, null once they are
+	 */
+	private function tryWriteRows(int $officeId, array $moverIds, array $userIds): ?string
+	{
 		try
 		{
 			$deleteResult = $this->officeEmployeeRepository->deleteByUserIds($moverIds);
 			if (!$deleteResult->isSuccess())
 			{
-				$connection->rollbackTransaction();
-				$this->logFailure(__FUNCTION__, implode('; ', $deleteResult->getErrorMessages()));
-
-				return false;
+				return implode('; ', $deleteResult->getErrorMessages());
 			}
 
 			$addResult = $this->officeEmployeeRepository->addMulti($officeId, $userIds, $this->userId);
 			if (!$addResult->isSuccess())
 			{
-				$connection->rollbackTransaction();
-				$this->logFailure(__FUNCTION__, implode('; ', $addResult->getErrorMessages()));
-
-				return false;
+				return implode('; ', $addResult->getErrorMessages());
 			}
 
-			$connection->commitTransaction();
-
-			return true;
+			return null;
 		}
 		catch (\Throwable $exception)
 		{
-			$connection->rollbackTransaction();
-			$this->logFailure(__FUNCTION__, $this->describeThrowable($exception));
-
-			return false;
+			return $this->describeThrowable($exception);
 		}
 	}
 
@@ -366,6 +406,11 @@ class AddEmployees extends AbstractCommand
 			'userId' => $userId,
 			'code' => OfficeEmployeeErrorCode::SAVE_FAILED,
 		];
+	}
+
+	protected function addBackgroundJob(callable $job): void
+	{
+		Application::getInstance()->addBackgroundJob($job);
 	}
 
 	private function getBusyError(): Error

@@ -244,14 +244,30 @@ final class RememberingActivityRepository implements ActivityRepositoryInterface
 	}
 
 	/**
-	 * The remembered model of this projection: the one read under it, or the whole row, which carries every
-	 * field a narrower projection could name.
+	 * The remembered model of this projection: the one read under it, the whole row, which carries every
+	 * field a narrower projection could name, or any other projection naming every field this one names - a
+	 * batch read narrow for the checks of the rights answers the narrower questions of those checks.
 	 *
 	 * The model itself, never handed out as it is - {@see self::copyOf()} is what leaves this object.
 	 */
 	private function remembered(int $id, string $projection): ?Activity
 	{
-		return $this->activities[$id][$projection] ?? $this->activities[$id][self::WHOLE_ROW] ?? null;
+		$remembered = $this->activities[$id][$projection] ?? $this->activities[$id][self::WHOLE_ROW] ?? null;
+		if ($remembered !== null || $projection === self::WHOLE_ROW || !isset($this->activities[$id]))
+		{
+			return $remembered;
+		}
+
+		$wanted = explode(',', $projection);
+		foreach ($this->activities[$id] as $rememberedProjection => $activity)
+		{
+			if (array_diff($wanted, explode(',', $rememberedProjection)) === [])
+			{
+				return $activity;
+			}
+		}
+
+		return null;
 	}
 
 	/** The copy a reader gets, so that what it does to the model it holds reaches no other reader. */

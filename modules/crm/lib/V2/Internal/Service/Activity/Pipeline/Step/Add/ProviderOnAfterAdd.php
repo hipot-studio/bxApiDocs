@@ -32,7 +32,13 @@ use Bitrix\Main\Result;
  *
  * THE RESTORATION NEEDS NO CARRIER HERE. Legacy hands the flag over inside the parameters of the hook; in V2 every
  * hook of a provider receives the whole context of the operation and reads the flag off it, so the step passes the
- * activity and the context and nothing else.
+ * activity and the context and nothing else for it.
+ *
+ * THE STORAGE COLUMNS OF THE RUN ARE HANDED OVER AS WELL. The context carries the input of the operation, and an add
+ * naming no owner - a voximplant call bound by `BINDINGS` alone - has its owner only in the run, where row 1 derived
+ * it ({@see ResolveOwnerFromBindings}), as it has the storage type row 2 defaulted ({@see ApplyStorageTypeDefault});
+ * legacy hands its hook the field array both were written into. Projecting them into that array is the business of
+ * the wrapper of a legacy provider and not of this row.
  *
  * @internal
  */
@@ -68,7 +74,7 @@ final class ProviderOnAfterAdd implements PipelineStepInterface
 		$provider = $context->getProvider();
 		if ($provider instanceof LifecycleCapabilityInterface)
 		{
-			$provider->onAfterAdd($context->getActivity(), $context->getOperationContext());
+			$provider->onAfterAdd($context->getActivity(), $context->getOperationContext(), $context->getTransit());
 		}
 
 		return new Result();

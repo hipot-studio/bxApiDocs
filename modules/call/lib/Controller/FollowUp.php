@@ -207,6 +207,16 @@ class FollowUp extends RestController
 			$isAdmin,
 		);
 
+		$rawChatId = null;
+		if (is_array($request->filter) && array_key_exists('chatId', $request->filter))
+		{
+			$rawChatId = $request->filter['chatId'];
+			if (!is_int($rawChatId))
+			{
+				throw new InvalidRequestFieldTypeException('filter.chatId', 'int');
+			}
+		}
+
 		$orderResult = $reader->validateOrder($request->order);
 		if (!$orderResult->isSuccess())
 		{
@@ -226,6 +236,7 @@ class FollowUp extends RestController
 			order: $request->order,
 			pagination: $request->pagination,
 			mentionFormat: (string)($request->mentionFormat ?? ''),
+			chatIds: $rawChatId !== null ? [$rawChatId] : null,
 		);
 
 		return new ArrayResponse([
@@ -573,7 +584,7 @@ class FollowUp extends RestController
 		}
 
 		$currentUserId = $this->getCurrentUser()?->getId();
-		if (!$currentUserId || !$chat->checkAccess($currentUserId))
+		if (!$currentUserId || !$chat->checkAccess($currentUserId)->isSuccess())
 		{
 			$this->addError(new Error('access_denied', "You do not have access to this call chat"));
 			return null;
@@ -601,7 +612,7 @@ class FollowUp extends RestController
 		}
 
 		$currentUserId = $this->getCurrentUser()?->getId();
-		if (!$currentUserId || !$chat->checkAccess($currentUserId))
+		if (!$currentUserId || !$chat->checkAccess($currentUserId)->isSuccess())
 		{
 			$this->addError(new Error('access_denied', "You do not have access to this call chat"));
 			return null;

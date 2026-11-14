@@ -706,7 +706,7 @@ class Event extends \IRestService
 			throw new Exceptions\ArgumentNullException('PROCESS_ID');
 		}
 
-		if(!is_array($messageId))
+		if(!is_array($messageId) || array_filter($messageId, 'is_scalar') !== $messageId)
 		{
 			throw new Exceptions\ArgumentException('Value must be array of MESSAGE_ID values', 'message_id');
 		}

@@ -8,11 +8,20 @@ use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumDefinition;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumType;
+use Bitrix\Rest\V3\Dto\Meta\FieldMetaInterface;
 use Bitrix\Rest\V3\Dto\TypeHelper;
 
 class FieldsConverter
 {
 	public static function convertValueByDtoField(DtoField $field, mixed $value): mixed
+	{
+		return self::convertValueByFieldMeta($field, $value);
+	}
+
+	/**
+	 * @internal
+	 */
+	public static function convertValueByFieldMeta(FieldMetaInterface $field, mixed $value): mixed
 	{
 		if ($field->getDynamicEnumProvider() !== null)
 		{
@@ -35,16 +44,16 @@ class FieldsConverter
 		{
 			if ($fieldType === DateTime::class)
 			{
-				$correctDateTime = \DateTime::createFromFormat(DATE_ATOM, $value);
-				if ($correctDateTime !== false)
+				$correctDateTime = self::createPhpDateTime(DATE_ATOM, $value);
+				if ($correctDateTime !== null)
 				{
 					return DateTime::createFromPhp($correctDateTime);
 				}
 			}
 			elseif ($fieldType === Date::class)
 			{
-				$correctDate = \DateTime::createFromFormat('Y-m-d', $value);
-				if ($correctDate !== false)
+				$correctDate = self::createPhpDateTime('Y-m-d', $value);
+				if ($correctDate !== null)
 				{
 					return Date::createFromPhp($correctDate);
 				}
@@ -70,6 +79,20 @@ class FieldsConverter
 		}
 
 		return $value;
+	}
+
+	private static function createPhpDateTime(string $format, mixed $value): ?\DateTime
+	{
+		$dateTime = \DateTime::createFromFormat($format, $value);
+		$errors = \DateTime::getLastErrors();
+
+		// A nonexistent date is rolled over (2026-02-31 becomes 2026-03-03) and reported only as a warning.
+		if ($dateTime === false || ($errors !== false && $errors['warning_count'] > 0))
+		{
+			return null;
+		}
+
+		return $dateTime;
 	}
 
 	private static function convertDynamicEnumValue(string $providerClass, mixed $value): mixed

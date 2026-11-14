@@ -2,6 +2,7 @@
 
 namespace Bitrix\Calendar\Internals\Log;
 
+use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Throwable;
 
 class Logger
@@ -24,10 +25,17 @@ class Logger
 			$data = var_export($data, true);
 		}
 
-		$message = [$this->marker];
-		$message[] = $data;
-		$message = implode("\n", $message);
-
-		// TODO: add database log or something else, but only if option enabled
+		try
+		{
+			(new RequestLogger())
+				->debug((string)$data, [
+					'marker' => $this->marker,
+					'traceDepth' => $traceDepth,
+				])
+			;
+		}
+		catch (Throwable)
+		{
+		}
 	}
 }

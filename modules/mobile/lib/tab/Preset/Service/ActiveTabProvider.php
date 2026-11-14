@@ -16,20 +16,30 @@ final class ActiveTabProvider
 		private readonly Manager $manager,
 		private readonly Context $context,
 		private readonly bool $managedTabPresetsEnabled,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		?ManagedActiveTabProvider $managedProvider = null,
 	)
 	{
 		$this->managedProvider = $managedProvider;
 	}
 
-	public static function forContext(Context $context, ?bool $managedTabPresetsEnabled = null): self
+	public static function forContext(
+		Context $context,
+		MobileMenuCacheInvalidator $cacheInvalidator,
+		?bool $managedTabPresetsEnabled = null,
+	): self
 	{
 		$managedTabPresetsEnabled ??= Feature::isEnabled(ManagedTabPresetsFeature::class);
 		$manager = $managedTabPresetsEnabled
 			? Manager::createManaged($context)
 			: new Manager($context);
 
-		return new self($manager, $context, $managedTabPresetsEnabled);
+		return new self(
+			manager: $manager,
+			context: $context,
+			managedTabPresetsEnabled: $managedTabPresetsEnabled,
+			cacheInvalidator: $cacheInvalidator,
+		);
 	}
 
 	public function getManager(): Manager
@@ -103,9 +113,10 @@ final class ActiveTabProvider
 	private function getManagedProvider(): ManagedActiveTabProvider
 	{
 		return $this->managedProvider ??= new ManagedActiveTabProvider(
-			$this->manager,
-			(int)$this->context->userId,
-			(string)$this->context->siteId,
+			manager: $this->manager,
+			userId: (int)$this->context->userId,
+			siteId: (string)$this->context->siteId,
+			cacheInvalidator: $this->cacheInvalidator,
 		);
 	}
 }

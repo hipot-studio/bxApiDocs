@@ -10,6 +10,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Rest\RestException;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Socialnetwork\Helper\Workgroup;
@@ -23,6 +24,7 @@ use Bitrix\Socialnetwork\V2\Internal\Entity\Project\ProjectDates;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\AddProjectCommand;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\Avatar;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\Project;
+use Bitrix\Socialnetwork\Rest\BlogCommentReader;
 
 if (!Loader::includeModule('rest'))
 {
@@ -51,6 +53,7 @@ class CSocNetLogRestService extends IRestService
 				"log.blogpost.delete" => array("CSocNetLogRestService", "deleteBlogPost"),
 				"log.blogpost.getusers.important" => array("CSocNetLogRestService", "getBlogPostUsersImprtnt"),
 				"log.blogcomment.add" => array("CSocNetLogRestService", "addBlogComment"),
+				"log.blogcomment.get" => array("CSocNetLogRestService", "getBlogComment"),
 				'log.blogcomment.user.get' =>  array('callback' => array(__CLASS__, 'getUserBlogComment'), 'options' => array('private' => true)),
 				"log.blogcomment.delete" => array("CSocNetLogRestService", "deleteBlogComment"),
 				'log.comment.user.get' =>  array('callback' => array(__CLASS__, 'getUserLogComment'), 'options' => array('private' => true)),
@@ -1053,6 +1056,126 @@ class CSocNetLogRestService extends IRestService
 		return $result;
 	}
 
+	public static function getBlogComment($arParams): array
+	{
+		$result = [
+			'COMMENTS' => [],
+			'FILES' => [],
+		];
+
+		if (!Loader::includeModule('blog'))
+		{
+			return $result;
+		}
+
+		try
+		{
+			$commentReader = new BlogCommentReader();
+			$commentList = $commentReader->read($arParams);
+		}
+		catch (ObjectNotFoundException $exception)
+		{
+			throw new RestException(
+				$exception->getMessage(),
+				RestException::ERROR_NOT_FOUND,
+				CRestServer::STATUS_NOT_FOUND,
+				$exception,
+			);
+		}
+		catch (\InvalidArgumentException $exception)
+		{
+			throw new RestException(
+				$exception->getMessage(),
+				RestException::ERROR_ARGUMENT,
+				CRestServer::STATUS_WRONG_REQUEST,
+				$exception,
+			);
+		}
+
+		$attachedIdList = [];
+		$commentAttachedList = [];
+		foreach ($commentList as $commentFields)
+		{
+			$commentId = (int)$commentFields['ID'];
+			$result['COMMENTS'][$commentId] = [
+				'ID' => $commentId,
+				'COMMENT_ID' => $commentId,
+				'POST_ID' => (int)$commentFields['POST_ID'],
+				'PARENT_ID' => (int)$commentFields['PARENT_ID'],
+				'AUTHOR_ID' => (int)$commentFields['AUTHOR_ID'],
+				'DATE' => $commentFields['DATE_CREATE'],
+				'TEXT' => (string)$commentFields['POST_TEXT'],
+				'ATTACH' => [],
+			];
+
+			if ($commentAuxProvider = \Bitrix\Socialnetwork\CommentAux\Base::findProvider(
+				$commentFields,
+				[
+					'mobile' => false,
+					'bPublicPage' => true,
+					'cache' => true,
+				],
+			))
+			{
+				$result['COMMENTS'][$commentId]['TEXT'] = $commentAuxProvider->getText();
+			}
+
+			$result['COMMENTS'][$commentId]['TEXT'] = Emoji::decode(
+				$result['COMMENTS'][$commentId]['TEXT'],
+			);
+
+			$attached = $commentFields['UF_BLOG_COMMENT_FILE'] ?? [];
+			if (!is_array($attached))
+			{
+				$attached = (int)$attached > 0 ? [(int)$attached] : [];
+			}
+
+			$attached = array_map('intval', $attached);
+			if (!empty($attached))
+			{
+				$attachedIdList = array_merge($attachedIdList, $attached);
+				$commentAttachedList[$commentId] = $attached;
+			}
+		}
+
+		$attachedObjectList = [];
+		if (!empty($attachedIdList) && Loader::includeModule('disk'))
+		{
+			$attachedFiles = $commentReader->readAttachedFiles($attachedIdList);
+			$attachedObjectList = $attachedFiles['ATTACHED_OBJECTS'];
+			foreach ($attachedFiles['FILES'] as $diskObjectId => $fileModel)
+			{
+				$result['FILES'][$diskObjectId] = self::getFileDataByModel($fileModel);
+			}
+		}
+
+		foreach ($result['COMMENTS'] as $commentId => $comment)
+		{
+			if ($comment['DATE'] instanceof DateTime)
+			{
+				$result['COMMENTS'][$commentId]['DATE'] = date('c', $comment['DATE']->getTimestamp());
+			}
+
+			foreach ($commentAttachedList[$commentId] ?? [] as $attachedId)
+			{
+				if (isset($attachedObjectList[$attachedId]))
+				{
+					$result['COMMENTS'][$commentId]['ATTACH'][] = $attachedObjectList[$attachedId];
+				}
+			}
+
+			$result['COMMENTS'][$commentId] = array_change_key_case(
+				$result['COMMENTS'][$commentId],
+				CASE_LOWER,
+			);
+		}
+
+		$result['COMMENTS'] = array_values($result['COMMENTS']);
+		$result['FILES'] = self::convertFileData($result['FILES']);
+
+		return $result;
+	}
+
 	public static function getUserBlogComment($arParams, $offset, CRestServer $server): array
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
@@ -1801,65 +1924,67 @@ class CSocNetLogRestService extends IRestService
 
 	private static function getFileData($diskObjectId)
 	{
-		$result = false;
-
 		$diskObjectId = (int)$diskObjectId;
 		if ($diskObjectId <= 0)
 		{
-			return $result;
+			return false;
 		}
 
 		if ($fileModel = \Bitrix\Disk\File::getById($diskObjectId))
 		{
-			/** @var \Bitrix\Disk\File $fileModel */
-			$contentType = 'file';
-			$imageParams = false;
-			if (\Bitrix\Disk\TypeFile::isImage($fileModel))
-			{
-				$contentType = 'image';
-				$params = $fileModel->getFile();
-				$imageParams = Array(
-					'width' => (int)$params['WIDTH'],
-					'height' => (int)$params['HEIGHT'],
-				);
-			}
-			else if (\Bitrix\Disk\TypeFile::isVideo($fileModel->getName()))
-			{
-				$contentType = 'video';
-				$params = $fileModel->getView()->getPreviewData();
-				$imageParams = Array(
-					'width' => (int)$params['WIDTH'],
-					'height' => (int)$params['HEIGHT'],
-				);
-			}
+			return self::getFileDataByModel($fileModel);
+		}
 
-			$isImage = \Bitrix\Disk\TypeFile::isImage($fileModel);
-			$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
+		return false;
+	}
 
-			$result = array(
-				'id' => (int)$fileModel->getId(),
-				'date' => $fileModel->getCreateTime(),
-				'type' => $contentType,
-				'name' => $fileModel->getName(),
-				'size' => (int)$fileModel->getSize(),
-				'image' => $imageParams,
-				'authorId' => (int)$fileModel->getCreatedBy(),
-				'authorName' => CUser::FormatName(CSite::getNameFormat(false), $fileModel->getCreateUser(), true, true),
-				'urlPreview' => (
-					$fileModel->getPreviewId()
-						? $urlManager->getUrlForShowPreview($fileModel, [ 'width' => 640, 'height' => 640])
-						: (
-							$isImage
-								? $urlManager->getUrlForShowFile($fileModel, [ 'width' => 640, 'height' => 640])
-								: null
-						)
-				),
-				'urlShow' => ($isImage ? $urlManager->getUrlForShowFile($fileModel) : $urlManager->getUrlForDownloadFile($fileModel)),
-				'urlDownload' => $urlManager->getUrlForDownloadFile($fileModel)
+	private static function getFileDataByModel(\Bitrix\Disk\File $fileModel): array
+	{
+		$contentType = 'file';
+		$imageParams = false;
+		if (\Bitrix\Disk\TypeFile::isImage($fileModel))
+		{
+			$contentType = 'image';
+			$params = $fileModel->getFile();
+			$imageParams = Array(
+				'width' => (int)$params['WIDTH'],
+				'height' => (int)$params['HEIGHT'],
+			);
+		}
+		else if (\Bitrix\Disk\TypeFile::isVideo($fileModel->getName()))
+		{
+			$contentType = 'video';
+			$params = $fileModel->getView()->getPreviewData();
+			$imageParams = Array(
+				'width' => (int)$params['WIDTH'],
+				'height' => (int)$params['HEIGHT'],
 			);
 		}
 
-		return $result;
+		$isImage = \Bitrix\Disk\TypeFile::isImage($fileModel);
+		$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
+
+		return array(
+			'id' => (int)$fileModel->getId(),
+			'date' => $fileModel->getCreateTime(),
+			'type' => $contentType,
+			'name' => $fileModel->getName(),
+			'size' => (int)$fileModel->getSize(),
+			'image' => $imageParams,
+			'authorId' => (int)$fileModel->getCreatedBy(),
+			'authorName' => CUser::FormatName(CSite::getNameFormat(false), $fileModel->getCreateUser(), true, true),
+			'urlPreview' => (
+				$fileModel->getPreviewId()
+					? $urlManager->getUrlForShowPreview($fileModel, [ 'width' => 640, 'height' => 640])
+					: (
+						$isImage
+							? $urlManager->getUrlForShowFile($fileModel, [ 'width' => 640, 'height' => 640])
+							: null
+					)
+			),
+			'urlShow' => ($isImage ? $urlManager->getUrlForShowFile($fileModel) : $urlManager->getUrlForDownloadFile($fileModel)),
+			'urlDownload' => $urlManager->getUrlForDownloadFile($fileModel)
+		);
 	}
 
 	private static function convertFileData($fileData): array

@@ -17,6 +17,7 @@ use Bitrix\Crm\Reservation\Strategy\ReservePaidProductsStrategy;
 use Bitrix\Crm\Reservation\Strategy\ReserveQuantityEqualProductQuantityStrategy;
 use Bitrix\Crm\Reservation\Strategy\ReserveStrategy;
 use Bitrix\Crm\Reservation\Strategy\Strategy;
+use Bitrix\Crm\Reservation\Validator\ExistingStore;
 use Bitrix\Crm\Service\Sale\BasketService;
 use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
@@ -418,6 +419,18 @@ class ReservationService
 			$storeId = $this->getDefaultStoreId();
 		}
 
+		if ($quantity > 0 && $this->isReserveChangedOnMissingStore($productRowId, $quantity, $storeId))
+		{
+			$productName = (string)($productRow['PRODUCT_NAME'] ?? '');
+			if ($productName === '')
+			{
+				$productName = (string)$productRow['PRODUCT_ID'];
+			}
+			$result->addError((new ExistingStore())->createError([$productName]));
+
+			return $result;
+		}
+
 		if (!($dateReserveEnd instanceof DateTime))
 		{
 			$dateReserveEnd = $this->prepareDateReserveEndWithTime($dateReserveEnd);
@@ -435,6 +448,44 @@ class ReservationService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * A reserve that stays as stored is not checked: an old reserve on a vanished store must not block the row.
+	 */
+	private function isReserveChangedOnMissingStore(int $productRowId, float $quantity, int $storeId): bool
+	{
+		if (empty(ExistingStore::getMissingStoreIds([$storeId])))
+		{
+			return false;
+		}
+
+		$storedReserve = ProductRowReservationTable::getRow([
+			'select' => [
+				'STORE_ID',
+				'RESERVE_QUANTITY',
+			],
+			'filter' => [
+				'=ROW_ID' => $productRowId,
+			],
+		]);
+
+		if ($storedReserve === null)
+		{
+			return true;
+		}
+
+		// An empty stored store means the default one, the same way as for the incoming store.
+		$storedStoreId = (int)$storedReserve['STORE_ID'];
+		if ($storedStoreId <= 0)
+		{
+			$storedStoreId = $this->getDefaultStoreId();
+		}
+
+		return
+			$storedStoreId !== $storeId
+			|| (float)$storedReserve['RESERVE_QUANTITY'] !== $quantity
+		;
 	}
 
 	/**
@@ -654,6 +705,8 @@ class ReservationService
 		return ProductRowTable::getRow([
 			'select' => [
 				'ID',
+				'PRODUCT_ID',
+				'PRODUCT_NAME',
 				'QUANTITY',
 				'TYPE',
 				'OWNER_ID',

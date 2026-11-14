@@ -12,7 +12,6 @@ use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Access\TypeAccessController;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Rooms\OccupancyCheckerException;
-use Bitrix\Calendar\Core\Event\EventSaveStateException;
 use Bitrix\Calendar\Rooms\OccupancyLockedException;
 use Bitrix\Calendar\Rooms\Manager;
 use Bitrix\Calendar\Rest\MachineDateFormatter;
@@ -945,10 +944,6 @@ final class CCalendarRestService extends IRestService
 		{
 			throw self::createOccupancyConflictRestException($exception);
 		}
-		catch (EventSaveStateException $exception)
-		{
-			throw new RestException($exception->getMessage(), $exception->getErrorCode());
-		}
 		catch (OccupancyLockedException $exception)
 		{
 			throw self::createOccupancyLockedRestException($exception);
@@ -1391,17 +1386,6 @@ final class CCalendarRestService extends IRestService
 		catch (OccupancyCheckerException $exception)
 		{
 			throw self::createOccupancyConflictRestException($exception);
-		}
-		catch (EventSaveStateException $exception)
-		{
-			if ($exception->getErrorCode() === EventSaveStateException::EVENT_NOT_AVAILABLE)
-			{
-				$newId = false;
-			}
-			else
-			{
-				throw new RestException($exception->getMessage(), $exception->getErrorCode());
-			}
 		}
 		catch (OccupancyLockedException $exception)
 		{

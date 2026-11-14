@@ -236,6 +236,30 @@ class CounterOverflowService
 		self::cleanCache($chatIds, $userId);
 	}
 
+	/**
+	 * One statement for a bounded group of users, where {@see self::deleteBatch()} would issue one per user.
+	 *
+	 * @param int[] $chatIds
+	 * @param int[] $userIds
+	 */
+	public static function deleteByChatIdsForUsers(array $chatIds, array $userIds): void
+	{
+		if (empty($chatIds) || empty($userIds))
+		{
+			return;
+		}
+
+		CounterOverflowTable::deleteByFilter(['@CHAT_ID' => $chatIds, '@USER_ID' => $userIds]);
+
+		foreach ($chatIds as $chatId)
+		{
+			foreach ($userIds as $userId)
+			{
+				self::cleanCacheByChatId((int)$chatId, (int)$userId);
+			}
+		}
+	}
+
 	public static function deleteAllByUserId(int $userId): void
 	{
 		CounterOverflowTable::deleteByFilter(['=USER_ID' => $userId]);

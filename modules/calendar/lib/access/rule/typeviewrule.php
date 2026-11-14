@@ -5,6 +5,7 @@ namespace Bitrix\Calendar\Access\Rule;
 use Bitrix\Calendar\Access\Model\TypeModel;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Calendar\Access\ActionDictionary;
+use Bitrix\Calendar\Access\NativeReservationOperations;
 use Bitrix\Calendar\Access\Rule\Traits\CurrentUserTrait;
 use CCalendarType;
 
@@ -19,6 +20,11 @@ class TypeViewRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return false;
 		}
 
+		if ($params instanceof NativeReservationOperations)
+		{
+			$params->assertType($item, $this->user->getUserId());
+		}
+
 		if (!$this->hasCurrentUser())
 		{
 			return true;
@@ -31,7 +37,9 @@ class TypeViewRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		return in_array(
 			ActionDictionary::getOldActionKeyByNewActionKey(ActionDictionary::ACTION_TYPE_VIEW),
-			CCalendarType::GetOperations($item->getXmlId(), $this->user->getUserId()),
+			$params instanceof NativeReservationOperations
+				? $params->getTypeOperations($item, $this->user->getUserId())
+				: CCalendarType::GetOperations($item->getXmlId(), $this->user->getUserId()),
 			true
 		);
 	}

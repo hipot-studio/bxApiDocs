@@ -12,10 +12,13 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Enum\WriteOperationContext;
+use Bitrix\Disk\Internal\Service\Restrictions\EditingRestrictionResolver;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\EditSessionTable;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\FileHelper;
+use Bitrix\Disk\Public\Service\Restrictions\WriteErrorTransportMap;
 use Bitrix\Disk\ShowSession;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui;
@@ -553,8 +556,7 @@ class DocumentController extends Internals\Controller
 		if(!$newFile)
 		{
 			\CFile::delete($fileId);
-			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_DOC_CONTROLLER_ERROR_COULD_NOT_CREATE_FILE'), self::ERROR_COULD_NOT_CREATE_FILE)));
-			$this->errorCollection->add($folder->getErrors());
+			$this->addErrorsOfRefusedCreation($folder->getErrors());
 			$this->sendJsonErrorResponse();
 		}
 
@@ -579,15 +581,7 @@ class DocumentController extends Internals\Controller
 					$this->sendJsonErrorResponse();
 				}
 
-				$fileId = \CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);
-				if($fileId && !$newFile->addVersion(array(
-						'ID' => $fileId,
-						'FILE_SIZE' => $fileArray['size'],
-					), $this->getUser()->getId())
-				)
-				{
-					\CFile::delete($fileId);
-				}
+				$this->addRepackedVersion($newFile, $fileArray, $this->getUser()->getId());
 			}
 		}
 
@@ -604,6 +598,28 @@ class DocumentController extends Internals\Controller
 			'nameWithoutExtension' => getFileNameWithoutExtension($newFile->getName()),
 			'uls' => $this->unifiedLinkAccessService->getUlsForObjectId($newFile->getId()),
 		));
+	}
+
+	/**
+	 * Puts the errors of a refused creation into the answer. The interface shows the first error of
+	 * the answer, so a refusal the module names - a format the portal restricts, among them - is
+	 * answered by itself; anything else a write may fail on is no text for the user and keeps the
+	 * general message of the action ahead of it.
+	 *
+	 * @param \Bitrix\Main\Error[] $writeErrors Errors the write was refused with.
+	 * @return void
+	 */
+	private function addErrorsOfRefusedCreation(array $writeErrors): void
+	{
+		if (WriteErrorTransportMap::findMappedRefusalCode($writeErrors) === null)
+		{
+			$this->errorCollection->addOne(new Error(
+				Loc::getMessage('DISK_DOC_CONTROLLER_ERROR_COULD_NOT_CREATE_FILE'),
+				self::ERROR_COULD_NOT_CREATE_FILE
+			));
+		}
+
+		$this->errorCollection->add($writeErrors);
 	}
 
 	private function getFolderToSaveFile($targetFolderId)
@@ -719,6 +735,18 @@ class DocumentController extends Internals\Controller
 			}
 		}
 
+		// Publishing the document to the service is the way into its editor, so a document the portal
+		// closes editing for is stopped here: it stays readable and no edit session appears for it.
+		// The verdict names its own reason - a restricted format and an exhausted personal quota are
+		// told apart by the code and by the words the answer of the action carries.
+		$refusal = (new EditingRestrictionResolver())->findRefusal($this->resolveNameOfDocumentToEdit(), $this->file);
+		if ($refusal !== null)
+		{
+			$this->errorCollection->add(array($refusal));
+
+			$this->sendJsonErrorResponse();
+		}
+
 		$onlineSession = $this->getOnlineEditSessionForFile();
 		if($onlineSession)
 		{
@@ -811,6 +839,22 @@ class DocumentController extends Internals\Controller
 			'id' => $fileData->getId(),
 			'link' => $fileData->getLinkInService(),
 		));
+	}
+
+	/**
+	 * Name the document is opened for editing under. A request naming a revision opens that
+	 * revision, and it carries a name of its own, so the format is judged by what is really opened.
+	 *
+	 * @return string|null
+	 */
+	protected function resolveNameOfDocumentToEdit()
+	{
+		if ($this->isSpecificVersion())
+		{
+			return $this->version?->getName();
+		}
+
+		return $this->file?->getName();
 	}
 
 	/**
@@ -926,7 +970,6 @@ class DocumentController extends Internals\Controller
 			$this->errorCollection->add($this->documentHandler->getErrors());
 			$this->sendJsonErrorResponse();
 		}
-		$this->deleteEditSession($currentSession);
 
 		$oldName = $this->file->getName();
 		//rename in cloud service
@@ -958,6 +1001,25 @@ class DocumentController extends Internals\Controller
 			$this->sendJsonErrorResponse();
 		}
 
+		// The document is still in the temporary file the handler gave back, so the format is judged
+		// here and the mark left in $options keeps the write node away from the stored content.
+		$writeOptions = $this->buildEditingSessionWriteOptions($currentSession);
+		$formatPolicyError = File::findFormatPolicyErrorForUpload(
+			$fileArray,
+			$this->file->getName(),
+			(int)$this->getUser()->getId(),
+			$writeOptions,
+		);
+		if($formatPolicyError)
+		{
+			$this->errorCollection->add(array($formatPolicyError));
+			$this->sendJsonErrorResponse();
+		}
+
+		// The session is given up only once the document is known to be storable: a refusal leaves
+		// the user editing in the service instead of taking their session away with nothing saved.
+		$this->deleteEditSession($currentSession);
+
 		$fileId = \CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);
 
 		if(!$fileId)
@@ -969,13 +1031,13 @@ class DocumentController extends Internals\Controller
 		$versionModel = $this->file->addVersion(array(
 			'ID' => $fileId,
 			'FILE_SIZE' => $fileArray['size'],
-		), $this->getUser()->getId(), true);
+		), $this->getUser()->getId(), true, $writeOptions);
 
 		if(!$versionModel)
 		{
 			if(Configuration::isEnabledObjectLock() && $this->file->getErrorByCode(File::ERROR_EXCLUSIVE_LOCK))
 			{
-				$this->processWithLockedFile($fileId, $fileArray);
+				$this->processWithLockedFile($fileId, $fileArray, $writeOptions);
 			}
 
 			\CFile::delete($fileId);
@@ -1001,15 +1063,12 @@ class DocumentController extends Internals\Controller
 					$this->sendJsonErrorResponse();
 				}
 
-				$fileId = \CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);
-				if($fileId && !$this->file->addVersion(array(
-						'ID' => $fileId,
-						'FILE_SIZE' => $fileArray['size'],
-					), $this->getUser()->getId())
-				)
-				{
-					\CFile::delete($fileId);
-				}
+				$this->addRepackedVersion(
+					$this->file,
+					$fileArray,
+					$this->getUser()->getId(),
+					$this->buildEditingSessionWriteOptions($currentSession)
+				);
 			}
 		}
 
@@ -1018,14 +1077,52 @@ class DocumentController extends Internals\Controller
 			$this->deleteFile($currentSession, $fileData);
 		}
 
-		$this->sendJsonSuccessResponse([
+		$response = [
 			'object' => [
 				'id' => $this->file->getId(),
 			],
 			'objectId' => $this->file->getId(),
 			'newName' => $this->file->getName(),
 			'oldName' => $oldName,
-		]);
+		];
+
+		$this->sendJsonSuccessResponse($response);
+	}
+
+	/**
+	 * Stores the document the handler repacked as one more version of the file. Both paths that
+	 * repack answer here, so the content is judged the same way on either of them.
+	 *
+	 * The content is still in the temporary file the handler gave back, so the format is judged
+	 * there and the mark left in $options keeps the write node away from the stored content. A
+	 * format the portal forbids leaves the file with the version it already has: the repack is a
+	 * convenience of the viewer and adds nothing the user asked for.
+	 *
+	 * The repack belongs to the write it follows, so it is judged in the context of that write: a
+	 * caller leaving the context out gets the fail-closed default of any write path.
+	 *
+	 * @param File $file File the version is written to.
+	 * @param array $fileArray Structure like $_FILES of the repacked content.
+	 * @param int $createdBy Id of the user the version is written on behalf of.
+	 * @param array $options Context of the write the repack follows.
+	 * @return void
+	 */
+	private function addRepackedVersion(File $file, array $fileArray, $createdBy, array $options = array())
+	{
+		if(File::findFormatPolicyErrorForUpload($fileArray, $file->getName(), (int)$createdBy, $options))
+		{
+			return;
+		}
+
+		$fileId = \CFile::saveFile($fileArray, Driver::INTERNAL_MODULE_ID, true, true);
+		if($fileId && !$file->addVersion(array(
+				'ID' => $fileId,
+				'FILE_SIZE' => $fileArray['size'],
+			), $createdBy, false, $options)
+		)
+		{
+			\CFile::delete($fileId);
+		}
 	}
 
 	protected function processActionGetLastVersionUri()
@@ -1179,7 +1276,7 @@ class DocumentController extends Internals\Controller
 			'SERVICE' => $editSession->getService(),
 			'SERVICE_FILE_ID' => $editSession->getServiceFileId(),
 			'SERVICE_FILE_LINK' => $editSession->getServiceFileLink(),
-		), $this->errorCollection);
+		), $this->errorCollection, $this->file->getRealObject()->getUploadCleanupMarkerPresenceHint());
 	}
 
 	/**
@@ -1211,7 +1308,11 @@ class DocumentController extends Internals\Controller
 			}
 		}
 
-		return EditSession::add($data, $this->errorCollection);
+		return EditSession::add(
+			$data,
+			$this->errorCollection,
+			$this->file->getRealObject()->getUploadCleanupMarkerPresenceHint(),
+		);
 	}
 
 	/**
@@ -1261,6 +1362,30 @@ class DocumentController extends Internals\Controller
 		));
 	}
 
+	/**
+	 * Context of a write coming out of an editing session, with the time that session began: a
+	 * session opened before the policy of formats was saved keeps saving its document, so the write
+	 * path is told both what it is and when it started
+	 * ({@see \Bitrix\Disk\Internal\Service\Restrictions\FormatPolicyService}).
+	 *
+	 * @param EditSession $editSession Session the document is saved out of.
+	 * @return array
+	 */
+	protected function buildEditingSessionWriteOptions(EditSession $editSession)
+	{
+		$options = array(
+			WriteOperationContext::OPTION_KEY => WriteOperationContext::EditingSession,
+		);
+
+		$createTime = $editSession->getCreateTime();
+		if($createTime)
+		{
+			$options[WriteOperationContext::OPTION_KEY_EDITING_SESSION_STARTED_AT] = $createTime->getTimestamp();
+		}
+
+		return $options;
+	}
+
 	protected function deleteEditSession(EditSession $editSession)
 	{
 		if (Configuration::isEnabledObjectLock() && Configuration::shouldAutoLockObjectOnEdit())
@@ -1304,7 +1429,7 @@ class DocumentController extends Internals\Controller
 		), $response));
 	}
 
-	private function processWithLockedFile($fileId, $fileArray)
+	private function processWithLockedFile($fileId, $fileArray, array $options = array())
 	{
 		$userStorage = Driver::getInstance()->getStorageByUserId($this->getUser()->getId());
 		$folderForSavedFiles = $userStorage->getFolderForSavedFiles();
@@ -1322,7 +1447,7 @@ class DocumentController extends Internals\Controller
 			'FILE_ID' => $fileId,
 			'SIZE' => $fileArray['size'],
 			'CREATED_BY' => $this->getUser()->getId(),
-		), array(), true);
+		), array(), true, $options);
 		if(!$forkedFile)
 		{
 			\CFile::delete($fileId);

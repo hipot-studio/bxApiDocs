@@ -2,10 +2,11 @@
 
 namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
-use Bitrix\Main\Web\Uri;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
 use Bitrix\Crm\V2\Internal\Integration\Rest\MarketplaceGateway;
+use Bitrix\Main\Result;
+use Bitrix\Main\Web\Uri;
 
 final class AppConfigurationNavigationItem implements SettingsHubUrlNavigationItem
 {
@@ -29,9 +30,9 @@ final class AppConfigurationNavigationItem implements SettingsHubUrlNavigationIt
 			&& $this->isMarketplaceUrlAvailable;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return true;
+		return new Result();
 	}
 
 	public function url(): ?Uri

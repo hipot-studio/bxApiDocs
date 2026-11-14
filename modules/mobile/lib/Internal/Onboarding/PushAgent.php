@@ -13,12 +13,15 @@ class PushAgent
 
 	public static function run(): string
 	{
-		if (Feature::isEnabled(OnboardingPushFlag::class))
+		// no user in the context: the agent decides for the portal, and it runs in the epilog of
+		// somebody's hit - see RegionConfig::isSupported()
+		if (Feature::isEnabled(OnboardingPushFlag::class, new Feature\Context()))
 		{
 			try
 			{
-				$service = new OnboardingService();
-				$service->processAllUsers();
+				// the pass reports its own outcome counters to the log, so the agent has
+				// nothing to add to the result it gets back
+				(new OnboardingService())->processAllUsers();
 			}
 			catch (\Throwable $e)
 			{

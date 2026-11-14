@@ -2,9 +2,11 @@
 namespace Bitrix\ImOpenLines;
 
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\ImOpenLines\V2\Analytics\Bot\EndBotSessionEventContext;
+use Bitrix\ImOpenLines\V2\Line\LineSettings;
 use Bitrix\ImOpenLines\V2\Status\StatusGroup;
 use Bitrix\Main;
 use Bitrix\Main\Event;
@@ -872,15 +874,9 @@ class Chat
 
 				$lineTo = $session->getConfig('LINE_NAME');
 
-				if ($params['TO']  === 'queue')
+				if ($params['TO']  === 'queue' || $lineFromId == $queueId)
 				{
 					$message = Loc::getMessage('IMOL_CHAT_RETURNED_TO_QUEUE_NEW');
-				}
-				elseif ($lineFromId == $queueId)
-				{
-					$message = Loc::getMessage('IMOL_CHAT_SKIP_'.$userFrom->getGender(), [
-						'#USER#' => '[USER='.$userFrom->getId().'][/USER]',
-					]);
 				}
 				else
 				{
@@ -1542,7 +1538,12 @@ class Chat
 	 * Builds a Pull push payload for the connector (line) update event.
 	 * Pure function - no side effects, no DB, no module dependencies.
 	 */
-	private static function buildLineUpdatePullEvent(int $chatId, string $dialogId, int $lineId): array
+	private static function buildLineUpdatePullEvent(
+		int $chatId,
+		string $dialogId,
+		int $lineId,
+		?array $lineSettings
+	): array
 	{
 		return [
 			'module_id' => 'imopenlines',
@@ -1553,6 +1554,7 @@ class Chat
 				'connector' => [
 					'lineId' => $lineId,
 				],
+				'lineSettings' => $lineSettings,
 			],
 		];
 	}
@@ -1575,12 +1577,15 @@ class Chat
 			return;
 		}
 
+		$lineSettings = $lineId > 0 ? LineSettings::createByLineId($lineId)->toRestFormat() : null;
+
 		Pull\Event::add(
 			$users,
 			self::buildLineUpdatePullEvent(
 				(int)$this->chat['ID'],
 				(string)$chat->getDialogId(),
-				$lineId
+				$lineId,
+				$lineSettings
 			)
 		);
 	}
@@ -2202,9 +2207,10 @@ class Chat
 	 *
 	 * @param $userId
 	 * @param $messageId
+	 * @param int $expectedSessionId Session the source message was validated against, 0 skips the check.
 	 * @return bool
 	 */
-	public function startSessionByMessage($userId, $messageId): bool
+	public function startSessionByMessage($userId, $messageId, int $expectedSessionId = 0): bool
 	{
 		$result = false;
 
@@ -2214,6 +2220,13 @@ class Chat
 
 			if (Tools\Lock::getInstance()->set($keyLock))
 			{
+				if ($expectedSessionId > 0 && !$this->isCurrentSession($expectedSessionId))
+				{
+					Tools\Lock::getInstance()->delete($keyLock);
+
+					return false;
+				}
+
 				$session = new Session();
 				$session->setChat($this);
 
@@ -2269,7 +2282,7 @@ class Chat
 								'TO_CHAT_ID' => $this->chat['ID'],
 								'FROM_USER_ID' => $message['AUTHOR_ID'],
 								'MESSAGE' => $message['MESSAGE'],
-								'PARAMS' => $message['PARAMS'],
+								'PARAMS' => self::removeComponentParams($message['PARAMS']),
 								'SKIP_CONNECTOR' => 'Y',
 							]);
 
@@ -2290,6 +2303,11 @@ class Chat
 								$sessionUpdate['EXTRA_URL'] = $session->getData('EXTRA_URL');
 							}
 
+							if ($session->getData('PORTAL_ID'))
+							{
+								$sessionUpdate['PORTAL_ID'] = $session->getData('PORTAL_ID');
+							}
+
 							$newSession->update($sessionUpdate);
 
 							$result = true;
@@ -2304,6 +2322,37 @@ class Chat
 	}
 
 	/**
+	 * The source message is validated against a session read outside the lock. Under the lock the
+	 * chat must still be on that very session and it must still be open, otherwise the message
+	 * already belongs to a previous dialog and must not open a new one.
+	 */
+	private function isCurrentSession(int $sessionId): bool
+	{
+		$session = SessionTable::getRow([
+			'select' => ['ID', 'CLOSED'],
+			'filter' => ['=CHAT_ID' => (int)$this->chat['ID']],
+			'order' => ['ID' => 'DESC'],
+		]);
+
+		return $session !== null
+			&& (int)$session['ID'] === $sessionId
+			&& $session['CLOSED'] !== 'Y'
+		;
+	}
+
+	/**
+	 * Component params of the source message are dropped: they would render the start session
+	 * button inside the new dialog. The rest is inherited on purpose - the copy stands for the
+	 * client message itself, so its own content params (files, connector data) must stay.
+	 */
+	private static function removeComponentParams(array $params): array
+	{
+		unset($params[Params::COMPONENT_ID], $params[Params::COMPONENT_PARAMS]);
+
+		return $params;
+	}
+
+	/**
 	 * @deprecated Hidden messages mode moved to the personal level (per operator+chat).
 	 * Use \Bitrix\ImOpenLines\Operator::setSilentMode and
 	 * \Bitrix\ImOpenLines\SilentMode\PersonalSilentMode. The chat-level flag (ENTITY_DATA_3)
@@ -2315,45 +2364,6 @@ class Chat
 	public function setSilentMode($active = true): bool
 	{
 		return true;
-	}
-
-	/**
-	 * Pull notification about a personal mode change. Addressed to the specific operator
-	 * ($userId); without $userId falls back to all chat participants (BC). Payload shape
-	 * is unchanged.
-	 */
-	public function sendPullUpdateSilentMode(bool $silentMode, ?int $userId = null): void
-	{
-		if (!Loader::includeModule('pull'))
-		{
-			return;
-		}
-
-		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$this->chat['ID']);
-
-		if ($userId !== null && $userId > 0)
-		{
-			$users = [$userId];
-		}
-		else
-		{
-			$users = $chat->getPullRecipients()->getUserIds();
-		}
-
-		if (empty($users))
-		{
-			return;
-		}
-
-		Pull\Event::add($users, [
-			'module_id' => 'imopenlines',
-			'command' => 'updateSilentMode',
-			'params' => [
-				'chatId' => (int)$this->chat['ID'],
-				'dialogId' => $chat->getDialogId(),
-				'silentMode' => $silentMode,
-			],
-		]);
 	}
 
 	/**
@@ -2980,6 +2990,53 @@ class Chat
 
 				if (array_key_exists('AUTHOR_ID', $fields))
 				{
+					$newAuthorId = (int)$fields['AUTHOR_ID'];
+					if ($newAuthorId > 0)
+					{
+						$chatId = (int)$this->chat['ID'];
+						$recipients = [];
+						$managerList = [];
+						$relationList = RelationTable::getList([
+							'select' => ['USER_ID', 'MANAGER'],
+							'filter' => ['=CHAT_ID' => $chatId],
+						])->fetchAll();
+						foreach ($relationList as $relation)
+						{
+							$recipients[] = (int)$relation['USER_ID'];
+							if ($relation['MANAGER'] === 'Y')
+							{
+								$managerList[] = (int)$relation['USER_ID'];
+							}
+						}
+
+						if (!empty($recipients))
+						{
+							$dialogId = 'chat'.$chatId;
+
+							Pull\Event::add($recipients, Array(
+								'module_id' => 'im',
+								'command' => 'chatManagers',
+								'params' => Array(
+									'dialogId' => $dialogId,
+									'chatId' => $chatId,
+									'list' => $managerList
+								),
+								'extra' => \Bitrix\Im\Common::getPullExtra()
+							));
+
+							Pull\Event::add($recipients, Array(
+								'module_id' => 'im',
+								'command' => 'chatOwner',
+								'params' => Array(
+									'dialogId' => $dialogId,
+									'chatId' => $chatId,
+									'userId' => $newAuthorId
+								),
+								'extra' => \Bitrix\Im\Common::getPullExtra()
+							));
+						}
+					}
+
 					//CRM
 					if(!empty($fields['AUTHOR_ID']) && !UserV2::getInstance((int)$fields['AUTHOR_ID'])->isBot())
 					{

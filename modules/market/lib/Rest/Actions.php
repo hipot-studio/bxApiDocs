@@ -22,4 +22,8 @@ class Actions
 	public const METHOD_SITE_PREVIEW = 'site_preview';
 
 	public const METHOD_TOTAL_APPS = 'total_apps';
+
+	public const METHOD_AI_SEARCH_ITEMS = 'ai_search_items';
+
+	public const METHOD_AI_SEARCH_EVENT = 'ai_search_event';
 }

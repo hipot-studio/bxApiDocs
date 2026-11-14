@@ -16,7 +16,7 @@ final class SessionManager extends BaseSessionManager
 		$filter = parent::buildFields();
 		if (!is_null($this->sessionType))
 		{
-			$filter['TYPE'] = $this->sessionType;
+			$filter['TYPE'] = $this->getEffectiveSessionType();
 		}
 
 		return $filter;

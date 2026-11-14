@@ -41,6 +41,8 @@ use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
 
 class Workgroup
 {
+	public const FEATURE_PERMISSIONS_CACHE_DIR = '/sonet/features_perms_v5/';
+
 	public static function isUsersHaveCommonGroups(int $userId, int $targetUserId, bool $includeInvited = false): bool
 	{
 		$roles = UserToGroupTable::getRolesMember();
@@ -370,7 +372,7 @@ class Workgroup
 		}
 
 		$cacheTTL = 3600 * 24 * 30;
-		$cacheDir = '/sonet/features_perms_v4/' . FeatureTable::FEATURE_ENTITY_TYPE_GROUP . '/list/'
+		$cacheDir = self::FEATURE_PERMISSIONS_CACHE_DIR . FeatureTable::FEATURE_ENTITY_TYPE_GROUP . '/list/'
 			. (int)($userId / 1000) . '/' . $userId
 		;
 		$cacheId = implode(' ', [ 'entities_list', $feature, $operation, $userId ]);
@@ -413,6 +415,7 @@ class Workgroup
 			if (\Bitrix\Socialnetwork\Integration\Extranet\User::isCollaber($userId))
 			{
 				$query->where('TYPE', Item\Workgroup\Type::Collab->value);
+				$query->whereIn('UG.ROLE', UserToGroupTable::getRolesMember());
 			}
 
 			$query->addSelect('ID');

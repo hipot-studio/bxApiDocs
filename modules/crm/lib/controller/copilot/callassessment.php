@@ -13,7 +13,6 @@ use Bitrix\Crm\Copilot\CallAssessment\CriteriaWriter;
 use Bitrix\Crm\Copilot\CallAssessment\Dto\ScriptStructureDto;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AutoCheckType;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\ClientType;
 use Bitrix\Crm\Copilot\CallAssessment\HintStateResolver;
@@ -50,8 +49,7 @@ final class CallAssessment extends Base
 		'clientTypeIds',
 		'callTypeId',
 		'autoCheckTypeId',
-		'availabilityType',
-		'availabilityData',
+		'isEnabled',
 		'isAiImprovementEnabled',
 		'lowBorder',
 		'highBorder',
@@ -79,6 +77,13 @@ final class CallAssessment extends Base
 		if (!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit())
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
+
+			return new Result();
+		}
+
+		if (!$callAssessmentItem->isEnabledValid())
+		{
+			$this->addError(new Error('isEnabled must be a boolean', ErrorCode::INVALID_ARG_VALUE));
 
 			return new Result();
 		}
@@ -225,16 +230,7 @@ final class CallAssessment extends Base
 			return new Result();
 		}
 
-		$availabilityType = $isEnabled === 'Y'
-			? AvailabilityType::ALWAYS_ACTIVE
-			: AvailabilityType::INACTIVE
-		;
-
-		$callAssessmentItem = (CallAssessmentItem::createFromEntity($entity))
-			->setAvailabilityType($availabilityType)
-		;
-
-		$result = CopilotCallAssessmentController::getInstance()->update($id, $callAssessmentItem);
+		$result = CopilotCallAssessmentController::getInstance()->updateEnabled($id, $isEnabled === 'Y');
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -538,6 +534,7 @@ final class CallAssessment extends Base
 			'lowBorder' => CallAssessmentItem::LOW_BORDER_DEFAULT,
 			'highBorder' => CallAssessmentItem::HIGH_BORDER_DEFAULT,
 			'autoCheckTypeId' => AutoCheckType::ALL->value,
+			'isEnabled' => true,
 			'isAiImprovementEnabled' => $patchData['isAiImprovementEnabled'] ?? true,
 			'status' => QueueTable::EXECUTION_STATUS_SUCCESS,
 		]);
@@ -799,8 +796,13 @@ final class CallAssessment extends Base
 			return [];
 		}
 
+		if (!array_key_exists('isEnabled', $data))
+		{
+			$data['isEnabled'] = ($data['availabilityType'] ?? null) !== 'inactive';
+		}
+
 		$data = array_intersect_key($data, array_flip(self::CLIENT_EDITABLE_ITEM_FIELDS));
-		foreach (['isHintEnabled', 'isAiImprovementEnabled'] as $field)
+		foreach (['isHintEnabled', 'isAiImprovementEnabled', 'isEnabled'] as $field)
 		{
 			if (($data[$field] ?? null) === 'true' || ($data[$field] ?? null) === 'false')
 			{

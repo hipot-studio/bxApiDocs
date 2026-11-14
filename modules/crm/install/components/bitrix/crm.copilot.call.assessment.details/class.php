@@ -11,6 +11,7 @@ use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController
 use Bitrix\Crm\Copilot\CallAssessment\V2ScriptDataLoader;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\BaasManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Service\Container;
@@ -73,15 +74,6 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 			}
 
 			$this->arResult['data']['users'] = Container::getInstance()->getUserBroker()->getBunchByIds($userIds);
-
-			$availabilityData = $this->arResult['data']['availabilityData'] ?? [];
-			array_walk($availabilityData,
-				static function (&$row) {
-					$row['startPoint'] = substr($row['startPoint']->toString(), 0, -3);
-					$row['endPoint'] = substr($row['endPoint']->toString(), 0, -3);
-				},
-			);
-			$this->arResult['data']['availabilityData'] = $availabilityData;
 
 			if ($this->isCallScoringV2Enabled())
 			{
@@ -160,6 +152,7 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 		return [
 			'moduleId' => 'crm',
 			'contextId' => 'crm_call_assessment_settings_prompt_' . CurrentUser::get()->getId(),
+			'feature' => CopilotFeatureCode::CALL_ASSESSMENT_SETTINGS_PROMPT,
 			'category' => Bitrix\AI\SharePrompt\Enums\Category::CRM_COMMENT_FIELD->value,
 			'autoHide' => true,
 		];

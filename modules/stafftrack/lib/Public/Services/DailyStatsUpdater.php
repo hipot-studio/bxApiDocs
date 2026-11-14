@@ -2,6 +2,8 @@
 
 namespace Bitrix\StaffTrack\Public\Services;
 
+use Bitrix\Main\DB\DuplicateEntryException;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
@@ -109,6 +111,7 @@ class DailyStatsUpdater
 		$updateFields = [
 			'CNT' => (int)($stats['CNT'] ?? 0) + $cntDelta,
 			'HAS_OPEN_ENTER' => $newHasOpenEnter ? 1 : 0,
+			...$this->manualCountKey($entityType === CheckInType::MANUAL->value ? 1 : 0),
 		];
 
 		$isClosingLeave =
@@ -405,11 +408,17 @@ class DailyStatsUpdater
 			$lastId = (int)($stats['LAST_CHECK_IN_ID'] ?? 0);
 			$lastLocalTimestamp = $lastId > 0 ? ($this->getCheckInLocalTimestamp($lastId) ?? 0) : 0;
 			$markerCheckInId = 0;
+			$manualCount = 0;
 
 			foreach ($groupPoints as $point)
 			{
 				$entityType = (int)($point['entityType'] ?? 0);
 				$description = (string)($point['description'] ?? '');
+
+				if ($entityType === CheckInType::MANUAL->value)
+				{
+					$manualCount++;
+				}
 
 				if ($this->producesMarker($entityType, $description, $hasOpenEnter))
 				{
@@ -443,6 +452,7 @@ class DailyStatsUpdater
 				'CNT' => $cnt,
 				'HAS_OPEN_ENTER' => $hasOpenEnter ? 1 : 0,
 				'LAST_CHECK_IN_ID' => $lastId,
+				...$this->manualCountKey($manualCount),
 			]);
 
 			$batchStates[] = [
@@ -668,11 +678,17 @@ class DailyStatsUpdater
 		$cnt = 0;
 		$hasOpenEnter = false;
 		$lastCheckInId = 0;
+		$manualCount = 0;
 
 		foreach ($checkInRows as $row)
 		{
 			$entityType = (int)($row['ENTITY_TYPE'] ?? 0);
 			$description = (string)($row['DESCRIPTION'] ?? '');
+			if ($entityType === CheckInType::MANUAL->value)
+			{
+				$manualCount++;
+			}
+
 			[$cntDelta, $newHasOpenEnter] = $this->calculateDelta($entityType, $description, $hasOpenEnter);
 			$cnt += $cntDelta;
 
@@ -697,13 +713,26 @@ class DailyStatsUpdater
 			$hasOpenEnter = $newHasOpenEnter;
 		}
 
-		CheckInDailyStatsTable::add([
-			'USER_ID' => $userId,
-			'LOCAL_DATE' => $localDate,
-			'CNT' => $cnt,
-			'HAS_OPEN_ENTER' => $hasOpenEnter ? 1 : 0,
-			'LAST_CHECK_IN_ID' => $lastCheckInId,
-		]);
+		try
+		{
+			CheckInDailyStatsTable::add([
+				'USER_ID' => $userId,
+				'LOCAL_DATE' => $localDate,
+				'CNT' => $cnt,
+				'HAS_OPEN_ENTER' => $hasOpenEnter ? 1 : 0,
+				'LAST_CHECK_IN_ID' => $lastCheckInId,
+				'MANUAL_CNT' => $manualCount,
+			]);
+		}
+		catch (DuplicateEntryException $exception)
+		{
+			// a parallel read wrote the row after the check above; the re-read goes to the master,
+			// the failed insert has already marked the table as changed in this hit
+			if ($this->findStats($userId, $localDate) === null)
+			{
+				throw $exception;
+			}
+		}
 	}
 
 	private function findStats(int $userId, Date $localDate): ?array
@@ -727,6 +756,7 @@ class DailyStatsUpdater
 			'CNT' => 0,
 			'HAS_OPEN_ENTER' => 0,
 			'LAST_CHECK_IN_ID' => 0,
+			'MANUAL_CNT' => 0,
 		]);
 
 		// On a unique-index race (USER_ID + LOCAL_DATE) add() returns a failed Result with a null id.
@@ -744,11 +774,34 @@ class DailyStatsUpdater
 		];
 	}
 
-	private function getLocalDate(int $timestamp, int $userTimezone): Date
+	/**
+	 * @return array{MANUAL_CNT?: SqlExpression}
+	 */
+	private function manualCountKey(int $manualCount): array
+	{
+		if ($manualCount === 0)
+		{
+			return [];
+		}
+
+		return ['MANUAL_CNT' => new SqlExpression('?# + ?i', 'MANUAL_CNT', $manualCount)];
+	}
+
+	/**
+	 * The day a point is counted into: the calendar day of its own author. Public because the write path
+	 * drops the cached map of the day it wrote into, and it has to name that day exactly as the statistics
+	 * filed the point under - a rule of its own there would sooner or later drop the neighbouring day.
+	 */
+	public static function localDateOf(int $timestamp, int $userTimezone): Date
 	{
 		$localDateString = date('Y-m-d', $timestamp + $userTimezone);
 
 		return new Date($localDateString, 'Y-m-d');
+	}
+
+	private function getLocalDate(int $timestamp, int $userTimezone): Date
+	{
+		return self::localDateOf($timestamp, $userTimezone);
 	}
 
 	private function extractTimestamp(mixed $value): int

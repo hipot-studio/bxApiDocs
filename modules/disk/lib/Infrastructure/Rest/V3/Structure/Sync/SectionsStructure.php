@@ -11,11 +11,11 @@ use Bitrix\Rest\V3\Structure\Structure;
 /**
  * The sections of an object card a listing method is asked for.
  *
- * Two of the declared sections are not filled at this stage. They stay in the schema so that the
- * later stages can fill them without changing the base contract, and asking for one now is an
- * explicit refusal rather than a section that silently comes back empty: a client that got an empty
- * "access" section would have no way to tell "nothing is shared" from "the portal cannot answer
- * that yet". Which sections a portal serves is published by disk.sync.capabilities.get.
+ * A declared section that is not filled yet stays in the schema so that a later stage can fill it
+ * without changing the base contract, and asking for it now is an explicit refusal rather than a
+ * section that silently comes back empty: a client that got an empty section would have no way to
+ * tell "nothing there" from "the portal cannot answer that yet". Which sections a portal serves is
+ * published by disk.sync.capabilities.get.
  */
 final class SectionsStructure extends Structure
 {
@@ -40,7 +40,30 @@ final class SectionsStructure extends Structure
 	 */
 	public static function getAvailableSections(): array
 	{
-		return [self::SECTION_METADATA, self::SECTION_LOCATION];
+		return [self::SECTION_METADATA, self::SECTION_LOCATION, self::SECTION_ACCESS];
+	}
+
+	/**
+	 * Served, yet only to a request that names them: a request that names no sections goes without
+	 * them. The section of access describes who else reaches an object, which a client that did not
+	 * ask for it has no use for, and its assembly is not free.
+	 *
+	 * @return string[]
+	 */
+	public static function getOnDemandSections(): array
+	{
+		return [self::SECTION_ACCESS];
+	}
+
+	/**
+	 * The sections of a request that names none: everything the portal serves but the sections served
+	 * on demand.
+	 *
+	 * @return string[]
+	 */
+	public static function getDefaultSections(): array
+	{
+		return array_values(array_diff(self::getAvailableSections(), self::getOnDemandSections()));
 	}
 
 	/**
@@ -50,7 +73,20 @@ final class SectionsStructure extends Structure
 	 */
 	public static function getUnavailableSections(): array
 	{
-		return [self::SECTION_ACCESS, self::SECTION_RELATIONS];
+		return [self::SECTION_RELATIONS];
+	}
+
+	/**
+	 * The sections whose assembly is expensive enough to bring a page down to
+	 * {@see \Bitrix\Disk\Internal\Service\Sync\SyncLimits::getPageSizeMaxHeavy()}, whichever of them
+	 * are asked for together. A section not served yet is harmless here: asking for it is refused
+	 * before the size of a page is chosen.
+	 *
+	 * @return string[]
+	 */
+	public static function getHeavySections(): array
+	{
+		return [self::SECTION_LOCATION, self::SECTION_RELATIONS, self::SECTION_ACCESS];
 	}
 
 	/**
@@ -61,12 +97,9 @@ final class SectionsStructure extends Structure
 		return [...self::getAvailableSections(), ...self::getUnavailableSections()];
 	}
 
-	/**
-	 * The sections of a request that names none: everything the portal serves.
-	 */
 	public static function createDefault(): self
 	{
-		return new self(self::getAvailableSections());
+		return new self(self::getDefaultSections());
 	}
 
 	public static function create(mixed $value, ?string $dtoClass = null, ?Request $request = null): self
@@ -103,6 +136,11 @@ final class SectionsStructure extends Structure
 	public function has(string $section): bool
 	{
 		return in_array($section, $this->sections, true);
+	}
+
+	public function hasHeavySection(): bool
+	{
+		return array_intersect(self::getHeavySections(), $this->sections) !== [];
 	}
 
 	private static function assertServed(string $section): void

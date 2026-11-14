@@ -39,6 +39,7 @@ final class SummaryDataProvider
 
 		return $result->setData([
 			'payload' => $payload->toArray(),
+			'jobId' => JobIdNormalizer::normalize($transcriptResult->getJobId()),
 			'createdAt' => $this->getJobFinishedTimestamp(
 				$activityId,
 				TranscribeCallRecording::TYPE_ID,
@@ -79,6 +80,7 @@ final class SummaryDataProvider
 
 		return $result->setData([
 			'payload' => $payload->toArray(),
+			'jobId' => JobIdNormalizer::normalize($summaryResult->getJobId()),
 			'createdAt' => $this->getJobFinishedTimestamp(
 				$activityId,
 				SummarizeCallTranscription::TYPE_ID,
@@ -138,11 +140,14 @@ final class SummaryDataProvider
 		);
 		foreach ($result as $index => $summary)
 		{
+			$result[$index]['originalJobId'] = $summary['jobId'] ?? null;
+			$result[$index]['jobId'] = JobIdNormalizer::normalize($summary['jobId'] ?? null);
 			$languageId = $summary['languageId'] ?? null;
 			if (!is_string($languageId) || $languageId === '')
 			{
 				$result[$index]['aiLanguage'] = null;
 				unset($result[$index]['languageId']);
+
 				continue;
 			}
 

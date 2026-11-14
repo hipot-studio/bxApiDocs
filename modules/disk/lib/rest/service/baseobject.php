@@ -3,6 +3,7 @@
 namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Main\DI\ServiceLocator;
@@ -13,12 +14,14 @@ use Bitrix\Disk;
 abstract class BaseObject extends Base
 {
 	protected ExternalLinkProvider $externalLinkProvider;
+	protected ExternalLinkAccessService $externalLinkAccessService;
 
 	public function __construct($methodName, array $params, $start, \CRestServer $restServer)
 	{
 		parent::__construct($methodName, $params, $start, $restServer);
 
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+		$this->externalLinkAccessService = ServiceLocator::getInstance()->get(ExternalLinkAccessService::class);
 	}
 
 	/**
@@ -36,14 +39,34 @@ abstract class BaseObject extends Base
 	 */
 	protected function get($id)
 	{
+		return $this->getByStorageRights($id);
+	}
+
+	/**
+	 * Returns object by id, readable by the rights of its storage only.
+	 *
+	 * Methods giving more than the metadata and the content of an object stay on this check.
+	 *
+	 * @param int $id Id of object.
+	 * @return Disk\File|Disk\Folder
+	 * @throws AccessException
+	 */
+	protected function getByStorageRights($id)
+	{
 		$object = $this->getWorkObjectById($id);
-		$securityContext = $object->getStorage()->getCurrentUserSecurityContext();
-		if(!$object->canRead($securityContext))
+		if (!$this->canReadByStorageRights($object))
 		{
 			throw new AccessException;
 		}
 
 		return $object;
+	}
+
+	protected function canReadByStorageRights(Disk\BaseObject $object): bool
+	{
+		$securityContext = $object->getStorage()->getCurrentUserSecurityContext();
+
+		return $object->canRead($securityContext);
 	}
 
 	/**
@@ -184,6 +207,14 @@ abstract class BaseObject extends Base
 			$this->errorCollection->add($object->getErrors());
 			return null;
 		}
+		// REST has no place for a warning beside the answer: the files the format policy kept in the
+		// trash can make it an error, while the folder stays restored
+		if ($object->getErrors())
+		{
+			$this->errorCollection->add($object->getErrors());
+
+			return null;
+		}
 
 		return $object;
 	}
@@ -210,7 +241,15 @@ abstract class BaseObject extends Base
 	 */
 	protected function getExternalLink($id)
 	{
-		$object = $this->get($id);
+		$object = $this->getByStorageRights($id);
+		if (
+			!$this->externalLinkAccessService->isExternalLinkEnabledOnPortal()
+			|| !$this->externalLinkAccessService->canManageExternalLink($object)
+		)
+		{
+			throw new AccessException;
+		}
+
 		$extModel = $this->externalLinkProvider->getForUse($object->getRealObjectId());
 
 		if(!$extModel)

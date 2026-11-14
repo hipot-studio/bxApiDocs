@@ -1,4 +1,7 @@
 <?php
+use Bitrix\Bizproc\Public\Dto\ManualStartContext;
+use Bitrix\Bizproc\Public\Service\WorkflowTemplate\ManualStartPolicyService;
+use Bitrix\Bizproc\Starter\Enum\ManualStartSurface;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
@@ -12,6 +15,7 @@ use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Ui\Icon;
 use Bitrix\Disk\Uf;
+use Bitrix\Disk\UserConfiguration;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
@@ -212,7 +216,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		{
 			$viewFile = CComponentEngine::makePathFromTemplate($this->arParams['PATH_TO_FILE_VIEW'], array(
 				'FILE_ID' => $this->file->getId(),
-				'FILE_PATH' => $this->arParams['RELATIVE_PATH'],
+				'FILE_PATH' => $this->encodePathSegments((string)$this->arParams['RELATIVE_PATH']),
 			));
 		}
 		else
@@ -261,7 +265,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 
 		if ($canUpdate && \Bitrix\Disk\Document\DocumentHandler::isEditable($this->file->getExtension()))
 		{
-			if ($this->file->supportsUnifiedLink())
+			if ($this->file->supportsUnifiedLink() && !UserConfiguration::isSetLocalDocumentService())
 			{
 				$editUnifiedLink = $urlManager->getUnifiedEditLink($this->file);
 				$attr
@@ -278,12 +282,14 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			else
 			{
 				$documentName = \CUtil::JSEscape($this->file->getName());
+				$editUls = $this->isViewByUnifiedLink ? $uls : null;
+				$editUlsJs = \CUtil::JSEscape($editUls ?? '');
 				$items = [];
 				foreach ($this->getDocumentHandlersForEditingFile() as $handlerData)
 				{
 					$items[] = [
 						'text' => $handlerData['name'],
-						'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '{$documentName}', objectId: {$this->file->getId()}, serviceCode: '{$handlerData['code']}'})",
+						'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '{$documentName}', objectId: {$this->file->getId()}, serviceCode: '{$handlerData['code']}', uls: '{$editUlsJs}'})",
 					];
 				}
 				$attr->addAction([
@@ -292,6 +298,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 					'params' => [
 						'objectId' => $this->file->getId(),
 						'name' => $documentName,
+						'uls' => $editUls,
 					],
 					'items' => $items,
 				]);
@@ -558,13 +565,21 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		);
 	}
 
+	/**
+	 * Encodes each segment of the relative path for a URL: a name like "100% done.pdf" must not break the link.
+	 */
+	private function encodePathSegments(string $path): string
+	{
+		return implode('/', array_map('rawurlencode', explode('/', $path)));
+	}
+
 	protected function processActionShowBp()
 	{
 		$this->application->setTitle(htmlspecialcharsbx($this->storage->getProxyType()->getTitleForCurrentUser()));
 
 		$viewFile = CComponentEngine::makePathFromTemplate($this->arParams['PATH_TO_FILE_VIEW'], array(
 			'FILE_ID' => $this->file->getId(),
-			'FILE_PATH' => $this->arParams['RELATIVE_PATH'],
+			'FILE_PATH' => $this->encodePathSegments((string)$this->arParams['RELATIVE_PATH']),
 		));
 
 		$isBpStarterExists = Loader::includeModule('bizproc') && class_exists(\Bitrix\Bizproc\Starter\Starter::class);
@@ -669,25 +684,45 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		return $crumbs;
 	}
 
+	private function hasManualStartRight(array $documentType): bool
+	{
+		return
+			Loader::includeModule('bizproc')
+			&& method_exists(ManualStartPolicyService::class, 'hasAnyManualStartRight')
+			&& (new ManualStartPolicyService())->hasAnyManualStartRight(
+				(int)$this->getUser()->getId(),
+				$documentType,
+				ManualStartContext::webEntry(Driver::INTERNAL_MODULE_ID, ManualStartSurface::DiskFile),
+			)
+		;
+	}
+
 	protected function showBizProc($documentData)
 	{
-		$this->arResult['BIZPROC_PERMISSION'] = array();
-		$this->arResult['BIZPROC_PERMISSION']['START'] = CBPDocument::canUserOperateDocument(
+		$canStartByDocumentRight = CBPDocument::canUserOperateDocument(
 			CBPCanUserOperateOperation::StartWorkflow,
 			$this->getUser()->getId(),
 			$documentData['DISK']['DOCUMENT_ID']
 		);
+		$this->arResult['BIZPROC_PERMISSION'] = array();
+		$this->arResult['BIZPROC_PERMISSION']['START'] =
+			$canStartByDocumentRight
+			|| $this->hasManualStartRight($documentData['DISK']['DOCUMENT_TYPE'])
+		;
 		$this->arResult['BIZPROC_PERMISSION']['VIEW'] = CBPDocument::canUserOperateDocument(
 			CBPCanUserOperateOperation::ViewWorkflow,
 			$this->getUser()->getId(),
 			$documentData['DISK']['DOCUMENT_ID']
 		);
-		$this->arResult['BIZPROC_PERMISSION']['STOP'] = $this->arResult['BIZPROC_PERMISSION']['START'];
-		$this->arResult['BIZPROC_PERMISSION']['DROP'] = CBPDocument::canUserOperateDocument(
-			CBPCanUserOperateOperation::CreateWorkflow,
-			$this->getUser()->getId(),
-			$documentData['DISK']['DOCUMENT_ID']
-		);
+		$this->arResult['BIZPROC_PERMISSION']['STOP'] = $canStartByDocumentRight;
+		// Same rule as the deleteBizProc action: start rights on the file and create rights on the storage.
+		$this->arResult['BIZPROC_PERMISSION']['DROP'] = $canStartByDocumentRight
+			&& CBPDocument::canUserOperateDocument(
+				CBPCanUserOperateOperation::CreateWorkflow,
+				$this->getUser()->getId(),
+				$documentData['DISK']['DOCUMENT_ID']
+			)
+		;
 
 		foreach($documentData as $nameModuleId => $data)
 		{

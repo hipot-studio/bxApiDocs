@@ -1047,6 +1047,45 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		return parent::saveAction($data);
 	}
 
+	protected function processItemFieldValues(array $data): array
+	{
+		if ($this->isCopyMode())
+		{
+			$sourceQuote = $this->getCopiedItemFrom();
+			if (!$sourceQuote instanceof Item\Quote)
+			{
+				$this->errorCollection[] = new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED'));
+
+				return [];
+			}
+
+			if (!array_key_exists(Item\Quote::FIELD_NAME_DEAL_ID, $data))
+			{
+				$dealId = $sourceQuote->getDealId();
+				if ($dealId > 0)
+				{
+					$deal = Container::getInstance()->getFactory(\CCrmOwnerType::Deal)?->getItem(
+						$dealId,
+						[Item::FIELD_NAME_ID],
+					);
+					if (
+						$deal === null
+						|| !$this->userPermissionsService->item()->canRead(\CCrmOwnerType::Deal, $dealId)
+					)
+					{
+						$this->errorCollection[] = new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED'));
+
+						return [];
+					}
+
+					$data[Item\Quote::FIELD_NAME_DEAL_ID] = $dealId;
+				}
+			}
+		}
+
+		return parent::processItemFieldValues($data);
+	}
+
 
 	private function calculateDefaultDataValues(array $data): array
 	{

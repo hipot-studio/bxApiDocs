@@ -18,21 +18,21 @@ use Bitrix\Main\Result;
  */
 final class ActivitylessItemsIncludedSetting extends AbstractSetting
 {
-	public const CODE = 'crm.counter.activityless_items.included';
+	public const ID = 'crm.counter.activityless_items.included';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

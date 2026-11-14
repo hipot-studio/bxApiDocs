@@ -12,6 +12,7 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\GuestUser;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\Bitrix24SiteUrlResolver;
 use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionService;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
@@ -26,7 +27,6 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
 use Bitrix\Disk\Internals\DiskComponent;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Context;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die;
@@ -440,12 +440,13 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 
 	private function getHeaderLogoUrl(): string
 	{
-		if ($this->isExternalLinkMode && ModuleManager::isModuleInstalled('bitrix24'))
+		$siteUrlResolver = Bitrix24SiteUrlResolver::create();
+		if ($this->isExternalLinkMode && $siteUrlResolver->isCloudPortal())
 		{
-			return 'https://bitrix24.com';
+			return $siteUrlResolver->getUrl();
 		}
 
-		if ($this->isExternalLinkMode && !ModuleManager::isModuleInstalled('bitrix24'))
+		if ($this->isExternalLinkMode && !$siteUrlResolver->isCloudPortal())
 		{
 			return UrlManager::getInstance()->getHostUrl();
 		}

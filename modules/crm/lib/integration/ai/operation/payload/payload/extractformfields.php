@@ -12,9 +12,38 @@ use Bitrix\Main\UserField\Types\EnumType;
 
 final class ExtractFormFields extends AbstractPayload implements CalcMarkersInterface
 {
+	/**
+	 * NAME is the key of a field both in the request to AI and in its answer, so it is unique here:
+	 * a field whose caption was already met is told apart by its code, the first one keeps the caption.
+	 * Uniqueness is counted over all fields of the entity, not only the enabled ones: the fill policy of
+	 * a field may be switched between the request and the answer, and that must not change other keys.
+	 */
 	public static function getAllSuitableFields(int $entityTypeId, string $scope = Context::SCOPE_AI): array
 	{
-		return (new FieldDataProvider($entityTypeId, $scope))->getEnabledForAiFillFieldData();
+		$provider = new FieldDataProvider($entityTypeId, $scope);
+
+		$uniqueNames = [];
+		$usedNames = [];
+		foreach ($provider->getFieldData() as $field)
+		{
+			$name = $field['NAME'];
+			// a suffixed name may itself be a caption of another field, so it is checked again
+			while (isset($usedNames[$name]))
+			{
+				$name .= ' (' . $field['ID'] . ')';
+			}
+			$usedNames[$name] = true;
+			$uniqueNames[$field['ID']] = $name;
+		}
+
+		$fields = $provider->getEnabledForAiFillFieldData();
+		foreach ($fields as &$field)
+		{
+			$field['NAME'] = $uniqueNames[$field['ID']] ?? $field['NAME'];
+		}
+		unset($field);
+
+		return $fields;
 	}
 
 	public static function prepareValue(array $data, mixed $value): mixed

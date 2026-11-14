@@ -19,7 +19,7 @@ use Bitrix\Main\Result;
  */
 final class FullCatalogEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.layout.full_catalog.enabled';
+	public const ID = 'crm.layout.full_catalog.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly LayoutSettings $layoutSettings;
@@ -29,18 +29,18 @@ final class FullCatalogEnabledSetting extends AbstractSetting
 		$this->layoutSettings = $layoutSettings ?? LayoutSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

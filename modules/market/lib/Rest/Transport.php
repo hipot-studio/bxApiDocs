@@ -6,6 +6,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
@@ -22,6 +23,8 @@ class Transport
 {
 	private const VERSION = 1;
 	private const API_VERSION = 5;
+
+	public const DEFAULT_TIMEOUT = 10;
 
 	private string $serviceDomain;
 
@@ -71,7 +74,7 @@ class Transport
 		return $this->prepareAnswer($response);
 	}
 
-	public function batch($actions): array
+	public function batch($actions, int $socketTimeout = self::DEFAULT_TIMEOUT, int $streamTimeout = self::DEFAULT_TIMEOUT): array
 	{
 		$query = [];
 
@@ -83,25 +86,32 @@ class Transport
 			$query[$key] = $this->prepareQuery($batch[0], $batch[1]);
 		}
 
-		$httpClient = $this->getHttpClient();
-		$response = $httpClient->post(
-			$this->getServiceUrl(),
-			['batch' => $query]
-		);
+		$url = $this->getServiceUrl();
+		$httpClient = $this->getHttpClient($socketTimeout, $streamTimeout);
+		$response = $httpClient->post($url, ['batch' => $query]);
 
 		if ($response === false)
 		{
-			throw new Exception\MarketRequestException($httpClient->getError());
+			$errors = [];
+			foreach ($httpClient->getError() as $code => $message)
+			{
+				$errors[] = "{$message} [{$code}]";
+			}
+			$errors[] = 'url:' . $url;
+
+			throw new Exception\MarketRequestException(
+				previous: new SystemException('Network connection error: ' . implode('; ', $errors))
+			);
 		}
 
 		return $this->prepareAnswer($response);
 	}
 
-	private function getHttpClient(): HttpClient
+	protected function getHttpClient(int $socketTimeout = self::DEFAULT_TIMEOUT, int $streamTimeout = self::DEFAULT_TIMEOUT): HttpClient
 	{
 		return new HttpClient([
-			'socketTimeout' => 10,
-			'streamTimeout' => 10,
+			'socketTimeout' => $socketTimeout,
+			'streamTimeout' => $streamTimeout,
 		]);
 	}
 

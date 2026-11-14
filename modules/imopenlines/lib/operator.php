@@ -1,9 +1,9 @@
 <?php
 namespace Bitrix\ImOpenLines;
 
-use Bitrix\Im\Bot\Keyboard;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Entity\User\User as UserV2;
+use Bitrix\Im\V2\Message\Params;
 use Bitrix\ImConnector\Output;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenlines\QuickAnswers\ListsDataManager;
@@ -12,14 +12,13 @@ use Bitrix\Main,
 	Bitrix\Main\Loader,
 	Bitrix\Main\Localization\Loc;
 
-use Bitrix\ImOpenlines\Security\Permissions;
-use Bitrix\ImOpenlines\Security\Helper;
-
 Loc::loadMessages(__FILE__);
 
 class Operator
 {
 	public const SOFT_PAUSE_OPTION = 'soft_pause';
+
+	private const MULTIDIALOG_ERROR_COMPONENT_ID = 'MultiDialogErrorMessage';
 
 	private $chatId = 0;
 	private $userId = 0;
@@ -289,10 +288,12 @@ class Operator
 
 		// Personal hidden messages mode: the state is stored for the specific operator,
 		// not for the whole chat. No system message about the mode change is broadcast.
-		SilentMode\PersonalSilentMode::set($this->userId, $this->chatId, $isActive);
+		if (!SilentMode\PersonalSilentMode::set($this->userId, $this->chatId, $isActive))
+		{
+			$this->error = new BasicError(__METHOD__, 'SILENT_MODE_FAIL', 'SILENT_MODE_FAIL');
 
-		$chat = new Chat($this->chatId);
-		$chat->sendPullUpdateSilentMode($isActive, $this->userId);
+			return false;
+		}
 
 		return true;
 	}
@@ -582,22 +583,113 @@ class Operator
 
 	/**
 	 * @param $messageId
+	 * @param int $errorMessageId Message with the start session button, it is hidden after a successful start.
 	 * @return bool
 	 */
-	public function startSessionByMessage($messageId)
+	public function startSessionByMessage($messageId, int $errorMessageId = 0)
 	{
-		$result = false;
-
 		$access = $this->checkAccess();
-		if ($access['RESULT'])
+		if (!$access['RESULT'])
 		{
-			$chat = new Chat($this->chatId);
-			$chat->startSessionByMessage($this->userId, $messageId);
+			$this->error = new BasicError(__METHOD__, 'ACCESS_DENIED', Loc::getMessage('IMOL_OPERATOR_ERROR_ACCESS_DENIED'));
 
-			$result = true;
+			return false;
 		}
 
-		return $result;
+		$session = V2\Session\Session::getInstanceByChatId($this->chatId);
+		if (
+			$session === null
+			|| !$session->getSessionId()
+			|| $session->isClosed()
+			|| !$this->isValidStartSessionSource((int)$messageId, $session)
+		)
+		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'START_SESSION_FAIL',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_START_SESSION_FAIL')
+			);
+
+			return false;
+		}
+
+		$chat = new Chat($this->chatId);
+		if (!$chat->startSessionByMessage($this->userId, $messageId, (int)$session->getSessionId()))
+		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'START_SESSION_FAIL',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_START_SESSION_FAIL')
+			);
+
+			return false;
+		}
+
+		if ($errorMessageId > 0)
+		{
+			$this->hideStartSessionButton($errorMessageId, (int)$messageId);
+		}
+
+		return true;
+	}
+
+	/**
+	 * A new dialog can be started only by a client message that belongs to the current session.
+	 */
+	private function isValidStartSessionSource(int $messageId, V2\Session\Session $session): bool
+	{
+		$message = new \Bitrix\Im\V2\Message($messageId);
+
+		if ((int)$message->getChatId() !== $this->chatId)
+		{
+			return false;
+		}
+
+		if ($messageId < (int)$session->getStartId())
+		{
+			return false;
+		}
+
+		$authorId = $message->getAuthorId();
+		if ($authorId <= 0)
+		{
+			return false;
+		}
+
+		$clientId = (int)$session->getUserId();
+		if ($clientId > 0)
+		{
+			return $authorId === $clientId;
+		}
+
+		// group-by-chat connectors keep the session without a client user id
+		return UserV2::getInstance($authorId)->isConnector();
+	}
+
+	private function hideStartSessionButton(int $errorMessageId, int $sourceMessageId): void
+	{
+		$message = new \Bitrix\Im\V2\Message($errorMessageId);
+		if ((int)$message->getChatId() !== (int)$this->chatId)
+		{
+			return;
+		}
+
+		$params = $message->getParams();
+		if (
+			!$params->isSet(Params::COMPONENT_ID)
+			|| $params->get(Params::COMPONENT_ID)->getValue() !== self::MULTIDIALOG_ERROR_COMPONENT_ID
+		)
+		{
+			return;
+		}
+
+		\CIMMessageParam::Set($errorMessageId, [
+			Params::COMPONENT_PARAMS => [
+				'MESSAGE_ID' => $sourceMessageId,
+				'SESSION_STARTED' => true,
+			],
+		]);
+		\CIMMessageParam::SendPull($errorMessageId, [Params::COMPONENT_PARAMS]);
 	}
 
 	/**
@@ -608,16 +700,31 @@ class Operator
 	{
 		if (!Loader::includeModule('imconnector'))
 		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'IMCONNECTOR_LOAD_ERROR',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_COMMON')
+			);
+
 			return false;
 		}
 
 		$access = $this->checkAccess();
 		if (!$access['RESULT'])
 		{
+			$this->error = new BasicError(__METHOD__, 'ACCESS_DENIED', Loc::getMessage('IMOL_OPERATOR_ERROR_ACCESS_DENIED'));
+
 			return false;
 		}
 
 		$message = new \Bitrix\Im\V2\Message((int)$messageId);
+
+		if ((int)$message->getChatId() !== (int)$this->chatId)
+		{
+			$this->error = new BasicError(__METHOD__, 'ACCESS_DENIED', Loc::getMessage('IMOL_OPERATOR_ERROR_ACCESS_DENIED'));
+
+			return false;
+		}
 
 		$session = SessionTable::getRow([
 			'filter' => [
@@ -627,6 +734,12 @@ class Operator
 
 		if (!$session)
 		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'SESSION_NOT_FOUND',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_COMMON')
+			);
+
 			return false;
 		}
 
@@ -634,6 +747,12 @@ class Operator
 		$connectorStatusParent = \Bitrix\ImConnector\Status::getInstance(\Bitrix\ImOpenLines\Connector::TYPE_NETWORK, (int)$userCode[1]);
 		if (!$connectorStatusParent->isStatus())
 		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'CONNECTOR_NOT_ACTIVE',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_COMMON')
+			);
+
 			return false;
 		}
 
@@ -646,6 +765,12 @@ class Operator
 				$connectorDataCurrent = $connectorStatusCurrent->getData();
 				if (!isset($connectorDataCurrent['MULTIDIALOG']) || $connectorDataCurrent['MULTIDIALOG'] === 'N')
 				{
+					$this->error = new BasicError(
+						__METHOD__,
+						'MULTIDIALOG_DISABLED',
+						Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_MSGVER_1')
+					);
+
 					return false;
 				}
 				else
@@ -658,11 +783,23 @@ class Operator
 		$connectorDataParent = $connectorStatusParent->getData();
 		if (!isset($connectorDataParent['MULTIDIALOG']))
 		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'MULTIDIALOG_DISABLED',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_MSGVER_1')
+			);
+
 			return false;
 		}
 
 		if ($connectorDataParent['MULTIDIALOG'] === 'N' && !$forceMultidialog)
 		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'MULTIDIALOG_DISABLED',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_MSGVER_1')
+			);
+
 			return false;
 		}
 
@@ -670,6 +807,10 @@ class Operator
 
 		$quotedMessageParts = explode("\n", $message->getQuotedMessage());
 		unset($quotedMessageParts[1]);
+
+		// Network keeps the last error in a static shared by all bots, so only a changed instance belongs to this call
+		$errorBefore = \Bitrix\ImBot\Bot\Network::getError();
+
 		$connectorOutput = new Output('network', $userCode[1]);
 		$result = $connectorOutput->operatorOpenNewDialog([
 			'LINE_ID' => $userCode[1],
@@ -678,37 +819,47 @@ class Operator
 			'OPERATOR_ID' => $userId,
 			'MESSAGE_ID' => $message->getMessageId(),
 			'MESSAGE_TEXT' => $message->getMessage(),
-			'MESSAGE_AUTHOR' => $message->getAuthor()->isConnector() ? $message->getAuthorid() : 0,
+			'MESSAGE_AUTHOR' => $message->getAuthor()?->isConnector() ? $message->getAuthorid() : 0,
 			'QUOTED_MESSAGE' => implode("\n", $quotedMessageParts),
 			'SESSION_ID' => $session['ID'],
 		]);
 
 		$error = \Bitrix\ImBot\Bot\Network::getError();
-		if ($error->code === 'VERSION_LOWER_THEN_REQUIRED')
+		$hasOwnError = $error !== $errorBefore && !empty($error->code);
+
+		if ($hasOwnError && $error->code === 'VERSION_LOWER_THEN_REQUIRED')
 		{
-			$keyboard = new Keyboard();
-			$keyboard->addButton([
-				'TEXT' => Loc::getMessage('IMOL_OPERATOR_ERROR_VERSION_LOWER_THAN_REQUIRED_BUTTON_CLOSE_AND_NEW'),
-				'FUNCTION' => 'BX.MessengerCommon.linesStartSessionByMessage(' . (int)$messageId . ');this.style.display = "none"',
-				'BG_COLOR' => '#29619b',
-				'TEXT_COLOR' => '#fff',
-				'BLOCK' => 'Y',
-				'DISPLAY' => 'LINE',
-			]);
+			$this->error = new BasicError(
+				__METHOD__,
+				$error->code,
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_VERSION_LOWER_THAN_REQUIRED_MSGVER_1')
+			);
 
 			\CIMMessenger::Add([
 				'DIALOG_ID' => 'chat' . $session['CHAT_ID'],
 				'TO_USER_ID' => $userId,
 				'MESSAGE' => Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_VERSION_LOWER_THAN_REQUIRED_MSGVER_1'),
 				'SYSTEM' => 'Y',
-				'KEYBOARD' => $keyboard,
 				'NO_SESSION_OL' => 'Y',
 				'URL_PREVIEW' => 'N',
+				'PARAMS' => [
+					Params::COMPONENT_ID => self::MULTIDIALOG_ERROR_COMPONENT_ID,
+					Params::COMPONENT_PARAMS => ['MESSAGE_ID' => (int)$messageId],
+				],
 			]);
+
+			return false;
 		}
-		elseif (!empty($error->code))
+
+		if ($hasOwnError)
 		{
 			Log::write(['code' => $error->code, 'session' => $session], 'MULTIDIALOG CREATE ERROR');
+
+			$this->error = new BasicError(
+				__METHOD__,
+				'MULTIDIALOG_CREATE_ERROR',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_MSGVER_1')
+			);
 
 			\CIMMessenger::Add([
 				'DIALOG_ID' => 'chat' . $session['CHAT_ID'],
@@ -718,9 +869,22 @@ class Operator
 				'NO_SESSION_OL' => 'Y',
 				'URL_PREVIEW' => 'N',
 			]);
+
+			return false;
 		}
 
-		return $result->isSuccess();
+		if (!$result->isSuccess())
+		{
+			$this->error = new BasicError(
+				__METHOD__,
+				'CONNECTOR_REQUEST_FAIL',
+				Loc::getMessage('IMOL_OPERATOR_ERROR_CANT_OPEN_NEW_DIALOG_MSGVER_1')
+			);
+
+			return false;
+		}
+
+		return true;
 	}
 
 	public function getMultiDialogs(): array
@@ -772,9 +936,10 @@ class Operator
 
 	/**
 	 * @param $messageId
-	 * @return bool
+	 * @param int $lineId Line ID to save the quick answer for. If <= 0, falls back to the active session config.
+	 * @return int|false
 	 */
-	public function saveToQuickAnswers($messageId)
+	public function saveToQuickAnswers($messageId, int $lineId = 0)
 	{
 		$message = \CIMMessenger::GetById($messageId);
 		if ($message)
@@ -787,7 +952,7 @@ class Operator
 				return false;
 			}
 
-			$lineId = Session\Common::getConfigIdByChatId($this->chatId);
+			$lineId = $lineId > 0 ? $lineId : Session\Common::getConfigIdByChatId($this->chatId);
 			if ($lineId > 0)
 			{
 				$listsDataManager = new ListsDataManager($lineId);
@@ -812,7 +977,7 @@ class Operator
 					}
 					if ($answer && $answer->getId() > 0)
 					{
-						return true;
+						return $answer->getId();
 					}
 				}
 			}
@@ -822,7 +987,7 @@ class Operator
 		return false;
 	}
 
-	public function getSessionHistory($sessionId)
+	public function getSessionHistory($sessionId, int $limit = 0, int $lastId = 0, int $lastDate = 0)
 	{
 		$sessionId = intval($sessionId);
 		if ($sessionId <= 0)
@@ -839,33 +1004,22 @@ class Operator
 			return false;
 		}
 
-		if ($session['OPERATOR_ID'] != $this->userId && !isset($session[$this->userId]))
+		if (!V2\Session\HistoryAccess::canView($session, (int)$this->userId))
 		{
-			$permission = Permissions::createWithCurrentUser();
-			$allowedUserIds = Helper::getAllowedUserIds(
-				Helper::getCurrentUserId(),
-				$permission->getPermission(Permissions::ENTITY_HISTORY, Permissions::ACTION_VIEW)
-			);
-			if (
-				(is_array($allowedUserIds) && !in_array($session['OPERATOR_ID'], $allowedUserIds))
-				&& \Bitrix\ImOpenLines\Crm\Common::hasAccessToEntitiesBindingActivity($session['CRM_ACTIVITY_ID'])->getResult() == false
-			)
-			{
-				$this->error = new BasicError(__METHOD__, 'ACCESS_DENIED', Loc::getMessage('IMOL_OPERATOR_ERROR_ACCESS_DENIED'));
-				return false;
-			}
+			$this->error = new BasicError(__METHOD__, 'ACCESS_DENIED', Loc::getMessage('IMOL_OPERATOR_ERROR_ACCESS_DENIED'));
+			return false;
 		}
 
 		$chatId = $session['CHAT_ID'];
 
 		$CIMChat = new \CIMChat();
-		$result = $CIMChat->GetLastMessageLimit($chatId, $session['START_ID'], $session['END_ID'], true, false);
+		$result = $CIMChat->GetLastMessageLimit($chatId, $session['START_ID'], $session['END_ID'], true, false, 'DESC', $limit, $lastId, $lastDate);
 		if ($result && isset($result['message']))
 		{
 			foreach ($result['message'] as $id => $ar)
 				$result['message'][$id]['recipientId'] = 'chat'.$ar['recipientId'];
 
-			$result['usersMessage']['chat'.$chatId] = $result['usersMessage'][$chatId];
+			$result['usersMessage']['chat'.$chatId] = $result['usersMessage'][$chatId] ?? array();
 			unset($result['usersMessage'][$chatId]);
 		}
 		else

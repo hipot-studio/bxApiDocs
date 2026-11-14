@@ -3,6 +3,7 @@ namespace Bitrix\ImOpenLines;
 
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Pull\Event\ChatHide;
+use Bitrix\Im\V2\RelationCollection;
 use Bitrix\ImOpenLines\Model\RecentTable;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\Main\Loader;
@@ -66,47 +67,56 @@ class Relation
 			return false;
 		}
 
+		$pushMessage = $this->getPullAddMessage($this->userId);
+
+		Event::add([$this->userId], $pushMessage);
+		return \CPullWatch::AddToStack('IM_PUBLIC_' . $this->chatId, $pushMessage);
+	}
+
+	/**
+	 * Chat state follows the convention of \Bitrix\Im\V2\Pull\Event\ChatUserAdd: a user without a real
+	 * relation gets a synthetic one (guest role), and the chat owner is the actual author of the chat.
+	 *
+	 * @internal
+	 */
+	public function getPullAddMessage(int $userId): array
+	{
 		$users = \CIMContactList::GetUserData([
-			'ID' => [$this->userId],
+			'ID' => [$userId],
 			'DEPARTMENT' => 'N',
 			'USE_CACHE' => 'N'
 		]);
 		$chat = \Bitrix\Im\V2\Chat::getInstance($this->chatId);
 
-		$relationsRest = $chat->getRelationsByUserIds([$this->userId])->toRestFormat();
-		if (empty($relationsRest))
+		$relations = $chat->getRelationsByUserIds([$userId]);
+		if ($relations->count() === 0)
 		{
-			$relationsRest = [[
-				'id' => 0,
-				'userId' => $this->userId,
-				'chatId' => $this->chatId,
-				'isHidden' => false,
-				'role' => mb_strtolower(\Bitrix\Im\V2\Chat::ROLE_MEMBER),
-			]];
+			$relations = RelationCollection::createFake([$userId], $chat);
 		}
 
-		$pushMessage = [
+		$participantIds = array_unique(array_merge($this->userIds, [$userId]));
+
+		return [
 			'module_id' => 'im',
 			'command' => 'chatUserAdd',
 			'params' => [
 				'chatId' => $this->chatId,
 				'dialogId' => 'chat' . $this->chatId,
 				'chatTitle' => '',
-				'chatOwner' => $this->userId,
+				'chatOwner' => (int)$chat->getAuthorId(),
 				'chatExtranet' => 'N',
 				'containsCollaber' => false,
 				'users' => $users['users'],
-				'newUsers' => [$this->userId],
-				'relations' => $relationsRest,
-				'userCount' => count($this->userIds),
+				'newUsers' => [$userId],
+				// toRestFormat() is declared nullable, and the console calls relations.find() on this
+				// without a guard, so the key stays an array whatever the collection returns.
+				'relations' => $relations->toRestFormat() ?? [],
+				'userCount' => count($participantIds),
 				'date' => date('H:i:s'),
 				'lines' => $this->getLine()
 			],
 			'extra' => \Bitrix\Im\Common::getPullExtra()
 		];
-
-		Event::add([$this->userId], $pushMessage);
-		return \CPullWatch::AddToStack('IM_PUBLIC_' . $this->chatId, $pushMessage);
 	}
 
 	private function sendPullChatHide(): bool

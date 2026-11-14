@@ -8,6 +8,24 @@ class CallLogPushService
 {
 	/**
 	 * Send push event about changes in call logs
+	 *
+	 * The side of the row and its unseen mark come with $params: both are what the row carries after the
+	 * write, and only the caller knows them.
+	 *
+	 * @internal Called by {@see \Bitrix\Call\Service\CallLogService::addOrUpdateEvent()} only.
+	 * @param string $command
+	 * @param array{
+	 *     id: int,
+	 *     sourceType: string,
+	 *     sourceCallId: int,
+	 *     userId: int,
+	 *     status: string,
+	 *     statusTime: string,
+	 *     oldStatus?: string,
+	 *     callData: array,
+	 *     type: string,
+	 *     isUnseen: bool,
+	 * } $params
 	 */
 	public static function sendCallLog(string $command, array $params): void
 	{
@@ -21,9 +39,6 @@ class CallLogPushService
 			return;
 		}
 
-		$params['type'] = $params['status'] === 'initiated' ? 'outgoing' : 'incoming';
-		$params['isUnseen'] = $params['status'] === 'missed';
-
 		$pushMessage = [
 			'module_id' => 'call',
 			'command' => 'Call::callLog' . $command,
@@ -36,6 +51,9 @@ class CallLogPushService
 
 	/**
 	 * Send push event for missed calls counter update
+	 *
+	 * @internal Called by {@see \Bitrix\Call\Service\CallLogService::publishCounter()} only, which stores the
+	 *           number before it is sent.
 	 */
 	public static function sendCounterUpdate(int $userId, int $counterValue, array $calls = []): void
 	{

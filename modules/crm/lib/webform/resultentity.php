@@ -20,6 +20,7 @@ use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integrity\ActualEntitySelector;
 use Bitrix\Crm\Merger\EntityMerger;
 use Bitrix\Crm\Order\TradingPlatform;
+use Bitrix\Crm\Service\StartCatalog\SubmissionListener;
 use Bitrix\Crm\WebForm\Agreement\ConsentRecorder;
 use Bitrix\Crm\WebForm\Debug\ResultEntityDebugLogger;
 use Bitrix\Main;
@@ -88,6 +89,8 @@ class ResultEntity
 	protected $dynamicId = null;
 
 	protected $resultEntityPack = array();
+	private bool $externalEffectsDeferred = false;
+	private array $deferredEffects = [];
 
 	/** @var ActualEntitySelector  */
 	protected $selector = null;
@@ -849,16 +852,18 @@ class ResultEntity
 			{
 				$previousFields = $entityClassName::GetByID($id, false);
 				$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::ResolveID($entityName), (int)$id));
-				$starter
-					->runAutomation(
-						new RunDataDto(
-							actualFields: $entityFields,
-							previousFields: $previousFields ?: [],
-							delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY,
-						),
-						\CCrmBizProcEventType::Edit
-					)
-				;
+				$this->performExternalEffect(static function () use ($starter, $entityFields, $previousFields): void {
+					$starter
+						->runAutomation(
+							new RunDataDto(
+								actualFields: $entityFields,
+								previousFields: $previousFields ?: [],
+								delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY,
+							),
+							\CCrmBizProcEventType::Edit
+						)
+					;
+				});
 			}
 		}
 
@@ -1585,7 +1590,7 @@ class ResultEntity
 				]
 			);
 
-			$event->send();
+			$this->performExternalEffect(static fn() => $event->send());
 		}
 	}
 
@@ -1776,7 +1781,7 @@ class ResultEntity
 					"NOTIFY_MESSAGE_OUT" => $notifyMessageOutCallback,
 				);
 
-				\CIMNotify::Add($imNotifyFields);
+				$this->performExternalEffect(static fn() => \CIMNotify::Add($imNotifyFields));
 			}
 		}
 	}
@@ -2136,6 +2141,49 @@ class ResultEntity
 		return $selector->search();
 	}
 
+	public function deferExternalEffects(): void
+	{
+		$this->externalEffectsDeferred = true;
+	}
+
+	public function runDeferredEffects(): void
+	{
+		$effects = $this->deferredEffects;
+		$this->deferredEffects = [];
+		$failure = null;
+		foreach ($effects as $effect)
+		{
+			try { $effect(); }
+			catch (\Throwable $error) { $failure ??= $error; }
+		}
+		if ($failure !== null) { throw $failure; }
+	}
+
+	private function performExternalEffect(callable $effect): void
+	{
+		if ($this->externalEffectsDeferred) { $this->deferredEffects[] = $effect; }
+		else { $effect(); }
+	}
+
+	public static function fromLegalOutcome(array $outcome): self
+	{
+		$result = new self();
+		foreach ($outcome['entities'] ?? [] as $entity)
+		{
+			if ($entity['ENTITY_TYPE'] === \CCrmOwnerType::ActivityName) { continue; }
+			$result->resultEntityPack[] = [
+				'ENTITY_NAME' => $entity['ENTITY_TYPE'], 'ITEM_ID' => $entity['ENTITY_ID'],
+				'IS_DUPLICATE' => $entity['IS_DUPLICATE'] ?? false, 'IS_AUTOMATION_RUN' => true,
+			];
+		}
+		$result->activityId = $outcome['activityId'] ?? null;
+		$result->orderId = $outcome['orderId'] ?? null;
+		$result->paymentId = $outcome['paymentId'] ?? null;
+		$result->invoiceId = $outcome['invoiceId'] ?? null;
+
+		return $result;
+	}
+
 	public function add($schemeId, $fields)
 	{
 		$this->debugLogger->setFormId($this->formId);
@@ -2247,14 +2295,15 @@ class ResultEntity
 
 			$this->fillTrace();
 			$this->addActivity();
-			$this->addConsent();
-			$this->runAutomation();
-			WebFormTrigger::onFormFill($this);
-
-			$this->debugLogger
-				->setCaseName('OnAfterAutomationRun')
-				->analyze()
-			;
+			$this->performExternalEffect(fn() => $this->addConsent());
+			$this->performExternalEffect(function (): void {
+				$this->runAutomation();
+				WebFormTrigger::onFormFill($this);
+				$this->debugLogger
+					->setCaseName('OnAfterAutomationRun')
+					->analyze()
+				;
+			});
 			if (count($this->resultEntityPack) > 0)
 			{
 				ResultEntityTable::addBatch($this->formId, $this->resultEntityPack);
@@ -2271,9 +2320,15 @@ class ResultEntity
 			$eventNamePostfix = $this->placeholders['eventNamePostfix'] ?? '';
 			if ($eventNamePostfix && preg_match('/\w+/', $eventNamePostfix))
 			{
-				(new Main\Event('crm', 'onSiteFormFilled' . $eventNamePostfix, $eventData))->send();
+				$this->performExternalEffect(static fn() =>
+					(new Main\Event('crm', 'onSiteFormFilled' . $eventNamePostfix, $eventData))->send());
 			}
-			(new Main\Event('crm', 'onSiteFormFilled', $eventData))->send();
+			$this->performExternalEffect(static fn() => (new Main\Event('crm', 'onSiteFormFilled', $eventData))->send());
+			$this->performExternalEffect(static fn() => SubmissionListener::onFormFilled(
+				(int)$eventData['id'],
+				(array)$eventData['properties'],
+				$eventData['result']['entities'],
+			));
 		}
 		catch(\Exception $e)
 		{

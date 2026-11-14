@@ -219,6 +219,7 @@ class WebForm
 		$options['integration'] = [];
 
 		$options['data']['agreements'] = [];
+		unset($options['data']['legalDocuments'], $options['data']['legalDocumentIntegration']);
 		$options['data']['fields'] = array_map(
 			function ($field)
 			{

@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Security\EntityAuthorization;
 use Bitrix\Crm\Timeline\CommentController;
@@ -123,6 +124,7 @@ class Timeline extends Main\Engine\Controller
 				'copilotParams' => [
 					'moduleId' => 'crm',
 					'contextId' => 'crm_timeline_comment_editor_' . $id,
+					'feature' => CopilotFeatureCode::TIMELINE_COMMENT_EDITOR,
 					'category' => 'crm_timeline_comment',
 					'autoHide' => true,
 				],

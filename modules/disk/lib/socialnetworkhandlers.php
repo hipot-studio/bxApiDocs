@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Model\UserQuotaTable;
 use Bitrix\Disk\Internal\Service\Sync\Access\GroupAccessPublisher;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\RightTable;
@@ -28,7 +29,7 @@ class SocialnetworkHandlers
 
 		$user = User::buildFromArray($fields);
 
-		if (!$user->isBotUser())
+		if ($user->shouldHavePersonalStorage())
 		{
 			Driver::getInstance()->addUserStorageByObject($user);
 		}
@@ -100,6 +101,8 @@ class SocialnetworkHandlers
 		$storage = Driver::getInstance()->getStorageByUserId($userId);
 		if(!$storage)
 		{
+			self::deletePersonalQuota((int)$userId);
+
 			return true;
 		}
 
@@ -117,7 +120,32 @@ class SocialnetworkHandlers
 			return false;
 		}
 
+		self::deletePersonalQuota((int)$userId);
+
 		return true;
+	}
+
+	/**
+	 * The personal quota lives as long as the employee it limits, the way the volume rows of their
+	 * storage do (@see \Bitrix\Disk\Integration\Volume::onUserDelete()). The row goes last: a storage
+	 * that refused to be deleted leaves the employee on the portal, and the quota with them.
+	 *
+	 * @param int $userId Id of the employee being deleted.
+	 * @return void
+	 */
+	private static function deletePersonalQuota(int $userId): void
+	{
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		UserQuotaTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->fetchObject()
+			?->delete()
+		;
 	}
 
 	public static function onSocNetGroupAdd($id, $fields)

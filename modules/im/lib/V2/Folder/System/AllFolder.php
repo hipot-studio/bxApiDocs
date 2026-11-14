@@ -22,9 +22,6 @@ final class AllFolder extends SystemFolder
 {
 	public const CODE = 'all';
 
-	/** Availability of every source is a portal-wide check, so the potential composition has no owner. */
-	private const PORTAL_SCOPE_USER_ID = 0;
-
 	/** @var string[]|null preloaded source folder codes - populated by {@see \Bitrix\Im\V2\Folder\FolderProvider} batch-load. */
 	private ?array $sourceCodes = null;
 
@@ -55,7 +52,18 @@ final class AllFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_ALL_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
+	{
+		return Features::isChatFolderAllAvailable();
+	}
+
+	/**
+	 * While "All" is on it takes over the root navigation entry from {@see DefaultFolder}, so it is
+	 * the root folder whose pin set carries the chat's overall pinned flag. Mirrored by
+	 * {@see DefaultFolder::isPrimaryRoot}, which negates the same option — that pair is what keeps
+	 * exactly one primary root folder on the portal.
+	 */
+	public function isPrimaryRoot(): bool
 	{
 		return Features::isChatFolderAllAvailable();
 	}
@@ -84,7 +92,8 @@ final class AllFolder extends SystemFolder
 	/**
 	 * Canonical, ordered source registry (DTO-03). Order is fixed by the registry,
 	 * not by stored data. "chat" is mandatory (kept by the registry, not by the
-	 * presence of a row); every source ships in the initial configuration.
+	 * presence of a row). Every source but "vibecodeApp" ships in the initial
+	 * configuration: that one starts switched off for new and existing users alike.
 	 *
 	 * @return SourceEntry[]
 	 */
@@ -96,15 +105,17 @@ final class AllFolder extends SystemFolder
 			new SourceEntry(CopilotFolder::CODE, mandatory: false, inInitialConfig: true),
 			new SourceEntry(ChannelFolder::CODE, mandatory: false, inInitialConfig: true),
 			new SourceEntry(CollabFolder::CODE, mandatory: false, inInitialConfig: true),
+			new SourceEntry(MeetingRootFolder::CODE, mandatory: false, inInitialConfig: true),
+			new SourceEntry(VibecodeAppFolder::CODE, mandatory: false, inInitialConfig: false),
 		];
 	}
 
 	/**
 	 * Recent sections of the potential composition: every source of the canonical registry
-	 * available on this portal, whatever the user actually enabled in b_im_folder_source. Reading
-	 * the stored composition here would make disabling a source revoke the right to put such a chat
-	 * into a personal folder, so it is deliberately not read
-	 * ({@see \Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypes}).
+	 * available on this portal ({@see SystemFolder::isAvailableOnPortal}), whatever the user can
+	 * reach or actually enabled in b_im_folder_source. Reading the stored composition here would
+	 * make disabling a source revoke the right to put such a chat into a personal folder, so it is
+	 * deliberately not read ({@see \Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypes}).
 	 *
 	 * @return string[]
 	 */
@@ -116,7 +127,7 @@ final class AllFolder extends SystemFolder
 		foreach (self::getDefaultDefinition() as $source)
 		{
 			$member = $registry->findByCode($source->code)?->instantiate();
-			if ($member === null || !$member->isAvailable(self::PORTAL_SCOPE_USER_ID))
+			if ($member === null || !$member->isAvailableOnPortal())
 			{
 				continue;
 			}

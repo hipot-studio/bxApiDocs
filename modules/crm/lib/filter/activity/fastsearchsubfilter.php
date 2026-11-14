@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Filter\Activity;
 
 
 use Bitrix\Crm\Activity\FastSearch\ActivityFastSearchTable;
+use Bitrix\Crm\Activity\FastSearch\Sync\ActivitySearchData;
 use Bitrix\Crm\Activity\Provider\Tasks\Task;
 use Bitrix\Crm\ActivityBindingTable;
 use Bitrix\Crm\Entity\EntityManager;
@@ -131,6 +132,31 @@ class FastSearchSubFilter
 			}
 
 		}
+
+		return $this->restrictPlannedKindToOpenActivities($resFilter);
+	}
+
+	/**
+	 * "Planned" is read as "still to do", so without an explicit state it must not find completed activities.
+	 * Only the planned kind alone implies it: a list with other kinds, which only API callers can pass, keeps every state.
+	 */
+	private function restrictPlannedKindToOpenActivities(array $resFilter): array
+	{
+		$kinds = array_values(array_unique(array_map('intval', (array)($resFilter['ACTIVITY_KIND'] ?? []))));
+		if ($kinds !== [ActivitySearchData::KIND_COMMON])
+		{
+			return $resFilter;
+		}
+
+		foreach (array_keys($resFilter) as $key)
+		{
+			if (str_ends_with($key, 'COMPLETED'))
+			{
+				return $resFilter;
+			}
+		}
+
+		$resFilter['COMPLETED'] = 'N';
 
 		return $resFilter;
 	}

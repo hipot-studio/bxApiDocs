@@ -131,6 +131,15 @@ class SharingEventManager
 
 		$eventLink = (new Sharing\Link\Factory())->createEventLink($eventLinkParams);
 
+		try
+		{
+			(new Sharing\JoinLink\JoinLinkProvider())->ensureForBooking($eventLink);
+		}
+		catch (\Throwable)
+		{
+			// the guest join link is a fail-soft side effect of booking
+		}
+
 		$result->setData([
 			'eventLink' => $eventLink,
 			'event' => $this->event,

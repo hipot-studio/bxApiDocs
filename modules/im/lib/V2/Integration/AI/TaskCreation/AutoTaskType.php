@@ -6,6 +6,7 @@ enum AutoTaskType: string
 {
 	case TaskCreation = 'taskCreation';
 	case TaskCreationMulti = 'taskCreationMulti';
+	case PendingDuplicate = 'pendingDuplicate';
 
 	/**
 	 * Identity of the dedup slot: the messages of the selection and nothing else. The initiator is
@@ -18,7 +19,7 @@ enum AutoTaskType: string
 	{
 		return match ($this)
 		{
-			self::TaskCreation => (string)(int)current($messageIds),
+			self::TaskCreation, self::PendingDuplicate => (string)(int)current($messageIds),
 			self::TaskCreationMulti => self::buildMessageSetHash($messageIds),
 		};
 	}

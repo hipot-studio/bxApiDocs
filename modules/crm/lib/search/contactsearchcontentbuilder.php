@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Search;
 
 use Bitrix\Crm\ContactTable;
 use Bitrix\Crm\Entity\Index;
+use Bitrix\Crm\Item;
 use CCrmContact;
 use CCrmOwnerType;
 
@@ -14,9 +15,30 @@ final class ContactSearchContentBuilder extends SearchContentBuilder
 	protected string $entityIndexTable = 'b_crm_contact_index';
 	protected string $entityIndexTablePrimaryColumn = 'CONTACT_ID';
 
+	private const INDEXED_FIELDS = [
+		Item::FIELD_NAME_LAST_NAME,
+		Item::FIELD_NAME_NAME,
+		Item::FIELD_NAME_SECOND_NAME,
+		Item::FIELD_NAME_ASSIGNED,
+		Item::FIELD_NAME_TYPE_ID,
+		Item::FIELD_NAME_COMMENTS,
+		Item::FIELD_NAME_SOURCE_ID,
+		Item::FIELD_NAME_SOURCE_DESCRIPTION,
+	];
+
 	public function getEntityTypeId(): int
 	{
 		return CCrmOwnerType::Contact;
+	}
+
+	public function getSearchSelectFields(): ?array
+	{
+		return [Item::FIELD_NAME_ID, ...self::INDEXED_FIELDS];
+	}
+
+	protected function getIndexedItemFieldNames(): ?array
+	{
+		return [...self::INDEXED_FIELDS, Item::FIELD_NAME_FM];
 	}
 
 	public function convertEntityFilterValues(array &$filter): void

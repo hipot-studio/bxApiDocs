@@ -669,30 +669,58 @@ window.arSnGroups['<?=$template?>']['<?= $key?>'] =
 		if (is_array($params) && isset($params['path'], $params['new_name']))
 		{
 			$path = CFileMan::SecurePathVar($params['path']);
+			$newName = trim((string)$params['new_name']);
+			if ($path === '' || !CFileMan::IsSafeName($newName))
+			{
+				return false;
+			}
+
 			$template = (isset($params['template']) && $params['template'] !== '') ? CFileMan::SecurePathVar($params['template']) : '.default';
 			$basePath = self::GetBasePath($template);
 			$categoryPath = $basePath.'/'.$path;
 
 			$io = CBXVirtualIo::GetInstance();
-			$newCategoryPath = $io->ExtractPathFromPath($categoryPath).'/'.$params['new_name'];
+			$newCategoryPath = $io->ExtractPathFromPath($categoryPath).'/'.$newName;
 			if($io->DirectoryExists($categoryPath) && !$io->DirectoryExists($newCategoryPath))
 			{
 				$res = $io->Rename($categoryPath, $newCategoryPath);
 			}
 
-			$io = CBXVirtualIo::GetInstance();
-			if($io->FileExists($basePath."/.content.php"))
+			// Nothing changed on a failed rename: leave .content.php and the cache untouched.
+			if($res)
 			{
-				$contentSrc = $APPLICATION->GetFileContent($basePath."/.content.php");
-				$newPath = ltrim($io->ExtractPathFromPath($path).'/'.$params['new_name'], '/');
-				$processedNewPath = CUtil::addslashes($newPath);
-				$contentSrc = preg_replace("/\\\$SNIPPETS\\['".$path."\\//", '$SNIPPETS[\''.$processedNewPath.'/', $contentSrc);
-				$APPLICATION->SaveFileContent($basePath."/.content.php", $contentSrc);
-			}
+				if($io->FileExists($basePath."/.content.php"))
+				{
+					$contentSrc = $APPLICATION->GetFileContent($basePath."/.content.php");
+					$newPath = ltrim($io->ExtractPathFromPath($path).'/'.$newName, '/');
+					$contentSrc = self::ReplaceCategoryPathInContent($contentSrc, $path, $newPath);
+					$APPLICATION->SaveFileContent($basePath."/.content.php", $contentSrc);
+				}
 
-			CSnippets::ClearCache();
+				CSnippets::ClearCache();
+			}
 		}
 		return $res;
+	}
+
+	/**
+	 * Rewrites $SNIPPETS['<path>/...'] keys of .content.php to the renamed category path.
+	 */
+	public static function ReplaceCategoryPathInContent(string $contentSrc, string $path, string $newPath): string
+	{
+		// preg_quote: match the old path literally, so regex metachars in it (., +, [) are not special.
+		$pattern = "/\\\$SNIPPETS\\['".preg_quote($path, '/')."\\//";
+		$replacement = '$SNIPPETS[\''.CUtil::addslashes($newPath).'/';
+
+		// Callback returns the replacement verbatim, so "$0" / "\1" in the new name stay literal, not backreferences.
+		return preg_replace_callback(
+			$pattern,
+			static function () use ($replacement)
+			{
+				return $replacement;
+			},
+			$contentSrc
+		);
 	}
 
 	public static function RemoveCategory($params)

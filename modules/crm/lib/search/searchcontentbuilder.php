@@ -121,6 +121,32 @@ abstract class SearchContentBuilder
 		return $this->prepareSearchMap($fields, $options)->getString();
 	}
 
+	/**
+	 * Entity fields the search content is built from, as keys of the entity data source.
+	 *
+	 * @return string[]|null null - all fields
+	 */
+	public function getSearchSelectFields(): ?array
+	{
+		return null;
+	}
+
+	/**
+	 * Item fields whose change makes the search content outdated.
+	 *
+	 * @return string[]|null null - unknown, any change does
+	 */
+	final public function getSearchChangeFields(): ?array
+	{
+		$itemFieldNames = $this->getIndexedItemFieldNames();
+		if ($itemFieldNames === null)
+		{
+			return null;
+		}
+
+		return array_values(array_unique(array_merge($itemFieldNames, $this->getIndexedUserFieldNames())));
+	}
+
 	public function build(int $entityId, array $options = null): void
 	{
 		$fields = $this->prepareEntityFields($entityId);
@@ -168,6 +194,7 @@ abstract class SearchContentBuilder
 	{
 		if (class_exists($this->entityClassName))
 		{
+			$select = $this->getSearchSelectFields() ?? ['*'];
 			if (method_exists($this->entityClassName, 'GetListEx'))
 			{
 				$dbResult = $this->entityClassName::GetListEx(
@@ -175,7 +202,7 @@ abstract class SearchContentBuilder
 					['=ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'],
 					false,
 					false,
-					['*'/*, 'UF_*'*/]
+					$select
 				);
 			}
 			elseif (method_exists($this->entityClassName, 'GetList'))
@@ -185,7 +212,7 @@ abstract class SearchContentBuilder
 					['=ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'],
 					false,
 					false,
-					['*'/*, 'UF_*'*/]
+					$select
 				);
 			}
 
@@ -350,6 +377,39 @@ abstract class SearchContentBuilder
 		}
 
 		return '';
+	}
+
+	/**
+	 * @return string[]|null null - unknown
+	 */
+	protected function getIndexedItemFieldNames(): ?array
+	{
+		return null;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	protected function getIndexedUserFieldNames(): array
+	{
+		global $USER_FIELD_MANAGER;
+
+		$userFieldEntityId = $this->getUserFieldEntityId();
+		if ($userFieldEntityId === '')
+		{
+			return [];
+		}
+
+		$names = [];
+		foreach ($USER_FIELD_MANAGER->GetUserFields($userFieldEntityId) as $userField)
+		{
+			if (SearchEnvironment::isUserFieldTypeSupported((string)($userField['USER_TYPE_ID'] ?? '')))
+			{
+				$names[] = (string)$userField['FIELD_NAME'];
+			}
+		}
+
+		return $names;
 	}
 
 	// region SearchMap wrappers

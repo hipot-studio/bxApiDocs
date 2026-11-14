@@ -4,9 +4,14 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
+
+Loc::loadMessages(__FILE__);
 
 final class DocumentNumeratorsNavigationItem implements SettingsHubWrappedNavigationItem
 {
@@ -21,13 +26,22 @@ final class DocumentNumeratorsNavigationItem implements SettingsHubWrappedNaviga
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return true;
+		return $permissions->isCrmAdmin() && $this->isDocumentGeneratorAvailable;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $this->isDocumentGeneratorAvailable
-			&& $permissions->entityType()->canReadSomeItemsInCrm();
+		if (!$permissions->entityType()->canReadSomeItemsInCrm())
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_DOCUMENTNUMERATORS_NO_ACCESS'),
+					'DOCUMENTNUMERATORS_NO_ACCESS',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

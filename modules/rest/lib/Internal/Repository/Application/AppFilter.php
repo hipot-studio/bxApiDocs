@@ -22,6 +22,7 @@ final class AppFilter
 	private ?string $code = null;
 	private ?array $attributes = null;
 	private ?ConditionTree $where = null;
+	private ?AppAccessFilter $accessFilter = null;
 	private ?array $ids = null;
 
 	public function active(?bool $active = true): self
@@ -94,6 +95,13 @@ final class AppFilter
 		return $this;
 	}
 
+	public function accessFilter(?AppAccessFilter $accessFilter): self
+	{
+		$this->accessFilter = $accessFilter;
+
+		return $this;
+	}
+
 	public function ids(?array $ids): self
 	{
 		$this->ids = $ids;
@@ -149,6 +157,11 @@ final class AppFilter
 	public function getWhere(): ?ConditionTree
 	{
 		return $this->where;
+	}
+
+	public function getAccessFilter(): ?AppAccessFilter
+	{
+		return $this->accessFilter;
 	}
 
 	public function getIds(): ?array

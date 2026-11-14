@@ -4,6 +4,7 @@ namespace Bitrix\AI\ShareRole\Components\Grid\Panel\Action;
 
 use Bitrix\AI\ShareRole\Events\BaseAnalyticEvent;
 use Bitrix\AI\Exception\ErrorCollectionException;
+use Bitrix\AI\ShareRole\Request\ChangeActivityByCodesRequest;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Filter\Filter;
@@ -35,10 +36,15 @@ abstract class BaseGridAction implements Action
 		{
 			$this->logErrorFromCollection($collectionException);
 			$this->sendEvent(false);
+			$messageCode = $collectionException->getCollection()->getErrorByCode(
+				ChangeActivityByCodesRequest::ERROR_NOT_AUTHOR,
+			)
+				? 'AI_COMPONENT_GRID_SHARE_ROLE_ACTIVITY_NOT_AUTHOR'
+				: 'AI_COMPONENT_GRID_SHARE_ROLE_ERROR_IN_ACTION';
 
 			return (new Result())
 				->addError(
-					new Error(Loc::getMessage('AI_COMPONENT_GRID_SHARE_ROLE_ERROR_IN_ACTION'))
+					new Error(Loc::getMessage($messageCode))
 				)
 			;
 		}

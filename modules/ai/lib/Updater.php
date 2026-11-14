@@ -2,6 +2,8 @@
 
 namespace Bitrix\AI;
 
+use Bitrix\AI\Cloud\PromptDb\PromptDbClient;
+use Bitrix\AI\Cloud\PromptDb\PromptDbProxyUpdater;
 use Bitrix\AI\Facade\AiUrlManager;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Synchronization\Enum\SyncMode;
@@ -45,6 +47,18 @@ final class Updater
 	 */
 	public static function refreshFromRemote(): void
 	{
+		if (self::shouldUseB24() || self::hasBoxPromptDbUriOverride())
+		{
+			self::refreshFromStaticHost();
+
+			return;
+		}
+
+		self::refreshFromPromptDbProxy();
+	}
+
+	private static function refreshFromStaticHost(): void
+	{
 		$http = new HttpClient();
 		$http->setHeader('Content-Type', 'application/json');
 		if (self::isCurrentFormatSubVersion())
@@ -66,6 +80,44 @@ final class Updater
 		}
 
 		self::refreshFromJson($response, $etag);
+	}
+
+	private static function refreshFromPromptDbProxy(): void
+	{
+		self::createPromptDbProxyUpdater()->refresh();
+	}
+
+	private static function createPromptDbProxyUpdater(): PromptDbProxyUpdater
+	{
+		return new PromptDbProxyUpdater(
+			new PromptDbClient(),
+			self::getVersion(),
+			!self::isCurrentFormatSubVersion(),
+			static function (string $rawJson, string $etag, SyncMode $mode): void {
+				self::refreshFromJson($rawJson, $etag, $mode);
+			},
+			static function (): void {
+				self::refreshFromStaticHost();
+			},
+			static function (int $hours): void {
+				self::makeExpired($hours);
+			},
+			static function (string $message): void {
+				self::sendInfo($message);
+			},
+		);
+	}
+
+	private static function shouldUseB24(): bool
+	{
+		return Bitrix24::shouldUseB24();
+	}
+
+	private static function hasBoxPromptDbUriOverride(): bool
+	{
+		$uri = Config::getValue('ai_box_prompt_db_uri');
+
+		return is_string($uri) && trim($uri) !== '';
 	}
 
 	private static function tryPartitionalUpdate(HttpClient $http, string $remoteDbUri, int $currentVersion): bool
@@ -119,7 +171,7 @@ final class Updater
 
 	private static function getRemoteDbUri(): string
 	{
-		if (Bitrix24::shouldUseB24() === false)
+		if (self::shouldUseB24() === false)
 		{
 			return self::getAiUrlManager()->getPromptBaseUrl();
 		}
@@ -147,12 +199,14 @@ final class Updater
 		catch (Exception)
 		{
 			self::makeExpired(self::TTL_HOURS);
+
 			return;
 		}
 
 		if ((int)$response['format_version'] !== self::CURRENT_JSON_FORMAT_VERSION)
 		{
 			self::makeExpired(self::TTL_HOURS);
+
 			return;
 		}
 
@@ -167,7 +221,7 @@ final class Updater
 			|| self::getFormatSubVersion() !== self::CURRENT_JSON_FORMAT_SUBVERSION
 		)
 		{
-			static::sendInfo('start. Version ' . $response['version'] . ' ' . time());
+			self::sendInfo('start. Version ' . $response['version'] . ' ' . time());
 
 			(new RoleSync())->sync($response['roles'] ?? [], ['=IS_SYSTEM' => 'Y'], $mode);
 			(new RoleIndustrySync())->sync($response['industries'] ?? [], [], $mode);
@@ -191,7 +245,7 @@ final class Updater
 			self::setFormatSubVersion(self::CURRENT_JSON_FORMAT_SUBVERSION);
 			self::setJsonDbEtag($etag);
 
-			static::sendInfo('end. Version ' . time());
+			self::sendInfo('end. Version ' . time());
 		}
 
 		self::makeExpired(self::TTL_HOURS);
@@ -237,7 +291,7 @@ final class Updater
 				[
 					'MODULE_ID' => 'ai',
 					'NAME' => $funcName,
-				]
+				],
 			);
 			if (!$res->fetch())
 			{
@@ -266,7 +320,6 @@ final class Updater
 	{
 		return (int)Config::getValue(self::OPTION_CODE_EXPIRED_TIME) <= time();
 	}
-
 
 	/**
 	 * Returns current version of Prompts' local DB.
@@ -341,7 +394,6 @@ final class Updater
 		return self::getFormatSubVersion() === self::CURRENT_JSON_FORMAT_SUBVERSION;
 	}
 
-
 	/**
 	 * @return string
 	 */
@@ -370,7 +422,7 @@ final class Updater
 		self::setVersion(max(0, self::getVersion() - 1));
 	}
 
-	private static function sendInfo($msg)
+	private static function sendInfo($msg): void
 	{
 		AddMessage2Log('Prompt Updater ' . $msg, 'ai');
 	}

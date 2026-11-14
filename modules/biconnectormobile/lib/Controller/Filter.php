@@ -36,7 +36,7 @@ class Filter extends Base
 	{
 		$filters = parent::getDefaultPreFilters();
 
-		// Order matters: a disabled feature must answer FEATURE_DISABLED, not an upgrade offer.
+		// Order matters: a portal without biconnector must answer FEATURE_DISABLED, not an upgrade offer.
 		$filters[] = new MobileBIFeatureAccess();
 
 		if (Loader::includeModule('biconnector'))

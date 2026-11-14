@@ -15,7 +15,7 @@ final class PurchasesFeature extends FeatureFlag
 
 	protected function isOptionEnabled(): bool
 	{
-		return $this->isOptionOn('mobile', self::OPTION_NAME, false);
+		return Option::get('mobile', self::OPTION_NAME, 'Y') === 'Y';
 	}
 
 	public function enable(): void

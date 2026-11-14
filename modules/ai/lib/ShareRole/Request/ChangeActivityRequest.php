@@ -41,6 +41,7 @@ class ChangeActivityRequest extends BaseRequest
 		$dto->roleId = $this->roleValidator->getRoleIdNotSystemByCode($dto->roleCode, 'roleCode');
 		$this->roleValidator->hasRoleIdInShare($dto->roleId, 'roleCode');
 		$this->roleValidator->accessOnRole($dto->roleId, 'roleCode', $dto->userId);
+		$this->roleValidator->checkRoleAuthor($dto->roleId, 'roleCode', $dto->userId);
 
 		$dto->needActivate = $this->getBool('needActivate', '1');
 

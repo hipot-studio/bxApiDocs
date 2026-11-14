@@ -270,6 +270,11 @@ class CrmKanbanComponent extends CBitrixComponent
 
 	private function getFilterFields(): array
 	{
+		if (is_array($this->arParams['~FILTER_FIELDS'] ?? null))
+		{
+			return $this->arParams['~FILTER_FIELDS'];
+		}
+
 		$filterFields = $this->arParams['FILTER_FIELDS'] ?? [];
 		if (!is_array($filterFields))
 		{
@@ -401,6 +406,8 @@ class CrmKanbanComponent extends CBitrixComponent
 			{
 				$ids = [];
 			}
+			$statusResults = [];
+			$successfulStatusUpdates = 0;
 
 			foreach ($ids as $id)
 			{
@@ -413,18 +420,31 @@ class CrmKanbanComponent extends CBitrixComponent
 				if ($action === 'status' && isset($statuses[$status]))
 				{
 					$result = $this->actionUpdateEntityStatus($id, $status, $statuses);
-					if (!$result->isSuccess())
+					$statusResults[] = $this->prepareStatusResult((int)$id, $result);
+					if ($result->isSuccess())
 					{
-						foreach ($result->getErrors() as $error)
-						{
-							$this->arResult['ERROR'] = $error->getMessage();
-							$this->arResult['ERROR_CODE'] = $error->getCode();
-						}
-					}
-					else
-					{
+						$successfulStatusUpdates++;
 						$viewMode = $this->arParams['VIEW_MODE'] ?? '';
 						$this->arResult['ITEMS']['isShouldUpdateCard'] = $viewMode === ViewMode::MODE_DEADLINES;
+					}
+				}
+			}
+
+			if ($statusResults !== [])
+			{
+				$this->arResult['STATUS_RESULTS'] = $statusResults;
+				$this->arResult['ITEMS']['statusResults'] = $statusResults;
+
+				if ($successfulStatusUpdates === 0)
+				{
+					foreach ($statusResults as $statusResult)
+					{
+						if (!$statusResult['success'])
+						{
+							$this->arResult['ERROR'] = $statusResult['message'];
+							$this->arResult['ERROR_CODE'] = $statusResult['code'];
+							break;
+						}
 					}
 				}
 			}
@@ -441,6 +461,24 @@ class CrmKanbanComponent extends CBitrixComponent
 				LocalRedirect($uri->deleteParams(['action', 'entity_id', 'status'])->getUri());
 			}
 		}
+	}
+
+	private function prepareStatusResult(int $id, Result $result): array
+	{
+		$statusResult = [
+			'id' => $id,
+			'success' => $result->isSuccess(),
+		];
+
+		if (!$result->isSuccess())
+		{
+			$errors = $result->getErrors();
+			$error = reset($errors) ?: null;
+			$statusResult['message'] = $error?->getMessage() ?? '';
+			$statusResult['code'] = $error?->getCode() ?? '';
+		}
+
+		return $statusResult;
 	}
 
 	public function executeComponent()
@@ -1831,10 +1869,16 @@ class CrmKanbanComponent extends CBitrixComponent
 
 		if ($entity->getSortSettings()->isUserSortSupported())
 		{
+			$previousEntityId = $request->get('prev_entity_id');
+			if (is_array($previousEntityId))
+			{
+				$previousEntityId = $previousEntityId[$id] ?? 0;
+			}
+
 			Kanban\SortTable::setPrevious([
 				'ENTITY_TYPE_ID' => $entity->getTypeName(),
 				'ENTITY_ID' => $id,
-				'PREV_ENTITY_ID' => $request->get('prev_entity_id')
+				'PREV_ENTITY_ID' => (int)$previousEntityId,
 			]);
 
 			// remember last id
@@ -2026,6 +2070,49 @@ class CrmKanbanComponent extends CBitrixComponent
 				'ERROR' => reset($errorMessages),
 			];
 		}
+
+		return [];
+	}
+
+	/**
+	 * Stores the manual position of the item for the current user without reading or changing its stage.
+	 * @noinspection PhpUnused
+	 */
+	protected function actionSaveItemPosition(): array
+	{
+		$accessDenied = ['ERROR' => Loc::getMessage('CRM_KANBAN_ERROR_ACCESS_DENIED')];
+
+		$id = $this->request('entity_id');
+		$id = is_scalar($id) ? (int)$id : 0;
+		if ($id <= 0)
+		{
+			return $accessDenied;
+		}
+
+		$prevId = $this->request('prev_entity_id');
+		$prevId = is_scalar($prevId) ? (int)$prevId : 0;
+		if ($prevId < 0 || $prevId === $id)
+		{
+			$prevId = 0;
+		}
+
+		$entity = $this->getEntity();
+		if (!$entity->checkUpdatePermissions($id) || !$entity->getItem($id, ['ID']))
+		{
+			return $accessDenied;
+		}
+
+		if (!$entity->getSortSettings()->isUserSortSupported())
+		{
+			return [];
+		}
+
+		Kanban\SortTable::setPrevious([
+			'ENTITY_TYPE_ID' => $entity->getTypeName(),
+			'ENTITY_ID' => $id,
+			'PREV_ENTITY_ID' => $prevId,
+		]);
+		$this->getKanban()->rememberLastId($entity->getItemLastId());
 
 		return [];
 	}

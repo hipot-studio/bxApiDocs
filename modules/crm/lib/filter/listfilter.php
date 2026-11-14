@@ -74,6 +74,8 @@ class ListFilter
 	 */
 	public function prepareListFilter(array &$filter, array $requestFilter): void
 	{
+		$requestFilter = $this->normalizeRequestFilter($requestFilter);
+
 		if (!empty($requestFilter['FIND']))
 		{
 			$filter['SEARCH_CONTENT'] = $requestFilter['FIND'];
@@ -290,6 +292,23 @@ class ListFilter
 					$requestFilter[$fieldName]);
 			}
 		}
+	}
+
+	/**
+	 * Values come from the user's filter presets and the query string, so a nested array may stand where
+	 * a scalar or a list of scalars is expected. Such an array is reduced to the list of its scalar values.
+	 */
+	private function normalizeRequestFilter(array $requestFilter): array
+	{
+		foreach ($requestFilter as $key => $value)
+		{
+			if (is_array($value))
+			{
+				$requestFilter[$key] = array_values(array_filter($value, 'is_scalar'));
+			}
+		}
+
+		return $requestFilter;
 	}
 
 	protected function getFieldNamesByType(string $type): array

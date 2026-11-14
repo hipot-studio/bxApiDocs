@@ -17,16 +17,16 @@ final class TariffMenuPurchaseCtaForceFeature extends FeatureFlag
 
 	public function isEnabled(): bool
 	{
-		return $this->isOptionOn('mobile', self::OPTION_CODE, false);
+		return Option::get('mobile', self::OPTION_CODE, 'N') === 'Y';
 	}
 
 	public function enable(): void
 	{
-		Option::set('mobile', self::OPTION_CODE, true);
+		Option::set('mobile', self::OPTION_CODE, 'Y');
 	}
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => self::OPTION_CODE]);
+		Option::set('mobile', self::OPTION_CODE, 'N');
 	}
 }

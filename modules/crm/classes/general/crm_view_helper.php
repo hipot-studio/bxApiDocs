@@ -908,6 +908,18 @@ class CCrmViewHelper
 			$valueType = isset($arValueTypes[$valueTypeID]) ? $arValueTypes[$valueTypeID] : null;
 		}
 
+		if($typeName === 'WEB' && is_array($valueType) && !empty($valueType['LINK']))
+		{
+			$href = str_replace('#VALUE_URL#', $valueUrl, $valueType['LINK']);
+			$className = isset($arParams['CLASS_NAME']) ? $arParams['CLASS_NAME'] : 'crm-client-contacts-block-text-web';
+
+			return '<a'.($className !== '' ? ' class="'.htmlspecialcharsbx($className).'"' : '')
+				.' title="'.htmlspecialcharsbx($href).'"'
+				.' href="'.htmlspecialcharsbx($href).'"'
+				.' target="_blank">'
+				.htmlspecialcharsbx($value).'</a>';
+		}
+
 		if(!($valueType && !empty($valueType['TEMPLATE'])))
 		{
 			if($value === '')
@@ -3370,7 +3382,8 @@ class CCrmViewHelper
 	{
 		Extension::load(['crm_common', 'sidepanel', 'loader']);
 
-		$router = Container::getInstance()->getRouter();
+		$container = Container::getInstance();
+		$router = $container->getRouter();
 		$url = $router->getItemDetailUrl($entityTypeId, $entityId, $entityCategoryId);
 		if (is_array($_GET))
 		{
@@ -3378,7 +3391,13 @@ class CCrmViewHelper
 		}
 		$url = CUtil::JSEscape($url->getUri());
 
-		$viewUrl = $router->getItemListUrlInCurrentView($entityTypeId, $viewCategoryId);
+		$viewUrl =
+			$entityTypeId === CCrmOwnerType::Company
+			&& ($_GET['mycompany_list'] ?? null) === 'Y'
+			&& $container->getUserPermissions()->myCompany()->canRead()
+				? SITE_DIR . 'crm/configs/mycompany/'
+				: $router->getItemListUrlInCurrentView($entityTypeId, $viewCategoryId)
+		;
 
 		if (!$viewUrl)
 		{

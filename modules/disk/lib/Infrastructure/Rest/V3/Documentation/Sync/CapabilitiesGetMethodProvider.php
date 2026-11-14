@@ -81,6 +81,13 @@ final class CapabilitiesGetMethodProvider extends SyncMethodProvider
 			`cardSections` names every section the schema declares and says, for each, whether this
 			portal fills it. A section published as `false` is refused when it is asked for rather than
 			answered empty: an empty section would be indistinguishable from "nothing is there".
+
+			`publicLinkPolicy` says whether the portal opens manual external links at the moment -
+			`manualLinks` - and manual links to boards - `boardLinks`, which follows `manualLinks` while
+			boards are off on the portal. The `publicAccess` of a card describes the link itself and not
+			this policy, and the client applies the policy on its own: `boardLinks` to a direct link on
+			a board, `manualLinks` to every other source, folders included. A change of the policy gives
+			no record in the journal; the client learns of it by asking this method again.
 			TEXT;
 	}
 }

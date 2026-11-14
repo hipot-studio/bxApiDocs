@@ -6,12 +6,15 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\StaffTrack\Access\OfficeCustody;
 use Bitrix\StaffTrack\Dictionary\OfficeErrorCode;
+use Bitrix\StaffTrack\Internal\Integration\Location\MapSourceAvailability;
 use Bitrix\StaffTrack\Internal\Repository\OfficeRepository;
 use Bitrix\StaffTrack\Internal\Service\Office\EmployeeListVisibility;
+use Bitrix\StaffTrack\Internal\Service\Office\EmployeeSearchService;
 use Bitrix\StaffTrack\Internal\Service\Office\EmployeeService;
 use Bitrix\StaffTrack\Internal\Service\Office\OfficeItemMapper;
 use Bitrix\StaffTrack\Item\Collection\OfficeCollection;
 use Bitrix\StaffTrack\Item\Collection\OfficeEmployeeCollection;
+use Bitrix\StaffTrack\Item\EmployeeSearchResult;
 use Bitrix\StaffTrack\Item\Office;
 
 /**
@@ -60,7 +63,7 @@ class OfficeProvider
 	 * for in the disk, and no name on this page needs them.
 	 *
 	 * A viewer the rule of visibility does not let in is refused with the code of access, and the page
-	 * is not read for them.
+	 * is not read for them. A query narrows the page by name and is refused the same way.
 	 *
 	 * @return Result data: array{
 	 *     employees: OfficeEmployeeCollection,
@@ -68,7 +71,7 @@ class OfficeProvider
 	 *     hasMore: bool,
 	 * }
 	 */
-	public function getEmployeesPage(int $officeId, int $viewerId, int $afterUserId = 0): Result
+	public function getEmployeesPage(int $officeId, int $viewerId, int $afterUserId = 0, string $query = ''): Result
 	{
 		$result = new Result();
 
@@ -79,20 +82,41 @@ class OfficeProvider
 			);
 		}
 
-		return $result->setData($this->employeeService->getPage($officeId, $afterUserId));
+		return $result->setData($this->employeeService->getPage($officeId, $afterUserId, $query));
+	}
+
+	public function searchEmployees(string $query, int $viewerId): EmployeeSearchResult
+	{
+		return $this->getEmployeeSearchService()->search($query, $viewerId);
 	}
 
 	/**
-	 * Whether the viewer may add an office: the circle of custody, asked apart from the directory so that
-	 * the answer does not depend on what the directory holds.
+	 * Whether the viewer may add an office: the circle of custody and a map to place the office on, both
+	 * of them required. Asked apart from the directory, so that the answer does not depend on what the
+	 * directory holds.
+	 *
+	 * The circle goes first because it is the cheaper of the two - its verdict is remembered per user for
+	 * the request - and because a viewer outside it is refused whatever the portal has selected.
 	 */
 	public function canCreateOffice(int $userId): bool
 	{
-		return $this->getOfficeCustody()->isMember($userId);
+		return $this->getOfficeCustody()->isMember($userId)
+			&& $this->getMapSourceAvailability()->isConfigured()
+		;
 	}
 
 	protected function getOfficeCustody(): OfficeCustody
 	{
 		return OfficeCustody::getInstance();
+	}
+
+	protected function getMapSourceAvailability(): MapSourceAvailability
+	{
+		return new MapSourceAvailability();
+	}
+
+	protected function getEmployeeSearchService(): EmployeeSearchService
+	{
+		return new EmployeeSearchService();
 	}
 }

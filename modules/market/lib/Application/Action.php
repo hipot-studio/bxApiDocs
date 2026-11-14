@@ -3,6 +3,7 @@
 namespace Bitrix\Market\Application;
 
 use Bitrix\Main\Loader;
+use Bitrix\Market\Internal\Integration\Rest\SystemUserCreationProvider;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
@@ -107,6 +108,17 @@ class Action
 			'INSTALLED_MESSAGE_CODE' => $installedMessageCode,
 			'INSTALLED_IMAGE_SHOW' => 'Y',
 			'PLACEMENT_OPTIONS' => [],
+			...self::getSystemUserToggleInfo($appData),
+		];
+	}
+
+	public static function getSystemUserToggleInfo(array $appData): array
+	{
+		$isCreationEnabled = (new SystemUserCreationProvider())->isCreationEnabled();
+
+		return [
+			'SYSTEM_USER_TOGGLE_AVAILABLE' => $isCreationEnabled && ($appData['ACTIVE'] ?? null) !== 'Y',
+			'SYSTEM_USER_TOGGLE_DEFAULT' => ($appData['CREATE_SYSTEM_USER'] ?? null) === 'Y',
 		];
 	}
 

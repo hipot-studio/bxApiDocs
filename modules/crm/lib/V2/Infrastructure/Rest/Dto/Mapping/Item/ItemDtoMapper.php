@@ -3001,7 +3001,7 @@ class ItemDtoMapper
 		{
 			$request = new GetItemRequest($dtoClass);
 			$request->select = SelectStructure::create($selectedFields, $dtoClass, $request);
-			$mapper = new self(EntityTypeSettings::of($item->getEntityType()), restServer: $this->restServer);
+			$mapper = new static(EntityTypeSettings::of($item->getEntityType()), restServer: $this->restServer);
 			$this->relatedDtoMappingContexts[$cacheKey] = [
 				'mapper' => $mapper,
 				'context' => $mapper->prepareDtoMappingContext($request),

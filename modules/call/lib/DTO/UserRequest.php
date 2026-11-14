@@ -14,8 +14,11 @@ class UserRequest extends Hydrator
 	public string $show = 'N';
 	public string $legacyMobile = 'N';
 	public string $repeated = 'N';
+	public string $manualInvite = 'N';
+	public string $inviteGenerationId = '';
 	public array $users = [];
 	public string $callInstanceId = '';
+	public string $ringingDeviceId = '';
 	public int $code = 0;
 	public string $provider = '';
 	public int $callType = 0;

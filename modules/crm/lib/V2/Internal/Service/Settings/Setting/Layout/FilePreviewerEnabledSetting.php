@@ -19,7 +19,7 @@ use Bitrix\Main\Result;
  */
 final class FilePreviewerEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.layout.file_previewer.enabled';
+	public const ID = 'crm.layout.file_previewer.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 	private const WRITE_AVAILABILITY_OPTION = 'allow_disable_file_previewer_in_kanban_and_grid';
 
@@ -30,18 +30,18 @@ final class FilePreviewerEnabledSetting extends AbstractSetting
 		$this->layoutSettings = $layoutSettings ?? LayoutSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

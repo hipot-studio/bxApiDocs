@@ -5,12 +5,16 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class PaymentSystemsNavigationItem implements SettingsHubWrappedNavigationItemLifecycle
 {
@@ -31,9 +35,19 @@ final class PaymentSystemsNavigationItem implements SettingsHubWrappedNavigation
 		return $permissions->isCrmAdmin();
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $this->isVisible($permissions) && $this->areRequiredModulesAvailable;
+		if (!$this->areRequiredModulesAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_NAVIGATION_PAYMENT_SYSTEMS_MODULES'),
+					'CRM_SETTINGS_HUB_NAVIGATION_PAYMENT_SYSTEMS_MODULES',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

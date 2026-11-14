@@ -191,7 +191,13 @@ final class MailAttachmentExternalLinkService
 				// The model reports the reason of a refused row only into the collection, and the caller gets
 				// the same code for every reason, so the reason travels with the error.
 				$creationErrors = new ErrorCollection();
-				$serviceLink = $this->addLink($userId, $objectId, $deathTime, $creationErrors);
+				$serviceLink = $this->addLink(
+					$userId,
+					$objectId,
+					$deathTime,
+					$creationErrors,
+					$object->getUploadCleanupMarkerPresenceHint(),
+				);
 				if (!$serviceLink instanceof ExternalLink)
 				{
 					$this->rollback($connection);
@@ -270,6 +276,7 @@ final class MailAttachmentExternalLinkService
 		int $objectId,
 		?DateTime $deathTime,
 		ErrorCollection $errorCollection,
+		?bool $hasUploadCleanupMarker,
 	): ?ExternalLink
 	{
 		$data = MailAttachmentLinkContract::applyTo(
@@ -281,7 +288,7 @@ final class MailAttachmentExternalLinkService
 			$deathTime,
 		);
 
-		return ExternalLink::add($data, $errorCollection);
+		return ExternalLink::add($data, $errorCollection, $hasUploadCleanupMarker);
 	}
 
 	/**

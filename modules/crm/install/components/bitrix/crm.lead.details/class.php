@@ -10,6 +10,7 @@ use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
+use Bitrix\Crm\Component\EntityDetails\ClientTab\ClientTabBuilder;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
 use Bitrix\Crm\Component\EntityDetails\Traits;
 use Bitrix\Crm\Conversion\LeadConversionDispatcher;
@@ -581,6 +582,16 @@ class CCrmLeadDetailsComponent
 					);
 				}
 			}
+		}
+
+		$clientTab = (new ClientTabBuilder())->build(
+			CCrmOwnerType::Lead,
+			$this->entityID,
+			$this->entityID <= 0 || $this->isCopyMode,
+		);
+		if ($clientTab !== null)
+		{
+			$this->arResult['TABS'] = ClientTabBuilder::insert($this->arResult['TABS'], $clientTab);
 		}
 		//endregion
 

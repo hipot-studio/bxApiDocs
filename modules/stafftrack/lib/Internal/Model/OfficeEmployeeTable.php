@@ -19,6 +19,19 @@ use Bitrix\Main\UserTable;
  * on USER_ID alone holds that, and assigning the same person elsewhere moves the row instead of adding
  * one. USER points at the record of the person, which is how a read tells a working employee from a
  * dismissed one without a join spelled out in every query.
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_OfficeEmployee_Query query()
+ * @method static EO_OfficeEmployee_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_OfficeEmployee_Result getById($id)
+ * @method static EO_OfficeEmployee_Result getList(array $parameters = [])
+ * @method static EO_OfficeEmployee_Entity getEntity()
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficeEmployee createObject($setDefaultValues = true)
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection createCollection()
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficeEmployee wakeUpObject($row)
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficeEmployeeCollection wakeUpCollection($rows)
  */
 class OfficeEmployeeTable extends DataManager
 {

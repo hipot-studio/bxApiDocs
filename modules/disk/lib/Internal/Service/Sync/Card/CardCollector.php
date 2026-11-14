@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\Sync\Card;
 
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\EntityRefDto;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\ObjectCardDto;
 use Bitrix\Disk\Infrastructure\Rest\V3\Structure\Sync\SectionsStructure;
+use Bitrix\Disk\Internal\Service\Sync\Index\BoardIndexReader;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\StorageTable;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\ProxyType;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -53,16 +56,22 @@ final class CardCollector
 	private PlaceCollector $places;
 	private ContentAvailability $contentAvailability;
 	private PlaceExpectation $placeExpectation;
+	private BoardIndexReader $boardIndexes;
+	private AccessSectionCollector $accessSections;
 
 	public function __construct(
 		?PlaceCollector $places = null,
 		?ContentAvailability $contentAvailability = null,
 		?PlaceExpectation $placeExpectation = null,
+		?BoardIndexReader $boardIndexes = null,
+		?AccessSectionCollector $accessSections = null,
 	)
 	{
 		$this->places = $places ?? new PlaceCollector();
 		$this->contentAvailability = $contentAvailability ?? new ContentAvailability();
 		$this->placeExpectation = $placeExpectation ?? new PlaceExpectation();
+		$this->boardIndexes = $boardIndexes ?? new BoardIndexReader();
+		$this->accessSections = $accessSections ?? new AccessSectionCollector();
 	}
 
 	/**
@@ -73,7 +82,15 @@ final class CardCollector
 	 * caller sees which ones dropped out by comparing what it asked for with the objects of the
 	 * cards it got.
 	 *
-	 * @param int[] $realObjectIds real objects of the page, as the fetch collapsed them
+	 * Only objects visible to the reader are given here, and the section of access relies on it: it
+	 * sets canRead = true without checking the rights ({@see AccessSectionCollector::collect()}).
+	 * Visibility is decided by the caller: the journal by confirming it
+	 * ({@see \Bitrix\Disk\Internal\Service\Sync\Journal\JournalReader}), the state by its verdict,
+	 * the snapshot by its fetch, by the readable ancestors and checkpoints and by the nodes of the paths
+	 * cut at the boundary of access.
+	 *
+	 * @param int[] $realObjectIds real objects of the page, as the fetch collapsed them, visible to the
+	 *        reader
 	 * @param int[] $visibleStorageIds storages the user sees, from
 	 *        {@see \Bitrix\Disk\Internal\Service\Sync\StorageListProvider}
 	 * @return ObjectCardDto[]
@@ -96,6 +113,7 @@ final class CardCollector
 
 		$withMetadata = $sections->has(SectionsStructure::SECTION_METADATA);
 		$withLocation = $sections->has(SectionsStructure::SECTION_LOCATION);
+		$withAccess = $sections->has(SectionsStructure::SECTION_ACCESS);
 
 		$rows = $this->readObjects($realObjectIds, $withMetadata);
 		if ($rows === [])
@@ -104,11 +122,20 @@ final class CardCollector
 		}
 
 		$fileIds = [];
+		$boardIds = [];
 		foreach ($rows as $objectId => $row)
 		{
 			if ($row['CARD_TYPE'] === ObjectCardDto::TYPE_FILE)
 			{
 				$fileIds[] = $objectId;
+				if (
+					$withMetadata
+					&& Configuration::isBoardIndexEnabled()
+					&& (int)$row['TYPE_FILE'] === TypeFile::BOARD
+				)
+				{
+					$boardIds[] = $objectId;
+				}
 			}
 		}
 
@@ -116,23 +143,29 @@ final class CardCollector
 		$available = [];
 		$owners = [];
 		$parties = [];
+		$readyBoardIds = [];
+		// the download permission of the access section is the availability of the content itself
+		if ($withMetadata || $withAccess)
+		{
+			$available = $this->contentAvailability->findAvailable($userId, $fileIds);
+		}
 		if ($withMetadata)
 		{
 			$versions = $this->readVersions($fileIds);
-			$available = $this->contentAvailability->findAvailable($userId, $fileIds);
 			$owners = $this->readStorageOwners($rows);
 			$parties = $this->readParties($rows, $owners);
+			$readyBoardIds = $this->boardIndexes->readyObjectIds($boardIds);
 		}
 
 		$placeSet = $withLocation
 			? $this->places->collect($userId, $realObjectIds, self::normaliseIds($visibleStorageIds))
-			: null
-		;
+			: null;
 
 		$expecting = $placeSet === null
 			? []
-			: $this->placeExpectation->findExpecting($userId, self::withoutPlaces($rows, $placeSet))
-		;
+			: $this->placeExpectation->findExpecting($userId, self::withoutPlaces($rows, $placeSet));
+
+		$accessSections = $withAccess ? $this->accessSections->collect($userId, $rows, $available) : [];
 
 		$cards = [];
 		foreach ($realObjectIds as $objectId)
@@ -149,13 +182,18 @@ final class CardCollector
 
 			if ($withMetadata)
 			{
-				$this->fillMetadata($card, $row, $versions, $available, $owners, $parties);
+				$this->fillMetadata($card, $row, $versions, $available, $owners, $parties, $readyBoardIds);
 			}
 
 			if ($placeSet !== null)
 			{
 				$card->places = $placeSet->getPlacesOf($objectId);
 				$card->placeExpected = isset($expecting[$objectId]);
+			}
+
+			if (isset($accessSections[$objectId]))
+			{
+				$card->access = $accessSections[$objectId];
 			}
 
 			$cards[] = $card;
@@ -179,12 +217,13 @@ final class CardCollector
 	 */
 	private function readObjects(array $objectIds, bool $withMetadata): array
 	{
-		$select = ['ID', 'TYPE'];
+		$select = ['ID', 'TYPE', 'REAL_OBJECT_ID'];
 		if ($withMetadata)
 		{
 			$select = [
 				'ID',
 				'TYPE',
+				'REAL_OBJECT_ID',
 				'NAME',
 				'STORAGE_ID',
 				'SIZE',
@@ -193,6 +232,7 @@ final class CardCollector
 				'UPDATE_TIME',
 				'CREATED_BY',
 				'UPDATED_BY',
+				'TYPE_FILE',
 				'CONTENT_TYPE' => 'FILE_CONTENT.CONTENT_TYPE',
 			];
 		}
@@ -421,6 +461,7 @@ final class CardCollector
 	 * @param array<int, true> $available
 	 * @param array<int, array{id: int, name: string, userId: int}> $owners
 	 * @param array<int, string> $parties
+	 * @param array<int, true> $readyBoardIds
 	 */
 	private function fillMetadata(
 		ObjectCardDto $card,
@@ -429,6 +470,7 @@ final class CardCollector
 		array $available,
 		array $owners,
 		array $parties,
+		array $readyBoardIds,
 	): void
 	{
 		$name = (string)$row['NAME'];
@@ -449,6 +491,10 @@ final class CardCollector
 				$card->versionId = $version['id'];
 			}
 			$card->versionNumber = $version['number'] ?? (int)$row['GLOBAL_CONTENT_VERSION'];
+			if (Configuration::isBoardIndexEnabled() && (int)$row['TYPE_FILE'] === TypeFile::BOARD)
+			{
+				$card->indexAvailable = isset($readyBoardIds[$card->objectId]);
+			}
 		}
 
 		$card->createdAt = $row['CREATE_TIME'];
@@ -508,8 +554,7 @@ final class CardCollector
 		$reference->id = $owner['id'];
 		$reference->name = $owner['userId'] > 0
 			? ($parties[$owner['userId']] ?? $owner['name'])
-			: $owner['name']
-		;
+			: $owner['name'];
 
 		return $reference;
 	}

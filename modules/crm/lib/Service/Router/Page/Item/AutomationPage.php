@@ -41,21 +41,11 @@ final class AutomationPage extends AbstractListPage
 		return [
 			(new SidePanelAnchorRule("type/(\d+)/automation/(\d+)/"))
 				->scopes(self::scopes())
-				->stopParameters(['id'])
 				->configureOptions(function (SidePanelAnchorOptions $options) {
 					$options
 						->setLoader('bizproc:automation-loader')
 						->setCacheable(false)
 						->setCustomLeftBoundary(0)
-					;
-				})
-			,
-			(new SidePanelAnchorRule("type/(\d+)/automation/(\d+)/"))
-				->scopes(self::scopes())
-				->configureOptions(function (SidePanelAnchorOptions $options) {
-					$options
-						->setLoader('bizproc:automation-loader')
-						->setCacheable(false)
 					;
 				})
 			,

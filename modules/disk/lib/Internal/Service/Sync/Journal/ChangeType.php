@@ -12,10 +12,11 @@ namespace Bitrix\Disk\Internal\Service\Sync\Journal;
  * answer never names is a branch nobody takes, and a type the answer names and the journal never writes
  * is a branch nobody reaches.
  *
- * Seven of them are the ways an object enters or changes inside what a client already holds, and they
- * are the ones a domain method chooses between. The remaining two the writer sets itself and no caller
- * passes: an object leaving the sight of its addressee, and a boundary of visibility that moved without
- * any object changing at all.
+ * Eight of them are the ways an object enters or changes inside what a client already holds, and they
+ * are the ones a domain method chooses between. Two the writer sets itself and no caller passes: an
+ * object leaving the sight of its addressee, and a boundary of visibility that moved without any object
+ * changing at all. The last six report a change of the sharing or of the public access of an object and
+ * have a method of the writer of their own ({@see isAccessState()}).
  *
  * An object entering an interaction set is published as an ordinary update. It has no value of its own
  * because a client needs no branch for it - it is handed a card by an identifier it never held and adds
@@ -33,8 +34,15 @@ enum ChangeType: string
 	case Moved = 'moved';
 	case Trashed = 'trashed';
 	case Restored = 'restored';
+	case IndexUpdated = 'indexUpdated';
 	case Deleted = 'deleted';
 	case AccessChanged = 'accessChanged';
+	case SharingCreated = 'sharingCreated';
+	case SharingUpdated = 'sharingUpdated';
+	case SharingDeleted = 'sharingDeleted';
+	case PublicAccessEnabled = 'publicAccessEnabled';
+	case PublicAccessUpdated = 'publicAccessUpdated';
+	case PublicAccessDisabled = 'publicAccessDisabled';
 
 	/**
 	 * Whether a domain mutation may publish this type through
@@ -51,7 +59,22 @@ enum ChangeType: string
 		return match ($this)
 		{
 			self::Created, self::Updated, self::ContentVersion, self::Renamed,
-			self::Moved, self::Trashed, self::Restored => true,
+			self::Moved, self::Trashed, self::Restored, self::IndexUpdated => true,
+			default => false,
+		};
+	}
+
+	/**
+	 * A change of the sharing or of the public access of an object. It is stored as an ordinary update
+	 * with a card, but only {@see JournalWriter::publishAccessState()} writes it: the record carries
+	 * whether it reaches the descendants, and the general method has no place for that.
+	 */
+	public function isAccessState(): bool
+	{
+		return match ($this)
+		{
+			self::SharingCreated, self::SharingUpdated, self::SharingDeleted,
+			self::PublicAccessEnabled, self::PublicAccessUpdated, self::PublicAccessDisabled => true,
 			default => false,
 		};
 	}

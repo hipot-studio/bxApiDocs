@@ -14,6 +14,16 @@ class PinProvider
 	{
 	}
 
+	/**
+	 * Pin set of the folder as the table holds it, with no regard for the composition of the folder.
+	 * This is the set a caller asking "is this chat already pinned here" needs: a row may legitimately
+	 * sit outside the visible composition ({@see PinService::pinChatPerFolder()}), and it still has to
+	 * be found - by the repeated pin, so it stays silent, and by the unpin, so it stays removable.
+	 * The limit of a per-folder write counts this same set.
+	 *
+	 * The set belongs to the owner of the folder ($folder->getUserId()) and not to the caller, so the
+	 * folder is expected to be access-checked already: a foreign folder here reads foreign rows.
+	 */
 	public function getByFolder(Folder $folder): FolderPinState
 	{
 		$userId = (int)($folder->getUserId() ?? 0);

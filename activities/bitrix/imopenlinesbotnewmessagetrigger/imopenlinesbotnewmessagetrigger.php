@@ -18,6 +18,7 @@ use Bitrix\ImOpenLines\Session;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Bizproc\Error;
 
 final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
@@ -27,6 +28,7 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 
 	private const RETURN_PARAM_MESSAGE = 'message';
 	private const RETURN_PARAM_CHAT_ID = 'chatId';
+	private const RETURN_PARAM_CONFIG_ID = 'configId';
 	private const RETURN_PARAM_ACTUAL_BOT_ID = 'actualBotId';
 	private const RETURN_PARAM_FROM_USER_ID = 'fromUserId';
 	private const RETURN_PARAM_CRM_ASSOCIATED_ITEM = 'crmAssociatedItem';
@@ -37,6 +39,7 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 	private const RETURN_PARAM_CRM_ASSOCIATED_CLIENT_ENTITY_TYPE_ID = 'crmAssociatedClientEntityTypeId';
 	private const RETURN_PARAM_CRM_ASSOCIATED_CLIENT_ID = 'crmAssociatedClientId';
 	private const RETURN_PARAM_IS_FIRST_MESSAGE = 'isFirstMessage';
+	private const RETURN_PARAM_EVENT_DATE_TIME = 'EventDateTime';
 
 	public function __construct(string $name)
 	{
@@ -49,6 +52,7 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 
 			self::RETURN_PARAM_MESSAGE => null,
 			self::RETURN_PARAM_CHAT_ID => null,
+			self::RETURN_PARAM_CONFIG_ID => null,
 			self::RETURN_PARAM_ACTUAL_BOT_ID => null,
 			self::RETURN_PARAM_FROM_USER_ID => null,
 			self::RETURN_PARAM_CRM_ASSOCIATED_ITEM => null,
@@ -59,6 +63,7 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 			self::RETURN_PARAM_CRM_ASSOCIATED_CLIENT_ENTITY_TYPE_ID => null,
 			self::RETURN_PARAM_CRM_ASSOCIATED_CLIENT_ID => null,
 			self::RETURN_PARAM_IS_FIRST_MESSAGE => null,
+			self::RETURN_PARAM_EVENT_DATE_TIME => null,
 		];
 
 		$this->SetPropertiesTypes([
@@ -67,6 +72,9 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 			],
 			self::RETURN_PARAM_CHAT_ID => [
 				'Type' => FieldType::STRING,
+			],
+			self::RETURN_PARAM_CONFIG_ID => [
+				'Type' => FieldType::INT,
 			],
 			self::RETURN_PARAM_ACTUAL_BOT_ID => [
 				'Type' => FieldType::INT,
@@ -98,6 +106,9 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 			self::RETURN_PARAM_IS_FIRST_MESSAGE => [
 				'Type' => FieldType::BOOL,
 			],
+			self::RETURN_PARAM_EVENT_DATE_TIME => [
+				'Type' => FieldType::DATETIME,
+			],
 		]);
 	}
 
@@ -122,31 +133,41 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 
 		$context = $this->getRootActivity()->{CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
 
-		$fromUserId = $context['FROM_USER_ID'] ?? '';
+		$fromUserId = (int)($context['FROM_USER_ID'] ?? 0);
 
 		$this->{self::RETURN_PARAM_ACTUAL_BOT_ID} = $botId;
 		$this->{self::RETURN_PARAM_MESSAGE} = (string)($context['MESSAGE'] ?? '');
 		$this->{self::RETURN_PARAM_CHAT_ID} = ($context['DIALOG_ID'] ?? '');
-		$this->{self::RETURN_PARAM_FROM_USER_ID} = "user_{$fromUserId}";
+		if ($fromUserId > 0)
+		{
+			$this->{self::RETURN_PARAM_FROM_USER_ID} = "user_{$fromUserId}";
+		}
 		$this->{self::RETURN_PARAM_IS_FIRST_MESSAGE} = $context['IS_CHAT_STARTED'] ?? false;
+		$this->{self::RETURN_PARAM_EVENT_DATE_TIME} = (new DateTime())->format(DateTime::getFormat());
 
-		$this->fillCrmReturns($context['CHAT_ENTITY_ID'] ?? '');
+		$this->fillSessionReturns((string)($context['CHAT_ENTITY_ID'] ?? ''));
 
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	private function fillCrmReturns(string $chatEntityId): void
+	private function fillSessionReturns(string $chatEntityId): void
 	{
-		if (!Loader::includeModule('crm'))
-		{
-			return;
-		}
-
 		$session = new Session();
 		$isSessionLoad = $session->load([
 			'USER_CODE' => $chatEntityId,
 		]);
 		if (!$isSessionLoad)
+		{
+			return;
+		}
+
+		$configId = (int)$session->getData('CONFIG_ID');
+		if ($configId > 0)
+		{
+			$this->{self::RETURN_PARAM_CONFIG_ID} = $configId;
+		}
+
+		if (!Loader::includeModule('crm'))
 		{
 			return;
 		}
@@ -242,7 +263,7 @@ final class CBPImOpenLinesBotNewMessageTrigger extends BaseTrigger
 		];
 	}
 
-	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array
+	public static function validateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null): array
 	{
 		$errors = [];
 

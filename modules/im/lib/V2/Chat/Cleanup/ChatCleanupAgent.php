@@ -96,9 +96,9 @@ final class ChatCleanupAgent
 	{
 		$limit = intval(Option::get('im', 'chat_cleanup_limit', self::CLEANUP_LIMIT));
 		$collector = new ChatContentCollector($currentChatId);
-		$nextCompletedStep = $collector->processCleanup($limit, $prevCompletedStep);
+		$progress = $collector->processCleanup($limit, $prevCompletedStep);
 
-		if (null === $nextCompletedStep)
+		if ($progress->isFinished)
 		{
 			$nextChatId = (new ChatContentCollector($chatId))->getNextChatIdToCleanup();
 
@@ -117,7 +117,7 @@ final class ChatCleanupAgent
 		return self::formatCleanupAgentName(
 			$chatId,
 			$currentChatId,
-			$nextCompletedStep,
+			$progress->completedStep,
 			$userId,
 		);
 	}

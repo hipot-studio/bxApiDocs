@@ -13,6 +13,7 @@ use Bitrix\Im\V2\Chat\Tree\ChatTreeAttachmentManager;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatCreateFieldsDto;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatUpdateFieldsDto;
+use Bitrix\Im\V2\Chat\Cleanup\ChatCleanupService;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
@@ -90,6 +91,16 @@ class Chat extends BaseController
 			'delete' => [
 				'+prefilters' => [
 					new CheckActionAccess(Permission\Action::Delete),
+				],
+			],
+			'clearHistory' => [
+				'+prefilters' => [
+					new CheckActionAccess(Permission\Action::DeleteHistoryForSelf),
+				],
+			],
+			'clearHistoryForAll' => [
+				'+prefilters' => [
+					new CheckActionAccess(Permission\Action::DeleteHistoryForAll),
 				],
 			],
 			'updateAvatar' => [
@@ -578,6 +589,40 @@ class Chat extends BaseController
 		return ['result' => true];
 	}
 
+	//region Clear History
+	/**
+	 * @restMethod im.v2.Chat.clearHistory
+	 */
+	public function clearHistoryAction(\Bitrix\Im\V2\Chat $chat): ?array
+	{
+		$result = (new ChatCleanupService($chat))->deleteHistoryForSelf();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+			return null;
+		}
+
+		return ['result' => true];
+	}
+
+	/**
+	 * @restMethod im.v2.Chat.clearHistoryForAll
+	 */
+	public function clearHistoryForAllAction(\Bitrix\Im\V2\Chat $chat): ?array
+	{
+		$result = (new ChatCleanupService($chat))->deleteHistoryForAll();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+			return null;
+		}
+
+		return ['result' => true];
+	}
+	//endregion
+
 	//region Manage Users
 	/**
 	 * @restMethod im.v2.Chat.addUsers
@@ -954,6 +999,15 @@ class Chat extends BaseController
 		?\Bitrix\Im\V2\Folder\Folder $folder = null,
 	): ?array
 	{
+		// A folderId that came in and resolved to nothing only adds an error, it does not stop the
+		// action: the core binds parameters without checking the collection. Stop here, so that a
+		// request answered with an error writes nothing - least of all into a scope of the server's
+		// own choosing instead of the one the client named.
+		if (!empty($this->getErrors()))
+		{
+			return null;
+		}
+
 		$result = $pinService->pinChat((int)$user->getId(), $chat, $folder);
 		if (!$result->isSuccess())
 		{
@@ -975,6 +1029,13 @@ class Chat extends BaseController
 		?\Bitrix\Im\V2\Folder\Folder $folder = null,
 	): ?array
 	{
+		// Same guard as on the pin side, and for the same reason: an unresolved folderId must refuse
+		// the request instead of letting it clear a pin in a scope the client never named.
+		if (!empty($this->getErrors()))
+		{
+			return null;
+		}
+
 		$result = $pinService->unpinChat((int)$user->getId(), $chat, $folder);
 		if (!$result->isSuccess())
 		{

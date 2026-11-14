@@ -185,6 +185,7 @@ class AiRoleLibraryComponentGrid extends CBitrixComponent
 					'name' => $gridRole->getAuthor(),
 					'photo' => $gridRole->getAuthorPhoto(),
 				],
+				'AUTHOR_ID' => $gridRole->getAuthorId(),
 				'EDITOR' => [
 					'name' => $gridRole->getEditor(),
 					'photo' => $gridRole->getEditorPhoto(),

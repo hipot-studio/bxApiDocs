@@ -17,7 +17,9 @@ use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Integration\AI\GreetingProvider;
 use Bitrix\Im\V2\Integration\AI\SuggestProvider;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
+use Bitrix\Im\V2\Link\Pin\PinLimits;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
+use Bitrix\Im\V2\Promotion\Service\UIPromotionService;
 use Bitrix\Im\V2\Reading\Counter\Entity\UserCounters;
 use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 use Bitrix\ImOpenLines\V2\Status\Status;
@@ -26,6 +28,7 @@ use Bitrix\Intranet\Portal;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
+use Bitrix\StaffTrack\Public\Provider\CheckInProvider;
 
 class Config implements \JsonSerializable
 {
@@ -46,6 +49,7 @@ class Config implements \JsonSerializable
 		$countersCollection = $this->getCounters();
 		$counters = $countersCollection->toRestFormat();
 		$notificationCounter = $countersCollection->getNotificationCounter();
+		$promoList = $this->getPromoList();
 
 		return [
 			'node' => self::NODE,
@@ -58,7 +62,7 @@ class Config implements \JsonSerializable
 			'counters' => $counters,
 			'notificationCounter' => $notificationCounter,
 			'settings' => $this->getSettings(),
-			'promoList' => $this->getPromoList(),
+			'promoList' => $promoList,
 			'phoneSettings' => $this->getPhoneSettings(),
 			'sessionTime' => $this->getSessionTime(),
 			'featureOptions' => $this->getFeatureOptions(),
@@ -72,6 +76,8 @@ class Config implements \JsonSerializable
 			'aiSettings' => $this->getAiSettings(),
 			'folders' => $this->getFolders(),
 			'voiceMessage' => $this->getVoiceMessageConfig(),
+			'shouldShowCheckInPromo' => $this->shouldShowCheckInPromo($promoList),
+			'pinLimits' => $this->getPinLimits(),
 		];
 	}
 
@@ -311,7 +317,7 @@ class Config implements \JsonSerializable
 	}
 
 	/**
-	 * @return array{maxFolders: int, maxChatsPerFolder: int, maxTitleLength: int}
+	 * @return array{maxFolders: int, maxChatsPerFolder: int, maxTitleLength: int, maxPinnedChats: int}
 	 */
 	protected function getFolderLimits(): array
 	{
@@ -319,6 +325,7 @@ class Config implements \JsonSerializable
 			'maxFolders' => FolderLimits::MAX_FOLDERS_PER_USER,
 			'maxChatsPerFolder' => FolderLimits::MAX_CHATS_PER_FOLDER,
 			'maxTitleLength' => FolderLimits::MAX_TITLE_LENGTH,
+			'maxPinnedChats' => FolderLimits::MAX_PINNED_CHATS,
 		];
 	}
 
@@ -331,6 +338,61 @@ class Config implements \JsonSerializable
 			'maxDurationSeconds' => Duration::getMaxSeconds(),
 			'isServerConversionAvailable' => Features::isVoiceMessageServerConversionAvailable(),
 		];
+	}
+
+	/**
+	 * Whether the one-time hint at the paperclip is still worth showing: the check-in is available, the
+	 * hint has not been watched yet and the person has checked in before (BRIEF, R-11). This is not the
+	 * history of check-ins on its own - the mobile HAS_CHECK_IN_HISTORY keeps that meaning (HISTORY-01).
+	 *
+	 * Asked once at startup instead of on every opened chat, and this runs on every page of the portal,
+	 * so the gates stand in order of price: the promo list is the one already assembled above, and the
+	 * history is read only while the answer can still change what the reader sees.
+	 *
+	 * @param array $promoList Result of getPromoList().
+	 */
+	protected function shouldShowCheckInPromo(array $promoList): bool
+	{
+		if (!$this->isCheckInAvailable())
+		{
+			return false;
+		}
+
+		if (!in_array(UIPromotionService::CHECK_IN_PROMO_ID, array_column($promoList, 'id'), true))
+		{
+			return false;
+		}
+
+		return $this->hasCheckInHistory();
+	}
+
+	protected function isCheckInAvailable(): bool
+	{
+		return Features::get()->isCheckInAvailable;
+	}
+
+	/**
+	 * The check-in module stays optional: a portal without it - or with a version of it that predates
+	 * the question - gets false.
+	 */
+	protected function hasCheckInHistory(): bool
+	{
+		if (!Loader::includeModule('stafftrack'))
+		{
+			return false;
+		}
+
+		return method_exists(CheckInProvider::class, 'hasCheckIns')
+			&& (new CheckInProvider())->hasCheckIns($this->getContext()->getUserId())
+		;
+	}
+
+	/**
+	 * @return array{maxPinsPerChat: int, maxPersonalPinsPerChat: int}
+	 */
+	protected function getPinLimits(): array
+	{
+		return PinLimits::getClientLimits();
 	}
 
 	public function getPortalSettingsUrl(): string

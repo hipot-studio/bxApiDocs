@@ -12,6 +12,21 @@ use CUser;
 
 class SearchMap
 {
+	// Types whose public text of an empty value has no non-blank comma-separated item
+	private const EMPTY_VALUE_SKIPPABLE_USER_TYPE_IDS = [
+		'address',
+		'string',
+		'integer',
+		'double',
+		'date',
+		'datetime',
+		'employee',
+		'file',
+		'url',
+		'crm',
+		'crm_status',
+	];
+
 	private static array $users = [];
 	private array $data = [];
 
@@ -299,6 +314,14 @@ class SearchMap
 		global $USER_FIELD_MANAGER;
 
 		$userTypeId = $userField['USER_TYPE_ID'] ?? '';
+		if (
+			in_array($userTypeId, self::EMPTY_VALUE_SKIPPABLE_USER_TYPE_IDS, true)
+			&& self::isEmptyUserFieldValue($userField['VALUE'] ?? null)
+		)
+		{
+			return;
+		}
+
 		if ($userTypeId === 'boolean')
 		{
 			$values = [];
@@ -346,5 +369,28 @@ class SearchMap
 	public function getString(): string
 	{
 		return implode(' ', array_keys($this->data));
+	}
+
+	private static function isEmptyUserFieldValue(mixed $value): bool
+	{
+		if ($value === null || $value === '' || $value === false)
+		{
+			return true;
+		}
+
+		if (!is_array($value))
+		{
+			return false;
+		}
+
+		foreach ($value as $item)
+		{
+			if (!self::isEmptyUserFieldValue($item))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

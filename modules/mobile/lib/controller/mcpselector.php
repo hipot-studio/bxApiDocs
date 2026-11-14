@@ -33,10 +33,20 @@ final class MCPSelector extends JsonController
 			];
 		}
 
-		$mcpFeature = \Bitrix\AiAssistant\RemoteMcp\RemoteMcpFeature::getInstance();
-		$mcpFeatureDisabled = $mcpFeature->isFeatureOff();
+		return $this->buildPayload(\Bitrix\AiAssistant\RemoteMcp\RemoteMcpFeature::getInstance());
+	}
 
-		if ($mcpFeatureDisabled)
+	private function buildPayload(object $mcpFeature): array
+	{
+		// mobile and aiassistant are updated separately, so the installed aiassistant may predate the regional lock.
+		$hasRegionalLock = method_exists($mcpFeature, 'resolveLock')
+			&& method_exists($mcpFeature, 'isFeatureMissingInRegion')
+		;
+
+		// A region without the feature answers exactly the way a switched off feature does: no
+		// items and no lock at all, so neither the current nor an older app opens the restriction
+		// screen with a reason that does not apply there.
+		if ($mcpFeature->isFeatureOff() || ($hasRegionalLock && $mcpFeature->isFeatureMissingInRegion()))
 		{
 			return [
 				'isDisabled' => true,
@@ -44,7 +54,11 @@ final class MCPSelector extends JsonController
 			];
 		}
 
-		$preparedServers = $this->prepareServers($this->getServerList());
+		// The lock answers the same for the whole payload, so it is resolved once and handed down.
+		$lock = $hasRegionalLock ? $mcpFeature->resolveLock() : null;
+		$isLocked = $hasRegionalLock ? $lock !== null : $mcpFeature->isLocked();
+
+		$preparedServers = $this->prepareServers($this->getServerList(), $isLocked);
 
 		$userIds = $this->extractUserIds($preparedServers);
 		$users = UserRepository::getByIds($userIds);
@@ -53,6 +67,10 @@ final class MCPSelector extends JsonController
 			'disabledByAdmin' => !$mcpFeature->isActive(),
 			'disabledByTariff' => !$mcpFeature->isAvailableByTariff(),
 			'disabledBySubscription' => !$mcpFeature->isAvailableBySubscription(),
+			// Reason and the way out of it: the screen shows the reason of its own region and opens
+			// the restriction slider by the feature id.
+			'lockReason' => $lock?->reason->value ?? '',
+			'sliderFeatureId' => $lock?->sliderFeatureId,
 			'items' => $preparedServers,
 			'users' => $users,
 		];
@@ -80,17 +98,15 @@ final class MCPSelector extends JsonController
 		return $remoteMcpSelectorProvider->getList($params, $userId);
 	}
 
-	private function prepareServers($servers): array
+	private function prepareServers($servers, bool $isLocked): array
 	{
-		$mcpFeature = \Bitrix\AiAssistant\RemoteMcp\RemoteMcpFeature::getInstance();
-
 		$items = array_map(fn($item) => [
 			'id' => $item['id'],
 			'name' => $item['name'],
 			'description' => $item['description'],
 			'iconUrl' => $item['iconUrl'],
 			'isActive' => $item['isActive'],
-			'isDisabled' => $mcpFeature->isLocked(),
+			'isDisabled' => $isLocked,
 			'authorizations' => $item['authorizations'],
 		], $servers);
 

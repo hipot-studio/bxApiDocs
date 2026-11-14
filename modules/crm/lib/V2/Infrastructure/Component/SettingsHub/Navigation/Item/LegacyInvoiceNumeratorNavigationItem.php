@@ -3,8 +3,9 @@
 namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
 use Bitrix\Crm\Service\Router;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubUrlNavigationItem;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
 
 final class LegacyInvoiceNumeratorNavigationItem implements SettingsHubUrlNavigationItem
@@ -29,12 +30,12 @@ final class LegacyInvoiceNumeratorNavigationItem implements SettingsHubUrlNaviga
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return $this->isOldInvoicesEnabled;
+		return $permissions->isCrmAdmin() && $this->isOldInvoicesEnabled;
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $permissions->isCrmAdmin();
+		return new Result();
 	}
 
 	public function url(): ?Uri

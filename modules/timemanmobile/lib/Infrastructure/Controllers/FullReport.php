@@ -3,6 +3,7 @@
 namespace Bitrix\TimemanMobile\Infrastructure\Controllers;
 
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Timeman\V2\Infrastructure\Controller;
 use Bitrix\Timeman\V2\Public\Dto\FullReport\FullReport as FullReportDto;
@@ -39,6 +40,11 @@ class FullReport extends Base
 	public function configureActions(): array
 	{
 		return [
+			'getReport' => [
+				'+prefilters' => [
+					new ActionFilter\ContentType([ActionFilter\ContentType::JSON]),
+				],
+			],
 			'getDiscussionUrl' => [
 				'+prefilters' => [
 					new ActionFilter\ContentType([ActionFilter\ContentType::JSON]),
@@ -74,6 +80,55 @@ class FullReport extends Base
 
 		return [
 			'items' => $result ? $result->toArray() : [],
+		];
+	}
+
+	/**
+	 * A single report addressed by its id, the way a notification and a link address one. The owner named by
+	 * the client is a hint and never a proof of access: named or restored from the stored row, he is checked
+	 * against that row by the report domain of timeman, which answers the right to read his worktime.
+	 *
+	 * The card reads the same settings envelope as the draft and the review list, so it travels along.
+	 *
+	 * @ajaxAction timemanmobile.FullReport.getReport
+	 */
+	public function getReportAction(
+		#[PositiveNumber]
+		int $reportId,
+		int $userId = 0,
+	): ?array
+	{
+		$ownerId = $userId > 0 ? $userId : FullReportMark::ownerIdOf($reportId);
+		if ($ownerId <= 0)
+		{
+			$this->addError(new Error('Report not found.', 'REPORT_NOT_FOUND'));
+
+			return null;
+		}
+
+		$result = $this->forward(
+			Controller\FullReport::class,
+			'getUserReport',
+			[
+				'reportId' => $reportId,
+				'userId' => $ownerId,
+			],
+		);
+
+		if (!$this->errorCollection->isEmpty())
+		{
+			return null;
+		}
+
+		$payload = $result?->toArray();
+		if ($payload === null)
+		{
+			return null;
+		}
+
+		return [
+			'report' => $payload,
+			'settings' => $this->getReportSettingsPayload(),
 		];
 	}
 

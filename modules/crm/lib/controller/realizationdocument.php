@@ -10,6 +10,7 @@ use Bitrix\Catalog;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Access\Model\StoreDocument;
+use Bitrix\Crm\Reservation\Validator\ExistingStore;
 use Bitrix\Crm\Service\Sale\Reservation\ShipmentService;
 use Bitrix\Main\Loader;
 
@@ -23,6 +24,7 @@ class RealizationDocument extends Main\Engine\Controller
 	private const REALIZATION_NOT_DEDUCTED_ERROR_CODE = 'REALIZATION_NOT_DEDUCTED';
 	private const REALIZATION_PRODUCT_NOT_FOUND_ERROR_CODE = 'REALIZATION_PRODUCT_NOT_FOUND';
 	private const REALIZATION_NOT_USED_INVENTORY_MANAGEMENT_ERROR_CODE = 'REALIZATION_NOT_USED_INVENTORY_MANAGEMENT';
+	private const REALIZATION_STORE_DELETED_ERROR_CODE = 'REALIZATION_STORE_DELETED';
 
 	/** @var int $defaultStoreId */
 	private $defaultStoreId;
@@ -110,7 +112,8 @@ class RealizationDocument extends Main\Engine\Controller
 		if ($value === 'N' && !$this->checkReadAnyStorePermission($shipment))
 		{
 			$this->addError(
-				new Main\Error(
+				$this->getDeletedStoreError($shipment)
+				?? new Main\Error(
 					Main\Localization\Loc::getMessage(
 						'CRM_CONTROLLER_REALIZATION_DOCUMENT_DELETE_ERROR',
 						[
@@ -242,9 +245,9 @@ class RealizationDocument extends Main\Engine\Controller
 	 *
 	 * @param int $id
 	 * @param string $value
-	 * @return void
+	 * @return array|null `['warnings' => string[]]` when the cancellation left reserves unrestored, otherwise null
 	 */
-	public function setShippedAction(int $id, string $value): void
+	public function setShippedAction(int $id, string $value): ?array
 	{
 		if (!State::isUsedInventoryManagement())
 		{
@@ -255,7 +258,7 @@ class RealizationDocument extends Main\Engine\Controller
 				)
 			);
 
-			return;
+			return null;
 		}
 
 		$accessAction =
@@ -265,7 +268,7 @@ class RealizationDocument extends Main\Engine\Controller
 		;
 		if (!$this->checkPermission($accessAction, $id))
 		{
-			return;
+			return null;
 		}
 
 		$shipmentResult = $this->prepareShipment($id);
@@ -273,7 +276,7 @@ class RealizationDocument extends Main\Engine\Controller
 		{
 			$this->addErrors($shipmentResult->getErrors());
 
-			return;
+			return null;
 		}
 
 		$shipmentData = $shipmentResult->getData();
@@ -323,7 +326,7 @@ class RealizationDocument extends Main\Engine\Controller
 						)
 					);
 
-					return;
+					return null;
 				}
 
 				/** @var Crm\Order\ShipmentItem $shipmentItem */
@@ -368,13 +371,14 @@ class RealizationDocument extends Main\Engine\Controller
 			if (!$this->checkReadAnyStorePermission($shipment))
 			{
 				$this->addError(
-					new Main\Error(
+					$this->getDeletedStoreError($shipment)
+					?? new Main\Error(
 						Main\Localization\Loc::getMessage('CRM_CONTROLLER_REALIZATION_DOCUMENT_ACCESS_DENIED'),
 						self::REALIZATION_ACCESS_DENIED_ERROR_CODE,
 					),
 				);
 
-				return;
+				return null;
 			}
 
 			$setResult = $shipment->setField('DEDUCTED', $value);
@@ -384,6 +388,7 @@ class RealizationDocument extends Main\Engine\Controller
 			}
 		}
 
+		$warnings = [];
 		if ($this->errorCollection->isEmpty())
 		{
 			$saveOrderResult = $order->save();
@@ -391,7 +396,8 @@ class RealizationDocument extends Main\Engine\Controller
 			{
 				if ($value === 'N')
 				{
-					ShipmentService::getInstance()->reserveCanceledShipment($shipment);
+					$reserveResult = ShipmentService::getInstance()->reserveCanceledShipment($shipment);
+					$warnings = $reserveResult->getData()['WARNINGS'] ?? [];
 				}
 			}
 			else
@@ -421,6 +427,8 @@ class RealizationDocument extends Main\Engine\Controller
 				}
 			}
 		}
+
+		return empty($warnings) ? null : ['warnings' => array_values($warnings)];
 	}
 
 	/**
@@ -467,11 +475,27 @@ class RealizationDocument extends Main\Engine\Controller
 
 	private function checkReadAnyStorePermission(Crm\Order\Shipment $shipment): bool
 	{
-		$shipmentItemCollection = $shipment->getShipmentItemCollection();
-		$hasAnyStore = false;
+		$storeIds = $this->getShipmentStoreIds($shipment);
+		foreach ($storeIds as $storeId)
+		{
+			if ($this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, $storeId))
+			{
+				return true;
+			}
+		}
+
+		return empty($storeIds);
+	}
+
+	/**
+	 * @return int[] unique ids of the stores the shipment is shipped from
+	 */
+	private function getShipmentStoreIds(Crm\Order\Shipment $shipment): array
+	{
+		$storeIds = [];
 
 		/** @var Crm\Order\ShipmentItem $shipmentItem */
-		foreach ($shipmentItemCollection as $shipmentItem)
+		foreach ($shipment->getShipmentItemCollection() as $shipmentItem)
 		{
 			$storeCollection = $shipmentItem->getShipmentItemStoreCollection();
 			if (!$storeCollection)
@@ -481,19 +505,50 @@ class RealizationDocument extends Main\Engine\Controller
 
 			foreach ($storeCollection as $store)
 			{
-				$storeId = $store->getStoreId();
+				$storeId = (int)$store->getStoreId();
 				if ($storeId > 0)
 				{
-					if ($this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, $storeId))
-					{
-						return true;
-					}
-					$hasAnyStore = true;
+					$storeIds[$storeId] = $storeId;
 				}
 			}
 		}
 
-		return !$hasAnyStore;
+		return array_values($storeIds);
+	}
+
+	/**
+	 * @param int[] $storeIds
+	 */
+	private function isAllShipmentStoresDeleted(array $storeIds): bool
+	{
+		if (empty($storeIds))
+		{
+			return false;
+		}
+
+		return empty(array_diff($storeIds, ExistingStore::getMissingStoreIds($storeIds)));
+	}
+
+	/**
+	 * The refusal of the store check when every store of the shipment has been deleted: only an employee with
+	 * access to all stores may act on such a document.
+	 */
+	private function getDeletedStoreError(Crm\Order\Shipment $shipment): ?Main\Error
+	{
+		if (!$this->isAllShipmentStoresDeleted($this->getShipmentStoreIds($shipment)))
+		{
+			return null;
+		}
+
+		return new Main\Error(
+			Main\Localization\Loc::getMessage(
+				'CRM_CONTROLLER_REALIZATION_DOCUMENT_DELETED_STORE_ACCESS_DENIED',
+				[
+					'#ID#' => htmlspecialcharsbx($shipment->getField('ACCOUNT_NUMBER')),
+				],
+			),
+			self::REALIZATION_STORE_DELETED_ERROR_CODE,
+		);
 	}
 
 	/**

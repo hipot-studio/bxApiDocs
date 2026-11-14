@@ -36,8 +36,6 @@ class WorkdayIntentProvider
 	private const INTENT_WORKDAY = 'WORKDAY';
 	private const INTENT_WEEKEND = 'WEEKEND';
 	private const ABSENCE_INTENT_IDS = ['LEAVEUNPAYED', 'VACATION', 'LEAVESICK'];
-	private const SUPPRESS_REASON_DAY_OFF = 'dayOff';
-	private const SUPPRESS_REASON_ABSENCE = 'absence';
 
 	private ?int $userId;
 	private ServiceLocator $locator;
@@ -78,10 +76,45 @@ class WorkdayIntentProvider
 	 */
 	public function canStartWorkday(): bool
 	{
-		$timemanUser = \CTimeManUser::instance();
-		$workTimeState = $timemanUser->state();
+		return $this->resolveDayStateRefusal() === null;
+	}
 
-		return $workTimeState === 'CLOSED' && $timemanUser->openAction() === 'OPEN';
+	/**
+	 * @return string|null refusal reason of the legacy workday state, null when a new day can be started
+	 */
+	private function resolveDayStateRefusal(): ?string
+	{
+		return match ($this->readWorkdayState())
+		{
+			'OPENED' => WorkdayIntentBoxDto::REFUSAL_REASON_DAY_OPENED,
+			'PAUSED' => WorkdayIntentBoxDto::REFUSAL_REASON_DAY_PAUSED,
+			'EXPIRED' => WorkdayIntentBoxDto::REFUSAL_REASON_DAY_EXPIRED,
+			'CLOSED' => $this->resolveClosedDayRefusal(),
+			default => WorkdayIntentBoxDto::REFUSAL_REASON_START_UNAVAILABLE,
+		};
+	}
+
+	private function resolveClosedDayRefusal(): ?string
+	{
+		return match ($this->readWorkdayOpenAction())
+		{
+			'OPEN' => null,
+			'REOPEN' => WorkdayIntentBoxDto::REFUSAL_REASON_DAY_REOPEN_ONLY,
+			default => WorkdayIntentBoxDto::REFUSAL_REASON_START_UNAVAILABLE,
+		};
+	}
+
+	protected function readWorkdayState(): string
+	{
+		return \CTimeManUser::instance()->state();
+	}
+
+	/**
+	 * @return string|false start action of a closed day, false when there is none
+	 */
+	protected function readWorkdayOpenAction(): string|false
+	{
+		return \CTimeManUser::instance()->openAction();
 	}
 
 	/**
@@ -100,23 +133,32 @@ class WorkdayIntentProvider
 	 */
 	public function getWorkdayIntentBoxData(): WorkdayIntentBoxDto
 	{
+		$now = time();
+
 		$admissionFailure = null;
 		if (!$this->hasIntentBaseAdmission($admissionFailure))
 		{
 			return WorkdayIntentBoxDto::make([
 				'canOpen' => false,
-				'suppressReason' => $admissionFailure,
+				'suppressReason' => $admissionFailure === WorkdayIntentBoxDto::SUPPRESS_REASON_SHIFTS_DISABLED
+					? $admissionFailure
+					: null,
+				'refusalReason' => $admissionFailure,
+				'checkedAt' => $now,
 			]);
 		}
 
 		$recordIntentSchedule = $this->getRecordIntentProvider()->getSchedule($this->userId);
 		$schedule = WorkdayIntentScheduleDto::make($recordIntentSchedule->toArray());
 
-		$canOpen = $this->canStartWorkday() && $this->canShowNow($recordIntentSchedule);
-		if (!$canOpen)
+		$refusalReason = $this->resolveDayStateRefusal();
+		$refusalReason ??= $this->resolveShowWindowRefusal($recordIntentSchedule, $now);
+		if ($refusalReason !== null)
 		{
 			return WorkdayIntentBoxDto::make([
 				'canOpen' => false,
+				'refusalReason' => $refusalReason,
+				'checkedAt' => $now,
 				'schedule' => $schedule,
 			]);
 		}
@@ -142,6 +184,8 @@ class WorkdayIntentProvider
 			return WorkdayIntentBoxDto::make([
 				'canOpen' => false,
 				'suppressReason' => $suppressReason,
+				'refusalReason' => $suppressReason,
+				'checkedAt' => $now,
 				// Without the write there is nothing to reschedule by: no schedule postpones the
 				// client to the next local day instead of an hourly retry over the same conditions.
 				'schedule' => $suppressed === null
@@ -154,6 +198,7 @@ class WorkdayIntentProvider
 
 		return WorkdayIntentBoxDto::make([
 			'canOpen' => true,
+			'checkedAt' => $now,
 			'intentList' => $intentList,
 			'shifts' => $this->getNearestShifts(),
 			'preselectedIntentId' => $this->resolvePreselectedIntentId($intentList),
@@ -178,24 +223,31 @@ class WorkdayIntentProvider
 
 	/**
 	 * @param RecordIntentSchedule $schedule
-	 * @return bool
+	 * @param int $now
+	 * @return string|null the first failed condition of the show window, null when the window is open
 	 */
-	private function canShowNow(RecordIntentSchedule $schedule): bool
+	private function resolveShowWindowRefusal(RecordIntentSchedule $schedule, int $now): ?string
 	{
-		$now = time();
+		// Server-side retry interval, unified across devices (AC-6): the next show is not earlier than
+		// retryIntervalSeconds after the previous one. lastShownTimestamp = 0 does not block the first show.
+		$retryAllowedAt = $schedule->lastShownTimestamp + $schedule->retryIntervalSeconds;
 
-		return
-			$now >= $schedule->targetStartTimestamp
-			&& $now < $schedule->periodEndTimestamp
-			&& $schedule->showCount < $schedule->maxShows
-			&& $schedule->dismissCount < $schedule->maxDismisses
-			&& $now >= $schedule->suppressedUntilTimestamp
-			&& $schedule->hasTargetAction === false
-			// Server-side retry interval, unified across devices (AC-6): the next show is not earlier than
-			// retryIntervalSeconds after the previous one. lastShownTimestamp = 0 does not block the first show.
-			&& $now >= $schedule->lastShownTimestamp + $schedule->retryIntervalSeconds
-			&& $schedule->shiftStartable
-		;
+		$refusedBy = [
+			// A shift schedule without a nearest shift has no target start
+			WorkdayIntentBoxDto::REFUSAL_REASON_NO_SHIFT => $schedule->targetStartTimestamp === 0,
+			WorkdayIntentBoxDto::REFUSAL_REASON_TOO_EARLY => $now < $schedule->targetStartTimestamp,
+			WorkdayIntentBoxDto::REFUSAL_REASON_PERIOD_ENDED => $now >= $schedule->periodEndTimestamp,
+			WorkdayIntentBoxDto::REFUSAL_REASON_SHOW_LIMIT => $schedule->showCount >= $schedule->maxShows,
+			WorkdayIntentBoxDto::REFUSAL_REASON_DISMISS_LIMIT => $schedule->dismissCount >= $schedule->maxDismisses,
+			WorkdayIntentBoxDto::REFUSAL_REASON_SUPPRESSED => $now < $schedule->suppressedUntilTimestamp,
+			WorkdayIntentBoxDto::REFUSAL_REASON_TARGET_ACTION_DONE => $schedule->hasTargetAction,
+			WorkdayIntentBoxDto::REFUSAL_REASON_RETRY_INTERVAL => $now < $retryAllowedAt,
+			WorkdayIntentBoxDto::REFUSAL_REASON_SHIFT_NOT_STARTABLE => !$schedule->shiftStartable,
+		];
+
+		$refusalReason = array_search(true, $refusedBy, true);
+
+		return $refusalReason === false ? null : $refusalReason;
 	}
 
 	/**
@@ -205,12 +257,12 @@ class WorkdayIntentProvider
 	{
 		if ($this->isDayOffByScheduleForUserDay())
 		{
-			return self::SUPPRESS_REASON_DAY_OFF;
+			return WorkdayIntentBoxDto::REFUSAL_REASON_DAY_OFF;
 		}
 
 		if ($this->hasAnyAbsenceOnUserDay())
 		{
-			return self::SUPPRESS_REASON_ABSENCE;
+			return WorkdayIntentBoxDto::REFUSAL_REASON_ABSENCE;
 		}
 
 		return null;
@@ -254,6 +306,7 @@ class WorkdayIntentProvider
 	 * only users who may participate are allowed to touch the timeman intent-state (which lazily
 	 * stamps firstUseAt on first resolve). Mobile eligibility is the consumer layer's responsibility.
 	 *
+	 * @param string|null $failureReason receives the refusal reason of the failed check
 	 * @return bool
 	 */
 	private function hasIntentBaseAdmission(?string &$failureReason = null): bool
@@ -262,6 +315,8 @@ class WorkdayIntentProvider
 		// (RecordProvider::canUseTimeman/canManageWorktimeOnMobile, RecordIntentProvider::getSchedule).
 		if (empty($this->userId))
 		{
+			$failureReason = WorkdayIntentBoxDto::REFUSAL_REASON_NO_USER;
+
 			return false;
 		}
 
@@ -276,13 +331,22 @@ class WorkdayIntentProvider
 
 		if (!$shiftsEnabled)
 		{
-			$failureReason = WorkdayIntentBoxDto::SUPPRESS_REASON_SHIFTS_DISABLED;
+			$failureReason = WorkdayIntentBoxDto::REFUSAL_REASON_SHIFTS_DISABLED;
 
 			return false;
 		}
 
-		if (!$this->canUseTimeman() || !$this->canManageWorktimeOnMobile())
+		if (!$this->canUseTimeman())
 		{
+			$failureReason = WorkdayIntentBoxDto::REFUSAL_REASON_TIMEMAN_UNAVAILABLE;
+
+			return false;
+		}
+
+		if (!$this->canManageWorktimeOnMobile())
+		{
+			$failureReason = WorkdayIntentBoxDto::REFUSAL_REASON_MOBILE_MANAGEMENT_DISABLED;
+
 			return false;
 		}
 

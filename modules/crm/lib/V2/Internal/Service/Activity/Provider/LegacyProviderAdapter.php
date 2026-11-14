@@ -11,7 +11,9 @@ use Bitrix\Crm\V2\Internal\Access\Activity\AccessDecision;
 use Bitrix\Crm\V2\Internal\Access\Activity\Operation;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityBinding;
+use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityCommunication;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityChangeSet;
+use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityStorageElement;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ProviderPayload;
 use Bitrix\Crm\V2\Internal\Entity\Activity\StorageFieldTransit;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityFieldMap;
@@ -32,6 +34,7 @@ use Bitrix\Crm\V2\Public\ItemId;
 use Bitrix\Crm\V2\Public\OwnerType;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
+use Bitrix\Main\ObjectException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use CCrmDateTimeHelper;
@@ -90,7 +93,8 @@ final class LegacyProviderAdapter implements
 	PermissionCapabilityInterface,
 	PingCapabilityInterface,
 	ScopeOperationsCapabilityInterface,
-	TimelineCapabilityInterface
+	TimelineCapabilityInterface,
+	ActivityProviderTypeCatalogInterface
 {
 	/**
 	 * The legacy methods each capability is made of: an own override of any one of them declares it.
@@ -167,6 +171,23 @@ final class LegacyProviderAdapter implements
 	/** Of those, the ones a provider may clear rather than only change. */
 	private const NULLABLE_COLUMNS = ['PROVIDER_TYPE_ID', 'START_TIME', 'END_TIME', 'PARENT_ID'];
 
+	private const COLUMN_STORAGE_ELEMENT_IDS = 'STORAGE_ELEMENT_IDS';
+
+	/**
+	 * The storage columns of a state the hooks of an update are handed off that state: the readers of the call
+	 * tell a voximplant call and its record by them (voximplantmanager.php:116-125, Call.php:574-581), and the
+	 * model holds none of them.
+	 */
+	private const STATE_COLUMNS_OF_AN_UPDATE = ['ORIGIN_ID', 'OWNER_TYPE_ID', 'STORAGE_TYPE_ID'];
+
+	/**
+	 * The storage columns the hook of an add is handed off the state of the run rather than off the input: a step
+	 * of the run derives them where the caller named none - the owner from the bindings, the storage type from the
+	 * portal - and legacy hands its hook the field array they were written into (crm_activity.php:104-109). The AI
+	 * handler of a call builds the analytics of its record off the owner and tells the record by the storage type.
+	 */
+	private const STATE_COLUMNS_OF_AN_ADD = ['OWNER_TYPE_ID', 'OWNER_ID', 'STORAGE_TYPE_ID'];
+
 	/**
 	 * Whether a legacy class declares a method itself rather than inheriting it - by class and by method.
 	 *
@@ -209,12 +230,27 @@ final class LegacyProviderAdapter implements
 	public function __construct(
 		private readonly string $legacyClassName,
 		private readonly TimelineCapabilitySet $timelineCapabilities = new TimelineCapabilitySet(),
+		private readonly ?ActivityProviderTypeCatalogInterface $timelineTypeCatalog = null,
 		?LegacyTimelineItemFactory $timelineItemFactory = null,
 	)
 	{
 		self::assertLegacyProvider($legacyClassName);
 
 		$this->timelineItemFactory = $timelineItemFactory ?? new LegacyTimelineItemFactory();
+	}
+
+	public function getTimelineTypeDescriptors(): array
+	{
+		return $this->timelineTypeCatalog?->getTimelineTypeDescriptors() ?? [];
+	}
+
+	public function canExposeTimelineType(
+		string $id,
+		Context $context,
+		\Bitrix\Crm\ItemIdentifier $owner,
+	): bool
+	{
+		return $this->timelineTypeCatalog?->canExposeTimelineType($id, $context, $owner) ?? false;
 	}
 
 	/**
@@ -450,6 +486,83 @@ final class LegacyProviderAdapter implements
 	}
 
 	/**
+	 * Reads the columns the permission hooks are handed past the model ({@see self::permissionFields()}) for these
+	 * activities in one query, whatever their providers: the columns are those of the row and the same for every
+	 * legacy class. An activity without a row is not among the answers.
+	 *
+	 * @param int[] $activityIds
+	 * @return array<int, array<string, mixed>> the columns by activity id
+	 */
+	public static function fetchPermissionFields(array $activityIds): array
+	{
+		$ids = [];
+		foreach ($activityIds as $activityId)
+		{
+			$activityId = (int)$activityId;
+			if ($activityId > 0)
+			{
+				$ids[$activityId] = $activityId;
+			}
+		}
+		if ($ids === [])
+		{
+			return [];
+		}
+
+		$fields = [];
+		$rows = ActivityTable::getList([
+			'select' => ['ID', ...self::PERMISSION_COLUMNS],
+			'filter' => ['@ID' => array_values($ids)],
+		]);
+		while ($row = $rows->fetch())
+		{
+			$activityId = (int)$row['ID'];
+			unset($row['ID']);
+			$fields[$activityId] = $row;
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * Remembers the columns read for a batch ({@see self::fetchPermissionFields()}), so that a set of activities
+	 * asked about one by one reads none of them again. Null stands for an activity without a row, which is
+	 * remembered as a single read remembers it.
+	 *
+	 * @param array<int, array<string, mixed>|null> $rowsByActivityId
+	 */
+	public function rememberPermissionFields(array $rowsByActivityId): void
+	{
+		foreach ($rowsByActivityId as $activityId => $row)
+		{
+			$this->permissionColumns[(int)$activityId] = $row ?? array_fill_keys(self::PERMISSION_COLUMNS, null);
+		}
+	}
+
+	/**
+	 * Forgets the columns read for these activities: a reader that is not going to ask about them again keeps the
+	 * memory of the hit from growing with every activity it passed by.
+	 *
+	 * @param int[] $activityIds
+	 */
+	public function forgetPermissionFields(array $activityIds): void
+	{
+		foreach ($activityIds as $activityId)
+		{
+			unset($this->permissionColumns[(int)$activityId]);
+		}
+	}
+
+	/**
+	 * Whether the provider states anything about reading at all: only its own `checkReadPermission` does, and
+	 * {@see self::decide()} answers "no opinion" about reading for every other one.
+	 */
+	public function hasOwnReadPermissionRule(): bool
+	{
+		return $this->hasOwnOverride('checkReadPermission');
+	}
+
+	/**
 	 * The reason of a refused completion as legacy keeps it: one static of the base class shared by every
 	 * provider, falling back to the plain "access denied" while nobody has written into it. It is neither
 	 * reset nor copied per provider here, so the text of one provider goes on reaching the answer of another
@@ -496,10 +609,28 @@ final class LegacyProviderAdapter implements
 
 	//region the lifecycle
 
-	public function onAfterAdd(Activity $activity, ActivityOperationContext $context): void
+	/**
+	 * The files travel with the fields, as a list of ids - the shape legacy hands over at this point
+	 * (crm_activity.php:429-432, :467): the AI handler of a call starts the processing of its record off them.
+	 *
+	 * THE OWNER AND THE STORAGE TYPE COME OFF THE STATE OF THE RUN where the caller of the hook hands it over. The
+	 * input of the operation holds only what the caller named, and a call bound by `BINDINGS` alone names no owner:
+	 * the run derived it, and a hook handed the input would announce a call without one. A value the caller did name
+	 * is the one the run holds as well, so it reaches the hook unchanged. Without the state of the run the input
+	 * answers, which is what it did before the argument existed.
+	 */
+	public function onAfterAdd(
+		Activity $activity,
+		ActivityOperationContext $context,
+		?StorageFieldTransit $transit = null,
+	): void
 	{
 		($this->legacyClassName)::onAfterAdd(
-			$this->toInputFields($activity, $context),
+			$this->withStateColumns(
+				$this->withFiles($this->toInputFields($activity, $context), $activity->getFiles()),
+				state: $transit,
+				columns: self::STATE_COLUMNS_OF_AN_ADD,
+			),
 			['IS_RESTORATION' => $context->isRestoration()],
 		);
 	}
@@ -517,24 +648,45 @@ final class LegacyProviderAdapter implements
 	 * ({@see LifecycleCapabilityInterface::onAfterUpdate()}); where it hands none - an operation whose state of
 	 * the run IS the state being written - the model of the run answers, which is what it did before the
 	 * argument existed.
+	 *
+	 * THE TWO STATES CARRY THEIR FILES AND THE STORAGE COLUMNS THEIR READERS ASK FOR, and no state is read again for
+	 * them. The previous state is the one the update loaded before its write. The current one is what legacy hands
+	 * over as its re-read row: the storage columns of the run after the write - a value a step resolved, such as the
+	 * owner derived from the bindings of a rebinding, and the re-read row for the rest - and only where the run says
+	 * nothing, the input and then the previous state, which is what the row holds after a write that left the value
+	 * alone. A reader of the call needs them on both sides: "a record appeared" is a record on the current side and
+	 * none on the previous one (EventHandler.php:467-476), and a side without the files would read as a call without
+	 * a record. The rest of the rows of legacy is not rebuilt here - nothing that reads these arrays asks for it, and
+	 * rebuilding it would cost a read per update.
 	 */
 	public function onAfterUpdate(
 		Activity $activity,
 		ActivityChangeSet $changes,
 		ActivityOperationContext $context,
-		?Activity $inputActivity = null
+		?Activity $inputActivity = null,
+		?Activity $previousActivity = null,
+		?StorageFieldTransit $previousTransit = null,
+		?StorageFieldTransit $transit = null,
 	): void
 	{
+		$written = $inputActivity ?? $activity;
+		$previousFiles = $previousActivity?->getFiles();
+
 		($this->legacyClassName)::onAfterUpdate(
 			$activity->getId() ?? 0,
-			$this->toLegacyFields(
-				$inputActivity ?? $activity,
-				$context->getInputPayload(),
-				$context->getInputTransit(),
-				true,
+			$this->withFiles(
+				$this->toLegacyFields($written, $context->getInputPayload(), $context->getInputTransit(), true),
+				$written->getFiles(),
 			),
-			$this->toChangeSetFields($changes, previous: true),
-			$this->toInputFields($activity, $context),
+			$this->withStateColumns(
+				$this->withFiles($this->toChangeSetFields($changes, previous: true), $previousFiles),
+				fallback: $previousTransit,
+			),
+			$this->withStateColumns(
+				$this->withFiles($this->toInputFields($activity, $context), $activity->getFiles() ?? $previousFiles),
+				state: $transit,
+				fallback: $previousTransit,
+			),
 		);
 	}
 
@@ -811,6 +963,14 @@ final class LegacyProviderAdapter implements
 			$fields['BINDINGS'] = $this->toLegacyBindings($bindings);
 		}
 
+		// The communications travel with the bindings: legacy hands its hooks the whole `$arFields` of the
+		// operation, and the trigger of an outgoing call reads the dialed number off them (outgoingcalltrigger.php:59).
+		$communications = $activity->getCommunications();
+		if ($communications !== null)
+		{
+			$fields['COMMUNICATIONS'] = $this->toLegacyCommunications($communications);
+		}
+
 		return $fields;
 	}
 
@@ -990,6 +1150,69 @@ final class LegacyProviderAdapter implements
 	}
 
 	/**
+	 * The fields with the ids of the files, unless they already name them or the state says nothing about the
+	 * files. A list and not the serialized column: it is what legacy hands over in the fields of an operation, and
+	 * every reader of a state accepts both shapes (`CCrmActivity::extractStorageElementIds()`).
+	 *
+	 * @param array<string, mixed> $fields
+	 * @param ActivityStorageElement[]|null $files
+	 * @return array<string, mixed>
+	 */
+	private function withFiles(array $fields, ?array $files): array
+	{
+		if ($files === null || array_key_exists(self::COLUMN_STORAGE_ELEMENT_IDS, $fields))
+		{
+			return $fields;
+		}
+
+		$fields[self::COLUMN_STORAGE_ELEMENT_IDS] = array_map(
+			static fn(ActivityStorageElement $element): int => $element->getElementId(),
+			$files,
+		);
+
+		return $fields;
+	}
+
+	/**
+	 * The fields with the given storage columns, those of {@see self::STATE_COLUMNS_OF_AN_UPDATE} by default: the
+	 * value the state holds, an empty one included - a column cleared by the update is empty in the row as well;
+	 * where the state holds none, the value the fields name; where they name none either, a non-empty value of the
+	 * fallback state.
+	 *
+	 * @param array<string, mixed> $fields
+	 * @param StorageFieldTransit|null $state the state answering first, over the fields.
+	 * @param StorageFieldTransit|null $fallback the state answering only where neither the state nor the fields do.
+	 * @param string[] $columns
+	 * @return array<string, mixed>
+	 */
+	private function withStateColumns(
+		array $fields,
+		?StorageFieldTransit $state = null,
+		?StorageFieldTransit $fallback = null,
+		array $columns = self::STATE_COLUMNS_OF_AN_UPDATE,
+	): array
+	{
+		foreach ($columns as $column)
+		{
+			if ($state !== null && $state->has($column))
+			{
+				$fields[$column] = $state->get($column);
+			}
+			elseif (
+				!array_key_exists($column, $fields)
+				&& $fallback !== null
+				&& $fallback->has($column)
+				&& $fallback->get($column) !== null
+			)
+			{
+				$fields[$column] = $fallback->get($column);
+			}
+		}
+
+		return $fields;
+	}
+
+	/**
 	 * @param ActivityBinding[] $bindings
 	 * @return array<int, array{OWNER_TYPE_ID: int, OWNER_ID: int}>
 	 */
@@ -1005,6 +1228,26 @@ final class LegacyProviderAdapter implements
 		}
 
 		return $legacyBindings;
+	}
+
+	/**
+	 * @param ActivityCommunication[] $communications
+	 * @return array<int, array{ENTITY_TYPE_ID: int, ENTITY_ID: int, TYPE: string, VALUE: string}>
+	 */
+	private function toLegacyCommunications(array $communications): array
+	{
+		$legacyCommunications = [];
+		foreach ($communications as $communication)
+		{
+			$legacyCommunications[] = [
+				'ENTITY_TYPE_ID' => $communication->getEntityType()->getId(),
+				'ENTITY_ID' => $communication->getEntityId(),
+				'TYPE' => $communication->getType(),
+				'VALUE' => $communication->getValue(),
+			];
+		}
+
+		return $legacyCommunications;
 	}
 
 	/**
@@ -1182,6 +1425,16 @@ final class LegacyProviderAdapter implements
 	}
 
 	/**
+	 * A STRING A PROVIDER WRITES IS THE TIME OF THE CURRENT USER, because that is how it was printed: the dates
+	 * go out to the field array through `toString()` ({@see self::toLegacyValue()}), a provider derives its own
+	 * the same way (the provider of tasks writes `$task->getDeadline()->toString()` into DEADLINE), and
+	 * `Base::tryPostpone()` shifts the printed wall clock. Legacy read them all back through
+	 * `createFromUserTime()` before the write (`CCrmActivity::NormalizeDateTimeFields()`); read as server time
+	 * instead, a deadline lands later by the offset of the user (Mantis 260638). The inverse of `toString()` is
+	 * the parsing for the same current user, whoever the operation names as acting.
+	 *
+	 * THE SENTINEL OF "NO DEADLINE" IS NOT A MOMENT OF ANY USER and is kept as the column holds it.
+	 *
 	 * @throws ArgumentException when the provider wrote something no date can be read out of.
 	 */
 	private function toModelDateTime(string $column, mixed $value): ?DateTime
@@ -1196,16 +1449,22 @@ final class LegacyProviderAdapter implements
 			return null;
 		}
 
-		$dateTime = DateTime::tryParse($value);
-		if ($dateTime === null)
+		if (CCrmDateTimeHelper::IsMaxDatabaseDate($value))
+		{
+			return CCrmDateTimeHelper::getMaxDatabaseDateObject();
+		}
+
+		try
+		{
+			return DateTime::createFromUserTime($value);
+		}
+		catch (ObjectException)
 		{
 			throw new ArgumentException(
 				"The activity provider '{$this->legacyClassName}' wrote '{$value}' into {$column},"
 				. ' which is no date'
 			);
 		}
-
-		return $dateTime;
 	}
 
 	/**

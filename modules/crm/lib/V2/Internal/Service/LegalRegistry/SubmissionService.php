@@ -34,13 +34,25 @@ class SubmissionService
 		return $service instanceof self ? $service : new self();
 	}
 
-	public function execute(TrustedSubmissionContext $context, string $operation, SubmissionManifest $manifest,
-		?SubmissionResolution $resolution = null): RegistryResult
+	public function execute(
+		TrustedSubmissionContext $context,
+		string $operation,
+		SubmissionManifest $manifest,
+		?SubmissionResolution $resolution = null,
+		?string $normalizedRequestHash = null,
+		?string $publicPresentationToken = null,
+	): RegistryResult
 	{
 		$policy = PolicyGate::getInstance()->requireCollection();
 		if (!$policy->isSuccess()) { return $policy; }
 		try
 		{
+			if (($publicPresentationToken !== null && $normalizedRequestHash === null)
+				|| ($normalizedRequestHash !== null && ($operation !== 'prepare'
+				|| preg_match('/^[a-f0-9]{64}$/D', $normalizedRequestHash) !== 1)))
+			{
+				return self::error('INVALID_PAYLOAD');
+			}
 			if (!in_array($operation, ['prepare', 'complete', 'markFailed'], true)
 				|| ($operation !== 'complete' && $resolution !== null)) { return self::error('INVALID_PAYLOAD'); }
 			$proof = (new PresentationValidator())->verify($context, $manifest);
@@ -48,8 +60,15 @@ class SubmissionService
 				->getValue(Application::getConnection())
 			;
 
-			return self::transaction(function () use ($proof, $operation, $manifest, $resolution, $externalLevel)
-				: RegistryResult {
+			return self::transaction(function () use (
+				$proof, $operation, $manifest, $resolution, $externalLevel, $normalizedRequestHash, $context,
+				$publicPresentationToken,
+			): RegistryResult {
+				if ($publicPresentationToken !== null)
+				{
+					// Keep the live form lock through the durable freeze, before locking its source.
+					(new FormPresentationService())->verify($manifest->formId, $publicPresentationToken);
+				}
 				$source = self::currentRows(SourceTable::class, ['=FORM_ID' => $manifest->formId])[0] ?? null;
 				if ($source === null || (int)$source['ID'] !== $proof['sourceId']) { return self::error('STALE_PRESENTATION'); }
 				$row = self::currentRows(SubmissionTable::class, ['=SOURCE_ID' => $source['ID'],
@@ -57,6 +76,15 @@ class SubmissionService
 				if ($row !== null && !hash_equals($row['PAYLOAD_HASH'], PresentationValidator::identityHash($manifest)))
 				{
 					return self::error('IDEMPOTENCY_CONFLICT');
+				}
+				if ($row !== null && $normalizedRequestHash !== null)
+				{
+					$stored = json_decode($row['MANIFEST'], true, 512, JSON_THROW_ON_ERROR);
+					$hash = $stored['formSubmission']['requestHash'] ?? null;
+					if (!is_string($hash) || !hash_equals($hash, $normalizedRequestHash))
+					{
+						return self::error('IDEMPOTENCY_CONFLICT');
+					}
 				}
 				if ($row === null)
 				{
@@ -66,9 +94,14 @@ class SubmissionService
 					$live = FormSourceGateway::getInstance()->captureLiveForm($manifest->formId);
 					$bindings = self::currentRows(UsageTable::class, ['=SOURCE_ID' => $source['ID'], '=DATE_END' => null]);
 					$versions = []; $snapshots = [];
+					$versionIds = array_values(array_unique(array_map(
+						static fn($item): int => $item->versionId, $manifest->items,
+					)));
+					$versionRows = $versionIds === [] ? [] : self::currentRows(VersionTable::class, ['@ID' => $versionIds]);
+					$versionRows = array_column($versionRows, null, 'ID');
 					foreach ($manifest->items as $item)
 					{
-						$version = self::currentRows(VersionTable::class, ['=ID' => $item->versionId])[0] ?? null;
+						$version = $versionRows[$item->versionId] ?? null;
 						if ($version === null || ($proof['versions'][(string)$item->versionId] ?? null) !== $version['CONTENT_HASH'])
 						{
 							return self::error('STALE_PRESENTATION');
@@ -87,6 +120,13 @@ class SubmissionService
 					$frozen = json_decode($row['MANIFEST'], true, 512, JSON_THROW_ON_ERROR);
 					$frozen['registryFreeze'] = ['schemaVersion' => 1, 'timezone' => $timezone,
 						'sourceName' => $live['name'], 'versions' => (object)$snapshots];
+					if ($normalizedRequestHash !== null)
+					{
+						$frozen['formSubmission'] = [
+							'requestHash' => $normalizedRequestHash,
+							'trustedToken' => $context->presentationToken,
+						];
+					}
 					$json = LedgerRepository::canonicalJson($frozen);
 					if (strlen($json) > 1048576) { return self::error('INVALID_PAYLOAD'); }
 					$saved = SubmissionTable::update((int)$row['ID'], ['MANIFEST' => $json]);

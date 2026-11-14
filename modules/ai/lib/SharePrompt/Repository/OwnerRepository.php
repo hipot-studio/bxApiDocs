@@ -123,7 +123,7 @@ class OwnerRepository extends BaseRepository
 
 	public function unsetDeletedFlagsForUsers(array $usersIds, int $promptId): Result
 	{
-		$idList = implode(',', $usersIds);
+		$idList = implode(',', array_unique(array_map('intval', $usersIds)));
 
 		return $this->getConnection()->query("
 			UPDATE 

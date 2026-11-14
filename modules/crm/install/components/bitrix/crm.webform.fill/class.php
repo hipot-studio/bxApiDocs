@@ -247,6 +247,8 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 		$resultRedirectUrl = '';
 		$resultId = null;
 		$gid = null;
+		$legalSubmissionUnavailable = false;
+		$legalSubmissionCode = 'FEATURE_UNAVAILABLE';
 
 		$action = $request->get('action');
 		if($action == 'inc_counter')
@@ -282,86 +284,118 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 		}
 		else
 		{
-
-			foreach($this->arResult['FIELDS'] as $fieldKey => $field)
+			$guard = null;
+			try
 			{
-				if($field['type'] == 'file')
+				$guard = \Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormMutationGuard::acquire(
+					(int)$this->formId,
+				);
+				if ((new WebForm\Embed\Config($this->form))->hasLegalDocuments(true)
+					|| $request->getPost('legalDocuments') !== null)
 				{
-					$values = $request->getFile($field['name']);
-					if(is_array($values['tmp_name']))
-					{
-						$valuesTmp = array();
-						foreach($values as $fileKey => $fileValue)
-						{
-							foreach($fileValue as $valueIndex => $value)
-							{
-								$valuesTmp[$valueIndex][$fileKey] = $value;
-							}
-						}
-
-						$values = $valuesTmp;
-					}
-					else
-					{
-						$values = array($values);
-					}
+					$this->markTelemetryError('validation');
+					$resultError = true;
+					$resultText = $this->arResult['FORM']['RESULT_FAILURE_TEXT'];
+					$legalSubmissionUnavailable = true;
+					$resultRedirectUrl = $this->arResult['FORM']['RESULT_FAILURE_URL'];
 				}
 				else
 				{
-					$values = $request->getPost($field['name']);
-				}
+					$guard->release();
+					$guard = null;
 
-				if(!is_array($values))
-				{
-					$values = array($values);
-				}
-
-				if($field['type'] == 'phone')
-				{
-					$valuesTmp = array();
-					foreach($values as $value)
+					foreach($this->arResult['FIELDS'] as $fieldKey => $field)
 					{
-						$value = preg_replace("/[^0-9+]/", '', $value);
-						$valuesTmp[] = $value;
-					}
-					$values = $valuesTmp;
-				}
+						if($field['type'] == 'file')
+						{
+							$values = $request->getFile($field['name']);
+							if(is_array($values['tmp_name']))
+							{
+								$valuesTmp = array();
+								foreach($values as $fileKey => $fileValue)
+								{
+									foreach($fileValue as $valueIndex => $value)
+									{
+										$valuesTmp[$valueIndex][$fileKey] = $value;
+									}
+								}
 
-				if ($field['entity_field_name'] == 'COMMENTS')
-				{
-					$valuesTmp = array();
-					foreach($values as $value)
+								$values = $valuesTmp;
+							}
+							else
+							{
+								$values = array($values);
+							}
+						}
+						else
+						{
+							$values = $request->getPost($field['name']);
+						}
+
+						if(!is_array($values))
+						{
+							$values = array($values);
+						}
+
+						if($field['type'] == 'phone')
+						{
+							$valuesTmp = array();
+							foreach($values as $value)
+							{
+								$value = preg_replace("/[^0-9+]/", '', $value);
+								$valuesTmp[] = $value;
+							}
+							$values = $valuesTmp;
+						}
+
+						if ($field['entity_field_name'] == 'COMMENTS')
+						{
+							$valuesTmp = array();
+							foreach($values as $value)
+							{
+								$valuesTmp[] = htmlspecialcharsbx($value);
+							}
+							$values = $valuesTmp;
+						}
+
+						$field['values'] = $values;
+						$this->arResult['FIELDS'][$fieldKey] = $field;
+					}
+
+					$result = $this->form->addResult(
+						$this->arResult['FIELDS'],
+						$this->getAddResultParameters()
+					);
+					if($this->form->hasErrors())
 					{
-						$valuesTmp[] = htmlspecialcharsbx($value);
-					}
-					$values = $valuesTmp;
-				}
+						$this->errors = $this->form->getErrors();
 
-				$field['values'] = $values;
-				$this->arResult['FIELDS'][$fieldKey] = $field;
+						$resultError = true;
+						$resultText = $this->arResult['FORM']['RESULT_FAILURE_TEXT'];
+						$resultRedirectUrl = $this->arResult['FORM']['RESULT_FAILURE_URL'];
+					}
+					else
+					{
+						$resultError = false;
+						$resultText = $this->arResult['FORM']['RESULT_SUCCESS_TEXT'];
+						$resultId = $result->getId();
+						$resultRedirectUrl = $result->getUrl();
+						$gid = $this->processPostGuest($result);
+						unset($_SESSION[self::TELEMETRY_SESSION_KEY][$this->formId]);
+					}
+				}
 			}
-
-			$result = $this->form->addResult(
-				$this->arResult['FIELDS'],
-				$this->getAddResultParameters()
-			);
-			if($this->form->hasErrors())
+			catch (\RuntimeException $error)
 			{
-				$this->errors = $this->form->getErrors();
-
+				if ($error->getMessage() !== 'REVISION_CONFLICT') { throw $error; }
+				$this->markTelemetryError('validation');
 				$resultError = true;
 				$resultText = $this->arResult['FORM']['RESULT_FAILURE_TEXT'];
 				$resultRedirectUrl = $this->arResult['FORM']['RESULT_FAILURE_URL'];
+				$legalSubmissionUnavailable = true;
+				$legalSubmissionCode = 'INVALID_STATE';
 			}
-			else
-			{
-				$resultError = false;
-				$resultText = $this->arResult['FORM']['RESULT_SUCCESS_TEXT'];
-				$resultId = $result->getId();
-				$resultRedirectUrl = $result->getUrl();
-				$gid = $this->processPostGuest($result);
-				unset($_SESSION[self::TELEMETRY_SESSION_KEY][$this->formId]);
-			}
+			finally { $guard?->release(); }
 		}
 
 		if($this->arParams['AJAX_POST'] == 'Y')
@@ -375,14 +409,19 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 				$redirectDelay = Form::REDIRECT_DELAY;
 			}
 
-			$this->answerJson(array(
+			$answer = array(
 				'error' => $resultError,
 				'text' => $resultText,
 				'redirect' => $resultRedirectUrl,
 				'redirectDelay' => (int) $redirectDelay,
 				'resultId' => $resultId,
 				'gid' => $gid
-			));
+			);
+			if ($legalSubmissionUnavailable)
+			{
+				$answer['errors'] = [['code' => $legalSubmissionCode, 'message' => 'Legal documents are unavailable.']];
+			}
+			$this->answerJson($answer);
 		}
 		else
 		{

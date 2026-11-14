@@ -67,8 +67,22 @@ final class AudienceResolver
 	 */
 	public function forRealObject(int $realObjectId): array
 	{
-		$rightsCodes = $this->rightsCodesOf($realObjectId);
+		return $this->forRightsCodes($realObjectId, $this->rightsCodesOf($realObjectId));
+	}
 
+	/**
+	 * The same audience over codes of the object the caller read itself, as {@see rightsCodesOf()} returns
+	 * them. An edit of rights needs it: after the edit the object is a checkpoint whose simple rights are
+	 * written only by the recalculation, so its codes are read before the edit.
+	 *
+	 * @param string[] $rightsCodes
+	 * @return string[]
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function forRightsCodes(int $realObjectId, array $rightsCodes): array
+	{
 		return array_values(array_unique(array_merge(
 			$rightsCodes,
 			self::personalCodesOf($this->interactionOnlyUserIds($realObjectId, $rightsCodes)),
@@ -146,6 +160,28 @@ final class AudienceResolver
 		}
 
 		$codes = Driver::getInstance()->getRightsManager()->getSimpleRightAccessCodesForObject($realObjectId);
+
+		return $this->withCreatorUnfolded($codes, $realObjectId);
+	}
+
+	/**
+	 * The same set as {@see rightsCodesOf}, for a caller that holds the simple rights of the object
+	 * itself rather than reading them through the rights of the module.
+	 *
+	 * @param string[] $simpleCodes
+	 * @return string[]
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function rightsCodesFrom(array $simpleCodes, int $realObjectId): array
+	{
+		if ($realObjectId <= 0)
+		{
+			return [];
+		}
+
+		$codes = array_values(array_unique(array_map('strval', $simpleCodes)));
 
 		return $this->withCreatorUnfolded($codes, $realObjectId);
 	}

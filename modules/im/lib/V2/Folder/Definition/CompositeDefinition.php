@@ -97,7 +97,10 @@ final class CompositeDefinition implements FolderDefinition
 	/**
 	 * Member of "All" iff the chat belongs to any enabled source - each source's
 	 * own definition answers membership (recent section + root frame), so this
-	 * agrees with {@see self::toSelection()} / {@see SelectionResolver::matchingChatIds()}.
+	 * agrees with {@see self::toSelection()} / {@see SelectionResolver::matchingChatIds()}. Membership
+	 * is the composition and nothing else, while the read of the folder narrows that same composition
+	 * further ({@see \Bitrix\Im\V2\Folder\FolderRecentProvider} also drops a private conversation the
+	 * page no longer shows), so a member chat is not necessarily on the page.
 	 */
 	public function containsChat(int $chatId): bool
 	{

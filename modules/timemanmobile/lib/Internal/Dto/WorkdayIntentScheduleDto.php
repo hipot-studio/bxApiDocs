@@ -21,4 +21,7 @@ class WorkdayIntentScheduleDto extends Dto
 	public int $suppressedUntilTimestamp = 0;
 	public bool $hasTargetAction = false;
 	public bool $shiftStartable = true;
+
+	/** Source of targetStartTimestamp in timeman; empty when timeman does not report it */
+	public string $targetStartBasis = '';
 }

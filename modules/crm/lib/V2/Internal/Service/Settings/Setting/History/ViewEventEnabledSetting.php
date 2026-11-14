@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class ViewEventEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.history.view_event.enabled';
+	public const ID = 'crm.history.view_event.enabled';
 
 	private readonly HistorySettings $historySettings;
 
@@ -26,18 +26,20 @@ final class ViewEventEnabledSetting extends AbstractSetting
 		$this->historySettings = $historySettings ?? HistorySettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'history_enable_view_event',
 		);
 	}
 

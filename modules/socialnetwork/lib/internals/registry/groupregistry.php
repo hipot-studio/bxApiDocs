@@ -87,11 +87,16 @@ class GroupRegistry
 			return;
 		}
 
+		// SITES stays in the common select: a group normally has one site, so it barely
+		// multiplies rows. Only MEMBERS does, hence it is loaded separately.
 		$rows = WorkgroupTable::query()
-			->setSelect(['*', 'SITES', 'MEMBERS'])
+			->setSelect(['*', 'SITES'])
 			->whereIn('ID', $groupIds)
 			->exec()
 			->fetchCollection();
+
+		$foundIds = $rows->getIdList();
+		$membersByGroup = empty($foundIds) ? [] : $this->loadMembers($foundIds);
 
 		foreach ($groupIds as $groupId)
 		{
@@ -103,7 +108,12 @@ class GroupRegistry
 				continue;
 			}
 
-			$fields = $this->loadData($groupId, $group->collectValues());
+			$baseFields = $group->collectValues();
+			// Must stay a collection even when empty: the field type is visible outside the
+			// registry, and fillUserMembers leaves the value untouched for an empty group.
+			$baseFields['MEMBERS'] = $membersByGroup[(int)$groupId] ?? UserToGroupTable::createCollection();
+
+			$fields = $this->loadData($groupId, $baseFields);
 			if (empty($fields))
 			{
 				static::$storage[$groupId] = null;
@@ -113,6 +123,30 @@ class GroupRegistry
 
 			$this->fillStorage($fields);
 		}
+	}
+
+	/**
+	 * @return array<int, MemberEntityCollection>
+	 */
+	protected function loadMembers(array $groupIds): array
+	{
+		$rows = UserToGroupTable::query()
+			->setSelect(['ID', 'GROUP_ID', 'USER_ID', 'ROLE'])
+			->whereIn('GROUP_ID', $groupIds)
+			->setOrder(['GROUP_ID' => 'ASC', 'USER_ID' => 'ASC'])
+			->fetchAll();
+
+		$rowsByGroup = [];
+
+		foreach ($rows as $row)
+		{
+			$rowsByGroup[(int)$row['GROUP_ID']][] = $row;
+		}
+
+		return array_map(
+			static fn (array $groupRows): MemberEntityCollection => UserToGroupTable::wakeUpCollection($groupRows),
+			$rowsByGroup
+		);
 	}
 
 	protected function loadData(int $groupId, array $baseFields): array

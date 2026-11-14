@@ -2,8 +2,13 @@
 
 namespace Bitrix\StaffTrack\Internal\Service\Office;
 
+use Bitrix\StaffTrack\Access\Model\OfficeModel;
+use Bitrix\StaffTrack\Access\OfficeAccessController;
+use Bitrix\StaffTrack\Access\OfficeAction;
 use Bitrix\StaffTrack\Access\OfficeCustody;
+use Bitrix\StaffTrack\Dictionary\OfficeAccessRequestStatus;
 use Bitrix\StaffTrack\Internal\Model\Office;
+use Bitrix\StaffTrack\Internal\Repository\OfficeAccessRequestRepository;
 use Bitrix\StaffTrack\Item;
 
 /**
@@ -22,24 +27,33 @@ use Bitrix\StaffTrack\Item;
  * with the numbers alone, as a directory is, and neither the staff nor their presence is assembled for
  * them.
  *
+ * Only a card closed to its viewer tells them where their request to see the staff stands: none, pending
+ * or rejected. An annulled request reads as none, since nothing keeps the viewer from asking again. An
+ * open card and a directory carry no status, and the request is not read for them.
+ *
  * Whether the viewer may edit an office is answered by the circle of custody {@see OfficeCustody} - the
  * same predicate the rule of editing stands on, asked directly and not through the access controller
  * and its events. The answer does not depend on the office, so a directory asks it once before the
  * offices are walked.
+ *
+ * Whether the viewer may delete an office is the answer of the rule of removal, asked through the access
+ * controller. It does not depend on the office either and is asked once per answer the same way.
  */
 class OfficeItemMapper
 {
-	private const MINUTES_IN_HOUR = 60;
+	private const NO_ACCESS_REQUEST = 'none';
 
 	private PhotoService $photoService;
 	private EmployeeService $employeeService;
 	private EmployeeListVisibility $employeeListVisibility;
+	private OfficeAccessRequestRepository $officeAccessRequestRepository;
 
 	public function __construct()
 	{
 		$this->photoService = new PhotoService();
 		$this->employeeService = new EmployeeService();
 		$this->employeeListVisibility = new EmployeeListVisibility();
+		$this->officeAccessRequestRepository = new OfficeAccessRequestRepository();
 	}
 
 	/**
@@ -55,6 +69,7 @@ class OfficeItemMapper
 		$photosByOffice = $this->loadPhotosByOfficeIds($officeIds);
 		$countsByOffice = $this->loadEmployeeCountsByOfficeIds($officeIds);
 		$canEdit = $this->isCustodian($viewerId);
+		$canDelete = $this->canDeleteOffices($viewerId);
 
 		return new Item\Collection\OfficeCollection(array_map(
 			fn (Office $office): Item\Office => $this->build(
@@ -63,6 +78,7 @@ class OfficeItemMapper
 				$countsByOffice[(int)$office->getId()] ?? 0,
 				null,
 				$canEdit,
+				$canDelete,
 			),
 			$offices,
 		));
@@ -72,12 +88,22 @@ class OfficeItemMapper
 	{
 		$officeId = (int)$office->getId();
 
+		$photos = $this->loadPhotos($officeId);
+		$assignedCount = $this->loadEmployeeCount($officeId);
+		$employees =
+			$this->isEmployeeListVisibleTo($officeId, $viewerId)
+				? $this->loadFirstEmployeePage($officeId)
+				: null
+		;
+
 		return $this->build(
 			$office,
-			$this->loadPhotos($officeId),
-			$this->loadEmployeeCount($officeId),
-			$this->isEmployeeListVisibleTo($officeId, $viewerId) ? $this->loadFirstEmployeePage($officeId) : null,
+			$photos,
+			$assignedCount,
+			$employees,
 			$this->isCustodian($viewerId),
+			$this->canDeleteOffices($viewerId),
+			$employees === null ? $this->getAccessRequestStatus($officeId, $viewerId) : null,
 		);
 	}
 
@@ -89,6 +115,13 @@ class OfficeItemMapper
 	protected function isCustodian(int $viewerId): bool
 	{
 		return OfficeCustody::getInstance()->isMember($viewerId);
+	}
+
+	protected function canDeleteOffices(int $viewerId): bool
+	{
+		return OfficeAccessController::getInstance($viewerId)
+			->check(OfficeAction::DELETE, OfficeModel::createFromId(0))
+		;
 	}
 
 	protected function loadPhotos(int $officeId): Item\Collection\OfficePhotoCollection
@@ -135,6 +168,30 @@ class OfficeItemMapper
 	}
 
 	/**
+	 * @return string the stored status of the viewer's request to the office, 'none' when there is none
+	 */
+	protected function loadAccessRequestStatus(int $officeId, int $viewerId): string
+	{
+		$request = $this->officeAccessRequestRepository->find($officeId, $viewerId);
+
+		return $request === null ? self::NO_ACCESS_REQUEST : $request['status']->value;
+	}
+
+	/**
+	 * A grant stored after the visibility was read does not open this card, so it reads as no request.
+	 */
+	private function getAccessRequestStatus(int $officeId, int $viewerId): string
+	{
+		$status = $this->loadAccessRequestStatus($officeId, $viewerId);
+
+		return match ($status)
+		{
+			OfficeAccessRequestStatus::PENDING->value, OfficeAccessRequestStatus::REJECTED->value => $status,
+			default => self::NO_ACCESS_REQUEST,
+		};
+	}
+
+	/**
 	 * @param ?Item\Collection\OfficeEmployeeCollection $employees Null when the staff was not assembled.
 	 */
 	private function build(
@@ -143,6 +200,8 @@ class OfficeItemMapper
 		int $assignedCount,
 		?Item\Collection\OfficeEmployeeCollection $employees,
 		bool $canEdit,
+		bool $canDelete,
+		?string $accessRequestStatus = null,
 	): Item\Office
 	{
 		return new Item\Office(
@@ -158,6 +217,9 @@ class OfficeItemMapper
 			employees: $employees ?? new Item\Collection\OfficeEmployeeCollection([]),
 			canEdit: $canEdit,
 			workingHours: $this->buildWorkingHours($office),
+			version: OfficeCardVersion::versionOf($office),
+			canDelete: $canDelete,
+			accessRequestStatus: $accessRequestStatus,
 		);
 	}
 
@@ -175,26 +237,9 @@ class OfficeItemMapper
 		$from = $office->getWorkTimeFrom();
 		$to = $office->getWorkTimeTo();
 
-		if ($from === null || $to === null)
-		{
-			return null;
-		}
-
-		return new Item\OfficeWorkingHours(
-			from: $this->formatMinutes((int)$from),
-			to: $this->formatMinutes((int)$to),
-		);
-	}
-
-	/**
-	 * The storage counts the working day in minutes from midnight, a client reads it as hours.
-	 */
-	private function formatMinutes(int $minutes): string
-	{
-		return sprintf(
-			'%02d:%02d',
-			intdiv($minutes, self::MINUTES_IN_HOUR),
-			$minutes % self::MINUTES_IN_HOUR,
+		return Item\OfficeWorkingHours::fromMinutes(
+			$from === null ? null : (int)$from,
+			$to === null ? null : (int)$to,
 		);
 	}
 }

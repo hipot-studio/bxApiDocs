@@ -15,6 +15,7 @@ class AddSubFolderCommand extends AbstractCommand
 	 * @param string $name
 	 * @param int $createdBy
 	 * @param bool $generateUniqueName
+	 * @param bool $autoCorrect
 	 * @param bool $shouldCheckUnifiedLink
 	 */
 	public function __construct(
@@ -22,6 +23,7 @@ class AddSubFolderCommand extends AbstractCommand
 		public readonly string $name,
 		public readonly int $createdBy,
 		public readonly bool $generateUniqueName = false,
+		public readonly bool $autoCorrect = false,
 		public readonly bool $shouldCheckUnifiedLink = false,
 	)
 	{

@@ -1,9 +1,11 @@
 <?php
 
 use Bitrix\Disk;
+use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Component\DocumentHeaderPage;
+use Bitrix\Disk\Internal\Service\Bitrix24SiteUrlResolver;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\BaseComponent;
@@ -17,7 +19,6 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Session\SessionInterface;
@@ -241,9 +242,10 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			Loader::includeModule('im');
 		}
 
-		if ($this->arResult['EXTERNAL_LINK_MODE'] && ModuleManager::isModuleInstalled('bitrix24'))
+		$siteUrlResolver = Bitrix24SiteUrlResolver::create();
+		if ($this->arResult['EXTERNAL_LINK_MODE'] && $siteUrlResolver->isCloudPortal())
 		{
-			$this->arResult['HEADER_LOGO_LINK'] = 'https://bitrix24.com';
+			$this->arResult['HEADER_LOGO_LINK'] = $siteUrlResolver->getUrl();
 			if (Loader::includeModule('bitrix24') && !\CBitrix24::isCustomDomain())
 			{
 				$host = parse_url(UrlManager::getInstance()->getHostUrl(), PHP_URL_HOST);
@@ -252,7 +254,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 				$configBuilder->setBaseUrlToLogo($baseUrlToLogo);
 			}
 		}
-		elseif ($this->arResult['EXTERNAL_LINK_MODE'] && !ModuleManager::isModuleInstalled('bitrix24'))
+		elseif ($this->arResult['EXTERNAL_LINK_MODE'] && !$siteUrlResolver->isCloudPortal())
 		{
 			$this->arResult['HEADER_LOGO_LINK'] = UrlManager::getInstance()->getHostUrl();
 		}
@@ -407,7 +409,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 	private function registerRestrictionUsage(string $documentKey, int $userId): void
 	{
-		$this->restrictionManager->registerUsage($documentKey, $userId);
+		$this->restrictionManager->registerUsage($documentKey, $userId, DocumentService::OnlyOffice);
 	}
 
 	private function lockForRestriction(): bool
@@ -518,7 +520,9 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		{
 			return $this->unifiedLinkUrl->addUlsToUrl(
 				url: $downloadUrl,
-				uls: $this->unifiedLinkAccessService->getUlsForObjectId($file->getId()),
+				uls: $documentSession->isVersion()
+					? $this->unifiedLinkAccessService->getUlsForVersion($file->getId(), $documentSession->getVersionId())
+					: $this->unifiedLinkAccessService->getUlsForObjectId($file->getId()),
 			);
 		}
 
@@ -697,6 +701,11 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 	protected function isEditAllowed(Disk\Document\Models\DocumentSession $documentSession): bool
 	{
+		if ($documentSession->findEditingRefusal() !== null)
+		{
+			return false;
+		}
+
 		$allowEdit = false;
 
 		if (

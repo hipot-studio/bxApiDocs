@@ -46,7 +46,14 @@ class ServerTable extends DataManager
 				->configureRequired()
 			,
 			(new IntegerField('VERSION')),
+			(new StringField('GENERATION'))
+				->configureNullable()
+				->configureSize(32)
+			,
 			(new EnumField(('IS_PORTAL_ID_VERIFIED')))
+				->configureValues(['Y', 'N'])
+				->configureDefaultValue('N'),
+			(new EnumField('PROTOCOL_REQUIRED'))
 				->configureValues(['Y', 'N'])
 				->configureDefaultValue('N'),
 			(new StringField('PORTAL_ID'))

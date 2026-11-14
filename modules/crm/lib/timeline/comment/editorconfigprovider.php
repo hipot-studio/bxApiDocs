@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Timeline\Comment;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\CopilotFeatureCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\CommentController;
@@ -49,6 +50,7 @@ class EditorConfigProvider
 				'moduleId' => 'crm',
 				'category' => 'crm_timeline_comment',
 				'contextId' => 'crm_timeline_comment_editor_' . $commentId,
+				'feature' => CopilotFeatureCode::TIMELINE_COMMENT_EDITOR,
 				'autoHide' => true,
 			]];
 		}

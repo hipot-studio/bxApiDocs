@@ -292,6 +292,18 @@ class ChatFactory
 		return $this->tryFromCacheOrFindById($chatId);
 	}
 
+	/**
+	 * The chats of a whole list brought into the cache in one selection: read one by one, every chat a
+	 * caller names costs a select of its own. Nothing is read here beyond that - the chats themselves are
+	 * still taken with {@see self::getChatById()}, which finds them in the cache this call has warmed.
+	 *
+	 * @param int[] $chatIds
+	 */
+	public function fillChats(array $chatIds): void
+	{
+		$this->getChatsByIds($chatIds);
+	}
+
 	public function getChatFromCache(int $chatId, CacheLevel $cacheLevel = CacheLevel::All): ?Chat
 	{
 		return $this->tryFromCache($chatId, $cacheLevel);

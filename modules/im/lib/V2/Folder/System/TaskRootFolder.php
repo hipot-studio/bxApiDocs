@@ -6,11 +6,10 @@ namespace Bitrix\Im\V2\Folder\System;
 use Bitrix\Im\V2\Application\Features;
 
 /**
- * "Tasks" source of the composite {@see AllFolder}. Shares the recent section
- * with the visible {@see TaskFolder} but keeps its own code ('tasksTaskRoot')
- * to bypass the unique (USER_ID, PARENT_CHAT_ID, CODE) key, and stays
- * root-scoped: unlike {@see TaskFolder} it does not flatten nested chats into
- * the root list. Hidden from the tab bar.
+ * "Tasks" source of the composite {@see AllFolder}. Shares the recent section with
+ * {@see TaskFolder} but keeps its own code ('tasksTaskRoot') to bypass the unique
+ * (USER_ID, PARENT_CHAT_ID, CODE) key, and stays root-scoped: unlike {@see TaskFolder}
+ * it does not flatten nested chats into the root list. Hidden by the system.
  */
 final class TaskRootFolder extends SystemFolder
 {
@@ -42,7 +41,7 @@ final class TaskRootFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_TASKS_ROOT_DESCRIPTION';
 	}
 
-	public function isAvailable(int $userId): bool
+	public function isAvailableOnPortal(): bool
 	{
 		return Features::isChatFolderAllAvailable() && Features::isTasksRecentListAvailable();
 	}
@@ -56,8 +55,8 @@ final class TaskRootFolder extends SystemFolder
 		return false;
 	}
 
-	public function isVisible(): bool
+	public function isHiddenBySystem(): bool
 	{
-		return false;
+		return true;
 	}
 }

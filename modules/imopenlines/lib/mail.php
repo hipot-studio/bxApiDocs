@@ -114,7 +114,7 @@ class Mail
 		$mess = Loc::loadLanguageFile(__FILE__, $session['CONFIG_LANGUAGE_ID']? $session['CONFIG_LANGUAGE_ID']: null);
 
 		$lineName = $session['CONFIG_LINE_NAME'];
-		$widgetUrl = $session['EXTRA_URL'];
+		$widgetUrl = Tools\Url::getSafeExternalUrl($session['EXTRA_URL']) ?? '';
 		if (empty($widgetUrl))
 		{
 			if (!empty($session['LIVECHAT_URL_CODE_PUBLIC']))
@@ -126,11 +126,11 @@ class Mail
 				$widgetUrl = \Bitrix\ImOpenLines\Common::getServerAddress().'/online/'.$session['LIVECHAT_URL_CODE'];
 			}
 		}
-		$widgetUrlParsed = parse_url($widgetUrl);
+		$widgetDomain = Tools\Url::getSafeHost($widgetUrl);
 
 		$title = str_replace(
 			Array('#SITE_URL#', '#SESSION_ID#'),
-			Array($widgetUrlParsed['host'], $sessionId),
+			Array($widgetDomain, $sessionId),
 			$mess['IMOL_MAIL_HISTORY_TITLE']
 		);
 		$actionTitle = $mess['IMOL_MAIL_ANSWER_ACTION_TITLE'];
@@ -148,7 +148,7 @@ class Mail
 			"TEMPLATE_SESSION_ID" => $sessionId,
 			"TEMPLATE_ACTION_TITLE" => $actionTitle,
 			"TEMPLATE_ACTION_DESC" => $actionDesc,
-			"TEMPLATE_WIDGET_DOMAIN" => $widgetUrlParsed['host'],
+			"TEMPLATE_WIDGET_DOMAIN" => $widgetDomain,
 			"TEMPLATE_WIDGET_URL" => $widgetUrl,
 			"TEMPLATE_LINE_NAME" => $lineName,
 		);
@@ -275,7 +275,7 @@ class Mail
 		));
 
 		$lineName = $session['CONFIG_LINE_NAME'];
-		$widgetUrl = $session['EXTRA_URL'];
+		$widgetUrl = Tools\Url::getSafeExternalUrl($session['EXTRA_URL']) ?? '';
 		if (empty($widgetUrl))
 		{
 			if (!empty($session['LIVECHAT_URL_CODE_PUBLIC']))
@@ -287,11 +287,11 @@ class Mail
 				$widgetUrl = \Bitrix\ImOpenLines\Common::getServerAddress().'/online/'.$session['LIVECHAT_URL_CODE'];
 			}
 		}
-		$widgetUrlParsed = parse_url($widgetUrl);
+		$widgetDomain = Tools\Url::getSafeHost($widgetUrl);
 
 		$title = str_replace(
 			Array('#SITE_URL#', '#SESSION_ID#'),
-			Array($widgetUrlParsed['host'], $sessionId),
+			Array($widgetDomain, $sessionId),
 			$mess['IMOL_MAIL_HISTORY_TITLE']
 		);
 		$actionTitle = $mess['IMOL_MAIL_HISTORY_ACTION_TITLE'];
@@ -308,7 +308,7 @@ class Mail
 			"TEMPLATE_SESSION_ID" => $sessionId,
 			"TEMPLATE_ACTION_TITLE" => $actionTitle,
 			"TEMPLATE_ACTION_DESC" => $actionDesc,
-			"TEMPLATE_WIDGET_DOMAIN" => $widgetUrlParsed['host'],
+			"TEMPLATE_WIDGET_DOMAIN" => $widgetDomain,
 			"TEMPLATE_WIDGET_URL" => $widgetUrl,
 			"TEMPLATE_LINE_NAME" => $lineName,
 		);

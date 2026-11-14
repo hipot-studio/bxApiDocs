@@ -2,6 +2,7 @@
 
 namespace Bitrix\AI\ShareRole\Components\Grid\Row\Field\Assembler;
 
+use Bitrix\AI\Facade\User;
 use Bitrix\AI\ShareRole\Service\GridRole\Dto\GridRoleDto;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
@@ -21,22 +22,30 @@ class ShareRoleNameFieldAssembler extends FieldAssembler
 
 		$button = $this->getButton($value->isFavorite(), $value->isActive() , $roleCode, $name);
 
-		$title = Loc::getMessage('ROLE_LIBRARY_GRID_ACTION_EDIT_ROLE');
-
-		$onTitleClick = HtmlFilter::encode(
-			"BX.AI.ShareRole.Library.Controller.handleClickOnRoleName(event, '{$roleCode}')"
-		);
+		$titleAttributes = '';
+		if ($value->getAuthorId() === $this->getCurrentUserId())
+		{
+			$title = Loc::getMessage('ROLE_LIBRARY_GRID_ACTION_EDIT_ROLE');
+			$onTitleClick = HtmlFilter::encode(
+				"BX.AI.ShareRole.Library.Controller.handleClickOnRoleName(event, '{$roleCode}')",
+			);
+			$titleAttributes = "title='{$title}' onclick=\"{$onTitleClick}\"";
+		}
 
 		return "
 			<div class='ai__role-library-grid_role-title-cell'>
 				<div 
-					title='{$title}' 
-					onclick=\"{$onTitleClick}\" 
+					{$titleAttributes}
 					class='ai__role-library-grid_role-title'
 					>{$encodedName}</div>
 				{$button}
 			</div>
 		";
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return User::getCurrentUserId();
 	}
 
 	private function getButton(bool $isFavourite, bool $isActive, string $roleCode, string $name): string
@@ -54,14 +63,14 @@ class ShareRoleNameFieldAssembler extends FieldAssembler
 		{
 			$isFavouriteButtonTitle = Loc::getMessage('ROLE_LIBRARY_GRID_ACTION_REMOVE_FROM_FAVOURITE');
 			$onFavouriteLabelClick = HtmlFilter::encode(
-				"$jsControllerName.handleClickOnRoleIsFavouriteLabel(event, '{$roleCode}','false', '{$name}')"
+				"$jsControllerName.handleClickOnRoleIsFavouriteLabel(event, '{$roleCode}','false', '{$name}')",
 			);
 		}
 		else
 		{
 			$isFavouriteButtonTitle = Loc::getMessage('ROLE_LIBRARY_GRID_ACTION_ADD_TO_FAVOURITE');
 			$onFavouriteLabelClick = HtmlFilter::encode(
-				"$jsControllerName.handleClickOnRoleIsFavouriteLabel(event, '{$roleCode}','true', '{$name}')"
+				"$jsControllerName.handleClickOnRoleIsFavouriteLabel(event, '{$roleCode}','true', '{$name}')",
 			);
 		}
 

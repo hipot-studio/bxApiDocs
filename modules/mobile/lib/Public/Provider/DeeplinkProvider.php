@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mobile\Public\Provider;
 
+use Bitrix\Mobile\Internal\Entity\Deeplink\Payload;
 use Bitrix\Mobile\Internal\Service\Deeplink\AuthLinkService;
 
 /**
@@ -20,9 +21,10 @@ final class DeeplinkProvider
 	 * @param string $intent code of the page the application opens
 	 * @param int|null $userId link recipient, the current user by default
 	 * @param int|null $ttl lifetime of the authentication hash in seconds, the portal default by default
+	 * @param Payload|null $payload handed to its owner together with the issued hash and never reaching the link
 	 */
-	public function getAuthLink(string $intent, ?int $userId = null, ?int $ttl = null): string
+	public function getAuthLink(string $intent, ?int $userId = null, ?int $ttl = null, ?Payload $payload = null): string
 	{
-		return (string)$this->authLinkService->issue($intent, $userId, $ttl);
+		return (string)$this->authLinkService->issue($intent, $userId, $ttl, $payload);
 	}
 }

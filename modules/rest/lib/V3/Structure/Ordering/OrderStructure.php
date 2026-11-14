@@ -9,9 +9,10 @@ use Bitrix\Rest\V3\Exception\InvalidOrderException;
 use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exception\Validation\DtoFieldRequiredAttributeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
+use Bitrix\Rest\V3\Structure\ReferencesDtoFields;
 use Bitrix\Rest\V3\Structure\Structure;
 
-final class OrderStructure extends Structure
+final class OrderStructure extends Structure implements ReferencesDtoFields
 {
 	/** @var OrderItem[] */
 	protected array $items = [];
@@ -36,12 +37,13 @@ final class OrderStructure extends Structure
 					throw new InvalidOrderException($order);
 				}
 
-				if (!isset($fields[$property]))
+				$field = $fields->getMeta($property);
+				if ($field === null)
 				{
 					throw new UnknownDtoPropertyException($dto->getShortName(), $property);
 				}
 
-				if (!$fields[$property]->isSortable())
+				if (!$field->isSortable())
 				{
 					throw new DtoFieldRequiredAttributeException($dto->getShortName(), $property, Sortable::class);
 				}
@@ -59,6 +61,26 @@ final class OrderStructure extends Structure
 		}
 
 		return $structure;
+	}
+
+	/**
+	 * @return list<string>
+	 * @throws InvalidOrderException
+	 */
+	public static function getReferencedFields(mixed $value): array
+	{
+		$fields = [];
+		foreach ((array)$value as $property => $order)
+		{
+			if ($property === 0) // The order should be a JSON object, not a JSON array
+			{
+				throw new InvalidOrderException($order);
+			}
+
+			$fields[] = (string)$property;
+		}
+
+		return $fields;
 	}
 
 	public function getItems(): array

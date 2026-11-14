@@ -3,6 +3,9 @@
 namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Entity\Audit\AuditChannel;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Rest\Externalizer;
@@ -10,14 +13,25 @@ use Bitrix\Disk\Rest\RestManager;
 use Bitrix\Disk\Rest\Service\Search;
 use Bitrix\Disk\Search\StorageFileFinder;
 use Bitrix\Disk\Search\StorageFileFinderOptions;
+use Bitrix\Main\SystemException;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
 use Bitrix\Disk\Rest\Entity;
 use Bitrix\Disk;
 
-final class File extends BaseObject
+/** Not final: the unit suite replaces the object lookup and the attachment lookup by subclassing. */
+class File extends BaseObject
 {
 	const VERSION_ON_PAGE = 50;
+
+	/** Every attachment asks a foreign module about the rights of the user, so their number is capped. */
+	private const ATTACHED_OBJECT_LIMIT = 20;
+
+	/** @var array<int, Disk\AttachedObject[]> */
+	private array $attachedObjects = [];
+
+	/** @var array<int, true> */
+	private array $readByAttachedObject = [];
 
 	/**
 	 * Returns field descriptions (type, possibility to usage in filter, in render).
@@ -38,6 +52,79 @@ final class File extends BaseObject
 	protected function getWorkObjectById($id)
 	{
 		return $this->getFileById($id);
+	}
+
+	/**
+	 * Returns file by id, falling back to the rights of an attachment of the file.
+	 *
+	 * @param int $id Id of file.
+	 * @return Disk\File
+	 * @throws AccessException
+	 * @throws RestException
+	 */
+	protected function get($id)
+	{
+		/** @var Disk\File $file */
+		$file = $this->getWorkObjectById($id);
+		if ($this->canReadByStorageRights($file))
+		{
+			return $file;
+		}
+
+		$attachedObject = $this->findAllowedAttachedObject(
+			$file,
+			fn(Disk\AttachedObject $attachedObject): bool => $attachedObject->canRead($this->userId),
+		);
+		if (!$attachedObject)
+		{
+			throw new AccessException;
+		}
+
+		$this->readByAttachedObject[(int)$file->getId()] = true;
+
+		return $file;
+	}
+
+	/** A file opened by an attachment tells nothing about the storage it lies in, its path included. */
+	public function shouldBuildDetailUrl(Disk\BaseObject $object): bool
+	{
+		return !$this->isReadByAttachedObject((int)$object->getId());
+	}
+
+	protected function isReadByAttachedObject(int $fileId): bool
+	{
+		return isset($this->readByAttachedObject[$fileId]);
+	}
+
+	protected function copyTo($id, $targetFolderId)
+	{
+		return AuditOperationContextStack::runWithContext(
+			AuditOperationContext::create(
+				actionKind: AuditOperationContext::ACTION_EXPLICIT_COPY,
+				channel: AuditChannel::API,
+				actionContext: $this->createAuditRestActionContext(),
+				selectedTargetIds: [(string)$id],
+			),
+			fn() => parent::copyTo($id, $targetFolderId),
+		);
+	}
+
+	protected function moveTo($id, $targetFolderId)
+	{
+		$object = $this->getWorkObjectById($id);
+		$targetFolder = $this->getFolderById($targetFolderId);
+
+		return AuditOperationContextStack::runWithContext(
+			AuditOperationContext::create(
+				actionKind: $object->getStorageId() == $targetFolder->getStorageId()
+					? AuditOperationContext::ACTION_EXPLICIT_MOVE
+					: AuditOperationContext::ACTION_CROSS_STORAGE_MOVE,
+				channel: AuditChannel::API,
+				actionContext: $this->createAuditRestActionContext(),
+				selectedTargetIds: [(string)$id],
+			),
+			fn() => parent::moveTo($id, $targetFolderId),
+		);
 	}
 
 	protected function search($QUERY, $TYPE = null, $FILTER = null)
@@ -172,7 +259,7 @@ final class File extends BaseObject
 	protected function getVersions($id, array $filter = array())
 	{
 		/** @var Disk\File $file */
-		$file = $this->get($id);
+		$file = $this->getByStorageRights($id);
 
 		$internalizer = new Disk\Rest\Internalizer(new Entity\Version, $this);
 
@@ -255,7 +342,7 @@ final class File extends BaseObject
 		/** @var Disk\File $file */
 		$file = $this->get($id);
 
-		$this->assertCanDownload($file);
+		$this->assertCanDownloadFile($file);
 
 		$fileData = $file->getFile();
 		if(!$fileData)
@@ -263,5 +350,61 @@ final class File extends BaseObject
 			throw new RestException('Could not get content of file');
 		}
 		\CFile::viewByUser($fileData, array('force_download' => true, 'cache_time' => 0, 'attachment_name' => $file->getName()));
+	}
+
+	/** @throws AccessException */
+	protected function assertCanDownloadFile(Disk\File $file): void
+	{
+		if ($this->canDownloadByStorageRights($file))
+		{
+			return;
+		}
+
+		$attachedObject = $this->findAllowedAttachedObject(
+			$file,
+			fn(Disk\AttachedObject $attachedObject): bool => $attachedObject->canDownload($this->userId),
+		);
+		if (!$attachedObject)
+		{
+			throw new AccessException;
+		}
+	}
+
+	/**
+	 * An attachment of a module which is gone answers with an exception, and the next one still can grant.
+	 *
+	 * @param callable(Disk\AttachedObject): bool $isAllowed
+	 */
+	private function findAllowedAttachedObject(Disk\File $file, callable $isAllowed): ?Disk\AttachedObject
+	{
+		foreach ($this->loadAttachedObjects($file) as $attachedObject)
+		{
+			try
+			{
+				if ($isAllowed($attachedObject))
+				{
+					return $attachedObject;
+				}
+			}
+			catch (SystemException)
+			{
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @return Disk\AttachedObject[]
+	 */
+	protected function loadAttachedObjects(Disk\File $file): array
+	{
+		return $this->attachedObjects[(int)$file->getId()] ??= $file->getAttachedObjects([
+			'order' => [
+				'ID' => 'DESC',
+			],
+			'limit' => self::ATTACHED_OBJECT_LIMIT,
+			'with' => ['OBJECT'],
+		]);
 	}
 }

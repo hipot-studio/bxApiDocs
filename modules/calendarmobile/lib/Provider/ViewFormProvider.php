@@ -3,9 +3,11 @@
 namespace Bitrix\CalendarMobile\Provider;
 
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver;
 use Bitrix\Calendar\Relation\RelationProvider;
 use Bitrix\CalendarMobile\Integration\Disk\Attachment;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
@@ -55,6 +57,8 @@ final class ViewFormProvider
 			return $this->result;
 		}
 
+		$guestLinkData = $this->getGuestLinkData($eventArray);
+
 		$config = [
 			'event' => $eventArray,
 			'sections' => $this->getSections($eventArray),
@@ -63,6 +67,8 @@ final class ViewFormProvider
 			'users' => $this->getUsers($eventArray),
 			'settings' => $this->getSettings($eventArray),
 			'entityRelation' => $this->getEntityRelation($eventArray),
+			'guestLinkAvailable' => $guestLinkData['available'],
+			'guestLinkUrl' => $guestLinkData['url'],
 		];
 
 		if (!empty($eventArray['COLLAB_ID']) && $this->requestCollabs)
@@ -255,6 +261,48 @@ final class ViewFormProvider
 		return [
 			...$relationResult->getRelation()->toArray(),
 			'users' => $users,
+		];
+	}
+
+	/**
+	 * Resolves the guest-link fields (availability + url) for the view-form payload.
+	 *
+	 * Read-only: uses GuestLinkResolver::resolveExisting, never creates a chat.
+	 * Availability is true only when the guest-link feature is available for the
+	 * user AND the event is eligible (not an excluded type); the resolver encodes
+	 * both conditions into `available`.
+	 *
+	 * @param array $eventArray
+	 * @return array{ available: bool, url: ?string }
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	private function getGuestLinkData(array $eventArray): array
+	{
+		$default = ['available' => false, 'url' => null];
+
+		if (!Loader::includeModule('calendar'))
+		{
+			return $default;
+		}
+
+		/** @var GuestLinkResolver $resolver */
+		$resolver = ServiceLocator::getInstance()->get(GuestLinkResolver::class);
+		// Resolve on the canonical organizer event: an attendee copy carries the
+		// organizer's PARENT_ID, so passing it avoids the child+parent double load
+		// inside the resolver (mirrors the web view bootstrap).
+		$canonicalEventId = (int)($eventArray['PARENT_ID'] ?? 0) ?: (int)$eventArray['ID'];
+		$resolveResult = $resolver->resolveExisting($canonicalEventId, $this->userId);
+
+		if (!$resolveResult->isSuccess())
+		{
+			return $default;
+		}
+
+		$data = $resolveResult->getData();
+
+		return [
+			'available' => (bool)($data['available'] ?? false),
+			'url' => $data['url'] ?? null,
 		];
 	}
 

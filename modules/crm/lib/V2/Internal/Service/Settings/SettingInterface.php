@@ -14,7 +14,7 @@ use Bitrix\Main\Result;
  */
 interface SettingInterface
 {
-	public function getCode(): string;
+	public function getId(): string;
 
 	/** @return SettingDescription<TValue> */
 	public function getDescription(): SettingDescription;

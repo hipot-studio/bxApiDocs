@@ -21,6 +21,7 @@ use CCrmBizProcEventType;
 final class TransactionWrapper
 {
 	private readonly Connection $connection;
+	private bool $committed = false;
 
 	public function __construct(
 		private readonly Operation $operation,
@@ -44,6 +45,17 @@ final class TransactionWrapper
 		return $this->launchOperationInTransactionAndAutomationAfterIt();
 	}
 
+	/**
+	 * Whether the transaction of the operation is committed. Set right after the commit, before the callbacks,
+	 * business processes and robots that run after it, so an exception from them comes with true.
+	 *
+	 * @return bool
+	 */
+	public function isCommitted(): bool
+	{
+		return $this->committed;
+	}
+
 	public function launchWithCallbacks(
 		callable $launcher,
 		callable $onRollback,
@@ -59,16 +71,15 @@ final class TransactionWrapper
 
 	private function launchWholeOperationInTransaction(): Result
 	{
-		$this->connection->startTransaction();
-
-		$result = $this->operation->launch();
+		$result = $this->launchInTransaction($this->operation->launch(...));
 		if ($result->isSuccess())
 		{
 			$this->connection->commitTransaction();
+			$this->committed = true;
 		}
 		else
 		{
-			$this->connection->rollbackTransaction();
+			$this->rollbackTransactionSafely();
 		}
 
 		return $result;
@@ -84,17 +95,16 @@ final class TransactionWrapper
 			->disableAutomation()
 		;
 
-		$this->connection->startTransaction();
-
-		$result = $this->operation->launch();
+		$result = $this->launchInTransaction($this->operation->launch(...));
 		if (!$result->isSuccess())
 		{
-			$this->connection->rollbackTransaction();
+			$this->rollbackTransactionSafely();
 
 			return $result;
 		}
 
 		$this->connection->commitTransaction();
+		$this->committed = true;
 
 		if ($isBizProcEnabled)
 		{
@@ -122,19 +132,7 @@ final class TransactionWrapper
 			->disableAutomation()
 		;
 
-		$this->connection->startTransaction();
-
-		try
-		{
-			$result = $launcher();
-		}
-		catch (\Throwable $throwable)
-		{
-			$this->rollbackTransactionSafely();
-			$onRollback();
-
-			throw $throwable;
-		}
+		$result = $this->launchInTransaction($launcher, $onRollback);
 		if (!$result->isSuccess())
 		{
 			$this->rollbackTransactionSafely();
@@ -144,6 +142,7 @@ final class TransactionWrapper
 		}
 
 		$this->connection->commitTransaction();
+		$this->committed = true;
 		$afterCommit();
 
 		$isRecurringItem = $this->isRecurringItem();
@@ -157,6 +156,30 @@ final class TransactionWrapper
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Starts a transaction and runs the launcher in it. The transaction is left open for the caller to finish,
+	 * unless the launcher throws: then it is rolled back and the exception goes up to the caller.
+	 */
+	private function launchInTransaction(callable $launcher, ?callable $onRollback = null): Result
+	{
+		$this->connection->startTransaction();
+
+		try
+		{
+			return $launcher();
+		}
+		catch (\Throwable $throwable)
+		{
+			$this->rollbackTransactionSafely();
+			if ($onRollback !== null)
+			{
+				$onRollback();
+			}
+
+			throw $throwable;
+		}
 	}
 
 	private function rollbackTransactionSafely(): void

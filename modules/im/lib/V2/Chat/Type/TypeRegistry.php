@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Chat\Type;
 
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
@@ -328,7 +329,7 @@ class TypeRegistry
 	 * resolves such a pair, so that an entry does not lie about itself.
 	 *
 	 * The registration point stays as the single owner of such exclusions: the section query
-	 * ({@see \Bitrix\Im\V2\Chat\Type\Query\TypeFilter}) and the membership predicate
+	 * ({@see Query\TypeFilter}) and the membership predicate
 	 * ({@see \Bitrix\Im\V2\Folder\Definition\SectionDefinition}) both read the same map, so a pair
 	 * added here keeps the two answers about the sections of a chat in agreement.
 	 */
@@ -373,6 +374,13 @@ class TypeRegistry
 				ImportService::IMPORT_ARCHIVE_ENTITY_TYPE,
 			),
 		];
+
+		if (Features::isMeetingsFolderAvailable())
+		{
+			// The released "Meetings" folder and its source in "All" own this conversation, so the
+			// additive 'chat' section must not select it again through the bare C literal.
+			$exclusions[] = $this->byLiteralAndEntity[Chat::IM_TYPE_CHAT][ExtendedType::Calendar->value];
+		}
 
 		foreach ($exclusions as $type)
 		{

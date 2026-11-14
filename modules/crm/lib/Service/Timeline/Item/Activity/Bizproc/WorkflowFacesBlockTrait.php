@@ -10,6 +10,7 @@ use Bitrix\Bizproc\Api\Service\WorkflowFacesService;
 use Bitrix\Crm\Service\Timeline\Layout\Body;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\AvatarsStackSteps;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 
 trait WorkflowFacesBlockTrait
 {
@@ -89,7 +90,8 @@ trait WorkflowFacesBlockTrait
 		$avatars = $step->getAvatars();
 		if ($avatars)
 		{
-			$stepBlock->setAvatars($this->getFacesAvatars($avatars));
+			$autoDecisions = method_exists($step, 'getAutoDecisions') ? $step->getAutoDecisions() : [];
+			$stepBlock->setAvatars($this->getFacesAvatars($avatars, $autoDecisions));
 
 			return;
 		}
@@ -117,15 +119,41 @@ trait WorkflowFacesBlockTrait
 		$stepBlock->setIcon($icon, $color);
 	}
 
-	private function getFacesAvatars(array $userIds): array
+	private function getFacesAvatars(array $userIds, array $autoDecisions = []): array
 	{
 		$avatars = [];
 		foreach ($userIds as $userId)
 		{
-			$avatars[] = ['src' => $this->getUserSrcById($userId), 'id' => $userId];
+			$avatar = ['src' => $this->getUserSrcById($userId), 'id' => $userId];
+
+			$badge = $this->getAutoDecisionBadge($autoDecisions[(int)$userId] ?? null);
+			if ($badge)
+			{
+				$avatar['badge'] = $badge;
+			}
+
+			$avatars[] = $avatar;
 		}
 
 		return $avatars;
+	}
+
+	private function getAutoDecisionBadge(mixed $autoDecision): ?array
+	{
+		$code = match ($autoDecision)
+		{
+			'yes' => 'CRM_TIMELINE_BIZPROC_FACES_AUTO_APPROVED',
+			'no' => 'CRM_TIMELINE_BIZPROC_FACES_AUTO_REJECTED',
+			default => null,
+		};
+
+		$title = $code ? (string)Loc::getMessage($code) : '';
+		if ($title === '')
+		{
+			return null;
+		}
+
+		return ['icon' => 's-robot', 'title' => $title];
 	}
 
 	private function getUserSrcById(int $userId): string

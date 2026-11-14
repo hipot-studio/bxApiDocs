@@ -22,25 +22,25 @@ use CCrmOwnerType;
  */
 final class DaysBeforeCloseSetting extends AbstractSetting
 {
-	public const CODE = 'crm.smart_invoice.days_before_close';
+	public const ID = 'crm.smart_invoice.days_before_close';
 	private const TYPE_NOT_FOUND_ERROR_CODE = 'SMART_INVOICE_TYPE_NOT_FOUND';
 
 	public function __construct(private readonly CloseDateConfigurator $closeDateConfigurator)
 	{
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new IntegerSchema(0, CloseDate::MAX_DAYS_BEFORE_CLOSE),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

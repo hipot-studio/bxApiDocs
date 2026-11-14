@@ -21,7 +21,7 @@ use CCrmOwnerType;
  */
 final class DealFillFieldsEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.copilot.fill_fields.deal.enabled';
+	public const ID = 'crm.copilot.fill_fields.deal.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly CopilotSettings $copilotSettings;
@@ -31,18 +31,18 @@ final class DealFillFieldsEnabledSetting extends AbstractSetting
 		$this->copilotSettings = $copilotSettings ?? CopilotSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

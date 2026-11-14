@@ -9,8 +9,10 @@ use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Access\OpenChatAccessPolicy;
 use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
 use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
+use Bitrix\Im\V2\Entity\User\UserFactory;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
@@ -32,10 +34,14 @@ readonly class CollabPreviewSourceResolver
 	 */
 	private const FAN_OUT_CHUNK_SIZE = 200;
 
+	/** Column the batched candidate statement matches every per-user join against. */
+	private const MEMBER_USER_COLUMN = 'OWN_REL.USER_ID';
+
 	public function __construct(
 		private UnreadFreshnessQuery $unreadFreshnessQuery,
 		private OwnMessageQuery $ownMessageQuery,
 		private ParentChainFilterFactory $parentChainFilterFactory,
+		private OpenChatAccessPolicy $openChatAccessPolicy,
 	) {}
 
 	public function resolve(int $collabChatId, int $userId): PreviewSource
@@ -90,11 +96,7 @@ readonly class CollabPreviewSourceResolver
 		$result = [];
 		foreach (array_chunk($userIds, self::FAN_OUT_CHUNK_SIZE) as $chunkUserIds)
 		{
-			$candidatesByUser = [];
-			foreach ($chunkUserIds as $userId)
-			{
-				$candidatesByUser[$userId] = $this->fetchAccessibleCandidates($collabChatId, $userId);
-			}
+			$candidatesByUser = $this->fetchAccessibleCandidatesForMembers($collabChatId, $chunkUserIds);
 
 			$freshUnreadByUser = $this->unreadFreshnessQuery->fetchForMembers($candidatesByUser, [$collabChatId]);
 
@@ -127,6 +129,26 @@ readonly class CollabPreviewSourceResolver
 				return $lastOwnCache;
 			};
 
+			// The ranking runs on the shared freshness map alone, so every member's winner is known
+			// before the database is asked anything about them - and the freshest unread of the whole
+			// chunk comes back grouped by the chat the members picked, instead of one statement per
+			// member with a winner.
+			$winnerByUser = [];
+			foreach ($chunkUserIds as $userId)
+			{
+				$winner = $this->rankWinner(
+					$candidatesByUser[$userId] ?? [],
+					$freshUnreadByUser[$userId] ?? [],
+				);
+
+				if ($winner !== null)
+				{
+					$winnerByUser[$userId] = $winner;
+				}
+			}
+
+			$ownFreshestByUser = $this->ownMessageQuery->freshestUnreadBatch($winnerByUser);
+
 			foreach ($chunkUserIds as $userId)
 			{
 				$result[$userId] = $this->resolveSingle(
@@ -135,6 +157,7 @@ readonly class CollabPreviewSourceResolver
 					$candidatesByUser[$userId],
 					$freshUnreadByUser[$userId] ?? [],
 					$lastOwnLoader,
+					$ownFreshestByUser,
 				);
 			}
 		}
@@ -143,25 +166,15 @@ readonly class CollabPreviewSourceResolver
 	}
 
 	/**
-	 * @param int[] $candidateIds accessible, not-hidden, not-muted candidates of this collab
+	 * The candidate holding the freshest unread among those the member can see, or null when the member
+	 * has no unread in any of them. Reads the shared freshness map and nothing else, so the fan-out can
+	 * settle every member's winner before it asks the database about any of them.
+	 *
+	 * @param int[] $candidateIds
 	 * @param array<int,int> $freshUnreadByChat chatId => freshest unread MESSAGE_ID
-	 * @param callable():array<int,?int>|null $lastOwnLoader shared last-own map loader of the fan-out
-	 *        path; must cover (be a superset of) $candidateIds. Null = per-user statements (the
-	 *        single-user paths).
 	 */
-	protected function resolveSingle(
-		int $collabChatId,
-		int $userId,
-		array $candidateIds,
-		array $freshUnreadByChat,
-		?callable $lastOwnLoader = null,
-	): PreviewSource
+	private function rankWinner(array $candidateIds, array $freshUnreadByChat): ?int
 	{
-		if (empty($candidateIds))
-		{
-			return $this->mainChatSource($collabChatId);
-		}
-
 		$ranked = [];
 		foreach ($candidateIds as $candidateId)
 		{
@@ -171,12 +184,47 @@ readonly class CollabPreviewSourceResolver
 			}
 		}
 
-		if (!empty($ranked))
+		if (empty($ranked))
 		{
-			arsort($ranked);
-			$winner = (int)array_key_first($ranked);
+			return null;
+		}
 
-			$ownFreshest = $this->ownMessageQuery->freshestUnread($winner, $userId);
+		arsort($ranked);
+
+		return (int)array_key_first($ranked);
+	}
+
+	/**
+	 * @param int[] $candidateIds accessible, not-hidden, not-muted candidates of this collab
+	 * @param array<int,int> $freshUnreadByChat chatId => freshest unread MESSAGE_ID
+	 * @param callable():array<int,?int>|null $lastOwnLoader shared last-own map loader of the fan-out
+	 *        path; must cover (be a superset of) $candidateIds. Null = per-user statements (the
+	 *        single-user paths).
+	 * @param array<int,int>|null $ownFreshestByUser freshest unread of each member in the candidate
+	 *        their ranking picked, resolved for the whole chunk ahead of the loop; a member without
+	 *        one is absent from the map. Null = per-user statement (the single-user paths).
+	 */
+	protected function resolveSingle(
+		int $collabChatId,
+		int $userId,
+		array $candidateIds,
+		array $freshUnreadByChat,
+		?callable $lastOwnLoader = null,
+		?array $ownFreshestByUser = null,
+	): PreviewSource
+	{
+		if (empty($candidateIds))
+		{
+			return $this->mainChatSource($collabChatId);
+		}
+
+		$winner = $this->rankWinner($candidateIds, $freshUnreadByChat);
+
+		if ($winner !== null)
+		{
+			$ownFreshest = $ownFreshestByUser !== null
+				? ($ownFreshestByUser[$userId] ?? null)
+				: $this->ownMessageQuery->freshestUnread($winner, $userId);
 			if ($ownFreshest !== null)
 			{
 				return new PreviewSource(
@@ -295,5 +343,92 @@ readonly class CollabPreviewSourceResolver
 		}
 
 		return $candidateIds;
+	}
+
+	/**
+	 * The same candidate set as {@see fetchAccessibleCandidates()} for a whole member chunk: one
+	 * statement per open-chat policy group instead of one per member. The chat-side restriction is
+	 * shared by the whole group, while the mute/hidden relation, the recent row and the parent chain
+	 * are matched against the driving USER_ID column, so each member is still resolved on their own
+	 * state. The single-user form above stays as it is - it is the read path, where the constant
+	 * USER_ID gives the optimizer the narrowest possible probes.
+	 *
+	 * @param int[] $userIds
+	 * @return array<int,int[]> userId => candidate chat ids, one entry per input member
+	 */
+	protected function fetchAccessibleCandidatesForMembers(int $collabChatId, array $userIds): array
+	{
+		$candidatesByUser = array_fill_keys($userIds, []);
+
+		foreach ($this->groupByOpenChatPolicy($userIds) as $groupUserIds)
+		{
+			$query = ChatTable::query()
+				->setSelect(['ID', 'MEMBER_USER_ID' => self::MEMBER_USER_COLUMN])
+				->where(
+					Query::filter()
+						->logic('OR')
+						->where('PARENT_ID', $collabChatId)
+						->where('ID', $collabChatId),
+				)
+				->whereNot('TYPE', Chat::IM_TYPE_COMMENT)
+			;
+
+			$query->registerRuntimeField(
+				'OWN_REL',
+				(new Reference(
+					'OWN_REL',
+					RelationTable::class,
+					Join::on('ref.CHAT_ID', 'this.ID')
+						->whereIn('ref.USER_ID', $groupUserIds)
+						->where('ref.NOTIFY_BLOCK', 'N')
+						->where('ref.IS_HIDDEN', 'N'),
+				))->configureJoinType(Join::TYPE_INNER),
+			);
+
+			$query->registerRuntimeField(
+				'OWN_RECENT',
+				(new Reference(
+					'OWN_RECENT',
+					RecentTable::class,
+					Join::on('ref.ITEM_CID', 'this.ID')
+						->whereColumn('ref.USER_ID', self::MEMBER_USER_COLUMN),
+				))->configureJoinType(Join::TYPE_INNER),
+			);
+
+			$this->parentChainFilterFactory
+				->forUsersColumn($groupUserIds[0], self::MEMBER_USER_COLUMN, new TreeOrigin('PARENT_ID', 'ID'))
+				->apply($query)
+			;
+
+			// Streamed: the statement yields a row per member and child chat, and only the ids are kept.
+			$rows = $query->exec();
+			while ($row = $rows->fetch())
+			{
+				$candidatesByUser[(int)$row['MEMBER_USER_ID']][] = (int)$row['ID'];
+			}
+		}
+
+		return $candidatesByUser;
+	}
+
+	/**
+	 * Splits the members by the open-chat exemption, which the chain condition resolves once per
+	 * statement. Users are loaded in one query first, so the policy reads a warm registry.
+	 *
+	 * @param int[] $userIds
+	 * @return array<int[]> non-empty groups
+	 */
+	private function groupByOpenChatPolicy(array $userIds): array
+	{
+		UserFactory::getInstance()->getUsersByIds($userIds);
+
+		$groups = [];
+		foreach ($userIds as $userId)
+		{
+			$canSkip = (int)$this->openChatAccessPolicy->canSkipMembershipForOpenChats($userId);
+			$groups[$canSkip][] = $userId;
+		}
+
+		return array_values($groups);
 	}
 }

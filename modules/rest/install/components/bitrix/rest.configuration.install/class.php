@@ -50,13 +50,16 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 		$this->errors = new ErrorCollection();
 
 		$manifestCode = '';
-		if (!empty($this->arParams['IMPORT_MANIFEST']['CODE']))
-		{
-			$manifestCode = $this->arParams['IMPORT_MANIFEST']['CODE'];
-		}
-		elseif ($this->arParams['MANIFEST_CODE'])
+		if (!empty($this->arParams['MANIFEST_CODE']))
 		{
 			$manifestCode = $this->arParams['MANIFEST_CODE'];
+		}
+		elseif (
+			!empty($this->arParams['IMPORT_MANIFEST']['CODE'])
+			&& Manifest::get($this->arParams['IMPORT_MANIFEST']['CODE']) !== null
+		)
+		{
+			$manifestCode = $this->arParams['IMPORT_MANIFEST']['CODE'];
 		}
 		$access = Manifest::checkAccess(Manifest::ACCESS_TYPE_IMPORT, $manifestCode);
 		if ($access['result'] !== true)

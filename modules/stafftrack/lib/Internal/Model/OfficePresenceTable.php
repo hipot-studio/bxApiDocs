@@ -20,6 +20,19 @@ use Bitrix\Main\ORM\Fields\IntegerField;
  * No object class and no collection, unlike the neighbours of the domain: both the write and the read
  * go through flat arrays, and an object named OfficePresence beside the enum
  * {@see \Bitrix\StaffTrack\Dictionary\OfficePresence} would only be read as that enum.
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_OfficePresence_Query query()
+ * @method static EO_OfficePresence_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_OfficePresence_Result getById($id)
+ * @method static EO_OfficePresence_Result getList(array $parameters = [])
+ * @method static EO_OfficePresence_Entity getEntity()
+ * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence createObject($setDefaultValues = true)
+ * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection createCollection()
+ * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence wakeUpObject($row)
+ * @method static \Bitrix\StaffTrack\Internal\Model\EO_OfficePresence_Collection wakeUpCollection($rows)
  */
 class OfficePresenceTable extends DataManager
 {

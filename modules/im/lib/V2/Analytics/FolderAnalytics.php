@@ -7,7 +7,9 @@ namespace Bitrix\Im\V2\Analytics;
 use Bitrix\Im\V2\Folder\System\ChannelFolder;
 use Bitrix\Im\V2\Folder\System\CollabFolder;
 use Bitrix\Im\V2\Folder\System\CopilotFolder;
+use Bitrix\Im\V2\Folder\System\MeetingRootFolder;
 use Bitrix\Im\V2\Folder\System\TaskRootFolder;
+use Bitrix\Im\V2\Folder\System\VibecodeAppFolder;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 
@@ -27,7 +29,10 @@ final class FolderAnalytics
 	private const SUBMIT_CREATE_FOLDER = 'submit_create_folder';
 	private const DELETE_FOLDER = 'delete_folder';
 	private const ADD_CHAT = 'add_chat';
+	private const HIDE_FOLDER = 'hide_folder';
+	private const SHOW_FOLDER = 'show_folder';
 	private const DISABLED_FOLDERS_PREFIX = 'disabledFolders_';
+	private const RETURNED_FOLDERS_PREFIX = 'returnedFolders_';
 	private const CHAT_COUNT_PREFIX = 'cnt_';
 	private const TYPE_EMPTY = 'empty';
 	private const TYPE_NON_EMPTY = 'non_empty';
@@ -43,15 +48,17 @@ final class FolderAnalytics
 	 * Keys are the constants of the source classes and not literals: a code renamed in the domain
 	 * has to break the build instead of silently switching a value off.
 	 *
-	 * No value may carry an underscore - the p3 slot spends its single allowed one on the
-	 * disabledFolders_ prefix, and a second one invalidates the whole event
+	 * No value may carry an underscore - the p3 slot spends its single allowed one on the prefix of
+	 * the list it carries, and a second one invalidates the whole event
 	 * ({@see AnalyticsEvent::validatePField()}).
 	 */
 	private const SOURCE_TYPE_MAP = [
+		MeetingRootFolder::CODE => 'meetings',
 		TaskRootFolder::CODE => 'tasks',
 		CopilotFolder::CODE => 'copilot',
 		ChannelFolder::CODE => 'channels',
 		CollabFolder::CODE => 'projects',
+		VibecodeAppFolder::CODE => 'vibecode',
 	];
 
 	public function __construct(private readonly int $userId)
@@ -89,21 +96,25 @@ final class FolderAnalytics
 
 		$event
 			->setStatus(AnalyticsEvent::STATUS_SUCCESS)
-			->setP3(self::buildDisabledFoldersSlot($disabledSourceCodes))
+			->setP3(self::buildSourceListSlot(self::DISABLED_FOLDERS_PREFIX, $disabledSourceCodes))
 			->send()
 		;
 	}
 
 	/**
-	 * Values of the dictionary sorted by the alphabet of the values and not of the domain codes -
-	 * the two do not agree, and the reports are read in the values.
+	 * A list of sources in a p-slot, shared by every label that carries one: the prefix names which
+	 * list it is, and the values of the dictionary follow it as JSON.
 	 *
-	 * @param string[] $disabledSourceCodes
+	 * Values sorted by the alphabet of the values and not of the domain codes - the two do not
+	 * agree, and the reports are read in the values.
+	 *
+	 * @param string $prefix the single underscore the slot is allowed
+	 * @param string[] $sourceCodes stored codes; a code outside the dictionary is dropped
 	 */
-	private static function buildDisabledFoldersSlot(array $disabledSourceCodes): string
+	private static function buildSourceListSlot(string $prefix, array $sourceCodes): string
 	{
 		$values = [];
-		foreach ($disabledSourceCodes as $code)
+		foreach ($sourceCodes as $code)
 		{
 			$value = self::SOURCE_TYPE_MAP[$code] ?? null;
 			if ($value !== null)
@@ -114,7 +125,7 @@ final class FolderAnalytics
 
 		sort($values);
 
-		return self::DISABLED_FOLDERS_PREFIX . json_encode(array_values($values));
+		return $prefix . json_encode(array_values($values));
 	}
 
 	/**
@@ -198,6 +209,75 @@ final class FolderAnalytics
 			->setType(self::buildChatSetType($chatIds))
 			->setStatus(AnalyticsEvent::STATUS_SUCCESS)
 			->setP3(self::buildChatCountSlot($chatIds))
+			->send()
+		;
+	}
+
+	/**
+	 * One event per one hide of a folder, a refusal included: both paths of the hide send it from
+	 * the thin wrapper of their write
+	 * ({@see \Bitrix\Im\V2\Folder\Visibility\FolderVisibilityService::hide()}), so the count of the
+	 * labels is the count of the decisions of the user and not of the folders or the sections.
+	 *
+	 * @param string[]|null $returnedSourceCodes stored codes of the sources the hide switched back
+	 *        on to keep the chats of the hidden sections reachable (AC-013). The empty array means
+	 *        the hide went through and no source had to come back; null means it never reached the
+	 *        invariant, so nothing was written
+	 * @param int|string|null $errorCode code of the refusal, read only when nothing was written
+	 */
+	public function addHideFolder(?array $returnedSourceCodes, int|string|null $errorCode = null): void
+	{
+		$this->sendInBackground(function () use ($returnedSourceCodes, $errorCode): void {
+			$this->sendHideFolder($returnedSourceCodes, self::normalizeErrorCode($errorCode));
+		});
+	}
+
+	/**
+	 * The return of the sections is a parameter of the hide and not a label of its own: one save of
+	 * the "Folder list" screen can hide several sections at once, and a label per section would
+	 * count the sections where the report counts the presses.
+	 *
+	 * @param string[]|null $returnedSourceCodes
+	 */
+	private function sendHideFolder(?array $returnedSourceCodes, ?string $errorCode): void
+	{
+		$event = new AnalyticsEvent(self::HIDE_FOLDER, self::TOOL, self::CATEGORY);
+		$event->setUserId($this->userId);
+
+		if ($returnedSourceCodes === null)
+		{
+			$event->setStatus(self::buildErrorStatus($errorCode))->send();
+
+			return;
+		}
+
+		$event
+			->setStatus(AnalyticsEvent::STATUS_SUCCESS)
+			->setP3(self::buildSourceListSlot(self::RETURNED_FOLDERS_PREFIX, $returnedSourceCodes))
+			->send()
+		;
+	}
+
+	/**
+	 * One event per one folder brought back to the navigation, a refusal included. The counterpart
+	 * of the hide, and it carries no list: nothing comes back to the composition of "All" when a
+	 * folder returns - the source that was switched on to keep its chats reachable stays on, and
+	 * the user decides about it on the composition screen.
+	 *
+	 * @param int|string|null $errorCode code of the refusal, null when the folder came back
+	 */
+	public function addShowFolder(int|string|null $errorCode = null): void
+	{
+		$this->sendInBackground(function () use ($errorCode): void {
+			$this->sendShowFolder(self::normalizeErrorCode($errorCode));
+		});
+	}
+
+	private function sendShowFolder(?string $errorCode): void
+	{
+		(new AnalyticsEvent(self::SHOW_FOLDER, self::TOOL, self::CATEGORY))
+			->setUserId($this->userId)
+			->setStatus(self::buildStatus($errorCode))
 			->send()
 		;
 	}

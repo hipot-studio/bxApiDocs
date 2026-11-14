@@ -25,6 +25,7 @@ final class CheckProductsOnUpdate extends Base
 		$validatorList = Validator\Factory::getInstance()->getValidatorCollection([
 			Validator\Factory::VALIDATOR_AVAILABLE_PRODUCT,
 			Validator\Factory::VALIDATOR_CUSTOM_PRODUCT_RESERVE,
+			Validator\Factory::VALIDATOR_EXISTING_STORE,
 		]);
 		foreach ($validatorList as $validator)
 		{

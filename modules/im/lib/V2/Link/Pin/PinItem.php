@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Link\Reminder\ReminderPopupItem;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Main\Application;
 
 /**
  * @method Message getEntity()
@@ -96,6 +97,35 @@ class PinItem extends BaseLinkItem
 		}
 
 		return static::initByEntity($entity)->setEntity($message);
+	}
+
+	/**
+	 * Removes the row with a single DELETE on the table, bypassing the ORM entity: no entity events,
+	 * no cache cleanup and no removal from the registry, only markDrop() on this object. Returns
+	 * whether this very call removed the row, so under concurrent requests only one caller gets true
+	 * and a once-only transition can be bound to it. Meant for the addressed unpin of a pin loaded on
+	 * its own; a pin held by a registry or a collection has to go through delete().
+	 */
+	public function tryDelete(): bool
+	{
+		if ($this->getPrimaryId() === null || $this->getMessageId() === null || !isset($this->chatId))
+		{
+			return false;
+		}
+
+		$filter = [
+			'=ID' => $this->getPrimaryId(),
+			'=MESSAGE_ID' => $this->getMessageId(),
+			'=CHAT_ID' => $this->getChatId(),
+		];
+
+		$connection = Application::getConnection();
+		LinkPinTable::deleteBatch($filter);
+		$deleted = $connection->getAffectedRowsCount() > 0;
+
+		$this->markDrop();
+
+		return $deleted;
 	}
 
 	public function toRestFormat(array $option = []): array

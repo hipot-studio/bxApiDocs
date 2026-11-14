@@ -21,7 +21,7 @@ final class RestV3McpTools extends AbstractCrmFlag
 
 	public function enabledByDefault(): bool
 	{
-		return false;
+		return true;
 	}
 
 	protected function onEnable(): void

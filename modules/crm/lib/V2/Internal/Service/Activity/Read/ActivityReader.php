@@ -10,6 +10,7 @@ use Bitrix\Crm\V2\Internal\Access\Activity\ActivityAccess;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ValueObject\ActivityFile;
 use Bitrix\Crm\V2\Internal\Integration\Disk\ActivityStorageElements;
+use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityBindingRepository;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityCommunicationRepository;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityFieldMap;
 use Bitrix\Crm\V2\Internal\Repository\Activity\ActivityStorageElementRepository;
@@ -18,13 +19,16 @@ use Bitrix\Main\ORM\Fields\ScalarField;
 use Bitrix\Main\Result;
 
 /**
- * Reads one activity on behalf of one user: the row, the right to it, and then what the caller selected.
+ * Reads one activity on behalf of one user: the row, the right to it, and then what the caller selected. A page
+ * of activities whose right the caller has decided is assembled the same way with the queries of one
+ * ({@see self::getManyUnchecked()}).
  *
  * An absent activity and a forbidden one leave through the same refusal, and both leave before anything but
  * the row and the right has been read. The right is asked even where no row answered. A read in a context
  * ({@see ActivityContext}) takes the bindings next and, where the context does not admit the activity, leaves
- * through the same refusal before anything else has been read. The bindings are the ones the right was decided
- * on ({@see ActivityAccess::getBindings()}), so a right granted through a binding costs no second read of them.
+ * through the same refusal before anything else has been read. The bindings a read of one activity loads, in a
+ * context or by the select, are the ones the right was decided on ({@see ActivityAccess::getBindings()}), so a
+ * right granted through a binding costs no second read of them.
  *
  * The row is read in its read projection ({@see ActivityFieldMap::getReadColumns()}), since the repository of
  * the row hydrates only the columns a write addresses.
@@ -69,6 +73,8 @@ final class ActivityReader
 
 	private ?ActivityAccess $access = null;
 
+	private ?ActivityBindingRepository $bindingRepository = null;
+
 	private ?ActivityCommunicationRepository $communicationRepository = null;
 
 	private ?ActivityStorageElementRepository $storageElementRepository = null;
@@ -104,55 +110,115 @@ final class ActivityReader
 		}
 
 		$activity = self::hydrate($row, $columns);
-		if ($context !== null)
+		if ($context !== null || isset($selected[Activity::bindings]))
 		{
 			$this->loadBindings($activity);
-			if (!$context->admits($activity))
-			{
-				return self::notFound();
-			}
 		}
 
-		$files = $this->enrich($userId, $activity, $row, $selected);
+		if ($context !== null && !$context->admits($activity))
+		{
+			return self::notFound();
+		}
+
+		$files = $this->enrich($userId, [$activityId => $activity], [$activityId => $row], $selected);
 
 		return (new Result())->setData([
 			self::DATA_ACTIVITY => $activity,
-			self::DATA_FILES => $files,
+			self::DATA_FILES => $files[$activityId] ?? null,
 		]);
 	}
 
 	/**
-	 * Loads what the select names, one query per collection. The communications are masked as soon as they
-	 * are read, so an address the user may not see never reaches the model it is handed.
+	 * A page of activities WITHOUT ANY CHECK OF THE RIGHT TO THEM: the caller has decided the user may read them
+	 * all. The rows and everything the select names are read for the whole set at once, so the queries do not grow
+	 * with the number of the activities, and each activity is assembled as {@see get()} assembles it. One that is
+	 * absent is left out.
 	 *
-	 * @param array<string, mixed> $row
-	 * @param array<string, true> $selected
-	 * @return ActivityFile[]|null the metadata of the files, null where they were not selected.
+	 * @param int[] $activityIds
+	 * @param string[] $select as {@see get()} takes it
+	 * @return array<int, array{activity: Activity, files: ActivityFile[]|null}> in the order of the given ids
 	 */
-	private function enrich(int $userId, Activity $activity, array $row, array $selected): ?array
+	public function getManyUnchecked(int $userId, array $activityIds, array $select = []): array
 	{
-		$activityId = (int)$activity->getId();
+		$activityIds = array_values(array_unique(array_filter($activityIds, static fn(int $id): bool => $id > 0)));
+		if ($userId <= 0 || $activityIds === [])
+		{
+			return [];
+		}
+
+		$selected = array_fill_keys($select === [] ? self::LOADED_BY_DEFAULT : $select, true);
+		$columns = self::columnsFor($selected);
+		$rows = self::readRows($activityIds, $columns);
+
+		$activities = [];
+		foreach ($rows as $activityId => $row)
+		{
+			$activities[$activityId] = self::hydrate($row, $columns);
+		}
+		$files = $this->enrich($userId, $activities, $rows, $selected);
+
+		$items = [];
+		foreach ($activities as $activityId => $activity)
+		{
+			$items[] = [
+				self::DATA_ACTIVITY => $activity,
+				self::DATA_FILES => $files[$activityId] ?? null,
+			];
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Loads what the select names for the whole set, one query per collection. The communications are masked as
+	 * soon as they are read, so an address the user may not see never reaches the model it is handed. Bindings
+	 * an activity already carries, the ones a single read took from the check of the right, are not read again.
+	 *
+	 * @param array<int, Activity> $activities by activity id
+	 * @param array<int, array<string, mixed>> $rows by activity id
+	 * @param array<string, true> $selected
+	 * @return array<int, ActivityFile[]>|null the metadata of the files by activity id, null where they were not
+	 *         selected.
+	 */
+	private function enrich(int $userId, array $activities, array $rows, array $selected): ?array
+	{
+		if ($activities === [])
+		{
+			return null;
+		}
+
+		$activityIds = array_keys($activities);
 
 		if (isset($selected[Activity::description]))
 		{
-			$this->getMailBodyLoader()->fill($activity);
+			$this->getMailBodyLoader()->fill(...array_values($activities));
 		}
 
-		if (isset($selected[Activity::bindings]) && $activity->getBindings() === null)
+		if (isset($selected[Activity::bindings]))
 		{
-			$this->loadBindings($activity);
+			$unboundIds = array_keys(
+				array_filter($activities, static fn(Activity $activity): bool => $activity->getBindings() === null)
+			);
+			$bindings = $unboundIds === [] ? [] : $this->getBindingRepository()->getByActivityIds($unboundIds);
+			foreach ($unboundIds as $activityId)
+			{
+				$activities[$activityId]->internalSet(Activity::bindings, $bindings[$activityId] ?? []);
+			}
 		}
 
 		if (isset($selected[Activity::communications]))
 		{
-			$communications = $this->getCommunicationRepository()->getByActivityIds([$activityId]);
-			$activity->internalSet(Activity::communications, $communications[$activityId] ?? []);
-			$this->getCommunicationMasker()->mask($userId, $activity);
+			$communications = $this->getCommunicationRepository()->getByActivityIds($activityIds);
+			foreach ($activities as $activityId => $activity)
+			{
+				$activity->internalSet(Activity::communications, $communications[$activityId] ?? []);
+			}
+			$this->getCommunicationMasker()->mask($userId, ...array_values($activities));
 		}
 
 		if (isset($selected[Activity::isIncomingChannel]))
 		{
-			$this->getIncomingChannelLoader()->fill($activity);
+			$this->getIncomingChannelLoader()->fill(...array_values($activities));
 		}
 
 		if (!isset($selected[Activity::files]))
@@ -160,12 +226,15 @@ final class ActivityReader
 			return null;
 		}
 
-		$elementIds = $this->getStorageElementRepository()->getElementIdsByActivityIds([$activityId]);
+		$storageTypeIds = [];
+		foreach ($activityIds as $activityId)
+		{
+			$storageTypeIds[$activityId] = (int)($rows[$activityId][self::STORAGE_TYPE_COLUMN] ?? 0);
+		}
 
-		return $this->getStorageElements()->getFiles(
-			$activityId,
-			(int)($row[self::STORAGE_TYPE_COLUMN] ?? 0),
-			$elementIds[$activityId] ?? [],
+		return $this->getStorageElements()->getFilesOfActivities(
+			$storageTypeIds,
+			$this->getStorageElementRepository()->getElementIdsByActivityIds($activityIds),
 		);
 	}
 
@@ -212,6 +281,42 @@ final class ActivityReader
 	}
 
 	/**
+	 * @param int[] $activityIds
+	 * @param string[] $columns
+	 * @return array<int, array<string, mixed>> by activity id, in the order of the given ids
+	 */
+	private static function readRows(array $activityIds, array $columns): array
+	{
+		if ($activityIds === [])
+		{
+			return [];
+		}
+
+		$fetched = [];
+		$query =
+			ActivityTable::query()
+				->setSelect(array_values(array_unique([...$columns, 'ID'])))
+				->whereIn('ID', $activityIds)
+				->exec()
+		;
+		while ($row = $query->fetch())
+		{
+			$fetched[(int)$row['ID']] = $row;
+		}
+
+		$rows = [];
+		foreach ($activityIds as $activityId)
+		{
+			if (isset($fetched[$activityId]))
+			{
+				$rows[$activityId] = $fetched[$activityId];
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * @param array<string, mixed> $row
 	 * @param string[] $columns
 	 */
@@ -251,6 +356,11 @@ final class ActivityReader
 	private function getAccess(): ActivityAccess
 	{
 		return $this->access ??= Container::getInstance()->getActivityAccess();
+	}
+
+	private function getBindingRepository(): ActivityBindingRepository
+	{
+		return $this->bindingRepository ??= new ActivityBindingRepository();
 	}
 
 	private function getCommunicationRepository(): ActivityCommunicationRepository

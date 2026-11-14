@@ -7,7 +7,14 @@
  */
 namespace Bitrix\Crm\WebForm;
 
+use Bitrix\Crm\Ads\AdsForm;
+use Bitrix\Crm\Ads\Internals\AdsFormLinkTable;
 use Bitrix\Crm\SiteButton;
+use Bitrix\Crm\V2\Internal\Model\LegalRegistry\SourceTable;
+use Bitrix\Crm\V2\Internal\Repository\LegalRegistry\UsageRepository;
+use Bitrix\Crm\V2\Internal\Repository\WebForm\FormSettingsColumn;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormMutationGuard;
+use Bitrix\Crm\V2\Public\Entity\LegalRegistry\FormBindings;
 use Bitrix\Crm\UI\Webpack;
 use Bitrix\Crm\WebForm\Internals;
 use Bitrix\Crm\WebForm\Internals\LandingTable;
@@ -58,6 +65,13 @@ class Form
 	protected $forceBuild = false;
 	protected $integration;
 	private ?Telemetry\RecorderInterface $telemetryRecorder;
+	private ?FormBindings $legalBindingsWriteContext = null;
+	private ?int $legalBindingsUserId = null;
+	private ?string $deferredPhoneCode = null;
+	private ?string $deferredCaptchaService = null;
+	private ?array $deferredCaptchaKeys = null;
+	private bool $deferredLanding = false;
+	private ?string $deferredLandingName = null;
 
 	public function __construct(
 		$id = null,
@@ -108,6 +122,48 @@ class Form
 	public function getName(): string
 	{
 		return $this->params['NAME'] ?? '';
+	}
+
+	public function setLegalBindingsWriteContext(?int $userId, ?FormBindings $bindings): void
+	{
+		$this->legalBindingsUserId = $userId;
+		$this->legalBindingsWriteContext = $bindings;
+		$this->deferredPhoneCode = null;
+		$this->deferredCaptchaService = null;
+		$this->deferredCaptchaKeys = null;
+		$this->deferredLanding = false;
+		$this->deferredLandingName = null;
+	}
+
+	public function completeLegalBindingsWrite(): void
+	{
+		if ($this->legalBindingsWriteContext === null) { return; }
+		$pool = Main\Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			if ($this->deferredPhoneCode !== null)
+			{
+				\CUserOptions::SetOption('crm', 'webform_phone_default_code', $this->deferredPhoneCode);
+			}
+			if ($this->deferredCaptchaService !== null)
+			{
+				Option::set('crm', 'crm_form_captcha_service', $this->deferredCaptchaService);
+			}
+			if ($this->deferredCaptchaKeys !== null)
+			{
+				[$service, $key, $secret, $version] = $this->deferredCaptchaKeys;
+				if ($service === self::GOOGLE_CAPTCHA_TYPE) { ReCaptcha::setKey($key, $secret, $version); }
+				else { YandexCaptcha::setKey($key, $secret); }
+			}
+			$this->prepareResult('INTEGRATION', $this->getIntegration()->save());
+			$this->buildScript();
+			if ($this->deferredLanding)
+			{
+				LandingTable::createLanding($this->id, $this->deferredLandingName);
+			}
+		}
+		finally { $pool->useMasterOnly(false); }
 	}
 
 	public function merge($params)
@@ -195,23 +251,137 @@ class Form
 
 	public static function delete($formId, $forceSystem = false)
 	{
-		$form = Internals\FormTable::getRowById($formId);
-		if (!$form || (!$forceSystem && $form['IS_SYSTEM'] == 'Y'))
+		$formId = (int)$formId;
+		if ($formId <= 0) { return false; }
+		$pool = Main\Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = Main\Application::getConnection();
+		$ambient = (new \ReflectionProperty($connection, 'transactionLevel'))->getValue($connection) > 0;
+		$started = false;
+		$source = false;
+		$exportLinks = [];
+		$landingIds = [];
+		$guard = null;
+		try
 		{
+			$guard = FormMutationGuard::acquire($formId);
+			$source = $connection->query('SELECT ID FROM b_crm_legal_source WHERE FORM_ID = '
+				. $formId)->fetch();
+			if ($source)
+			{
+				$connection->startTransaction();
+				$started = true;
+			}
+			$locked = $connection->query('SELECT ID, IS_SYSTEM FROM b_crm_webform WHERE ID = '
+				. $formId . ($source ? ' FOR UPDATE' : ''))->fetch();
+			if ($locked) { $locked = array_change_key_case($locked, CASE_UPPER); }
+			if (!$locked || (!$forceSystem && $locked['IS_SYSTEM'] === 'Y'))
+			{
+				if ($started) { self::rollbackLegalDelete(); }
+				return false;
+			}
+			if ($source)
+			{
+				$source = $connection->query('SELECT ID, REVISION FROM b_crm_legal_source WHERE FORM_ID = '
+					. $formId . ' FOR UPDATE')->fetch();
+				if (!$source || $ambient)
+				{
+					self::rollbackLegalDelete();
+					return false;
+				}
+				$source = array_change_key_case($source, CASE_UPPER);
+			}
+			$formToDelete = new self($formId);
+			if ($source)
+			{
+				$exportLinks = AdsFormLinkTable::getList(['select' => ['ID', 'ADS_TYPE', 'ADS_ACCOUNT_ID', 'ADS_FORM_ID'],
+					'filter' => ['=WEBFORM_ID' => $formId,
+						'=LINK_DIRECTION' => AdsFormLinkTable::LINK_DIRECTION_EXPORT]])->fetchAll();
+				$landingIds = array_column(Internals\LandingTable::getList(['select' => ['ID'],
+					'filter' => ['=FORM_ID' => $formId]])->fetchAll(), 'ID');
+				$closed = (new UsageRepository())->changeUsage($formId, 'closeSource', null, null,
+					false, false, (int)$source['REVISION']);
+				if (!$closed->isSuccess())
+				{
+					self::rollbackLegalDelete();
+					return false;
+				}
+				Internals\FormTable::beginDeferredExternalDelete($formId);
+				try { $deleteResult = Internals\FormTable::delete($formId); }
+				finally { Internals\FormTable::endDeferredExternalDelete($formId); }
+			}
+			else
+			{
+				$formToDelete->getIntegration()->delete();
+				$deleteResult = Internals\FormTable::delete($formId);
+			}
+			if (!$deleteResult->isSuccess())
+			{
+				if ($started) { self::rollbackLegalDelete(); }
+				return false;
+			}
+			if ($started)
+			{
+				$connection->commitTransaction();
+				$started = false;
+			}
+		}
+		catch (\Throwable)
+		{
+			if ($started) { try { self::rollbackLegalDelete(); } catch (\Throwable) {} }
 			return false;
 		}
+		finally
+		{
+			try { $guard?->release(); }
+			finally { $pool->useMasterOnly(false); }
+		}
+		if ($source)
+		{
+			$pool->useMasterOnly(true);
+			try
+			{
+				$externalSucceeded = true;
+				try { $externalSucceeded = $formToDelete->getIntegration()->deleteWithResult()->isSuccess(); }
+				catch (\Throwable) { $externalSucceeded = false; }
+				foreach ($exportLinks as $link)
+				{
+					try
+					{
+						if (!AdsFormLinkTable::getById((int)$link['ID'])->fetch()) { continue; }
+						$adsForm = AdsForm::getService()->getForm($link['ADS_TYPE']);
+						$adsForm->setAccountId($link['ADS_ACCOUNT_ID']);
+						$unlinked = $adsForm->unlink($link['ADS_FORM_ID']);
+						$deleted = $unlinked && AdsFormLinkTable::delete((int)$link['ID'])->isSuccess();
+						$externalSucceeded = $deleted && $externalSucceeded;
+					}
+					catch (\Throwable) { $externalSucceeded = false; }
+				}
+				foreach ($landingIds as $landingId)
+				{
+					try { $externalSucceeded = Internals\LandingTable::delete((int)$landingId)->isSuccess()
+						&& $externalSucceeded; }
+					catch (\Throwable) { $externalSucceeded = false; }
+				}
+				if (!$externalSucceeded)
+				{
+					\AddMessage2Log('CRM form external deletion incomplete after commit: ' . $formId, 'crm');
+				}
+			}
+			finally { $pool->useMasterOnly(false); }
+		}
+		Webpack\Form::instance($formId)->delete();
+		static::cleanCacheByTag($formId);
 
-		(new self($formId))->getIntegration()->delete();
-		$deleteResult = Internals\FormTable::delete($formId);
-		if ($deleteResult->isSuccess())
+		return true;
+	}
+
+	private static function rollbackLegalDelete(): void
+	{
+		try { Main\Application::getConnection()->rollbackTransaction(); }
+		catch (Main\DB\TransactionException $exception)
 		{
-			Webpack\Form::instance($formId)->delete();
-			static::cleanCacheByTag($formId);
-			return true;
-		}
-		else
-		{
-			return false;
+			if ($exception->getMessage() !== 'Nested rollbacks are unsupported.') { throw $exception; }
 		}
 	}
 
@@ -501,10 +671,15 @@ class Form
 			if ($captchaService !== Option::get('crm', 'crm_form_captcha_service'))
 			{
 				$this->forceBuild = true;
-				Option::set('crm', 'crm_form_captcha_service', $captchaService);
+				if ($this->legalBindingsWriteContext === null)
+				{
+					Option::set('crm', 'crm_form_captcha_service', $captchaService);
+				}
+				else { $this->deferredCaptchaService = $captchaService; }
 			}
 		}
-		$captchaService = Option::get('crm', 'crm_form_captcha_service', self::GOOGLE_CAPTCHA_TYPE);
+		$captchaService = $this->deferredCaptchaService
+			?? Option::get('crm', 'crm_form_captcha_service', self::GOOGLE_CAPTCHA_TYPE);
 		unset($result['CAPTCHA_SERVICE']);
 
 		$captchaKey = $result['CAPTCHA_KEY'] ?? '';
@@ -519,7 +694,11 @@ class Form
 			)
 			{
 				$this->forceBuild = true;
-				ReCaptcha::setKey($captchaKey, $captchaSecret, $captchaVersion);
+				if ($this->legalBindingsWriteContext === null)
+				{
+					ReCaptcha::setKey($captchaKey, $captchaSecret, $captchaVersion);
+				}
+				else { $this->deferredCaptchaKeys = [$captchaService, $captchaKey, $captchaSecret, $captchaVersion]; }
 			}
 			else if (
 				$captchaService === self::YANDEX_CAPTCHA_TYPE
@@ -528,7 +707,11 @@ class Form
 			)
 			{
 				$this->forceBuild = true;
-				YandexCaptcha::setKey($captchaKey, $captchaSecret);
+				if ($this->legalBindingsWriteContext === null)
+				{
+					YandexCaptcha::setKey($captchaKey, $captchaSecret);
+				}
+				else { $this->deferredCaptchaKeys = [$captchaService, $captchaKey, $captchaSecret, $captchaVersion]; }
 			}
 		}
 		unset($result['CAPTCHA_KEY']);
@@ -671,9 +854,20 @@ class Form
 			}
 		}
 
-		if ($phoneCodeToSetAsDefault !== null)
+		if ($phoneCodeToSetAsDefault !== null && $this->legalBindingsWriteContext === null)
 		{
 			\CUserOptions::SetOption('crm', 'webform_phone_default_code', $phoneCodeToSetAsDefault);
+		}
+		elseif ($phoneCodeToSetAsDefault !== null)
+		{
+			$this->deferredPhoneCode = $phoneCodeToSetAsDefault;
+		}
+		if ($this->legalBindingsWriteContext !== null
+			&& FormSettingsColumn::storedSize(is_array($result['FORM_SETTINGS'] ?? null)
+				? $result['FORM_SETTINGS'] : []) > FormSettingsColumn::MAX_STORED_BYTES)
+		{
+			$this->errors[] = 'CRM form settings exceed storage capacity.';
+			return;
 		}
 
 		if ($this->id)
@@ -681,7 +875,9 @@ class Form
 			unset($result['ID']);
 			// FormTable::onBeforeUpdate() advances the version only when the fields omit it
 			unset($result['DATE_MODIFY']);
-			$formResult = Internals\FormTable::update($this->id, $result);
+			$formResult = $this->legalBindingsWriteContext === null
+				? self::updatePreservingLegalDocuments((int)$this->id, $result)
+				: Internals\FormTable::update($this->id, $result);
 			$isAdded = false;
 		}
 		else
@@ -718,7 +914,10 @@ class Form
 		}
 
 		/*INTEGRATION*/
-		$this->prepareResult('INTEGRATION',$this->getIntegration()->save());
+		if ($this->legalBindingsWriteContext === null)
+		{
+			$this->prepareResult('INTEGRATION',$this->getIntegration()->save());
+		}
 
 		/* FIELDS */
 		$existedFieldList = array();
@@ -838,6 +1037,12 @@ class Form
 			$this->prepareResult('AGREEMENTS', $agreementResult);
 		}
 
+		if ($this->legalBindingsWriteContext !== null)
+		{
+			$this->deferredLanding = $isAdded && (int)$this->params['TYPE_ID'] === Internals\FormTable::TYPE_DEFAULT;
+			$this->deferredLandingName = $result['NAME'];
+			return;
+		}
 		$this->buildScript();
 		if ($isAdded && (int)$this->params['TYPE_ID'] === Internals\FormTable::TYPE_DEFAULT)
 		{
@@ -845,39 +1050,104 @@ class Form
 		}
 	}
 
+	private static function updatePreservingLegalDocuments(int $formId, array $columns): Main\ORM\Data\UpdateResult
+	{
+		$pool = Main\Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = Main\Application::getConnection();
+		$started = false;
+		try
+		{
+			$connection->startTransaction();
+			$started = true;
+			$query = new class(Internals\FormTable::getEntity()) extends Main\ORM\Query\Query {
+				protected function query($sql)
+				{
+					$result = $this->entity->getConnection()->query($sql . ' FOR UPDATE');
+					$result->setReplacedAliases($this->replaced_aliases);
+					if ($this->isFetchModificationRequired())
+					{
+						$result->addFetchDataModifier([$this, 'fetchDataModificationCallback']);
+					}
+					return $result;
+				}
+			};
+			$current = $query->setSelect(['FORM_SETTINGS'])->setFilter(['=ID' => $formId])->fetch();
+			$columns['FORM_SETTINGS'] = is_array($columns['FORM_SETTINGS'] ?? null)
+				? $columns['FORM_SETTINGS'] : [];
+			if (is_array($current['FORM_SETTINGS'] ?? null)
+				&& array_key_exists('LEGAL_DOCUMENTS', $current['FORM_SETTINGS']))
+			{
+				$columns['FORM_SETTINGS']['LEGAL_DOCUMENTS'] = $current['FORM_SETTINGS']['LEGAL_DOCUMENTS'];
+			}
+			else
+			{
+				unset($columns['FORM_SETTINGS']['LEGAL_DOCUMENTS']);
+			}
+			if (FormSettingsColumn::storedSize($columns['FORM_SETTINGS']) > FormSettingsColumn::MAX_STORED_BYTES)
+			{
+				self::rollbackLegalDelete();
+				$started = false;
+				return (new Main\ORM\Data\UpdateResult())->addError(
+					new Main\Error('CRM form settings exceed storage capacity.'));
+			}
+			$updated = Internals\FormTable::update($formId, $columns);
+			if ($updated->isSuccess()) { $connection->commitTransaction(); }
+			else { self::rollbackLegalDelete(); }
+			$started = false;
+
+			return $updated;
+		}
+		catch (\Throwable $exception)
+		{
+			if ($started) { try { self::rollbackLegalDelete(); } catch (\Throwable) {} }
+			throw $exception;
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
 	public function buildScript()
 	{
-		$resourceBooking = Webpack\Form\ResourceBooking::instance();
-		if (Main\ModuleManager::isModuleInstalled('calendar') && !$resourceBooking->isBuilt())
+		$pool = Main\Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
 		{
-			$resourceBooking->build();
-		}
-
-		$booking = Webpack\Form\Booking::instance();
-		if (Main\ModuleManager::isModuleInstalled('booking') && !$booking->isBuilt())
-		{
-			$booking->build();
-		}
-
-		$app = Webpack\Form\App::instance();
-		if ($this->forceBuild || !$app->isBuilt(new Main\Type\Date()))
-		{
-			if ($app->build())
+			$resourceBooking = Webpack\Form\ResourceBooking::instance();
+			if (Main\ModuleManager::isModuleInstalled('calendar') && !$resourceBooking->isBuilt())
 			{
-				Webpack\Form::addCheckResourcesAgent();
+				$resourceBooking->build();
 			}
-		}
 
-		$result = Webpack\Form::instance($this->id)->build();
-		if (Manager::isEmbeddingAvailable() && $this->isEmbeddingAvailable()
-			&& ($this->isEmbeddingEnabled() || $this->isEmbeddedAvailableChanged))
-		{
-			SiteButton\Manager::updateScriptCacheWithForm($this->getId());
-		}
+			$booking = Webpack\Form\Booking::instance();
+			if (Main\ModuleManager::isModuleInstalled('booking') && !$booking->isBuilt())
+			{
+				$booking->build();
+			}
 
-		$this->forceBuild = false;
-		self::cleanCacheByTag($this->id);
-		return $result;
+			$app = Webpack\Form\App::instance();
+			if ($this->forceBuild || !$app->isBuilt(new Main\Type\Date()))
+			{
+				if ($app->build())
+				{
+					Webpack\Form::addCheckResourcesAgent();
+				}
+			}
+
+			$result = Webpack\Form::instance($this->id)->build();
+			if (Manager::isEmbeddingAvailable() && $this->isEmbeddingAvailable()
+				&& ($this->isEmbeddingEnabled() || $this->isEmbeddedAvailableChanged))
+			{
+				SiteButton\Manager::updateScriptCacheWithForm($this->getId());
+			}
+
+			$this->forceBuild = false;
+			self::cleanCacheByTag($this->id);
+			return $result;
+		}
+		finally { $pool->useMasterOnly(false); }
 	}
 
 	public function getErrors()
@@ -1335,6 +1605,10 @@ class Form
 			$form['SECURITY_CODE'],
 			$form['XML_ID']
 		);
+		if (is_array($form['FORM_SETTINGS'] ?? null))
+		{
+			unset($form['FORM_SETTINGS']['LEGAL_DOCUMENTS']);
+		}
 		$form['NAME'] = Loc::getMessage('CRM_WEBFORM_FORM_COPY_NAME_PREFIX') . ' ' . $form['NAME'];
 		$form['ACTIVE'] = 'N';
 		$form['IS_SYSTEM'] = 'N';
@@ -1660,7 +1934,7 @@ class Form
 		}
 
 		// set responsible
-		$responsibleQueue = new ResponsibleQueue($this->id);
+		$responsibleQueue = new ResponsibleQueue($this->id, empty($resultParameters['LEGAL_SUBMISSION']));
 		$responsibleId = $responsibleQueue->getNextId();
 		$this->params['ASSIGNED_BY_ID'] = $responsibleId ? $responsibleId : 1;
 
@@ -1687,8 +1961,24 @@ class Form
 			'CALLBACK_PHONE' => $fieldPhoneValue,
 			'ENTITIES' => isset($resultParameters['ENTITIES']) ? $resultParameters['ENTITIES'] : [],
 		);
+		if (!empty($resultParameters['LEGAL_SUBMISSION']))
+		{
+			$data['LEGAL_SUBMISSION'] = $resultParameters['LEGAL_SUBMISSION'];
+		}
 		$result = $this->createResult($data);
 		$result->save();
+		if ($result->isLegalReplay()) { return $result; }
+		if (!empty($resultParameters['LEGAL_SUBMISSION']) && !$result->hasErrors() && $responsibleId)
+		{
+			try { $responsibleQueue->setLastId($responsibleId); }
+			catch (\Throwable)
+			{
+				\Bitrix\Crm\Service\Container::getInstance()->getLogger('Webform')->error(
+					'Legal form responsible queue update failed after commit.',
+					['formId' => (int)$this->id, 'resultId' => (int)$result->getId()],
+				);
+			}
+		}
 		if ($result->hasErrors())
 		{
 			$this->errors = $result->getErrors();

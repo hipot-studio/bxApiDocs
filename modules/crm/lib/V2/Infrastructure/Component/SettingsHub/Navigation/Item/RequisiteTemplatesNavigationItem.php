@@ -5,9 +5,10 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItem;
 use Bitrix\Main\HttpRequest;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
 
 final class RequisiteTemplatesNavigationItem implements SettingsHubWrappedNavigationItem
@@ -28,9 +29,9 @@ final class RequisiteTemplatesNavigationItem implements SettingsHubWrappedNaviga
 		return $permissions->isCrmAdmin();
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $permissions->isCrmAdmin();
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

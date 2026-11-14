@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Document\Flipchart;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\SessionTerminationService;
@@ -41,6 +42,31 @@ class BoardSessionTerminationService implements SessionTerminationService
 
 		$this->markSessionAsNonActive($unallowedSessions);
 		BoardService::kickUnallowedUsers($unallowedSessions, $this->object);
+	}
+
+	public function terminateSessionsByExternalLink(int $externalLinkId): void
+	{
+		if (!$this->object instanceof File)
+		{
+			return;
+		}
+
+		$sessions = DocumentSession::getModelList([
+			'filter' => [
+				'=SERVICE' => DocumentService::FlipChart->value,
+				'=OBJECT_ID' => $this->object->getId(),
+				'=EXTERNAL_LINK_ID' => $externalLinkId,
+				'=STATUS' => DocumentSession::STATUS_ACTIVE,
+			],
+		]);
+
+		if (empty($sessions))
+		{
+			return;
+		}
+
+		$this->markSessionAsNonActive($sessions);
+		BoardService::kickUnallowedUsers($sessions, $this->object);
 	}
 
 	public function findUnallowedSessions(File|AttachedObject $object): array

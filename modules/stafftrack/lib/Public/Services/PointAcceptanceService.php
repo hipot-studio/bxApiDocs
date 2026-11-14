@@ -92,11 +92,39 @@ class PointAcceptanceService
 	 */
 	public const LEAVE_CLOSE_LOOKBACK_SEC = 129600;
 
+	private const DAY_SEC = 86400;
+
+	/** UTC-12, the westernmost zone, ends a date twelve hours after UTC does. */
+	private const WESTERNMOST_ZONE_LAG_SEC = 43200;
+
 	private CheckInRepository $repository;
 
 	public function __construct(?CheckInRepository $repository = null)
 	{
 		$this->repository = $repository ?? new CheckInRepository();
+	}
+
+	/**
+	 * Whether no point can be accepted into the date any more. Whoever asks names the date by his own
+	 * calendar while every point counts by the local date of its own author, so the date is over once it is
+	 * over in the westernmost zone, and a point is still accepted POINT_ACCEPT_PAST_SEC after its own time.
+	 *
+	 * Reading and writing share the one rule and may not drift apart: the map caches such a date and no
+	 * other ({@see \Bitrix\StaffTrack\Public\Provider\CheckInProvider}), and the write drops that cache for
+	 * the dates it reached all the same ({@see \Bitrix\StaffTrack\Public\Command\CheckIn\AbstractCommand}),
+	 * because one point does reach past the window - the LEAVE that closes a route, admitted by
+	 * {@see self::admitRouteClosingPoints()}.
+	 *
+	 * @param string $localDate Y-m-d
+	 */
+	public static function isDateClosedToNewPoints(string $localDate, ?int $now = null): bool
+	{
+		$endInTheWesternmostZone = (int)strtotime($localDate . ' 00:00:00 UTC')
+			+ self::DAY_SEC
+			+ self::WESTERNMOST_ZONE_LAG_SEC
+		;
+
+		return ($now ?? time()) >= $endInTheWesternmostZone + self::POINT_ACCEPT_PAST_SEC;
 	}
 
 	/**
@@ -589,7 +617,12 @@ class PointAcceptanceService
 		}
 	}
 
-	private static function isRouteClosingPoint(CheckInDto $point): bool
+	/**
+	 * Whether the point is one of those the acceptance may let past its lower bound - and so the only kind
+	 * that can reach a day already closed to new points. The write path asks about it to know whose day may
+	 * have to be dropped from the cache of the map; the decision itself stays here.
+	 */
+	public static function isRouteClosingPoint(CheckInDto $point): bool
 	{
 		return $point->entityType === CheckInType::AUTOMATIC->value
 			&& $point->description === self::DESCRIPTION_LEAVE;

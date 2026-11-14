@@ -5,9 +5,18 @@ use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
+use Bitrix\Disk\Internal\Service\Audit\AuditCaptureService;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
+use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
+use Bitrix\Disk\Internal\Service\Audit\AuditRightsChangeAuditService;
+use Bitrix\Disk\Internal\Service\Audit\AuditRightsEventProducer;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Public\Event\Audit\AuditRightsEvent;
 use Bitrix\Disk\SystemUser;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Result;
 use Bitrix\Main\Update\Stepper;
 
 class GroupStepper extends Stepper
@@ -46,9 +55,9 @@ class GroupStepper extends Stepper
 				return !$this->isQueueEmpty();
 			}
 
-			$groupId = ($queueOption["groupId"] ?: 0);
-			$copiedGroupId = ($queueOption["copiedGroupId"] ?: 0);
-			$errorOffset = ($queueOption["errorOffset"] ?: 0);
+			$groupId = (int)($queueOption['groupId'] ?? 0);
+			$copiedGroupId = (int)($queueOption['copiedGroupId'] ?? 0);
+			$errorOffset = (int)($queueOption['errorOffset'] ?? 0);
 
 			$storage = Driver::getInstance()->getStorageByGroupId($groupId);
 			$targetStorage = Driver::getInstance()->getStorageByGroupId($copiedGroupId);
@@ -62,15 +71,55 @@ class GroupStepper extends Stepper
 			$targetRootFolder = $targetStorage->getRootObject();
 
 			$limit = 5;
-			$offset = $this->getOffset($targetRootFolder) + $errorOffset;
+			$offset = max(
+				(int)($queueOption['processedOffset'] ?? 0),
+				$this->getOffset($targetRootFolder) + $errorOffset,
+			);
 
-			$executiveUserId = ($queueOption["executiveUserId"] ?: SystemUser::SYSTEM_USER_ID);
-			$mapFolderIds = ($queueOption["mapFolderIds"] ?: []);
-			$mapIdsCopiedFiles = ($queueOption["mapIdsCopiedFiles"] ?: []);
+			$executiveUserId = (int)($queueOption['executiveUserId'] ?? 0) ?: SystemUser::SYSTEM_USER_ID;
+			$mapFolderIds = $queueOption['mapFolderIds'] ?? [];
+			$mapIdsCopiedFiles = $queueOption['mapIdsCopiedFiles'] ?? [];
+			if (array_is_list($mapIdsCopiedFiles))
+			{
+				$mapIdsCopiedFiles = [];
+			}
+			if (empty($queueOption['errorBatchesStored']))
+			{
+				$failedFileIds = $queueOption['failedFileIds'] ?? [];
+				foreach ($mapIdsCopiedFiles as $fileId => $copiedFileId)
+				{
+					if (!$copiedFileId)
+					{
+						$failedFileIds[] = (int)$fileId;
+					}
+				}
+				foreach (array_chunk(array_values(array_unique($failedFileIds)), $limit) as $index => $failedIds)
+				{
+					$this->saveErrorBatch('0_legacy_' . $index, $failedIds);
+				}
+				$queueOption['errorBatchesStored'] = true;
+				unset($queueOption['failedFileIds']);
+			}
+			if (empty($queueOption['auditOperationId']))
+			{
+				$queueOption['auditOperationId'] = AuditOperationContextStack::createOperationId();
+				$queueOption['mapIdsCopiedFiles'] = $mapIdsCopiedFiles;
+				$this->saveQueueOption($queueOption);
+			}
 
-			$fileIds = $this->getFileIds($rootFolder);
-			$count = count($fileIds);
-			$fileIds = array_slice($fileIds, $offset, $limit);
+			$sourceFileIds = $this->getFileIds($rootFolder);
+			$count = count($sourceFileIds);
+			$fileIds = [];
+			$nextOffset = $offset;
+			while ($nextOffset < $count && count($fileIds) < $limit)
+			{
+				$fileId = $sourceFileIds[$nextOffset++];
+				if (array_key_exists($fileId, $mapIdsCopiedFiles))
+				{
+					continue;
+				}
+				$fileIds[] = $fileId;
+			}
 
 			if (!$fileIds || !$mapFolderIds)
 			{
@@ -79,22 +128,38 @@ class GroupStepper extends Stepper
 				return !$this->isQueueEmpty();
 			}
 
-			$copiedFileIds = [];
+			$mapIdsCopiedFiles = [];
+			$failedFileIds = [];
 			foreach ($fileIds as $fileId)
 			{
 				try
 				{
 					$file = File::loadById($fileId);
+					if (!$file)
+					{
+						$queueOption['errorOffset'] = ++$errorOffset;
+						$mapIdsCopiedFiles[$fileId] = 0;
+						$failedFileIds[] = (int)$fileId;
+						continue;
+					}
 					$folderId = $this->getFolderId($file);
-					$targetFolderId = ($mapFolderIds[$folderId] ?: 0);
+					$targetFolderId = $mapFolderIds[$folderId] ?? 0;
 					$targetFolder = Folder::loadById($targetFolderId);
-					$copiedFile = $file->copyTo($targetFolder, $executiveUserId);
+					$copiedFile = $targetFolder ? $file->copyTo($targetFolder, $executiveUserId) : null;
 					if (!$copiedFile || $file->getErrors())
 					{
-						$queueOption["errorOffset"] += 1;
+						$queueOption['errorOffset'] = ++$errorOffset;
+						$mapIdsCopiedFiles[$fileId] = 0;
+						$failedFileIds[] = (int)$fileId;
 					}
-					$this->setFileRights($groupId, $copiedGroupId, $file, $copiedFile);
-					$copiedFileIds[] = ($copiedFile->getId() ? $fileId : 0);
+					else
+					{
+						$this->setFileRights(
+							$groupId, $copiedGroupId, $file, $copiedFile,
+							$queueOption['auditOperationId'], $executiveUserId,
+						);
+						$mapIdsCopiedFiles[$fileId] = (int)$copiedFile->getId();
+					}
 				}
 				catch (\Throwable $exception)
 				{
@@ -102,8 +167,12 @@ class GroupStepper extends Stepper
 					return false;
 				}
 			}
-
-			$queueOption["mapIdsCopiedFiles"] = $mapIdsCopiedFiles + $copiedFileIds;
+			$queueOption['processedOffset'] = $nextOffset;
+			$queueOption['mapIdsCopiedFiles'] = $mapIdsCopiedFiles;
+			if ($failedFileIds !== [])
+			{
+				$this->saveErrorBatch('1_batch_' . $offset, $failedFileIds);
+			}
 			$this->saveQueueOption($queueOption);
 
 			$option["count"] = $count;
@@ -121,25 +190,35 @@ class GroupStepper extends Stepper
 
 	private function onAfterCopy(array $queueOption)
 	{
-		$this->saveErrorOption($queueOption);
+		$this->saveErrorOption();
 	}
 
-	private function saveErrorOption(array $queueOption)
+	private function saveErrorBatch(string $name, array $failedFileIds): void
 	{
-		$mapIdsCopiedFiles = $queueOption["mapIdsCopiedFiles"] ?: [];
+		Option::set($this->getErrorBatchModuleId(), $name, serialize($failedFileIds), '');
+	}
 
+	private function getErrorBatchModuleId(): string
+	{
+		return strtolower(static::$moduleId . '.' . $this->errorName);
+	}
+
+	private function saveErrorOption(): void
+	{
+		$batches = Option::getForModule($this->getErrorBatchModuleId(), '');
+		ksort($batches, SORT_NATURAL);
 		$mapIdsWithErrors = [];
-		foreach ($mapIdsCopiedFiles as $fileId => $copiedFileId)
+		foreach ($batches as $batch)
 		{
-			if (!$copiedFileId)
+			foreach (unserialize($batch, ['allowed_classes' => false]) as $fileId)
 			{
-				$mapIdsWithErrors[] = $fileId;
+				$mapIdsWithErrors[$fileId] = (int)$fileId;
 			}
 		}
 
 		if ($mapIdsWithErrors)
 		{
-			Option::set(self::$moduleId, $this->errorName, serialize($mapIdsWithErrors));
+			Option::set(self::$moduleId, $this->errorName, serialize(array_values($mapIdsWithErrors)));
 		}
 	}
 
@@ -183,7 +262,9 @@ class GroupStepper extends Stepper
 		int $groupId,
 		int $copiedGroupId,
 		BaseObject $sourceFile,
-		BaseObject $copiedFile
+		BaseObject $copiedFile,
+		?string $operationId = null,
+		?int $executiveUserId = null,
 	): void
 	{
 		$rightsManager = Driver::getInstance()->getRightsManager();
@@ -206,7 +287,48 @@ class GroupStepper extends Stepper
 			$newRights[] = $right;
 		}
 
-		$rightsManager->set($copiedFile, $newRights);
+		AuditTransaction::run(static function (AuditTransaction $owner) use (
+			$rightsManager, $copiedFile, $newRights, $operationId, $executiveUserId, $groupId, $copiedGroupId,
+		): bool {
+			$audit = new AuditRightsChangeAuditService(producer: new AuditRightsEventProducer(
+				sender: static function (AuditRightsEvent $event) use ($groupId, $copiedGroupId): Result {
+					$event = new AuditRightsEvent(
+						eventCode: $event->eventCode, operationId: $event->operationId, source: $event->source,
+						actionContext: $event->actionContext, targetType: $event->targetType, targetId: $event->targetId,
+						targetObject: $event->targetObject, subject: $event->subject,
+						details: $event->details + ['sourceGroupId' => $groupId, 'targetGroupId' => $copiedGroupId],
+						occurredAt: $event->occurredAt,
+						objectSnapshot: $event->objectSnapshot,
+					);
+
+					return (new AuditRightsEventProducer())->publishEvents([$event]);
+				},
+			));
+			$before = $audit->capture($copiedFile);
+			$context = null;
+			AuditCaptureService::runFailOpen(static function () use (
+				$operationId, $executiveUserId, $copiedGroupId, &$context,
+			): Result {
+				$context = AuditOperationContext::create(
+					operationId: $operationId,
+					actionContext: (new AuditActionContextResolver())->resolveForSystemActor($executiveUserId, [
+						'type' => 'system', 'entityType' => 'group_copy', 'entityId' => $copiedGroupId,
+					]),
+				);
+
+				return new Result();
+			});
+			if (!$rightsManager->set($copiedFile, $newRights, $owner, isServiceEdit: true))
+			{
+				return false;
+			}
+			if ($context !== null)
+			{
+				$audit->schedule($copiedFile, $before, $context, $owner);
+			}
+
+			return true;
+		});
 	}
 
 	private function prepareAccessCodeByCopiedGroup(
@@ -263,6 +385,7 @@ class GroupStepper extends Stepper
 	{
 		$queue = $this->getQueue();
 		$this->setQueue($queue);
+		Option::delete($this->getErrorBatchModuleId());
 		$this->deleteCurrentQueue($queue);
 		Option::delete(static::$moduleId, ["name" => $this->checkerName]);
 		Option::delete(static::$moduleId, ["name" => $this->baseName]);

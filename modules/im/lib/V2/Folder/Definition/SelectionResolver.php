@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Folder\Definition;
 
+use Bitrix\Im\V2\Folder\System\ChatFolder;
 use Bitrix\Im\V2\Recent\Query\RecentFilter;
 use Bitrix\Im\V2\Recent\Query\RecentParams;
 use Bitrix\Im\V2\Recent\RecentProvider;
@@ -14,9 +15,9 @@ use Bitrix\Im\V2\Recent\RecentProvider;
  * for the counter (ALG-02) via {@see self::resolveRootChatIds()} and for pins
  * (ALG-03) via {@see self::matchingChatIds()}.
  *
- * The pin path is live: {@see self::matchingChatIds()} runs on every save of a composition
- * ({@see \Bitrix\Im\V2\Folder\Source\FolderSourceService::updateSources()}) - once for the sources
- * switched off and once for the ones left enabled. The counter path is not -
+ * The pin path is live: {@see self::matchingChatIds()} runs on a save of the composition that
+ * switches a source off ({@see \Bitrix\Im\V2\Folder\Pin\PinService::syncShadowsOnSourcesRemove()}) -
+ * once for the sources switched off and once for the ones left enabled. The counter path is not -
  * {@see self::resolveRootChatIds()} has no production caller while the counter is computed on the
  * client.
  */
@@ -44,7 +45,7 @@ final class SelectionResolver
 	 *
 	 * @param int[] $withinChatIds candidates the read is narrowed to; the empty set means the
 	 *        whole recent list of the user. A caller that already holds the candidates (the pin
-	 *        shadows of a folder) passes them here instead of scanning the sections. They must
+	 *        rows of a folder) passes them here instead of scanning the sections. They must
 	 *        not go into {@see SelectionBranch::$chatIds} - there they would REPLACE the type
 	 *        condition of the branch instead of narrowing it, and the source would be lost.
 	 * @return int[]
@@ -52,6 +53,23 @@ final class SelectionResolver
 	public function matchingChatIds(Selection $selection, int $userId, array $withinChatIds = []): array
 	{
 		return $this->fetchChatIds($userId, $selection, $withinChatIds);
+	}
+
+	/**
+	 * Whether the composition covers the chat section, and with it the private conversations the
+	 * companion rules of the folder read decide about ({@see \Bitrix\Im\V2\Folder\FolderRecentProvider}).
+	 */
+	public static function hasChatSection(Selection $selection): bool
+	{
+		foreach ($selection->getBranches() as $branch)
+		{
+			if ($branch->typeCondition === ChatFolder::RECENT_SECTION)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

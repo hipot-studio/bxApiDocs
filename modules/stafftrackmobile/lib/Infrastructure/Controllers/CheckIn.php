@@ -25,6 +25,7 @@ use Bitrix\StaffTrackMobile\Infrastructure\ActionFilters\CheckInAvailableByRegio
 use Bitrix\StaffTrackMobile\Infrastructure\ActionFilters\IntranetOnlyFilter;
 use Bitrix\StaffTrackMobile\Infrastructure\ActionFilters\NewCheckInEnabledFilter;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInV3StaffSelectorFeature;
+use Bitrix\StaffTrackMobile\Public\Features\PresenceListFeature;
 
 final class CheckIn extends Base
 {
@@ -204,6 +205,7 @@ final class CheckIn extends Base
 		$timezoneOffset = \CTimeZone::GetOffset();
 		$userId = (int)$this->getCurrentUser()?->getId();
 		$isStaffSelectorEnabled = (new CheckInV3StaffSelectorFeature())->isEnabled();
+		$mapEntities = $isStaffSelectorEnabled ? $entities : [];
 
 		[
 			'checkIns' => $checkIns,
@@ -214,7 +216,7 @@ final class CheckIn extends Base
 		] = $provider->getLatestUsersCheckInByDepartment(
 			$timezoneOffset,
 			$timestamp,
-			$isStaffSelectorEnabled ? $entities : [],
+			$mapEntities,
 		);
 
 		return [
@@ -223,11 +225,13 @@ final class CheckIn extends Base
 			'manualStats' => $manualStats,
 			'checkInRolloutEnabled' => $checkInRolloutEnabled,
 			'subscribedUserIds' => $subscribedUserIds,
-			'hasSubordinates' => DepartmentProvider::hasSubordinates($userId),
+			'hasSubordinates' => self::hasSubordinates($userId, $mapEntities, $subscribedUserIds),
 			'users' => UserRepository::getByIds(array_column($checkIns, 'userId')),
 			'isWesternPortal' => Feature::isGeoRetentionLimited(),
 			'isGeoEncryptionAvailable' => Feature::isGeoEncryptionAvailable(),
 			'isCheckInV3StaffSelectorEnabled' => $isStaffSelectorEnabled,
+			// the gate of the presence widget over the map: the client is told of it here and nowhere else
+			'isPresenceListEnabled' => (new PresenceListFeature())->isEnabled(),
 		];
 	}
 
@@ -263,18 +267,20 @@ final class CheckIn extends Base
 	 * @ajaxAction stafftrackmobile.v2.CheckIn.loadCheckInForm
 	 * @param float $latitude
 	 * @param float $longitude
+	 * @param string $dialogId
 	 * @return array|null
 	 */
-	public function loadCheckInFormAction(float $latitude = 0, float $longitude = 0): ?array
+	public function loadCheckInFormAction(float $latitude = 0, float $longitude = 0, string $dialogId = ''): ?array
 	{
 		$userId = (int)$this->getCurrentUser()?->getId();
 
 		$formProvider = new CheckInFormProvider();
 
 		$needGeo = ($latitude !== 0.0 && $longitude !== 0.0);
+		$requestedDialogId = $dialogId !== '' ? $dialogId : null;
 		$result = $needGeo
-			? $formProvider->load($userId, $latitude, $longitude)
-			: $formProvider->load($userId);
+			? $formProvider->load($userId, $latitude, $longitude, $requestedDialogId)
+			: $formProvider->load($userId, dialogId: $requestedDialogId);
 
 		if (!$result->isSuccess())
 		{
@@ -291,15 +297,24 @@ final class CheckIn extends Base
 
 	/**
 	 * @ajaxAction stafftrackmobile.v2.CheckIn.getManualCheckInCount
-	 * @return array
+	 * @param int $userId the employee the check-ins are counted for; the viewer when none is named
+	 * @param int $timestamp the day the check-ins are counted for; today when none is named
+	 * @return array|null
 	 */
-	public function getManualCheckInCountAction(): array
+	#[CheckInToolEnabled]
+	public function getManualCheckInCountAction(int $userId = 0, int $timestamp = 0): ?array
 	{
-		$userId = (int)$this->getCurrentUser()?->getId();
+		$employeeId = $userId > 0 ? $userId : (int)$this->getCurrentUser()?->getId();
+		if (!$this->canViewEmployee($employeeId))
+		{
+			return null;
+		}
+
+		$day = $timestamp > 0 ? $timestamp : time();
 		$timezoneOffset = \CTimeZone::GetOffset();
 
 		$count = (new CheckInProvider())
-			->getManualCheckInCountByDate($userId, time(), $timezoneOffset)
+			->getManualCheckInCountByDate($employeeId, $day, $timezoneOffset)
 		;
 
 		return ['count' => $count];
@@ -430,6 +445,23 @@ final class CheckIn extends Base
 			static fn(array $point): array => $point + ['userId' => $userId],
 			$ends,
 		);
+	}
+
+	/**
+	 * Without a selector the map is drawn for the viewer and his team, so the answer is taken from that read rather
+	 * than from a second one, which would build the team again where the cache gives no generation of the structure.
+	 *
+	 * @param int[] $subscribedUserIds whom the map is drawn for: without a selector, the viewer and his team
+	 */
+	private static function hasSubordinates(int $viewerId, array $mapEntities, array $subscribedUserIds): bool
+	{
+		if ($viewerId > 0 && $mapEntities === [])
+		{
+			// the team of a viewer never holds the viewer himself
+			return array_diff($subscribedUserIds, [$viewerId]) !== [];
+		}
+
+		return DepartmentProvider::hasSubordinates($viewerId);
 	}
 
 	private static function wantsFlatList(string $withFlatList): bool

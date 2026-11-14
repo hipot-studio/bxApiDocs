@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Search;
 
 use Bitrix\Crm\Field;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\Search\Content;
@@ -42,6 +43,38 @@ final class DynamicTypeSearchContentBuilder extends SearchContentBuilder
 	{
 		$this->getIndexDataClass()::delete($entityId);
 	}
+
+	public function getSearchSelectFields(): ?array
+	{
+		$indexedFieldNames = $this->getIndexedItemFieldNames();
+		if ($indexedFieldNames === null)
+		{
+			return null;
+		}
+
+		return [Item::FIELD_NAME_ID, ...$indexedFieldNames];
+	}
+
+	protected function getIndexedItemFieldNames(): ?array
+	{
+		$factory = $this->getFactory();
+		if ($factory === null)
+		{
+			return null;
+		}
+
+		$candidates = array_unique([
+			Item::FIELD_NAME_TITLE,
+			Item\SmartInvoice::FIELD_NAME_ACCOUNT_NUMBER,
+			Item::FIELD_NAME_ASSIGNED,
+			...$this->getFieldsWithUsers(),
+		]);
+
+		return array_values(array_filter(
+			$candidates,
+			static fn(string $fieldName): bool => $factory->isFieldExists($fieldName),
+		));
+	}
 	
 	protected function getUserFieldEntityId(): string
 	{
@@ -50,7 +83,24 @@ final class DynamicTypeSearchContentBuilder extends SearchContentBuilder
 
 	protected function prepareEntityFields(int $entityId): ?array
 	{
-		return $this->getFactory()?->getItem($entityId)?->getData();
+		$factory = $this->getFactory();
+		$select = $this->getSearchSelectFields();
+		if ($factory === null || $select === null)
+		{
+			return $factory?->getItem($entityId)?->getData();
+		}
+
+		// Read past Factory::getItems(): it widens a narrow select, e.g. a smart invoice adds the fields
+		// of its title placeholder, which the content does not use.
+		$entityObject = $factory->getDataClass()::getList([
+			'select' => array_map(
+				static fn(string $fieldName): string => $factory->getEntityFieldNameByMap($fieldName),
+				$select,
+			),
+			'filter' => ['=ID' => $entityId],
+		])->fetchObject();
+
+		return $entityObject ? $factory->getItemByEntityObject($entityObject)->getDataForFields($select) : null;
 	}
 
 	protected function prepareSearchMap(array $fields, array $options = null): SearchMap

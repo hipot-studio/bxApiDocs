@@ -1,5 +1,6 @@
 <?php
 namespace Bitrix\Crm\Settings;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 
 class DealSettings
@@ -203,6 +204,7 @@ class DealSettings
 	 */
 	protected static function includeModuleFile()
 	{
+		Container::getInstance()->getLocalization()->loadMessages();
 		if(self::$messagesLoaded)
 		{
 			return;

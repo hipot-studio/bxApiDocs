@@ -3,9 +3,11 @@
 namespace Bitrix\Call\Controller;
 
 use Bitrix\Call\Analytics\CloudRecordAnalytics;
+use Bitrix\Call\Analytics\TrackAnalytics;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Main\Service\MicroService\BaseReceiver;
@@ -31,6 +33,8 @@ use Bitrix\Im\V2\Chat;
 class Cloud extends BaseReceiver implements IdempotentReplayable
 {
 	use IdempotentReplayableTrait;
+
+	private const LOCK_TTL = 10; // in seconds
 
 	public function getAutoWiredParameters(): array
 	{
@@ -190,6 +194,8 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 					errorCode: 'track_not_created',
 					event: 'cloud_record_track_not_created'
 				);
+			$this->addError(new Error('Track not created', 'track_not_created'));
+
 			return null;
 		}
 
@@ -239,6 +245,10 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 			$downloadStarted |= $result;
 		}
 
+		// A stored preview has no branch of its own: the pair always carries its record, and
+		// processing the record resolves the stored preview, binds it to the record and
+		// delivers the record. A second entry for the preview would deliver the same record
+		// again, inside the window the service waits for the answer of the portal.
 		if (!$recordTrack->getDownloaded())
 		{
 			$log && $logger->info("Cloud::recordingReadyAction: start to download record track");
@@ -251,6 +261,22 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 
 			$result &= $this->downloadTrack($recordTrack);
 			$downloadStarted |= $result;
+		}
+		elseif ($recordingRequest->manualRetry)
+		{
+			// The file is already on the portal and the download would add nothing: what the
+			// operator is missing is the delivery of it - the chat message and the preview bound
+			// to the record. Without the resend mark a stored file is still skipped, so a media
+			// retransmit cannot republish anything.
+			$log && $logger->info("Cloud::recordingReadyAction: process stored record track on an operator-driven resend");
+
+			// The preview of this pair is named whatever state it is in. A call may hold several
+			// pairs, and leaving it unnamed makes the delivery resolve the newest preview of the
+			// call instead - a foreign image bound to this record. Named, it decides the pair on
+			// its own: ready, it is bound; still downloading, the delivery waits for its
+			// completion; stuck without a download, it is replaced by a default
+			// {@see TrackService::processCloudVideoTrack()}.
+			$this->processDownloadedTrack($call, $recordTrack, $previewTrack);
 		}
 
 		if ($downloadStarted)
@@ -302,6 +328,51 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 		$logger = Logger::getInstance();
 
 		$log && $logger->info("Cloud::makeTrack: starting. Create {$fileInfo->type} track for call {$call->getId()}");
+
+		// Serialize find-or-create per file, the same way trackReadyAction() does. The replay keys
+		// of a regular delivery and of an operator resend differ on purpose, so UniqueRequestFilter
+		// lets a media retransmit and a resend of the same recording through together, and the
+		// table carries no unique constraint on (CALL_ID, EXTERNAL_TRACK_ID) to fall back on:
+		// without the lock both requests miss the stored row and insert one each, which doubles
+		// the download and the delivery as well. Only the row is protected here - the download is
+		// started by the caller, outside the lock.
+		$lockName = $this->trackLockName($call, $fileInfo);
+		if (!Application::getConnection()->lock($lockName, self::LOCK_TTL))
+		{
+			$log && $logger->error("Cloud::makeTrack: could not lock {$fileInfo->type} track of call {$call->getId()}");
+			$this->addError(new Error('Could not get exclusive lock', 'could_not_lock'));
+
+			return null;
+		}
+
+		try
+		{
+			return $this->findOrCreateTrack($call, $fileInfo);
+		}
+		finally
+		{
+			Application::getConnection()->unlock($lockName);
+		}
+	}
+
+	/**
+	 * The name of the lock follows the search of findOrCreateTrack(): a file with an external
+	 * identifier is one row of the call, a file without one is one row per type.
+	 */
+	private function trackLockName(\Bitrix\Call\Call $call, FileInfo $fileInfo): string
+	{
+		$key = $fileInfo->id > 0 ? "ext_{$fileInfo->id}" : "type_{$fileInfo->type}";
+
+		return "call_cloud_track_{$call->getId()}_{$key}";
+	}
+
+	/**
+	 * @return Track|null Track instance on success, null on failure
+	 */
+	private function findOrCreateTrack(\Bitrix\Call\Call $call, FileInfo $fileInfo): ?Track
+	{
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
 
 		$searchParams = [
 			'CALL_ID' => $call->getId(),
@@ -379,7 +450,7 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 	private function downloadTrack(Track $track): bool
 	{
 		$trackService = TrackService::getInstance();
-		if ($trackService->doNeedDownloadTrack($track))
+		if (!$trackService->isDownloaded($track) && $trackService->hasDownloadSource($track))
 		{
 			$downloadResult = $trackService->downloadTrackFile($track, true);
 			if (!$downloadResult->isSuccess())
@@ -390,6 +461,44 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 		}
 
 		return true;
+	}
+
+	/**
+	 * Processing of a file the portal already holds {@see TrackService::processDownloaded()}.
+	 *
+	 * Only an operator-driven resend gets here, and only for the record of the pair: processing
+	 * it delivers the record with the preview bound to it, so the pair is processed once per
+	 * request. The chat message about a ready recording stays single: it is guarded by the claim
+	 * NotifyService holds per call, message type and track.
+	 *
+	 * The preview of this very pair is passed along: without it the record binds to the newest
+	 * preview of the call, and a call with several pairs would deliver a resent record with the
+	 * preview of another one.
+	 *
+	 * A failure of the delivery is the answer of the callback and an event of its own: the operator
+	 * is told the file was not delivered instead of reading a success next to a file that never
+	 * reached the chat. The failure is reported here and not inside the finalization, which stays
+	 * silent about it for the sake of the background agent {@see TrackService::finalizeDownload()},
+	 * so one failure makes one event.
+	 */
+	protected function processDownloadedTrack(\Bitrix\Call\Call $call, Track $track, ?Track $knownPreview = null): void
+	{
+		$processResult = TrackService::getInstance()->processDownloaded(
+			$track,
+			knownPreview: $knownPreview
+		);
+		if ($processResult->isSuccess())
+		{
+			return;
+		}
+
+		$this->addErrors($processResult->getErrors());
+		(new TrackAnalytics($call))->sendTelemetry(
+			source: $track,
+			status: 'error',
+			event: 'track_processing_error',
+			error: $processResult->getError()
+		);
 	}
 
 	/**

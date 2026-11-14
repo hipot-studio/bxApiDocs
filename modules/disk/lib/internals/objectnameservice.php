@@ -9,6 +9,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Security\Random;
 
 /**
  * Class ObjectNameService
@@ -23,7 +24,17 @@ final class ObjectNameService
 	public const TYPE_FOLDER = ObjectTable::TYPE_FOLDER;
 
 	protected const MAX_ATTEMPT = 10;
+	protected const MAX_FALLBACK_ATTEMPT = 5;
 	protected const LOCK_DEFAULT_WAITING_TIMEOUT = 3;
+	private const COMPOUND_EXTENSIONS = [
+		'tar.gz',
+		'tar.bz2',
+		'tar.xz',
+		'tar.zst',
+		'tar.lz',
+		'tar.lzma',
+		'tar.z',
+	];
 
 	private string $desiredName;
 	private bool $shouldGenerateUniqueName = false;
@@ -161,12 +172,7 @@ final class ObjectNameService
 
 	private function getLockKey(): string
 	{
-		$keyData = [
-			$this->getDesiredName(),
-			$this->getUnderObjectId() ?? 0,
-		];
-
-		return implode('|', array_values($keyData));
+		return ObjectNameKey::of($this->getDesiredName()) . '|' . ($this->getUnderObjectId() ?? 0);
 	}
 
 	private function shouldLockName(): bool
@@ -192,27 +198,23 @@ final class ObjectNameService
 			return $result;
 		}
 
-		$parameters = [
-			'select' => ['NAME'],
-			'filter' => [
-				'PARENT_ID' => $this->getUnderObjectId(),
-				'=NAME' => $this->getDesiredName(),
-			],
-			'limit' => 1,
+		$filter = [
+			'PARENT_ID' => $this->getUnderObjectId(),
 		];
 
 		if ($excludeId !== null)
 		{
-			$parameters['filter']['!ID'] = $excludeId;
+			$filter['!ID'] = $excludeId;
 		}
 
-		if ($returnOpponentId)
-		{
-			$parameters['select'][] = 'ID';
-		}
-
-		$opponent = ObjectTable::getList($parameters)->fetch();
-		if (!$opponent)
+		$opponent = ObjectNameKey::findSameName(
+			[
+				'select' => ['ID', 'NAME'],
+				'filter' => $filter,
+			],
+			$this->getDesiredName(),
+		);
+		if ($opponent === null)
 		{
 			return $result;
 		}
@@ -259,7 +261,7 @@ final class ObjectNameService
 
 			if ($count > self::MAX_ATTEMPT)
 			{
-				$this->desiredName = $this->generateFallbackName($mainPartName, $suffix);
+				$this->applyFallbackName($mainPartName, $suffix);
 				break;
 			}
 		}
@@ -279,8 +281,8 @@ final class ObjectNameService
 
 		$suffix = array_pop($mainParts);
 
-		//name with a few dots like "example.tar.gz"
-		if ($partsCount > 2 && preg_match('/^[a-zA-Z][a-zA-Z0-9]{1,2}$/', $mainParts[$partsCount - 2]))
+		//name with a compound extension like "example.tar.gz"
+		if ($partsCount > 2 && in_array(mb_strtolower($mainParts[$partsCount - 2] . '.' . $suffix), self::COMPOUND_EXTENSIONS, true))
 		{
 			$suffix = array_pop($mainParts) . '.' . $suffix;
 		}
@@ -366,12 +368,31 @@ final class ObjectNameService
 		];
 	}
 
-	private function generateFallbackName(string $mainPartName, string $suffix): string
+	//when the attempts run out, the last name stays and the insert meets the unique index and fails, as before
+	private function applyFallbackName(string $mainPartName, ?string $suffix): void
+	{
+		for ($attempt = 1; $attempt <= self::MAX_FALLBACK_ATTEMPT; $attempt++)
+		{
+			$this->desiredName = $this->generateFallbackName($mainPartName, $suffix);
+			if ($this->isUniqueName($this->excludeId ?? null)->isSuccess())
+			{
+				return;
+			}
+		}
+	}
+
+	private function generateFallbackName(string $mainPartName, ?string $suffix): string
 	{
 		return implode('.', array_filter([
-			$mainPartName . ' ' . time(),
-			$suffix
+			$mainPartName . ' ' . $this->generateFallbackTail(),
+			$suffix,
 		]));
+	}
+
+	//objects with the same name may be renamed within the same second, so the tail keeps a random part
+	private function generateFallbackTail(): string
+	{
+		return time() . '-' . Random::getString(6);
 	}
 
 	private function isFolder(): bool

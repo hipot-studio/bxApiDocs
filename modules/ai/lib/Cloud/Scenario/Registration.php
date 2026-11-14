@@ -18,6 +18,8 @@ final class Registration
 {
 	/** @see \Bitrix\AiProxy\Controller\BaseReceiver::ERROR_CLIENT_NOT_FOUND */
 	private const ERROR_CLIENT_NOT_FOUND = 'client_not_found';
+	private const ERROR_SERVER_NOT_ALLOWED = 'server_not_allowed';
+	private const ERROR_SERVER_LIST_UNAVAILABLE = 'server_list_unavailable';
 	public const NOTIFICATION_TAG = 'ai_cloud_failed_registration';
 
 	public function __construct(
@@ -29,11 +31,31 @@ final class Registration
 	/**
 	 * Register portal in cloud aiproxy service.
 	 * @param string $serviceUrl Service URL.
+	 * @param array|null $allowedServers Preloaded server list; null loads it lazily.
 	 * @return Result
 	 */
-	public function register(string $serviceUrl): Result
+	public function register(string $serviceUrl, ?array $allowedServers = null): Result
 	{
 		$result = new Result();
+
+		// Fail closed: refuse service URLs outside the allowed server list.
+		try
+		{
+			$allowed = (new Cloud\ServerList())->isAllowedServer($serviceUrl, $allowedServers);
+		}
+		catch (\Throwable)
+		{
+			$result->addError(new Error('Allowed server list is not available.', self::ERROR_SERVER_LIST_UNAVAILABLE));
+
+			return $result;
+		}
+
+		if (!$allowed)
+		{
+			$result->addError(new Error('Service URL is not in the allowed server list.', self::ERROR_SERVER_NOT_ALLOWED));
+
+			return $result;
+		}
 
 		$cloudRegistration = new Cloud\Registration($serviceUrl);
 		$cloudRegistration->setLanguageId($this->languageId);
@@ -108,11 +130,13 @@ final class Registration
 		$result = new Result();
 
 		$serverList = new Cloud\ServerList();
-		$mostSuitableServer = $serverList->getMostSuitableServer();
+		// One list fetch is reused by both the pick and the whitelist check inside register().
+		$allowedServers = $serverList->getAllowedServers();
+		$mostSuitableServer = $serverList->getMostSuitableServer($allowedServers);
 
 		if ($mostSuitableServer)
 		{
-			$result = $this->register($mostSuitableServer);
+			$result = $this->register($mostSuitableServer, $allowedServers);
 			if (!$result->isSuccess())
 			{
 				\CAdminNotify::add([

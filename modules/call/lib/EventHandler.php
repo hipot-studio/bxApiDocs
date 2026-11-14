@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Call\Background\JobDispatcher;
 use Bitrix\Main\Application;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -11,9 +12,8 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Event\Dto\ChatDto;
 use Bitrix\Call\Model\CallUserTable;
 use Bitrix\Call\Model\CallUserLogTable;
+use Bitrix\Call\Service\CallLogDirectionResolver;
 use Bitrix\Call\Service\CallLogService;
-use Bitrix\Call\Service\CallLogPushService;
-use Bitrix\Call\Counter;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\EntityType;
 
@@ -22,6 +22,21 @@ use Bitrix\Call\Integration\EntityType;
  */
 class EventHandler
 {
+	/**
+	 * The call log service the running batch job lends to the handlers of the events it sends.
+	 *
+	 * The event manager carries no service of its own, so a handler builds one per event - and with it a
+	 * participants repository with an empty memory. One finished group call replays an event per person who
+	 * never answered, and every one of them would read the roster of that same call again.
+	 *
+	 * Held for the length of one job and handed back to whoever held it before, so a job nested in another
+	 * leaves the outer one the service it was running with. A service living as long as the process would
+	 * instead hand a roster read at the beginning of the hit to a client at the end of it.
+	 *
+	 * @see self::dispatchUserStateChangeEventsBatch()
+	 */
+	private static ?CallLogService $batchCallLogService = null;
+
 	/**
 	 * @event 'im:OnChatUserDelete'
 	 * @see \Bitrix\Im\V2\Chat::sendEventUserDelete
@@ -78,11 +93,11 @@ class EventHandler
 	}
 
 	/**
-	 * Recounts the missed-calls badge of the guests whose chat membership has just changed.
+	 * Publishes the missed-calls counter of the guests whose chat membership has just changed.
 	 *
 	 * A guest sees the journal through their chat membership, so gaining or losing a chat changes their
-	 * badge while not a single journal row moves. Nothing else would notice: the counter cache is dropped
-	 * by journal writes, and this is not one - the number would stay as it was until the cache expired a
+	 * badge while not a single journal row moves. Nothing else would notice: the counter is published by
+	 * journal writes, and this is not one - the number would stay as it was until the cache expired a
 	 * day later, disagreeing with the journal in either direction. Membership is already written by the
 	 * time these events are sent (@see \Bitrix\Im\V2\Chat::deleteUser, @see \Bitrix\Im\V2\Chat::addUsers),
 	 * so the recount reads the new one.
@@ -115,8 +130,7 @@ class EventHandler
 						continue;
 					}
 
-					Counter::clearCache($userId);
-					CallLogPushService::sendCounterUpdate($userId, $service->getMissedCounter($userId));
+					$service->publishCounter($userId);
 				}
 				catch (\Throwable $exception)
 				{
@@ -240,10 +254,27 @@ class EventHandler
 			Recent::terminateAllCallsInChat($chatId, (int)$call->getId());
 		}
 
+		// By now Call::finish() has fixed user states and the missed-call counter,
+		// so the pushes collected in Chat::onStateChange() go out with a correct badge.
+		$entity = $call->getAssociatedEntity();
+		if ($entity instanceof Integration\Chat)
+		{
+			$entity->sendPendingMissedCallPushes();
+		}
+
 		$userIds = array_keys($call->getCallUsers());
 		if ($userIds !== [])
 		{
-			Application::getInstance()->addBackgroundJob(
+			// A push to every participant, and this handler is reached from the hourly cleanup
+			// agent as well {@see Recent::finishOldCallsAgent()}: in a process without an epilogue
+			// the queue of the core never runs, so the final journal of the call would not just be
+			// late - it would be lost, and no repeat of the finish would replay it.
+			//
+			// It replays rows it does not write, so the batch that writes them has to have run
+			// first {@see \Bitrix\Call\Call::finishSideEffects()}. Both go through the dispatcher
+			// for that reason, and LOW is what keeps this one behind the batch on a hit: the queue
+			// of the core takes NORMAL first.
+			JobDispatcher::getInstance()->enqueue(
 				[self::class, 'broadcastCallLogFinish'],
 				[$call->getId(), $userIds],
 				Application::JOB_PRIORITY_LOW
@@ -257,8 +288,9 @@ class EventHandler
 	 * Status is reused from the existing b_call_userlog row, matching what
 	 * CallLog.list would return on a fresh fetch.
 	 *
-	 * Runs as a background job via Application::addBackgroundJob — must stay
-	 * public static and accept primitives only (no Call instance).
+	 * Handed to {@see \Bitrix\Call\Background\JobDispatcher} — must stay public static and accept
+	 * primitives only (no Call instance): on a hit it still travels through the background queue
+	 * of the core, which is emptied after the response is sent.
 	 */
 	public static function broadcastCallLogFinish(int $callId, array $userIds): void
 	{
@@ -280,15 +312,21 @@ class EventHandler
 		// One batch instead of a cold user load per participant: every replayed row asks whether its user is
 		// a guest, and a large room replays as many rows as it had participants.
 		$service->preloadGuestFlags(array_column($existing, 'USER_ID'));
+		// The roster goes out to the members of the chat alone: their membership is read once for the whole
+		// broadcast rather than once per participant it replays.
+		$service->preloadChatMembership([$callId], array_column($existing, 'USER_ID'));
 
+		$directionResolver = new CallLogDirectionResolver();
 		foreach ($existing as $row)
 		{
+			$userId = (int)$row['USER_ID'];
 			$service->addOrUpdateEvent(
 				CallUserLogTable::SOURCE_TYPE_CALL,
 				$callId,
-				(int)$row['USER_ID'],
+				$userId,
 				$row['STATUS'],
-				$row['STATUS_TIME']
+				$row['STATUS_TIME'],
+				direction: $directionResolver->forCallParticipant($callId, $userId, (string)$row['STATUS']),
 			);
 		}
 	}
@@ -398,6 +436,11 @@ class EventHandler
 					sendPush: true,
 					ttl: $conferenceTtl,
 					manualInvite: $conferenceInvite,
+					// im:OnChatUserAdd carries no actor, so $initiatorId stands in as the push
+					// author only. Reporting the creator as the one who rang would suppress the
+					// incoming card for a creator who was removed from the chat and added back
+					// while the call is still running.
+					inviteSenderId: Signaling::INVITE_SENDER_UNKNOWN,
 				);
 			}
 			else
@@ -466,8 +509,17 @@ class EventHandler
 			return $result;
 		}
 
-		$service = new CallLogService();
-		$service->addOrUpdateEvent('call', $callId, $userId, $status);
+		$callId = (int)$callId;
+		$userId = (int)$userId;
+
+		$service = self::$batchCallLogService ?? new CallLogService();
+		$service->addOrUpdateEvent(
+			CallUserLogTable::SOURCE_TYPE_CALL,
+			$callId,
+			$userId,
+			$status,
+			direction: (new CallLogDirectionResolver())->forCallParticipant($callId, $userId, $status),
+		);
 
 		return $result;
 	}
@@ -638,32 +690,58 @@ class EventHandler
 		}
 
 		$eventManager = EventManager::getInstance();
-		foreach ($changes as $change)
+		// One service for the whole replay, the way broadcastCallLogFinish() runs the other job of the same
+		// finish: the events below read the roster of the calls they name, and each of those is worth reading
+		// once rather than once per event. What stood here before is put back at the end instead of a null,
+		// so a job running inside another leaves the outer one the service it started with.
+		$outerCallLogService = self::$batchCallLogService;
+		self::$batchCallLogService = new CallLogService();
+
+		try
 		{
-			$callId = (int)($change['callId'] ?? 0);
-			$userId = (int)($change['userId'] ?? 0);
-			$newState = (string)($change['newState'] ?? '');
+			// The roster goes out to the members of the chat alone: their membership is read once for the whole
+			// replay rather than once per person it replays.
+			self::$batchCallLogService->preloadChatMembership(array_keys($affected), array_keys($allUserIds));
 
-			if (($currentStates[$callId][$userId] ?? null) !== $newState)
+			foreach ($changes as $change)
 			{
-				continue;
-			}
+				$callId = (int)($change['callId'] ?? 0);
+				$userId = (int)($change['userId'] ?? 0);
+				$newState = (string)($change['newState'] ?? '');
 
-			try
-			{
-				$eventManager->send(new Event(
-					'im',
-					'OnCallUserStateChange',
-					[
-						'callId' => $callId,
-						'userId' => $userId,
-						'oldState' => (string)($change['oldState'] ?? ''),
-						'newState' => $newState,
-					],
-				));
+				if (($currentStates[$callId][$userId] ?? null) !== $newState)
+				{
+					continue;
+				}
+
+				try
+				{
+					$eventManager->send(new Event(
+						'im',
+						'OnCallUserStateChange',
+						[
+							'callId' => $callId,
+							'userId' => $userId,
+							'oldState' => (string)($change['oldState'] ?? ''),
+							'newState' => $newState,
+						],
+					));
+				}
+				catch (\Throwable $exception)
+				{
+					// Swallowed on purpose: the replay is a side effect of a call that has already finished,
+					// and one event nobody could take must not cost the rest of the batch. Written down all
+					// the same - an event lost without a trace here is an event nobody can reproduce later.
+					Logger::getInstance()->error(
+						"Failed to send the state change of user {$userId} in call {$callId}: "
+						. $exception->getMessage()
+					);
+				}
 			}
-			catch (\Throwable $e)
-			{}
+		}
+		finally
+		{
+			self::$batchCallLogService = $outerCallLogService;
 		}
 	}
 }

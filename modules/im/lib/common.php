@@ -57,7 +57,12 @@ class Common
 
 	public static function isChatId($id)
 	{
-		return $id && preg_match('/^(chat|sg|crm)[0-9]{1,}$/i', $id);
+		if (is_string($id) || is_int($id))
+		{
+			return $id && preg_match('/^(chat|sg|crm)[0-9]{1,}$/i', $id);
+		}
+
+		return false;
 	}
 
 	public static function isDialogId($id)

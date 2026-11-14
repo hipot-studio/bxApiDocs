@@ -34,6 +34,16 @@ final class DocumentTable extends DataManager
 				->configureValues('N', 'Y')
 				->configureDefaultValue('N')
 				->configureRequired(),
+			(new Fields\IntegerField('REVISION'))->configureRequired()->configureDefaultValue(1)
+				->addValidator(static fn(mixed $value): bool|string => is_int($value) && $value > 0
+					? true : 'Invalid document revision.'),
+			(new Fields\TextField('METADATA'))->configureNullable()->configureLong()
+				->addValidator(static function (mixed $value): bool|string {
+					if ($value === null) { return true; }
+					if (!is_string($value) || strlen($value) > 262144) { return 'Invalid metadata JSON.'; }
+					json_decode($value, true);
+					return json_last_error() === JSON_ERROR_NONE ? true : 'Invalid metadata JSON.';
+				}),
 		];
 	}
 

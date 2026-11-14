@@ -6,6 +6,7 @@ namespace Bitrix\Rest\Internal\Access\App\Rule;
 
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\Rest\Internal\Access\App\AppBatchAccessChecker;
 use Bitrix\Rest\Internal\Access\App\Model\AppModel;
 use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 
@@ -18,7 +19,7 @@ class UseAppRule extends AbstractRule
 			return false;
 		}
 
-		if (!$item->isInstalled())
+		if (!$item->isInstalled() && !($params['skipInstallCheck'] ?? false))
 		{
 			return false;
 		}
@@ -41,6 +42,15 @@ class UseAppRule extends AbstractRule
 
 		/** @var RestUserModel $user */
 		$user = $this->user;
+		$batchChecker = is_array($params) ? ($params['batchAccessChecker'] ?? null) : null;
+		if ($batchChecker instanceof AppBatchAccessChecker)
+		{
+			$decision = $batchChecker->tryResolveAccess($item, $accessCodes);
+			if ($decision !== null)
+			{
+				return $decision;
+			}
+		}
 
 		return $user->canAccess($accessCodes);
 	}

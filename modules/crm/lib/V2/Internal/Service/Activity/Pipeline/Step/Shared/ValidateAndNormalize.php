@@ -164,6 +164,12 @@ final class ValidateAndNormalize implements PipelineStepInterface
 
 	public const ERROR_PROVIDER_NOT_FOUND = 'CRM_ACTIVITY_PROVIDER_NOT_FOUND';
 
+	/**
+	 * An activity of a type no provider is derived from names no provider. Legacy stored such an activity, so the
+	 * code and the text are the ones of V2.
+	 */
+	public const ERROR_PROVIDER_NOT_GIVEN = 'CRM_ACTIVITY_PROVIDER_NOT_GIVEN';
+
 	public const ERROR_SUBJECT_NOT_GIVEN = 'CRM_ACTIVITY_SUBJECT_NOT_GIVEN';
 
 	public const ERROR_RESPONSIBLE_NOT_GIVEN = 'CRM_ACTIVITY_RESPONSIBLE_NOT_GIVEN';
@@ -899,25 +905,39 @@ final class ValidateAndNormalize implements PipelineStepInterface
 	/**
 	 * The provider of the activity, put into the context for every step below this one. An activity that
 	 * declares itself a provider one and resolves to nobody is refused (:1916-1920).
+	 *
+	 * An activity of a type no provider is derived from (the general type "Activity") that names no provider
+	 * either is refused here too, unlike legacy, which stored it with no provider at all: the storage of V2 does
+	 * not store an activity without one, and a refusal here names the reason instead of failing the write.
 	 */
 	private function resolveProvider(PipelineContext $context, Result $result): ?ActivityProviderInterface
 	{
 		$transit = $context->getTransit();
+		$activityType = self::typeOfActivity($transit);
 		$provider = $this->resolver->resolve(
 			$context->getActivity()->getProviderId(),
-			self::typeOfActivity($transit),
+			$activityType,
 		);
 		$context->setProvider($provider);
 
-		if ($provider === null && self::typeOfActivity($transit) === CCrmActivityType::Provider)
+		if ($provider !== null)
+		{
+			return $provider;
+		}
+
+		if ($activityType === CCrmActivityType::Provider)
 		{
 			$result->addError(new Error(
 				'Provider for custom activity is not found.',
 				self::ERROR_PROVIDER_NOT_FOUND,
 			));
 		}
+		elseif (CCrmActivityType::IsDefined($activityType) && $context->getActivity()->getProviderId() === null)
+		{
+			$result->addError(new Error('PROVIDER_ID is not assigned.', self::ERROR_PROVIDER_NOT_GIVEN));
+		}
 
-		return $provider;
+		return null;
 	}
 
 	/**

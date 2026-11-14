@@ -27,6 +27,7 @@ class Provider
 				Library::ID_FBINSTAGRAMDIRECT_CONNECTOR,
 				Library::ID_WAZZUP_CONNECTOR,
 				Library::ID_MAX_CONNECTOR,
+				Library::ID_YANDEXTRAVEL_CONNECTOR,
 			],
 		'livechat' => [Library::ID_LIVE_CHAT_CONNECTOR],
 		'network' => [Library::ID_NETWORK_CONNECTOR],

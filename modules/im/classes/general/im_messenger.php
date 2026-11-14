@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Send\Push\MobilePush;
+use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Im\V2\Reading\Counter\Notification\CountersUpdater;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Sync;
@@ -985,6 +986,7 @@ class CIMMessenger
 			return false;
 		}
 
+		$chatId = (int)$message['CHAT_ID'];
 
 		$dateText = Array();
 		$dateTs = Array();
@@ -1165,7 +1167,7 @@ class CIMMessenger
 
 				if ($message['MESSAGE_TYPE'] === Chat::IM_TYPE_COMMENT)
 				{
-					CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $message['CHAT_PARENT_ID'], $pull);
+					CommentTagPublisher::addToStack((int)$message['CHAT_ID'], $pull);
 				}
 				else
 				{
@@ -1214,8 +1216,29 @@ class CIMMessenger
 		}
 
 		\Bitrix\Im\Model\MessageTable::indexRecord($id);
+		self::updateMessageSearchIndex((int)$id, $chatId);
 
 		return true;
+	}
+
+	/**
+	 * The entry of the message search, kept by the same call from the legacy path and from the V2 update
+	 * service: an edit that never reached the service would leave the text of before in the search.
+	 *
+	 * Only the identifier is handed over - the row of the message is read inside the background job of
+	 * the index service, so a portal with the pipeline off pays nothing for an edit.
+	 */
+	private static function updateMessageSearchIndex(int $messageId, int $chatId): void
+	{
+		if (!\Bitrix\Im\V2\Application\Features::isMessageSearchIndexingEnabled() || $chatId <= 0)
+		{
+			return;
+		}
+
+		\Bitrix\Main\DI\ServiceLocator::getInstance()
+			->get(\Bitrix\Im\V2\Integration\Search\IndexService::class)
+			->onMessageUpdatedById($messageId, Chat::getInstance($chatId))
+		;
 	}
 
 	public static function Share($id, $type, $date = '')
@@ -1411,6 +1434,18 @@ class CIMMessenger
 			)
 		));
 		$chat = $result->fetch();
+		if (!$chat)
+			return false;
+
+		// A message behind the border of the chat is unreachable from the moment the border is set, long
+		// before the scheduled cleanup takes it, and a member who cleared the history for themselves
+		// stands above it as well: neither of them has a message left to react to.
+		$chatEntity = Chat::getInstance((int)$message['CHAT_ID']);
+		if ($chatEntity->isMessageBehindUserHistoryBorder((int)$id, $userId))
+		{
+			return false;
+		}
+
 		if ($chat['ENTITY_TYPE'] != 'LIVECHAT')
 		{
 			if (!isset($relations[$userId]))
@@ -1551,14 +1586,20 @@ class CIMMessenger
 			}
 			$dialogId = $toUserId;
 
-			\Bitrix\Pull\Event::add($fromUserId, [
-				'module_id' => 'im',
-				'command' => 'messageLike',
-				'params' => array_merge($arPullMessage, ['dialogId' => $toUserId]),
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			]);
+			if (!isset($relations[$fromUserId]['START_ID']) || (int)$relations[$fromUserId]['START_ID'] <= $id)
+			{
+				\Bitrix\Pull\Event::add($fromUserId, [
+					'module_id' => 'im',
+					'command' => 'messageLike',
+					'params' => array_merge($arPullMessage, ['dialogId' => $toUserId]),
+					'extra' => \Bitrix\Im\Common::getPullExtra()
+				]);
+			}
 
-			if ($toUserId !== $fromUserId)
+			if (
+				$toUserId !== $fromUserId
+				&& (!isset($relations[$toUserId]['START_ID']) || (int)$relations[$toUserId]['START_ID'] <= $id)
+			)
 			{
 				\Bitrix\Pull\Event::add($toUserId, [
 					'module_id' => 'im',
@@ -1583,6 +1624,11 @@ class CIMMessenger
 					}
 				}
 			}
+
+			$filteredRelations = array_filter($relations, function($rel) use ($id) {
+				return !isset($rel['START_ID']) || (int)$rel['START_ID'] <= $id;
+			});
+
 			$pull = [
 				'module_id' => 'im',
 				'command' => 'messageLike',
@@ -1592,15 +1638,19 @@ class CIMMessenger
 
 			if ($chat['TYPE'] === Chat::IM_TYPE_COMMENT)
 			{
-				CPullWatch::AddToStack('IM_PUBLIC_COMMENT_'.$chat['PARENT_ID'], $pull);
+				// A comment chat never gets a START_ID border of its own, so the tag is filtered by the
+				// border of the post the comments hang on.
+				CommentTagPublisher::addToStack((int)$chat['ID'], $pull);
 			}
 			else
 			{
-				\Bitrix\Pull\Event::add(array_keys($relations), $pull);
+				\Bitrix\Pull\Event::add(array_keys($filteredRelations), $pull);
 			}
 
 			if (self::needToSendPublicPull($chat['TYPE']))
 			{
+				// Watchers of a public chat hold no relation and therefore no border; members are
+				// already served by the filtered push above.
 				CPullWatch::AddToStack('IM_PUBLIC_'.$chat['ID'], $pull);
 			}
 		}
@@ -1919,7 +1969,7 @@ class CIMMessenger
 
 		$strSql = "
 			SELECT
-				R.USER_ID, U.EXTERNAL_AUTH_ID, M.CHAT_ID
+				R.USER_ID, U.EXTERNAL_AUTH_ID, M.CHAT_ID, R.START_ID
 			FROM b_im_message M
 			LEFT JOIN b_im_relation R ON M.CHAT_ID = R.CHAT_ID
 			LEFT JOIN b_user U ON U.ID = R.USER_ID

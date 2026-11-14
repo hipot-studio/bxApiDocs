@@ -10,6 +10,7 @@ use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallCriteria;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallScriptDescription;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallScriptFromDialog;
+use Bitrix\Crm\Integration\AI\Operation\GenerateClientSummary;
 use Bitrix\Crm\Integration\AI\Operation\GenerateManagerSummary;
 use Bitrix\Crm\Integration\AI\Operation\GroupSuspiciousCalls;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\CallCriteriaGenerator;
@@ -20,6 +21,7 @@ use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\CallScoringV2;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\CallScriptCreator;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\CallScriptDescriptionGenerator;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\ClientDialogueActionExtraction;
+use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\ClientSummary;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\ExtractFormFields;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\ManagerSummary;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\RepeatSalesPrompt;
@@ -59,6 +61,7 @@ final class PayloadFactory
 			FillRepeatSaleTips::TYPE_ID, Sandbox\FillRepeatSaleTips::TYPE_ID => new RepeatSalesPrompt($userId, $identifier),
 			ScreeningRepeatSaleItem::TYPE_ID => new RepeatSalesScreeningItem($userId, $identifier),
 			AnalyzeCommunication::TYPE_ID => new ClientDialogueActionExtraction($userId, $identifier),
+			GenerateClientSummary::TYPE_ID => new ClientSummary($userId, $identifier),
 			default => $throwException(),
 		};
 	}

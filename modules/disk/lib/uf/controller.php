@@ -14,6 +14,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Access\DownloadAccess;
+use Bitrix\Disk\Internal\Service\Storage\AvailableStorageService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
@@ -243,7 +244,9 @@ class Controller extends Internals\Controller
 			$cache->endDataCache(array($currentUserGroups));
 		}
 
-		return $currentUserGroups;
+		$activeGroupIds = (new AvailableStorageService())->filterGroupsWithActiveFiles(array_keys($currentUserGroups));
+
+		return array_intersect_key($currentUserGroups, array_flip($activeGroupIds));
 	}
 
 	protected function getCommonStorages()
@@ -951,6 +954,13 @@ class Controller extends Internals\Controller
 			$this->sendJsonErrorResponse();
 		}
 
+		$configurationError = $this->getGooglePickerConfigurationError($documentHandler);
+		if ($configurationError)
+		{
+			$this->errorCollection[] = $configurationError;
+			$this->sendJsonErrorResponse();
+		}
+
 		if (!$documentHandler->queryAccessToken()->hasAccessToken() || $documentHandler->isRequiredAuthorization())
 		{
 			$this->sendNeedAuth($documentHandler->getUrlForAuthorizeInTokenService('opener'));
@@ -967,6 +977,26 @@ class Controller extends Internals\Controller
 		   'appId' => $documentHandler->getAppId(),
 		   'accessToken' => $documentHandler->queryAccessToken()->getAccessToken(),
 	   ]);
+	}
+
+	protected function getGooglePickerConfigurationError(DocumentHandler $documentHandler): ?Error
+	{
+		$isConfigured =
+			trim((string)$documentHandler->getAppId()) !== ''
+			&& trim((string)$documentHandler->getApiKey()) !== ''
+		;
+		if ($isConfigured)
+		{
+			return null;
+		}
+
+		return new Error(
+			Loc::getMessage(
+				'DISK_UF_CONTROLLER_ERROR_COULD_NOT_WORK_WITH_TOKEN_SERVICE_B24',
+				['#NAME#' => $documentHandler::getName()],
+			),
+			self::ERROR_COULD_NOT_WORK_WITH_TOKEN_SERVICE,
+		);
 	}
 
 	protected function processActionLoadItems()
@@ -2016,6 +2046,9 @@ class Controller extends Internals\Controller
 		}
 		if(!$file->moveToAnotherFolder($targetFolder, $this->getUser()->getId(), true))
 		{
+			// The reason the model refused by comes first: a full quota of the destination carries
+			// both its own code and the words the user is to be shown.
+			$this->errorCollection->add($file->getErrors());
 			$this->errorCollection->add(array(new Error('Could not move the file')));
 			$this->sendJsonErrorResponse();
 		}

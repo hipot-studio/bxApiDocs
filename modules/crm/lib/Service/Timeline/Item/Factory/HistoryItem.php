@@ -6,6 +6,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item;
 use Bitrix\Crm\Service\Timeline\Item\Model;
+use Bitrix\Crm\Service\Timeline\Navigation\Availability;
 use Bitrix\Crm\Timeline\AI;
 use Bitrix\Crm\Timeline\Bizproc;
 use Bitrix\Crm\Timeline\CalendarSharing;
@@ -41,6 +42,20 @@ class HistoryItem
 
 		if ($typeId === TimelineType::ACTIVITY && $assocEntityTypeId === CCrmOwnerType::Activity)
 		{
+			if (
+				empty($rawData['ASSOCIATED_ENTITY'])
+				&& (new Availability())->isAvailable($context->getEntityTypeId(), $context->getEntityId())
+			)
+			{
+				$placeholderModel = (new Model())
+					->setId($model->getId())
+					->setDate($model->getDate())
+					->setIsFixed($model->isFixed())
+				;
+
+				return new Item\NotAvailable($context, $placeholderModel);
+			}
+
 			$responsibleId = (int)($rawData['ASSOCIATED_ENTITY']['RESPONSIBLE_ID'] ?? 0);
 			if ($responsibleId > 0)
 			{
@@ -148,6 +163,7 @@ class HistoryItem
 					{
 						return new Item\LogMessage\Tasks\TaskPing($context, $model);
 					}
+
 					return new Item\LogMessage\Ping($context, $model);
 				case LogMessageType::REST:
 					return new Item\LogMessage\Rest($context, $model);
@@ -254,7 +270,7 @@ class HistoryItem
 		if ($typeId === TimelineType::ORDER)
 		{
 			$historyItemFields = $model->getHistoryItemModel()?->get('FIELDS');
-			$historyItemFields = $historyItemFields ?? [];
+			$historyItemFields ??= [];
 
 			if ($typeCategoryId === TimelineType::CREATION)
 			{
@@ -564,7 +580,7 @@ class HistoryItem
 			(new Item\Compatible\Model())
 				->setData($rawData)
 				->setId((int)$rawData['ID'])
-				->setIsFixed($rawData['IS_FIXED'] === 'Y')
+				->setIsFixed($rawData['IS_FIXED'] === 'Y'),
 		);
 	}
 

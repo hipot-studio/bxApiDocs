@@ -11,6 +11,7 @@ use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkDayService;
 use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Service\OptionService;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
+use Bitrix\StaffTrackMobile\Public\Features\PresenceListFeature;
 
 class CheckInOnboardingProvider
 {
@@ -230,6 +231,78 @@ class CheckInOnboardingProvider
 		);
 
 		$this->optionProvider->invalidateCache($userId);
+	}
+
+	/**
+	 * Whether the aha popup of the presence list is still owed to the user: the list is on, the popup was not
+	 * shown, and the user has a team. Not the `type` of the onboarding config: a head of an empty department
+	 * gets no list. The structure of the company is read last as the only costly check.
+	 *
+	 * @param int $userId
+	 * @return bool
+	 */
+	public function shouldShowPresenceAha(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		if (!$this->isPresenceListEnabled())
+		{
+			return false;
+		}
+
+		if ($this->isPresenceAhaShown($userId))
+		{
+			return false;
+		}
+
+		return $this->readSubordinateIds($userId) !== [];
+	}
+
+	/**
+	 * Remembers that the popup has been shown, in the options of the user: once per person, not per device.
+	 *
+	 * @param int $userId
+	 * @return void
+	 */
+	public function markPresenceAhaShown(int $userId): void
+	{
+		$this->optionService->save(
+			$userId,
+			Option::CHECKIN_PRESENCE_AHA_SHOWN,
+			'Y',
+		);
+
+		$this->optionProvider->invalidateCache($userId);
+	}
+
+	/**
+	 * The rollout switch of the widget; without stafftrackmobile there is no widget.
+	 */
+	protected function isPresenceListEnabled(): bool
+	{
+		if (!Loader::includeModule('stafftrackmobile'))
+		{
+			return false;
+		}
+
+		return (new PresenceListFeature())->isEnabled();
+	}
+
+	/**
+	 * @param int $userId
+	 * @return int[]
+	 */
+	protected function readSubordinateIds(int $userId): array
+	{
+		return DepartmentProvider::getTeamIds($userId);
+	}
+
+	private function isPresenceAhaShown(int $userId): bool
+	{
+		return $this->getOptionValue($userId, Option::CHECKIN_PRESENCE_AHA_SHOWN) === 'Y';
 	}
 
 	public function canShowMobileOnboardingFor(int $userId): bool

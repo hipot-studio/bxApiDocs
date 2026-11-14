@@ -767,12 +767,54 @@ class FormHandler
 		// OL already created CRM entities
 		if (isset($sessionField['CRM']) && $sessionField['CRM'] === 'Y')
 		{
+			$this->bindNewCrmEntitiesToChat();
+
 			return false;
 		}
 
 		$this->addLinesBindingToCrm();
 		$this->addCrmBindingToLines();
 		$this->createCrmActivity();
+
+		return true;
+	}
+
+	/**
+	 * Bind CRM entities created by the form to the chat when the chat already has CRM bindings
+	 * (e.g. the operator saved the dialog to CRM before the client filled the form).
+	 * Fills only empty entity slots, existing bindings and the primary entity are kept.
+	 */
+	private function bindNewCrmEntitiesToChat(): bool
+	{
+		if (!($this->chat instanceof Chat))
+		{
+			return false;
+		}
+
+		$entityTypeToField = [
+			\CCrmOwnerType::LeadName => 'LEAD',
+			\CCrmOwnerType::DealName => 'DEAL',
+			\CCrmOwnerType::ContactName => 'CONTACT',
+			\CCrmOwnerType::CompanyName => 'COMPANY',
+		];
+
+		$currentBindings = $this->chat->getFieldData(Chat::FIELD_CRM);
+		$updateFields = [];
+		foreach ($this->crmEntities as $entity)
+		{
+			$field = $entityTypeToField[$entity['ENTITY_TYPE']] ?? null;
+			if ($field !== null && empty($currentBindings[$field]))
+			{
+				$updateFields[$field] = $entity['ENTITY_ID'];
+			}
+		}
+
+		if (empty($updateFields))
+		{
+			return false;
+		}
+
+		$this->chat->setCrmFlag($updateFields);
 
 		return true;
 	}

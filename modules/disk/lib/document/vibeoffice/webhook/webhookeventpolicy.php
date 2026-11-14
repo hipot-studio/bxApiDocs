@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Document\Vibeoffice\Webhook;
 
+use Bitrix\Disk\Document\Vibeoffice\Filters\WebhookSignatureCheck;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\DateTime;
 
 final class WebhookEventPolicy
 {
@@ -87,6 +89,19 @@ final class WebhookEventPolicy
 		{
 			return $this->invalid('Invalid origin_unknown.');
 		}
+		if (array_key_exists('restored', $payload) && !is_bool($payload['restored']))
+		{
+			return $this->invalid('Invalid restored flag.');
+		}
+		$occurredAt = null;
+		if (($payload['occurred_at'] ?? null) !== null)
+		{
+			$occurredAt = $this->occurredAt($payload['occurred_at']);
+			if (!$occurredAt)
+			{
+				return $this->invalid('Invalid occurred_at.');
+			}
+		}
 
 		$legacy = match ($event)
 		{
@@ -114,6 +129,18 @@ final class WebhookEventPolicy
 			'rev' => $rev,
 			'snapshotSeq' => null,
 			'finalization' => self::FINALIZATION_NONE,
+			// "There was nothing to restore": a known fact and not a lost identity. The platform
+			// omits `origin_unknown` instead of sending it as false, so the `restored` flag is the
+			// only sound discriminator of the empty key. An origin the platform does call unknown
+			// still wins over it: no verdict about the placement can be made of such a body. Without
+			// the frozen moment of the event there is no cut-off for a late delivery either, and the
+			// branch stays as it was.
+			'placementAbsent' => $event === WebhookProcessor::EVENT_FAILOVER
+				&& ($payload['restored'] ?? null) === false
+				&& !($payload['origin_unknown'] ?? false)
+				&& ($editorKey === null || $editorKey === '')
+				&& $occurredAt !== null,
+			'occurredAt' => $occurredAt,
 		];
 
 		return match ($event)
@@ -212,6 +239,32 @@ final class WebhookEventPolicy
 		}
 
 		return array_values($result);
+	}
+
+	/**
+	 * The moment the platform froze when it queued the delivery. It does not move between the
+	 * attempts of one event, which is what makes it usable as a cut-off for a late delivery.
+	 *
+	 * A moment ahead of now is not a frozen past: it would let the cut-off cover the rows of a
+	 * placement opened after the event, which is exactly what the cut-off exists to spare. The
+	 * bound is the window the signed transport already allows the platform clock to drift by
+	 * ({@see WebhookSignatureCheck::MAX_SKEW}) - a wider drift never gets past the signature
+	 * either - and beyond it the value is rejected like any other malformed one.
+	 */
+	private function occurredAt(mixed $value): ?DateTime
+	{
+		if (!is_string($value)
+			|| preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/Di', $value) !== 1)
+		{
+			return null;
+		}
+		$timestamp = strtotime($value);
+		if ($timestamp === false || $timestamp > time() + WebhookSignatureCheck::MAX_SKEW)
+		{
+			return null;
+		}
+
+		return DateTime::createFromTimestamp($timestamp);
 	}
 
 	private function hasAny(array $payload, array $keys): bool

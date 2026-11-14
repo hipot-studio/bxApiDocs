@@ -2,6 +2,11 @@
 
 namespace Bitrix\StaffTrack\Internal\Integration\HumanResources;
 
+use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\HumanResources\Public\Service\Container;
+use Bitrix\Main\Loader;
+use Bitrix\StaffTrack\Item\OfficeStaffSelection;
+
 /**
  * The codes of the entity selector as the module reads them: a person, a department - with the nested
  * ones or without them - and every employee of the portal.
@@ -11,14 +16,15 @@ namespace Bitrix\StaffTrack\Internal\Integration\HumanResources;
  *
  * The parse truncates everything past {@see self::MAX_SELECTOR_ENTITIES} without a word. That is right
  * for a showcase and wrong for a write, so a caller that may not lose codes counts the raw ones against
- * the same constant before asking for the parse.
+ * the same constant before asking for the parse. {@see self::parseStrict()} is the parse that loses nothing.
  */
-final class SelectorEntityNormalizer
+class SelectorEntityNormalizer
 {
 	public const MAX_SELECTOR_ENTITIES = 50;
 
 	private const ALL_EMPLOYEES_TYPE = 'meta-user';
 	private const ALL_EMPLOYEES_ID = 'all-users';
+	private const FLAT_SUFFIX = ':F';
 
 	/**
 	 * @return array{0: int[], 1: int[], 2: int[]} people, flat departments, departments with their nested
@@ -89,6 +95,68 @@ final class SelectorEntityNormalizer
 	}
 
 	/**
+	 * Every code is either taken or reported back, nothing is truncated or skipped. A department of the
+	 * selector names a section of the old structure, so it is translated into its node by the access code:
+	 * the identifiers of sections and nodes differ. The root of the structure in any form, every-employee
+	 * and anything unknown are unsupported, and the caller refuses the whole request on them.
+	 */
+	public function parseStrict(array $entities): OfficeStaffSelection
+	{
+		$rootNodeId = $this->getRootNodeId();
+
+		$userIds = [];
+		$flatNodeIds = [];
+		$deepNodeIds = [];
+		$unsupportedCodes = [];
+		$rawKeys = [];
+		$resolvedKeys = [];
+
+		foreach ($entities as $entity)
+		{
+			$code = self::describeCode($entity);
+			$rawKey = $code['type'] . ':' . $code['id'];
+			if (isset($rawKeys[$rawKey]))
+			{
+				continue;
+			}
+
+			$rawKeys[$rawKey] = true;
+
+			$resolved = $this->resolveStrictEntity($entity, $rootNodeId);
+			if ($resolved === null)
+			{
+				$unsupportedCodes[] = $code;
+
+				continue;
+			}
+
+			[$kind, $targetId] = $resolved;
+			$resolvedKey = $kind . ':' . $targetId;
+			if (isset($resolvedKeys[$resolvedKey]))
+			{
+				continue;
+			}
+
+			$resolvedKeys[$resolvedKey] = true;
+
+			if ($kind === 'user')
+			{
+				$userIds[] = $targetId;
+			}
+			elseif ($kind === 'flat')
+			{
+				$flatNodeIds[] = $targetId;
+			}
+			else
+			{
+				$deepNodeIds[] = $targetId;
+			}
+		}
+
+		return new OfficeStaffSelection($userIds, $flatNodeIds, $deepNodeIds, $unsupportedCodes);
+	}
+
+	/**
 	 * The third kind of code, and the one the parse above says nothing about. An unknown type is skipped
 	 * there silently, so every employee of the portal has to be asked for by name rather than expected to
 	 * fall out of the parse.
@@ -112,6 +180,86 @@ final class SelectorEntityNormalizer
 		}
 
 		return false;
+	}
+
+	protected function getRootNodeId(): ?int
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		$rootNodeId = Container::getNodeService()->getRootNode()?->id;
+
+		return $rootNodeId > 0 ? $rootNodeId : null;
+	}
+
+	protected function findNodeIdByDepartmentId(int $departmentId): ?int
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return null;
+		}
+
+		$accessCode = DepartmentBackwardAccessCode::makeById($departmentId);
+		$nodeId = Container::getNodeService()->getByAccessCode($accessCode)?->id;
+
+		return $nodeId > 0 ? $nodeId : null;
+	}
+
+	/**
+	 * @return array{0: 'user'|'flat'|'deep', 1: int}|null
+	 */
+	private function resolveStrictEntity(mixed $entity, ?int $rootNodeId): ?array
+	{
+		if (!is_array($entity))
+		{
+			return null;
+		}
+
+		$type = $entity['type'] ?? '';
+		$id = $entity['id'] ?? '';
+
+		if ($type === 'user')
+		{
+			$userId = self::normalizePositiveInt($id);
+
+			return $userId === null ? null : ['user', $userId];
+		}
+
+		if ($type !== 'structure-node' && $type !== 'department')
+		{
+			return null;
+		}
+
+		$isFlat = is_string($id) && str_ends_with($id, self::FLAT_SUFFIX);
+		$targetId = self::normalizePositiveInt($isFlat ? substr($id, 0, -strlen(self::FLAT_SUFFIX)) : $id);
+		if ($targetId === null)
+		{
+			return null;
+		}
+
+		$nodeId = $type === 'department' ? $this->findNodeIdByDepartmentId($targetId) : $targetId;
+		if ($nodeId === null || $nodeId === $rootNodeId)
+		{
+			return null;
+		}
+
+		return [$isFlat ? 'flat' : 'deep', $nodeId];
+	}
+
+	/**
+	 * @return array{type: string, id: int|string}
+	 */
+	private static function describeCode(mixed $entity): array
+	{
+		$type = is_array($entity) ? ($entity['type'] ?? '') : '';
+		$id = is_array($entity) ? ($entity['id'] ?? '') : '';
+
+		return [
+			'type' => is_string($type) ? $type : '',
+			'id' => is_int($id) || is_string($id) ? $id : '',
+		];
 	}
 
 	private static function normalizePositiveInt(mixed $value): ?int

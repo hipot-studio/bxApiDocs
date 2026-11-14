@@ -20,7 +20,7 @@ final class SettingOption
 		/** @var TValue */
 		public readonly mixed $value,
 		public readonly string $title,
-		public readonly ?string $hint = null,
+		public readonly ?string $description = null,
 	)
 	{
 		if ($this->title === '')

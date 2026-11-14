@@ -7,6 +7,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\ProxyType;
+use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Disk\Sharing;
 use Bitrix\Disk\Storage;
 use Bitrix\Main\Application;
@@ -25,6 +26,8 @@ final class SubscriberManager
 	private $sharingsByObject = array();
 	/** @var array */
 	private $detectCycles = array();
+	/** @var array<string, bool> */
+	private array $canReadByUserAndObject = [];
 
 	public function __construct()
 	{
@@ -53,11 +56,19 @@ final class SubscriberManager
 	public function onSharingUpdated(Event $event)
 	{
 		$fields = $event->getParameter('fields');
-		if ($fields['REAL_OBJECT_ID'])
+		if (!array_key_exists('REAL_OBJECT_ID', $fields) || !array_key_exists('LINK_OBJECT_ID', $fields))
+		{
+			$stored = SharingTable::getByPrimary(
+				$event->getParameter('id'),
+				['select' => ['REAL_OBJECT_ID', 'LINK_OBJECT_ID']],
+			)->fetch();
+			$fields += $stored ?: [];
+		}
+		if ($fields['REAL_OBJECT_ID'] ?? null)
 		{
 			$this->cleanByObjectId($fields['REAL_OBJECT_ID']);
 		}
-		if ($fields['LINK_OBJECT_ID'])
+		if ($fields['LINK_OBJECT_ID'] ?? null)
 		{
 			$this->cleanByObjectId($fields['LINK_OBJECT_ID']);
 		}
@@ -329,18 +340,41 @@ final class SubscriberManager
 			if ($linkObject)
 			{
 				[$type, $id] = Sharing::parseEntityValue($sharing->getToEntity());
-				if($type === Sharing::TYPE_TO_USER)
+				// A link outlives the rights on its folder: a user who lost them gets only an empty snapshot,
+				// while every change in the folder makes the desktop client ask for it again.
+				$linkStorageIdWithoutRights = null;
+				if ($type === Sharing::TYPE_TO_USER)
 				{
-					$subscribers[$linkObject->getStorageId()] = $id;
+					if ($this->canUserRead((int)$id, (int)$sharing->getRealObjectId()))
+					{
+						$subscribers[$linkObject->getStorageId()] = $id;
+					}
+					else
+					{
+						$linkStorageIdWithoutRights = (int)$linkObject->getStorageId();
+					}
 				}
+
+				// The link lies in the storage of its user, so the subscribers of the link name that storage again.
 				foreach ($this->collectSubscribers($linkObject) as $storageId => $userId)
 				{
-					$subscribers[$storageId] = $userId;
+					if ($storageId !== $linkStorageIdWithoutRights)
+					{
+						$subscribers[$storageId] = $userId;
+					}
 				}
 			}
 		}
 
 		return $subscribers;
+	}
+
+	private function canUserRead(int $userId, int $objectId): bool
+	{
+		$key = $userId . '|' . $objectId;
+		$this->canReadByUserAndObject[$key] ??= (new DiskSecurityContext($userId))->canRead($objectId);
+
+		return $this->canReadByUserAndObject[$key];
 	}
 
 	private function appendSubscribersBySharings(BaseObject $object, array $alreadySubscribers)
@@ -418,5 +452,6 @@ final class SubscriberManager
 		$this->subscribersByObjectId = array();
 		$this->sharingsByObject = array();
 		$this->detectCycles = array();
+		$this->canReadByUserAndObject = [];
 	}
 }

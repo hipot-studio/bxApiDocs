@@ -100,12 +100,20 @@ final class Workflow
 		{
 			if ($step)
 			{
-				$faces['steps'][] = [
+				$stepData = [
 					'id' => $step->getId(),
 					'avatars' => $step->getAvatars(),
 					'duration' => $step->getDuration(),
 					'success' => $step->getSuccess(),
 				];
+
+				$autoDecisions = method_exists($step, 'getAutoDecisions') ? $step->getAutoDecisions() : [];
+				if ($autoDecisions)
+				{
+					$stepData['autoDecisions'] = $autoDecisions;
+				}
+
+				$faces['steps'][] = $stepData;
 			}
 		}
 

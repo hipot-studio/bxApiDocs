@@ -26,7 +26,13 @@ use Bitrix\Crm\V2\Internal\Integration\Landing\FormPage;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\FormDeleteRepository;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\FormRepository;
 use Bitrix\Crm\V2\Internal\Repository\WebForm\FormWriteRepository;
+use Bitrix\Crm\V2\Internal\Model\LegalRegistry\SourceTable;
+use Bitrix\Crm\V2\Internal\Repository\LegalRegistry\UsageRepository;
+use Bitrix\Crm\V2\Public\Command\LegalRegistry\FormBindingsCommand;
+use Bitrix\Crm\V2\Public\Entity\LegalRegistry\FormBindings;
 use Bitrix\Crm\WebForm\Form;
+use Bitrix\Crm\V2\Internal\Service\LegalRegistry\FormMutationGuard;
+use Bitrix\Main\Application;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use UnexpectedValueException;
@@ -75,6 +81,7 @@ final class FormWriter
 	private readonly FormPage $formPage;
 	private readonly FormDeleteRepository $deleteRepository;
 	private ?FormStorageRefusal $storageRefusal;
+	private readonly FormWriteRepository $bindingsRepository;
 
 	/**
 	 * @param null|\Closure(int): bool $permissionChecker
@@ -140,6 +147,7 @@ final class FormWriter
 		$this->formPage = $formPage ?? new FormPage();
 		$this->deleteRepository = $deleteRepository ?? new FormDeleteRepository($this->formPage);
 		$this->storageRefusal = $storageRefusal;
+		$this->bindingsRepository = new FormWriteRepository();
 	}
 
 	/**
@@ -163,7 +171,7 @@ final class FormWriter
 	 * @throws FormSideEffectException a side effect of the creation failed after the form was
 	 *         written; the form stays created, there is no rollback, and the refusal names its id
 	 */
-	public function add(int $userId, WebFormChangeSet $changeSet): int
+	public function add(int $userId, WebFormChangeSet $changeSet, ?FormBindings $legalDocuments = null): int
 	{
 		$this->assertCanWrite($userId);
 		// Creation asks about the form id zero, the way the editor does.
@@ -181,6 +189,10 @@ final class FormWriter
 		if (self::createsWorkingForm($changeSet))
 		{
 			$this->assertLimitNotReached();
+		}
+		if ($legalDocuments !== null)
+		{
+			return $this->addWithBindings($userId, $changeSet, $legalDocuments);
 		}
 
 		$result = ($this->formCreator)($changeSet);
@@ -222,6 +234,7 @@ final class FormWriter
 		int $formId,
 		WebFormChangeSet $changeSet,
 		?DateTime $expectedModifiedTime = null,
+		?FormBindings $legalDocuments = null,
 	): void
 	{
 		$this->assertCanWrite($userId);
@@ -233,7 +246,7 @@ final class FormWriter
 			throw new FormSystemImmutableException();
 		}
 
-		if ($changeSet->isEmpty())
+		if ($changeSet->isEmpty() && $legalDocuments === null)
 		{
 			if ($expectedModifiedTime !== null)
 			{
@@ -245,20 +258,153 @@ final class FormWriter
 
 		$changeSet = $this->applyCopyrightRestriction($changeSet);
 		$this->validate($changeSet, $form, $userId);
+		if ($legalDocuments !== null)
+		{
+			$this->updateWithBindings($userId, $formId, $changeSet, $expectedModifiedTime, $legalDocuments);
+			return;
+		}
 
 		$this->updateForm($formId, $changeSet, $expectedModifiedTime);
 
 		$this->buildScripts($formId);
 	}
 
+	private function addWithBindings(int $userId, WebFormChangeSet $changeSet, FormBindings $bindings): int
+	{
+		self::assertNoOuterTransaction();
+		$connection = Application::getConnection();
+		$started = false;
+		$guard = null;
+		try
+		{
+			$connection->startTransaction();
+			$started = true;
+			$result = $this->bindingsRepository->add($changeSet, true);
+			if (!$result->isSuccess()) { throw $this->storageRefusal()->toException($result); }
+			$formId = (int)$result->getData()[FormWriteRepository::DATA_FORM_ID];
+			$guard = FormMutationGuard::acquire($formId);
+			$bound = (new FormBindingsCommand($userId, $formId, $bindings))->run();
+			if (!$bound->isSuccess()) { throw self::bindingsRefusal($bound); }
+			$connection->commitTransaction();
+			$started = false;
+		}
+		catch (\Throwable $exception)
+		{
+			if ($started) { self::rollbackLegalWrite(); }
+			if ($exception->getMessage() === 'REVISION_CONFLICT')
+			{
+				throw FormValidationException::forPath('legalDocuments', 'REVISION_CONFLICT');
+			}
+			throw $exception;
+		}
+		finally { $guard?->release(); }
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			if (!$this->bindingsRepository->writeDeferredIntegrations($formId, $changeSet)->isSuccess())
+			{
+				throw new FormSideEffectException('saveIntegration', $formId);
+			}
+			$this->buildScripts($formId, createdFormId: $formId);
+			$this->createLandingPage($formId, $changeSet);
+		}
+		finally { $pool->useMasterOnly(false); }
+
+		return $formId;
+	}
+
+	private function updateWithBindings(int $userId, int $formId, WebFormChangeSet $changeSet,
+		?DateTime $expectedModifiedTime, FormBindings $bindings): void
+	{
+		self::assertNoOuterTransaction();
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = Application::getConnection();
+		$started = false;
+		$guard = null;
+		try
+		{
+			$guard = FormMutationGuard::acquire($formId);
+			$connection->startTransaction();
+			$started = true;
+			$locked = $connection->query('SELECT ID FROM b_crm_webform WHERE ID = '
+				. $formId . ' FOR UPDATE')->fetch();
+			if (!$locked) { throw new FormNotFoundException(); }
+			$source = SourceTable::getList(['filter' => ['=FORM_ID' => $formId]])->fetch();
+			if (($source === false && $bindings->expectedSourceRevision !== null)
+				|| ($source !== false && (int)$source['REVISION'] !== $bindings->expectedSourceRevision))
+			{
+				throw FormValidationException::forPath('legalDocuments.expectedSourceRevision',
+					'Registry revision conflict.');
+			}
+			$result = $this->bindingsRepository->update($formId, $changeSet, $expectedModifiedTime, true);
+			if (!$result->isSuccess()) { throw $this->storageRefusal()->toException($result); }
+			$bound = (new FormBindingsCommand($userId, $formId, $bindings))->run();
+			if (!$bound->isSuccess()) { throw self::bindingsRefusal($bound); }
+			$connection->commitTransaction();
+			$started = false;
+		}
+		catch (\Throwable $exception)
+		{
+			if ($started) { self::rollbackLegalWrite(); }
+			if ($exception->getMessage() === 'REVISION_CONFLICT')
+			{
+				throw FormValidationException::forPath('legalDocuments', 'REVISION_CONFLICT');
+			}
+			throw $exception;
+		}
+		finally
+		{
+			try { $guard?->release(); }
+			finally { $pool->useMasterOnly(false); }
+		}
+		$pool->useMasterOnly(true);
+		try
+		{
+			if (!$this->bindingsRepository->writeDeferredIntegrations($formId, $changeSet)->isSuccess())
+			{
+				throw new FormSideEffectException('saveIntegration');
+			}
+			$this->buildScripts($formId);
+		}
+		finally { $pool->useMasterOnly(false); }
+	}
+
+	private static function bindingsRefusal(\Bitrix\Crm\V2\Public\Entity\LegalRegistry\RegistryResult $result):
+		FormValidationException
+	{
+		$code = $result->getErrors()[0]?->getCode() ?? 'INVALID_PAYLOAD';
+
+		return FormValidationException::forPath('legalDocuments', (string)$code);
+	}
+
+	private static function assertNoOuterTransaction(): void
+	{
+		$connection = Application::getConnection();
+		if ((new \ReflectionProperty($connection, 'transactionLevel'))->getValue($connection) > 0)
+		{
+			throw FormValidationException::forPath('legalDocuments', 'An outer transaction is active.');
+		}
+	}
+
+	private static function rollbackLegalWrite(): void
+	{
+		try { Application::getConnection()->rollbackTransaction(); }
+		catch (\Bitrix\Main\DB\TransactionException $exception)
+		{
+			if ($exception->getMessage() !== 'Nested rollbacks are unsupported.') { throw $exception; }
+		}
+	}
+
 	/**
 	 * Deletes a CRM form together with the data the legacy cascade removes.
 	 *
 	 * The cascade is reproduced literally by FormDeleteRepository: the agreements, the responsible
-	 * queue, the dependency groups, the rotation option and the background image stay behind as
-	 * orphans, exactly as they do today. The built script package is the one addition to it, because
-	 * nothing but the form names that package. What is new besides is that the three reasons of a
-	 * refusal are told apart instead of sharing one false.
+	 * queue, the dependency groups and the background image stay behind as orphans, exactly as they
+	 * do today. The built script package is the one addition to it, because nothing but the form
+	 * names that package. What is new besides is that the three reasons of a refusal are told apart
+	 * instead of sharing one false.
 	 *
 	 * The plan of the portal is asked here as it is asked on a creation and on a change: legacy
 	 * checks it in the access predicate every changing action of the editor goes through, removal
@@ -313,20 +459,142 @@ final class FormWriter
 		}
 
 		self::assertRemovable($form, $expectedModifiedTime, $confirmed);
-		$this->claimRemoval($formId, $expectedModifiedTime, $confirmed);
-
-		if (!$this->deleteRepository->deleteCascade($formId)->isSuccess())
+		if ($this->deleteRepository::class !== FormDeleteRepository::class)
 		{
-			// The form row is still there, so the delete can be repeated - by a caller rereading
-			// the form first, because the claim has spent the version it was made with.
-			throw new FormSideEffectException(self::OPERATION_DELETE_CASCADE);
+			$this->deleteWithInjectedRepository($formId, $expectedModifiedTime, $confirmed);
+			return;
 		}
-
-		if (!$this->deleteRepository->deleteFormRow($formId)->isSuccess())
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = Application::getConnection();
+		$ambient = (new \ReflectionProperty($connection, 'transactionLevel'))->getValue($connection) > 0;
+		$started = false;
+		$source = false;
+		$exportLinks = [];
+		$guard = null;
+		try
 		{
-			throw new FormSideEffectException(self::OPERATION_DELETE_FORM);
+			$guard = FormMutationGuard::acquire($formId);
+			$source = $connection->query('SELECT ID FROM b_crm_legal_source WHERE FORM_ID = '
+				. $formId)->fetch();
+			if ($source)
+			{
+				$connection->startTransaction();
+				$started = true;
+				$locked = $connection->query('SELECT ID FROM b_crm_webform WHERE ID = '
+					. $formId . ' FOR UPDATE')->fetch();
+				if (!$locked) { throw new FormNotFoundException(); }
+				$source = $connection->query('SELECT ID, REVISION FROM b_crm_legal_source WHERE FORM_ID = '
+					. $formId . ' FOR UPDATE')->fetch();
+				if (!$source)
+				{
+					throw FormValidationException::forPath('legalDocuments', 'Registry source changed.');
+				}
+				$source = array_change_key_case($source, CASE_UPPER);
+				if ($ambient)
+				{
+					throw FormValidationException::forPath('legalDocuments', 'An outer transaction is active.');
+				}
+			}
+			$this->claimRemoval($formId, $expectedModifiedTime, $confirmed);
+			if ($source)
+			{
+				$exportLinks = $this->deleteRepository->captureExternalDelete($formId);
+				$closed = (new UsageRepository())->changeUsage($formId, 'closeSource', null, null,
+					false, false, (int)$source['REVISION']);
+				if (!$closed->isSuccess()) { throw self::bindingsRefusal($closed); }
+			}
+			$cascade = $source
+				? $this->deleteRepository->deleteCascadeDeferred($formId)
+				: $this->deleteRepository->deleteCascade($formId);
+			if (!$cascade->isSuccess())
+			{
+				throw new FormSideEffectException(self::OPERATION_DELETE_CASCADE);
+			}
+			$deleted = $source
+				? $this->deleteRepository->deleteFormRowDeferred($formId)
+				: $this->deleteRepository->deleteFormRow($formId);
+			if (!$deleted->isSuccess())
+			{
+				throw new FormSideEffectException(self::OPERATION_DELETE_FORM);
+			}
+			if ($started)
+			{
+				$connection->commitTransaction();
+				$started = false;
+			}
 		}
+		catch (\Throwable $exception)
+		{
+			if ($started) { self::rollbackLegalWrite(); }
+			throw $exception;
+		}
+		finally
+		{
+			try { $guard?->release(); }
+			finally { $pool->useMasterOnly(false); }
+		}
+		Form::cleanCacheByTag($formId);
+		if ($source)
+		{
+			$pool->useMasterOnly(true);
+			try { $external = $this->deleteRepository->completeExternalDelete($formId, $exportLinks); }
+			finally { $pool->useMasterOnly(false); }
+			if (!$external->isSuccess())
+			{
+				throw new FormSideEffectException(self::OPERATION_DELETE_CASCADE);
+			}
+		}
+	}
 
+	private function deleteWithInjectedRepository(int $formId, ?DateTime $expectedModifiedTime,
+		bool $confirmed): void
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		$connection = Application::getConnection();
+		$started = false;
+		try
+		{
+			$connection->startTransaction();
+			$started = true;
+			$stored = $connection->query('SELECT ID FROM b_crm_webform WHERE ID = '
+				. $formId . ' FOR UPDATE')->fetch();
+			if ($stored)
+			{
+				$source = $connection->query('SELECT ID FROM b_crm_legal_source WHERE FORM_ID = '
+					. $formId . ' FOR UPDATE')->fetch();
+				if ($source)
+				{
+					throw FormValidationException::forPath('legalDocuments',
+						'Injected form deletion repository does not support legal document history.');
+				}
+			}
+			else
+			{
+				self::rollbackLegalWrite();
+				$started = false;
+			}
+			$this->claimRemoval($formId, $expectedModifiedTime, $confirmed);
+			if (!$this->deleteRepository->deleteCascade($formId)->isSuccess())
+			{
+				throw new FormSideEffectException(self::OPERATION_DELETE_CASCADE);
+			}
+			if (!$this->deleteRepository->deleteFormRow($formId)->isSuccess())
+			{
+				throw new FormSideEffectException(self::OPERATION_DELETE_FORM);
+			}
+			if ($started) { $connection->commitTransaction(); $started = false; }
+		}
+		catch (\Throwable $exception)
+		{
+			if ($started) { self::rollbackLegalWrite(); }
+			throw $exception;
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
 		Form::cleanCacheByTag($formId);
 	}
 
@@ -587,10 +855,16 @@ final class FormWriter
 	 */
 	private function buildScripts(int $formId, ?int $createdFormId = null): void
 	{
-		if (!($this->scriptBuilder)($formId))
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
 		{
-			throw new FormSideEffectException(self::OPERATION_BUILD_SCRIPTS, $createdFormId);
+			if (!($this->scriptBuilder)($formId))
+			{
+				throw new FormSideEffectException(self::OPERATION_BUILD_SCRIPTS, $createdFormId);
+			}
 		}
+		finally { $pool->useMasterOnly(false); }
 	}
 
 	/**

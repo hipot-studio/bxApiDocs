@@ -12,7 +12,6 @@ use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Exception\Application\ApplicationNotInstalledException;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
-use Bitrix\Rest\Internal\Service\Embedding\EmbeddingAccessSynchronizer;
 use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\Provider;
 use Bitrix\Rest\Enum\Integration\ElementCodeType;
@@ -23,8 +22,6 @@ class ApplicationInstaller
 		private readonly AppRepository $appRepository,
 		private readonly IntegrationRepository $integrationRepository = new IntegrationRepository(),
 		private readonly SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
-		private readonly EmbeddingAccessSynchronizer $embeddingAccessSynchronizer
-			= new EmbeddingAccessSynchronizer(),
 	) {}
 
 	/**
@@ -188,8 +185,6 @@ class ApplicationInstaller
 		{
 			AppTable::install((int)$savedApp->getId());
 		}
-
-		$this->embeddingAccessSynchronizer->syncApp((int)$savedApp->getId());
 
 		$this->fireApplicationInstalled($integration->getId(), (int)$savedApp->getId(), $userId);
 

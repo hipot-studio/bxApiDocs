@@ -27,6 +27,12 @@ final class ProjectAccessCodesProvider extends BaseProvider
 	{
 		parent::__construct();
 
+		$this->options['addAccessCodesTab'] = true;
+		if (isset($options['addAccessCodesTab']) && is_bool($options['addAccessCodesTab']))
+		{
+			$this->options['addAccessCodesTab'] = $options['addAccessCodesTab'];
+		}
+
 		$this->options['fillAccessCodesTab'] = true;
 		if (isset($options['fillAccessCodesTab']) && is_bool($options['fillAccessCodesTab']))
 		{
@@ -37,6 +43,17 @@ final class ProjectAccessCodesProvider extends BaseProvider
 		if (isset($options['fillRecentTab']) && is_bool($options['fillRecentTab']))
 		{
 			$this->options['fillRecentTab'] = $options['fillRecentTab'];
+		}
+
+		$this->options['closed'] = null;
+		if (array_key_exists('closed', $options) && (is_bool($options['closed']) || $options['closed'] === null))
+		{
+			$this->options['closed'] = $options['closed'];
+		}
+
+		if (isset($options['siteId']) && is_string($options['siteId']))
+		{
+			$this->options['siteId'] = $options['siteId'];
 		}
 	}
 
@@ -60,6 +77,9 @@ final class ProjectAccessCodesProvider extends BaseProvider
 
 		$projects = ProjectProvider::getProjects([
 			'projectId' => $projectIdsToFetch,
+			'myProjectsOnly' => false,
+			'includeInvisibleExactItems' => true,
+			...$this->getProjectFilterOptions(),
 		]);
 		if ($projects->isEmpty())
 		{
@@ -192,7 +212,10 @@ final class ProjectAccessCodesProvider extends BaseProvider
 
 	public function fillDialog(Dialog $dialog): void
 	{
-		$this->addAccessCodesTab($dialog);
+		if ($this->getOption('addAccessCodesTab'))
+		{
+			$this->addAccessCodesTab($dialog);
+		}
 
 		$dialogHasOnlyThisEntity = count($dialog->getEntities()) === 1;
 
@@ -272,6 +295,7 @@ final class ProjectAccessCodesProvider extends BaseProvider
 
 		$projects = ProjectProvider::getProjects([
 			'limit' => $howMuchLeftToFill,
+			...$this->getProjectFilterOptions(),
 		]);
 
 		foreach ($projects as $project)
@@ -292,6 +316,7 @@ final class ProjectAccessCodesProvider extends BaseProvider
 	{
 		$projects = ProjectProvider::getProjects([
 			'limit' => self::FILL_LIMIT,
+			...$this->getProjectFilterOptions(),
 		]);
 
 		foreach ($projects as $project)
@@ -342,6 +367,7 @@ final class ProjectAccessCodesProvider extends BaseProvider
 		$projects = ProjectProvider::getProjects([
 			'searchQuery' => $searchQuery->getQuery(),
 			'searchLimit' => self::SEARCH_LIMIT,
+			...$this->getProjectFilterOptions(),
 		]);
 
 		if ($projects->count() >= self::SEARCH_LIMIT)
@@ -356,5 +382,21 @@ final class ProjectAccessCodesProvider extends BaseProvider
 		}
 
 		$dialog->addItems($items);
+	}
+
+	private function getProjectFilterOptions(): array
+	{
+		$options = [];
+		if ($this->options['closed'] !== null)
+		{
+			$options['closed'] = $this->options['closed'];
+		}
+
+		if (isset($this->options['siteId']))
+		{
+			$options['siteId'] = $this->options['siteId'];
+		}
+
+		return $options;
 	}
 }

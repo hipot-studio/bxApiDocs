@@ -5,14 +5,18 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
 use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class UserFieldsNavigationItem implements SettingsHubWrappedNavigationItemLifecycle
 {
@@ -38,16 +42,25 @@ final class UserFieldsNavigationItem implements SettingsHubWrappedNavigationItem
 			|| $configuration->canDeleteFields(ConfigurationCallSite::CrmConfigsComponent, $scope);
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
 		$configuration = $permissions->configuration();
 		$scope = ConfigurationScope::ofCrm();
 
-		return $this->isVisible($permissions)
-			&& (
-				$configuration->canManageFields(ConfigurationCallSite::FieldsListComponent, $scope)
-				|| $configuration->canDeleteFields(ConfigurationCallSite::FieldsListComponent, $scope)
+		if (
+			!$configuration->canManageFields(ConfigurationCallSite::FieldsListComponent, $scope)
+			&& !$configuration->canDeleteFields(ConfigurationCallSite::FieldsListComponent, $scope)
+		)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_NAVIGATION_USER_FIELDS_ACCESS'),
+					'CRM_SETTINGS_HUB_NAVIGATION_USER_FIELDS_ACCESS',
+				),
 			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

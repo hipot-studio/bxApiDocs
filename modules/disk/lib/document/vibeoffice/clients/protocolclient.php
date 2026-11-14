@@ -26,7 +26,6 @@ final class ProtocolClient implements ProtocolClientInterface
 	private Signer $signer;
 	/** @var (\Closure(): HttpClient)|null */
 	private ?\Closure $httpClientFactory;
-
 	/**
 	 * @param (\Closure(): HttpClient)|null $httpClientFactory test seam; without it
 	 *        the client is built by {@see buildHttpClient()} with the production timeouts.
@@ -49,7 +48,13 @@ final class ProtocolClient implements ProtocolClientInterface
 
 		unset($body['user']['image']);
 
-		return $this->send(HttpClient::HTTP_POST, $path, $body, $deadline, ['X-VO-Accept-Open' => 'save-refused-v1']);
+		return $this->send(
+			HttpClient::HTTP_POST,
+			$path,
+			$body,
+			$deadline,
+			['X-VO-Accept-Open' => 'save-refused-v1, filetype-not-editable-v1'],
+		);
 	}
 
 	public function upsertGrants(string $docKey, array $grants): Result

@@ -8,6 +8,7 @@ use Bitrix\Disk\Document\Contract\FileCreatable;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Document\FileData;
 use Bitrix\Disk\Document\IViewer;
+use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main;
 
@@ -54,29 +55,52 @@ class VibeofficeHandler extends DocumentHandler implements FileCreatable, IViewe
 	public static function listEditableExtensions(): array
 	{
 		return [
-			'doc',
-			'docx',
+			'csv',
 			'docm',
-			'rtf',
-			'xls',
-			'xlsx',
-			'xlt',
-			'xlsm',
-			'ppt',
-			'pptx',
-			'pptm',
-			'xodt',
-			'odt',
+			'docx',
+			'dotm',
+			'dotx',
+			'epub',
+			'fb2',
+			'html',
 			'odp',
 			'ods',
+			'odt',
 			'otp',
 			'ots',
 			'ott',
-			'dot',
-			'pot',
-			'potx',
+			'pdf',
 			'potm',
+			'potx',
+			'ppsm',
+			'ppsx',
+			'pptm',
+			'pptx',
+			'rtf',
+			'tsv',
+			'txt',
+			'xlsb',
+			'xlsm',
+			'xlsx',
+			'xltm',
+			'xltx',
 		];
+	}
+
+	public static function listViewableExtensions(): array
+	{
+		return array_merge(
+			self::listEditableExtensions(),
+			['doc', 'xls', 'xlt', 'ppt', 'xodt', 'dot', 'pot'],
+		);
+	}
+
+	public static function listMimeRoutableExtensions(): array
+	{
+		// Keep the original office MIME route. VibeOffice-only formats (including
+		// HTML, TXT, FB2 and EPUB) need their own file-scoped routing decision.
+		// XODT is also file-scoped because its application/xml MIME is shared.
+		return array_values(array_diff(OnlyOfficeHandler::listEditableExtensions(), ['xodt']));
 	}
 
 	/**

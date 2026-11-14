@@ -3,6 +3,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
 use Bitrix\Disk\Internals\Entity\ModelSynchronizer;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -141,17 +142,18 @@ final class FolderLink extends Folder
 	 * @param array $data Contains additional fields (CREATED_BY, NAME, etc).
 	 * @param array $rights Rights (@see \Bitrix\Disk\RightsManager).
 	 * @param bool  $generateUniqueName Generates unique name for object in directory.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return File|null
 	 */
-	public function uploadFile(array $fileArray, array $data, array $rights = array(), $generateUniqueName = false)
+	public function uploadFile(array $fileArray, array $data, array $rights = array(), $generateUniqueName = false, array $options = [])
 	{
 		if(!$this->getRealObject())
 		{
 			return null;
 		}
 
-		return $this->getRealObject()->uploadFile($fileArray, $data, $rights, $generateUniqueName);
+		return $this->getRealObject()->uploadFile($fileArray, $data, $rights, $generateUniqueName, $options);
 	}
 
 	/**
@@ -159,17 +161,24 @@ final class FolderLink extends Folder
 	 * @param array $data Contains additional fields (CREATED_BY, NAME, MIME_TYPE).
 	 * @param array $rights Rights (@see \Bitrix\Disk\RightsManager).
 	 * @param bool  $generateUniqueName Generates unique name for object in directory.
+	 * @param array $options Options of the write operation (@see \Bitrix\Disk\File::addVersion()).
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return null|static|File
 	 */
-	public function addFile(array $data, array $rights = array(), $generateUniqueName = false)
+	public function addFile(
+		array $data,
+		array $rights = [],
+		$generateUniqueName = false,
+		array $options = [],
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		if(!$this->getRealObject())
 		{
 			return null;
 		}
 
-		return $this->getRealObject()->addFile($data, $rights, $generateUniqueName);
+		return $this->getRealObject()->addFile($data, $rights, $generateUniqueName, $options, $auditTransaction);
 	}
 
 	/**
@@ -199,14 +208,19 @@ final class FolderLink extends Folder
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @return null|static|Folder
 	 */
-	public function addSubFolder(array $data, array $rights = array(), $generateUniqueName = false)
+	public function addSubFolder(
+		array $data,
+		array $rights = [],
+		$generateUniqueName = false,
+		?AuditTransaction $auditTransaction = null,
+	)
 	{
 		if(!$this->getRealObject())
 		{
 			return null;
 		}
 
-		return $this->getRealObject()->addSubFolder($data, $rights, $generateUniqueName);
+		return $this->getRealObject()->addSubFolder($data, $rights, $generateUniqueName, $auditTransaction);
 	}
 
 	/**
@@ -298,6 +312,19 @@ final class FolderLink extends Folder
 	 */
 	public function deleteTree($deletedBy, bool $bypassDeletionRestriction = false)
 	{
+		$this->declineSharingOfTheLink($deletedBy);
+
+		return parent::deleteNonRecursive($deletedBy);
+	}
+
+	/**
+	 * Switches off the sharing the link was accepted by. Called by the direct deletion of the link and by
+	 * the cascade of a folder that holds it; the outcome of the decline does not stop the deletion.
+	 * @param int $deletedBy
+	 * @return void
+	 */
+	protected function declineSharingOfTheLink($deletedBy): void
+	{
 		/** @var Sharing $sharing */
 		$sharing = Sharing::load(array(
 			'LINK_OBJECT_ID' => $this->getId(),
@@ -307,8 +334,6 @@ final class FolderLink extends Folder
 			$sharing->setAttributes(array('LINK_OBJECT' => $this));
 			$sharing->decline($deletedBy, false);
 		}
-
-		return parent::deleteNonRecursive($deletedBy);
 	}
 
 	/**

@@ -57,6 +57,8 @@ final class CCrmEntityProductListComponent
 	private const PREFIX_MEASURE_INDEX = 'measure_';
 	private const NEW_ROW_ID_PREFIX = 'n';
 	private const PRODUCT_ICON_URL = '/bitrix/images/crm/grid_icons/product.svg';
+	private const ROW_STORE_STATE_MISSING = 'missing';
+	private const ROW_STORE_STATE_INACTIVE = 'inactive';
 
 	/** @var Main\Grid\Options $gridConfig */
 	protected $gridConfig;
@@ -89,6 +91,12 @@ final class CCrmEntityProductListComponent
 	protected array $measures = [];
 	protected array $stores = [];
 	protected array $allowedStores = [];
+	/** @var array<int, string> $rowStoreStates store id => state of a row store that is out of $stores */
+	protected array $rowStoreStates = [];
+	/** @var array<int, string> $inactiveRowStoreTitles */
+	private array $inactiveRowStoreTitles = [];
+	/** @var int $rowDefaultStoreId the store a row without a store stands on */
+	private int $rowDefaultStoreId = 0;
 	protected array $productVatList = [];
 	protected array $discountTypes = [];
 	protected int $newRowCounter = 0;
@@ -849,6 +857,131 @@ final class CCrmEntityProductListComponent
 		$this->allowedStores = array_values($this->allowedStores);
 
 		return $this->allowedStores;
+	}
+
+	/**
+	 * Classifies the stores of the rows that are not offered for selection.
+	 * A store without the view right gets no state: the row stays restricted.
+	 *
+	 * @return void
+	 */
+	protected function loadRowStoreStates(): void
+	{
+		$this->rowStoreStates = [];
+		$this->inactiveRowStoreTitles = [];
+		$this->rowDefaultStoreId = (int)$this->getDefaultStoreId();
+
+		// Not offered for selection, the default store of the catalog is classified like any row store.
+		$catalogDefaultStoreId = 0;
+		if ($this->rowDefaultStoreId <= 0)
+		{
+			$catalogDefaultStoreId = (int)StoreTable::getDefaultStoreId();
+		}
+
+		$storeIds = [];
+		foreach ($this->rows as $row)
+		{
+			$storeId = (int)($row['STORE_ID'] ?? 0);
+			if ($storeId <= 0)
+			{
+				$storeId = $catalogDefaultStoreId;
+			}
+			if ($storeId > 0 && !isset($this->stores[$storeId]))
+			{
+				$storeIds[$storeId] = $storeId;
+			}
+		}
+
+		if (empty($storeIds))
+		{
+			return;
+		}
+
+		$existingStoreIds = [];
+		$storeIterator = StoreTable::getList([
+			'select' => ['ID'],
+			'filter' => ['@ID' => array_values($storeIds)],
+		]);
+		while ($store = $storeIterator->fetch())
+		{
+			$existingStoreIds[(int)$store['ID']] = (int)$store['ID'];
+		}
+
+		foreach ($storeIds as $storeId)
+		{
+			if (!isset($existingStoreIds[$storeId]))
+			{
+				$this->rowStoreStates[$storeId] = self::ROW_STORE_STATE_MISSING;
+			}
+		}
+
+		if (!empty($existingStoreIds))
+		{
+			$this->loadInactiveRowStoreStates($existingStoreIds);
+		}
+
+		// A default store without the view right gets no state: such a row stays without a store, as before.
+		if ($catalogDefaultStoreId > 0 && isset($this->rowStoreStates[$catalogDefaultStoreId]))
+		{
+			$this->rowDefaultStoreId = $catalogDefaultStoreId;
+		}
+	}
+
+	/**
+	 * @param int[] $existingStoreIds
+	 * @return void
+	 */
+	private function loadInactiveRowStoreStates(array $existingStoreIds): void
+	{
+		$filter = [
+			'@ID' => array_values($existingStoreIds),
+			'=ACTIVE' => 'N',
+		];
+		$accessFilter = AccessController::getCurrent()->getEntityFilter(
+			ActionDictionary::ACTION_STORE_VIEW,
+			StoreTable::class
+		);
+		if ($accessFilter)
+		{
+			$filter = [
+				$accessFilter,
+				$filter,
+			];
+		}
+
+		$storeIterator = StoreTable::getList([
+			'select' => ['ID', 'TITLE'],
+			'filter' => $filter,
+		]);
+		while ($store = $storeIterator->fetch())
+		{
+			$storeId = (int)$store['ID'];
+			$title = (string)$store['TITLE'];
+			if ($title === '')
+			{
+				$title = (string)Loc::getMessage('CRM_ENTITY_PRODUCT_LIST_EMPTY_STORE_TITLE');
+			}
+
+			$this->rowStoreStates[$storeId] = self::ROW_STORE_STATE_INACTIVE;
+			$this->inactiveRowStoreTitles[$storeId] = (string)Loc::getMessage(
+				'CRM_ENTITY_PRODUCT_LIST_STORE_INACTIVE_TITLE',
+				['#STORE_TITLE#' => $title]
+			);
+		}
+	}
+
+	/**
+	 * @param int $storeId
+	 * @return string
+	 */
+	protected function getRowStoreTitle(int $storeId): string
+	{
+		if (isset($this->stores[$storeId]))
+		{
+			return $this->stores[$storeId]['TITLE'];
+		}
+
+		return $this->inactiveRowStoreTitles[$storeId] ?? '';
 	}
 
 	/**
@@ -2259,6 +2392,7 @@ final class CCrmEntityProductListComponent
 		$this->arResult['MEASURES'] = $this->measures;
 		$this->arResult['STORES'] = $this->stores;
 		$this->arResult['ALLOWED_STORES'] = $this->getAllowedStories();
+		$this->arResult['STORE_STATES'] = $this->rowStoreStates;
 		$this->arResult['MEASURES']['LIST'] = array_values(array_filter(
 			$this->arResult['MEASURES']['LIST']
 		));
@@ -2281,6 +2415,11 @@ final class CCrmEntityProductListComponent
 			$catalogItems = [];
 
 			$basketCode = 0;
+
+			if ($this->isAllowedReservation())
+			{
+				$this->loadRowStoreStates();
+			}
 
 			foreach ($this->rows as $index => $row)
 			{
@@ -2329,15 +2468,11 @@ final class CCrmEntityProductListComponent
 				{
 					$row['STORE_ID'] =
 						empty($row['STORE_ID'])
-							? $this->getDefaultStoreId()
+							? $this->rowDefaultStoreId
 							: (int)$row['STORE_ID']
 					;
 
-					$row['STORE_TITLE'] =
-						isset($this->stores[$row['STORE_ID']])
-							? $this->stores[$row['STORE_ID']]['TITLE']
-							: ''
-					;
+					$row['STORE_TITLE'] = $this->getRowStoreTitle($row['STORE_ID']);
 				}
 
 				$this->rows[$index] = $row;

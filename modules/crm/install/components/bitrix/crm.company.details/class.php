@@ -9,6 +9,7 @@ use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\EditorHelper;
 use Bitrix\Crm\CompanyAddress;
+use Bitrix\Crm\Component\EntityDetails\ClientTab\ClientTabBuilder;
 use Bitrix\Crm\Component\EntityDetails\Traits;
 use Bitrix\Crm\Conversion\LeadConversionWizard;
 use Bitrix\Crm\EntityAddressType;
@@ -653,6 +654,21 @@ class CCrmCompanyDetailsComponent
 						'enabled' => false
 					);
 				}
+			}
+		}
+
+		// my company is not a client and has no client tabs;
+		// a company in a category has no client tab, like the other relation tabs
+		if (!$this->isMyCompany() && !$this->arResult['CATEGORY_ID'])
+		{
+			$clientTab = (new ClientTabBuilder())->build(
+				CCrmOwnerType::Company,
+				$this->entityID,
+				$this->entityID <= 0 || $this->isCopyMode,
+			);
+			if ($clientTab !== null)
+			{
+				$this->arResult['TABS'] = ClientTabBuilder::insert($this->arResult['TABS'], $clientTab);
 			}
 		}
 		//endregion

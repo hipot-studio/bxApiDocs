@@ -9,7 +9,6 @@ use Bitrix\Rest\V3\Attribute\Description;
 use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Dto\Dto;
-use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
 use Bitrix\Rest\V3\CacheManager;
 use Bitrix\Rest\V3\Schema\MethodDescription;
@@ -56,8 +55,7 @@ final class Scope extends RestController
 						$dtos[$methodDescription->dtoFqcn] = $methodDescription->dtoFqcn::create();
 						$dtoFields[$methodDescription->dtoFqcn] = [];
 
-						/** @var DtoField $dtoField */
-						foreach ($dtos[$methodDescription->dtoFqcn]->getFields() as $dtoField)
+						foreach ($dtos[$methodDescription->dtoFqcn]->getFields()->getMetaList() as $dtoField)
 						{
 							$dtoFieldData = [
 								'name' => $dtoField->getPropertyName(),

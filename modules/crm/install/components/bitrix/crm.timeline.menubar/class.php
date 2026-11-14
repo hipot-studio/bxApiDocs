@@ -16,6 +16,7 @@ class CrmTimelineMenuBarComponent extends \CBitrixComponent
 	private ?int $entityCategoryId = null;
 	private string $guid = 'timeline';
 	private bool $isReadonly = false;
+	private bool $isCommentTextEditorEnabled = false;
 
 	private function init(): void
 	{
@@ -32,6 +33,7 @@ class CrmTimelineMenuBarComponent extends \CBitrixComponent
 
 		$this->guid = (string)($this->arParams['GUID'] ?? $this->guid);
 		$this->isReadonly = (bool)($this->arParams['READ_ONLY'] ?? false);
+		$this->isCommentTextEditorEnabled = ($this->arParams['COMMENT_TEXT_EDITOR_ENABLED'] ?? false) === true;
 
 		$this->arResult['guid'] = $this->guid;
 		$this->arResult['entityTypeId'] = $this->entityTypeId;
@@ -81,6 +83,7 @@ class CrmTimelineMenuBarComponent extends \CBitrixComponent
 		$repoContext = new \Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Context($this->entityTypeId, $this->entityId);
 		$repoContext->setGuid($this->guid);
 		$repoContext->setIsReadonly($this->isReadonly);
+		$repoContext->setIsCommentTextEditorEnabled($this->isCommentTextEditorEnabled);
 		$repoContext->setEntityCategoryId($this->entityCategoryId);
 
 		$repo = new \Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Repository($repoContext);

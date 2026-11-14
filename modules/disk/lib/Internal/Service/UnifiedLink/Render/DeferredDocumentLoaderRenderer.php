@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\Render;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Json;
 
 Loc::loadMessages(__FILE__);
 
@@ -18,6 +19,10 @@ final class DeferredDocumentLoaderRenderer
 		$languageId = htmlspecialcharsbx(Loc::getCurrentLang());
 		$title = htmlspecialcharsbx(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_TITLE') ?? '');
 		$hint = $this->renderHint();
+		$openNow = htmlspecialcharsbx(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_OPEN_NOW') ?? '');
+		$cancel = htmlspecialcharsbx(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_CANCEL') ?? '');
+		$countdownText = Json::encode(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_COUNTDOWN') ?? '');
+		$cancelledText = Json::encode(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_CANCELLED') ?? '');
 
 		return <<<HTML
 <!doctype html>
@@ -34,6 +39,13 @@ final class DeferredDocumentLoaderRenderer
 		.disk-deferred-loader__title { margin: 0; font-size: 20px; font-weight: 600; }
 		.disk-deferred-loader__hint { margin: 0; color: #6a737c; }
 		.disk-deferred-loader__link { color: #2066b0; }
+		.disk-deferred-loader__status { margin: 0; min-height: 1.5em; }
+		.disk-deferred-loader__button {
+			min-width: 160px; padding: 8px 20px; border: 1px solid #2066b0; border-radius: 6px;
+			background: #fff; color: #2066b0; font: inherit; cursor: pointer;
+		}
+		.disk-deferred-loader__button:hover { background: #eef5fc; }
+		.disk-deferred-loader__button:focus-visible { outline: 2px solid #2066b0; outline-offset: 2px; }
 		@keyframes disk-deferred-loader-spin { to { transform: rotate(360deg); } }
 		@media (prefers-reduced-motion: reduce) { .disk-deferred-loader__spinner { animation: none; } }
 	</style>
@@ -43,15 +55,25 @@ final class DeferredDocumentLoaderRenderer
 		<div class="disk-deferred-loader__spinner" aria-hidden="true"></div>
 		<h1 class="disk-deferred-loader__title">{$title}</h1>
 		<p class="disk-deferred-loader__hint">{$hint}</p>
+		<p class="disk-deferred-loader__status" id="deferred-document-loader-status" role="status"></p>
+		<button type="button" class="disk-deferred-loader__button" id="deferred-document-loader-open-now">
+			{$openNow}
+		</button>
+		<button type="button" class="disk-deferred-loader__button" id="deferred-document-loader-cancel">
+			{$cancel}
+		</button>
 	</main>
 	<script>
 		(() => {
-			const LOAD_DELAY = 1000;
+			const LOAD_DELAY = 5000;
+			const COUNTDOWN_TEXT = {$countdownText};
+			const CANCELLED_TEXT = {$cancelledText};
 			// A visible tab hands off at once, so the stub would only flash. It is revealed after this
 			// delay, which leaves the slow hand-off with a loading state instead of a bare page.
 			const REVEAL_DELAY = 300;
 
 			let isLoaded = false;
+			let isCancelled = false;
 			let loadTimeoutId = null;
 			let revealTimeoutId = null;
 
@@ -92,9 +114,36 @@ final class DeferredDocumentLoaderRenderer
 				window.location.replace(getImmediateLoadUrl().toString());
 			};
 
+			const setStatus = (text) => {
+				const status = document.getElementById('deferred-document-loader-status');
+				if (status)
+				{
+					status.textContent = String(text || '');
+				}
+			};
+
 			const scheduleLoad = () => {
+				if (isLoaded || isCancelled)
+				{
+					return;
+				}
+
 				cancelLoad();
 				loadTimeoutId = window.setTimeout(loadDocument, LOAD_DELAY);
+				// The region is emptied first, so a restarted countdown is announced again.
+				setStatus('');
+				setStatus(String(COUNTDOWN_TEXT || '').replace('#SECONDS#', String(LOAD_DELAY / 1000)));
+			};
+
+			const cancelCountdown = () => {
+				if (isLoaded || isCancelled)
+				{
+					return;
+				}
+
+				isCancelled = true;
+				cancelLoad();
+				setStatus(CANCELLED_TEXT);
 			};
 
 			const onVisibilityChange = () => {
@@ -105,6 +154,12 @@ final class DeferredDocumentLoaderRenderer
 					return;
 				}
 
+				// A paused countdown must not keep announcing the opening; the cancel text stays.
+				if (!isCancelled)
+				{
+					setStatus('');
+				}
+
 				cancelLoad();
 			};
 
@@ -113,6 +168,16 @@ final class DeferredDocumentLoaderRenderer
 			{
 				link.href = getImmediateLoadUrl().toString();
 			}
+
+			// The buttons are live before the visible tab hands off, as the stub may be revealed meanwhile.
+			document.getElementById('deferred-document-loader-open-now')?.addEventListener('click', loadDocument);
+			document.getElementById('deferred-document-loader-cancel')?.addEventListener('click', cancelCountdown);
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape' && loadTimeoutId !== null)
+				{
+					cancelCountdown();
+				}
+			});
 
 			if (document.visibilityState === 'visible')
 			{

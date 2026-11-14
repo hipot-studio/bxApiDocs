@@ -32,7 +32,6 @@ use Bitrix\Crm\V2\Public\ItemId;
 use Bitrix\Crm\V2\Public\Provider\Item\ItemProvider;
 use Bitrix\Crm\V2\Public\Provider\Item\Param\ItemSelect;
 use Bitrix\Main\Error;
-use Bitrix\Main\Application;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
@@ -82,16 +81,19 @@ final class DeleteFieldValueCommandHandler
 	private readonly ItemOperationRunner $operationRunner;
 	private readonly CustomFieldRegistry $customFieldRegistry;
 	private readonly FileCustomFieldWriteService $fileWriteService;
+	private readonly ClientBindingSupport $clientBindingSupport;
 
 	public function __construct(
 		?ItemOperationRunner $operationRunner = null,
 		?CustomFieldRegistry $customFieldRegistry = null,
 		?FileCustomFieldWriteService $fileWriteService = null,
+		?ClientBindingSupport $clientBindingSupport = null,
 	)
 	{
 		$this->operationRunner = $operationRunner ?? new ItemOperationRunner();
 		$this->customFieldRegistry = $customFieldRegistry ?? CustomFieldRegistry::getInstance();
 		$this->fileWriteService = $fileWriteService ?? new FileCustomFieldWriteService();
+		$this->clientBindingSupport = $clientBindingSupport ?? new ClientBindingSupport();
 	}
 
 	public function handle(DeleteFieldValueCommand $command): Result
@@ -102,17 +104,10 @@ final class DeleteFieldValueCommandHandler
 			return $target;
 		}
 
-		$lockKey = $this->getLockKey($command->getItemId(), $target['fieldName']);
-		try
+		$lockResult = $this->clientBindingSupport->lock($command->getItemId(), $target['fieldName']);
+		if ($lockResult !== null)
 		{
-			if (!Application::getConnection()->lock($lockKey, 10))
-			{
-				return $this->error('The field is being changed by another operation.', 'CRM_FIELD_VALUE_LOCKED');
-			}
-		}
-		catch (\Throwable)
-		{
-			return $this->error('The field change could not be serialized.', 'CRM_FIELD_VALUE_LOCK_FAILED');
+			return $lockResult;
 		}
 
 		try
@@ -191,7 +186,7 @@ final class DeleteFieldValueCommandHandler
 		}
 		finally
 		{
-			Application::getConnection()->unlock($lockKey);
+			$this->clientBindingSupport->unlock($command->getItemId(), $target['fieldName']);
 		}
 	}
 
@@ -257,19 +252,16 @@ final class DeleteFieldValueCommandHandler
 	 */
 	private function loadItem(ItemId $itemId, int $userId, array $target, bool $checkPermissions): Item
 	{
+		if (in_array($target['kind'], [ClientBindingSupport::KIND_CONTACTS, ClientBindingSupport::KIND_COMPANIES], true))
+		{
+			return $this->clientBindingSupport->loadOwner($itemId, $userId, $target['kind'], $checkPermissions);
+		}
+
 		$select = new ItemSelect($target['itemField']);
 		if ($target['kind'] === 'multifield')
 		{
 			$selector = $target['config']['selector'];
 			$select->{$selector}();
-		}
-		elseif ($target['kind'] === 'contacts')
-		{
-			$select->withContactBindings();
-		}
-		elseif ($target['kind'] === 'companies')
-		{
-			$select->withCompanyBindings();
 		}
 		elseif ($target['kind'] === 'observers')
 		{

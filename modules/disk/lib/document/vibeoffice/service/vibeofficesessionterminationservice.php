@@ -7,6 +7,7 @@ namespace Bitrix\Disk\Document\Vibeoffice\Service;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Document\SessionTerminationService;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientFactory;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientInterface;
@@ -62,7 +63,24 @@ class VibeofficeSessionTerminationService implements SessionTerminationService
 		}
 
 		$this->revokeExternalGrants($sessionsToTerminate);
+		$this->finishLocalSessions($sessionsToTerminate);
 		$this->deleteLocalSessions($sessionsToTerminate);
+	}
+
+	/** @param DocumentSession[] $localSessions */
+	private function finishLocalSessions(array $localSessions): void
+	{
+		$sessionIds = [];
+		foreach ($localSessions as $session)
+		{
+			$sessionIds[] = (int)$session->getId();
+		}
+
+		// The same chunking the finalizer applies to its session ids.
+		foreach (array_chunk($sessionIds, 300) as $chunk)
+		{
+			DocumentSessionTable::deactivateByIds($chunk);
+		}
 	}
 
 	/**

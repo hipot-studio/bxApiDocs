@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Filter;
 
 use Bitrix\Crm;
+use Bitrix\Crm\Service\Timeline\Navigation\CandidateExpression;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -90,6 +91,91 @@ class TimelineEntryCategory
 		}
 
 		return $result;
+	}
+
+	/** @return array<string, TimelineEntryCategoryDescriptor> */
+	public static function getDescriptors(): array
+	{
+		$descriptors = [];
+		foreach (self::getDescriptions() as $id => $title)
+		{
+			if (!is_string($title) || $title === '')
+			{
+				continue;
+			}
+			$expression = self::expressionFor((string)$id);
+			if ($expression === null)
+			{
+				continue;
+			}
+			$descriptors[$id] = new TimelineEntryCategoryDescriptor(
+				(string)$id,
+				$title,
+				null,
+				count($descriptors),
+				$expression,
+				$expression,
+				$id === self::ACTIVITY_MEETING ? ['activity-meeting'] : [],
+			);
+		}
+
+		return $descriptors;
+	}
+
+	private static function expressionFor(string $id): ?CandidateExpression
+	{
+		$typeIds = [
+			self::COMMENT => Crm\Timeline\TimelineType::COMMENT,
+			self::DOCUMENT => Crm\Timeline\TimelineType::DOCUMENT,
+			self::BIZ_PROCESS => Crm\Timeline\TimelineType::BIZPROC,
+			self::CREATION => Crm\Timeline\TimelineType::CREATION,
+			self::MODIFICATION => Crm\Timeline\TimelineType::MODIFICATION,
+			self::CONVERSION => Crm\Timeline\TimelineType::CONVERSION,
+			self::LINK => Crm\Timeline\TimelineType::LINK,
+			self::UNLINK => Crm\Timeline\TimelineType::UNLINK,
+			self::WAITING => Crm\Timeline\TimelineType::WAIT,
+			self::ORDER => Crm\Timeline\TimelineType::ORDER,
+			self::ORDER_CHECK => Crm\Timeline\TimelineType::ORDER_CHECK,
+			self::LOG_MESSAGE => Crm\Timeline\TimelineType::LOG_MESSAGE,
+		];
+		if (isset($typeIds[$id]))
+		{
+			return CandidateExpression::eq('TYPE_ID', $typeIds[$id]);
+		}
+
+		$providers = [
+			self::ACTIVITY_REQUEST => Crm\Activity\Provider\Request::getId(),
+			self::ACTIVITY_CALL => Crm\Activity\Provider\Call::getId(),
+			self::ACTIVITY_VISIT => Crm\Activity\Provider\Visit::getId(),
+			self::ACTIVITY_MEETING => Crm\Activity\Provider\Meeting::getId(),
+			self::ACTIVITY_EMAIL => Crm\Activity\Provider\Email::getId(),
+			self::ACTIVITY_ZOOM => Crm\Activity\Provider\Zoom::getId(),
+			self::ACTIVITY_CALL_TRACKER => Crm\Activity\Provider\CallTracker::getId(),
+			self::SMS => Crm\Activity\Provider\Sms::getId(),
+			self::WHATSAPP => Crm\Activity\Provider\WhatsApp::getId(),
+			self::TELEGRAM => Crm\Activity\Provider\Telegram::getId(),
+			self::NOTIFICATION => Crm\Activity\Provider\Notification::getId(),
+			self::WEB_FORM => Crm\Activity\Provider\WebForm::getId(),
+			self::CHAT => Crm\Activity\Provider\OpenLine::getId(),
+			self::REPEAT_SALE => Crm\Activity\Provider\RepeatSale::getId(),
+			self::ENTITY_EXCLUSION => Crm\Activity\Provider\EntityExclusion::getId(),
+		];
+		if ($id === self::ACTIVITY_TASK)
+		{
+			return CandidateExpression::in('PROVIDER_ID', [
+				Crm\Activity\Provider\Task::getId(),
+				Crm\Activity\Provider\Tasks\Task::getId(),
+			]);
+		}
+		if ($id === self::APPLICATION)
+		{
+			return CandidateExpression::in('PROVIDER_ID', [
+				Crm\Activity\Provider\RestApp::getId(),
+				Crm\Activity\Provider\ConfigurableRestApp::getId(),
+			]);
+		}
+
+		return isset($providers[$id]) ? CandidateExpression::eq('PROVIDER_ID', $providers[$id]) : null;
 	}
 
 	/**

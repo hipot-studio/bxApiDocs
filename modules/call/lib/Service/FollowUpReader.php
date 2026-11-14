@@ -366,6 +366,103 @@ class FollowUpReader
 	}
 
 	/**
+	 * Finished calls of one chat, each marked with whether a Follow-up exists for it.
+	 *
+	 * Unlike `list`, the selection is not narrowed to calls that already carry an outcome:
+	 * a chat timeline needs every finished call, and `hasFollowUp` only tells whether at
+	 * least one outcome row is stored for that call. No AI payload is read, so a single
+	 * page-size cap applies: a requested positive limit is capped at {@see MAX_LIMIT_LIGHT}.
+	 * Access checks stay with the caller, as everywhere in this class.
+	 *
+	 * A child or cloned call ({@see Call::createChildCall()}, {@see Call::makeClone()}) inherits
+	 * the CHAT_ID of its parent, so one such chain leaves several rows in the same chat. The chain
+	 * is not collapsed here: every finished session of it is a timeline item of its own, carrying
+	 * its own `hasFollowUp`.
+	 *
+	 * @param array<string, string>|null $order e.g. ['startDate' => 'desc']. Default: desc.
+	 * @param array{limit?: int, afterCursor?: array{startDate: string, id: int}}|null $pagination
+	 * @return Result Data on success: array{
+	 *     items: array<int, array{callId: int, startDate: ?string, hasFollowUp: bool}>,
+	 *     hasMore: bool,
+	 *     afterCursor: ?array{startDate: string, id: int}
+	 * }. Error code `invalid_chat_id` when the chat id is not positive - no query is made.
+	 * The `invalid_order` / `invalid_pagination` errors of {@see validateOrder()} and
+	 * {@see validatePagination()} are passed through as they are.
+	 */
+	public function listByChat(
+		int $chatId,
+		?array $order = null,
+		?array $pagination = null,
+	): Result
+	{
+		$result = new Result();
+		if ($chatId <= 0)
+		{
+			return $result->addError(new Error('chatId must be a positive integer.', 'invalid_chat_id'));
+		}
+
+		$orderValidation = $this->validateOrder($order);
+		if (!$orderValidation->isSuccess())
+		{
+			return $result->addErrors($orderValidation->getErrors());
+		}
+		$paginationValidation = $this->validatePagination($pagination);
+		if (!$paginationValidation->isSuccess())
+		{
+			return $result->addErrors($paginationValidation->getErrors());
+		}
+
+		$direction = $orderValidation->getData()['direction'];
+		$pagination = $paginationValidation->getData();
+		// A non-positive limit never reaches here: validatePagination() rejects it above.
+		$requestedLimit = $pagination['limit'] ?? null;
+		$limit = $requestedLimit !== null ? min($requestedLimit, self::MAX_LIMIT_LIGHT) : self::DEFAULT_LIMIT;
+
+		$rows = $this->queryCallsByChat(
+			$chatId,
+			$direction,
+			$limit + 1,
+			$pagination['afterCursor'] ?? null,
+		);
+
+		$hasMore = count($rows) > $limit;
+		if ($hasMore)
+		{
+			$rows = array_slice($rows, 0, $limit);
+		}
+
+		$callsWithOutcome = $this->loadCallIdsWithOutcome(array_column($rows, 'ID'));
+
+		$items = [];
+		$last = null;
+		foreach ($rows as $row)
+		{
+			$callId = (int)$row['ID'];
+			$items[] = [
+				'callId' => $callId,
+				'startDate' => $this->formatDateTime($row['START_DATE'] ?? null),
+				'hasFollowUp' => isset($callsWithOutcome[$callId]),
+			];
+			$last = $row;
+		}
+
+		$nextCursor = null;
+		if ($hasMore && $last)
+		{
+			$nextCursor = [
+				'startDate' => $this->formatDateTime($last['START_DATE'] ?? null, self::CURSOR_DATE_FORMAT),
+				'id' => (int)$last['ID'],
+			];
+		}
+
+		return $result->setData([
+			'items' => $items,
+			'hasMore' => $hasMore,
+			'afterCursor' => $nextCursor,
+		]);
+	}
+
+	/**
 	 * Resolves every user mentioned across the page in one query, before any text is rendered.
 	 * A mention is rendered from the id inside its own tag, so without this each distinct id would
 	 * cost a lookup of its own. Structured overview fields remove mentions even for the `bb` output,
@@ -802,6 +899,73 @@ class FollowUpReader
 		}
 
 		return $query->fetchAll();
+	}
+
+	/**
+	 * Finished calls of one chat, one row per call.
+	 *
+	 * Unlike {@see queryCalls()}, no outcome join narrows or annotates the selection: a chat
+	 * timeline keeps calls without a Follow-up, and the flag itself is resolved for the rows of
+	 * the page by {@see loadCallIdsWithOutcome()}. Without a join there is nothing to group by,
+	 * so the read stays a plain ordered scan of the page.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function queryCallsByChat(int $chatId, string $direction, int $limit, ?array $afterCursor): array
+	{
+		$dir = strtoupper($direction) === 'ASC' ? 'ASC' : 'DESC';
+
+		$query = CallTable::query()
+			->setSelect(['ID', 'START_DATE'])
+			->where('CHAT_ID', $chatId)
+			->where('STATE', Call::STATE_FINISHED)
+			->setOrder(['START_DATE' => $dir, 'ID' => $dir])
+			->setLimit($limit);
+
+		if ($afterCursor)
+		{
+			$op = $dir === 'ASC' ? '>' : '<';
+			// Same keyset boundary as queryCalls(): the cursor carries sub-second precision
+			// (see CURSOR_DATE_FORMAT), so the equality branch stays exact and the boundary
+			// row is never served twice.
+			$boundaryDate = $afterCursor['startDate'];
+			$query->where(
+				\Bitrix\Main\ORM\Query\Query::filter()->logic('or')
+					->where('START_DATE', $op, $boundaryDate)
+					->where(
+						\Bitrix\Main\ORM\Query\Query::filter()
+							->where('START_DATE', $boundaryDate)
+							->where('ID', $op, $afterCursor['id'])
+					),
+			);
+		}
+
+		return $query->fetchAll();
+	}
+
+	/**
+	 * Which of the given calls carry at least one outcome row.
+	 *
+	 * One query per page, not per call: the grouping collapses several outcomes of one call into
+	 * a single row, and only the column the calls are looked up by is read.
+	 *
+	 * @param int[] $callIds
+	 * @return array<int, int>  Set of call ids to test with isset().
+	 */
+	private function loadCallIdsWithOutcome(array $callIds): array
+	{
+		if (!$callIds)
+		{
+			return [];
+		}
+
+		$rows = CallOutcomeTable::query()
+			->setSelect(['CALL_ID'])
+			->whereIn('CALL_ID', $callIds)
+			->setGroup(['CALL_ID'])
+			->fetchAll();
+
+		return array_flip(array_map(static fn ($row): int => (int)$row['CALL_ID'], $rows));
 	}
 
 	/**
@@ -1583,9 +1747,14 @@ class FollowUpReader
 		return array_keys($types);
 	}
 
+	/**
+	 * The language of the transcription the reader shows, which is the latest contentful one
+	 * {@see self::findTranscriptionContent()} - an empty repeated run stores a result of the type
+	 * on top and would otherwise name the language of a transcription nobody reads.
+	 */
 	private function extractLanguage(OutcomeCollection $outcomes): ?string
 	{
-		$transcription = $outcomes->getOutcomeByType(SenseType::TRANSCRIBE->value);
+		$transcription = $outcomes->getLatestContentfulByType(SenseType::TRANSCRIBE->value);
 		$content = $transcription?->getSenseContent();
 		if ($content instanceof Transcription && $content->language !== '')
 		{

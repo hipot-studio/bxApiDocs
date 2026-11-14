@@ -87,21 +87,6 @@ class SmartInvoiceDeadlines extends SmartInvoice
 		return $this->canDisplaySums();
 	}
 
-	public function prepareItemCommonFields(array $item): array
-	{
-		$item = parent::prepareItemCommonFields($item);
-		if (!$this->canDisplaySums())
-		{
-			$item['PRICE'] = 0.0;
-			$item['PRICE_FORMATTED'] = $this->getHiddenPriceFormattedText($item['CURRENCY_FORMAT']);
-			$item['OPPORTUNITY_VALUE'] = 0.0;
-			$item[Item::FIELD_NAME_OPPORTUNITY_ACCOUNT] = null;
-			$item['OPPORTUNITY']['SUM'] = null;
-		}
-
-		return $item;
-	}
-
 	/**
 	 * Every stage of the category counts, the ones excluded by the filter too: the rule does not depend on it.
 	 */

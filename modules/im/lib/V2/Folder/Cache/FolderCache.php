@@ -16,7 +16,7 @@ class FolderCache
 	 * returns from {@see \Bitrix\Im\V2\Folder\FolderProvider::getByUser} before ensureSystemFolders(),
 	 * which leaves a newly added system folder uncreated until the TTL expires.
 	 */
-	private const BASE_DIR = '/bx/imc/folder/v4/';
+	private const BASE_DIR = '/bx/imc/folder/v5/';
 	private const TAG_SYSTEM = 'folder_feature_system';
 
 	private array $inMemoryCache = [];

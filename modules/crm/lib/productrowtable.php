@@ -24,6 +24,7 @@ use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Objectify\Collection;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Result;
 
 // load language file that was created before this file renaming
 Loc::loadMessages(Path::combine(__DIR__, 'productrow.php'));
@@ -300,31 +301,37 @@ class ProductRowTable extends DataManager
 		{
 			if ($changeType === Collection::OBJECT_REMOVED)
 			{
-				$deleteResult = $changedObject->delete();
-
-				if (!$deleteResult->isSuccess())
+				foreach (static::deleteUnboundRow($changedObject)->getErrors() as $error)
 				{
-					foreach ($deleteResult->getErrors() as $error)
-					{
-						$result->addError(new EntityError($error->getMessage()));
-					}
-				}
-
-				/** @var \Bitrix\Crm\Reservation\ProductRowReservation $productRowReservation */
-				$productRowReservation = $changedObject->get(Item::FIELD_NAME_PRODUCT_RESERVATION);
-				if ($productRowReservation)
-				{
-					$deleteResult = $productRowReservation->delete();
-					if (!$deleteResult->isSuccess())
-					{
-						foreach ($deleteResult->getErrors() as $error)
-						{
-							$result->addError(new EntityError($error->getMessage()));
-						}
-					}
+					$result->addError(new EntityError($error->getMessage()));
 				}
 			}
 		}
+	}
+
+	/**
+	 * Deletes a product row taken out of the product rows of its owner, together with its reserve.
+	 *
+	 * @internal
+	 *
+	 * @param ProductRow $row
+	 * @return Result
+	 */
+	public static function deleteUnboundRow(ProductRow $row): Result
+	{
+		$result = new Result();
+
+		$result->addErrors($row->delete()->getErrors());
+
+		/** @var \Bitrix\Crm\Reservation\ProductRowReservation $productRowReservation */
+		$productRowReservation = $row->get(Item::FIELD_NAME_PRODUCT_RESERVATION);
+		// a reserve deleted by an earlier attempt has lost its primary key
+		if ($productRowReservation && $productRowReservation->getId())
+		{
+			$result->addErrors($productRowReservation->delete()->getErrors());
+		}
+
+		return $result;
 	}
 
 	/**

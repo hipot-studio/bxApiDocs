@@ -51,12 +51,15 @@ class File extends Volume\Base implements Volume\IVolumeIndicatorParent, Volume\
 		}
 
 		$parentFolderId = $this->getFilterValue('PARENT_ID', '=@!');
-		if (!empty($parentFolderId))
+		if (!empty($parentFolderId) && !$parentFolderId instanceof Volume\SqlSubQuery)
 		{
 			$this
 				->addSelect('PARENT_ID', $parentFolderId)
 				->unsetFilter('PARENT_ID')
-				->addFilter('@PARENT_ID', Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId));
+				->addFilter(
+					'@PARENT_ID',
+					new Volume\SqlSubQuery(Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId))
+				);
 		}
 
 		$prefSql = '';
@@ -465,29 +468,38 @@ class File extends Volume\Base implements Volume\IVolumeIndicatorParent, Volume\
 		$sqlHelper = $connection->getSqlHelper();
 
 		$parentFolderId = $this->getFilterValue('PARENT_ID', '=@!');
-		if (!empty($parentFolderId))
+		if (!empty($parentFolderId) && !$parentFolderId instanceof Volume\SqlSubQuery)
 		{
 			$this
 				->unsetFilter('PARENT_ID')
-				->addFilter('@PARENT_ID', Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId));
+				->addFilter(
+					'@PARENT_ID',
+					new Volume\SqlSubQuery(Volume\QueryHelper::prepareFolderTreeQuery($parentFolderId))
+				);
 		}
 
 		$this->unsetFilter('FILES_LEFT');
 
+		$whereAlias = [
+			'MODULE_ID' => 'storage.MODULE_ID',
+			'STORAGE_ID' => 'files.STORAGE_ID',
+			'FOLDER_ID' => 'files.PARENT_ID',
+			'PARENT_ID' => 'files.PARENT_ID',
+			'TITLE' => 'files.NAME',
+			'TYPE' => 'files.TYPE_FILE',
+			'DELETED_TYPE' => 'files.DELETED_TYPE',
+			'ENTITY_TYPE' => 'storage.ENTITY_TYPE',
+		];
+
+		// Filter may come from a saved user grid preset and goes into raw SQL, so only known fields are kept
 		$whereSql = Volume\QueryHelper::prepareWhere(
-			$this->getFilter([
-				'DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
-			]),
-			[
-				'MODULE_ID' => 'storage.MODULE_ID',
-				'STORAGE_ID' => 'files.STORAGE_ID',
-				'FOLDER_ID' => 'files.PARENT_ID',
-				'PARENT_ID' => 'files.PARENT_ID',
-				'TITLE' => 'files.NAME',
-				'TYPE' => 'files.TYPE_FILE',
-				'DELETED_TYPE' => 'files.DELETED_TYPE',
-				'ENTITY_TYPE' => 'storage.ENTITY_TYPE',
-			]
+			$this->filterWhere(
+				$this->getFilter([
+					'DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
+				]),
+				array_keys($whereAlias)
+			),
+			$whereAlias
 		);
 		if ($whereSql != '')
 		{
@@ -906,6 +918,56 @@ class File extends Volume\Base implements Volume\IVolumeIndicatorParent, Volume\
 		}
 
 		return $cursor;
+	}
+
+	/**
+	 * Keeps only conditions on allowed fields; drops the root LOGIC and empty groups.
+	 * @param array $filter Filter as key => value, numeric keys hold condition groups.
+	 * @param string[] $allowedFields List of filterable fields.
+	 * @return array
+	 */
+	private function filterWhere(array $filter, array $allowedFields): array
+	{
+		$result = [];
+		foreach ($filter as $key => $value)
+		{
+			if (is_string($key))
+			{
+				if ($key !== 'LOGIC' && in_array(trim($key, '=<>!@%'), $allowedFields, true))
+				{
+					$result[$key] = $value;
+				}
+				continue;
+			}
+
+			if (!is_array($value))
+			{
+				continue;
+			}
+
+			$group = [];
+			foreach ($value as $groupKey => $groupValue)
+			{
+				if (
+					is_string($groupKey)
+					&& $groupKey !== 'LOGIC'
+					&& in_array(trim($groupKey, '=<>!@%'), $allowedFields, true)
+				)
+				{
+					$group[$groupKey] = $groupValue;
+				}
+			}
+			if (count($group) > 0)
+			{
+				if (array_key_exists('LOGIC', $value))
+				{
+					$group = ['LOGIC' => $value['LOGIC']] + $group;
+				}
+				$result[$key] = $group;
+			}
+		}
+
+		return $result;
 	}
 
 	/**

@@ -99,15 +99,46 @@ abstract class ScopeStorage extends AbstractStorage
 	 */
 	public function saveFileMetadata(int $fileId, array $metadata, int $ttl = self::DEFAULT_FILE_METADATA_TTL): bool
 	{
-		$key = $this->getFileKey($fileId);
+		$value = $this->encodeFileMetadata($metadata);
+		if ($value === null)
+		{
+			return false;
+		}
 
+		return $this->set($this->getFileKey($fileId), $value, $ttl);
+	}
+
+	/**
+	 * Save metadata of several files. Storages able to write many keys in one round trip override it
+	 *
+	 * @param array<int, array> $metadataByFileId File metadata indexed by file ID (b_file.ID)
+	 * @param int $ttl TTL in seconds
+	 * @return int[] IDs of files whose metadata was saved
+	 */
+	public function saveFileMetadataBatch(array $metadataByFileId, int $ttl = self::DEFAULT_FILE_METADATA_TTL): array
+	{
+		$savedFileIds = [];
+
+		foreach ($metadataByFileId as $fileId => $metadata)
+		{
+			if ($this->saveFileMetadata((int)$fileId, $metadata, $ttl))
+			{
+				$savedFileIds[] = (int)$fileId;
+			}
+		}
+
+		return $savedFileIds;
+	}
+
+	protected function encodeFileMetadata(array $metadata): ?string
+	{
 		try
 		{
-			return $this->set($key, json_encode($metadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), $ttl);
+			return json_encode($metadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 		}
 		catch (\JsonException)
 		{
-			return false;
+			return null;
 		}
 	}
 

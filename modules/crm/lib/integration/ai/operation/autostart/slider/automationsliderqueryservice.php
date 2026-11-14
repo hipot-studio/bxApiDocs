@@ -55,6 +55,7 @@ final readonly class AutomationSliderQueryService
 				'languageId' => $languageId,
 				'languageTitle' => AIManager::getAvailableLanguageList()[$languageId] ?? '',
 				'isLanguageSelectorAvailable' => true,
+				'isScenarioSetupAvailable' => $this->featureReader->isScenarioSetupAvailable(),
 			],
 			'scenarios' => $scenarios,
 		];

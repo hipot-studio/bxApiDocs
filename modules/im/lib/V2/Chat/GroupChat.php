@@ -34,6 +34,7 @@ use Bitrix\ImBot\Bot\Support24;
 use Bitrix\ImBot\Bot\SupportBox;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Pull\Event;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Chat\Add\AddResult;
@@ -463,7 +464,7 @@ class GroupChat extends Chat
 		$push['params']['dialogId'] = $this->getDialogId();
 		if ($this->getType() === self::IM_TYPE_COMMENT)
 		{
-			\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $message->getChat()->getParentChatId(), $push);
+			CommentTagPublisher::addToStack($message->getChat(), $push);
 		}
 		else
 		{

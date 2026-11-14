@@ -62,6 +62,6 @@ final class Assign extends Base
 
 		$operation = $factory->getUpdateOperation($item);
 
-		return (new TransactionWrapper($operation))->launch();
+		return $this->launchInTransactionWrapper(new TransactionWrapper($operation))->launch();
 	}
 }

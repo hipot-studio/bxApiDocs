@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Integration\AI\CopilotError;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 
@@ -19,11 +20,9 @@ use Bitrix\Main\Loader;
  * Requests a stop of the active BitrixGPT generation in a one-to-one copilot chat. This
  * service stays thin: it resolves the active aiassistant session (for idempotency, the
  * initiator check and the event payload) and publishes the im `OnCopilotGenerationStop`
- * event. The actual stop — finalizing the pending "thinking" placeholder, dropping the
- * session, marking the context as user-stopped, the system message and the terminal pull
- * signal — is performed by the aiassistant subscriber synchronously inside the event send,
- * so the stop is already done when this method returns "Stopped". Idempotent: a repeated
- * stop finds no active session and only reports the current state.
+ * event. The subscriber records an intent; only Marta's terminal callback confirms a stop.
+ * The response reports the current chat state, never a confirmation of the requested stop.
+ * A repeated request is idempotent and reports the same active session until it ends.
  */
 class GenerationStopService
 {
@@ -35,12 +34,17 @@ class GenerationStopService
 	private const ONE_TO_ONE_USER_COUNT = 2;
 
 	/**
-	 * @return Result<array{status: string, initiatorId: ?int}> actual state after the operation
+	 * @param ?int $messageId Restricts the request to the original question when supplied.
+	 * @return Result<array{status: string, initiatorId: ?int, messageId?: int}> actual state after the operation
 	 */
-	public function stop(Chat $chat, int $userId): Result
+	public function stop(Chat $chat, int $userId, ?int $messageId = null): Result
 	{
-		/** @var Result<array{status: string, initiatorId: ?int}> $result */
+		/** @var Result<array{status: string, initiatorId: ?int, messageId?: int}> $result */
 		$result = new Result();
+		if ($messageId !== null && $messageId <= 0)
+		{
+			return $result->addError(new Error('Question ID must be positive.', 'INVALID_MESSAGE_ID'));
+		}
 
 		if (!$chat instanceof CopilotChat || $chat->getUserCount() > self::ONE_TO_ONE_USER_COUNT)
 		{
@@ -60,20 +64,19 @@ class GenerationStopService
 			return $result->setResult($this->getCurrentState($chatId));
 		}
 
-		if ((int)$session['userId'] !== $userId)
+		if (
+			(int)$session['userId'] !== $userId
+			|| ($messageId !== null && (int)$session['messageId'] !== $messageId)
+		)
 		{
-			// Not the caller's generation: report the neutral "nothing of mine to stop" state
-			// instead of ACCESS_DENIED, so the response does not reveal that a foreign generation
-			// is active. In a one-to-one copilot chat (the only supported scenario here) a foreign
-			// session cannot occur; this is a defensive branch for any future multi-user reuse.
+			// A foreign or replaced turn must not receive this intent or leak its current state.
 			return $result->setResult([
 				'status' => GenerationStatus::Completed->value,
 				'initiatorId' => null,
 			]);
 		}
 
-		// The aiassistant subscriber performs the stop synchronously inside send(): finalize
-		// placeholder, drop session, mark context, system message and the terminal pull signal.
+		// The session may finish while the intent is being recorded; re-read its state afterwards.
 		$this->sendStopEvent(
 			(string)$session['contextId'],
 			$chatId,
@@ -81,10 +84,7 @@ class GenerationStopService
 			(int)$session['messageId'],
 		);
 
-		return $result->setResult([
-			'status' => GenerationStatus::Stopped->value,
-			'initiatorId' => $userId,
-		]);
+		return $result->setResult($this->getCurrentState($chatId));
 	}
 
 	/**
@@ -116,17 +116,23 @@ class GenerationStopService
 	}
 
 	/**
-	 * @return array{status: string, initiatorId: ?int}
+	 * @return array{status: string, initiatorId: ?int, messageId?: int}
 	 */
 	private function getCurrentState(int $chatId): array
 	{
 		$session = $this->findActiveSession($chatId);
 		if ($session !== null)
 		{
-			return [
+			$state = [
 				'status' => GenerationStatus::Generating->value,
 				'initiatorId' => (int)$session['userId'],
 			];
+			if ((int)$session['messageId'] > 0)
+			{
+				$state['messageId'] = (int)$session['messageId'];
+			}
+
+			return $state;
 		}
 
 		// No active session: the generation has already reached a terminal state on its own.

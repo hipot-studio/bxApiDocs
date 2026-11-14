@@ -14,6 +14,19 @@ use Bitrix\Main\Type\DateTime;
  *
  * Coordinates are stored as plain numbers, unlike the ones of a check-in point: an office is picked
  * by the frame of a map, and an encrypted column cannot be compared by a range.
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Office_Query query()
+ * @method static EO_Office_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Office_Result getById($id)
+ * @method static EO_Office_Result getList(array $parameters = [])
+ * @method static EO_Office_Entity getEntity()
+ * @method static \Bitrix\StaffTrack\Internal\Model\Office createObject($setDefaultValues = true)
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficeCollection createCollection()
+ * @method static \Bitrix\StaffTrack\Internal\Model\Office wakeUpObject($row)
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficeCollection wakeUpCollection($rows)
  */
 class OfficeTable extends DataManager
 {

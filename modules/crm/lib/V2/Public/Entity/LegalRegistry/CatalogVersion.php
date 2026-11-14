@@ -31,6 +31,7 @@ final readonly class CatalogVersion
 	 * @param ?string $displayUrl
 	 * @param ?DateTimeImmutable $publishedAt
 	 * @param ?int $publishedBy
+	 * @param ?DraftSettings $draftSettings
 	 * @throws InvalidArgumentException
 	 */
 	public function __construct(
@@ -50,6 +51,7 @@ final readonly class CatalogVersion
 		public ?string $displayUrl = null,
 		public ?DateTimeImmutable $publishedAt = null,
 		public ?int $publishedBy = null,
+		public ?DraftSettings $draftSettings = null,
 	)
 	{
 		foreach ([$id, $documentId, $number, $revision, $publishedBy] as $value)

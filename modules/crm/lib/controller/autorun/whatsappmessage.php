@@ -46,6 +46,15 @@ final class WhatsAppMessage extends Base
 	}
 
 	/**
+	 * The item processing sends a message, which the rollback of the transaction does not undo,
+	 * so a repeat after a transient SQL error could do it twice.
+	 */
+	protected function isRetryOnTransientSqlErrorEnabled(): bool
+	{
+		return false;
+	}
+
+	/**
 	 * The right to send is checked per item, and every such check reads the permission attributes of that
 	 * item from the database. One warm-up per page keeps that from becoming a query per item.
 	 *

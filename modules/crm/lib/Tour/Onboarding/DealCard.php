@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Tour\Onboarding;
 
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tour\Base;
 use Bitrix\Crm\Tour\Mixin\HasEntitySupport;
@@ -74,7 +73,7 @@ class DealCard extends Base
 			return false;
 		}
 
-		if (!$this->isOnboardingAvailable())
+		if (!$this->hasCrmPermission())
 		{
 			return false;
 		}
@@ -116,28 +115,9 @@ class DealCard extends Base
 	}
 
 	/**
-	 * The rollout flag and the CRM permission, and nothing about the age of the portal: the cohort
-	 * of this tour is the newcomer, and newcomers arrive on portals of any age.
+	 * The CRM permission, and nothing about the age of the portal: the cohort of this tour is the
+	 * newcomer, and newcomers arrive on portals of any age.
 	 */
-	protected function isOnboardingAvailable(): bool
-	{
-		return $this->isFeatureEnabled() && $this->hasCrmPermission();
-	}
-
-	protected function isFeatureEnabled(): bool
-	{
-		return $this->isFlagEnabled(Feature\CrmDealCardOnboardingTour::class);
-	}
-
-	/**
-	 * The only place the facade is asked, so that a test can see which flag the tour asks about
-	 * without switching the real one.
-	 */
-	protected function isFlagEnabled(string $flagClassName): bool
-	{
-		return Feature::enabled($flagClassName);
-	}
-
 	protected function hasCrmPermission(): bool
 	{
 		$userId = (int)CurrentUser::get()->getId();

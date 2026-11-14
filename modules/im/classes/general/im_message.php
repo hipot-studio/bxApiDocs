@@ -410,6 +410,9 @@ class CIMMessage
 				$lastId = (int)$arRes['LAST_ID'];
 				//$count = $readService->getCounterService()->getByChat($chatId);
 				$chatObject = Chat::getInstance($chatId);
+				// A cleanup for everyone leaves its border on the chat; a companion the walk of the
+				// cleanup has not reached yet still carries the old relation.
+				$startId = max($startId, $chatObject->getHistoryStartId());
 				$lastIdInChat = $chatObject->getLastMessageId();
 
 				$messageCountFilter = \Bitrix\Main\ORM\Query\Query::filter()

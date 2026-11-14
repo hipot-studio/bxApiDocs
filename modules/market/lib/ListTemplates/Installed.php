@@ -172,6 +172,7 @@ class Installed extends BaseTemplate
 					$this->result['APPS'][$key]['LANDING_TYPE'] = $app['LANDING_TYPE'] ?? null;
 					$this->result['APPS'][$key]['SITE_PREVIEW'] = $app['SITE_PREVIEW'] ?? null;
 					$this->result['APPS'][$key]['IS_SITE_TEMPLATE'] = $app['IS_SITE_TEMPLATE'] ?? null;
+					$this->result['APPS'][$key]['RATING_FLOAT'] = $app['RATING_FLOAT'] ?? null;
 					$this->result['APPS'][$key]['RATING'] = $app['RATING'] ?? null;
 					$this->result['APPS'][$key]['REVIEWS_NUMBER'] = $app['REVIEWS_NUMBER'] ?? null;
 					$this->result['APPS'][$key]['NUM_INSTALLS'] = $app['NUM_INSTALLS'] ?? null;

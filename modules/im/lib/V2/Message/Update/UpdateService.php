@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\File\FileError;
+use Bitrix\Im\V2\Integration\Search\IndexService;
 use Bitrix\Im\V2\Link\File\FileService;
 use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
@@ -206,6 +207,34 @@ class UpdateService
 
 		$this->fireEventAfterMessageUpdate();
 		$this->message->getChat()->onAfterMessageUpdate($this->message);
+		$this->indexUpdatedMessage();
+	}
+
+	/**
+	 * The stored message is read anew: an update arriving by event carries a snapshot of the params of
+	 * its own, while the entry of the index has to describe the message the portal actually keeps.
+	 *
+	 * Only the identifier is handed over: the read of the row happens inside the background job of the
+	 * index service, so a portal with the pipeline off never pays a full row of b_im_message for an
+	 * edit, and deferring it here as well would put that job inside another one.
+	 */
+	private function indexUpdatedMessage(): void
+	{
+		if (!Features::isMessageSearchIndexingEnabled())
+		{
+			return;
+		}
+
+		$messageId = $this->message->getMessageId();
+		if ($messageId === null)
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()
+			->get(IndexService::class)
+			->onMessageUpdatedById($messageId, $this->message->getChat())
+		;
 	}
 
 	private function updateTextDerivedState(): void

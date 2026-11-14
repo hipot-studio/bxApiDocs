@@ -139,8 +139,7 @@ final class LocalDocumentController extends Document\LocalDocumentController
 		);
 		if(!$newFile)
 		{
-			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_CREATE_FILE'), self::ERROR_COULD_NOT_CREATE_FILE)));
-			$this->errorCollection->add($folder->getErrors());
+			$this->addErrorsOfRefusedCreation($folder->getErrors());
 			$this->sendJsonErrorResponse();
 		}
 

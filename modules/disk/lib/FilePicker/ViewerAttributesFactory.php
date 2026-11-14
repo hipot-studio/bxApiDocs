@@ -11,7 +11,9 @@ use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\FileTable;
+use Bitrix\Main\UI\Viewer\ItemAttributes;
 use Bitrix\Main\UI\Viewer\Renderer;
+use Bitrix\Main\UI\Viewer\Transformation\TransformerManager;
 
 /**
  * Builds the viewer attributes of one file for the picker: viewing and downloading only, no action that
@@ -137,7 +139,7 @@ class ViewerAttributesFactory
 			: $this->getUrlForShowFile($file)
 		;
 
-		$attributes = $this->buildFileAttributes($file, $sourceUrl);
+		$attributes = $this->buildItemAttributes($file, $sourceUrl);
 		if ($attributes === null)
 		{
 			return null;
@@ -150,23 +152,23 @@ class ViewerAttributesFactory
 			return null;
 		}
 
-		$isUnifiedLinkItem = $attributes->getTypeClass() === FileAttributes::JS_TYPE_CLASS_UNIFIED_LINK;
-
-		// A separate item other than the unified link one opens a slider (OnlyOffice) or relies on an action
-		// the picker cuts out (board): the picker offers neither, so such a file stays out of the viewer.
-		if ($attributes->issetAttribute(FileAttributes::ATTRIBUTE_SEPARATE_ITEM) && !$isUnifiedLinkItem)
+		if ($attributes->issetAttribute(FileAttributes::ATTRIBUTE_SEPARATE_ITEM))
 		{
 			return null;
 		}
 
 		$attributes
-			->setObjectId((int)$file->getId())
+			->setAttribute(FileAttributes::ATTRIBUTE_OBJECT_ID, (int)$file->getId())
 			->setTitle($file->getName())
-			->setDownloadDisabled(!$canDownload)
 			->clearActions()
 		;
 
-		if (!$isUnifiedLinkItem)
+		if (!$canDownload)
+		{
+			$attributes->setAttribute(FileAttributes::ATTRIBUTE_DOWNLOAD_DISABLED, 'true');
+		}
+
+		if ($attributes instanceof FileAttributes)
 		{
 			$attributes->setUnifiedLinkDisabled();
 		}
@@ -206,11 +208,13 @@ class ViewerAttributesFactory
 	 * A file without its stored record is skipped like an unreadable one. The record comes from the batch;
 	 * a file left out of it is read by its own model and shaped for the item here instead.
 	 *
-	 * The record and the model handed to the attributes are those of the object behind a link, because that
-	 * is the object its stored file, its unique code and therefore its unified link belong to. The item the
-	 * picker answers about stays the link itself: its id, its name, its right to download and its urls.
+	 * A document is built as a plain viewer item: the Disk attributes would turn it into a separate item
+	 * (cloud document, unified link), and the picker offers the embedded viewer only. The record and the
+	 * model handed to the attributes are those of the object behind a link, because the stored file belongs
+	 * to that object. The item the picker answers about stays the link itself: its id, its name, its right
+	 * to download and its urls.
 	 */
-	protected function buildFileAttributes(File $file, string $sourceUrl): ?FileAttributes
+	protected function buildItemAttributes(File $file, string $sourceUrl): ?ItemAttributes
 	{
 		$source = $this->resolveFileSource($file);
 		$fileData = $this->fileDataByObjectId[(int)$file->getId()]
@@ -223,12 +227,46 @@ class ViewerAttributesFactory
 
 		try
 		{
+			if (TypeFile::isDocument($file->getName()))
+			{
+				if ($this->isDocumentRestrictedByTransformationSize($fileData))
+				{
+					return null;
+				}
+
+				return ItemAttributes::buildByFileData($fileData, $sourceUrl);
+			}
+
 			return FileAttributes::buildByFileData($this->withFileObject($fileData, $source), $sourceUrl);
 		}
 		catch (ArgumentException)
 		{
 			return null;
 		}
+	}
+
+	private function isDocumentRestrictedByTransformationSize(array $fileData): bool
+	{
+		if ((string)($fileData['CONTENT_TYPE'] ?? '') === 'application/pdf')
+		{
+			return false;
+		}
+
+		$transformerManager = new TransformerManager();
+		if (!$transformerManager->isAvailable())
+		{
+			return false;
+		}
+
+		$transformation = $transformerManager->buildTransformationByFile($fileData);
+		if ($transformation === null)
+		{
+			return false;
+		}
+
+		$maxSize = $transformation->getInputMaxSize();
+
+		return $maxSize > 0 && (int)($fileData['FILE_SIZE'] ?? 0) > $maxSize;
 	}
 
 	private function withFileObject(array $fileData, File $file): array

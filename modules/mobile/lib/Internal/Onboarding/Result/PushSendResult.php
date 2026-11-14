@@ -23,8 +23,17 @@ class PushSendResult extends Result
 		return $this->isSuccess();
 	}
 
+	/**
+	 * Human-readable reason of the first failure - for the log and the dev harness.
+	 * Code matching belongs to getFailureCode().
+	 */
 	public function getFailureReason(): ?string
 	{
 		return $this->getError()?->getMessage();
+	}
+
+	public function getFailureCode(): int|string|null
+	{
+		return $this->getError()?->getCode();
 	}
 }

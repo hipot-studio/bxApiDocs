@@ -2,12 +2,17 @@
 
 namespace Bitrix\StaffTrack\Internal\Repository;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UserUtils;
 use Bitrix\StaffTrack\Internal\Model\OfficeEmployeeTable;
 use Bitrix\StaffTrack\Internal\Model\OfficeTable;
 
@@ -39,11 +44,14 @@ class OfficeEmployeeRepository
 	 * length of its own answer would call a page the last one while the staff goes on. The cursor is the
 	 * last identifier read for the page, not the last one a caller kept.
 	 *
+	 * A search narrows the same walk by the filter of users the core builds, carried onto the person the
+	 * row points at. A search the core finds no token in is an empty page rather than the whole staff.
+	 *
 	 * @return array{userIds: int[], nextAfterUserId: int, hasMore: bool}
 	 */
-	public function getUserIdsPage(int $officeId, int $afterUserId, int $limit): array
+	public function getUserIdsPage(int $officeId, int $afterUserId, int $limit, string $query = ''): array
 	{
-		$query = OfficeEmployeeTable::query()
+		$pageQuery = OfficeEmployeeTable::query()
 			->setSelect(['USER_ID'])
 			->where('OFFICE_ID', $officeId)
 			->where('USER_ID', '>', $afterUserId)
@@ -51,7 +59,22 @@ class OfficeEmployeeRepository
 			->setLimit($limit + 1)
 		;
 
-		$rows = $this->onlyWorkingEmployees($query)->fetchAll();
+		if ($query !== '')
+		{
+			$searchFilter = $this->getUserSearchFilter($query);
+			if (!$this->hasSearchToken($searchFilter))
+			{
+				return [
+					'userIds' => [],
+					'nextAfterUserId' => $afterUserId,
+					'hasMore' => false,
+				];
+			}
+
+			$pageQuery->setFilter($this->moveOntoUser($searchFilter));
+		}
+
+		$rows = $this->onlyWorkingEmployees($pageQuery)->fetchAll();
 
 		$hasMore = count($rows) > $limit;
 		$userIds = array_map(
@@ -277,11 +300,90 @@ class OfficeEmployeeRepository
 	}
 
 	/**
+	 * The rows of exact pairs in one statement, whatever number of offices the people come from. A person
+	 * whose row is in another office than the pair names keeps it: the condition on the office holds for
+	 * every pair, and only the outer set of people keeps the statement on the unique key of a person.
+	 *
+	 * @param array<int, int> $moves user id => the office their row is taken from; at most WRITE_CHUNK_SIZE
+	 * @throws ArgumentException when the chunk is larger than one statement carries
+	 */
+	public function deleteByPairs(array $moves): Result
+	{
+		if ($moves === [])
+		{
+			return new Result();
+		}
+
+		if (count($moves) > self::WRITE_CHUNK_SIZE)
+		{
+			throw new ArgumentException('At most ' . self::WRITE_CHUNK_SIZE . ' pairs per call', 'moves');
+		}
+
+		$userIdsByOffice = [];
+
+		foreach ($moves as $userId => $officeId)
+		{
+			$userIdsByOffice[(int)$officeId][] = (int)$userId;
+		}
+
+		$byOffice = ['LOGIC' => 'OR'];
+
+		foreach ($userIdsByOffice as $officeId => $userIds)
+		{
+			$byOffice[] = [
+				'=OFFICE_ID' => $officeId,
+				'@USER_ID' => $userIds,
+			];
+		}
+
+		return $this->deleteByFilter([
+			'@USER_ID' => array_map('intval', array_keys($moves)),
+			$byOffice,
+		]);
+	}
+
+	/**
 	 * The whole staff of an office at once: an office leaving the directory takes its assignments with it.
 	 */
 	public function deleteByOfficeId(int $officeId): Result
 	{
 		return $this->deleteByFilter(['=OFFICE_ID' => $officeId]);
+	}
+
+	/**
+	 * The whole staff of an office handed over to another one in a single statement: every row it has,
+	 * the dismissed and the service records included, so nobody is read and a staff of any size costs the
+	 * same one statement. A moved row is a new assignment - the one who moved it and the moment of the
+	 * move replace the author and the date it had.
+	 *
+	 * Neither unique key can break: a person keeps the one row they had, and no other office holds a row
+	 * of theirs. A failure comes back as an error for the reason and in the shape of
+	 * {@see self::deleteByFilter()}; the caller holds the transaction.
+	 */
+	public function moveAllToOffice(int $fromOfficeId, int $toOfficeId, int $movedBy): Result
+	{
+		$result = new Result();
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
+		try
+		{
+			$connection->queryExecute(
+				'UPDATE ' . $sqlHelper->quote(OfficeEmployeeTable::getTableName())
+				. ' SET ' . $sqlHelper->quote('OFFICE_ID') . ' = ' . $toOfficeId
+				. ', ' . $sqlHelper->quote('CREATED_BY') . ' = ' . $movedBy
+				. ', ' . $sqlHelper->quote('DATE_CREATE') . ' = ' . $sqlHelper->convertToDbDateTime(new DateTime())
+				. ' WHERE ' . $sqlHelper->quote('OFFICE_ID') . ' = ' . $fromOfficeId,
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			return $result->addError(new Error(
+				$exception::class . ' at ' . $exception->getFile() . ':' . $exception->getLine(),
+			));
+		}
+
+		return $result;
 	}
 
 	/**
@@ -311,6 +413,88 @@ class OfficeEmployeeRepository
 	}
 
 	/**
+	 * The filter of users the core builds for a search: a full-text one where the portal keeps the index
+	 * of names, a fallback one of nested conditions where it does not.
+	 */
+	protected function getUserSearchFilter(string $query): array
+	{
+		return UserUtils::getUserSearchFilter(['FIND' => $query]);
+	}
+
+	/**
+	 * A full-text condition without a token is dropped from the query silently, and the page would then
+	 * be the whole staff instead of nobody.
+	 */
+	private function hasSearchToken(array $filter): bool
+	{
+		if ($filter === [])
+		{
+			return false;
+		}
+
+		foreach ($filter as $key => $condition)
+		{
+			if (is_int($key))
+			{
+				if (is_array($condition) && !$this->hasSearchToken($condition))
+				{
+					return false;
+				}
+
+				continue;
+			}
+
+			[$operator] = $this->splitCondition($key);
+			$isFullText = $operator === '*' || $operator === '*=';
+
+			if ($isFullText && Filter\Helper::parseFulltextPhrase((string)$condition) === [])
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * The filter of the core names the fields of a user, and the staff is read from the rows of
+	 * assignment, so every field is reached through the person the row points at.
+	 */
+	private function moveOntoUser(array $filter): array
+	{
+		$moved = [];
+
+		foreach ($filter as $key => $condition)
+		{
+			if (is_int($key))
+			{
+				$moved[$key] = is_array($condition) ? $this->moveOntoUser($condition) : $condition;
+			}
+			elseif ($key === 'LOGIC')
+			{
+				$moved[$key] = $condition;
+			}
+			else
+			{
+				[$operator, $field] = $this->splitCondition($key);
+				$moved[$operator . 'USER.' . $field] = $condition;
+			}
+		}
+
+		return $moved;
+	}
+
+	/**
+	 * @return array{0: string, 1: string} the operator of a condition and the field it is put on
+	 */
+	private function splitCondition(string $key): array
+	{
+		preg_match('/^(\W*)(.*)$/s', $key, $parts);
+
+		return [$parts[1], $parts[2]];
+	}
+
+	/**
 	 * The working staff of the company and nobody else: a dismissed account and a service record both
 	 * keep their row and both stay out of every read. No reading query may skip this - a count taken
 	 * without it and a page taken with it would disagree on everyone who has left.
@@ -319,7 +503,7 @@ class OfficeEmployeeRepository
 	{
 		return $query
 			->where('USER.ACTIVE', 'Y')
-			->where('USER.IS_REAL_USER', 'Y')
+			->where('USER.REAL_USER', 'expr', true)
 		;
 	}
 }

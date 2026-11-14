@@ -2,13 +2,13 @@
 
 namespace Bitrix\Calendar\Core\Queue\Rule;
 
+use Bitrix\Calendar\Core\Base\SingletonTrait;
 use Bitrix\Calendar\Core\Queue\Exception\InvalidRuleException;
 use Bitrix\Calendar\Core\Queue\Interfaces\RouteRule;
 use Bitrix\Calendar\Core\Queue\Rule\Rules\EventAttendeesUpdateRule;
 use Bitrix\Calendar\Core\Queue\Rule\Rules\EventDelayedSyncRule;
 use Bitrix\Calendar\Core\Queue\Rule\Rules\EventWithEntityAttendeesFindRule;
 use Bitrix\Calendar\Core\Queue\Rule\Rules\PushDelayedRule;
-use Bitrix\Calendar\Core\Base\SingletonTrait;
 use Bitrix\Calendar\Core\Queue\Rule\Rules\SendingEmailNotificationRule;
 
 class Registry

@@ -40,13 +40,14 @@ final class TargetDocumentResolver implements TargetDocumentResolverInterface
 			;
 		}
 
+		if (Resolver::hasTargetFilter($activity))
+		{
+			return is_array($documentId) ? $documentId : [];
+		}
+
 		if (is_array($documentId))
 		{
 			return $documentId;
-		}
-		if (Resolver::hasTargetFilter($activity))
-		{
-			return [];
 		}
 
 		$fallbackDocumentId = self::resolveFallbackDocumentId($activity);
@@ -155,4 +156,5 @@ final class TargetDocumentResolver implements TargetDocumentResolverInterface
 
 		return (int)$entityTypeId > 0 ? (int)$entityTypeId : null;
 	}
+
 }

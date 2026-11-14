@@ -33,6 +33,7 @@ use Bitrix\Rest\V3\Structure\Filtering\Expressions\ColumnExpression;
 use Bitrix\Rest\V3\Structure\Filtering\Expressions\Expression;
 use Bitrix\Rest\V3\Structure\Filtering\Expressions\LengthExpression;
 use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Filtering\Operator;
 use Bitrix\Rest\V3\Structure\Ordering\OrderItem;
 use Bitrix\Rest\V3\Structure\Ordering\OrderStructure;
 use Bitrix\Rest\V3\Structure\PaginationStructure;
@@ -224,9 +225,10 @@ class OrmRepository extends Repository
 				continue;
 			}
 			$dtoProperty = self::mapOrmFieldToDtoProperty($key);
-			if ($value !== null && isset($dtoFields[$dtoProperty]))
+			$fieldMeta = $value !== null ? $dtoFields->getMeta($dtoProperty) : null;
+			if ($fieldMeta !== null)
 			{
-				$propertyType = $dtoFields[$dtoProperty]->getPropertyType();
+				$propertyType = $fieldMeta->getPropertyType();
 				if (TypeHelper::isBackedEnum($propertyType))
 				{
 					$value = self::coerceOrmValueToEnum($propertyType, $value, $dtoProperty);
@@ -276,6 +278,15 @@ class OrmRepository extends Repository
 			$ormFields = array_unique(array_merge($ormFields, $ormEntityRelationFields));
 		}
 
+		// a select of embedded DTOs only has no columns, and an empty ORM select means all of them
+		if (empty($ormFields) && !$select->isEmpty())
+		{
+			/** @var DataManager $dataClass */
+			$dataClass = $this->dataClass;
+
+			return $dataClass::getEntity()->getPrimaryArray();
+		}
+
 		return $ormFields;
 	}
 
@@ -297,6 +308,15 @@ class OrmRepository extends Repository
 			{
 				if ($condition instanceof Condition)
 				{
+					if (self::isEmptySetCondition($condition))
+					{
+						// An empty set matches nothing, while the ORM would write the invalid `IN ()` for it.
+						// The negation of a group still turns the always false condition into a true one.
+						$query->whereExpr('(1 = 0)', []);
+
+						continue;
+					}
+
 					$query->where($this->convertFilterCondition($condition));
 				}
 				elseif ($condition instanceof FilterStructure)
@@ -313,6 +333,11 @@ class OrmRepository extends Repository
 		}
 
 		return null;
+	}
+
+	private static function isEmptySetCondition(Condition $condition): bool
+	{
+		return $condition->getOperator() === Operator::In && $condition->getRightOperand() === [];
 	}
 
 	protected function prepareOrder(?OrderStructure $order = null): array
@@ -572,6 +597,11 @@ class OrmRepository extends Repository
 
 	public static function mapDtoPropertyToOrmField(string $property): string
 	{
+		if (str_starts_with($property, 'UF_'))
+		{
+			return $property;
+		}
+
 		return strtoupper(StringHelper::camel2snake($property));
 	}
 

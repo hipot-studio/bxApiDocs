@@ -10,6 +10,7 @@ class CallLogIndex
 	private const CHARS_TO_REPLACE = ['(', ')', '[', ']', '{', '}', '<', '>', '-', '#', '"', '\''];
 
 	private int $callLogId;
+	private ?int $ownerId = null;
 	private array $phoneNumbers = [];
 	private array $userNames = [];
 	private string $title = '';
@@ -31,6 +32,23 @@ class CallLogIndex
 	public function setCallLogId(int $callLogId): CallLogIndex
 	{
 		$this->callLogId = $callLogId;
+		return $this;
+	}
+
+	/**
+	 * The user whose row of the journal this is. The index holds one row per participant of a call, so the owner
+	 * belongs to the row and not to the call behind it.
+	 *
+	 * Null when nobody was named: no user has a non-positive id.
+	 */
+	public function getOwnerId(): ?int
+	{
+		return $this->ownerId;
+	}
+
+	public function setOwnerId(int $ownerId): CallLogIndex
+	{
+		$this->ownerId = $ownerId > 0 ? $ownerId : null;
 		return $this;
 	}
 

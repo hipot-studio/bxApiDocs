@@ -21,10 +21,26 @@ class DownloadHelper
 	/**
 	 * Check if remote server supports Range requests and get file size.
 	 *
+	 * The timeouts are those of the download by default, which takes this HEAD before it chooses
+	 * how to fetch the file {@see DownloaderFactory::create()}. A caller that asks the address on
+	 * behalf of somebody waiting for the answer passes shorter ones of its own
+	 * {@see \Bitrix\Call\Track\TrackService::DELIVERY_PROBE_CONNECT_TIMEOUT},
+	 * {@see \Bitrix\Call\Track\TrackService::DELIVERY_PROBE_READ_TIMEOUT}.
+	 *
 	 * @param string $url Download URL
-	 * @return array{supports_range: bool, file_size: int, error: ?string}
+	 * @param int $connectTimeout seconds to wait for the connection
+	 * @param int $streamTimeout seconds to wait for the answer once connected
+	 * @return array{supports_range: bool, file_size: int, content_type: string, status: int,
+	 *     error: ?string} `status` is the http status the HEAD was answered with, and zero where
+	 *     it was not answered at all - the caller that refuses a replacement by this probe tells
+	 *     "the file is not there" from "the address could not be asked" by it
+	 *     {@see \Bitrix\Call\Track\TrackService::replaceLocalCopy()}
 	 */
-	public static function checkRangeSupport(string $url): array
+	public static function checkRangeSupport(
+		string $url,
+		int $connectTimeout = DownloadPolicy::DEFAULT_CONNECT_TIMEOUT,
+		int $streamTimeout = DownloadPolicy::DEFAULT_STREAM_TIMEOUT
+	): array
 	{
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
@@ -33,15 +49,17 @@ class DownloadHelper
 			'supports_range' => false,
 			'file_size' => 0,
 			'content_type' => '',
+			'status' => 0,
 			'error' => null,
 		];
 
 		$log && $logger->info("DownloadHelper::checkRangeSupport: HEAD request to {$url}");
 
-		$httpClient = self::createHttpClient();
+		$httpClient = self::createHttpClient($connectTimeout, $streamTimeout);
 		$httpClient->head($url);
 
-		$status = $httpClient->getStatus();
+		$status = (int)$httpClient->getStatus();
+		$result['status'] = $status;
 		if ($status !== 200)
 		{
 			$result['error'] = 'HEAD request failed with status: ' . $status;
@@ -118,12 +136,24 @@ class DownloadHelper
 
 	/**
 	 * Create configured HttpClient instance: the client of the track policy, which the chunks of
-	 * {@see ChunkedDownloader} are requested with as well.
+	 * {@see ChunkedDownloader} are requested with as well. Without arguments it is exactly that
+	 * client; other timeouts replace only the timeouts of the policy {@see DownloadPolicy::withTimeouts()}.
 	 *
+	 * @param int $connectTimeout seconds to wait for the connection
+	 * @param int $streamTimeout seconds a response may stay silent (CURLOPT_LOW_SPEED_TIME)
 	 * @return HttpClient
 	 */
-	public static function createHttpClient(): HttpClient
+	public static function createHttpClient(
+		int $connectTimeout = DownloadPolicy::DEFAULT_CONNECT_TIMEOUT,
+		int $streamTimeout = DownloadPolicy::DEFAULT_STREAM_TIMEOUT
+	): HttpClient
 	{
-		return DownloadPolicy::forTracks()->createHttpClient();
+		$policy = DownloadPolicy::forTracks();
+		if ($connectTimeout !== $policy->connectTimeout || $streamTimeout !== $policy->streamTimeout)
+		{
+			$policy = $policy->withTimeouts($connectTimeout, $streamTimeout);
+		}
+
+		return $policy->createHttpClient();
 	}
 }

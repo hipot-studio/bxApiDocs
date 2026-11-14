@@ -190,6 +190,7 @@ final class ProviderRegistry implements ProviderRegistryInterface, TimelineParti
 		): ActivityProviderInterface => $descriptor->createProvider() ?? new LegacyProviderAdapter(
 			$descriptor->getClassName(),
 			$descriptor->getTimelineCapabilities(),
+			$descriptor->getTimelineTypeCatalog(),
 		);
 	}
 
@@ -487,6 +488,9 @@ final class ProviderRegistry implements ProviderRegistryInterface, TimelineParti
 			isRelatedFilterProvider: $isRelatedFilterProvider,
 			providesLegacyInstance: $providesLegacyInstance,
 			timelineCapabilities: self::timelineCapabilitiesOf($className),
+			timelineTypeCatalog: method_exists($className, 'createTimelineTypeCatalog')
+				? static fn(): ?ActivityProviderTypeCatalogInterface => $className::createTimelineTypeCatalog()
+				: null,
 		);
 	}
 

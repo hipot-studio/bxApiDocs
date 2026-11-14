@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\Tasks\Service\Transcription;
 
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Duplicate\DuplicateCheckService;
 use Bitrix\Im\V2\Integration\AI\TaskCreation\Status;
 use Bitrix\Im\V2\Integration\AI\Transcription\LaunchType;
 use Bitrix\Im\V2\Message;
@@ -11,7 +12,7 @@ use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Pull\Event\AutoTaskStatus;
 
 /**
- * Creates one task from several selected messages (AI multiselect, SC-002): validates the
+ * Creates tasks from several selected messages (AI multiselect, SC-002): validates the
  * AI verdict, reports statuses by the anchor message and delegates the task pipeline to
  * TranscribedTaskHandler, forwarding the whole selection to the task chat.
  *
@@ -27,6 +28,8 @@ class MultipleMessagesTaskHandler
 
 	public function __construct(
 		private readonly TranscribedTaskHandler $taskHandler,
+		private readonly TaskDataExtractor $taskDataExtractor = new TaskDataExtractor(),
+		private readonly DuplicateCheckService $duplicateCheckService = new DuplicateCheckService(),
 	)
 	{
 	}
@@ -42,10 +45,24 @@ class MultipleMessagesTaskHandler
 		int $initiatorId,
 		LaunchType $launchType = LaunchType::Auto,
 		bool $isPartial = false,
+		string $sourceText = '',
 	): bool
 	{
 		$verdict = EntityType::tryFrom($data[self::TYPE_FIELD] ?? '');
 		$taskData = is_array($data[self::TASK_DATA_FIELD] ?? null) ? $data[self::TASK_DATA_FIELD] : [];
+
+		if ($launchType === LaunchType::Auto && $verdict === EntityType::Task)
+		{
+			return $this->createTasks(
+				$this->taskDataExtractor->extract($data),
+				$messages,
+				$anchor,
+				$initiatorId,
+				false,
+				$isPartial,
+				$sourceText,
+			);
+		}
 
 		if ($verdict === EntityType::Task && !empty($taskData))
 		{
@@ -60,13 +77,14 @@ class MultipleMessagesTaskHandler
 				$taskData = TranscribedTaskHandler::withoutSingleItemCheckLists($taskData);
 			}
 
-			return $this->createTask(
-				$taskData,
+			return $this->createTasks(
+				[$taskData],
 				$messages,
 				$anchor,
 				$initiatorId,
 				false,
 				$isPartial,
+				$sourceText,
 			);
 		}
 
@@ -82,44 +100,74 @@ class MultipleMessagesTaskHandler
 		$taskData = TranscribedTaskHandler::buildFallbackTaskData($taskData);
 		$taskData = TranscribedTaskHandler::withoutSingleItemCheckLists($taskData);
 
-		return $this->createTask(
-			$taskData,
+		return $this->createTasks(
+			[$taskData],
 			$messages,
 			$anchor,
 			$initiatorId,
 			true,
 			$isPartial,
+			$sourceText,
 		);
 	}
 
-	private function createTask(
-		array $taskData,
+	private function createTasks(
+		array $tasksData,
 		MessageCollection $messages,
 		Message $anchor,
 		int $initiatorId,
 		bool $builtWithoutVerdict,
 		bool $isPartial,
+		string $sourceText,
 	): bool
 	{
-		(new AutoTaskStatus($anchor, $initiatorId, Status::TaskCreationStarted, true))->send();
-
-		$created = $this->taskHandler->handle(
-			$taskData,
-			$anchor,
-			$initiatorId,
-			$messages,
-			$builtWithoutVerdict,
-			$isPartial,
-		);
-		if (!$created)
+		if ($tasksData === [])
 		{
-			// the delegate can fail without a terminal status (tasks module off, mapper null
-			// or a SystemException in add); without this the initiator panel hangs forever.
-			// On success TaskCreationCompleted is sent from ChatTaskLinkService, so there is
-			// no double terminal here.
 			(new AutoTaskStatus($anchor, $initiatorId, Status::NotFound))->send();
+
+			return false;
 		}
 
-		return $created;
+		(new AutoTaskStatus($anchor, $initiatorId, Status::TaskCreationStarted, true))->send();
+
+		$createdCount = 0;
+		$deferredCount = 0;
+		foreach ($tasksData as $taskData)
+		{
+			$outcome = $this->taskHandler->handle(
+				$taskData,
+				$anchor,
+				$initiatorId,
+				$messages,
+				$builtWithoutVerdict,
+				$isPartial,
+				withTerminalStatus: false,
+				sourceText: $sourceText,
+			);
+
+			match ($outcome)
+			{
+				TaskCreationOutcome::Created => $createdCount++,
+				TaskCreationOutcome::Deferred => $deferredCount++,
+				TaskCreationOutcome::Failed => null,
+			};
+		}
+
+		if ($deferredCount > 0)
+		{
+			$this->duplicateCheckService->finalizeBatch($anchor, $initiatorId, $createdCount);
+
+			return true;
+		}
+
+		(new AutoTaskStatus(
+			$anchor,
+			$initiatorId,
+			$createdCount > 0 ? Status::TaskCreationCompleted : Status::NotFound,
+			true,
+			$isPartial,
+		))->send();
+
+		return $createdCount > 0;
 	}
 }

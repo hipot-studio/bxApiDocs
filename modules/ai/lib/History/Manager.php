@@ -201,7 +201,7 @@ class Manager
 
 			while($groupItem = $groupRes->fetch())
 			{
-				if ($collection[$groupItem['GROUP_ID']])
+				if (isset($collection[$groupItem['GROUP_ID']]))
 				{
 					$collection[$groupItem['GROUP_ID']]->addGroupData($groupItem['RESULT_TEXT']);
 				}

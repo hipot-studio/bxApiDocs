@@ -7,6 +7,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main;
+use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Rest\Internal\Access\AppAccessChecker;
 use Bitrix\Rest\Internal\Integration\Market\ApplicationLimitProvider;
 use Bitrix\Rest\Internal\Service\Application\ApplicationInstallationFinalizer;
@@ -22,6 +23,7 @@ use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Public\Command\Application\Access\SetAppAccessCommand;
 use Bitrix\Rest\Public\Provider\ApplicationProvider;
+use Bitrix\Rest\Public\Service\AppSystemUserDecisionService;
 use CRestUtil;
 
 Loc::loadMessages(__FILE__);
@@ -112,7 +114,14 @@ class Application
 		return $fallback;
 	}
 
-	public static function install($code, $version = false, $checkHash = false, $installHash = false, $from = null) : array
+	public static function install(
+		$code,
+		$version = false,
+		$checkHash = false,
+		$installHash = false,
+		$from = null,
+		bool $createSystemUser = false,
+	) : array
 	{
 		$result = [];
 
@@ -291,7 +300,22 @@ class Application
 						}
 
 						$appId = $addResult->isSuccess() ? (int)$addResult->getId() : 0;
-						if ($appId > 0 && $requiresFinalization)
+						if ($appId > 0)
+						{
+							try
+							{
+								(new AppSystemUserDecisionService())->saveInstallDecision(
+									$appId,
+									$existingApp,
+									$createSystemUser,
+								);
+							}
+							catch (PersistenceException $exception)
+							{
+								Main\Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+							}
+						}
+						if ($appId > 0 && $addResult->isSuccess() && $requiresFinalization)
 						{
 							$addResult = (new ApplicationInstallationFinalizer())->finalize(
 								$appId,
@@ -307,6 +331,7 @@ class Application
 						{
 							if ($existingApp !== null)
 							{
+								AppLangTable::deleteByApp($appId);
 								AppLogTable::log($appId, AppLogTable::ACTION_TYPE_UPDATE);
 							}
 							else

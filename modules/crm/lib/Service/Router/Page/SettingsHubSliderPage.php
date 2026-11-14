@@ -89,7 +89,7 @@ final class SettingsHubSliderPage extends AbstractPage
 			new PermissionValidator(
 				fn (): bool => $this->item !== null
 					&& $this->item->isVisible($this->userPermissions)
-					&& $this->item->canRead($this->userPermissions),
+					&& $this->item->checkAvailability($this->userPermissions)->isSuccess(),
 			),
 		];
 	}

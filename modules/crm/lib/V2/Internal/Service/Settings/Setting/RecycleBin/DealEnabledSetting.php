@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class DealEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.recycle_bin.deal.enabled';
+	public const ID = 'crm.recycle_bin.deal.enabled';
 
 	private readonly DealSettings $dealSettings;
 
@@ -26,18 +26,20 @@ final class DealEnabledSetting extends AbstractSetting
 		$this->dealSettings = $dealSettings ?? DealSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'enable_deal_recycle_bin',
 		);
 	}
 

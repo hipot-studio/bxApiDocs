@@ -18,7 +18,7 @@ use Bitrix\Main\Result;
  */
 final class PublicBitrix24SignatureEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.invoice.public_bitrix24_signature.enabled';
+	public const ID = 'crm.invoice.public_bitrix24_signature.enabled';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly InvoiceSettings $invoiceSettings;
@@ -28,18 +28,18 @@ final class PublicBitrix24SignatureEnabledSetting extends AbstractSetting
 		$this->invoiceSettings = $invoiceSettings ?? InvoiceSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
 		);
 	}
 

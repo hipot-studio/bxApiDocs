@@ -116,6 +116,7 @@ class Callback
 					'APPLICATION_TOKEN',
 					'CONNECTOR_ID',
 					'INTEGRATION_ID',
+					'OPTIONS',
 					'APP_CODE' => 'REST_APP.CLIENT_ID',
 					'APP_STATUS' => 'REST_APP.STATUS',
 					'APP_ACTIVE' => 'REST_APP.ACTIVE',

@@ -13,8 +13,8 @@ final class ManagedTabPresetStateWriter implements TabPresetStateWriter
 		private readonly Manager $manager,
 		private readonly int $userId,
 		private readonly string $siteId,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly UserPresetStateService $stateService = new UserPresetStateService(),
-		private readonly MobileMenuCacheInvalidator $cacheInvalidator = new MobileMenuCacheInvalidator(),
 		private readonly bool $deferCacheInvalidation = false,
 		?TabPresetConfigProvider $configProvider = null,
 		?ManagedPresetService $managedPresetService = null,
@@ -91,7 +91,8 @@ final class ManagedTabPresetStateWriter implements TabPresetStateWriter
 	private function getManagedPresetService(): ManagedPresetService
 	{
 		return $this->managedPresetService ??= new ManagedPresetService(
-			$this->manager,
+			manager: $this->manager,
+			cacheInvalidator: $this->cacheInvalidator,
 			stateService: $this->stateService,
 		);
 	}

@@ -10,6 +10,9 @@ use Bitrix\Disk\Infrastructure\Controller\HtmlViewerRefusalResponse;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Command\BaseObject\CreateByContentCommand;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
+use Bitrix\Disk\Internal\Service\HtmlEditor\SessionService;
+use Bitrix\Disk\Internal\Service\HtmlEditor\SaveService;
+use Bitrix\Disk\Internal\Service\HtmlEditor\SourceResolver;
 use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Disk\Internal\Service\TiffPreviewService;
 use Bitrix\Disk\Internals\Engine;
@@ -70,8 +73,152 @@ class File extends BaseObject
 		$configureActions['showTiffPreview']['+prefilters'][] = new Main\Engine\ActionFilter\HttpMethod([
 			Main\Engine\ActionFilter\HttpMethod::METHOD_GET,
 		]);
+		foreach ([
+			'acquireHtmlEditingSession',
+			'finishHtmlEditingSession',
+			'saveHtmlEditingSession',
+		] as $actionName)
+		{
+			$configureActions[$actionName] = [
+				'-prefilters' => [Engine\ActionFilter\CheckReadPermission::class],
+				'+prefilters' => [new Main\Engine\ActionFilter\HttpMethod([
+					Main\Engine\ActionFilter\HttpMethod::METHOD_POST,
+				])],
+			];
+		}
+		$configureActions['saveHtmlEditingSession']['+prefilters'][] = new Main\Engine\ActionFilter\ContentType([
+			Main\Engine\ActionFilter\ContentType::JSON,
+			'application/x-www-form-urlencoded',
+			'multipart/form-data',
+		]);
 
 		return $configureActions;
+	}
+
+	public function acquireHtmlEditingSessionAction(
+		Disk\File $file,
+		?int $attachedObjectId = null,
+		?string $uniqueCode = null,
+	): ?array
+	{
+		$realFile = $file->getRealObject();
+		$shouldCheckUnifiedLink = $realFile instanceof Disk\File
+			&& $this->hasMatchingUniqueCode($realFile, $uniqueCode)
+		;
+		$sourceResult = (new SourceResolver())->resolve(
+			$file,
+			(int)$this->getCurrentUser()->getId(),
+			$attachedObjectId,
+			$shouldCheckUnifiedLink,
+		);
+		if (!$sourceResult->isSuccess())
+		{
+			$this->addErrors($sourceResult->getErrors());
+
+			return null;
+		}
+
+		$source = $sourceResult->getData();
+		/** @var Disk\File $realFile */
+		$realFile = $source['file'];
+		$result = (new SessionService())->acquireWithContent(
+			$realFile,
+			$source['securityContext'],
+			$source['attachedObject'],
+			$shouldCheckUnifiedLink,
+		);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return [
+			'state' => $result->getData()['state']->toArray(),
+			'contentBase64' => base64_encode($result->getData()['content']),
+		];
+	}
+
+	public function finishHtmlEditingSessionAction(Disk\File $file, string $sessionHash): ?array
+	{
+		$result = $this->finishHtmlSession($file, $sessionHash);
+
+		return $result?->getData();
+	}
+
+	public function saveHtmlEditingSessionAction(
+		Disk\File $file,
+		string $sessionHash,
+		int $globalContentVersion,
+		array $changeSet,
+		?string $uniqueCode = null,
+	): ?array
+	{
+		$realFile = $file->getRealObject();
+		$shouldCheckUnifiedLink = $realFile instanceof Disk\File
+			&& $this->hasMatchingUniqueCode($realFile, $uniqueCode)
+		;
+		$securityContext = $realFile instanceof Disk\File
+			? $realFile->getStorage()?->getSecurityContext(
+				(int)$this->getCurrentUser()->getId(),
+				$shouldCheckUnifiedLink,
+			)
+			: null
+		;
+		if (!$realFile instanceof Disk\File || $securityContext === null)
+		{
+			$this->addError(new Main\Error('access_denied', 'access_denied'));
+
+			return null;
+		}
+
+		$result = (new SaveService())->save(
+			$realFile,
+			$securityContext,
+			$sessionHash,
+			$globalContentVersion,
+			$changeSet,
+			$shouldCheckUnifiedLink,
+		);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return [
+			'ok' => true,
+			'version' => $result->getData()['version'],
+			'contentBase64' => $result->getData()['contentBase64'],
+			'state' => $result->getData()['state']->toArray(),
+		];
+	}
+
+	private function finishHtmlSession(Disk\File $file, string $sessionHash): ?Main\Result
+	{
+		$realFile = $file->getRealObject();
+		$securityContext = $realFile instanceof Disk\File
+			? $realFile->getStorage()?->getSecurityContext((int)$this->getCurrentUser()->getId())
+			: null
+		;
+		if (!$realFile instanceof Disk\File || $securityContext === null)
+		{
+			$this->addError(new Main\Error('access_denied', 'access_denied'));
+
+			return null;
+		}
+
+		$result = (new SessionService())->finishOwned($realFile, $securityContext, $sessionHash);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result;
 	}
 
 	public function getPrimaryAutoWiredParameter()
@@ -309,6 +456,14 @@ class File extends BaseObject
 			objectId: $file->getId(),
 			uls: $uls,
 		);
+	}
+
+	private function hasMatchingUniqueCode(Disk\File $file, ?string $uniqueCode): bool
+	{
+		return $uniqueCode !== null
+			&& $uniqueCode !== ''
+			&& hash_equals((string)$file->getUniqueCode(), $uniqueCode)
+		;
 	}
 
 	public function showMarkdownAction(Disk\File $file): ?array

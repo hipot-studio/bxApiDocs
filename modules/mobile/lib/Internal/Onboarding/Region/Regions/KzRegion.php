@@ -11,7 +11,7 @@ class KzRegion
 	public function __invoke(RegionConfig $cfg): void
 	{
 		$cfg->setTimeSend('10:00');
-		$cfg->setMaxPortalAgeDays(18);
+		$cfg->setMaxPortalAgeDays(19);
 
 		$cfg->onDay(2, function (DayConfig $day): void {
 			$day->setType(PushType::INVITE)

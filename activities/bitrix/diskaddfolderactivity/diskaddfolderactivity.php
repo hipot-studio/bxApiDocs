@@ -123,10 +123,7 @@ class CBPDiskAddFolderActivity
 
 		if(!$newFolder && $folder->getErrorByCode(\Bitrix\Disk\BaseObject::ERROR_NON_UNIQUE_NAME))
 		{
-			$newFolder = \Bitrix\Disk\Folder::load([
-				'=NAME' => $folderName,
-				'PARENT_ID' => $folder->getId()
-			]);
+			$newFolder = $folder->getChildFolderWithSameName($folderName);
 		}
 		if ($newFolder)
 		{

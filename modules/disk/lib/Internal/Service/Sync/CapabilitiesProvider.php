@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\Sync;
 
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\CapabilitiesDto;
 use Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\ObjectCardDto;
 use Bitrix\Disk\Infrastructure\Rest\V3\Structure\Sync\SectionsStructure;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkOpenPolicy;
 use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
 
 /**
@@ -24,7 +26,7 @@ final class CapabilitiesProvider
 	 * The version of the contour's schema as a whole. It moves when the shape of the answers
 	 * changes, not when a number in them does.
 	 */
-	public const SCHEMA_VERSION = 1;
+	public const SCHEMA_VERSION = 2;
 
 	/** @var string[] */
 	public const ENTITY_TYPES = [ObjectCardDto::TYPE_FILE, ObjectCardDto::TYPE_FOLDER];
@@ -37,19 +39,24 @@ final class CapabilitiesProvider
 	private const CHANGE_NOTIFICATION_SUPPORTED = false;
 
 	private SyncLimits $limits;
+	private ExternalLinkOpenPolicy $linkPolicy;
 
-	public function __construct(?SyncLimits $limits = null)
+	public function __construct(?SyncLimits $limits = null, ?ExternalLinkOpenPolicy $linkPolicy = null)
 	{
 		$this->limits = $limits ?? new SyncLimits();
+		$this->linkPolicy = $linkPolicy ?? ExternalLinkOpenPolicy::fromPortalConfiguration();
 	}
 
 	public function get(): CapabilitiesDto
 	{
 		$capabilities = new CapabilitiesDto();
+		$boardIndexEnabled = Configuration::isBoardIndexEnabled();
 
-		$capabilities->schemaVersion = self::SCHEMA_VERSION;
+		$capabilities->schemaVersion = $boardIndexEnabled ? self::SCHEMA_VERSION : 1;
 		$capabilities->entityTypes = self::ENTITY_TYPES;
-		$capabilities->changeTypes = self::getChangeTypes();
+		$capabilities->changeTypes = $boardIndexEnabled
+			? self::getChangeTypes()
+			: array_values(array_diff(self::getChangeTypes(), [ChangeType::IndexUpdated->value]));
 		$capabilities->pageSizeMax = $this->limits->getPageSizeMax();
 		$capabilities->pageSizeMaxHeavy = $this->limits->getPageSizeMaxHeavy();
 		$capabilities->journalRetentionDays = $this->limits->getJournalRetentionDays();
@@ -60,6 +67,10 @@ final class CapabilitiesProvider
 		$capabilities->pollIntervalMaxSeconds = $this->limits->getPollIntervalMaxSeconds();
 		$capabilities->cardSections = self::describeCardSections();
 		$capabilities->changeNotificationSupported = self::CHANGE_NOTIFICATION_SUPPORTED;
+		$capabilities->publicLinkPolicy = [
+			'manualLinks' => $this->linkPolicy->allowsManualLinks(),
+			'boardLinks' => $this->linkPolicy->allowsBoardLinks(),
+		];
 
 		return $capabilities;
 	}

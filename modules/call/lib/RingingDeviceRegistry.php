@@ -76,6 +76,10 @@ final class RingingDeviceRegistry
 
 		$threshold = time() - $this->freshnessWindow();
 		$map = array_filter($storedMap, static fn ($lastSeen): bool => (int)$lastSeen >= $threshold);
+		if (!array_key_exists($instanceId, $map))
+		{
+			return !empty($map);
+		}
 		unset($map[$instanceId]);
 
 		if (empty($map))

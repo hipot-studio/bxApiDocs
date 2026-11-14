@@ -10,7 +10,6 @@ use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Chat\Type\TypeCondition;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
-use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Recent\Internal\RecentItemCache;
 use Bitrix\Im\V2\Recent\Query\RecentFilter;
@@ -77,22 +76,17 @@ class RecentProvider
 	}
 
 	/**
-	 * Chats the user pinned globally. Read straight from the table, past the excluded types of
-	 * {@see self::getList()}: a pin is a decision of the user about a concrete chat, and a caller
-	 * asking for the pinned set must get it whole. Bounded by the global pin limit, so no chunking.
-	 *
-	 * @return int[]
+	 * Pinned rows of the user inside one parent chat. b_im_recent keeps no parent of its own, so the
+	 * condition goes through the CHAT reference onto b_im_chat.PARENT_ID; the reference is one-to-one
+	 * (ITEM_CID -> primary key of the chat), so the join adds no row to the count.
 	 */
-	public function getPinnedChatIds(int $userId): array
+	public function countPinnedByParentChat(int $userId, int $parentChatId): int
 	{
-		$rows = RecentTable::query()
-			->setSelect(['ITEM_CID'])
-			->where('USER_ID', $userId)
-			->where('PINNED', 'Y')
-			->fetchAll()
-		;
-
-		return Normalizer::toUniquePositiveIntegers(array_column($rows, 'ITEM_CID'));
+		return RecentTable::getCount([
+			'=USER_ID' => $userId,
+			'=PINNED' => 'Y',
+			'=CHAT.PARENT_ID' => $parentChatId,
+		]);
 	}
 
 	public function getItem(int $userId, int $chatId): ?RecentItem

@@ -343,7 +343,7 @@ class TrackedObject extends BaseObject
 		];
 	}
 
-	public function renameAction(Disk\Document\TrackedObject $object, $newName, $autoCorrect = false)
+	public function renameAction(Disk\Document\TrackedObject $object, $newName, $autoCorrect = true)
 	{
 		return $this->rename($object->getFile(), $newName, $autoCorrect);
 	}

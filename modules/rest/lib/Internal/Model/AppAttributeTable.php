@@ -16,6 +16,7 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Internal\Integration\Bitrix24\LicenseScannerStateInvalidator;
+use Bitrix\Rest\Internal\Service\Application\AccessCacheInvalidator;
 
 /**
  * DO NOT WRITE ANYTHING BELOW THIS
@@ -159,5 +160,6 @@ class AppAttributeTable extends DataManager
 	private static function resetScannerComputedState(): void
 	{
 		LicenseScannerStateInvalidator::reset();
+		AccessCacheInvalidator::clear();
 	}
 }

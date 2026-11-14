@@ -6,7 +6,6 @@ use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Item\Factory\HistoryItem;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 
@@ -18,7 +17,7 @@ class Item extends Base
 		{
 			return;
 		}
-		if (!$this->checkPinnedLimit($id, $ownerTypeId, $ownerId))
+		if (\Bitrix\Crm\Timeline\TimelineEntry::isPinnedLimitReached($ownerTypeId, $ownerId))
 		{
 			$this->addError(new Error(Loc::getMessage('CRM_TIMELINE_FASTEN_LIMIT_MESSAGE_MSGVER_1')));
 
@@ -127,20 +126,6 @@ class Item extends Base
 		}
 
 		return true;
-	}
-
-	private function checkPinnedLimit(int $id, int $ownerTypeId, int $ownerId): bool
-	{
-		$existedItems = \Bitrix\Crm\Timeline\Entity\TimelineBindingTable::query()
-			->where('ENTITY_TYPE_ID', $ownerTypeId)
-			->where('ENTITY_ID', $ownerId)
-			->where('IS_FIXED', true)
-			->setSelect(['OWNER_ID'])
-			->setLimit(HistoryItem::MAX_PINNED_ITEMS_COUNT)
-		;
-
-		return (count($existedItems->exec()->fetchAll()) < HistoryItem::MAX_PINNED_ITEMS_COUNT);
-
 	}
 
 	private function setPinned(int $id, int $ownerTypeId, int $ownerId, bool $isPinned): void

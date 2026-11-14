@@ -13,9 +13,13 @@ class StrategyFactory
 	private readonly TextNormalizer $textNormalizer;
 	private readonly ActivityQueryBuilder $queryBuilder;
 
-	public function __construct()
+	/**
+	 * @param TextLengthConfig|null $lengthConfig The lengths the texts of the strategies are kept inside
+	 * of, when a caller needs other ones than the collector of the repeat sales does.
+	 */
+	public function __construct(?TextLengthConfig $lengthConfig = null)
 	{
-		$this->textNormalizer = new TextNormalizer(new TextLengthConfig());
+		$this->textNormalizer = new TextNormalizer($lengthConfig ?? new TextLengthConfig());
 		$this->queryBuilder = new ActivityQueryBuilder();
 	}
 

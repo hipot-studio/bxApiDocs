@@ -239,7 +239,8 @@ class Handler extends \IRestService
 		Loader::includeModule('im');
 		$relations = self::resolveChatRelationsForNotification((int)($params['CHAT_ID'] ?? 0), $currentUserId);
 
-		if ($USER->GetParam("NAME") != $params['NAME'])
+		$isNameChanged = $USER->GetParam("NAME") != $params['NAME'];
+		if ($isNameChanged)
 		{
 			$userManager = new \CUser;
 			$userManager->Update($currentUserId, [
@@ -263,7 +264,11 @@ class Handler extends \IRestService
 		return [
 			'id' => $USER->GetID(),
 			'hash' => mb_substr($USER->GetParam('XML_ID'), mb_strlen(Auth::AUTH_TYPE) + 1),
-			'userToken' => \Bitrix\Call\JwtCall::getUserJwt($USER->GetID()),
+			// Reissue only after a rename: updateUserJwt drops the static name caches of
+			// \Bitrix\Im\User and \CIMContactList, which an unchanged name does not need.
+			'userToken' => $isNameChanged
+				? \Bitrix\Call\JwtCall::updateUserJwt($USER->GetID())
+				: \Bitrix\Call\JwtCall::getUserJwt($USER->GetID()),
 		];
 	}
 
@@ -415,6 +420,14 @@ class Handler extends \IRestService
 			throw new RestException("No chat id", "INVALID_FORMAT", \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
+		/** @var \CUser $USER */
+		global $USER;
+		$users = self::filterChatMembers($chatId, $users, (int)$USER->GetID());
+		if (empty($users))
+		{
+			return [];
+		}
+
 		$configParams = [];
 		$configParams['TYPE'] = $type;
 		$configParams['USERS'] = $users;
@@ -427,6 +440,54 @@ class Handler extends \IRestService
 		}
 
 		return $config;
+	}
+
+	/**
+	 * Narrows the requested users down to members of the chat. The caller must be a member too:
+	 * a foreign chat and a missing one share a single error code, so the response cannot be used
+	 * to probe which chats exist.
+	 *
+	 * @param int[] $userIds
+	 * @return array<int, int> member ids keyed by themselves
+	 */
+	private static function filterChatMembers(int $chatId, array $userIds, int $currentUserId): array
+	{
+		if ($currentUserId <= 0)
+		{
+			throw self::createNoChatAccessException();
+		}
+
+		Loader::includeModule('im');
+
+		$members = [];
+		$rows = \Bitrix\Im\Model\RelationTable::getList([
+			'select' => ['USER_ID'],
+			'filter' => [
+				'=CHAT_ID' => $chatId,
+				'@USER_ID' => array_values(array_unique([...$userIds, $currentUserId])),
+			],
+		]);
+		while ($row = $rows->fetch())
+		{
+			$memberId = (int)$row['USER_ID'];
+			$members[$memberId] = $memberId;
+		}
+
+		if (!isset($members[$currentUserId]))
+		{
+			throw self::createNoChatAccessException();
+		}
+
+		return array_intersect_key($members, array_flip($userIds));
+	}
+
+	private static function createNoChatAccessException(): RestException
+	{
+		return new RestException(
+			"You don't have access to this chat",
+			"NO_ACCESS",
+			\CRestServer::STATUS_WRONG_REQUEST
+		);
 	}
 
 	/**

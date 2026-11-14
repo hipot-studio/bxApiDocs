@@ -46,6 +46,14 @@ class Registry
 	}
 
 	/**
+	 * Drops every cached Call object, so the next getCallWithId() / getCallWithUuid() reloads from database.
+	 */
+	public static function clearAllCache(): void
+	{
+		static::$calls = [];
+	}
+
+	/**
 	 * @param string $uuid internal call Id
 	 * @return Call|null
 	 */

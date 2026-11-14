@@ -6,7 +6,7 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Rest\Marketplace;
 use Bitrix\Main\Engine\ActionFilter;
-use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
+use Bitrix\Rest\Internal\Access\EmbeddingAccessChecker;
 use Bitrix\Rest\Internal\Entity\CurrentUser;
 use Bitrix\Rest\Internal\Service\User\ExternalUserChecker;
 use Bitrix\Rest\PlacementTable;
@@ -58,7 +58,10 @@ class Application extends Controller
 		if (
 			$externalUserChecker->isExternal($targetUserId)
 			|| ($currentUserId !== $targetUserId && $externalUserChecker->isExternal($currentUserId))
-			|| ($currentUserId !== $targetUserId && !RestUserModel::createFromId($currentUserId)->isAdmin())
+			|| (
+				$currentUserId !== $targetUserId
+				&& !(new EmbeddingAccessChecker($currentUserId))->canViewAllEmbeddings()
+			)
 		)
 		{
 			return [];

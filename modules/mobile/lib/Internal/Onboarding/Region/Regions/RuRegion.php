@@ -2,14 +2,37 @@
 
 namespace Bitrix\Mobile\Internal\Onboarding\Region\Regions;
 
+use Bitrix\Main\Config\Feature;
+use Bitrix\Mobile\Internal\Onboarding\Config\JsonCampaignConfigProvider;
 use Bitrix\Mobile\Internal\Onboarding\PushType;
 use Bitrix\Mobile\Internal\Onboarding\Region\DayConfig;
 use Bitrix\Mobile\Internal\Onboarding\Region\RegionConfig;
+use Bitrix\Mobile\Public\Feature\OnboardingActivationSeriesFlag;
 
+/**
+ * RU has two schemes, chosen by OnboardingActivationSeriesFlag.
+ *
+ * With the flag on it runs the activation series: no day map and no values here -
+ * schedule, send window, portal age gate, paths, texts and analytics all come from the
+ * campaign document (cached JSON with the bundled code default). Enabling the campaign
+ * for RU only is what makes the new series RU-only.
+ *
+ * With the flag off - the default - RU stays on the legacy day map below, so the new
+ * series can be rolled back without a release.
+ */
 class RuRegion
 {
 	public function __invoke(RegionConfig $cfg): void
 	{
+		// no user in the context: which day map the region walks is a property of the portal -
+		// see RegionConfig::isSupported()
+		if (Feature::isEnabled(OnboardingActivationSeriesFlag::class, new Feature\Context()))
+		{
+			$cfg->setCampaignConfig(new JsonCampaignConfigProvider());
+
+			return;
+		}
+
 		$cfg->setTimeSend('10:00');
 		$cfg->setMaxPortalAgeDays(12);
 

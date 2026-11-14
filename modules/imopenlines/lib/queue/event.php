@@ -885,7 +885,7 @@ class Event
 
 			if ($isVacation === true && $durationAbsenceDay > 0)
 			{
-				$listLine = self::getLineIsSessionOperator($userId);
+				$listLine = self::getLineIsSessionOperator($userId, true);
 
 				if (!empty($listLine))
 				{
@@ -897,7 +897,7 @@ class Event
 							if(!empty($configManager))
 							{
 								$configManager->returnSessionsUsersToQueueIsStartAbsence(
-									[$userId],
+									$userId,
 									$durationAbsenceDay,
 									ImOpenLines\Queue::REASON_OPERATOR_ABSENT
 								);

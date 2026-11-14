@@ -15,16 +15,16 @@ final class PersonalAccountFeature extends FeatureFlag
 
 	protected function isOptionEnabled(): bool
 	{
-		return $this->isOptionOn('mobile', self::OPTION_NAME, false);
+		return Option::get('mobile', self::OPTION_NAME, 'N') === 'Y';
 	}
 
 	public function enable(): void
 	{
-		Option::set('mobile', self::OPTION_NAME, true);
+		Option::set('mobile', self::OPTION_NAME, 'Y');
 	}
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => self::OPTION_NAME]);
+		Option::set('mobile', self::OPTION_NAME, 'N');
 	}
 }

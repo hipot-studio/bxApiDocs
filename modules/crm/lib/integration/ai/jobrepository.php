@@ -17,6 +17,7 @@ use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
+use Bitrix\Crm\Integration\AI\Operation\GenerateClientSummary;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCallV2;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
@@ -26,6 +27,8 @@ use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\EventManager;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Web\Json;
 use CCrmOwnerType;
 
@@ -56,6 +59,8 @@ class JobRepository
 	private array $summarizeTranscriptionDataCache = [];
 	/** @var Array<int, array|null> */
 	private array $jobOwnerCache = [];
+	/** @var Array<int, ItemIdentifier|null> */
+	private array $summarizeTargetOwnerCache = [];
 
 	private EventManager $ormEventManager;
 	private array $eventKeys = [
@@ -1167,6 +1172,90 @@ class JobRepository
 		return $result;
 	}
 
+	/**
+	 * The last job of a client summary of this client and this user, whole.
+	 *
+	 * The pair is the key the generation is deduplicated by: the data is collected on behalf of the
+	 * person, so two people with different rights have two jobs of one client
+	 * ({@see GenerateClientSummary::checkPreviousJobsBeforeLaunch()}). The conditions of the selection
+	 * are those of the dedup, so no index of its own is needed.
+	 *
+	 * The row is taken whole because the reader of the state hands it to
+	 * {@see GenerateClientSummary::constructResult()}, which asks about a dozen and a half of fields
+	 * through `require*` and fails on a partial row.
+	 *
+	 * The answer is not cached: the state of a job changes while a person is looking at the tab, and a
+	 * cached row would keep answering `running` after the generation is over.
+	 */
+	public function getLastClientSummaryJob(ItemIdentifier $target, int $userId): ?EO_Queue
+	{
+		return $this->queryLastClientSummaryJob($target, $userId)?->fetchObject();
+	}
+
+	/**
+	 * The last job of a client summary of this client and this user that is not running any more,
+	 * whatever it ended with.
+	 *
+	 * Asked beside {@see getLastClientSummaryJob()} and never instead of it: two jobs of one pair may
+	 * be pending at once - a launch from the tab of the call card is joined by nobody, and a launch
+	 * from the chat queues a job of its own past it (ADR section 3) - so the newest row alone cannot
+	 * tell whether the summary a person is waiting for has arrived.
+	 */
+	public function getLastFinishedClientSummaryJob(ItemIdentifier $target, int $userId): ?EO_Queue
+	{
+		return $this->queryLastClientSummaryJob($target, $userId)
+			?->whereNot('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_PENDING)
+			->fetchObject()
+		;
+	}
+
+	/**
+	 * The last job of a client summary of this client and this user that ended with an answer.
+	 *
+	 * Asked when the newest row of the pair has failed. Two jobs of one pair may be pending at once, so
+	 * the one that failed is not necessarily the one the summary was coming from - the answer then lands
+	 * on an older row, and {@see getLastFinishedClientSummaryJob()} would hand back the failure itself.
+	 */
+	public function getLastSuccessfulClientSummaryJob(ItemIdentifier $target, int $userId): ?EO_Queue
+	{
+		return $this->queryLastClientSummaryJob($target, $userId)
+			?->where('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_SUCCESS)
+			->fetchObject()
+		;
+	}
+
+	/**
+	 * The last job of a client summary of this client and this user that is still running.
+	 *
+	 * Asked for the same reason: a failure of the newest row says nothing about an older one that is
+	 * still collecting.
+	 */
+	public function getLastPendingClientSummaryJob(ItemIdentifier $target, int $userId): ?EO_Queue
+	{
+		return $this->queryLastClientSummaryJob($target, $userId)
+			?->where('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_PENDING)
+			->fetchObject()
+		;
+	}
+
+	private function queryLastClientSummaryJob(ItemIdentifier $target, int $userId): ?Query
+	{
+		if ($userId <= 0)
+		{
+			return null;
+		}
+
+		return QueueTable::query()
+			->setSelect(['*'])
+			->where('ENTITY_TYPE_ID', $target->getEntityTypeId())
+			->where('ENTITY_ID', $target->getEntityId())
+			->where('TYPE_ID', GenerateClientSummary::TYPE_ID)
+			->where('USER_ID', $userId)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+		;
+	}
+
 	public function isUserHasJobs(int $userId): bool
 	{
 		$useJob = QueueTable::query()
@@ -1328,6 +1417,146 @@ class JobRepository
 	}
 
 	/**
+	 * Warms the summarize-result cache for many activities in a single query.
+	 *
+	 * Mirrors getSummarizeCallTranscriptionResultByActivity() called without a job and without an
+	 * owner scope: one QueueTable read by ENTITY_ID IN (...) + TYPE_ID = SummarizeCallTranscription
+	 * ({@see self::latestSummarizeJobsByActivity()}) instead of a query per activity. An activity may
+	 * carry several summarize jobs, so the latest one wins here as it does there. Activities without a
+	 * job are cached as null so a later per-activity lookup still hits the cache. Only activities that
+	 * are not cached yet are queried.
+	 *
+	 * The keys are the owner-less ones: a per-activity read given an ownerTypeId/ownerId picks its
+	 * job by the owner and takes a key of its own, which this warming does not fill. The card every job
+	 * was launched for is remembered along the way, so
+	 * {@see self::getSummarizeTargetOwnersByActivity()} costs no second read of the same rows.
+	 *
+	 * @param int[] $activityIds
+	 */
+	public function warmSummarizeCacheForActivities(array $activityIds): void
+	{
+		$activityIds = self::normalizedActivityIds($activityIds);
+
+		$missing = array_values(array_filter(
+			$activityIds,
+			fn (int $id): bool => !array_key_exists(sprintf('%d-0', $id), $this->summarizeCache)
+				|| !array_key_exists($id, $this->summarizeTargetOwnerCache)
+			,
+		));
+		if (empty($missing))
+		{
+			return;
+		}
+
+		$jobByActivity = $this->latestSummarizeJobsByActivity($missing);
+		$this->warmJobOwnerCache($jobByActivity);
+
+		foreach ($missing as $activityId)
+		{
+			$job = $jobByActivity[$activityId] ?? null;
+			$result = $job ? SummarizeCallTranscription::constructResult($job) : null;
+			$this->summarizeCache[sprintf('%d-0', $activityId)] = is_object($result) ? clone $result : null;
+			$this->summarizeTargetOwnerCache[$activityId] = $job ? self::identifierOf($this->resolveJobOwner($job)) : null;
+		}
+	}
+
+	/**
+	 * The card the summarize job of every activity was launched for, keyed by the activity: `null` when
+	 * the job named no card of its own, and `null` as well when the activity carries no job at all.
+	 *
+	 * A summarize job is launched either for the activity alone or for a card the activity belongs to,
+	 * and in the second case the summary is written of the correspondence picked for that card. The
+	 * target is stripped from the payload on the way out by
+	 * {@see \Bitrix\Crm\Integration\AI\Operation\AbstractOperation::constructPayload()},
+	 * so whoever has to tell whose correspondence a summary was built of asks the repository and not the
+	 * result it already holds.
+	 *
+	 * The same jobs the summaries come from answer it - one warming, no read of its own - and the owner
+	 * of a job is taken from its result, or from the context of the queue of the module `ai` when the
+	 * result carries none, in one query for the whole batch.
+	 *
+	 * @param int[] $activityIds
+	 * @return array<int, ItemIdentifier|null>
+	 */
+	public function getSummarizeTargetOwnersByActivity(array $activityIds): array
+	{
+		$activityIds = self::normalizedActivityIds($activityIds);
+		$this->warmSummarizeCacheForActivities($activityIds);
+
+		$owners = [];
+		foreach ($activityIds as $activityId)
+		{
+			$owners[$activityId] = $this->summarizeTargetOwnerCache[$activityId] ?? null;
+		}
+
+		return $owners;
+	}
+
+	/**
+	 * @param int[] $activityIds
+	 * @return int[]
+	 */
+	private static function normalizedActivityIds(array $activityIds): array
+	{
+		return array_values(array_unique(array_filter(
+			array_map('intval', $activityIds),
+			static fn (int $id): bool => $id > 0,
+		)));
+	}
+
+	/**
+	 * @param array{ownerTypeId: int, ownerId: int}|null $owner
+	 */
+	private static function identifierOf(?array $owner): ?ItemIdentifier
+	{
+		if ($owner === null)
+		{
+			return null;
+		}
+
+		$ownerTypeId = (int)($owner['ownerTypeId'] ?? 0);
+		$ownerId = (int)($owner['ownerId'] ?? 0);
+
+		return $ownerTypeId > 0 && $ownerId > 0 ? new ItemIdentifier($ownerTypeId, $ownerId) : null;
+	}
+
+	/**
+	 * The latest summarize job of every activity of the list, keyed by the activity.
+	 *
+	 * Which job is the latest is decided by the storage and not in PHP: an activity carries several
+	 * summarize jobs, only the latest of them is ever read, and RESULT is a `longtext` - fetched along
+	 * with the whole row, the jobs nobody asked about are the bulk of what travels. The subquery answers
+	 * one identifier per activity, so the rows that reach the process are the rows that are kept.
+	 *
+	 * @param int[] $activityIds
+	 * @return array<int, EO_Queue>
+	 */
+	private function latestSummarizeJobsByActivity(array $activityIds): array
+	{
+		$latestOfEveryActivity = QueueTable::query()
+			->registerRuntimeField('MAX_ID', new ExpressionField('MAX_ID', 'MAX(%s)', ['ID']))
+			->setSelect(['MAX_ID'])
+			->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
+			->whereIn('ENTITY_ID', $activityIds)
+			->where('TYPE_ID', SummarizeCallTranscription::TYPE_ID)
+			->setGroup(['ENTITY_ID'])
+		;
+
+		$jobByActivity = [];
+		$jobs = QueueTable::query()
+			->setSelect(['*'])
+			->whereIn('ID', $latestOfEveryActivity)
+			->fetchCollection()
+		;
+		foreach ($jobs as $job)
+		{
+			$jobByActivity[(int)$job->requireEntityId()] = $job;
+		}
+
+		return $jobByActivity;
+	}
+
+	/**
 	 * @internal
 	 */
 	public function cleanRuntimeCache(): void
@@ -1342,5 +1571,6 @@ class JobRepository
 		$this->analyzeCommunicationCache = [];
 		$this->summarizeTranscriptionDataCache = [];
 		$this->jobOwnerCache = [];
+		$this->summarizeTargetOwnerCache = [];
 	}
 }

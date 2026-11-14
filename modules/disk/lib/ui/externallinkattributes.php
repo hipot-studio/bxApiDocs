@@ -4,8 +4,8 @@ namespace Bitrix\Disk\Ui;
 
 use Bitrix\Disk\Document\BitrixHandler;
 use Bitrix\Disk\Document\BoardsHandler;
-use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Service\Document\OfficeEngineRecognizer;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\UI\Viewer\ItemAttributes;
 use Bitrix\Main\UI\Viewer\Renderer\Pdf;
@@ -37,7 +37,7 @@ final class ExternalLinkAttributes extends ItemAttributes
 
 		$documentHandler = $documentHandlersManager->getDefaultHandlerForView();
 		$viewerType = $this->getViewerType();
-		if ($documentHandler instanceof OnlyOfficeHandler && $viewerType === 'cloud-document')
+		if (OfficeEngineRecognizer::isOfficeEngine($documentHandler) && $viewerType === 'cloud-document')
 		{
 			$this->setTypeClass('BX.Disk.Viewer.OnlyofficeExternalLinkItem');
 			$this->setAttribute('data-viewer-separate-item', true);
@@ -70,7 +70,7 @@ final class ExternalLinkAttributes extends ItemAttributes
 	{
 		$documentHandler = Driver::getInstance()->getDocumentHandlersManager()->getDefaultHandlerForView();
 		$viewerTypeByFile = parent::getViewerTypeByFile($fileArray);
-		if ($viewerTypeByFile === Pdf::JS_TYPE_DOCUMENT && $documentHandler instanceof OnlyOfficeHandler)
+		if ($viewerTypeByFile === Pdf::JS_TYPE_DOCUMENT && OfficeEngineRecognizer::isOfficeEngine($documentHandler))
 		{
 			return 'cloud-document';
 		}

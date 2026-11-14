@@ -4,6 +4,8 @@ namespace Bitrix\Im\V2\Entity\View;
 
 use Bitrix\Im\Model\EO_MessageViewed_Collection;
 use Bitrix\Im\Model\MessageViewedTable;
+use Bitrix\Im\V2\Common\MySqlIndexHint;
+use Bitrix\Im\V2\Common\TailPageSizeTrait;
 use Bitrix\Im\V2\Entity\EntityCollection;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Rest\PopupData;
@@ -12,6 +14,10 @@ use Bitrix\Main\ORM\Query\Query;
 
 class ViewCollection extends EntityCollection
 {
+	use TailPageSizeTrait;
+
+	private const MYSQL_TAIL_INDEX = 'IX_B_IM_MESSAGE_VIEWED_MESSAGE_ID_ID';
+
 	public static function find(
 		array $filter,
 		array $order = ['ID' => 'DESC'],
@@ -26,10 +32,7 @@ class ViewCollection extends EntityCollection
 			$viewOrder['ID'] = $order['ID'];
 		}
 
-		$query = MessageViewedTable::query()
-			->setSelect(['ID', 'USER_ID', 'MESSAGE_ID', 'DATE_CREATE'])
-			->setOrder($viewOrder)
-		;
+		$query = MessageViewedTable::query()->setOrder($viewOrder);
 
 		if (isset($limit))
 		{
@@ -37,6 +40,31 @@ class ViewCollection extends EntityCollection
 		}
 
 		static::processFilters($query, $filter, $viewOrder);
+		if (
+			$query->getEntity()->getConnection()->getType() === 'mysql'
+			&& isset($filter['MESSAGE_ID'])
+			&& $limit !== null
+		)
+		{
+			$ids = MySqlIndexHint::fetchIds($query, self::MYSQL_TAIL_INDEX);
+			if (empty($ids))
+			{
+				return new static();
+			}
+
+			$query = MessageViewedTable::query()
+				->setSelect(['ID', 'USER_ID', 'MESSAGE_ID', 'DATE_CREATE'])
+				->whereIn('ID', $ids)
+				->setOrder($viewOrder)
+			;
+
+			return (new static())
+				->initByEntityCollection($query->fetchCollection())
+				->setTailPageSize(count($ids))
+			;
+		}
+
+		$query->setSelect(['ID', 'USER_ID', 'MESSAGE_ID', 'DATE_CREATE']);
 
 		return (new static())->initByEntityCollection($query->fetchCollection());
 	}

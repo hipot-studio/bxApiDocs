@@ -133,9 +133,21 @@ abstract class DocumentHandler implements IErrorable
 			'ppt',
 			'pptx',
 			'xodt',
+			'odt',
 			'flp',
 			'board',
 		];
+	}
+
+	public static function listViewableExtensions(): array
+	{
+		return static::listEditableExtensions();
+	}
+
+	/** Extensions whose MIME alone is enough to select this document handler. */
+	public static function listMimeRoutableExtensions(): array
+	{
+		return static::listEditableExtensions();
 	}
 
 	/**

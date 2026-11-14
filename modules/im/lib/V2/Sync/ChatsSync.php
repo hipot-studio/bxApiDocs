@@ -23,11 +23,18 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 	protected UserCountersCollector $countersCollector;
 	protected bool $withCounters = false;
 
-	public function __construct(array $chats, RecentSync $recent, bool $withCounters = false)
+	/** @var array<int, true> Chats answered with their counter even when the answer as a whole carries none. */
+	protected array $counterChatIds = [];
+
+	/**
+	 * @param int[] $counterChatIds
+	 */
+	public function __construct(array $chats, RecentSync $recent, bool $withCounters = false, array $counterChatIds = [])
 	{
 		$this->recent = $recent;
 		$this->countersCollector = ServiceLocator::getInstance()->get(UserCountersCollector::class);
 		$this->withCounters = $withCounters;
+		$this->counterChatIds = array_fill_keys(array_map('intval', $counterChatIds), true);
 
 		parent::__construct($chats);
 	}
@@ -69,10 +76,11 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 			'userCounter' => $chat->getUserCount(),
 		];
 
-		if ($this->withCounters)
+		if ($this->withCounters || isset($this->counterChatIds[$chat->getId()]))
 		{
 			$userId = $this->getContext()->getUserId();
-			$data['counter'] = $this->countersCollector->get($userId)->getByChatId($chat->getId());
+			// a chat the collector knows nothing about has nothing unread
+			$data['counter'] = $this->countersCollector->get($userId)->getByChatId($chat->getId())?->counter ?? 0;
 		}
 
 		return $data;

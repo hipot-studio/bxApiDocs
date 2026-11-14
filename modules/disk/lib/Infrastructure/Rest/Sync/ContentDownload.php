@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Infrastructure\Rest\Sync;
 
+use Bitrix\Disk\Internal\Service\Sync\CallingApplication;
 use Bitrix\Disk\Internal\Service\Sync\ContentLinkProvider;
+use Bitrix\Disk\Internal\Service\Sync\Metrics\CallMetrics;
 use Bitrix\Disk\Internal\Service\Sync\SyncFeatureOption;
 use Bitrix\Disk\Rest\Service\File;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
+use Throwable;
 
 /**
  * The far end of a link handed out by disk.sync.content.get.
@@ -28,6 +31,10 @@ use Bitrix\Rest\RestException;
  */
 final class ContentDownload
 {
+	private const METRIC_METHOD = 'content.download';
+	private const OUTCOME_ACCESS_DENIED = 'ACCESS_DENIED';
+	private const OUTCOME_INTERNAL = 'INTERNAL';
+
 	/**
 	 * The switch of the contour stands in front of this end of the link as it stands in front of every
 	 * method of it. Otherwise a portal that turned the contour off would go on serving files through
@@ -43,6 +50,9 @@ final class ContentDownload
 	 */
 	public static function download(array $query, mixed $scope, \CRestServer $server): mixed
 	{
+		$metrics = new CallMetrics();
+		$metrics->start();
+
 		if (!(new SyncFeatureOption())->isEnabled())
 		{
 			throw new RestException(
@@ -53,13 +63,40 @@ final class ContentDownload
 		}
 
 		$userId = (int)CurrentUser::get()->getId();
+		$appId = CallingApplication::nameOf($server);
 
 		$objectId = (new ContentLinkProvider())->objectIdOfGrant($query, $userId, $server);
 		if ($objectId === null)
 		{
+			$metrics->finish(self::METRIC_METHOD, self::OUTCOME_ACCESS_DENIED, $userId, $appId);
+
 			throw new AccessException();
 		}
 
-		return (new File(\CRestUtil::METHOD_DOWNLOAD, ['id' => $objectId], 0, $server))->processMethodRequest();
+		// The stream is left out of the measure: its time is the time of the network of the client. A
+		// stream that succeeds ends the process, so the call is finished as served before it starts and
+		// revised when the download of Disk refuses the file or serves nothing.
+		$metrics->finish(self::METRIC_METHOD, CallMetrics::OUTCOME_OK, $userId, $appId, downloadedObjectId: $objectId);
+
+		try
+		{
+			$result = (new File(\CRestUtil::METHOD_DOWNLOAD, ['id' => $objectId], 0, $server))->processMethodRequest();
+		}
+		catch (RestException $refusal)
+		{
+			$metrics->reviseOutcome((string)$refusal->getErrorCode());
+
+			throw $refusal;
+		}
+		catch (Throwable $error)
+		{
+			$metrics->reviseOutcome(self::OUTCOME_INTERNAL);
+
+			throw $error;
+		}
+
+		$metrics->reviseOutcome(self::OUTCOME_INTERNAL);
+
+		return $result;
 	}
 }

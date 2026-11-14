@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
  */
 final class ContactEnabledSetting extends AbstractSetting
 {
-	public const CODE = 'crm.recycle_bin.contact.enabled';
+	public const ID = 'crm.recycle_bin.contact.enabled';
 
 	private readonly ContactSettings $contactSettings;
 
@@ -26,18 +26,20 @@ final class ContactEnabledSetting extends AbstractSetting
 		$this->contactSettings = $contactSettings ?? ContactSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'enable_contact_recycle_bin',
 		);
 	}
 

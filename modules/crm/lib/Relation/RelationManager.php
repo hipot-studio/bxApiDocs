@@ -10,6 +10,8 @@ use Bitrix\Crm\Component\EntityList\Grid\Panel\GroupActionsParameter;
 use Bitrix\Crm\Conversion\Entity\EntityConversionMapTable;
 use Bitrix\Crm\Conversion\Entity\EO_EntityConversionMap;
 use Bitrix\Crm\Conversion\Entity\EO_EntityConversionMap_Collection;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\ClientTabs;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Catalog\Contractor\AgentContractRelationStorageStrategy;
 use Bitrix\Crm\Integration\Catalog\Contractor\StoreDocumentRelationStorageStrategy;
@@ -21,6 +23,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\InvoiceSettings;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
 class RelationManager
@@ -1017,7 +1020,7 @@ class RelationManager
 
 				$tab = [
 					'id' => $tabCode,
-					'name' => $factory->getEntityDescriptionInPlural(),
+					'name' => $this->getRelationTabName($entityTypeId) ?? $factory->getEntityDescriptionInPlural(),
 					'loader' => [
 						'serviceUrl' => $serviceUrl,
 						'componentData' => [
@@ -1047,6 +1050,27 @@ class RelationManager
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Contacts and companies have their own tabs in the card ("Contacts", "Companies"),
+	 * so their relation tabs are named differently. Without those tabs the names stay as they were.
+	 *
+	 * @return string|null Name of the relation tab, null for the plural name of the child type.
+	 */
+	private function getRelationTabName(int $childEntityTypeId): ?string
+	{
+		if (!Feature::enabled(ClientTabs::class))
+		{
+			return null;
+		}
+
+		return match ($childEntityTypeId)
+		{
+			\CCrmOwnerType::Contact => Loc::getMessage('CRM_RELATION_TAB_NAME_CONTACTS'),
+			\CCrmOwnerType::Company => Loc::getMessage('CRM_RELATION_TAB_NAME_COMPANIES'),
+			default => null,
+		};
 	}
 
 	/**

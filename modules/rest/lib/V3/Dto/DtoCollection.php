@@ -22,6 +22,14 @@ class DtoCollection implements \IteratorAggregate, \Countable, Arrayable, \JsonS
 		$this->type = $type;
 	}
 
+	/**
+	 * @return string Dto class name of the items
+	 */
+	public function getType(): string
+	{
+		return $this->type;
+	}
+
 	public function add(Dto $dto): void
 	{
 		if (!($dto instanceof $this->type))

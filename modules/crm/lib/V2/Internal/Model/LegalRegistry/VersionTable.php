@@ -34,8 +34,8 @@ final class VersionTable extends DataManager
 			(new Fields\StringField('LANGUAGE_ID'))
 				->configureRequired()
 				->addValidator(new Fields\Validators\LengthValidator(1, 10)),
-			self::text('TEMPLATE', false),
-			self::text('LABEL', false),
+			self::text('TEMPLATE', false)->configureRequired(false),
+			self::text('LABEL', false)->configureRequired(false),
 			self::text('SUBSTITUTION_SCHEMA', true),
 			(new Fields\StringField('DISPLAY_URL'))
 				->configureNullable()
@@ -46,6 +46,7 @@ final class VersionTable extends DataManager
 			self::text('EXPIRY_RULE', true),
 			self::utcDate('PUBLISHED_AT'),
 			(new Fields\IntegerField('PUBLISHED_BY'))->configureNullable(),
+			self::text('DRAFT_SETTINGS', true, true),
 		];
 	}
 
@@ -155,7 +156,7 @@ final class VersionTable extends DataManager
 		return null;
 	}
 
-	private static function text(string $name, bool $json): Fields\TextField
+	private static function text(string $name, bool $json, bool $nullable = false): Fields\TextField
 	{
 		$field = new class($name) extends Fields\TextField {
 			public function cast(mixed $value): mixed
@@ -169,8 +170,9 @@ final class VersionTable extends DataManager
 			}
 		};
 
-		return $field->configureRequired()->configureLong()
-			->addValidator(static function (mixed $value) use ($json): bool|string {
+		return $field->configureRequired(!$nullable)->configureNullable($nullable)->configureLong()
+			->addValidator(static function (mixed $value) use ($json, $nullable): bool|string {
+				if ($nullable && $value === null) { return true; }
 				if (!is_string($value) || strlen($value) > self::MAX_TEXT_BYTES || preg_match('//u', $value) !== 1)
 				{
 					return 'Invalid text snapshot size or encoding.';

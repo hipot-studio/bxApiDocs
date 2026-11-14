@@ -17,20 +17,22 @@ use Bitrix\Main\Result;
  */
 final class ReassignedCallsKeptSetting extends AbstractSetting
 {
-	public const CODE = 'crm.activity.calendar.reassigned_calls.kept';
+	public const ID = 'crm.activity.calendar.reassigned_calls.kept';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'act_cal_keep_reassign_call',
 		);
 	}
 

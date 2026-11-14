@@ -46,7 +46,6 @@ final class TiffPreviewService
 	private const CONVERSION_SLOT_LOCK_PREFIX = 'disk_tiff_preview_slot_';
 	private const PREVIEW_TOKEN_SALT = 'disk.tiff.preview';
 	private const PREVIEW_TOKEN_PARAM = 'previewToken';
-	private const TIFF_CONTENT_TYPE = 'image/tiff';
 	private const CONVERSION_ERROR_CACHE_TTL = 3600;
 	private const CONVERSION_ERROR_CACHE_DIR = '/disk/tiff_preview/errors';
 	private const PREVIEW_TOUCH_INTERVAL = 86400;
@@ -205,11 +204,6 @@ final class TiffPreviewService
 		?string $previewToken,
 	): Result
 	{
-		if (!Configuration::isEnabledFileViewerFormats())
-		{
-			return $this->createFailureResult(ErrorCode::TIFF_UNSUPPORTED);
-		}
-
 		try
 		{
 			return $this->processSource(
@@ -461,13 +455,6 @@ final class TiffPreviewService
 	{
 		$extension = mb_strtolower((string)pathinfo((string)($sourceFile['ORIGINAL_NAME'] ?? ''), PATHINFO_EXTENSION));
 		if (!in_array($extension, ['tif', 'tiff'], true))
-		{
-			return ErrorCode::TIFF_UNSUPPORTED;
-		}
-
-		$contentTypeParts = explode(';', (string)($sourceFile['CONTENT_TYPE'] ?? ''), 2);
-		$contentType = mb_strtolower(trim($contentTypeParts[0]));
-		if ($contentType !== self::TIFF_CONTENT_TYPE)
 		{
 			return ErrorCode::TIFF_UNSUPPORTED;
 		}

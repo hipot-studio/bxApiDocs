@@ -13,16 +13,16 @@ final class SelfDeleteV2Feature extends FeatureFlag
 
 	public function isEnabled(): bool
 	{
-		return (bool)Option::get('mobile', self::$FEATURE_CODE, false);
+		return Option::get('mobile', self::$FEATURE_CODE, 'Y') !== 'N';
 	}
 
 	public function enable(): void
 	{
-		Option::set('mobile', self::$FEATURE_CODE, true);
+		Option::set('mobile', self::$FEATURE_CODE, 'Y');
 	}
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => self::$FEATURE_CODE]);
+		Option::set('mobile', self::$FEATURE_CODE, 'N');
 	}
 }

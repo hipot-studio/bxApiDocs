@@ -73,6 +73,7 @@ class EventHandler
 				'crm_deal_contact',
 				'crm_quote_contact',
 				'crm_contact_company',
+				'crm_entity_contact',
 				'crm_quote',
 				'crm_quote_product_row',
 				'crm_activity_relation',
@@ -100,6 +101,7 @@ class EventHandler
 				'crm_deal_contact' => DealContactMapping::getMapping(),
 				'crm_quote_contact' => QuoteContactMapping::getMapping(),
 				'crm_contact_company' => ContactCompanyMapping::getMapping(),
+				'crm_entity_contact' => EntityContactMapping::getMapping(),
 				'crm_quote' => QuoteMapping::getMapping($helper),
 				'crm_quote_product_row' => QuoteProductMapping::getMapping($helper),
 				'crm_activity_relation' => ActivityRelationMapping::getMapping(),
@@ -127,6 +129,7 @@ class EventHandler
 		$result['crm_deal_contact'] = DealContactMapping::getMapping();
 		$result['crm_quote_contact'] = QuoteContactMapping::getMapping();
 		$result['crm_contact_company'] = ContactCompanyMapping::getMapping();
+		$result['crm_entity_contact'] = EntityContactMapping::getMapping();
 		$result['crm_quote'] = QuoteMapping::getMapping($helper);
 		$result['crm_quote_product_row'] = QuoteProductMapping::getMapping($helper);
 		$result['crm_activity_relation'] = ActivityRelationMapping::getMapping();
@@ -163,6 +166,7 @@ class EventHandler
 			'crm_deal_contact',
 			'crm_quote_contact',
 			'crm_contact_company',
+			'crm_entity_contact',
 			'crm_quote',
 			'crm_quote_product_row',
 			'crm_activity_relation',

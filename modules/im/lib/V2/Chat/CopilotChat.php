@@ -543,7 +543,7 @@ class CopilotChat extends GroupChat
 	 * Live derivative of the active aiassistant session; never cached with the chat,
 	 * so a finished generation cannot leave a stale "generating" behind.
 	 *
-	 * @return array{status: string, initiatorId: int}|null
+	 * @return array{status: string, initiatorId: int, messageId?: int}|null
 	 */
 	private function getGenerationState(): ?array
 	{
@@ -569,9 +569,15 @@ class CopilotChat extends GroupChat
 			return null;
 		}
 
-		return [
+		$state = [
 			'status' => Copilot\GenerationStatus::Generating->value,
 			'initiatorId' => (int)$session['userId'],
 		];
+		if ((int)$session['messageId'] > 0)
+		{
+			$state['messageId'] = (int)$session['messageId'];
+		}
+
+		return $state;
 	}
 }

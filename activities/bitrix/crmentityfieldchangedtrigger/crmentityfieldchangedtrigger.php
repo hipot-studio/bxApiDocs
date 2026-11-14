@@ -53,6 +53,174 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 		$this->arProperties[self::EVENT_DATE_TIME_ID] = null;
 	}
 
+	public function createApplyRules(): array
+	{
+		$rules = parent::createApplyRules();
+		$properties = $this->arProperties;
+		if (
+			!is_array($properties['NodeCondition'] ?? null)
+			|| !$properties['NodeCondition']
+			|| !is_array($properties['Rules'] ?? null)
+			|| ($rules['Properties']['Rules'] ?? null) !== $properties['Rules']
+			|| ($rules['Properties']['NodeCondition'] ?? null) !== $properties['NodeCondition']
+		)
+		{
+			return $rules;
+		}
+
+		$expected = $this->extractApplyRuleCondition($properties['Rules']);
+		if ($expected !== null && $expected === $properties['NodeCondition'])
+		{
+			unset($rules['Properties']['Rules']);
+		}
+
+		return $rules;
+	}
+
+	private function extractApplyRuleCondition(array $editorRules): ?array
+	{
+		if (count($editorRules) !== 1)
+		{
+			return null;
+		}
+		$container = reset($editorRules);
+		$cards = is_array($container) ? ($container['ruleCards'] ?? null) : null;
+		if (
+			!is_array($cards)
+			|| !array_is_list($cards)
+			|| count($cards) < 1
+			|| count($cards) > 2
+			|| array_diff(array_keys($container), ['portId', 'ruleCards', 'isFilled'])
+			|| (array_key_exists('isFilled', $container) && !is_bool($container['isFilled']))
+		)
+		{
+			return null;
+		}
+		$constructions = [];
+		foreach ($cards as $index => $card)
+		{
+			if (
+				!is_array($card)
+				|| array_diff(array_keys($card), ['id', 'constructions', 'groupTitle'])
+				|| !is_array($card['constructions'] ?? null)
+				|| !array_is_list($card['constructions'])
+				|| !$card['constructions']
+			)
+			{
+				return null;
+			}
+			if (count($cards) === 2)
+			{
+				$firstType = $card['constructions'][0]['type'] ?? null;
+				if (
+					($index === 0 && (count($card['constructions']) !== 1 || $firstType !== 'base-settings'))
+					|| ($index === 1 && $firstType !== 'condition:if')
+				)
+				{
+					return null;
+				}
+			}
+			array_push($constructions, ...$card['constructions']);
+		}
+
+		$expected = [];
+		$started = false;
+		$hasSettings = false;
+		foreach ($constructions as $construction)
+		{
+			if (
+				!is_array($construction)
+				|| !is_array($construction['expression'] ?? null)
+				|| array_diff(array_keys($construction), ['id', 'type', 'expression'])
+			)
+			{
+				return null;
+			}
+			$type = $construction['type'] ?? null;
+			if ($type === 'base-settings' && !$started && !$hasSettings)
+			{
+				if (
+					($construction['expression']['actionId'] ?? null) !== null
+					|| array_diff(
+						array_keys($construction['expression']),
+						['actionId', 'rawActivityData', 'activityData', 'document', 'auxPortId', 'auxPortTitle', 'area', 'object'],
+					)
+				)
+				{
+					return null;
+				}
+				$hasSettings = true;
+
+				continue;
+			}
+			if (
+				!in_array($type, ['condition:if', 'condition:and', 'condition:or'], true)
+				|| (!$started && $type !== 'condition:if')
+				|| ($started && $type === 'condition:if')
+			)
+			{
+				return null;
+			}
+			$started = true;
+			$expression = $construction['expression'];
+			if (
+				!array_key_exists('field', $expression)
+				|| array_diff(array_keys($expression), ['field', 'operator', 'value'])
+			)
+			{
+				return null;
+			}
+			if ($expression['field'] === null)
+			{
+				continue;
+			}
+			$field = $expression['field'];
+			$value = $expression['value'] ?? '';
+			if (
+				!is_array($field)
+				|| !is_string($field['object'] ?? null)
+				|| !is_string($field['fieldId'] ?? null)
+				|| !is_string($expression['operator'] ?? null)
+				|| !$this->isApplyRuleLiteralValue($value)
+			)
+			{
+				return null;
+			}
+			$expected[] = [
+				'object' => $field['object'],
+				'field' => $field['fieldId'],
+				'operator' => $expression['operator'],
+				'value' => $value,
+				'joiner' => $type === 'condition:or' ? '1' : '0',
+			];
+		}
+
+		return $expected ?: null;
+	}
+
+	private function isApplyRuleLiteralValue(mixed $value): bool
+	{
+		if (is_array($value))
+		{
+			if (!array_is_list($value))
+			{
+				return false;
+			}
+			foreach ($value as $item)
+			{
+				if (!$this->isApplyRuleLiteralValue($item))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		return (is_scalar($value) || $value === null)
+			&& (!is_string($value) || preg_match('/\{\{[^=]/', $value) !== 1);
+	}
+
 	public function checkApplyRules(array $rules, TriggerParameters $parameters): Result
 	{
 		// the entity type and category filter applies in both modes, the changed fields only in the fields mode

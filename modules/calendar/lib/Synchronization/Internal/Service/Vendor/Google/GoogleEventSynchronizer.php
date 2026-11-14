@@ -39,6 +39,7 @@ use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepositor
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\EventSynchronizerInterface;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Common\EventSynchronizerTrait;
+use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Dto\EventSearchItemResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Gateway\GoogleEventGateway;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Processor\EventImportProcessor;
 use Bitrix\Main\ArgumentException;
@@ -199,9 +200,23 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		{
 			if ($sectionConnection->isActive())
 			{
-				$eventResponse = $this->safeCreateEvent($event, $sectionConnection, $gateway);
-
 				$eventConnection = new EventConnection();
+
+				// @todo \Bitrix\Calendar\Sync\Google\Builders\BuilderSyncEventFromExternalData::getEventConnectionData
+				$eventConnection->setData([]);
+
+				$eventResponse = $this->safeCreateEvent(
+					event: $event,
+					eventConnection: $eventConnection,
+					connection: $connection,
+					sectionConnection: $sectionConnection,
+					gateway: $gateway,
+				);
+
+				if ($eventResponse === null)
+				{
+					return;
+				}
 
 				$eventConnection
 					->setEvent($event)
@@ -213,8 +228,6 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 					->setVersion($event->getVersion())
 					->setVendorVersionId($eventResponse->getVersion()) // sequence ???
 					->setRecurrenceId($eventResponse->recurringEventId)
-					->setData([]
-					) // @todo \Bitrix\Calendar\Sync\Google\Builders\BuilderSyncEventFromExternalData::getEventConnectionData
 				;
 
 				$this->eventConnectionRepository->save($eventConnection);
@@ -239,7 +252,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				$e
 			);
 		}
-		catch (BadRequestException|AccessDeniedException|NotFoundException $e)
+		catch (BadRequestException|AccessDeniedException|NotFoundException|ConflictException $e)
 		{
 			throw new SynchronizerException(
 				sprintf('Google API exception on create event: "%s"', $e->getMessage()),
@@ -298,13 +311,25 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 					// EventConnection may have an empty value of vendorEventId because in legacy logic
 					// it creates in case of deleted section on the vendor's side.
 					// See GoogleEventSynchronizer::createEvent logic
-					$eventResponse = $this->safeCreateEvent($event, $sectionConnection, $gateway);
+					$eventResponse = $this->safeCreateEvent(
+						event: $event,
+						eventConnection: $eventConnection,
+						connection: $connection,
+						sectionConnection: $sectionConnection,
+						gateway: $gateway,
+					);
+				}
+
+				if ($eventResponse)
+				{
+					$eventConnection
+						->setVendorEventId($eventResponse->id)
+						->setEntityTag($eventResponse->etag)
+						->setVendorVersionId($eventResponse->getVersion())
+					;
 				}
 
 				$eventConnection
-					->setVendorEventId($eventResponse->id)
-					->setEntityTag($eventResponse->etag)
-					->setVendorVersionId($eventResponse->getVersion())
 					->setVersion($event->getVersion())
 					->setLastSyncStatus(Dictionary::SYNC_STATUS['success'])
 				;
@@ -1244,6 +1269,10 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	}
 
 	/**
+	 * Creates the event in Google. Returns null when the event is considered already uploaded
+	 * by a foreign event with the same iCalUID. When an own event found after a conflict is updated instead,
+	 * its Google attendees are written to the data of the event connection, as the import does.
+	 *
 	 * @throws AccessDeniedException
 	 * @throws BadRequestException
 	 * @throws ConflictException
@@ -1252,28 +1281,200 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 	 * @throws NotAuthorizedException
 	 * @throws NotFoundException
 	 * @throws RateLimitExceededException
+	 * @throws SynchronizerException
 	 * @throws UnexpectedException
 	 */
 	private function safeCreateEvent(
 		Event $event,
+		EventConnection $eventConnection,
+		Connection $connection,
 		SectionConnection $sectionConnection,
 		GoogleEventGateway $gateway,
+	): ?Dto\EventResponse
+	{
+		$calendarId = $sectionConnection->getVendorSectionId();
+		$iCalUid = $this->getICalUidForCreate($event);
+
+		try
+		{
+			return $gateway->createEvent($event, $calendarId, withICalUid: $iCalUid !== null);
+		}
+		catch (ConflictException $e)
+		{
+			$ownEvent = $this->findOwnLiveEvent($event, $calendarId, $gateway);
+
+			if ($ownEvent)
+			{
+				$eventResponse = $this->updateFoundOwnEvent($event, $ownEvent, $calendarId, $gateway, $connection);
+
+				$eventConnection->setData($ownEvent->attendees ? ['attendees' => $ownEvent->attendees] : []);
+
+				return $eventResponse;
+			}
+
+			if ($iCalUid === null)
+			{
+				throw $e;
+			}
+
+			if ($this->hasForeignLiveEvent($event, $iCalUid, $calendarId, $gateway))
+			{
+				return null;
+			}
+
+			// No search after this attempt: without iCalUID the create cannot conflict with an own event.
+			return $gateway->createEvent($event, $calendarId, withICalUid: false);
+		}
+	}
+
+	private function getICalUidForCreate(Event $event): ?string
+	{
+		$uid = $event->getUid();
+
+		return $uid === null || $uid === '' ? null : $uid;
+	}
+
+	/**
+	 * Returns the newest live event of the calendar marked with the ID of the event; on equal modification time
+	 * the one with the smallest vendor ID.
+	 *
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	private function findOwnLiveEvent(
+		Event $event,
+		string $calendarId,
+		GoogleEventGateway $gateway,
+	): ?EventSearchItemResponse
+	{
+		$eventId = (int)$event->getId();
+		$ownEvent = null;
+
+		foreach ($gateway->findEventsByBxId($calendarId, $eventId) as $foundEvent)
+		{
+			if (
+				$foundEvent->isCancelled()
+				|| $foundEvent->isInstance()
+				|| !$foundEvent->isMarkedWithBxId($eventId)
+			)
+			{
+				continue;
+			}
+
+			if ($ownEvent === null || $this->isPreferredOwnEvent($foundEvent, $ownEvent))
+			{
+				$ownEvent = $foundEvent;
+			}
+		}
+
+		return $ownEvent;
+	}
+
+	private function isPreferredOwnEvent(EventSearchItemResponse $candidate, EventSearchItemResponse $current): bool
+	{
+		$order = strcmp($candidate->getUpdatedSortKey(), $current->getUpdatedSortKey());
+
+		return $order !== 0 ? $order > 0 : strcmp($candidate->id, $current->id) < 0;
+	}
+
+	/**
+	 * @throws AccessDeniedException
+	 * @throws BadRequestException
+	 * @throws DtoValidationException
+	 * @throws NoResponseException
+	 * @throws NotAuthorizedException
+	 * @throws NotFoundException
+	 * @throws RateLimitExceededException
+	 * @throws UnexpectedException
+	 */
+	private function hasForeignLiveEvent(
+		Event $event,
+		string $iCalUid,
+		string $calendarId,
+		GoogleEventGateway $gateway,
+	): bool
+	{
+		foreach ($gateway->findEventsByICalUid($calendarId, $iCalUid) as $foundEvent)
+		{
+			if (
+				!$foundEvent->isCancelled()
+				&& $foundEvent->iCalUID === $iCalUid
+				&& !$foundEvent->isMarkedWithBxId((int)$event->getId())
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Errors of this request are handled as errors of an ordinary update of the event.
+	 *
+	 * @throws SynchronizerException
+	 */
+	private function updateFoundOwnEvent(
+		Event $event,
+		EventSearchItemResponse $foundEvent,
+		string $calendarId,
+		GoogleEventGateway $gateway,
+		Connection $connection,
 	): Dto\EventResponse
 	{
 		try
 		{
-			return $gateway->createEvent($event, $sectionConnection->getVendorSectionId());
+			return $gateway->updateFoundEvent($event, $foundEvent, $calendarId);
 		}
-		catch (ConflictException $e)
+		catch (NotAuthorizedException $e)
 		{
-			if ($event->getUid())
-			{
-				$event->setUid(null);
+			$this->handleUnauthorizedException($connection);
 
-				return $this->safeCreateEvent($event, $sectionConnection, $gateway);
-			}
-
-			throw $e;
+			throw new SynchronizerException(
+				sprintf('Google authorization exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+				isRecoverable: false,
+			);
+		}
+		catch (RateLimitExceededException $e)
+		{
+			throw new SynchronizerException(
+				sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
+		catch (NotFoundException $e)
+		{
+			throw new SynchronizerException(
+				sprintf('Found Google event "%s" not found on update', $foundEvent->id),
+				previous: $e,
+				isRecoverable: false,
+			);
+		}
+		catch (BadRequestException|AccessDeniedException $e)
+		{
+			throw new SynchronizerException(
+				sprintf('Google API exception on update of found event: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+				isRecoverable: false,
+			);
+		}
+		catch (ApiException|DtoValidationException $e)
+		{
+			throw new SynchronizerException(
+				sprintf('Google API exception on update of found event: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
 		}
 	}
 

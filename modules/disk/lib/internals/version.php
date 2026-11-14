@@ -131,6 +131,9 @@ final class VersionTable extends DataManager
 			'VIEW_ID' => array(
 				'data_type' => 'integer',
 			),
+			'UPLOAD_INTENT_TOKEN' => array(
+				'data_type' => 'string',
+			),
 		);
 	}
 

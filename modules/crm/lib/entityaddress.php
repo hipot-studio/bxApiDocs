@@ -43,6 +43,16 @@ class EntityAddress
 	/** @deprecated  Use constants of EntityAddressType */
 	const Last = 11;
 
+	private const FILTER_JOIN_FIELDS = [
+		'ADDRESS_1',
+		'ADDRESS_2',
+		'CITY',
+		'POSTAL_CODE',
+		'REGION',
+		'PROVINCE',
+		'COUNTRY',
+	];
+
 	private static $messagesLoaded = false;
 
 	private static $FIELD_INFOS = null;
@@ -1081,6 +1091,9 @@ class EntityAddress
 					'IS_DEF' => 1
 				],
 				'select' => ['ENTITY_ID'],
+				// Ordered, so that the requisite is the same one on every write when the owner has more
+				// than one default row of the type.
+				'order' => ['ENTITY_ID' => 'ASC'],
 				'limit' => 1
 			]
 		);
@@ -1282,6 +1295,9 @@ class EntityAddress
 						'=ANCHOR_ID' => $entityID,
 						'=IS_DEF' => 1
 					],
+					// Ordered, so that the previous row is the same one on every write when the owner
+					// has more than one default row of the type.
+					'order' => ['ENTITY_ID' => 'ASC'],
 					'limit' => 1
 				]
 			);
@@ -2125,17 +2141,34 @@ class EntityAddress
 
 	public static function prepareFilterJoinSql($entityTypeID, $typeID, array $filter, $tableAlias)
 	{
+		// An unusable address type must not narrow the selection, so no JOIN is built for it.
+		if (!is_int($typeID) || $typeID <= 0)
+		{
+			return '';
+		}
+
+		$entityTypeID = (int)$entityTypeID;
 		$connection = Main\Application::getConnection();
 		$helper = $connection->getSqlHelper();
 		$conditions = array();
 		foreach($filter as $fieldName => $value)
 		{
+			if (!in_array($fieldName, self::FILTER_JOIN_FIELDS, true))
+			{
+				continue;
+			}
+
 			$value = trim($value);
 			if($value !== '')
 			{
 				$value = $helper->forSql(mb_strtoupper($value));
 				$conditions[] = "{$fieldName} LIKE '{$value}'";
 			}
+		}
+
+		if (empty($conditions))
+		{
+			return '';
 		}
 
 		$addrAlias = "{$tableAlias}_ADDR{$typeID}";

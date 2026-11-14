@@ -14,7 +14,6 @@ use Bitrix\Socialnetwork\Control\Enum\ViewMode;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ConvertChatService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Service\StructureRelationService;
-use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectTagRepositoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityCollection;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
@@ -25,6 +24,7 @@ use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectAvatarLegacyPayloadB
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\InitiatorMemberTrait;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectFeatureToggleService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectMemberDiffBuilder;
+use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectTagNormalizer;
 
 class UpdateProjectService
 {
@@ -33,7 +33,7 @@ class UpdateProjectService
 	public function __construct(
 		private readonly CollabService $collabService,
 		private readonly WorkgroupFieldService $workgroupFieldService,
-		private readonly ProjectTagRepositoryInterface $projectTagRepository,
+		private readonly ProjectTagNormalizer $projectTagNormalizer,
 		private readonly ProjectAvatarLegacyPayloadBuilder $projectAvatarLegacyPayloadBuilder,
 		private readonly ProjectMemberDiffBuilder $projectMemberDiffBuilder,
 		private readonly ProjectFeatureToggleService $projectFeatureToggleService,
@@ -63,16 +63,17 @@ class UpdateProjectService
 			return (new Result())->addError(new Error('Base feature is invalid'));
 		}
 
+		$data = ['id' => $projectId];
 		if ($project->tagNames !== null)
 		{
-			$tagValidation = $this->projectTagRepository->validate($project->tagNames);
+			$tagValidation = $this->projectTagNormalizer->normalize($project->tagNames);
 			if (!$tagValidation->isSuccess())
 			{
 				return (new Result())->addErrors($tagValidation->getErrors());
 			}
-		}
 
-		$data = ['id' => $projectId];
+			$data['tagNames'] = $tagValidation->getData()['tagNames'];
+		}
 
 		if ($project->name !== null)
 		{
@@ -193,15 +194,6 @@ class UpdateProjectService
 				publication: $project->publication,
 				goal: $project->goal,
 			);
-		}
-
-		if ($project->tagNames !== null)
-		{
-			$tagResult = $this->projectTagRepository->save($projectId, $project->tagNames);
-			if (!$tagResult->isSuccess())
-			{
-				return (new Result())->addErrors($tagResult->getErrors());
-			}
 		}
 
 		if ($featureStates !== [])

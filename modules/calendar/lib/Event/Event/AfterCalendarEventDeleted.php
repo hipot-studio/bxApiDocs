@@ -10,6 +10,10 @@ final class AfterCalendarEventDeleted extends BaseEvent
 {
 	public function __construct(
 		private readonly int $calendarEventId,
+		private readonly int $seriesRootId = 0,
+		private readonly int $creatorId = 0,
+		private readonly int $ownerId = 0,
+		private readonly int $chatId = 0,
 	)
 	{
 	}
@@ -23,6 +27,10 @@ final class AfterCalendarEventDeleted extends BaseEvent
 	{
 		return [
 			'eventId' => $this->calendarEventId,
+			'seriesRootId' => $this->seriesRootId,
+			'creatorId' => $this->creatorId,
+			'ownerId' => $this->ownerId,
+			'chatId' => $this->chatId,
 		];
 	}
 
@@ -30,6 +38,7 @@ final class AfterCalendarEventDeleted extends BaseEvent
 	{
 		return [
 			new EventSubscriber\Event\CheckIsOpenEvent(),
+			new EventSubscriber\Event\RevokeGuestLinkAfterDelete(),
 		];
 	}
 }

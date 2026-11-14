@@ -12,6 +12,7 @@ use Bitrix\Calendar\Ui\CalendarFilter;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
 use Bitrix\CalendarMobile\Dto\Sharing;
+use Bitrix\CalendarMobile\Integration\Calendar\GuestLinkService;
 use Bitrix\CalendarMobile\Integration\Socialnetwork\FeatureService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
@@ -319,6 +320,10 @@ final class BaseInfoProvider
 			'userTimezoneName' => \CCalendar::GetUserTimezoneName($this->userId),
 			'isCollabCalendar' => $this->isCollabCalendar(),
 			'isNewProjectsOn' => FeatureService::isNewProjectsOn(),
+			// Per-user pre-gate of the guest link, carried by the bootstrap so opening the
+			// create form costs no extra request. Per-event availability is resolved
+			// separately against the saved event.
+			'guestLinkAvailable' => (new GuestLinkService($this->userId))->isAvailableForUser(),
 		];
 	}
 

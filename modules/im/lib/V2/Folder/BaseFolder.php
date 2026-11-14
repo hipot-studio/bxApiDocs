@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Common\RegistryEntryImplementation;
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Definition\FolderDefinition;
 use Bitrix\Im\V2\Folder\Error\FolderError;
+use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityContext;
 use Bitrix\Im\V2\RegistryEntry;
 use Bitrix\Im\V2\Result;
 
@@ -29,6 +30,8 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 	protected ?string $code = null;
 	protected ?string $title = null;
 	protected int $sort = 0;
+	protected bool $hiddenByUser = false;
+	private ?FolderVisibilityContext $visibilityContext = null;
 
 	public function __construct($source = null)
 	{
@@ -170,10 +173,62 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 		return $this;
 	}
 
-	/** Top-level folder attribute: whether the folder is shown as a tab/panel entry. */
-	public function isVisible(): bool
+	/** The user's own decision to hide the folder, stored per folder row. */
+	public function isHiddenByUser(): bool
 	{
-		return true;
+		return $this->hiddenByUser;
+	}
+
+	public function setHiddenByUser(bool $hiddenByUser): self
+	{
+		$this->hiddenByUser = $hiddenByUser;
+
+		return $this;
+	}
+
+	public function setVisibilityContext(FolderVisibilityContext $visibilityContext): self
+	{
+		$this->visibilityContext = $visibilityContext;
+
+		return $this;
+	}
+
+	/**
+	 * DTO-01 visibility fields. A folder read past {@see FolderProvider} carries no context of its
+	 * owner and publishes the pair that can neither hide it nor leave it unreachable.
+	 *
+	 * @return array{canHide: bool, hiddenByUser: bool}
+	 */
+	protected function getPublishedVisibility(): array
+	{
+		return [
+			'canHide' => $this->visibilityContext?->canHide($this) ?? false,
+			'hiddenByUser' => $this->visibilityContext?->publishesHiddenByUser($this) ?? false,
+		];
+	}
+
+	/** Top-level folder attribute: the system keeps the folder out of navigation, regardless of the user. */
+	public function isHiddenBySystem(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * Whether the owner may hide the folder although no source of "All" keeps its section reachable:
+	 * the chats of such a section leave the navigation together with the folder.
+	 */
+	public function canBeHiddenWithoutSource(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * Top-level folder attribute: whether the folder is the primary root one of the portal.
+	 * Only the two root folders that can hold that place override it ({@see Folder::isPrimaryRoot}).
+	 */
+	public function isPrimaryRoot(): bool
+	{
+		return false;
 	}
 
 	/** Top-level folder attribute: optional subtitle. */
@@ -241,6 +296,11 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 				'field' => 'sort',
 				'set' => 'setSort',
 				'get' => 'getSort',
+			],
+			'HIDDEN_BY_USER' => [
+				'field' => 'hiddenByUser',
+				'set' => 'setHiddenByUser',
+				'get' => 'isHiddenByUser',
 			],
 		];
 	}

@@ -7,11 +7,14 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Item\FieldImplementation;
 use Bitrix\Crm\Service\Broker;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\V2\Internal\Service\Item\Binding\PrimaryContactRule;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ORM\Entity;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Objectify\Collection;
 use Bitrix\Main\ORM\Objectify\EntityObject;
@@ -40,11 +43,17 @@ final class Binding implements FieldImplementation
 	private string $thisIdField = '';
 	private array $boundIdsBeforeSave;
 
+	private bool $isPrimaryFlagOnBoundSide = false;
+	/** @var int[] */
+	private array $primaryBoundIdsBeforeSave = [];
+
 	/** @var Array<string, mixed> */
 	private $defaultValuesForBindingObject = [];
 
 	/** @var Broker */
 	private $broker;
+
+	private PrimaryContactRule $primaryContactRule;
 
 	public function __construct(
 		EntityObject $entityObject,
@@ -66,6 +75,7 @@ final class Binding implements FieldImplementation
 		$this->bindingEntity = $bindingEntity;
 
 		$this->broker = $boundEntitiesBroker;
+		$this->primaryContactRule = new PrimaryContactRule();
 	}
 
 	/**
@@ -103,6 +113,34 @@ final class Binding implements FieldImplementation
 
 		$this->boundEntity = $boundEntity;
 		$this->thisIdField = $thisIdField;
+
+		return $this;
+	}
+
+	/**
+	 * IS_PRIMARY of the binding entity marks the primary binding of the BOUND entity, not of this one.
+	 * E.g. b_crm_contact_company, when a company is saved: IS_PRIMARY there is the primary company of a contact.
+	 *
+	 * In this mode:
+	 * - IS_PRIMARY of existing bindings is never changed by this entity;
+	 * - a new binding is primary only if the bound entity has no primary binding yet;
+	 * - an unbound entity, for which this entity was primary, gets the first remaining binding by SORT as primary;
+	 * - ref id in the bound entity is recalculated only for added and removed bound entities.
+	 *
+	 * Should be called after configureUpdatingRefIdInBoundEntity.
+	 */
+	public function configurePrimaryFlagOnBoundSide(): self
+	{
+		if (empty($this->thisIdField))
+		{
+			throw new InvalidOperationException('configureUpdatingRefIdInBoundEntity should be called first');
+		}
+		if (!($this->bindingEntity->getField('IS_PRIMARY') instanceof BooleanField))
+		{
+			throw new ArgumentException('Binding entity should have boolean IS_PRIMARY field');
+		}
+
+		$this->isPrimaryFlagOnBoundSide = true;
 
 		return $this;
 	}
@@ -240,6 +278,12 @@ final class Binding implements FieldImplementation
 		$actualBindings = $this->remindActual($this->fieldNameMap->getBindings());
 
 		$this->boundIdsBeforeSave = EntityBinding::prepareEntityIDs($this->boundEntityTypeId, $actualBindings);
+
+		if ($this->isPrimaryFlagOnBoundSide)
+		{
+			$this->primaryBoundIdsBeforeSave = $this->getActualPrimaryBoundIds();
+			$this->markAddedBindingsPrimaryIfBoundEntityHasNoPrimary();
+		}
 	}
 
 	public function afterSuccessfulItemSave(Item $item, EntityObject $entityObject): void
@@ -248,6 +292,11 @@ final class Binding implements FieldImplementation
 
 	public function save(): Result
 	{
+		if ($this->isPrimaryFlagOnBoundSide)
+		{
+			return $this->saveWithPrimaryFlagOnBoundSide();
+		}
+
 		if (is_null($this->boundEntity) || empty($this->thisIdField))
 		{
 			// everything was saved at entityObject save
@@ -576,6 +625,12 @@ final class Binding implements FieldImplementation
 			return;
 		}
 
+		if ($this->isPrimaryFlagOnBoundSide)
+		{
+			// IS_PRIMARY belongs to the bound side, it's handled on save
+			return;
+		}
+
 		$idOfPrimaryBoundEntity = $this->ensureExactlyOnePrimaryBoundEntityExists($bindingsCollection, $bindings);
 
 		if ($this->fieldNameMap->isSingleIdFilled())
@@ -632,10 +687,15 @@ final class Binding implements FieldImplementation
 			$bindingObject = $this->bindingEntity->createObject();
 			foreach (($singleBindingToAdd + $this->defaultValuesForBindingObject) as $fieldName => $value)
 			{
-				if ($this->bindingEntity->hasField($fieldName))
+				if ($this->bindingEntity->hasField($fieldName) && !$this->isPrimaryFlagManagedOnSave($fieldName))
 				{
 					$bindingObject->set($fieldName, $value);
 				}
+			}
+
+			if ($this->isPrimaryFlagOnBoundSide)
+			{
+				$bindingObject->set('IS_PRIMARY', false);
 			}
 
 			$this->entityObject->addTo($this->fieldNameMap->getBindings(), $bindingObject);
@@ -654,7 +714,11 @@ final class Binding implements FieldImplementation
 
 			foreach ($singleBindingToUpdate as $fieldName => $value)
 			{
-				if ($this->bindingEntity->hasField($fieldName) && !$this->bindingEntity->getField($fieldName)->isPrimary())
+				if (
+					$this->bindingEntity->hasField($fieldName)
+					&& !$this->bindingEntity->getField($fieldName)->isPrimary()
+					&& !$this->isPrimaryFlagManagedOnSave($fieldName)
+				)
 				{
 					$bindingObject->set($fieldName, $value);
 				}
@@ -712,48 +776,236 @@ final class Binding implements FieldImplementation
 
 	private function selectPrimaryBoundEntity(Collection $bindingsCollection, array $providedBindings): int
 	{
-		$idOfPrimaryBoundEntity = null;
-
-		$primaryBinding = EntityBinding::findPrimaryBinding($providedBindings);
-		if ($primaryBinding)
-		{
-			$idOfPrimaryBoundEntity = EntityBinding::prepareEntityID($this->boundEntityTypeId, $primaryBinding);
-			// prioritize explicitly set primary binding
-			if ($idOfPrimaryBoundEntity > 0)
-			{
-				return $idOfPrimaryBoundEntity;
-			}
-		}
-
-		$firstBindingObject = null;
-		// let the current primary binding to remain primary
+		$currentPrimaryFlags = [];
 		foreach ($bindingsCollection as $bindingObject)
 		{
-			if (!$firstBindingObject)
-			{
-				$firstBindingObject = $bindingObject;
-			}
+			$boundEntityId = $bindingObject->get($this->boundEntityIdFieldName);
+			$currentPrimaryFlags[$boundEntityId] = (bool)$bindingObject->get('IS_PRIMARY');
+		}
 
+		$providedPrimaryBinding = EntityBinding::findPrimaryBinding($providedBindings);
+		$requestedPrimaryBoundEntityId = $providedPrimaryBinding
+			? EntityBinding::prepareEntityID($this->boundEntityTypeId, $providedPrimaryBinding)
+			: null
+		;
+
+		return $this->primaryContactRule->selectPrimaryBoundEntityId(
+			$currentPrimaryFlags,
+			$requestedPrimaryBoundEntityId,
+		);
+	}
+	//endregion
+
+	//region Primary flag on bound side
+	private function isPrimaryFlagManagedOnSave(string $fieldName): bool
+	{
+		return $this->isPrimaryFlagOnBoundSide && $fieldName === 'IS_PRIMARY';
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getActualPrimaryBoundIds(): array
+	{
+		$actualCollection = $this->getActualBindingsCollection();
+		if (!$actualCollection)
+		{
+			return [];
+		}
+
+		$ids = [];
+		foreach ($actualCollection as $bindingObject)
+		{
 			if ($bindingObject->get('IS_PRIMARY'))
 			{
-				$idOfPrimaryBoundEntity = $bindingObject->get($this->boundEntityIdFieldName);
-
-				break;
+				$ids[] = (int)$bindingObject->get($this->boundEntityIdFieldName);
 			}
 		}
 
-		if ($idOfPrimaryBoundEntity <= 0)
+		return $ids;
+	}
+
+	private function markAddedBindingsPrimaryIfBoundEntityHasNoPrimary(): void
+	{
+		$bindingsCollection = $this->getBindingsCollection();
+		if (!$bindingsCollection)
 		{
-			// if no primary found, simply make the first binding primary
-			$idOfPrimaryBoundEntity = $firstBindingObject->get($this->boundEntityIdFieldName);
+			return;
 		}
 
-		if ($idOfPrimaryBoundEntity <= 0)
+		$isBoundBeforeSave = array_fill_keys($this->boundIdsBeforeSave, true);
+
+		/** @var Array<int, EntityObject> $addedBindingObjects */
+		$addedBindingObjects = [];
+		foreach ($bindingsCollection as $bindingObject)
 		{
-			throw new InvalidOperationException('Could not select a primary bound entity, which should be an impossible case');
+			$boundId = (int)$bindingObject->get($this->boundEntityIdFieldName);
+			if ($boundId > 0 && !isset($isBoundBeforeSave[$boundId]))
+			{
+				$addedBindingObjects[$boundId] = $bindingObject;
+			}
 		}
 
-		return $idOfPrimaryBoundEntity;
+		if (empty($addedBindingObjects))
+		{
+			return;
+		}
+
+		$boundIdsWithPrimary = [];
+		$rows =
+			(new Query($this->bindingEntity))
+				->setSelect([$this->boundEntityIdFieldName])
+				->whereIn($this->boundEntityIdFieldName, array_keys($addedBindingObjects))
+				->where('IS_PRIMARY', true)
+				->exec()
+		;
+		while ($row = $rows->fetch())
+		{
+			$boundIdsWithPrimary[(int)$row[$this->boundEntityIdFieldName]] = true;
+		}
+
+		foreach ($addedBindingObjects as $boundId => $bindingObject)
+		{
+			$bindingObject->set('IS_PRIMARY', !isset($boundIdsWithPrimary[$boundId]));
+		}
+	}
+
+	private function saveWithPrimaryFlagOnBoundSide(): Result
+	{
+		$boundIdsAfterSave = EntityBinding::prepareEntityIDs(
+			$this->boundEntityTypeId,
+			$this->get($this->fieldNameMap->getBindings()),
+		);
+
+		$addedIds = array_values(array_diff($boundIdsAfterSave, $this->boundIdsBeforeSave));
+		$removedIds = array_values(array_diff($this->boundIdsBeforeSave, $boundIdsAfterSave));
+		if (empty($addedIds) && empty($removedIds))
+		{
+			return new Result();
+		}
+
+		$removedPrimaryIds = array_values(array_intersect($removedIds, $this->primaryBoundIdsBeforeSave));
+		$this->assignPrimaryToFirstRemainingBinding($removedPrimaryIds);
+
+		if (!is_null($this->boundEntity))
+		{
+			$this->updateRefIdInBoundEntities(array_merge($addedIds, $removedIds));
+			Container::getInstance()->getEntityBroker($this->boundEntityTypeId)?->resetAllCache();
+		}
+
+		return new Result();
+	}
+
+	/**
+	 * @param int[] $boundIds
+	 */
+	private function assignPrimaryToFirstRemainingBinding(array $boundIds): void
+	{
+		if (empty($boundIds))
+		{
+			return;
+		}
+
+		$rows =
+			(new Query($this->bindingEntity))
+				->setSelect([$this->boundEntityIdFieldName, $this->thisIdField, 'IS_PRIMARY'])
+				->whereIn($this->boundEntityIdFieldName, $boundIds)
+				->setOrder(['SORT' => 'ASC', $this->thisIdField => 'ASC'])
+				->exec()
+		;
+
+		/** @var Array<int, int|null> $newPrimaryMap bound id => this id */
+		$newPrimaryMap = [];
+		while ($row = $rows->fetch())
+		{
+			$boundId = (int)$row[$this->boundEntityIdFieldName];
+			$isPrimary = in_array($row['IS_PRIMARY'], [true, 'Y'], true);
+
+			if ($isPrimary)
+			{
+				// the bound entity has a primary binding already
+				$newPrimaryMap[$boundId] = null;
+			}
+			elseif (!array_key_exists($boundId, $newPrimaryMap))
+			{
+				$newPrimaryMap[$boundId] = (int)$row[$this->thisIdField];
+			}
+		}
+
+		$newPrimaryMap = array_filter($newPrimaryMap);
+		if (empty($newPrimaryMap))
+		{
+			return;
+		}
+
+		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$boundIdColumn = $sqlHelper->quote($this->bindingEntity->getField($this->boundEntityIdFieldName)->getColumnName());
+		$thisIdColumn = $sqlHelper->quote($this->bindingEntity->getField($this->thisIdField)->getColumnName());
+		$isPrimaryColumn = $sqlHelper->quote($this->bindingEntity->getField('IS_PRIMARY')->getColumnName());
+
+		$cases = '';
+		foreach ($newPrimaryMap as $boundId => $thisId)
+		{
+			$cases .= ' WHEN ' . (int)$boundId . ' THEN ' . (int)$thisId;
+		}
+
+		Application::getConnection()->queryExecute(
+			'UPDATE ' . $sqlHelper->quote($this->bindingEntity->getDBTableName())
+			. " SET {$isPrimaryColumn} = " . $sqlHelper->convertToDbString($this->getPrimaryFlagDbValue(true))
+			. " WHERE {$boundIdColumn} IN (" . implode(',', array_keys($newPrimaryMap)) . ')'
+			. " AND {$thisIdColumn} = CASE {$boundIdColumn}{$cases} END"
+		);
+
+		$this->bindingEntity->cleanCache();
+	}
+
+	/**
+	 * Ref id in the bound entity always points to its primary binding (the lowest one if the data is inconsistent)
+	 *
+	 * @param int[] $boundIds
+	 */
+	private function updateRefIdInBoundEntities(array $boundIds): void
+	{
+		$boundIds = array_unique(array_filter(array_map('intval', $boundIds)));
+		if (empty($boundIds))
+		{
+			return;
+		}
+
+		$sqlHelper = Application::getConnection()->getSqlHelper();
+
+		$boundTable = $sqlHelper->quote($this->boundEntity->getDBTableName());
+		$boundPrimary = $this->boundEntity->getPrimary();
+		$boundPrimaryColumn = $sqlHelper->quote(
+			$this->boundEntity->getField(is_array($boundPrimary) ? reset($boundPrimary) : $boundPrimary)->getColumnName()
+		);
+		$refIdColumn = $sqlHelper->quote($this->boundEntity->getField($this->thisIdField)->getColumnName());
+
+		$bindingTable = $sqlHelper->quote($this->bindingEntity->getDBTableName());
+		$bindingBoundIdColumn = $sqlHelper->quote(
+			$this->bindingEntity->getField($this->boundEntityIdFieldName)->getColumnName()
+		);
+		$bindingThisIdColumn = $sqlHelper->quote($this->bindingEntity->getField($this->thisIdField)->getColumnName());
+		$isPrimaryColumn = $sqlHelper->quote($this->bindingEntity->getField('IS_PRIMARY')->getColumnName());
+		$primaryValue = $sqlHelper->convertToDbString($this->getPrimaryFlagDbValue(true));
+
+		Application::getConnection()->queryExecute(
+			"UPDATE {$boundTable} SET {$refIdColumn} = ("
+			. "SELECT MIN(t.{$bindingThisIdColumn}) FROM {$bindingTable} t"
+			. " WHERE t.{$isPrimaryColumn} = {$primaryValue} AND t.{$bindingBoundIdColumn} = {$boundTable}.{$boundPrimaryColumn}"
+			. ") WHERE {$boundPrimaryColumn} IN (" . implode(',', $boundIds) . ')'
+		);
+
+		$this->boundEntity->cleanCache();
+	}
+
+	private function getPrimaryFlagDbValue(bool $isPrimary): string
+	{
+		/** @var BooleanField $field */
+		$field = $this->bindingEntity->getField('IS_PRIMARY');
+		$values = $field->getValues();
+
+		return (string)($isPrimary ? $values[1] : $values[0]);
 	}
 	//endregion
 }

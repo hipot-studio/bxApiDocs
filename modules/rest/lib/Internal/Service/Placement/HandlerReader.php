@@ -7,6 +7,8 @@ namespace Bitrix\Rest\Internal\Service\Placement;
 use Bitrix\Main\Application;
 use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Entity\CurrentUser;
+use Bitrix\Rest\Internal\Repository\Application\AppRepository;
+use Bitrix\Rest\Internal\Repository\Application\AppSelect;
 use Bitrix\Rest\Internal\Repository\EmbeddingAccessRepository;
 use Bitrix\Rest\Internal\Service\Embedding\ApplicationOnlyPlacements;
 use Bitrix\Rest\Internal\Service\Embedding\LegacyNonAppEmbeddingsAvailability;
@@ -47,6 +49,7 @@ final class HandlerReader
 			$placement,
 			$skipInstallCheck,
 			$this->getAccessibleEmbeddingIds($rows, $userId, $placement),
+			$userId,
 		);
 	}
 
@@ -70,12 +73,12 @@ final class HandlerReader
 
 	private function getPlacementCacheId(string $placement, int $userId): string
 	{
-		return 'rest_placement_list|' . $placement . '|' . LANGUAGE_ID . '|user_' . $userId;
+		return 'rest_placement_list_v2|' . $placement . '|' . LANGUAGE_ID . '|user_' . $userId;
 	}
 
 	private function getAccessibleHandlerCacheId(string $placement, int $userId): string
 	{
-		return 'rest_placement_access_ids|' . $placement . '|user_' . $userId;
+		return 'rest_placement_access_ids_v2|' . $placement . '|user_' . $userId;
 	}
 
 	private function getLegacyHandlers(string $placement, bool $skipInstallCheck, int $userId): array
@@ -93,11 +96,11 @@ final class HandlerReader
 					$result[] = $mapper->mapLegacyHandler($handler);
 				}
 
-				return $result;
+				return self::withAppAccessData($result);
 			},
 		);
 
-		return $this->adapter->makeHandlers($handlers, $placement, $skipInstallCheck, []);
+		return $this->adapter->makeHandlers($handlers, $placement, $skipInstallCheck, [], $userId);
 	}
 
 	private function getLegacyAccessibleIds(string $placement, int $userId): array
@@ -114,7 +117,7 @@ final class HandlerReader
 					$result[] = $mapper->mapLegacyAccessCandidate($handler);
 				}
 
-				return $result;
+				return self::withAppAccessData($result);
 			},
 		);
 
@@ -129,9 +132,9 @@ final class HandlerReader
 				$query = new HandlerQuery();
 				$mapper = new HandlerCacheRowMapper();
 
-				return $mapper->mapOwnerAwareCollection(
+				return self::withAppAccessData($mapper->mapOwnerAwareCollection(
 					$query->getOwnerAwareCandidates($placement, $userId),
-				);
+				));
 			},
 		);
 	}
@@ -150,9 +153,58 @@ final class HandlerReader
 					$result[] = $mapper->mapOwnerAwareAccessCandidate($handler);
 				}
 
-				return $result;
+				return self::withAppAccessData($result);
 			},
 		);
+	}
+
+	private static function withAppAccessData(array $rows): array
+	{
+		$appIds = [];
+		foreach ($rows as $row)
+		{
+			$appId = (int)($row['APP_ID'] ?? 0);
+			if ($appId > 0)
+			{
+				$appIds[$appId] = $appId;
+			}
+		}
+
+		if ($appIds === [])
+		{
+			return $rows;
+		}
+
+		$accessData = [];
+		$repository = new AppRepository();
+		foreach (array_chunk(array_values($appIds), 300) as $appIdChunk)
+		{
+			$apps = $repository->getByIds($appIdChunk, (new AppSelect())->attributes());
+			foreach ($apps as $app)
+			{
+				$appId = (int)$app->getId();
+				$access = $app->getAccess();
+				$accessData[$appId] = [
+					'ID' => $appId,
+					'INSTALLED' => $app->isInstalled(),
+					'OWNER_USER_ID' => $app->getOwnerUserId(),
+					'ACCESS_CODES' => $access === null || $access === '' ? [] : explode(',', $access),
+				];
+			}
+		}
+
+		foreach ($rows as &$row)
+		{
+			$appId = (int)($row['APP_ID'] ?? 0);
+			if ($appId > 0)
+			{
+				$row['APP_ACCESS_DATA'] = $accessData[$appId] ?? null;
+				$row['APP_ACCESS'] = implode(',', $accessData[$appId]['ACCESS_CODES'] ?? []);
+			}
+		}
+		unset($row);
+
+		return $rows;
 	}
 
 	private function getAccessibleEmbeddingIds(array $rows, int $userId, string $placement): array

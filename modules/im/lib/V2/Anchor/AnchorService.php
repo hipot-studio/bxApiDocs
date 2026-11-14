@@ -37,10 +37,25 @@ final class AnchorService
 		$anchorCollection = new AnchorCollection();
 
 		$authorId = $this->message->getAuthorId();
+		// Loads the relations of the whole list at once, so the check below reads them from the chat.
+		$this->chat->getRelationsByUserIds($userIds);
+		if ($this->chat instanceof Chat\CommentChat)
+		{
+			// The border of the post answers per reader as well, so the relations of the channel are read
+			// in one go too.
+			$this->chat->getParentChat()->getRelationsByUserIds($userIds);
+		}
 
 		foreach ($userIds as $userId)
 		{
 			if ($userId <= 0 || $authorId === $userId)
+			{
+				continue;
+			}
+
+			// An edit can mention someone in a message that is already behind their history border: the
+			// anchor would keep a counter alive on a message they cannot open.
+			if (!$this->isMessageAvailableForUser($userId))
 			{
 				continue;
 			}
@@ -69,6 +84,11 @@ final class AnchorService
 
 		$authorId = $this->message->getAuthorId();
 		if ($authorId <= 0)
+		{
+			return new Result();
+		}
+
+		if (!$this->isMessageAvailableForUser($authorId))
 		{
 			return new Result();
 		}
@@ -246,6 +266,21 @@ final class AnchorService
 		$this->pushService->add($anchorItem);
 
 		return $result;
+	}
+
+	private function isMessageAvailableForUser(int $userId): bool
+	{
+		// An anchor is a personal pointer: the counter and the recent row it feeds hang on the relation of
+		// its reader, so a reader without one gets none.
+		if ($this->chat->getRelationByUserId($userId) === null)
+		{
+			return false;
+		}
+
+		return !$this->chat->isMessageBehindUserHistoryBorder(
+			(int)$this->message->getMessageId(),
+			$userId
+		);
 	}
 
 	private function init(): void

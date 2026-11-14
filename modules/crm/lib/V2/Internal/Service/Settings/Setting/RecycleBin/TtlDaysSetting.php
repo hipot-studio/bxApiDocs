@@ -20,7 +20,7 @@ use Bitrix\Main\Result;
  */
 final class TtlDaysSetting extends AbstractSetting
 {
-	public const CODE = 'crm.recycle_bin.ttl_days';
+	public const ID = 'crm.recycle_bin.ttl_days';
 	private const ERROR_CODE = 'SETTING_NOT_AVAILABLE';
 
 	private readonly RecyclebinSettings $recyclebinSettings;
@@ -30,9 +30,9 @@ final class TtlDaysSetting extends AbstractSetting
 		$this->recyclebinSettings = $recyclebinSettings ?? RecyclebinSettings::getCurrent();
 	}
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -44,10 +44,12 @@ final class TtlDaysSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'recyclebin_ttl',
 		);
 	}
 

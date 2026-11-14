@@ -92,7 +92,9 @@ class ActionsMetadata
 		{
 			foreach ($this->attributesByActions as $actionName => $actionAttributes)
 			{
-				$this->redirectFileTypesByActions[$actionName] = $actionAttributes[RedirectToView::class]?->getArguments() ?? [];
+				$this->redirectFileTypesByActions[$actionName] =
+					($actionAttributes[RedirectToView::class] ?? null)?->getArguments() ?? []
+				;
 			}
 		}
 

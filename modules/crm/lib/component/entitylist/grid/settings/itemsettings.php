@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Settings;
 
+use Bitrix\Crm\Component\EntityList\ClientTab\ClientTabPanelOptions;
 use Bitrix\Main\Grid\Settings;
 
 final class ItemSettings extends Settings
@@ -12,6 +13,7 @@ final class ItemSettings extends Settings
 	private ?bool $isMyCompany = null;
 	private ?array $editableFieldsWhitelist = null;
 	private array $columnNameToEditableFieldNameMap = [];
+	private ?ClientTabPanelOptions $clientTab = null;
 
 	public function __construct(array $params)
 	{
@@ -147,5 +149,20 @@ final class ItemSettings extends Settings
 	public function getColumnNameToEditableFieldNameMap(): array
 	{
 		return $this->columnNameToEditableFieldNameMap;
+	}
+
+	public function setClientTab(?ClientTabPanelOptions $options): self
+	{
+		$this->clientTab = $options;
+
+		return $this;
+	}
+
+	/**
+	 * Options of the client tab the grid is shown in, null outside a client tab.
+	 */
+	public function getClientTab(): ?ClientTabPanelOptions
+	{
+		return $this->clientTab;
 	}
 }

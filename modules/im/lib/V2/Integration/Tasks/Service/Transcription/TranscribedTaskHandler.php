@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Integration\Tasks\Service\Transcription;
 
 use Bitrix\Im\V2\Integration\AI\TaskCreation\AbstractCreator;
+use Bitrix\Im\V2\Integration\AI\TaskCreation\Duplicate\DuplicateCheckService;
 use Bitrix\Im\V2\Integration\Tasks\Service\ChatTaskLinkService;
 use Bitrix\Im\V2\Integration\Tasks\Service\CheckListService;
 use Bitrix\Im\V2\Integration\Tasks\Service\ForwardService;
@@ -12,6 +13,7 @@ use Bitrix\Im\V2\Integration\Tasks\Service\TaskService;
 use Bitrix\Im\V2\Integration\Tasks\Service\Transcription\Mapper\CheckListMapper;
 use Bitrix\Im\V2\Integration\Tasks\Service\Transcription\Mapper\TaskMapper;
 use Bitrix\Im\V2\Link\Task\TaskType;
+use Bitrix\Im\V2\Logger;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Main\Diag\LoggerFactory;
@@ -20,7 +22,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 
-class TranscribedTaskHandler
+class TranscribedTaskHandler implements DeferredTaskCreator
 {
 	private const LOGGER_ID = 'im.AiTaskCreation.SideEffect';
 
@@ -42,6 +44,7 @@ class TranscribedTaskHandler
 		private readonly UnresolvedFieldsNotifier $unresolvedFieldsNotifier,
 		private readonly ForwardService $forwardService,
 		private readonly SkippedSourcesNotifier $skippedSourcesNotifier,
+		private readonly DuplicateCheckService $duplicateCheckService,
 	)
 	{
 	}
@@ -167,16 +170,53 @@ class TranscribedTaskHandler
 		?MessageCollection $messagesToForward = null,
 		bool $builtWithoutVerdict = false,
 		bool $isPartial = false,
-	): bool
+		bool $withTerminalStatus = true,
+		bool $skipDuplicateCheck = false,
+		string $sourceText = '',
+	): TaskCreationOutcome
+	{
+		try
+		{
+			return $this->handleInternal(
+				$taskData,
+				$message,
+				$initiatorId,
+				$messagesToForward,
+				$builtWithoutVerdict,
+				$isPartial,
+				$withTerminalStatus,
+				$skipDuplicateCheck,
+				$sourceText,
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			(new Logger('ai_task_creation'))->logThrowable($exception);
+
+			return TaskCreationOutcome::Failed;
+		}
+	}
+
+	private function handleInternal(
+		array $taskData,
+		Message $message,
+		int $initiatorId,
+		?MessageCollection $messagesToForward,
+		bool $builtWithoutVerdict,
+		bool $isPartial,
+		bool $withTerminalStatus,
+		bool $skipDuplicateCheck,
+		string $sourceText,
+	): TaskCreationOutcome
 	{
 		if (empty($taskData) || !Loader::includeModule('tasks'))
 		{
-			return false;
+			return TaskCreationOutcome::Failed;
 		}
 
 		if ($initiatorId <= 0)
 		{
-			return false;
+			return TaskCreationOutcome::Failed;
 		}
 
 		$taskData = self::normalizeTaskData($taskData);
@@ -189,7 +229,22 @@ class TranscribedTaskHandler
 		);
 		if ($taskToAdd === null)
 		{
-			return false;
+			return TaskCreationOutcome::Failed;
+		}
+
+		if (!$skipDuplicateCheck && $this->duplicateCheckService->checkBeforeCreate(
+			$taskData,
+			(string)$taskToAdd->title,
+			$taskToAdd->responsible?->id,
+			$message,
+			$sourceText,
+			$initiatorId,
+			$messagesToForward?->getIds() ?? [],
+			$builtWithoutVerdict,
+			$isPartial,
+		))
+		{
+			return TaskCreationOutcome::Deferred;
 		}
 
 		try
@@ -198,7 +253,7 @@ class TranscribedTaskHandler
 		}
 		catch (SystemException)
 		{
-			return false;
+			return TaskCreationOutcome::Failed;
 		}
 
 		$this->runSideEffect(
@@ -218,7 +273,7 @@ class TranscribedTaskHandler
 		$this->runSideEffect(
 			$addedTask,
 			'chatLink',
-			function () use ($addedTask, $message, $initiatorId, $messagesToForward, $isPartial)
+			function () use ($addedTask, $message, $initiatorId, $messagesToForward, $isPartial, $withTerminalStatus)
 			{
 				$this->chatTaskLinkService->linkFromMessage(
 					taskId: $addedTask->getId(),
@@ -226,6 +281,7 @@ class TranscribedTaskHandler
 					userId: $initiatorId,
 					taskType: $this->getTaskType($addedTask, $messagesToForward !== null),
 					isPartial: $isPartial,
+					withTerminalStatus: $withTerminalStatus,
 				);
 			},
 		);
@@ -266,7 +322,30 @@ class TranscribedTaskHandler
 			},
 		);
 
-		return true;
+		return TaskCreationOutcome::Created;
+	}
+
+	public function createDeferred(
+		array $taskData,
+		Message $message,
+		string $transcribedText,
+		int $initiatorId,
+		?MessageCollection $messagesToForward = null,
+		bool $builtWithoutVerdict = false,
+		bool $isPartial = false,
+	): TaskCreationOutcome
+	{
+		return $this->handle(
+			$taskData,
+			$message,
+			$initiatorId,
+			$messagesToForward,
+			$builtWithoutVerdict,
+			$isPartial,
+			withTerminalStatus: false,
+			skipDuplicateCheck: true,
+			sourceText: $transcribedText,
+		);
 	}
 
 	/**

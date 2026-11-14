@@ -69,6 +69,23 @@ final class ExternalLinkOpenPolicy
 		return $this->manualLinksEnabled;
 	}
 
+	/**
+	 * Whether the portal lets manual links of regular objects be opened.
+	 */
+	public function allowsManualLinks(): bool
+	{
+		return $this->manualLinksEnabled;
+	}
+
+	/**
+	 * Whether the portal lets manual links of boards be opened: by the board policy while boards are
+	 * on, by the manual one otherwise, as {@see canOpenByPortalPolicy()} decides it.
+	 */
+	public function allowsBoardLinks(): bool
+	{
+		return $this->boardsEnabled ? $this->boardLinksEnabled : $this->manualLinksEnabled;
+	}
+
 	private function isBoard(ExternalLink $link): bool
 	{
 		$file = $link->getFile();

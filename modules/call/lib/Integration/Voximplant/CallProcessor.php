@@ -33,7 +33,7 @@ class CallProcessor
 	{
 		$statisticRecord = $eventData['fields'] ?? $eventData;
 		$participants = $eventData['participants'] ?? null;
-		$initiatorId = $eventData['initiatorId'] ?? 0;
+		$initiatorId = (int)($eventData['initiatorId'] ?? 0);
 
 		// Get participants from event data or fallback to PORTAL_USER_ID
 		$callUsers = [];
@@ -83,9 +83,34 @@ class CallProcessor
 				(int)$statisticRecord['ID'],
 				$userId,
 				$status,
-				$statisticRecord['CALL_START_DATE']
+				$statisticRecord['CALL_START_DATE'],
+				direction: $this->resolveDirection($statisticRecord, $userId),
 			);
 		}
+	}
+
+	/**
+	 * Which side of the phone call the entry of the user is on.
+	 *
+	 * Read off the call itself rather than off the role that picks the status: on a call that came in
+	 * nobody holds the caller role, so the event names the user the call was routed to as its initiator,
+	 * and the one who picked it up would be filed as outgoing. Outgoing is the portal placing a call, and
+	 * only for the user it was placed by; everybody else is incoming.
+	 *
+	 * @param array $statisticRecord
+	 * @param int $userId Owner of the entry being written
+	 * @return string One of the DIRECTION_* of {@see CallUserLogTable}
+	 */
+	private function resolveDirection(array $statisticRecord, int $userId): string
+	{
+		$incoming = (int)$statisticRecord['INCOMING'];
+		$isPlacedByPortal = $incoming === CVoxImplantMain::CALL_OUTGOING || $incoming === CVoxImplantMain::CALL_CALLBACK;
+		$isPlacedByUser = $userId === (int)($statisticRecord['PORTAL_USER_ID'] ?? 0);
+
+		return $isPlacedByPortal && $isPlacedByUser
+			? CallUserLogTable::DIRECTION_OUTGOING
+			: CallUserLogTable::DIRECTION_INCOMING
+		;
 	}
 
 	/**

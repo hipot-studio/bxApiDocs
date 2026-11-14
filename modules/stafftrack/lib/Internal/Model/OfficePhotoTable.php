@@ -13,6 +13,19 @@ use Bitrix\Main\Type\DateTime;
  *
  * One row per photo of an office. SORT only orders the photos of one office relative to each other:
  * values may repeat and may leave gaps, so the identifier settles the order of a tie.
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_OfficePhoto_Query query()
+ * @method static EO_OfficePhoto_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_OfficePhoto_Result getById($id)
+ * @method static EO_OfficePhoto_Result getList(array $parameters = [])
+ * @method static EO_OfficePhoto_Entity getEntity()
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficePhoto createObject($setDefaultValues = true)
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection createCollection()
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficePhoto wakeUpObject($row)
+ * @method static \Bitrix\StaffTrack\Internal\Model\OfficePhotoCollection wakeUpCollection($rows)
  */
 class OfficePhotoTable extends DataManager
 {

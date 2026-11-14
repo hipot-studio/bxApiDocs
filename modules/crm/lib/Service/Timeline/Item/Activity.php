@@ -177,7 +177,10 @@ abstract class Activity extends Configurable implements Deadlinable
 
 	protected function isPlanned(): bool
 	{
-		return is_null($this->getAssociatedEntityModel()?->get('ORIGIN_ID'));
+		// The data of a pull event may carry the missing origin of a planned activity as '' instead of null.
+		$originId = $this->getAssociatedEntityModel()?->get('ORIGIN_ID');
+
+		return $originId === null || $originId === '';
 	}
 
 	final protected function getScheduleButton(

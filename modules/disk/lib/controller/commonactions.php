@@ -176,6 +176,7 @@ class CommonActions extends BaseObject
 
 					continue;
 				}
+				$this->addErrorsOfRestoredObject($object);
 
 				$restoredIds[] = $object->getRealObjectId();
 			}

@@ -20,6 +20,9 @@ final class AddUsersConfig
 	public readonly bool $cascadeToParent;
 	public readonly array $visitedChatIds;
 	public readonly ?Chat $originChat;
+	public readonly array $mutedUserIds;
+	public readonly bool $addToRecent;
+	public readonly ?int $unreadMarkedMessageId;
 
 	public function __construct(
 		array $managerIds = [],
@@ -35,6 +38,9 @@ final class AddUsersConfig
 		bool $cascadeToParent = true,
 		array $visitedChatIds = [],
 		?Chat $originChat = null,
+		array $mutedUserIds = [],
+		bool $addToRecent = false,
+		?int $unreadMarkedMessageId = null,
 	)
 	{
 		$this->managerIds = $this->normalizeIds($managerIds);
@@ -50,6 +56,9 @@ final class AddUsersConfig
 		$this->cascadeToParent = $cascadeToParent;
 		$this->visitedChatIds = $this->normalizeIds($visitedChatIds);
 		$this->originChat = $originChat;
+		$this->mutedUserIds = $this->normalizeIds($mutedUserIds);
+		$this->addToRecent = $addToRecent;
+		$this->unreadMarkedMessageId = ($unreadMarkedMessageId ?? 0) > 0 ? $unreadMarkedMessageId : null;
 	}
 
 	public function hasVisited(int $chatId): bool
@@ -72,6 +81,27 @@ final class AddUsersConfig
 		$hiddenUserIds += $this->normalizeIds($ids);
 
 		return $this->with(['hiddenUserIds' => $hiddenUserIds]);
+	}
+
+	/**
+	 * @param int[] $ids
+	 * @return self
+	 */
+	public function addMutedUserIds(array $ids): self
+	{
+		$mutedUserIds = $this->mutedUserIds;
+		$mutedUserIds += $this->normalizeIds($ids);
+
+		return $this->with(['mutedUserIds' => $mutedUserIds]);
+	}
+
+	/**
+	 * @param int[] $mutedUserIds
+	 * @return self
+	 */
+	public function setMutedUserIds(array $mutedUserIds): self
+	{
+		return $this->with(['mutedUserIds' => $mutedUserIds]);
 	}
 
 	/**
@@ -111,9 +141,19 @@ final class AddUsersConfig
 		return $this->with(['visitedChatIds' => $visited]);
 	}
 
+	public function withoutInitialMemberState(): self
+	{
+		return $this->with(['mutedUserIds' => [], 'addToRecent' => false, 'unreadMarkedMessageId' => null]);
+	}
+
 	public function isHidden(int $userId): bool
 	{
 		return isset($this->hiddenUserIds[$userId]);
+	}
+
+	public function isMuted(int $userId): bool
+	{
+		return isset($this->mutedUserIds[$userId]);
 	}
 
 	public function bySharingLink(): bool

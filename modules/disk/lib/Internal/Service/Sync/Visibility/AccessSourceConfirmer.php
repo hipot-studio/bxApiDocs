@@ -7,6 +7,7 @@ namespace Bitrix\Disk\Internal\Service\Sync\Visibility;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Model\UnifiedLinkAccessTable;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkLiveness;
 use Bitrix\Disk\Internal\Service\Sync\Snapshot\AccessSourceConfirmerInterface;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -20,41 +21,23 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 
 /**
- * The source of access behind a row of the interaction set, confirmed for a whole page at once
- * (ALG-05).
+ * Confirms the source of access behind a page of the interaction set (ALG-05).
  *
- * A row of the set is written when the user touches an object, and it stays there afterwards. The
- * access it was written for may since have been taken away - the rights of Disk revoked, the link it
- * was opened through switched off - so presence in the set is not visibility. Without this
- * confirmation the event of such a revocation would be idle: the client would sync, be told it may
- * see the object, and keep something it can no longer open.
- *
- * Both checks are batch and both stay inside the module. Two queries answer for the whole page,
- * whatever its size - one, when the sources beyond the rights are not asked at all - and no connector
- * of another module is asked anything: per-object questions are exactly what a page of a hundred
- * objects cannot afford.
- *
- * A row is confirmed by any one of three sources, and they are asked in this order:
+ * Presence in the set is not visibility: Disk rights may be revoked, a link may be switched off,
+ * or the owning module may stop exposing its attached object. A row is retained while at least one
+ * of these sources is current:
  *
  *  1. the object is visible by the rights of Disk;
- *  2. a link that grants reading is alive on it - an external link that exists and has not expired,
- *     or a unified link whose stored level is not the denied one;
- *  3. the row carries an attachment of the object into an entity of another module.
+ *  2. an external or unified link still grants reading;
+ *  3. the attached object is readable according to its connector.
  *
- * The last two sources are not personal - a link answers for whoever holds it, and an attachment is
- * counted by the identifier the row carries - so for a reader of the extranet or of a collab they are
- * not asked at all ({@see ReaderCategory}). The page of such a reader costs the one query of the
- * rights, and its rows fall the moment the rights of Disk do.
+ * Disk rights and links are checked in batches for the page. Attached objects are de-duplicated,
+ * then checked one by one because their access belongs to the owning modules. Reader-category
+ * narrowing remains in force: links and attachments are not considered for extranet and collab
+ * readers ({@see ReaderCategory}).
  *
- * The third branch is a declared narrowing rather than a stub: the connector of the owning module
- * answers one object at a time, and connecting them belongs to stage 3. Until then such an object
- * leaves the memory of the client by the ageing of the set, not at the moment the other module takes
- * the access away.
- *
- * The unified link is read as its stored state: a level written for the object that still grants
- * reading. The portal-wide default is deliberately not taken as a confirmation - every file of the
- * portal carries a unique code, so the default would confirm every row of every set and leave the
- * check with nothing to say.
+ * The portal-wide default unified-link level is deliberately not a confirmation. Every file has a
+ * unique code, so that default would confirm every row and make revocation ineffective.
  */
 final class AccessSourceConfirmer implements AccessSourceConfirmerInterface
 {
@@ -65,10 +48,15 @@ final class AccessSourceConfirmer implements AccessSourceConfirmerInterface
 	private const RIGHTS_COLUMNS = ['ID', 'CREATED_BY'];
 
 	private ReaderCategory $reader;
+	private AttachedObjectAccessConfirmer $attachedObjectAccessConfirmer;
 
-	public function __construct(?ReaderCategory $reader = null)
+	public function __construct(
+		?ReaderCategory $reader = null,
+		?AttachedObjectAccessConfirmer $attachedObjectAccessConfirmer = null,
+	)
 	{
 		$this->reader = $reader ?? new ReaderCategory();
+		$this->attachedObjectAccessConfirmer = $attachedObjectAccessConfirmer ?? new AttachedObjectAccessConfirmer();
 	}
 
 	/**
@@ -100,13 +88,17 @@ final class AccessSourceConfirmer implements AccessSourceConfirmerInterface
 
 		$beyondRights = $this->reader->allowsSourcesBeyondDiskRights($userId);
 		$byLink = $beyondRights ? $this->carryingAnAliveLink($ids) : [];
+		$byAttachment = $beyondRights
+			? $this->attachedObjectAccessConfirmer->readableIds($userId, self::attachedObjectIdsOf($rows))
+			: [];
 
 		$confirmed = [];
 		foreach ($rows as $row)
 		{
 			if (
 				self::isAmong($row, $byRights)
-				|| ($beyondRights && (self::isAmong($row, $byLink) || $row['attachedObjectId'] !== null))
+				|| ($beyondRights && self::isAmong($row, $byLink))
+				|| ($row['attachedObjectId'] !== null && isset($byAttachment[$row['attachedObjectId']]))
 			)
 			{
 				$confirmed[] = $row;
@@ -139,6 +131,24 @@ final class AccessSourceConfirmer implements AccessSourceConfirmerInterface
 	}
 
 	/**
+	 * @param array<int, array{attachedObjectId: int|null}> $rows
+	 * @return int[]
+	 */
+	private static function attachedObjectIdsOf(array $rows): array
+	{
+		$ids = [];
+		foreach ($rows as $row)
+		{
+			if ($row['attachedObjectId'] !== null)
+			{
+				$ids[] = $row['attachedObjectId'];
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
 	 * @param array{objectId: int, realObjectId: int} $row
 	 * @param array<int, true> $ids
 	 */
@@ -148,10 +158,8 @@ final class AccessSourceConfirmer implements AccessSourceConfirmerInterface
 	}
 
 	/**
-	 * The one personal source of the three, asked on its own. A caller that holds objects instead of
-	 * rows of the set has nothing else to ask: the other two answer for whoever holds a link or an
-	 * attachment, and over an object nobody touched they would confirm it to every reader of the
-	 * portal.
+	 * The source asked on its own. A caller that holds objects instead of rows of the set has nothing
+	 * else to ask: links and attachments are meaningful only in the context of a stored interaction.
 	 *
 	 * @param int[] $objectIds
 	 * @return array<int, true>
@@ -222,18 +230,7 @@ final class AccessSourceConfirmer implements AccessSourceConfirmerInterface
 			->where(
 				Query::filter()
 					->logic('or')
-					->where(
-						Query::filter()
-							->whereNotNull('SYNC_EXTERNAL_LINK.ID')
-							->where(
-								Query::filter()
-									->logic('or')
-									->whereNull('SYNC_EXTERNAL_LINK.DEATH_TIME')
-									->where('SYNC_EXTERNAL_LINK.DEATH_TIME', '>', new DateTime())
-								,
-							)
-						,
-					)
+					->where(ExternalLinkLiveness::aliveFilter('SYNC_EXTERNAL_LINK.'))
 					->where(
 						Query::filter()
 							->whereNotNull('SYNC_UNIFIED_LINK.ID')

@@ -8,9 +8,11 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\BaseComponent;
+use Bitrix\Disk\QuickAccess\ScopeTokenService;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Uf\FileUserType;
+use Bitrix\Disk\Uf\UserFieldManager;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
@@ -28,6 +30,9 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 	const VIEW_TYPE_MOBILE_GRID	= 'mobile_grid';
 
 	protected $editMode = false;
+
+	/** @var int[] Ids of attached objects saved in the field which the viewer cannot read. */
+	private array $hiddenForeignIds = [];
 
 	public function configureActions()
 	{
@@ -165,6 +170,12 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			'FILES' => $this->loadFilesData(),
 			'UID' => $this->getComponentId(),
 		];
+
+		if ($this->editMode)
+		{
+			// The edit form sends these ids back as they are, so saving the form keeps them in the field.
+			$this->arResult['HIDDEN_FOREIGN_IDS'] = $this->hiddenForeignIds;
+		}
 
 		$this->arResult['SIGNED_PARAMS'] = $this->getComponentSignedParameters();;
 
@@ -316,8 +327,20 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 		$scopeTokenService = $this->getScopeTokenService();
 
-		$fileItems = $this->prepareFileItems($values, $userFieldManager);
+		$preparedFileItems = $this->prepareFileItems($values, $userFieldManager);
+		$fileItems = $this->filterReadableFileItems(
+			$preparedFileItems,
+			$userFieldManager,
+			$this->getForeignCheckUserId((int)$userId),
+		);
+		$this->hiddenForeignIds = $this->collectHiddenForeignIds($preparedFileItems, $fileItems);
 		$securityContextsByFile = $this->preloadFileItemsDownloadAccess($fileItems, (int)$userId);
+		$quickAccessByFile = $this->grantFileItemsQuickAccess(
+			$fileItems,
+			$securityContextsByFile,
+			$scopeTokenService,
+			(int)$userId,
+		);
 
 		foreach($values as $id)
 		{
@@ -368,18 +391,10 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			$name = $fileModel->getName();
 
 			$quickAccessGetParam = [];
-			if ($attachedModel)
+			$quickAccess = $quickAccessByFile[$id] ?? null;
+			if ($quickAccess !== null)
 			{
-				$scope = $scopeTokenService->getTokenScopeByAttachedObject($attachedModel);
-				$result = $scopeTokenService->grantAccessWithScope(
-					$attachedModel,
-					$scope,
-				);
-
-				if ($result !== null)
-				{
-					$quickAccessGetParam['_esd'] = $result['encryptedScope'];
-				}
+				$quickAccessGetParam['_esd'] = $quickAccess['encryptedScope'];
 			}
 
 			$downloadUrl = $canDownload
@@ -778,6 +793,76 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		return $fileItems;
 	}
 
+	/**
+	 * Drops attached objects of other entities which the viewer cannot read, so that neither their data
+	 * nor quick access to them gets to the template. New objects are checked later by their own rights.
+	 * Only fields whose connector supports foreign connectors may hold such objects, others are kept as is.
+	 *
+	 * @param array $fileItems Items by value of the field, see prepareFileItems().
+	 * @param UserFieldManager $userFieldManager User field manager.
+	 * @param int $viewerId Id of user whose rights are checked.
+	 * @return array
+	 */
+	protected function filterReadableFileItems(
+		array $fileItems,
+		UserFieldManager $userFieldManager,
+		int $viewerId,
+	): array
+	{
+		$userField = $this->arParams['PARAMS']['arUserField'];
+		$entityType = (string)($userField['ENTITY_ID'] ?? '');
+		if (!$userFieldManager->supportsForeignAttachedObjects($entityType))
+		{
+			return $fileItems;
+		}
+
+		$entityId = (int)($userField['ENTITY_VALUE_ID'] ?? 0);
+		foreach ($fileItems as $id => $fileItem)
+		{
+			$attachedModel = $fileItem['attachedModel'] ?? null;
+			if (
+				$attachedModel instanceof AttachedObject
+				&& !$userFieldManager->canUseAttachedObject($attachedModel, $entityType, $entityId, $viewerId)
+			)
+			{
+				unset($fileItems[$id]);
+			}
+		}
+
+		return $fileItems;
+	}
+
+	/**
+	 * Ids of attached objects of the field which filterReadableFileItems() dropped. Only bare ids are returned:
+	 * nothing about the files themselves goes to the template.
+	 *
+	 * @param array $fileItems Items before the filter.
+	 * @param array $readableFileItems Items after the filter.
+	 * @return int[]
+	 */
+	protected function collectHiddenForeignIds(array $fileItems, array $readableFileItems): array
+	{
+		$ids = [];
+		foreach (array_diff_key($fileItems, $readableFileItems) as $fileItem)
+		{
+			$attachedModel = $fileItem['attachedModel'] ?? null;
+			if ($attachedModel instanceof AttachedObject)
+			{
+				$ids[] = (int)$attachedModel->getId();
+			}
+		}
+
+		return array_values(array_unique(array_filter($ids)));
+	}
+
+	/**
+	 * The mail template shows files to its recipient, so the rights of the recipient are checked there.
+	 */
+	protected function getForeignCheckUserId(int $currentUserId): int
+	{
+		return UserFieldManager::resolveViewerId((string)$this->getTemplateName(), $this->arParams, $currentUserId);
+	}
+
 	protected function loadNewFileModels(array $objectIds): array
 	{
 		$objectIds = array_values(array_unique(array_filter(array_map('intval', $objectIds))));
@@ -824,6 +909,57 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		$downloadAccess->preload($fileModels);
 
 		return DownloadAccess::preloadForFilesBySecurityContext($fileModels, $userId);
+	}
+
+	/**
+	 * Grants quick access to the attached files in one batch, so that their metadata goes to the storage
+	 * in one round trip instead of one per file. Only files the listing goes on to show are granted.
+	 * An attachment with owner parameters is granted only when its provider lets the user read it:
+	 * the user field accepts any attachment of the same connector class and entity id, whatever its parameters.
+	 *
+	 * @return array<array-key, array|null> Result of ScopeTokenService::grantAccessWithScope() by item id
+	 */
+	protected function grantFileItemsQuickAccess(
+		array $fileItems,
+		array $securityContextsByFile,
+		ScopeTokenService $scopeTokenService,
+		int $userId,
+	): array
+	{
+		$objectsWithScopes = [];
+
+		foreach ($fileItems as $id => $fileItem)
+		{
+			$attachedModel = $fileItem['attachedModel'] ?? null;
+			$fileModel = $fileItem['fileModel'] ?? null;
+
+			if (
+				$attachedModel instanceof AttachedObject
+				&& $fileModel instanceof File
+				&& isset($securityContextsByFile[spl_object_id($fileModel)])
+			)
+			{
+				$scope = $scopeTokenService->getTokenScopeByAttachedObject($attachedModel);
+				if ($scope === null)
+				{
+					continue;
+				}
+
+				if ($attachedModel->hasOwnerParameters() && !$attachedModel->canRead($userId))
+				{
+					continue;
+				}
+
+				$objectsWithScopes[$id] = [$attachedModel, $scope];
+			}
+		}
+
+		if (empty($objectsWithScopes))
+		{
+			return [];
+		}
+
+		return $scopeTokenService->grantAccessWithScopes($objectsWithScopes);
 	}
 
 	private function buildItemAttributes(\Bitrix\Disk\AttachedObject $attachedObject, Uri $sourceUri)

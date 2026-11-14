@@ -3,11 +3,14 @@
 namespace Bitrix\Disk\Document\Models;
 
 use Bitrix\Disk\Document\OnlyOffice;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\DataManager;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\BooleanField;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Event;
+use Bitrix\Main\ORM\EventResult;
+use Bitrix\Main\ORM\EntityError;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -41,6 +44,19 @@ final class DocumentSessionTable extends DataManager
 	public const STATUS_NON_ACTIVE = 2;
 
 	public const EXTERNAL_HASH_LENGTH = 128;
+
+	public static function onBeforeAdd(Event $event): EventResult
+	{
+		$result = new EventResult();
+		$fields = $event->getParameter('fields');
+		$objectId = (int)($fields['OBJECT_ID'] ?? 0);
+		if ($objectId > 0 && !(new MarkerService())->revokeBeforeUse($objectId))
+		{
+			$result->addError(new EntityError(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
+		}
+
+		return $result;
+	}
 
 	/**
 	 * Returns DB table name for entity.
@@ -171,6 +187,23 @@ final class DocumentSessionTable extends DataManager
 			],
 			[
 				'=EXTERNAL_HASH' => $hash,
+			]
+		);
+	}
+
+	public static function deactivateByIds(array $sessionIds): void
+	{
+		if ($sessionIds === [])
+		{
+			return;
+		}
+
+		parent::updateBatch(
+			[
+				'STATUS' => self::STATUS_NON_ACTIVE,
+			],
+			[
+				'@ID' => $sessionIds,
 			]
 		);
 	}

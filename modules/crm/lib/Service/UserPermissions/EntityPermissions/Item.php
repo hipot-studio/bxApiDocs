@@ -193,6 +193,21 @@ class Item
 		return $this->canUpdateItemIdentifier($itemId);
 	}
 
+	/**
+	 * Returns true if user can update the source item and add items in its category.
+	 *
+	 * @param \Bitrix\Crm\Item $item
+	 * @return bool
+	 */
+	public function canCopyItem(\Bitrix\Crm\Item $item): bool
+	{
+		return $this->canUpdateItem($item)
+			&& $this->entityType->canAddItemsInCategory(
+				$item->getEntityTypeId(),
+				(int)$item->getCategoryIdForPermissions(),
+			);
+	}
+
 	public function canDeleteItem(\Bitrix\Crm\Item $item): bool
 	{
 		$itemId = ItemIdentifier::createByParams($item->getEntityTypeId(), $item->getId(), $item->getCategoryIdForPermissions());

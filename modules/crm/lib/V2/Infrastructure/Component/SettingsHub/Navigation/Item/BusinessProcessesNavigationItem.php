@@ -2,17 +2,22 @@
 
 namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 
+use Bitrix\Crm\Integration\Intranet\ToolsManager;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
 use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+
+Loc::loadMessages(__FILE__);
 
 final class BusinessProcessesNavigationItem implements SettingsHubWrappedNavigationItemLifecycle
 {
@@ -39,15 +44,46 @@ final class BusinessProcessesNavigationItem implements SettingsHubWrappedNavigat
 		);
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return $this->isVisible($permissions)
-			&& $this->isBizprocAvailable
-			&& $this->isBizprocEnabled
-			&& $permissions->configuration()->canManageBizprocTemplates(
+		if (!$this->isBizprocAvailable)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_BUSINESSPROCESSES_BIZPROC_TOOL_OFF'),
+					'BUSINESSPROCESSES_BIZPROC_TOOL_OFF',
+					['restrictionSliderCode' => ToolsManager::BIZPROC_SLIDER_CODE],
+				),
+			);
+		}
+
+		if (!$this->isBizprocEnabled)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_BUSINESSPROCESSES_BIZPROC_UNAVAILABLE'),
+					'BUSINESSPROCESSES_BIZPROC_UNAVAILABLE',
+					['restrictionSliderCode' => 'limit_crm_bp_automation'],
+				),
+			);
+		}
+
+		if (
+			!$permissions->configuration()->canManageBizprocTemplates(
 				ConfigurationCallSite::BizprocTemplateComponent,
 				ConfigurationScope::ofCrm(),
+			)
+		)
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_BUSINESSPROCESSES_NO_ACCESS'),
+					'BUSINESSPROCESSES_NO_ACCESS',
+				),
 			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

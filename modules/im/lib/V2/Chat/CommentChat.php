@@ -394,6 +394,41 @@ class CommentChat extends GroupChat
 		return $this;
 	}
 
+	/**
+	 * A post cleared from the channel takes its comments with it. The comment chat gets no border of
+	 * its own - the cascade reaches it passes later, in the scheduled cleanup - so it follows the post:
+	 * once the post stands behind the border of the channel, every comment is behind it as well.
+	 * Reading the comments is refused before this is asked (the access check goes through the post),
+	 * so this serves the paths that read no chat, such as a signed link to the file of a comment.
+	 */
+	public function isMessageBehindHistoryBorder(int $messageId): bool
+	{
+		return parent::isMessageBehindHistoryBorder($messageId)
+			|| $this->getParentChat()->isMessageBehindHistoryBorder($this->getParentMessageId());
+	}
+
+	/**
+	 * The same rule for a single reader: clearing the channel for oneself moves the border of that reader
+	 * in the channel and leaves the comment chats where they are, only unsubscribing from them, so the
+	 * comment chat itself holds no border to answer with. This is the reader-scoped half of what the
+	 * access check gets through the post ({@see self::checkAccessInternal()}), for the paths that ask
+	 * about reachability rather than about access.
+	 */
+	public function isParentMessageBehindUserHistoryBorder(int $userId): bool
+	{
+		return $this->getParentChat()->getStartId($userId) > $this->getParentMessageId();
+	}
+
+	/**
+	 * Both halves at once for a reader of the comments: the post behind the border of the channel, and
+	 * the post behind the border this reader has in it.
+	 */
+	public function isMessageBehindUserHistoryBorder(int $messageId, int $userId): bool
+	{
+		return parent::isMessageBehindUserHistoryBorder($messageId, $userId)
+			|| $this->isParentMessageBehindUserHistoryBorder($userId);
+	}
+
 	public function getParentChat(): Chat
 	{
 		$this->parentChat ??= Chat::getInstance($this->getParentChatId())

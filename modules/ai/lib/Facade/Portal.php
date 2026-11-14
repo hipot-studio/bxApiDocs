@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\AI\Facade;
 
 use Bitrix\AI\Integration\Baas\BaasTokenService;
+use Bitrix\AI\Tuning\Defaults;
+use Bitrix\AI\Tuning\Manager;
 use Bitrix\Bitrix24\License;
 use Bitrix\Bitrix24\Public\Enum\VibePlus\MonetizationModel;
 use Bitrix\Bitrix24\Public\Service\VibePlus\RuntimeStateProvider;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\LoggerFactory;
@@ -16,6 +19,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserTable;
+use Bitrix\Main\Web\Json;
 use CBitrix24;
 use Psr\Log\NullLogger;
 
@@ -30,7 +34,18 @@ class Portal
 	private const DEMO_LICENSE_TYPE = 'demo';
 	private const VIBE_PLUS_LOGGER_ID = 'ai.vibe_plus.runtime_state';
 
+	private const MODULE_AI_ID = 'ai';
+	private const MODULE_AIASSISTANT_ID = 'aiassistant';
+	private const OPTION_TUNING = 'tuning';
+	private const AIASSISTANT_SCENARIO_OPTIONS = [
+		'remote_mcp_server_active',
+		'remote_mcp_server_sharing_only',
+		'enable_bitrix_internal_mcp_server',
+	];
+
 	private static bool $missingRuntimeStateProviderWarningLogged = false;
+	private static ?bool $enabledAiScenarioResult = null;
+	private static ?string $enabledAiScenarioKey = null;
 
 	public static function getCreationDateTime(): ?DateTime
 	{
@@ -59,7 +74,8 @@ class Portal
 			->setSelect(['ID', 'DATE_REGISTER'])
 			->where('ID', 1)
 			->setLimit(1)
-			->fetchObject();
+			->fetchObject()
+		;
 
 		$timestamp = (int)($firstUser?->getDateRegister()?->getTimestamp() ?: 0);
 
@@ -103,6 +119,116 @@ class Portal
 	public static function isBitrix24Portal(): bool
 	{
 		return ModuleManager::isModuleInstalled('bitrix24');
+	}
+
+	/**
+	 * Returns true while at least one AI scenario is enabled in the portal settings.
+	 */
+	public static function hasEnabledAiScenario(): bool
+	{
+		// Building Tuning\Manager fires the ai:onTuningLoad handlers of every module, so
+		// repeat calls inside one hit reuse the result. It is not cached across requests:
+		// handlers may hinge a scenario on their own module's options, and there is no
+		// way to enumerate all of those for a cache key.
+		$key = self::getAiScenarioStateKey();
+		if (self::$enabledAiScenarioKey === $key)
+		{
+			return self::$enabledAiScenarioResult;
+		}
+
+		$result = self::detectEnabledAiScenario();
+		self::$enabledAiScenarioKey = $key;
+
+		return self::$enabledAiScenarioResult = $result;
+	}
+
+	private static function getAiScenarioStateKey(): string
+	{
+		$key = (string)Option::get(self::MODULE_AI_ID, self::OPTION_TUNING, '');
+		foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
+		{
+			$key .= '|' . Option::get(self::MODULE_AIASSISTANT_ID, $optionName, 'N');
+		}
+
+		return $key;
+	}
+
+	private static function detectEnabledAiScenario(): bool
+	{
+		$manager = new Manager();
+		foreach ($manager->getList() as $group)
+		{
+			$items = $group->getItems();
+
+			// A child switch keeps its stored value while its parent is off: the settings page
+			// only hides the row, so such a child is not a scenario the admin enabled.
+			$hiddenChildren = [];
+			foreach ($group->toArray()['relations'] ?? [] as $relation)
+			{
+				if ($items->get($relation['parent'])?->getValue() === false)
+				{
+					array_push($hiddenChildren, ...$relation['children']);
+				}
+			}
+
+			foreach ($items as $item)
+			{
+				if (Defaults::isItemInternal($item) || in_array($item->getCode(), $hiddenChildren, true))
+				{
+					continue;
+				}
+
+				if ($item->isBoolean() && $item->getValue() === true)
+				{
+					return true;
+				}
+			}
+		}
+
+		if (Loader::includeModule(self::MODULE_AIASSISTANT_ID))
+		{
+			foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
+			{
+				if (Option::get(self::MODULE_AIASSISTANT_ID, $optionName, 'N') === 'Y')
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Switches off every AI scenario in the portal settings.
+	 */
+	public static function disableAllAiScenarios(): void
+	{
+		$manager = new Manager();
+		$storage = Manager::getTuningStorage();
+
+		foreach ($manager->getList() as $group)
+		{
+			foreach ($group->getItems() as $item)
+			{
+				if (Defaults::isItemInternal($item) || !$item->isBoolean())
+				{
+					continue;
+				}
+
+				$storage[$item->getCode()] = false;
+			}
+		}
+
+		Option::set(self::MODULE_AI_ID, self::OPTION_TUNING, Json::encode($storage));
+
+		if (Loader::includeModule(self::MODULE_AIASSISTANT_ID))
+		{
+			foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
+			{
+				Option::set(self::MODULE_AIASSISTANT_ID, $optionName, 'N');
+			}
+		}
 	}
 
 	public static function hasVibePlusMonetizationModel(): bool

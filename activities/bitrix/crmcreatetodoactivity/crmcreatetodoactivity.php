@@ -38,7 +38,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 			"AutoComplete" => null,
 			"Subject" => '',
 			"ColorId" => '',
-			'AttachmentType' => static::ATTACHMENT_TYPE_FILE,
+			'AttachmentType' => self::ATTACHMENT_TYPE_FILE,
 			'Attachment' => [],
 			"Address" => '',
 			'LocationId' => '',
@@ -112,7 +112,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 		$fileIds = $this->getIntValuesArray($this->Attachment);
 		if (\Bitrix\Main\Loader::includeModule('disk'))
 		{
-			if ($this->AttachmentType === static::ATTACHMENT_TYPE_DISK)
+			if ($this->AttachmentType === self::ATTACHMENT_TYPE_DISK)
 			{
 				$attachment = $fileIds;
 				$fileIds = self::getRealFilesIds($fileIds);
@@ -527,8 +527,8 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 				'FieldName' => 'attachment_type',
 				'Type' => 'select',
 				'Options' => [
-					static::ATTACHMENT_TYPE_FILE => Loc::getMessage('CRM_BP_CREATE_TODO_ATTACHMENT_TYPE_FILE'),
-					static::ATTACHMENT_TYPE_DISK => Loc::getMessage('CRM_BP_CREATE_TODO_ATTACHMENT_TYPE_DISK'),
+					self::ATTACHMENT_TYPE_FILE => Loc::getMessage('CRM_BP_CREATE_TODO_ATTACHMENT_TYPE_FILE'),
+					self::ATTACHMENT_TYPE_DISK => Loc::getMessage('CRM_BP_CREATE_TODO_ATTACHMENT_TYPE_DISK'),
 				],
 			];
 			$map['Attachment'] = [
@@ -602,7 +602,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 			);
 		}
 
-		if ($properties['AttachmentType'] === static::ATTACHMENT_TYPE_DISK)
+		if ($properties['AttachmentType'] === self::ATTACHMENT_TYPE_DISK)
 		{
 			foreach ((array)$currentValues["attachment"] as $attachmentId)
 			{

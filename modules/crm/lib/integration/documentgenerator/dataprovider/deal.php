@@ -17,6 +17,7 @@ use Bitrix\Main\Localization\Loc;
 class Deal extends ProductsDataProvider implements Filterable
 {
 	protected $contacts;
+	protected $contactIds;
 	protected $payments;
 	protected $shipments;
 	protected $order;
@@ -53,6 +54,7 @@ class Deal extends ProductsDataProvider implements Filterable
 				$this->fields['CONTACTS'] = [
 					'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_CONTACTS_TITLE'),
 					'PROVIDER' => ArrayDataProvider::class,
+					'ITEM_IDS' => 'getContactIds',
 					'OPTIONS' => [
 						'ITEM_PROVIDER' => Contact::class,
 						'ITEM_NAME' => 'CONTACT',
@@ -146,8 +148,8 @@ class Deal extends ProductsDataProvider implements Filterable
 				foreach($contactBindings as $binding)
 				{
 					$contact = DataProviderManager::getInstance()->getDataProvider(Contact::class, $binding['CONTACT_ID'], [
-						'isLightMode' => true,
 						'DISABLE_MY_COMPANY' => true,
+						'isLightMode' => true,
 					], $this);
 					$this->contacts[] = $contact;
 				}
@@ -155,6 +157,29 @@ class Deal extends ProductsDataProvider implements Filterable
 		}
 
 		return $this->contacts;
+	}
+
+	/**
+	 * Returns contact IDs in binding order.
+	 *
+	 * @return list<int>
+	 */
+	public function getContactIds(): array
+	{
+		if($this->contactIds === null)
+		{
+			$this->contactIds = [];
+			if(intval($this->source) > 0)
+			{
+				$contactBindings = DealContactTable::getDealBindings($this->source);
+				foreach($contactBindings as $binding)
+				{
+					$this->contactIds[] = (int)$binding['CONTACT_ID'];
+				}
+			}
+		}
+
+		return $this->contactIds;
 	}
 
 	public function getCategory()

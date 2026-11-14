@@ -18,11 +18,11 @@ use Bitrix\Main\Result;
  */
 final class PersonNameSetting extends AbstractSetting
 {
-	public const CODE = 'crm.format.person_name';
+	public const ID = 'crm.format.person_name';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
@@ -34,10 +34,12 @@ final class PersonNameSetting extends AbstractSetting
 		}
 
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new SelectSchema(...$options),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'prsn_nm_frmt_id',
 		);
 	}
 

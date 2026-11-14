@@ -77,6 +77,11 @@ class EventAttendeesUpdate implements Interfaces\Processor
 			$result = $this->saveNotRecurrentEvent($event, $fields);
 		}
 
+		if ($result === false || $result === null)
+		{
+			return self::REJECT;
+		}
+
 		if ($result && $this->wasEventOwnerUpdated($fields))
 		{
 			$newHostEventData = $this->getNewHostEventData($fields, $result);

@@ -26,7 +26,13 @@ class CopilotGenerationState extends BaseChatEvent
 	/** @see CopilotGenerationState class doc — meaning is status-dependent. */
 	protected int $initiatorId;
 
-	public function __construct(Chat $chat, GenerationStatus $status, int $initiatorId)
+	/** @param ?int $messageId Original user question associated with this generation. */
+	public function __construct(
+		Chat $chat,
+		GenerationStatus $status,
+		int $initiatorId,
+		private readonly ?int $messageId = null,
+	)
 	{
 		parent::__construct($chat);
 		$this->status = $status;
@@ -40,12 +46,18 @@ class CopilotGenerationState extends BaseChatEvent
 
 	protected function getBasePullParamsInternal(): array
 	{
-		return [
+		$params = [
 			'dialogId' => $this->getBaseDialogId(),
 			'chatId' => $this->chat->getId(),
 			'status' => $this->status->value,
 			'initiatorId' => $this->initiatorId,
 		];
+		if ($this->messageId !== null && $this->messageId > 0)
+		{
+			$params['messageId'] = $this->messageId;
+		}
+
+		return $params;
 	}
 
 	protected function getRecipients(): array

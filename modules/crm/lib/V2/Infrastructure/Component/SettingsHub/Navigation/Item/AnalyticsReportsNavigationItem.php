@@ -5,11 +5,15 @@ namespace Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\Item;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
 use Bitrix\Crm\Service\Router\Contract;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
-use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Navigation\SettingsHubWrappedNavigationItemLifecycle;
+use Bitrix\Crm\V2\Infrastructure\Component\SettingsHub\Rendering\SettingsHubRenderContext;
+use Bitrix\Main\Error;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
+
+Loc::loadMessages(__FILE__);
 
 final class AnalyticsReportsNavigationItem implements SettingsHubWrappedNavigationItemLifecycle
 {
@@ -20,14 +24,22 @@ final class AnalyticsReportsNavigationItem implements SettingsHubWrappedNavigati
 
 	public function isVisible(UserPermissions $permissions): bool
 	{
-		return true;
+		return $permissions->isCrmAdmin();
 	}
 
-	public function canRead(UserPermissions $permissions): bool
+	public function checkAvailability(UserPermissions $permissions): Result
 	{
-		return \CCrmAuthorizationHelper::CheckConfigurationUpdatePermission(
-			\CCrmPerms::GetCurrentUserPermissions(),
-		);
+		if (!\CCrmAuthorizationHelper::CheckConfigurationUpdatePermission(\CCrmPerms::GetCurrentUserPermissions()))
+		{
+			return (new Result())->addError(
+				new Error(
+					Loc::getMessage('CRM_SETTINGS_HUB_ANALYTICSREPORTS_NO_ACCESS'),
+					'ANALYTICSREPORTS_NO_ACCESS',
+				),
+			);
+		}
+
+		return new Result();
 	}
 
 	public function urlQueryParameters(): array

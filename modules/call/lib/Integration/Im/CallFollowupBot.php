@@ -2,7 +2,10 @@
 
 namespace Bitrix\Call\Integration\Im;
 
+use Bitrix\Call\Update\CallFollowupBotRepair;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Main\SystemException;
 use Bitrix\Im;
 use Bitrix\Im\Command;
 use Bitrix\Im\Bot\Keyboard;
@@ -35,6 +38,7 @@ class CallFollowupBot extends ImBot\Bot\Base
 	public const BOT_CODE = 'CallFollowupBot';
 	public const COMMAND_CONTINUE_FOLLOWUP = 'continueFollowup';
 	public const COMMAND_RETRY_CLOUD_RECORDING = 'retryCloudRecording';
+	public const BOT_COLOR = 'COPILOT';
 
 	protected const BOT_PROPERTIES = [
 		'CODE' => self::BOT_CODE,
@@ -51,7 +55,7 @@ class CallFollowupBot extends ImBot\Bot\Base
 		'METHOD_BOT_DELETE' => 'onBotDelete',/** @see CallFollowupBot::onBotDelete */
 		'PROPERTIES' => [
 			'NAME' => 'Call Followup Bot',
-			'COLOR' => 'COPILOT',
+			'COLOR' => self::BOT_COLOR,
 		]
 	];
 
@@ -78,7 +82,25 @@ class CallFollowupBot extends ImBot\Bot\Base
 				$call = Registry::getCallWithId($callId);
 				if ($call)
 				{
-					$result = CallAIService::getInstance()->restartCallAiTask($callId);
+					// A member of the chat is not by itself a participant of the call
+					// {@see \Bitrix\Call\Controller\TaskAI::restartAction()}. Checked here and not deeper:
+					// the path behind the retry is shared with callers that have no portal user at all.
+					$userId = (int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID'] ?? 0);
+					if ($userId <= 0 || !$call->checkAccess($userId))
+					{
+						if (CallAISettings::isLoggingEnable())
+						{
+							Logger::getInstance()->error(
+								"CallFollowupBot: continueFollowup refused for call #{$callId}:"
+								. " user #{$userId} has no access to it."
+							);
+						}
+
+						// Buttons stay in place: they belong to the whole chat, not to this user.
+						return true;
+					}
+
+					$result = CallAIService::getInstance()->retryCallAiTask($call);
 					if ($result->isSuccess())
 					{
 						$chat = Chat::getInstance($call->getChatId());
@@ -101,10 +123,8 @@ class CallFollowupBot extends ImBot\Bot\Base
 									->enableSkipUrlIndex()
 								;
 								$context = (new Context())->setUser($call->getInitiatorId());
-								NotifyService::getInstance()
-									->sendMessageDeferred($chat, $message, $sendingConfig, $context)
-									->setMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START)
-								;
+								NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+								NotifyService::getInstance()->setMessageShown($callId, NotifyService::MESSAGE_TYPE_AI_START);
 							}
 						}
 					}
@@ -283,19 +303,63 @@ class CallFollowupBot extends ImBot\Bot\Base
 			return -1;
 		}
 
-		if (self::getBotId())
+		$savedId = self::getBotId();
+		if ($savedId > 0)
 		{
-			return self::getBotId();
+			if (self::isBotUser($savedId))
+			{
+				return $savedId;
+			}
+
+			// No retry in this pass on purpose: the registry row still holds the foreign id, so
+			// Im\Bot::register() would hand back the very same value and the loop would repeat.
+			self::logBotIdRejection('followup bot id does not belong to a bot user', $savedId);
+			self::setBotId(0);
+
+			return 0;
 		}
 
-		$botId = Im\Bot::register(self::BOT_PROPERTIES);
-		if ($botId)
+		$botId = (int)Im\Bot::register(self::BOT_PROPERTIES);
+		if ($botId <= 0)
 		{
-			self::setBotId($botId);
-			self::registerCommands();
+			return 0;
 		}
+
+		if (!self::isBotUser($botId))
+		{
+			self::logBotIdRejection('bot registration returned a foreign user id', $botId);
+			CallFollowupBotRepair::unbind($botId);
+
+			return 0;
+		}
+
+		self::setBotId($botId);
+		self::registerCommands();
 
 		return $botId;
+	}
+
+	/**
+	 * The same criterion the bot registry itself applies to a bot id.
+	 *
+	 * The read goes straight to the account row: the id is checked right after an insert or a
+	 * removal, and the cached messenger profile may still answer from the copy taken before it.
+	 */
+	public static function isBotUser(int $userId): bool
+	{
+		return $userId > 0 && Im\Bot::isBotUser($userId);
+	}
+
+	/**
+	 * Diagnostics of a refused bot id: goes to the portal error log, so support sees the case
+	 * without reading the database. Only identifiers and the reason go into the record.
+	 */
+	private static function logBotIdRejection(string $reason, int $botId): void
+	{
+		$systemException = new SystemException(
+			self::BOT_CODE . ': ' . $reason . ' (botId: ' . $botId . ', module: ' . self::MODULE_ID . ')'
+		);
+		Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
 	}
 
 	/**
@@ -326,7 +390,17 @@ class CallFollowupBot extends ImBot\Bot\Base
 			return false;
 		}
 
-		return Im\Bot::unRegister(['BOT_ID' => self::getBotId()]);
+		$botId = self::getBotId();
+		if (self::isBotUser($botId))
+		{
+			return Im\Bot::unRegister(['BOT_ID' => $botId]);
+		}
+
+		// The id is not confirmed to be a bot: dropping our own traces is all we are allowed to do,
+		// Im\Bot::unRegister() would delete the account behind the id.
+		CallFollowupBotRepair::unbind($botId);
+
+		return true;
 	}
 
 	/**

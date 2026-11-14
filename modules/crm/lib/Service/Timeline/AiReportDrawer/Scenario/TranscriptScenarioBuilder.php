@@ -7,9 +7,11 @@ use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\PresentationResolver;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ActivityBadgeCleaner;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\CallRecordDataProvider;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\JobIdNormalizer;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\MessageProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SettingsProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SummaryDataProvider;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\TranscriptMarkupMapper;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -48,6 +50,7 @@ final class TranscriptScenarioBuilder implements ScenarioBuilderInterface
 		}
 
 		$block = [
+			'jobId' => JobIdNormalizer::normalize($transcriptResult->getData()['jobId'] ?? null),
 			'blockId' => self::TRANSCRIPTION_BLOCK_ID,
 			'blockType' => self::TRANSCRIPTION_BLOCK_ID,
 			'title' => MessageProvider::getTranscriptionBlockTitle(),
@@ -57,7 +60,7 @@ final class TranscriptScenarioBuilder implements ScenarioBuilderInterface
 				: null,
 			'aiLanguage' => $this->summaryDataProvider->getTranscriptAiLanguage($context->request->activityId),
 			'minimized' => false,
-		];
+		] + TranscriptMarkupMapper::map($transcript);
 		$title = MessageProvider::getTranscriptionBlockTitle();
 		$drawerData = [
 			'title' => $title,

@@ -470,14 +470,23 @@ abstract class Engine
 	{
 		try
 		{
-			return Json::decode($response);
+			$decoded = Json::decode($response);
 		}
 		catch (\Exception $e)
 		{
 			$this->onResponseError($e->getMessage(), $e->getCode());
+
+			return null;
 		}
 
-		return null;
+		if (!is_array($decoded))
+		{
+			$this->onResponseError('Response is not a JSON object or array', 'unexpected_response');
+
+			return null;
+		}
+
+		return $decoded;
 	}
 
 	/**
@@ -599,10 +608,24 @@ abstract class Engine
 			$cacheManager->store($response);
 		}
 
+		$status = null;
+		if (Analytics::isVoiceWidgetAudio($this, $this->analyticData))
+		{
+			try
+			{
+				$status = Analytics::getVoiceWidgetResultStatus($this->getResultFromRaw($response, $cached)->getPrettifiedData());
+			}
+			catch (\Throwable)
+			{
+				$status = Analytics::VOICE_WIDGET_STATUS_ERROR_B24;
+			}
+		}
+
 		Analytics::engineGenerateResultEvent(
 			($cached) ? 'generate_reusage' : 'generate',
 			$this,
-			$this->analyticData
+			$this->analyticData,
+			$status
 		);
 
 		$result = $this->getResultFromRaw($response, $cached);
@@ -647,6 +670,13 @@ abstract class Engine
 			{
 				$errorForUser = new Error(Loc::getMessage('AI_ENGINE_ERROR_OTHER'), 'AI_ENGINE_ERROR_OTHER');
 			}
+			Analytics::sendVoiceWidgetAudioError(
+				$this,
+				$this->analyticData,
+				$errorForUser->getCode() === 'AI_ENGINE_ERROR_PROVIDER'
+					? Analytics::VOICE_WIDGET_STATUS_ERROR_PROVIDER
+					: Analytics::VOICE_WIDGET_STATUS_ERROR_B24,
+			);
 			call_user_func($this->onErrorCallback, $errorForUser);
 		}
 	}

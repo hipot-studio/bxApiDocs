@@ -150,6 +150,12 @@ final class TrackDeletionService
 
 	/**
 	 * Check if AI tracks are downloaded (have fileId)
+	 *
+	 * A row that still names the copy a replacement is on its way to push out is not downloaded
+	 * {@see TrackService::awaitsReplacement()}: the file it names is the previous one, kept until
+	 * the new one lands, and the new one is being fetched from the mixer right now. Read as
+	 * "downloaded", it would have the files of the call dropped from the mixer while the download
+	 * of the replacement is still going out to them.
 	 */
 	protected function areAiTracksDownloaded(int $callId): bool
 	{
@@ -159,7 +165,7 @@ final class TrackDeletionService
 		foreach ($trackTypes as $type)
 		{
 			$track = Track::getTrackForCall($callId, $type);
-			if ($track && !$track->getFileId())
+			if ($track && (!$track->getFileId() || TrackService::getInstance()->awaitsReplacement($track)))
 			{
 				$result = false;
 			}

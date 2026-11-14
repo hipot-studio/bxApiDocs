@@ -4,10 +4,12 @@ namespace Bitrix\Crm\Integration\BizProc;
 
 use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentFieldTypesEvent\OnGetDocumentFieldTypesEvent;
 use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentTypeEvent\OnGetDocumentTypeEvent;
+use Bitrix\Bizproc\Public\Event\UserProcesses\OnCollectStartableProcessesEvent\OnCollectStartableProcessesEvent;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\Provider\Bizproc;
 use Bitrix\Crm\Integration\BizProc\Events\OnGetDocumentType\CrmDocumentTypeFilter;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\StartCatalog\RowProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -238,5 +240,12 @@ class EventHandler
 				new EventResult(EventResult::SUCCESS, ['dirs' => [$nodesDir]]),
 			);
 		}
+	}
+
+	public static function onCollectStartableProcesses(OnCollectStartableProcessesEvent $event): void
+	{
+		$event->addProcesses(
+			...(new RowProvider())->getProcesses($event->getUserId(), $event->getSearchString())
+		);
 	}
 }

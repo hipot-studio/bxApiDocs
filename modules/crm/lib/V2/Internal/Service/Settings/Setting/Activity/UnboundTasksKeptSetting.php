@@ -17,20 +17,22 @@ use Bitrix\Main\Result;
  */
 final class UnboundTasksKeptSetting extends AbstractSetting
 {
-	public const CODE = 'crm.activity.unbound_tasks.kept';
+	public const ID = 'crm.activity.unbound_tasks.kept';
 
-	public function getCode(): string
+	public function getId(): string
 	{
-		return self::CODE;
+		return self::ID;
 	}
 
 	public function getDescription(): SettingDescription
 	{
 		return new SettingDescription(
-			self::CODE,
-			SettingTitleProvider::getTitle(self::CODE),
+			self::ID,
+			SettingTitleProvider::getTitle(self::ID),
 			new BooleanSchema(),
-			SettingTitleProvider::getHint(self::CODE),
+			SettingTitleProvider::getDescription(self::ID),
+			SettingTitleProvider::getNote(self::ID),
+			'act_task_keep_unbound',
 		);
 	}
 

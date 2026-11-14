@@ -7,6 +7,8 @@ namespace Bitrix\Crm\V2\Internal\Service\Requisite;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\RequisiteAddress;
+use Bitrix\Crm\RequisiteLegacyUserFieldValidationContext;
+use Bitrix\Crm\RequisiteTable;
 use Bitrix\Crm\V2\Internal\Access\Requisite\RequisitePermissions;
 use Bitrix\Crm\V2\Internal\Entity\Requisite\Requisite;
 use Bitrix\Crm\V2\Internal\Entity\Requisite\RequisiteWriteData;
@@ -320,17 +322,24 @@ final class RequisiteWriteService
 	 *        requisite, and only when there is one.
 	 * @param array<string, mixed> $userFieldValues the values of the write that are no column of this
 	 *        area - see {@see RequisiteWriteRepository::insert()}.
+	 * @param RequisiteLegacyUserFieldValidationContext $userFieldValidationContext the explicitly
+	 *        supplied legacy dependencies used by the ORM user-field hook for this write only.
 	 */
 	public function addForLegacyFacade(
 		RequisiteWriteData $fields,
 		array $eventFields,
+		RequisiteLegacyUserFieldValidationContext $userFieldValidationContext,
 		?callable $afterWrite = null,
 		array $userFieldValues = [],
 	): Result
 	{
 		try
 		{
-			$id = $this->requisites->insert($fields, $userFieldValues);
+			$id = $this->requisites->insert(
+				$fields,
+				$userFieldValues,
+				$userFieldValidationContext,
+			);
 		}
 		catch (\Throwable $refusal)
 		{
@@ -371,12 +380,15 @@ final class RequisiteWriteService
 	 * @param array<string, mixed> $eventFields see {@see self::addForLegacyFacade()}.
 	 * @param (callable(int): void)|null $afterWrite see {@see self::addForLegacyFacade()}.
 	 * @param array<string, mixed> $userFieldValues see {@see self::addForLegacyFacade()}.
+	 * @param RequisiteLegacyUserFieldValidationContext $userFieldValidationContext see
+	 *        {@see self::addForLegacyFacade()}.
 	 */
 	public function updateForLegacyFacade(
 		int $id,
 		?RequisiteWriteTarget $current,
 		RequisiteWriteData $fields,
 		array $eventFields,
+		RequisiteLegacyUserFieldValidationContext $userFieldValidationContext,
 		?callable $afterWrite = null,
 		array $userFieldValues = [],
 	): Result
@@ -390,7 +402,12 @@ final class RequisiteWriteService
 
 		try
 		{
-			$this->requisites->update($id, $fields, $userFieldValues);
+			$this->requisites->update(
+				$id,
+				$fields,
+				$userFieldValues,
+				$userFieldValidationContext,
+			);
 		}
 		catch (\Throwable $refusal)
 		{

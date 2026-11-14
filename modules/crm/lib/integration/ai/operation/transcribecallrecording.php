@@ -9,6 +9,8 @@ use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\Config;
 use Bitrix\Crm\Integration\AI\Dto\TranscribeCallRecordingPayload;
+use Bitrix\Crm\Integration\AI\Dto\TranscriptSegment;
+use Bitrix\Crm\Integration\AI\Enum\SpeakerSource;
 use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
@@ -300,9 +302,36 @@ final class TranscribeCallRecording extends AbstractOperation
 
 	protected static function extractPayloadFromAIResult(\Bitrix\AI\Result $result, EO_Queue $job): Dto
 	{
+		$transcription = $result->getPrettifiedData();
+		$raw = $result->getRawData();
+		$transcriptVersion = self::determineTranscriptVersion($raw);
+		if ($transcriptVersion === null)
+		{
+			return new TranscribeCallRecordingPayload(['transcription' => $transcription]);
+		}
+
+		$segments = TranscriptSegment::listFromResult($result);
+
 		return new TranscribeCallRecordingPayload([
-			'transcription' => $result->getPrettifiedData(),
+			'transcription' => $transcription,
+			'segments' => $segments === null ? null : array_map(
+				static fn(TranscriptSegment $segment): array => [
+					'startTime' => $segment->startTime,
+					'endTime' => $segment->endTime,
+					'text' => $segment->text,
+					'speaker' => $segment->speaker,
+					'trackId' => $segment->trackId,
+				],
+				$segments,
+			),
+			'speakerSource' => SpeakerSource::fromResult($result)?->value,
+			'transcriptVersion' => $transcriptVersion,
 		]);
+	}
+
+	private static function determineTranscriptVersion(mixed $raw): ?int
+	{
+		return is_array($raw) && array_key_exists('speakerSource', $raw) ? 1 : null;
 	}
 
 	protected static function getJobFinishEventBuilder(): AIBaseEvent

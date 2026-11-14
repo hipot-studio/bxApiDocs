@@ -33,9 +33,14 @@ class CallUserLogCleaner
 		$startTime = defined('START_EXEC_TIME') ? START_EXEC_TIME : microtime(true);
 		$isCli = (php_sapi_name() === 'cli');
 
-		$deletedTotal = 0;
 		while (true)
 		{
+			// Stop once the time budget is spent; the next agent run continues from here.
+			if (!$isCli && (microtime(true) - $startTime) >= $timeLimit)
+			{
+				break;
+			}
+
 			// Snapshot a bounded batch of expired ids, then delete strictly by that snapshot.
 			$ids = [];
 			$rows = CallUserLogTable::query()
@@ -54,17 +59,14 @@ class CallUserLogCleaner
 				break;
 			}
 
-			self::deleteByIds($ids);
-			$deletedTotal += count($ids);
+			$owners = self::deleteByIds($ids);
+			self::dropCachedCounters($owners);
+
+			// Best-effort badge resync for the owners of this batch, within the shared time budget.
+			self::resyncUsers($owners, $startTime, $isCli, $timeLimit);
 
 			// Fewer rows than requested means the backlog is exhausted.
 			if (count($ids) < $batchSize)
-			{
-				break;
-			}
-
-			// Stop once the time budget is spent; the next agent run continues from here.
-			if (!$isCli && (microtime(true) - $startTime) >= $timeLimit)
 			{
 				break;
 			}
@@ -72,14 +74,7 @@ class CallUserLogCleaner
 
 		// Secondary cleanup within the remaining time budget; the main drain above keeps priority.
 		self::sweepOrphans(CallUserLogIndexTable::class, $batchSize, $startTime, $isCli, $timeLimit);
-		$sweptCounters = self::sweepOrphans(CallUserLogCountersTable::class, $batchSize, $startTime, $isCli, $timeLimit);
-
-		// Counter::getCount() counts by USER_ID without joining the parent, so both the cascade
-		// and the counters orphan sweep shrink user badge values; drop the cached counters once per run.
-		if ($deletedTotal > 0 || $sweptCounters > 0)
-		{
-			Counter::clearCache();
-		}
+		self::sweepOrphans(CallUserLogCountersTable::class, $batchSize, $startTime, $isCli, $timeLimit);
 
 		return static::getAgentName();
 	}
@@ -89,27 +84,89 @@ class CallUserLogCleaner
 	 * Children (index, counters) go first and the parent row last, so an interrupted run keeps the
 	 * still-expired parent rows: the next run re-selects them and repeats the cascade idempotently.
 	 *
+	 * Returns the distinct owners of the removed counter rows so the caller can drop their cached
+	 * counters and best-effort resync their badges; a resync dropped on a crash self-heals on the
+	 * owner's next counter change.
+	 *
 	 * @param int[] $ids Non-empty list of userlog ids.
+	 * @return int[] Distinct USER_ID owners of the removed counter rows.
 	 */
-	private static function deleteByIds(array $ids): void
+	private static function deleteByIds(array $ids): array
 	{
+		// Collect the owners before deleting: once the counter rows are gone this is the only trace
+		// that these badges need a resync.
+		$users = [];
+		$rows = CallUserLogCountersTable::query()
+			->setSelect(['USER_ID'])
+			->whereIn('USERLOG_ID', $ids)
+			->setGroup(['USER_ID'])
+			->fetchAll()
+		;
+		foreach ($rows as $row)
+		{
+			$users[] = (int)$row['USER_ID'];
+		}
+
 		CallUserLogIndexTable::deleteByFilter(['@USERLOG_ID' => $ids]);
 		CallUserLogCountersTable::deleteByFilter(['@USERLOG_ID' => $ids]);
 		CallUserLogTable::deleteByFilter(['@ID' => $ids]);
+
+		return $users;
+	}
+
+	/**
+	 * Drops the cached missed counter of every given owner, regardless of the time budget.
+	 *
+	 * The cached number may still count the rows just deleted, and resyncUsers() can skip an owner; that
+	 * owner then recounts on the next read instead of keeping the old number for up to a day. Only the
+	 * owners: dropping the whole cache directory would make every user of the portal recount.
+	 *
+	 * @param int[] $userIds
+	 */
+	private static function dropCachedCounters(array $userIds): void
+	{
+		foreach ($userIds as $userId)
+		{
+			Counter::clearCache((int)$userId);
+		}
+	}
+
+	/**
+	 * Best-effort badge resync for the given owners within the shared time budget. Owners skipped by
+	 * the budget, or whose per-user lock is busy (resync returns null), are simply dropped: the badge
+	 * self-heals on the owner's next counter change, and their cached counter is already dropped.
+	 *
+	 * @param int[] $userIds
+	 */
+	private static function resyncUsers(array $userIds, float $startTime, bool $isCli, int $timeLimit): void
+	{
+		foreach ($userIds as $userId)
+		{
+			if (!$isCli && (microtime(true) - $startTime) >= $timeLimit)
+			{
+				break;
+			}
+
+			Counter::resync((int)$userId);
+		}
 	}
 
 	/**
 	 * Removes orphan child rows in bounded batches — rows whose USERLOG_ID no longer exists in
 	 * b_call_userlog. Orphans come from historical data and from other delete paths that break
 	 * between removing the parent and its children (e.g. CallLogService::deleteEntry failing
-	 * mid-cascade). Counter math includes orphan rows (it filters by USER_ID only), so the caller
-	 * must clear the counter cache when the counters sweep reports deletions.
+	 * mid-cascade). An employee's missed counter includes orphan counter rows (it filters by USER_ID
+	 * without the parent; a guest's count joins the parent and never sees them), so the counters sweep
+	 * drops the cached counters of the owners it removes rows of and resyncs their badges.
 	 *
 	 * @param class-string<DataManager> $entityClass Child table to sweep (index or counters).
 	 * @return int Number of distinct USERLOG_ID values swept.
 	 */
 	private static function sweepOrphans(string $entityClass, int $batchSize, float $startTime, bool $isCli, int $timeLimit): int
 	{
+		// Only the counters table carries USER_ID; drop owners' caches and resync their badges just for that sweep.
+		$collectUsers = ($entityClass === CallUserLogCountersTable::class);
+
 		$swept = 0;
 		while (true)
 		{
@@ -119,8 +176,9 @@ class CallUserLogCleaner
 				break;
 			}
 
-			// LEFT-join to the parent table; a NULL parent id marks an orphan. Grouping by
-			// USERLOG_ID keeps the snapshot distinct (counters may hold several rows per id).
+			// LEFT-join to the parent table; a NULL parent id marks an orphan. Grouping and
+			// limiting by USERLOG_ID keeps the batch a set of whole ids, so the exhaustion
+			// check compares like with like and no id is ever half-deleted at the boundary.
 			$ids = [];
 			$rows = $entityClass::query()
 				->registerRuntimeField(
@@ -147,8 +205,34 @@ class CallUserLogCleaner
 				break;
 			}
 
+			// Collect every owner of the batch before deleting: the counters table may hold
+			// several USER_IDs per USERLOG_ID (group calls) and we delete whole ids at once,
+			// so each of those users needs a badge resync afterwards.
+			$users = [];
+			if ($collectUsers)
+			{
+				$userRows = $entityClass::query()
+					->setSelect(['USER_ID'])
+					->whereIn('USERLOG_ID', $ids)
+					->setGroup(['USER_ID'])
+					->fetchAll()
+				;
+				foreach ($userRows as $userRow)
+				{
+					$users[] = (int)$userRow['USER_ID'];
+				}
+			}
+
 			$entityClass::deleteByFilter(['@USERLOG_ID' => $ids]);
 			$swept += count($ids);
+
+			if ($collectUsers)
+			{
+				self::dropCachedCounters($users);
+
+				// Best-effort badge resync for the owners of this batch, within the shared time budget.
+				self::resyncUsers($users, $startTime, $isCli, $timeLimit);
+			}
 
 			// Fewer rows than requested means this table has no more orphans.
 			if (count($ids) < $batchSize)

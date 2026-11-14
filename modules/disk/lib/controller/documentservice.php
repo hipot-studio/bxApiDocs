@@ -65,6 +65,7 @@ final class DocumentService extends Engine\Controller
 				'+prefilters' => [
 					(new DocumentSessionCheck())
 						->enableStrictCheckRight()
+						->enableVersionScopedUnifiedLink()
 						->enableHashCheck(function(){
 							return Context::getCurrent()->getRequest()->get('documentSessionHash');
 						})
@@ -77,7 +78,6 @@ final class DocumentService extends Engine\Controller
 			'goToEditOrPreview' => ['-prefilters' => [Csrf::class]],
 			'goToPreview' => ['-prefilters' => [Csrf::class]],
 			'goToEdit' => ['-prefilters' => [Csrf::class]],
-			'goToCreate' => ['-prefilters' => [Csrf::class]],
 			'love' => ['prefilters' => [
 				new HttpMethod([HttpMethod::METHOD_GET]),
 				new CloseSession(),
@@ -262,13 +262,14 @@ final class DocumentService extends Engine\Controller
 	public function downloadDocumentAction(Document\Models\DocumentSession $documentSession): HttpResponse
 	{
 		$file = $documentSession->getFile();
+		$selectedContent = $this->getSelectedDownloadContent($documentSession);
 
 		$securityContext = $file?->getStorage()?->getSecurityContext(
 			user: $this->getCurrentUser(),
 			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLink($documentSession),
 		);
 
-		if (!$securityContext || !$documentSession->canDownload($securityContext))
+		if (!$selectedContent || !$securityContext || !$documentSession->canDownload($securityContext))
 		{
 			$this->addError(new Error('Could not download document.'));
 
@@ -278,10 +279,37 @@ final class DocumentService extends Engine\Controller
 			return $response;
 		}
 
-		$response = Response\BFile::createByFileId($file->getFileId(), $file->getName());
+		$response = Response\BFile::createByFileId(
+			$selectedContent['fileId'],
+			$selectedContent['name'],
+		);
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
+	}
+
+	private function getSelectedDownloadContent(Document\Models\DocumentSession $documentSession): ?array
+	{
+		$file = $documentSession->getFile();
+		if (!$file)
+		{
+			return null;
+		}
+
+		if (!$documentSession->isVersion())
+		{
+			return ['fileId' => $file->getFileId(), 'name' => $file->getName()];
+		}
+
+		$version = $documentSession->getVersion();
+		if (!$version
+			|| (int)$version->getId() !== (int)$documentSession->getVersionId()
+			|| (int)$version->getObjectId() !== (int)$file->getRealObjectId())
+		{
+			return null;
+		}
+
+		return ['fileId' => $version->getFileId(), 'name' => $version->getName()];
 	}
 
 	private function shouldCheckUnifiedLink(Document\Models\DocumentSession $documentSession): bool
@@ -303,10 +331,21 @@ final class DocumentService extends Engine\Controller
 		/** @var UnifiedLinkAccessService $unifiedLinkAccessService */
 		$unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
 
-		return $unifiedLinkAccessService->validateUlsForObjectId(
-			objectId: $file->getId(),
-			uls: $uls,
-		);
+		if ($documentSession->isVersion())
+		{
+			$version = $documentSession->getVersion();
+
+			return $version
+				&& (int)$version->getId() === (int)$documentSession->getVersionId()
+				&& (int)$version->getObjectId() === (int)$file->getRealObjectId()
+				&& $unifiedLinkAccessService->validateUlsForVersion(
+					objectId: $file->getId(),
+					versionId: $version->getId(),
+					uls: $uls,
+				);
+		}
+
+		return $unifiedLinkAccessService->validateUlsForObjectId($file->getId(), $uls);
 	}
 
 	public function goToEditOrPreviewAction($serviceCode, $attachedObjectId = null, $objectId = null, $versionId = null)
@@ -323,6 +362,8 @@ final class DocumentService extends Engine\Controller
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+
+			return null;
 		}
 
 		if (
@@ -401,8 +442,13 @@ final class DocumentService extends Engine\Controller
 
 		if ($canEdit)
 		{
+			if (Document\Vibeoffice\Feature::servesPortalEditing())
+			{
+				return $this->goToEditAction($serviceCode, $attachedObjectId, $objectId);
+			}
+
 			$isAllowedEdit = true;
-			$availableSessionBoost = (new BaasSessionBoostService())->isAvailable();
+			$availableSessionBoost = ServiceLocator::getInstance()->get(BaasSessionBoostService::class)->isAvailable();
 			if ($availableSessionBoost)
 			{
 				$userId = (int)$this->getCurrentUser()?->getId();
@@ -432,6 +478,8 @@ final class DocumentService extends Engine\Controller
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+
+			return null;
 		}
 
 		if ($documentHandler instanceof VibeofficeHandler)
@@ -501,6 +549,8 @@ final class DocumentService extends Engine\Controller
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+
+			return null;
 		}
 
 		if ($documentHandler instanceof VibeofficeHandler)
@@ -586,14 +636,16 @@ final class DocumentService extends Engine\Controller
 		$handlersManager = $driver->getDocumentHandlersManager();
 		$documentHandler = $handlersManager->resolveEffectiveHandler(
 			$serviceCode,
-			Document\DocumentResolveContext::forObject(
-				null,
+			Document\DocumentResolveContext::forCreate(
+				$targetFolderId !== null ? (int)$targetFolderId : null,
 				$attachedObjectId !== null ? (int)$attachedObjectId : null,
 			),
 		);
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+
+			return null;
 		}
 
 		if ($documentHandler instanceof VibeofficeHandler)

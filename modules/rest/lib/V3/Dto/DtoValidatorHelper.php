@@ -6,6 +6,7 @@ use Bitrix\Main\Validation\Group\ValidationGroup;
 use Bitrix\Main\Validation\Rule\ClassValidationAttributeInterface;
 use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Main\Validation\ValidationResult;
+use Bitrix\Rest\V3\Dto\Meta\ClassMeta;
 use Bitrix\Rest\V3\Dto\Validation\FieldEditableValidator;
 use Bitrix\Rest\V3\Dto\Validation\FieldRequiredValidator;
 use Bitrix\Rest\V3\Dto\Validation\FieldTypeValidator;
@@ -18,12 +19,13 @@ class DtoValidatorHelper
 		$validateRequired = new FieldRequiredValidator($group);
 		$validateEditable = new FieldEditableValidator($group);
 		$validateType = new FieldTypeValidator();
+		$classMeta = ClassMeta::of($dto::class);
 		/** @var DtoField $field */
 		foreach ($dto->getFields() as $field)
 		{
 			if ($field->getType() === DtoField::DTO_FIELD_TYPE_PROPERTY)
 			{
-				$property = PropertyHelper::getProperty($dto, $field->getPropertyName());
+				$property = $classMeta->getProperty($field->getPropertyName());
 				if ($property->isInitialized($dto))
 				{
 					$field->setValue($dto->{$property->getName()});

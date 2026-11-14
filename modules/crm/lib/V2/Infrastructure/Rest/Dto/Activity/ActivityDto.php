@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Activity;
 
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\User\EmployeeDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Request\Structure\FilterableByNull;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Enum\DescriptionType;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Enum\Direction;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Enum\Type;
@@ -29,12 +30,13 @@ use Bitrix\Rest\V3\Realisation\Dto\FileDto;
  * by name instead of having the value dropped.
  *
  * `Filterable` and `Sortable` are closed lists kept narrow: widening them later is compatible, narrowing
- * them is not. Publishing a field promises no search by it.
+ * them is not. Publishing a field promises no search by it. A nullable filterable field is compared with null
+ * to find the activities where it holds nothing, such as the ones without a deadline.
  *
  * The enums are the ones of the model ({@see \Bitrix\Crm\V2\Internal\Entity\Activity\Enum}) and their backed
  * values are the published ones.
  */
-final class ActivityDto extends Dto
+final class ActivityDto extends Dto implements FilterableByNull
 {
 	#[Filterable]
 	#[Sortable]

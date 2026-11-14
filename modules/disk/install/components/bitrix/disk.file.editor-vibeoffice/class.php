@@ -11,6 +11,10 @@ use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Document\OnlyOffice;
 use Bitrix\Disk\Document\Vibeoffice;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkOpenPolicy;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordService;
+use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
@@ -31,19 +35,9 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 {
 	use DocumentHeaderPage;
 
-	// Shared with the OnlyOffice component on purpose: the concurrent-edit-session limit is
-	// global per portal (one RestrictionManager / one restriction log, keyed by EXTERNAL_HASH,
-	// no SERVICE split), so vibeoffice and OnlyOffice draw from the same pool.
-	private const RESTRICTION_OUTCOMES = [
-		Vibeoffice\EditSessionAdmission::OUTCOME_LIMIT_EXCEEDED,
-		Vibeoffice\EditSessionAdmission::OUTCOME_LOCK_UNAVAILABLE,
-	];
 	private const OPENING_NOTICE_CODES = [
 		OpeningNoticeCodeAware::OBJECT_LOCK_EDIT_VIEW,
 	];
-	// @see \Bitrix\Disk\Controller\Vibeoffice::mapOpenErrors()
-	private const IN_PROGRESS_ERROR_CODE = 'ERR-IN-PROGRESS';
-	private const SAVE_REFUSED_ERROR_CODE = 'ERR-SAVE-REFUSED';
 	// A single leading slash, then no scheme, no second slash, no backslash and no control character:
 	// what is left addresses this portal alone.
 	private const SAME_PORTAL_PATH_PATTERN = '#^/(?!/)[^\\\\\x00-\x1F\x7F]*$#D';
@@ -61,7 +55,8 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			// instead of returning a silent false (which left the user with a blank panel).
 			// Reuse the existing cloud-error template — the generic "could not open the editor"
 			// page shared with the platform-open-failure path.
-			$this->includeComponentTemplate('cloud-error');
+			$this->prepareOpenFailureScreen(null, 'cloud-error');
+			$this->includeComponentTemplate('open-error');
 
 			return false;
 		}
@@ -104,10 +99,12 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		$this->arResult['UNIFIED_LINK_MODE'] = $this->unifiedLinkMode;
 		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
 		$this->arResult['INITIAL_NOTICE'] = $this->getOpeningNoticeCode() !== null;
+		$this->arResult['SIGN_PLACEHOLDERS_ENABLED'] = $this->isSignPlaceholdersEnabled();
 
-		if (isset($this->arParams['TEMPLATE']) && $this->arParams['TEMPLATE'] === 'not-found')
+		if (in_array($this->arParams['TEMPLATE'] ?? null, ['not-found', 'cloud-error'], true))
 		{
-			$this->includeComponentTemplate('not-found');
+			$this->prepareOpenFailureScreen(null, $this->arParams['TEMPLATE']);
+			$this->includeComponentTemplate('open-error');
 
 			return;
 		}
@@ -119,18 +116,15 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 
 		if ($documentSession->isNonActive())
 		{
+			if ($documentSession->isEdit())
+			{
+				$this->prepareOpenFailureScreen($documentSession, 'cloud-error');
+				$this->includeComponentTemplate('open-error');
+
+				return;
+			}
+
 			$documentSession->setAsActive();
-		}
-
-		$restrictionOutcome = $this->getRestrictionOutcome();
-		if ($documentSession->isView() && $restrictionOutcome !== null)
-		{
-			$this->arResult['LIMIT'] = [
-				'VALUE' => (int)(new OnlyOffice\RestrictionManager())->getLimit(),
-			];
-			$this->includeComponentTemplate('limit-exceeded');
-
-			return;
 		}
 
 		// The platform builds & signs the config; the backend proxies the open-response
@@ -156,6 +150,10 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		 */
 		$controller = new Disk\Controller\Vibeoffice();
 		$controller->setCurrentUser(CurrentUser::get());
+		// Not wired: ajax.php passes OPENING_BUDGET as a parameter, this component never reads it, so
+		// Controller\Vibeoffice::setOpeningBudget() is never called and the opening deadline stays
+		// empty. Wiring it changes the timing of an open, so it waits for the owner of the restart
+		// layer (ROL-102, @see Disk\Controller\Vibeoffice::$openingBudget).
 		$openingBudget = null;
 		if ($this->arResult['EXTERNAL_LINK_MODE'])
 		{
@@ -186,12 +184,21 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 				);
 			}
 			$this->arResult['OPEN_RETRY_DELAY'] = $this->resolveOpenRetryDelay($errors);
+			$template = $this->chooseOpenFailureTemplate($errors);
 			foreach ($errors as $error)
 			{
-				if ($error->getCode() === self::SAVE_REFUSED_ERROR_CODE)
+				if ($error->getCode() === Vibeoffice\OpenFailureCode::SaveRefused->value)
 				{
 					$this->arResult['OPEN_FAILURE_KIND'] = 'save_refused';
 					$this->arResult['SAVE_REFUSAL_REASON'] = $this->findSavedRefusalReason($documentSession);
+					break;
+				}
+				if ($error->getCode() === Vibeoffice\OpenFailureCode::CapacityFull->value)
+				{
+					$this->arResult['OPEN_RETRY_URL'] = Disk\Document\Vibeoffice\RestartTarget::build(
+						$documentSession,
+						$this->arParams['TRUSTED_OPENING'] ?? [],
+					);
 					break;
 				}
 				if ($error->getCode() === 'open_operation_expired')
@@ -206,13 +213,28 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 				}
 			}
 
-			$this->includeComponentTemplate($this->chooseOpenFailureTemplate($errors));
+			if ($this->shouldReleaseAfterOpenFailure($template, $errors))
+			{
+				$this->releaseFailedEditSession($documentSession, $template === 'no-capacity');
+			}
+			if ($template !== 'saving')
+			{
+				$this->prepareOpenFailureScreen($documentSession, $template);
+			}
+			$this->includeComponentTemplate($template === 'saving' ? 'saving' : 'open-error');
 
 			return;
 		}
 
 		$documentSession = $openedDocumentSession;
+		if ($documentSession->isView())
+		{
+			$this->releaseFailedEditSession($this->arParams['DOCUMENT_SESSION']);
+		}
 		$this->arParams['DOCUMENT_SESSION'] = $documentSession;
+		$this->arResult['VO_OPEN_REFUSAL'] = [
+			'VIEW_ONLY_BY_FORMAT' => $this->isViewOnlyByFormat($documentSession),
+		];
 		$this->arResult['DOCUMENT_SESSION'] = [
 			'ID' => $documentSession->getId(),
 			'HASH' => $documentSession->getExternalHash(),
@@ -231,8 +253,14 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		// instead of choosing the mode for it and sending the reader straight back into editing.
 		$this->arResult['LINK_OPEN_NEW_WINDOW'] = $this->getLinkToView($documentSession, exactlyView: true);
 		$this->arResult['LINK_TO_DOWNLOAD'] = $this->getLinkToDownload($documentSession);
-		$this->arResult['CAN_DOWNLOAD'] = $this->canDownloadDocument($documentSession);
-		$this->arResult['LINK_TO_EDIT'] = $this->getLinkToEdit();
+		$this->arResult['CAN_DOWNLOAD'] = $this->arResult['LINK_TO_DOWNLOAD'] !== '';
+		// The engine draws the button of editing by the sole fact an address is there, so a document
+		// the portal leaves to viewing - a restricted format, an exhausted personal quota - is given
+		// none: the shared header names the reason instead (@see HeaderCompositionService).
+		$this->arResult['LINK_TO_EDIT'] = $documentSession->findEditingRefusal() === null
+			? $this->getLinkToEdit()
+			: ''
+		;
 
 		$infoToken = Disk\Document\Online\UserInfoToken::generateTimeLimitedToken(
 			$this->getUserIdForOnline(),
@@ -249,18 +277,13 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 
 		if (!$this->arResult['EXTERNAL_LINK_MODE'])
 		{
-			//for BX.desktopUtils.runningCheck
-			Loader::includeModule('im');
-		}
-
-		if (!$this->arResult['EXTERNAL_LINK_MODE'])
-		{
 			// An in-portal visitor without a storage of their own has nothing to open the document
 			// from, so the page answers with the "not found" surface instead of an empty editor.
 			$proxyTypeUser = Driver::getInstance()->getStorageByUserId($this->currentUser->getId())?->getProxyType();
 			if (!$proxyTypeUser)
 			{
-				$this->includeComponentTemplate('not-found');
+				$this->prepareOpenFailureScreen(null, 'not-found');
+			$this->includeComponentTemplate('open-error');
 
 				return;
 			}
@@ -270,6 +293,7 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		// session_expires_at/vo_sess/urls{}/config) is proxied straight from the platform
 		// and inlined for the helper; the host never rebuilds or re-signs it.
 		$this->arResult['OPEN_CONFIG'] = Json::encode($openConfig['openConfig'] ?? []);
+		$this->arResult['API_JS_URL'] = $openConfig['openConfig']['urls']['api_js'] ?? '';
 		$this->arResult['RESTART_TARGET'] = Disk\Document\Vibeoffice\RestartTarget::build(
 			$documentSession,
 			$this->arParams['TRUSTED_OPENING'] ?? [],
@@ -324,6 +348,11 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			{
 				$unifiedLinkOptions['attachedId'] = $attachedObjectId;
 			}
+			$versionId = (int)$documentSession->getVersionId();
+			if ($versionId > 0)
+			{
+				$unifiedLinkOptions['versionId'] = $versionId;
+			}
 
 			if ($exactlyView)
 			{
@@ -375,14 +404,22 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		return (new Disk\Controller\Vibeoffice())->getActionUri('loadDocumentViewer', $viewParams);
 	}
 
-	protected function getLinkToDownload(Disk\Document\Models\DocumentSession $documentSession)
+	protected function getLinkToDownload(Disk\Document\Models\DocumentSession $documentSession): string
 	{
-		if (isset($this->arParams['LINK_TO_DOWNLOAD']))
+		$selection = Vibeoffice\OpenRoutePolicy::selectSession($documentSession);
+		if ($selection === null || !$this->hasDownloadRight($documentSession))
 		{
-			return (string)$this->arParams['LINK_TO_DOWNLOAD'];
+			return '';
 		}
 
-		$file = $documentSession->getFile();
+		$file = $selection['file'];
+		$version = $selection['version'];
+		if ($this->arResult['EXTERNAL_LINK_MODE'] ?? false)
+		{
+			$url = $this->arParams['LINK_TO_DOWNLOAD'] ?? '';
+
+			return is_string($url) && preg_match(self::SAME_PORTAL_PATH_PATTERN, $url) === 1 ? $url : '';
+		}
 
 		$downloadUrl = (new Disk\Controller\DocumentService())->getActionUri(
 			actionName: 'downloadDocument',
@@ -392,11 +429,13 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			],
 		);
 
-		if ($file && $this->unifiedLinkMode)
+		if ($this->unifiedLinkMode)
 		{
 			return $this->unifiedLinkUrl->addUlsToUrl(
 				url: $downloadUrl,
-				uls: $this->unifiedLinkAccessService->getUlsForObjectId($file->getId()),
+				uls: $version
+					? $this->unifiedLinkAccessService->getUlsForVersion($file->getId(), $version->getId())
+					: $this->unifiedLinkAccessService->getUlsForObjectId($file->getId()),
 			);
 		}
 
@@ -405,14 +444,27 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 
 	protected function canDownloadDocument(Disk\Document\Models\DocumentSession $documentSession): bool
 	{
-		if (empty($this->arResult['LINK_TO_DOWNLOAD']))
-		{
-			return false;
-		}
+		return !empty($this->arResult['LINK_TO_DOWNLOAD']) && $this->hasDownloadRight($documentSession);
+	}
 
-		if ($this->arResult['EXTERNAL_LINK_MODE'])
+	protected function hasDownloadRight(DocumentSession $documentSession): bool
+	{
+		if ($this->arResult['EXTERNAL_LINK_MODE'] ?? false)
 		{
-			return ($this->arParams['DOWNLOAD_ALLOWED_BY_EXTERNAL_LINK'] ?? false) === true;
+			$file = $documentSession->getFile();
+			$link = $this->getPublicLink($documentSession);
+			if (!$file || !$link instanceof Disk\ExternalLink
+				|| !$link->getObject()
+				|| !$this->publicLinkMatchesSessionContent($documentSession, $link)
+				|| $link->isExpired()
+				|| !ServiceLocator::getInstance()->get(ExternalLinkOpenPolicy::class)->canOpenByPortalPolicy($link)
+				|| ($link->hasPassword()
+					&& !ServiceLocator::getInstance()->get(ExternalLinkPasswordService::class)->isConfirmed($link)))
+			{
+				return false;
+			}
+			return $link->allowEdit()
+				|| ServiceLocator::getInstance()->get(DownloadAccess::class)->checkExternalLink($file, $link);
 		}
 
 		$file = $documentSession->getFile();
@@ -425,8 +477,43 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			)
 		;
 
-		return $securityContext
+		return $securityContext instanceof Disk\Security\SecurityContext
 			&& $documentSession->canDownload($securityContext);
+	}
+
+	protected function getPublicLink(DocumentSession $session): ?Disk\ExternalLink
+	{
+		return $session->getContext()?->getExternalLink();
+	}
+
+	private function publicLinkMatchesSessionContent(DocumentSession $session, Disk\ExternalLink $link): bool
+	{
+		$file = $session->getFile();
+		if (!$file)
+		{
+			return false;
+		}
+		$fileId = (int)$file->getRealObjectId();
+		$linkObjectId = (int)$link->getObjectId();
+		if ($linkObjectId !== $fileId)
+		{
+			$linkObject = $link->getObject();
+			if (!$linkObject instanceof Disk\Folder || !(bool)Disk\Internals\ObjectPathTable::query()
+				->setSelect(['ID'])
+				->where('OBJECT_ID', $fileId)
+				->where('PARENT_ID', $linkObjectId)
+				->setLimit(1)
+				->fetch())
+			{
+				return false;
+			}
+		}
+
+		$versionId = (int)$session->getVersionId();
+
+		return $link->isSpecificVersion()
+			? $versionId > 0 && (int)$link->getVersionId() === $versionId
+			: $versionId === 0;
 	}
 
 	protected function getUserIdForOnline(): int
@@ -439,12 +526,6 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		return $this->currentUser->getId();
 	}
 
-	private function getRestrictionOutcome(): ?string
-	{
-		$outcome = $this->arParams['RESTRICTION_OUTCOME'] ?? null;
-
-		return in_array($outcome, self::RESTRICTION_OUTCOMES, true) ? $outcome : null;
-	}
 
 	/**
 	 * The platform is still busy with the document - closing, saving or failing over - and the
@@ -457,13 +538,171 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 	{
 		foreach ($errors as $error)
 		{
-			if ($error->getCode() === self::IN_PROGRESS_ERROR_CODE)
+			if ($error->getCode() === Vibeoffice\OpenFailureCode::InProgress->value)
 			{
 				return 'saving';
 			}
 		}
+		foreach ($errors as $error)
+		{
+			$template = Vibeoffice\OpenFailureCode::tryFrom((string)$error->getCode())?->template();
+			if ($template !== null)
+			{
+				return $template;
+			}
+		}
 
 		return 'cloud-error';
+	}
+
+	private function prepareOpenFailureScreen(?DocumentSession $session, string $kind): void
+	{
+		$screen = Vibeoffice\OpenFailureScreen::forKind(
+			$kind,
+			$this->arResult['OPEN_FAILURE_KIND'] ?? null,
+			$session?->isEdit() ?? false,
+		);
+		$selection = $session ? Vibeoffice\OpenRoutePolicy::selectSession($session) : null;
+		$source = $selection ? ($selection['version'] ?? $selection['file']) : null;
+		if ($screen['fileName'] && $source)
+		{
+			$screen['name'] = (string)$source->getName();
+		}
+		if ($screen['fileSize'] && $source)
+		{
+			$screen['size'] = (string)CFile::FormatSize($source->getSize());
+		}
+		$screen['allowedActions'] = [];
+		foreach ($screen['actions'] as $action)
+		{
+			$url = match ($action)
+			{
+				'download' => $session && $source ? $this->getLinkToDownload($session) : '',
+				'view' => $session ? (string)$this->getLinkToView($session, exactlyView: true) : '',
+				'return' => $this->getSafeReturnUrl(),
+				'retry' => (string)($this->arResult['OPEN_RETRY_URL'] ?? ''),
+				default => '',
+			};
+			if ($url !== '' && preg_match(self::SAME_PORTAL_PATH_PATTERN, $url) === 1)
+			{
+				$screen['allowedActions'][] = [
+					'type' => $action,
+					'label' => match ($action)
+					{
+						'download' => 'DISK_FILE_EDITOR_VIBEOFFICE_LARGE_FILE_DOWNLOAD',
+						'view' => 'DISK_FILE_EDITOR_VIBEOFFICE_FILETYPE_VIEW',
+						'return' => 'DISK_FILE_EDITOR_VIBEOFFICE_OPEN_OTHER_RETURN',
+						'retry' => $screen['kind'] === 'no-capacity'
+							? 'DISK_FILE_EDITOR_VIBEOFFICE_NO_CAPACITY_RETRY'
+							: 'DISK_FILE_EDITOR_VIBEOFFICE_OPEN_EXPIRED_RETRY',
+					},
+					'url' => $url,
+				];
+			}
+		}
+		if ($screen['kind'] === 'cloud-error' && isset($screen['reasonLabel']))
+		{
+			$screen['reason'] = (string)($this->arResult['SAVE_REFUSAL_REASON'] ?? '');
+		}
+		if ($screen['kind'] === 'limit-exceeded')
+		{
+			$screen['limit'] = (int)($this->arResult['LIMIT']['VALUE'] ?? 0);
+		}
+		$this->arResult['OPEN_FAILURE_SCREEN'] = $screen;
+
+		// Keep the existing templates functional until the shared renderer replaces them.
+		$this->arResult['VO_OPEN_REFUSAL'] = ['VIEW_ONLY_BY_FORMAT' => false];
+		$this->arResult['OBJECT'] = [
+			'NAME' => $screen['name'] ?? '',
+			'SIZE_READABLE' => $screen['size'] ?? '',
+		];
+		$this->arResult['OPEN_REFUSAL_VIEW_URL'] = '';
+		$this->arResult['LINK_TO_RETURN'] = '';
+		$this->arResult['LINK_TO_DOWNLOAD'] = '';
+		foreach ($screen['allowedActions'] as $action)
+		{
+			match ($action['type'])
+			{
+				'download' => $this->arResult['LINK_TO_DOWNLOAD'] = $action['url'],
+				'view' => $this->arResult['OPEN_REFUSAL_VIEW_URL'] = $action['url'],
+				'return' => $this->arResult['LINK_TO_RETURN'] = $action['url'],
+				default => null,
+			};
+		}
+		$this->arResult['CAN_DOWNLOAD'] = $this->arResult['LINK_TO_DOWNLOAD'] !== '';
+	}
+
+	private function shouldReleaseAfterOpenFailure(string $template, array $errors): bool
+	{
+		if ($template === 'saving')
+		{
+			return false;
+		}
+
+		foreach ($errors as $error)
+		{
+			if (Vibeoffice\OpenFailureCode::tryFrom((string)$error->getCode())?->releasesEditSlot())
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function getSafeReturnUrl(): string
+	{
+		if ($this->arResult['EXTERNAL_LINK_MODE'] ?? false)
+		{
+			return '';
+		}
+
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			return '';
+		}
+		$storage = Driver::getInstance()->getStorageByUserId($userId);
+		$root = $storage?->getRootObject();
+		if (!$root || !$root->canRead($storage->getCurrentUserSecurityContext()))
+		{
+			return '';
+		}
+		$url = (string)Driver::getInstance()->getUrlManager()->getUrlForUserDisk($userId);
+
+		return preg_match(self::SAME_PORTAL_PATH_PATTERN, $url) === 1 ? $url : '';
+	}
+
+	private function isViewOnlyByFormat(DocumentSession $session): bool
+	{
+		$selection = Vibeoffice\OpenRoutePolicy::selectSession($session);
+
+		return $session->isView() && ($selection === null || !$selection['editable']);
+	}
+
+	private function releaseFailedEditSession(DocumentSession $session, bool $removeLocalSession = false): void
+	{
+		if ((!$session->isEdit() && !$removeLocalSession)
+			|| $session->getService() !== Disk\Document\Models\DocumentService::Vibeoffice
+			|| !$session->getId())
+		{
+			return;
+		}
+		if ($this->arResult['EXTERNAL_LINK_MODE'] ?? false)
+		{
+			// Public sessions belong to the guest (-1) or to the temporary DocumentEditorUser.
+			// The link id in the session context, rather than its user id, identifies this channel.
+			// A revoked link may no longer load, but its refused edit slot still must be released.
+			if (!$session->getContext()?->getExternalLinkId())
+			{
+				return;
+			}
+		}
+		elseif ((int)$session->getUserId() !== (int)CurrentUser::get()->getId())
+		{
+			return;
+		}
+		(new Vibeoffice\TerminalSessionFinalizer())->releaseRefusedEditSession($session, $removeLocalSession);
 	}
 
 	private function findSavedRefusalReason(DocumentSession $session): ?string
@@ -478,7 +717,7 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 	{
 		foreach ($errors as $error)
 		{
-			if ($error->getCode() !== self::IN_PROGRESS_ERROR_CODE)
+			if ($error->getCode() !== Vibeoffice\OpenFailureCode::InProgress->value)
 			{
 				continue;
 			}
@@ -490,6 +729,17 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		}
 
 		return 0;
+	}
+
+	private function isSignPlaceholdersEnabled(): bool
+	{
+		$request = Application::getInstance()->getContext()->getRequest();
+		if ($request->get('signPlaceholders') !== 'Y')
+		{
+			return false;
+		}
+
+		return Loader::includeModule('sign');
 	}
 
 	private function getOpeningNoticeCode(): ?string

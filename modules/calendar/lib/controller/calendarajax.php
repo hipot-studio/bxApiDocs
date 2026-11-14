@@ -19,6 +19,7 @@ use Bitrix\Calendar\OpenEvents\Service\DefaultCategoryService;
 use Bitrix\Calendar\OpenEvents\Service\OpenEventAttendeeService;
 use Bitrix\Calendar\Internals\SectionTable;
 use Bitrix\Calendar\OpenEvents\Controller\Request\OpenEvent\SetEventAttendeeStatusDto;
+use Bitrix\Calendar\Internal\GuestLink;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Calendar\Ui\CalendarFilter;
@@ -31,6 +32,8 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
+use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
 use Bitrix\Calendar\Ui\CountersManager;
 use Bitrix\Calendar\Access\ActionDictionary;
@@ -70,6 +73,20 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			],
 			'hideExternalCalendarSection' => [
 				'+prefilters' => [
+					new RestrictExternalUser(),
+				],
+			],
+			'getEventGuestLink' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+					new CloseSession(),
+					new RestrictExternalUser(),
+				],
+			],
+			'getEventGuestLinkState' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+					new CloseSession(),
 					new RestrictExternalUser(),
 				],
 			],
@@ -676,6 +693,32 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			}
 			$responseParams['eventWithEmailGuestEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS);
 
+			if ($entryId > 0)
+			{
+				// The edit form consumes guestLinkAvailable only in create-flow and never
+				// reads guestLinkUrl, so for a saved meeting skip resolveExisting()
+				// (event load + ACL check + im link lookup) and report the cheap
+				// availability predicate instead.
+				if (!empty($entry['IS_MEETING']))
+				{
+					/** @var GuestLink\AvailabilityService $guestLinkAvailability */
+					$guestLinkAvailability = ServiceLocator::getInstance()->get(GuestLink\AvailabilityService::class);
+					$responseParams['guestLinkAvailable'] = $guestLinkAvailability->isAvailableForUser($userId);
+				}
+				else
+				{
+					$responseParams['guestLinkAvailable'] = false;
+				}
+				$responseParams['guestLinkUrl'] = null;
+			}
+			else
+			{
+				/** @var GuestLink\AvailabilityService $guestLinkAvailability */
+				$guestLinkAvailability = ServiceLocator::getInstance()->get(GuestLink\AvailabilityService::class);
+				$responseParams['guestLinkAvailable'] = $guestLinkAvailability->isAvailableForUser($userId);
+				$responseParams['guestLinkUrl'] = null;
+			}
+
 			if ($isOpenEvent)
 			{
 				$responseParams['defaultCategoryId'] = DefaultCategoryService::getInstance()->getCategoryId();
@@ -750,6 +793,12 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 		$responseParams['plannerFeatureEnabled'] = Bitrix24Manager::isPlannerFeatureEnabled();
 		$responseParams['eventWithEmailGuestEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS);
+
+		/** @var GuestLink\AvailabilityService $standaloneGuestLinkAvailability */
+		$standaloneGuestLinkAvailability = ServiceLocator::getInstance()->get(GuestLink\AvailabilityService::class);
+		$responseParams['guestLinkAvailable'] = $standaloneGuestLinkAvailability->isAvailableForUser($userId);
+		$responseParams['guestLinkUrl'] = null;
+
 		$responseParams['isCollabFeatureEnabled'] = \Bitrix\Calendar\Integration\SocialNetwork\Collab\CollabFeature::isAvailable();
 		$responseParams['projectFeatureEnabled'] = SocialNetwork\FeatureService::isProjectFeatureEnabled();
 		$responseParams['isNewProjectsOn'] = SocialNetwork\FeatureService::isNewProjectsOn();
@@ -1165,13 +1214,12 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				]);
 				if ($id === false)
 				{
-					$this->addError(new Error(
-						'[ed01]' . Loc::getMessage('EC_EVENT_DEL_ERROR'),
-						'change_recurcive_entry_until',
-					));
+					$this->addError(new Error('[ed01]' . Loc::getMessage('EC_EVENT_DEL_ERROR'),
+						'change_recurcive_entry_until'));
 
-					return ['result' => false];
+					return $response;
 				}
+
 				$recId = $event["ID"];
 				$response['id'] = $id;
 			}
@@ -1205,13 +1253,12 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 						]);
 						if ($id === false)
 						{
-							$this->addError(new Error(
-								'[ed01]' . Loc::getMessage('EC_EVENT_DEL_ERROR'),
-								'change_recurcive_entry_until',
-							));
+							$this->addError(new Error('[ed01]' . Loc::getMessage('EC_EVENT_DEL_ERROR'),
+								'change_recurcive_entry_until'));
 
-							return ['result' => false];
+							return $response;
 						}
+
 						$response['id'] = $id;
 						$recId = $event["RECURRENCE_ID"];
 					}
@@ -1336,8 +1383,15 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$entryId = (int)$request->getPost('entryId');
 		/** @var Factory $mapperFactory */
 		$mapperFactory = ServiceLocator::getInstance()->get('calendar.service.mappers.factory');
-		/** @var Event $event */
+		/** @var Event|null $event */
 		$event = $mapperFactory->getEvent()->getById($entryId);
+		if (!$event || $event->isDeleted())
+		{
+			$this->addError(new Error('Meeting not found.', 'EVENT_NOT_FOUND'));
+
+			return $response;
+		}
+
 		if ($event->isOpenEvent())
 		{
 			OpenEventAttendeeService::getInstance()->setEventAttendeeStatus(
@@ -1351,7 +1405,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		else
 		{
 			$meetingStatus = $request->getPost('status');
-			$meetingStatusResult = \CCalendarEvent::SetMeetingStatusEx([
+			$result = \CCalendarEvent::SetMeetingStatusEx([
 				'attendeeId' => $userId,
 				'eventId' => (int)$request->getPost('entryId'),
 				'parentId' => (int)$request->getPost('entryParentId'),
@@ -1360,14 +1414,11 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				'currentDateFrom' => $request->getPost('currentDateFrom'),
 			]);
 
-			if ($meetingStatusResult === false)
+			if ($result === false)
 			{
-				$this->addError(new Error(
-					'Meeting status was not applied.',
-					'MEETING_STATUS_NOT_APPLIED',
-				));
+				$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR'), 'edit_entry_save'));
 
-				return null;
+				return [];
 			}
 
 			$section = $event->getSection();
@@ -1454,6 +1505,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 						Rooms\OccupancyLockedException::ERROR_CODE,
 					),
 				);
+
+				return [];
+			}
+
+			if ($response['id'] === false)
+			{
+				$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR'), 'edit_entry_save'));
 
 				return [];
 			}
@@ -1752,6 +1810,77 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		return CalendarFilter::getFilterData($params);
 	}
 
+	public function getEventGuestLinkAction(int $entryId): array
+	{
+		$userId = \CCalendar::GetCurUserId();
+
+		/** @var GuestLink\GuestLinkResolver $resolver */
+		$resolver = ServiceLocator::getInstance()->get(GuestLink\GuestLinkResolver::class);
+		$result = $resolver->getOrCreate($entryId, $userId);
+
+		if (!$result->isSuccess())
+		{
+			foreach ($result->getErrors() as $error)
+			{
+				// Do not let this user-facing action leak whether a private event exists:
+				// a hidden event (NO_RIGHTS) and one that is missing or of an excluded
+				// type (EVENT_NOT_SAVED) must be indistinguishable to the client.
+				$code = $error->getCode();
+				if ($code === GuestLink\GuestLinkResolver::ERROR_EVENT_NOT_SAVED)
+				{
+					$code = GuestLink\GuestLinkResolver::ERROR_NO_RIGHTS;
+				}
+				$messageKey = 'EC_GUEST_LINK_ERROR_' . $code;
+				$message = Loc::getMessage($messageKey);
+				if ($message === null)
+				{
+					$message = $error->getMessage();
+				}
+				$this->addError(new Error($message, $code));
+			}
+
+			return [];
+		}
+
+		$data = $result->getData();
+
+		return [
+			'url' => $data['url'],
+		];
+	}
+
+	/**
+	 * Per-event guest-link state for the compact form view mode: whether the link
+	 * control applies to this event and its current url (null when not created yet).
+	 *
+	 * Read-only, never creates a chat or a link. A denied or ineligible event
+	 * resolves to a hidden control rather than an error: surfacing the error would
+	 * re-show the button in a failed state, which is the very QA bug this replaces.
+	 */
+	public function getEventGuestLinkStateAction(int $entryId): array
+	{
+		$userId = \CCalendar::GetCurUserId();
+
+		/** @var GuestLink\GuestLinkResolver $resolver */
+		$resolver = ServiceLocator::getInstance()->get(GuestLink\GuestLinkResolver::class);
+		$result = $resolver->resolveExisting($entryId, $userId);
+
+		if (!$result->isSuccess())
+		{
+			return [
+				'available' => false,
+				'url' => null,
+			];
+		}
+
+		$data = $result->getData();
+
+		return [
+			'available' => (bool)($data['available'] ?? false),
+			'url' => $data['url'] ?? null,
+		];
+	}
+
 	public function getConferenceChatIdAction(int $eventId)
 	{
 		$result = [];
@@ -1770,7 +1899,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			return $result;
 		}
 
-		$chatId = (new Sharing\SharingConference($eventLink))->getConferenceChatId();
+		$joinLink = (new Sharing\JoinLink\JoinLinkProvider())->resolveChatId($eventLink);
+		$chatId = $joinLink->isSuccess() ? $joinLink->getChatId() : null;
 
 		if (!$chatId)
 		{

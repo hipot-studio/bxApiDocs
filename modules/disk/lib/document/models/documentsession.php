@@ -2,15 +2,22 @@
 
 namespace Bitrix\Disk\Document\Models;
 
+use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\OnlyOffice\Bitrix24Scenario;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\Restrictions\EditingRestrictionResolver;
+use Bitrix\Disk\Internal\Service\Restrictions\FormatEditingRestriction;
+use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\Entity\Model;
+use Bitrix\Disk\Internals\Error\Error as DiskError;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Version;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Type\DateTime;
@@ -63,6 +70,8 @@ final class DocumentSession extends Model
 	protected $context;
 	/** @var string|null */
 	protected $service;
+	/** @var array<int, Error|null> */
+	private array $editingRefusals = [];
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -73,21 +82,49 @@ final class DocumentSession extends Model
 		return DocumentSessionTable::class;
 	}
 
-	public static function add(array $data, ErrorCollection $errorCollection)
+	public static function add(
+		array $data,
+		ErrorCollection $errorCollection,
+		?bool $hasUploadCleanupMarker = null,
+	)
 	{
 		if (!array_key_exists('EXTERNAL_LINK_ID', $data))
 		{
 			$data['EXTERNAL_LINK_ID'] = self::extractExternalLinkId($data['CONTEXT'] ?? null);
 		}
 
-		self::trackFirstEditForLimitedEdit($data);
+		$objectId = (int)($data['OBJECT_ID'] ?? 0);
+		$markerService = new MarkerService();
+		if (
+			$objectId > 0
+			&& !$markerService->revokeBeforeUse($objectId, $hasUploadCleanupMarker)
+		)
+		{
+			$errorCollection->addOne(new DiskError(MarkerService::ERROR_FILE_IS_BEING_REMOVED));
 
-		return parent::add($data, $errorCollection);
+			return null;
+		}
+
+		if (($data['SERVICE'] ?? null) !== DocumentService::Vibeoffice->value)
+		{
+			self::trackFirstEditForLimitedEdit($data);
+		}
+
+		return $objectId > 0
+			? $markerService->runWithConfirmedRevokedMarker(
+				$objectId,
+				static fn() => parent::add($data, $errorCollection),
+			)
+			: parent::add($data, $errorCollection)
+		;
 	}
 
 	protected function update(array $data)
 	{
-		self::trackFirstEditForLimitedEdit($data);
+		if ($this->getServiceRaw() !== DocumentService::Vibeoffice->value)
+		{
+			self::trackFirstEditForLimitedEdit($data);
+		}
 
 		return parent::update($data);
 	}
@@ -535,7 +572,58 @@ final class DocumentSession extends Model
 
 	public function canTransformToEdit(SecurityContext $securityContext): bool
 	{
-		return $this->canEdit($securityContext);
+		if ($this->findEditingRefusal() !== null)
+		{
+			return false;
+		}
+
+		if (!$this->canEdit($securityContext))
+		{
+			return false;
+		}
+
+		$lock = Configuration::isEnabledObjectLock() ? $this->getObject()?->getLock() : null;
+
+		return !$lock || !$lock->isExclusive() || $lock->canUnlock($securityContext->getUserId());
+	}
+
+	/**
+	 * Why editing this document is closed, or null while it is open.
+	 *
+	 * Turning a view session into an editing one is a way into the editor rather than a save, so it
+	 * is judged here in full: the format the portal restricts and the personal quota the employee
+	 * has run over both close it. A session already editing is never asked - what it saves is its
+	 * own business (AC-048).
+	 *
+	 * The page of an editor asks the verdict more than once - the config handed to the engine, the
+	 * control the hint stands over, the session behind them - and a document reached through a link
+	 * costs a lookup of the file it would be written into to answer. The answer is kept per reader
+	 * rather than once: the words the refusal carries differ between the owner of the disk and
+	 * everybody else, and a request can authorize somebody else halfway through
+	 * ({@see \Bitrix\Disk\Document\DocumentEditorUser::login()}).
+	 */
+	public function findEditingRefusal(): ?Error
+	{
+		$readerId = (int)CurrentUser::get()->getId();
+		if (!array_key_exists($readerId, $this->editingRefusals))
+		{
+			$this->editingRefusals[$readerId] = (new EditingRestrictionResolver())
+				->findRefusal($this->getFilename(), $this->getFile())
+			;
+		}
+
+		return $this->editingRefusals[$readerId];
+	}
+
+	/**
+	 * Tells whether the format policy leaves this document to viewing only.
+	 *
+	 * The name alone decides: an already stored document is never read through to answer whether
+	 * it may be opened for editing. Viewing and downloading are not touched by the verdict.
+	 */
+	public function isEditRestrictedByFormat(): bool
+	{
+		return (new FormatEditingRestriction())->isRestricted($this->getFilename());
 	}
 
 	public function canEdit(SecurityContext $securityContext): bool
@@ -546,7 +634,11 @@ final class DocumentSession extends Model
 			return $securityContext->canUpdate($this->getObjectId());
 		}
 
-		if ($context->getAttachedObject() && $context->getAttachedObject()->canUpdate($securityContext->getUserId()))
+		$attachedObject = $context->getAttachedObject();
+		if ($attachedObject
+			&& $this->isSelectedContentCoveredByAttachedObject($attachedObject)
+			&& $attachedObject->canUpdate($securityContext->getUserId())
+		)
 		{
 			return true;
 		}
@@ -675,7 +767,11 @@ final class DocumentSession extends Model
 			return $securityContext->canRead($this->getObjectId());
 		}
 
-		if ($context->getAttachedObject() && $context->getAttachedObject()->canRead($securityContext->getUserId()))
+		$attachedObject = $context->getAttachedObject();
+		if ($attachedObject
+			&& $this->isSelectedContentCoveredByAttachedObject($attachedObject)
+			&& $attachedObject->canRead($securityContext->getUserId())
+		)
 		{
 			return true;
 		}
@@ -691,7 +787,10 @@ final class DocumentSession extends Model
 		{
 			$attachedObject = $context->getAttachedObject();
 
-			if ($attachedObject && $attachedObject->canDownload($securityContext->getUserId()))
+			if ($attachedObject
+				&& $this->isSelectedContentCoveredByAttachedObject($attachedObject)
+				&& $attachedObject->canDownload($securityContext->getUserId())
+			)
 			{
 				return true;
 			}
@@ -700,6 +799,26 @@ final class DocumentSession extends Model
 		$file = $this->getFile();
 
 		return $file instanceof File && $file->canDownload($securityContext);
+	}
+
+	private function isSelectedContentCoveredByAttachedObject(AttachedObject $attachedObject): bool
+	{
+		$attachedFile = $attachedObject->getFile();
+		$sessionFile = $this->getFile();
+		if (!$attachedFile || !$sessionFile
+			|| (int)$attachedFile->getRealObjectId() !== (int)$sessionFile->getRealObjectId()
+		)
+		{
+			return false;
+		}
+
+		if ($attachedObject->isSpecificVersion())
+		{
+			return $this->isVersion()
+				&& (int)$attachedObject->getVersionId() === (int)$this->getVersionId();
+		}
+
+		return !$this->isVersion();
 	}
 
 	protected function isSingleUsageOfExternalHash(): bool

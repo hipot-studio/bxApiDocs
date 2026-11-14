@@ -17,7 +17,8 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
-use Bitrix\Rest\Engine\Access\LoadLimiter;
+use Bitrix\Rest\V3\Limiter\LimiterChain;
+use Bitrix\Rest\V3\Limiter\LimiterChainFactory;
 use Bitrix\Rest\Engine\RestManager;
 use Bitrix\Rest\Event\Session;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
@@ -34,6 +35,9 @@ use Bitrix\Rest\Internal\Response\StreamedJsonResponse;
 use Bitrix\Rest\RestExceptionInterface;
 use Bitrix\Rest\Tools\Diagnostics\RestServerProcessLogger;
 use Bitrix\Rest\UsageStatTable;
+use Bitrix\Rest\V3\Exception\RateLimitException;
+use Bitrix\Rest\V3\Exception\RestException as V3RestException;
+use Bitrix\Rest\V3\Exception\Limiter\TimeLimitExceptionInterface;
 use Bitrix\Socialservices\Bitrix24Signer;
 use Bitrix\Rest\NonLoggedExceptionDecorator;
 
@@ -49,6 +53,7 @@ class CRestServer
 	public const STATUS_CONFLICT = "409 Conflict";
 	public const STATUS_TO_MANY_REQUESTS = "429 Too Many Requests";
 	public const STATUS_INTERNAL = "500 Internal Server Error";
+	public const STATUS_SERVICE_UNAVAILABLE = "503 Service Unavailable";
 
 	public const TRANSPORT_JSON = 'json';
 	public const TRANSPORT_XML = 'xml';
@@ -83,6 +88,7 @@ class CRestServer
 
 	protected bool $tokenCheck = false;
 	protected ?string $authType = null;
+	private ?LimiterChain $limiterChain = null;
 
 	public function __construct($params, $toLowerMethod = true)
 	{
@@ -206,17 +212,6 @@ class CRestServer
 	 */
 	protected function processCall(): mixed
 	{
-		if (
-			LoadLimiter::is(
-				$this->getAuthType(),
-				!empty($this->getClientId()) ? $this->getClientId() : $this->getPasswordId(),
-				$this->method,
-			)
-		)
-		{
-			throw new RestException('Method is blocked due to operation time limit.', RestException::ERROR_OPERATION_TIME_LIMIT, self::STATUS_TO_MANY_REQUESTS);
-		}
-
 		$start = 0;
 		if (isset($this->query['start']))
 		{
@@ -238,22 +233,33 @@ class CRestServer
 			$this->usage = getrusage();
 		}
 
-		$entity = !empty($this->getClientId()) ? $this->getClientId() : $this->getPasswordId();
-		LoadLimiter::registerStarting(
-			$this->getAuthType(),
-			$entity,
-			$this->method,
-		);
+		try
+		{
+			$response = $this->getLimiterChain()->run(fn() => call_user_func_array($callback, [$this->query, $start, $this]));
+		}
+		catch (RateLimitException)
+		{
+			throw new RestException('Method is blocked due to operation time limit.', RestException::ERROR_OPERATION_TIME_LIMIT, self::STATUS_TO_MANY_REQUESTS);
+		}
 
-		$response = call_user_func_array($callback, [$this->query, $start, $this]);
-		LoadLimiter::registerEnding(
-			$this->getAuthType(),
-			$entity,
-			$this->method,
-		);
 		$this->timeProcessFinish = microtime(true);
 
 		return $this->processResponse($response);
+	}
+
+	protected function getLimiterChain(): LimiterChain
+	{
+		return $this->limiterChain ??= Main\DI\ServiceLocator::getInstance()->get(LimiterChainFactory::class)->get(
+			$this->getAuthType(),
+			$this->getClientId() ?: $this->getPasswordId(),
+			$this->getLoadLimiterMethod(),
+			$this->isLoadLimited(),
+		);
+	}
+
+	protected function getLoadLimiterMethod(): ?string
+	{
+		return $this->method;
 	}
 
 	public function getTransport()
@@ -696,12 +702,26 @@ class CRestServer
 
 	protected function outputError(): array
 	{
+		if ($this->error instanceof V3RestException)
+		{
+			return [
+				'error' => $this->error->getRegistryCode(),
+				'error_description' => $this->error->getMessage(),
+			];
+		}
+
 		return $this->error->output();
 	}
 
 	public function sendHeaders():void
 	{
 		CHTTP::setStatus($this->getResponseStatus());
+
+		$retryAfter = $this->getRetryAfter();
+		if ($retryAfter > 0)
+		{
+			header('Retry-After: ' . $retryAfter);
+		}
 
 		switch ($this->transport)
 		{
@@ -716,6 +736,11 @@ class CRestServer
 		}
 
 		$this->sendHeadersAdditional();
+	}
+
+	protected function getRetryAfter(): int
+	{
+		return $this->error instanceof TimeLimitExceptionInterface ? $this->error->getRetryAfter() : 0;
 	}
 
 	protected function getResponseStatus(): string
@@ -772,6 +797,14 @@ class CRestServer
 	}
 
 	/**
+	 * Returns whether the call is checked and counted by the load limiter.
+	 */
+	protected function isLoadLimited(): bool
+	{
+		return true;
+	}
+
+	/**
 	 * @throws Main\LoaderException
 	 */
 	protected function appendDebugInfo(array $data): array
@@ -787,24 +820,7 @@ class CRestServer
 		$data['time']['date_start'] = date('c', $data['time']['start']);
 		$data['time']['date_finish'] = date('c', $data['time']['finish']);
 
-		if (LoadLimiter::isActive())
-		{
-			$reset = LoadLimiter::getResetTime(
-				$this->getAuthType(),
-				!empty($this->getClientId()) ? $this->getClientId() : $this->getPasswordId(),
-				$this->method,
-			);
-			if ($reset)
-			{
-				$data['time']['operating_reset_at'] = $reset;
-			}
-
-			$data['time']['operating'] = LoadLimiter::getRestTime(
-				$this->getAuthType(),
-				!empty($this->getClientId()) ? $this->getClientId() : $this->getPasswordId(),
-				$this->method,
-			);
-		}
+		$data['time'] += $this->getLimiterChain()->getDebugInfo();
 
 		return $data;
 	}
@@ -814,6 +830,12 @@ class CRestServer
 		$response = new StreamedJsonResponse(Main\Application::getInstance(), $data, (string)$this->getMethod());
 		$response->setStatus($this->getResponseStatus());
 		$response->addHeader('Content-Type', 'application/json; charset=utf-8');
+
+		$retryAfter = $this->getRetryAfter();
+		if ($retryAfter > 0)
+		{
+			$response->addHeader('Retry-After', (string)$retryAfter);
+		}
 
 		return $response;
 	}
@@ -908,7 +930,7 @@ class CRestServer
 		{
 			$e = RestException::initFromException($e->getOriginalException());
 		}
-		elseif (!($e instanceof RestException))
+		elseif (!($e instanceof RestExceptionInterface))
 		{
 			Main\Application::getInstance()->getExceptionHandler()->writeToLog($e);
 
@@ -918,7 +940,7 @@ class CRestServer
 		$this->error = $e;
 
 		$ex = $APPLICATION->GetException();
-		if ($ex)
+		if ($ex && $this->error instanceof RestException)
 		{
 			$this->error->setApplicationException($ex);
 		}
@@ -993,6 +1015,14 @@ class CRestServerBatchItem extends CRestServer
 	public function setAuthType($authType): void
 	{
 		$this->authType = $authType;
+	}
+
+	/**
+	 * Calls inside a batch are not limited on their own: the batch call is counted as a whole.
+	 */
+	protected function isLoadLimited(): bool
+	{
+		return false;
 	}
 
 	/**

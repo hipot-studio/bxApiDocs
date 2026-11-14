@@ -8,6 +8,7 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
 use Bitrix\Disk\Internals\Rights\Table\RightSetupSessionTable;
 use Bitrix\Disk\ObjectLock;
 use Bitrix\Disk\ObjectTtl;
@@ -15,6 +16,7 @@ use Bitrix\Disk\ShowSession;
 use Bitrix\Disk\SystemUser;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\FileTable as MainFileTable;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Type\DateTime;
@@ -31,6 +33,17 @@ final class Cleaner
 	public static function className()
 	{
 		return self::class;
+	}
+
+	/**
+	 * The counter the deltas of the version rows a portion moves are accumulated in: a sweep deletes
+	 * objects one by one, and the counter follows its progress by one update per portion.
+	 *
+	 * @return StorageUsageCounter
+	 */
+	private static function getStorageUsageCounter(): StorageUsageCounter
+	{
+		return ServiceLocator::getInstance()->get(StorageUsageCounter::class);
 	}
 
 	/**
@@ -210,14 +223,23 @@ final class Cleaner
 		]);
 
 		$startTime = time();
-		foreach ($versions as $version)
+		$usageCounter = self::getStorageUsageCounter();
+		$usageCounter->openAccumulator();
+		try
 		{
-			if ($type === self::DELETE_TYPE_TIME && (time() - $startTime > $limit))
+			foreach ($versions as $version)
 			{
-				break;
-			}
+				if ($type === self::DELETE_TYPE_TIME && (time() - $startTime > $limit))
+				{
+					break;
+				}
 
-			$version->delete(SystemUser::SYSTEM_USER_ID);
+				$version->delete(SystemUser::SYSTEM_USER_ID);
+			}
+		}
+		finally
+		{
+			$usageCounter->flushAccumulator();
 		}
 	}
 
@@ -334,17 +356,26 @@ final class Cleaner
 		]);
 
 		$startTime = time();
-		foreach ($objects as $object)
+		$usageCounter = self::getStorageUsageCounter();
+		$usageCounter->openAccumulator();
+		try
 		{
-			if ($type === self::DELETE_TYPE_TIME && (time() - $startTime > $limit))
+			foreach ($objects as $object)
 			{
-				break;
-			}
+				if ($type === self::DELETE_TYPE_TIME && (time() - $startTime > $limit))
+				{
+					break;
+				}
 
-			if ($object instanceof File)
-			{
-				$object->delete(SystemUser::SYSTEM_USER_ID);
+				if ($object instanceof File)
+				{
+					$object->delete(SystemUser::SYSTEM_USER_ID);
+				}
 			}
+		}
+		finally
+		{
+			$usageCounter->flushAccumulator();
 		}
 	}
 
@@ -446,19 +477,28 @@ final class Cleaner
 
 		$workLoad = false;
 		$startTime = time();
-		foreach ($ttls as $ttl)
+		$usageCounter = self::getStorageUsageCounter();
+		$usageCounter->openAccumulator();
+		try
 		{
-			$workLoad = true;
-			if($type === self::DELETE_TYPE_TIME && (time() - $startTime > $limit))
+			foreach ($ttls as $ttl)
 			{
-				break;
-			}
+				$workLoad = true;
+				if($type === self::DELETE_TYPE_TIME && (time() - $startTime > $limit))
+				{
+					break;
+				}
 
-			if ($ttl->isReadyToDeath())
-			{
-				$ttl->deleteObject(SystemUser::SYSTEM_USER_ID);
-				$ttl->delete(SystemUser::SYSTEM_USER_ID);
+				if ($ttl->isReadyToDeath())
+				{
+					$ttl->deleteObject(SystemUser::SYSTEM_USER_ID);
+					$ttl->delete(SystemUser::SYSTEM_USER_ID);
+				}
 			}
+		}
+		finally
+		{
+			$usageCounter->flushAccumulator();
 		}
 
 		if(!$workLoad)

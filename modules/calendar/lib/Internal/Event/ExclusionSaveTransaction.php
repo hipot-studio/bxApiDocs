@@ -28,31 +28,11 @@ final class ExclusionSaveTransaction
 		return self::hasNativeManager() ? ['eventSaveTransactionMode' => 'join_existing'] : [];
 	}
 
-	public static function shouldPropagateEventNotAvailable(array $params): bool
-	{
-		return ($params['propagateEventNotAvailable'] ?? null) === true
-			|| (self::hasNativeManager() && ($params['eventSaveTransactionMode'] ?? null) === 'join_existing');
-	}
-
 	public static function run(callable $callback): mixed
 	{
 		if (self::isActive())
 		{
 			throw new \LogicException('Exclusion requires its own transaction.');
-		}
-		if (self::hasNativeManager())
-		{
-			return CCalendar::runEventSaveTransaction($callback);
-		}
-
-		return self::runEventSaveTransaction($callback);
-	}
-
-	public static function runEventSaveTransaction(callable $callback): mixed
-	{
-		if (self::isActive())
-		{
-			return $callback();
 		}
 		if (self::hasNativeManager())
 		{

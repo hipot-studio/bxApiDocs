@@ -2,12 +2,9 @@
 
 namespace Bitrix\Crm\Copilot\CallAssessment;
 
-use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentAvailabilityController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\ClientType;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\VoxImplant\Call;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\MultiValueStoreService;
@@ -30,13 +27,10 @@ final class ItemFactory
 	 *        it takes only settings with criteria, so without the same condition here the newest matching
 	 *        setting can hide a ready one behind it. A setting pinned to the call is exempt - it is an
 	 *        explicit choice of the user and must not be silently replaced by another one.
-	 * @param bool $requireCurrentAvailability rejects a pinned setting outside its availability window
-	 *        instead of silently replacing the explicit choice. Regular selection always applies this gate.
 	 */
 	public static function getByActivityId(
 		int $activityId,
 		bool $requireScoringCriteria = false,
-		bool $requireCurrentAvailability = false,
 	): ?CallAssessmentItem
 	{
 		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
@@ -57,10 +51,7 @@ final class ItemFactory
 			$savedAssessmentItemByCallId = self::getSavedAssessmentItemByCallId($callId);
 			if ($savedAssessmentItemByCallId)
 			{
-				return !$requireCurrentAvailability || self::isCurrentlyAvailable($savedAssessmentItemByCallId)
-					? $savedAssessmentItemByCallId
-					: null
-				;
+				return $savedAssessmentItemByCallId;
 			}
 		}
 
@@ -83,16 +74,13 @@ final class ItemFactory
 	 *
 	 * This is what the V2 script selector chooses between. Handing it the single pick instead left it no
 	 * choice at all and the script of a call was decided by the freshest UPDATED_AT of the most specific
-	 * client type; leaving it free to query on its own is the other extreme, because the selector applies
-	 * no availability window. The list keeps the gates on the CRM side and the choice within them on the
-	 * model side.
+	 * client type. The list keeps the gates on the CRM side and the choice within them on the model side.
 	 *
 	 * @return int[]
 	 */
 	public static function getCandidateIdsByActivityId(
 		int $activityId,
 		bool $requireScoringCriteria = false,
-		bool $requireCurrentAvailability = false,
 	): array
 	{
 		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
@@ -110,10 +98,7 @@ final class ItemFactory
 			{
 				// the setting pinned to the call is an explicit choice of the user: it is the only candidate,
 				// and the selector must not be given the freedom to replace it
-				return !$requireCurrentAvailability || self::isCurrentlyAvailable($savedAssessmentItemByCallId)
-					? [(int)$savedAssessmentItemByCallId->getId()]
-					: []
-				;
+				return [(int)$savedAssessmentItemByCallId->getId()];
 			}
 		}
 
@@ -197,32 +182,6 @@ final class ItemFactory
 		return CallAssessmentItem::createFromEntity($callAssessmentItem);
 	}
 
-	private static function isCurrentlyAvailable(CallAssessmentItem $callAssessmentItem): bool
-	{
-		if (!Feature::enabled(Feature\CopilotCallAssessmentAvailability::class))
-		{
-			return true;
-		}
-
-		$availabilityType = $callAssessmentItem->getAvailabilityType();
-		if ($availabilityType === AvailabilityType::ALWAYS_ACTIVE->value)
-		{
-			return true;
-		}
-
-		$assessmentId = $callAssessmentItem->getId();
-		if ($assessmentId === null || !AvailabilityType::isExtendedAvailabilityType($availabilityType))
-		{
-			return false;
-		}
-
-		$currentAvailableAssessmentIds = CopilotCallAssessmentAvailabilityController::getInstance()
-			->getCurrentAvailableAssessmentIds()
-		;
-
-		return in_array($assessmentId, $currentAvailableAssessmentIds, true);
-	}
-
 	private static function getAssessmentByClientAndCallType(
 		ClientType $assessmentClientType,
 		CallType $callType,
@@ -283,12 +242,6 @@ final class ItemFactory
 		if ($requireScoringCriteria)
 		{
 			$filter['!=CRITERIA.ID'] = null;
-		}
-
-		$additionalFilter = CopilotCallAssessmentController::getInstance()->getCurrentAvailableAssessmentFilter();
-		if ($additionalFilter)
-		{
-			$filter[] = $additionalFilter;
 		}
 
 		return $filter;

@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta\ActionsMetadata;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Main\Engine\ActionFilter\Base;
@@ -50,6 +51,14 @@ class FileTypeControl extends Base
 		}
 
 		$this->baseObject = $service->resolveBaseObject();
+		if (
+			$action->getName() === 'edit'
+			&& $this->baseObject instanceof File
+			&& HtmlViewerPolicy::isViewable($this->baseObject)
+		)
+		{
+			return null;
+		}
 
 		if ($this->actionsMetaData->shouldRedirectToView($this->action->getName(), $this->baseObject))
 		{

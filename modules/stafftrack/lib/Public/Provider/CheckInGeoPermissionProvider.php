@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Public\Provider;
 use Bitrix\StaffTrack\Dictionary\CheckInGeoPermissionScenario;
 use Bitrix\StaffTrack\Dictionary\CheckInGeoPermissionState;
 use Bitrix\StaffTrack\Dictionary\Option;
+use Bitrix\StaffTrack\Internal\Service\CheckIn\AutoCheckInConsentRule;
 use Bitrix\StaffTrack\Model\OptionTable;
 use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Service\OptionService;
@@ -14,12 +15,11 @@ use Bitrix\StaffTrack\Service\OptionService;
  * scenarios the mark names is decided here and not by the caller: the mobile client caches the
  * settings for a day, so the composition it knows may already be wrong.
  *
- * No rights are checked. Reading a mark, telling whether a postponement is still in force, and
- * recording a permission that was granted work by the user id they are given: which scenarios are
- * switched on for an arbitrary employee is read through the forms of the settings facade that take
- * his id. Writing a postponement still does not: it names the scenarios switched on for the session
- * user, the one the popup was shown to, so `registerPostponed()` is meant for the employee who is
- * making the request and nobody else - see the note on it.
+ * No rights are checked. Reading a mark, telling whether the permission is withheld, and recording a
+ * permission that was granted work by the user id they are given: the departments and the consent marker
+ * of an arbitrary employee are read by his id. Writing a postponement still does not: it names the
+ * scenarios switched on for the session user, the one the popup was shown to, so `registerPostponed()` is
+ * meant for the employee who is making the request and nobody else - see the note on it.
  *
  * Whether the employee has postponed the popup too many times is decided here as well: the decision on
  * the limit is the only place the threshold lives, and the client gets the decision, never the count.
@@ -29,8 +29,7 @@ class CheckInGeoPermissionProvider
 	/**
 	 * Postponements in a row after which the popup stops asking. Reaching it is not a state of the mark:
 	 * the count goes on as before and a granted permission drops it, which is what lifts the limit. It
-	 * weighs on whether a postponement is in force as well: with no popup left to ask, the last postponement
-	 * holds while the auto mode is on, whatever popup it was given in.
+	 * does not weigh on whether the permission is withheld ({@see isPostponementInForce()}).
 	 */
 	public const POSTPONEMENT_LIMIT = 3;
 
@@ -44,16 +43,19 @@ class CheckInGeoPermissionProvider
 	private OptionService $optionService;
 	private OptionProvider $optionProvider;
 	private CheckInSettingsProvider $settingsProvider;
+	private AutoCheckInConsentRule $consentRule;
 
 	public function __construct(
 		?OptionService $optionService = null,
 		?OptionProvider $optionProvider = null,
 		?CheckInSettingsProvider $settingsProvider = null,
+		?AutoCheckInConsentRule $consentRule = null,
 	)
 	{
 		$this->optionService = $optionService ?? OptionService::getInstance();
 		$this->optionProvider = $optionProvider ?? OptionProvider::getInstance();
 		$this->settingsProvider = $settingsProvider ?? new CheckInSettingsProvider();
+		$this->consentRule = $consentRule ?? new AutoCheckInConsentRule();
 	}
 
 	/**
@@ -178,30 +180,25 @@ class CheckInGeoPermissionProvider
 	}
 
 	/**
-	 * Whether the postponement of the employee still holds: the auto mode is switched on for him right now,
-	 * and the mark stands for a refusal to let his routes be collected. It does when he postponed the popup
-	 * of the auto mode, and the mark names the auto mode only then: it keeps the scenarios switched on at that
-	 * moment, and the popup of the day start check-in is shown only where the auto mode is off. It does as
-	 * well once his postponements have reached the limit, whatever popup the last of them was given in.
+	 * Whether the permission to collect the auto check-ins of the employee is withheld - the plaque over the
+	 * timeline of his day: the auto check-ins are switched on in at least one department he is a member of,
+	 * and he has not granted the permission, whether he ever saw the popup or not. It is the rule the mark
+	 * of his row in the presence list is put by ({@see AutoCheckInConsentRule}). The name is left from the
+	 * rule it replaced, which asked for a postponement in force: the method is called from stafftrackmobile,
+	 * and the two modules are updated apart.
 	 *
-	 * A refusal in the popup of the day start check-in says nothing of the routes: that popup asks for the
-	 * location of the phone for a check-in made by hand. Short of the limit that settles it, for once the auto
-	 * mode is switched on, the popup of the auto mode is still to come and the answer given there writes the
-	 * mark anew. At the limit no popup asks any more, so no postponement is left to write the scenarios anew -
-	 * only a permission granted from the settings row writes the mark anew, as granted - and the scenarios it
-	 * keeps may be those of a day the auto mode was still off. Were the mark to settle it then, the
-	 * postponement would never be in force again, while for whoever opens the day of the employee this answer
-	 * is the only sign left that the permission to collect his routes has not been given.
+	 * The permission is granted by the mark granted, or by the marker of the consent the employee keeps - the
+	 * one the tracker of his device collects the routes by - whatever the mark says. Neither the scenarios of
+	 * the mark nor its count, the limit or its date weigh, and a department the employee only manages does not
+	 * count. A setting of the departments nobody could read answers no, so does a marker nobody could read, and
+	 * so does a region where geo features are not available: no auto check-in is collected there.
 	 *
-	 * The count weighs only through the limit and the date not at all, and the auto mode is read as it is
-	 * now: the settings of the departments may have changed since the postponement.
-	 *
-	 * The settings are asked lazily and last, of a postponement the mark cannot dismiss alone: an employee who
-	 * never answered the popup, who granted the permission, or whose postponement in the popup of the day
-	 * start check-in is short of the limit costs the one reading of his options.
+	 * The mark is read first, the region next, then the marker - one reading of the user options of main, mostly
+	 * off its cache - and the departments last, by two queries of the structure: a granted permission costs the
+	 * one reading of the options of the employee, and an identifier that names no employee costs nothing at all.
 	 *
 	 * No rights are checked: whether the caller may learn this of the employee is for the transport to
-	 * decide before asking. Nothing is written, and no cache is dropped.
+	 * decide before asking, and so is the day it is asked for. Nothing is written, and no cache is dropped.
 	 *
 	 * @param int $userId
 	 * @return bool
@@ -213,26 +210,7 @@ class CheckInGeoPermissionProvider
 			return false;
 		}
 
-		$permission = $this->getPermission($userId);
-		if ($permission === null)
-		{
-			return false;
-		}
-
-		if ($permission->state !== CheckInGeoPermissionState::POSTPONED)
-		{
-			return false;
-		}
-
-		if (
-			!in_array(CheckInGeoPermissionScenario::AUTO_CHECK_IN, $permission->postponedScenarios, true)
-			&& !$this->hasReachedPostponementLimit($permission)
-		)
-		{
-			return false;
-		}
-
-		return $this->settingsProvider->isAutoCheckInEnabledInSettingsFor($userId);
+		return $this->consentRule->isWithheldForUser($userId, $this->getPermission($userId)?->state);
 	}
 
 	/**
@@ -335,8 +313,7 @@ class CheckInGeoPermissionProvider
 	}
 
 	/**
-	 * The decision on the limit and the verdict on a postponement both weigh the limit on a mark they have
-	 * already read, so the two cannot part on it and neither asks the storage for it twice.
+	 * Whether a mark already read has reached the limit: the storage is not asked for it twice.
 	 *
 	 * @param CheckInGeoPermissionDto $permission
 	 * @return bool

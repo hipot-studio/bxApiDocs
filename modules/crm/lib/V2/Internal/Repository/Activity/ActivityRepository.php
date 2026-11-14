@@ -4,18 +4,23 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Repository\Activity;
 
+use Bitrix\Crm\ActivityBindingTable;
 use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Activity;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ActivityBinding;
 use Bitrix\Crm\V2\Internal\Entity\Activity\Enum\CompletionStatus;
 use Bitrix\Crm\V2\Internal\Entity\Activity\ProviderPayload;
 use Bitrix\Crm\V2\Internal\Entity\Activity\StorageFieldTransit;
+use Bitrix\Crm\V2\Internal\Service\Activity\Read\ActivityFilter;
+use Bitrix\Crm\V2\Internal\Service\Activity\Read\ActivitySort;
 use Bitrix\Crm\V2\Public\OwnerType;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Objectify\EntityObject;
+use Bitrix\Main\ORM\Query\Filter\Condition;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
 use CCrmActivityNotifyType;
 use CCrmActivityType;
@@ -70,6 +75,13 @@ final class ActivityRepository implements ActivityRepositoryInterface
 	private const OWNER_ID_COLUMN = 'OWNER_ID';
 	private const OWNER_TYPE_ID_COLUMN = 'OWNER_TYPE_ID';
 	private const HANDLEABLE_COLUMN = 'IS_HANDLEABLE';
+	private const STORAGE_ELEMENT_IDS_COLUMN = 'STORAGE_ELEMENT_IDS';
+
+	/**
+	 * Columns of the sort that are NOT NULL in the table on every storage, so that no NULL ordering applies to them.
+	 * `START_TIME`, `END_TIME` and `DEADLINE` are nullable.
+	 */
+	private const NOT_NULL_SORT_COLUMNS = ['ID', 'CREATED', 'LAST_UPDATED'];
 
 	/** Alias the raw `SETTINGS` is selected under, past the unpacking callback of the field map. */
 	private const RAW_SETTINGS_ALIAS = 'SETTINGS_RAW';
@@ -78,7 +90,11 @@ final class ActivityRepository implements ActivityRepositoryInterface
 	{
 		$transitColumns = self::transitColumnsOfARow();
 		$object = $this->fetchOne(
-			array_values(array_unique(array_merge(ActivityFieldMap::getCoreColumns(), $transitColumns))),
+			array_values(array_unique(array_merge(
+				ActivityFieldMap::getCoreColumns(),
+				$transitColumns,
+				[self::STORAGE_ELEMENT_IDS_COLUMN],
+			))),
 			$id,
 		);
 		if ($object === null)
@@ -96,6 +112,9 @@ final class ActivityRepository implements ActivityRepositoryInterface
 			self::STATE_ACTIVITY => $this->hydrate($object, ActivityFieldMap::getCoreColumns()),
 			self::STATE_PAYLOAD => $this->getProviderPayload($id) ?? new ProviderPayload(),
 			self::STATE_TRANSIT => $transit,
+			self::STATE_STORAGE_ELEMENT_IDS => self::storageElementIdsOf(
+				$object->get(self::STORAGE_ELEMENT_IDS_COLUMN),
+			),
 		];
 	}
 
@@ -140,6 +159,85 @@ final class ActivityRepository implements ActivityRepositoryInterface
 		}
 
 		return $activities;
+	}
+
+	/**
+	 * Identifiers of the activities the filter selects, in the order of the sort, from the offset on.
+	 *
+	 * THE ORDER IS WRITTEN HERE, NOT BY THE ORM. The ORM puts the NULL ordering of MySQL onto PostgreSQL for every
+	 * column (`ASC NULLS FIRST`), and PostgreSQL walks no ascending index in that order: every page would sort the
+	 * whole table, even by the primary key. A column that holds no NULL ({@see self::NOT_NULL_SORT_COLUMNS}) is
+	 * ordered plainly, a nullable one keeps the NULL ordering of the ORM, so the order is the same either way. On
+	 * MySQL the statement is the one the ORM builds.
+	 *
+	 * @return int[]
+	 */
+	public function getIds(ActivityFilter $filter, ActivitySort $sort, int $limit, int $offset): array
+	{
+		$query = ActivityTable::query()
+			->setSelect(['ID'])
+			->where($this->toStorageFilter($filter))
+		;
+
+		$connection = Application::getConnection();
+		$order = $this->orderSql($query, $this->toStorageOrder($sort));
+		$sql = $query->getQuery() . "\nORDER BY " . $order;
+		if ($limit > 0)
+		{
+			$sql = $connection->getSqlHelper()->getTopSql($sql, $limit, $offset);
+		}
+
+		return array_map('intval', array_column($connection->query($sql)->fetchAll(), 'ID'));
+	}
+
+	/**
+	 * Identifiers of the activities of these providers bound to exactly this object by a row of bindings, whoever
+	 * owns their rows: one statement, in the order of the identifiers. A caller that reads them in portions names
+	 * the last identifier it has got and how many it takes; fewer than that many means there are no more.
+	 *
+	 * THE ORDER IS BY AN EXPRESSION, NOT BY THE COLUMN. Asked for a few rows in the order of the primary key, a
+	 * storage walks that key instead of sorting, and for a parent with fewer candidates than the limit the walk
+	 * goes through every activity of the portal. An expression is no order of an index, so the candidates are
+	 * found by the bindings and the providers as without a limit, and then sorted.
+	 *
+	 * @param string[] $providerIds values of the PROVIDER_ID column
+	 * @param int $afterId only the identifiers above this one
+	 * @param int $limit how many identifiers at most, 0 for all of them
+	 * @return int[]
+	 */
+	public function getCandidateIds(
+		ActivityBinding $binding,
+		array $providerIds,
+		int $afterId = 0,
+		int $limit = 0,
+	): array
+	{
+		$providerIds = array_values(array_unique(array_map('strval', $providerIds)));
+		if ($providerIds === [])
+		{
+			return [];
+		}
+
+		$query = ActivityTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $this->boundActivityIdsQuery($binding))
+			->whereIn('PROVIDER_ID', $providerIds)
+		;
+		if ($afterId > 0)
+		{
+			$query->where('ID', '>', $afterId);
+		}
+
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		$column = $helper->quote($query->getInitAlias()) . '.' . $helper->quote('ID');
+		$sql = $query->getQuery() . "\nORDER BY " . $column . ' + 0 ASC';
+		if ($limit > 0)
+		{
+			$sql = $helper->getTopSql($sql, $limit);
+		}
+
+		return array_map('intval', array_column($connection->query($sql)->fetchAll(), 'ID'));
 	}
 
 	public function getOwners(array $ids): array
@@ -740,6 +838,154 @@ final class ActivityRepository implements ActivityRepositoryInterface
 		return $query->fetchCollection()->getAll();
 	}
 
+	private function toStorageFilter(ActivityFilter $filter): ConditionTree
+	{
+		$storageFilter = (new ConditionTree())->where($this->toStorageTree($filter->getConditions()));
+
+		$binding = $filter->getBinding();
+		if ($binding !== null)
+		{
+			$storageFilter->whereIn('ID', $this->boundActivityIdsQuery($binding));
+		}
+
+		$excludedIds = $filter->getExcludedIds();
+		if ($excludedIds !== [])
+		{
+			$storageFilter->whereNotIn('ID', $excludedIds);
+		}
+
+		return $storageFilter;
+	}
+
+	/** The identifiers of the activities bound to exactly this object by a row of bindings. */
+	private function boundActivityIdsQuery(ActivityBinding $binding): Query
+	{
+		return ActivityBindingTable::query()
+			->setSelect(['ACTIVITY_ID'])
+			->where('OWNER_TYPE_ID', $binding->getOwnerType()->getId())
+			->where('OWNER_ID', $binding->getOwnerId())
+		;
+	}
+
+	/**
+	 * A copy keeps the logic and the negation of the group, which the tree does not let read.
+	 */
+	private function toStorageTree(ConditionTree $tree): ConditionTree
+	{
+		$storageTree = clone $tree;
+		$storageTree->removeAllConditions();
+		foreach ($tree->getConditions() as $condition)
+		{
+			$storageTree->addCondition(
+				$condition instanceof ConditionTree
+					? $this->toStorageTree($condition)
+					: $this->toStorageCondition($condition)
+			);
+		}
+
+		return $storageTree;
+	}
+
+	private function toStorageCondition(Condition $condition): Condition|ConditionTree
+	{
+		$column = ActivityFieldMap::getReadColumn((string)$condition->getColumn());
+		if ($column === null)
+		{
+			throw new ArgumentException("'{$condition->getColumn()}' is not stored in the table of activities");
+		}
+
+		$operator = $condition->getOperator();
+		$value = $condition->getValue();
+		if ($column === 'DEADLINE')
+		{
+			return $this->toStorageDeadlineCondition($operator, $value);
+		}
+
+		if ($value !== null)
+		{
+			$value = is_array($value)
+				? array_map(static fn($item) => ActivityFieldMap::toReadColumnValue($column, $item), $value)
+				: ActivityFieldMap::toReadColumnValue($column, $value)
+			;
+		}
+
+		return new Condition($column, $operator, $value);
+	}
+
+	/**
+	 * The column says "no deadline" both with NULL and with the far date of {@see ActivityFieldMap}, and the model
+	 * reads either as none: a date compared with the deadline never matches the far one, and a missing deadline
+	 * matches both.
+	 *
+	 * A DATE IS NEVER UNKNOWN FOR NULL. The comparison is FALSE on a NULL row rather than NULL, so a negated group
+	 * keeps a row without a deadline whichever of the two answers the row stores.
+	 */
+	private function toStorageDeadlineCondition(string $operator, mixed $value): ConditionTree
+	{
+		$sentinelYear = ActivityFieldMap::getDeadlineSentinel()->format('Y');
+		$noDeadlineFrom = new DateTime("{$sentinelYear}-01-01 00:00:00", 'Y-m-d H:i:s');
+
+		if ($value === null)
+		{
+			return $operator === '='
+				? (new ConditionTree())->logic(ConditionTree::LOGIC_OR)
+					->whereNull('DEADLINE')
+					->where('DEADLINE', '>=', $noDeadlineFrom)
+				: (new ConditionTree())->whereNotNull('DEADLINE')->where('DEADLINE', '<', $noDeadlineFrom)
+			;
+		}
+
+		return (new ConditionTree())
+			->whereNotNull('DEADLINE')
+			->where('DEADLINE', $operator, $value)
+			->where('DEADLINE', '<', $noDeadlineFrom)
+		;
+	}
+
+	/**
+	 * @return array<string, string>
+	 */
+	private function toStorageOrder(ActivitySort $sort): array
+	{
+		$order = [];
+		foreach ($sort->getOrder() as $fieldName => $direction)
+		{
+			$order[(string)ActivityFieldMap::getReadColumn($fieldName)] = $direction->value;
+		}
+
+		return $order;
+	}
+
+	/**
+	 * The ORDER BY of the statement of {@see self::getIds()}: a column of {@see self::NOT_NULL_SORT_COLUMNS} in its
+	 * direction alone and a nullable one with the NULL ordering of the storage. `ID` is the column the statement
+	 * selects and is named by its own name, as the ORM names it; every other column is named through the table.
+	 *
+	 * @param array<string, string> $order
+	 */
+	private function orderSql(Query $query, array $order): string
+	{
+		$helper = Application::getConnection()->getSqlHelper();
+		$table = $helper->quote($query->getInitAlias());
+		$parts = [];
+		foreach ($order as $column => $direction)
+		{
+			$isAscending = strtoupper($direction) === 'ASC';
+			if (in_array($column, self::NOT_NULL_SORT_COLUMNS, true))
+			{
+				$sqlDirection = $isAscending ? 'ASC' : 'DESC';
+			}
+			else
+			{
+				$sqlDirection = $isAscending ? $helper->getAscendingOrder() : $helper->getDescendingOrder();
+			}
+			$name = $helper->quote($column);
+			$parts[] = ($column === 'ID' ? $name : $table . '.' . $name) . ' ' . $sqlDirection;
+		}
+
+		return implode(', ', $parts);
+	}
+
 	/**
 	 * @param string[] $columns
 	 */
@@ -972,19 +1218,53 @@ final class ActivityRepository implements ActivityRepositoryInterface
 	}
 
 	/**
+	 * The ids the column lists, read the way legacy reads it (`CCrmActivity::extractStorageElementIds()`): one
+	 * plain unserialization, the positive ids kept. A column holding anything but a serialized list holds no file.
+	 *
+	 * @return int[]
+	 */
+	private static function storageElementIdsOf(mixed $storedValue): array
+	{
+		if (!is_string($storedValue) || !str_starts_with($storedValue, 'a:'))
+		{
+			return [];
+		}
+
+		$ids = unserialize($storedValue, ['allowed_classes' => false]);
+		if (!is_array($ids))
+		{
+			return [];
+		}
+
+		return array_values(array_filter(
+			array_map('intval', $ids),
+			static fn(int $id): bool => $id > 0,
+		));
+	}
+
+	/**
 	 * A stored column in the one shape the transit carries it in - the legacy one, which is what every other
-	 * producer of a transit puts there and what legacy hands a provider in `PREVIOUS_FIELDS`. Only the
-	 * handleable flag needs the translation: its ORM field is a boolean over a column of 'N' and 'Y'
+	 * producer of a transit puts there and what legacy hands a provider in `PREVIOUS_FIELDS`. Two translations
+	 * are needed. The handleable flag: its ORM field is a boolean over a column of 'N' and 'Y'
 	 * (`crm/lib/activity.php`), so a read gives a `bool` where the rest of the pipeline speaks the letters.
+	 * The text columns: their ORM fields are plain strings, so a NULL of the row - the origin of a planned
+	 * activity - comes out of the ORM as '', while the raw fetch of legacy keeps the NULL, and a reader of the
+	 * state handed on in the legacy shape tells "planned" by exactly that null (the item of a call in the
+	 * timeline, Mantis 260654). The read projection makes the same translation ({@see ActivityFieldMap::toText()}).
 	 */
 	private static function transitValueOf(string $column, mixed $storedValue): mixed
 	{
-		if ($column !== self::HANDLEABLE_COLUMN || !is_bool($storedValue))
+		if ($column === self::HANDLEABLE_COLUMN && is_bool($storedValue))
 		{
-			return $storedValue;
+			return $storedValue ? 'Y' : 'N';
 		}
 
-		return $storedValue ? 'Y' : 'N';
+		if ($storedValue === '' && ActivityFieldMap::getType($column) === ActivityFieldMap::TYPE_STRING)
+		{
+			return null;
+		}
+
+		return $storedValue;
 	}
 
 	private function hasTransitValue(?StorageFieldTransit $transit, string $column): bool

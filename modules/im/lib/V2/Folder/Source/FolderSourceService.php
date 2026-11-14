@@ -16,7 +16,8 @@ use Bitrix\Im\V2\Folder\Pull\FolderUpdate;
 use Bitrix\Im\V2\Folder\System\AllFolder;
 use Bitrix\Im\V2\Folder\System\ShowcaseSourceRegistry;
 use Bitrix\Im\V2\Folder\System\SystemFolder;
-use Bitrix\Main\Application;
+use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityLock;
+use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityResolver;
 
 /**
  * Composition of a composite folder ("All") as its settings screen needs it (ALG-01): one
@@ -40,17 +41,21 @@ use Bitrix\Main\Application;
  * canonical registry and the merge speak the stored ones ({@see SystemFolder::getCode()}). Reading
  * turns stored into wire, writing turns wire back into stored, and neither half ever compares a
  * code of one kind with a code of the other.
+ *
+ * The invariant of a hidden folder crosses both halves as one rule ({@see self::getLockedSourceCodes}):
+ * the source feeding a section whose navigation folder the owner has hidden is shown locked by the
+ * reading half and kept mandatory by the writing one, so neither can let it go while the other
+ * promises it is there.
  */
 class FolderSourceService
 {
-	/** Same budget the rest of the folder domain gives a named lock ({@see \Bitrix\Im\V2\Folder\FolderBootstrapper}). */
-	private const LOCK_TIMEOUT = 3;
-
 	public function __construct(
 		private readonly FolderProvider $folderProvider,
 		private readonly ShowcaseSourceRegistry $showcaseSourceRegistry,
 		private readonly PinService $pinService,
 		private readonly FolderCache $folderCache,
+		private readonly FolderVisibilityResolver $visibilityResolver,
+		private readonly FolderVisibilityLock $visibilityLock,
 	)
 	{
 	}
@@ -77,6 +82,7 @@ class FolderSourceService
 
 		$foldersByCode = $this->getFoldersByCode($userId);
 		$composition = $this->getSeededComposition($foldersByCode) ?? $composition;
+		$lockedSourceCodes = $this->getLockedSourceCodes($userId, $foldersByCode);
 
 		// The stored composition arrives as wire codes ({@see CompositeDefinition::toRestFormat}),
 		// so an item is looked up in it by the wire code it carries itself. Membership is not
@@ -103,12 +109,17 @@ class FolderSourceService
 				continue;
 			}
 
+			// AC-015: a source the invariant holds keeps its row on the screen and loses the switch.
+			// Dropping the item instead would take the explanation away together with the control.
+			$folderHidden = isset($lockedSourceCodes[$entry->code]);
+
 			$wireCode = (string)$sourceFolder->getRestCode();
 			$item = new SourceItem(
 				folderId: (int)$sourceFolder->getId(),
 				code: $wireCode,
 				enabled: isset($storedCodes[$wireCode]),
-				togglable: true,
+				togglable: !$folderHidden,
+				lockReason: $folderHidden ? LockReason::FolderHidden : null,
 			);
 
 			$items[] = $item;
@@ -132,6 +143,7 @@ class FolderSourceService
 					code: (string)$sourceFolder->getRestCode(),
 					enabled: false,
 					togglable: false,
+					lockReason: LockReason::Showcase,
 				),
 			);
 		}
@@ -154,6 +166,84 @@ class FolderSourceService
 	 */
 	public function updateSources(Folder $folder, array $sourceCodes): UpdateSourcesResult
 	{
+		return $this->writeComposition(
+			$folder,
+			fn (array $storedCodes, array $storedCodeByWireCode): array
+				=> $this->toStoredCodes($sourceCodes, $storedCodeByWireCode),
+		);
+	}
+
+	/**
+	 * Switches a set of sources on over the stored composition and leaves the rest of it alone -
+	 * the write the invariant of a hidden folder is kept by (AC-013): a section may leave the
+	 * navigation only while its chats stay reachable through "All", so hiding it switches its
+	 * source back on first.
+	 *
+	 * Not expressible through {@see self::updateSources()}: that one takes the snapshot of the
+	 * client and reads a missing code as a source switched off, so a call carrying part of the
+	 * codes would switch off everything else.
+	 *
+	 * A whole set and not one code: one save of the "Folder list" screen can hide several sections
+	 * at once (API-02). The set goes through one lock and one merge, so a partial return does not
+	 * happen - either every section of it is back or none is; hiding a single folder (API-01) is
+	 * the same call with a set of one.
+	 *
+	 * @param string[] $storedCodesToEnable sources to switch on, in the codes the composition is
+	 *        stored under ({@see SystemFolder::getCode()}) - the kind
+	 *        {@see \Bitrix\Im\V2\Folder\Visibility\FolderVisibilityResolver::resolveSourceToReturn}
+	 *        answers in. A set of codes already enabled, the empty set included, writes nothing
+	 *        and sends no event.
+	 */
+	public function enableSources(Folder $folder, array $storedCodesToEnable): UpdateSourcesResult
+	{
+		return $this->writeComposition(
+			$folder,
+			static fn (array $storedCodes, array $storedCodeByWireCode): array
+				=> array_merge($storedCodes, $storedCodesToEnable),
+		);
+	}
+
+	/**
+	 * The composition really stored for the folder, in the codes the merge and the canonical
+	 * registry speak ({@see SystemFolder::getCode()}) - the input the invariant of a hidden folder
+	 * is answered against ({@see \Bitrix\Im\V2\Folder\Visibility\FolderVisibilityResolver::resolveSourceToReturn}).
+	 *
+	 * The shape published to the client ({@see CompositeDefinition::toRestFormat()}) cannot serve
+	 * it: that one speaks wire codes and drops the sources unavailable to the owner, and the
+	 * invariant asks about the stored row.
+	 *
+	 * A folder with no composition of ours answers the empty set, the same soft refusal the
+	 * reading half gives it.
+	 *
+	 * @return string[]
+	 */
+	public function getStoredSourceCodes(Folder $folder): array
+	{
+		if ($this->getComposition($folder) === null)
+		{
+			return [];
+		}
+
+		return $this->loadStoredCodes((int)$folder->getId());
+	}
+
+	/**
+	 * The single write path of the composition, shared by both entry points: the lock, the merge
+	 * against what is really stored, insert before delete, the side effects, and the answer and
+	 * the push built from one re-read folder.
+	 *
+	 * The entries differ in the desired composition alone, so they hand it in as a closure that is
+	 * called under the lock - the stored codes it may need are read there and nowhere earlier.
+	 * Each entry uses one of the two arguments and ignores the other: the snapshot write speaks
+	 * wire codes and needs the map, the enabling write already speaks stored codes and needs the
+	 * stored composition.
+	 *
+	 * @param \Closure(string[], array<string, string>): string[] $resolveDesiredCodes stored
+	 *        composition and "wire code => stored code" of the sources this user may switch,
+	 *        answered with the codes that must end up enabled, in stored codes
+	 */
+	private function writeComposition(Folder $folder, \Closure $resolveDesiredCodes): UpdateSourcesResult
+	{
 		$result = new UpdateSourcesResult();
 
 		if ($this->getComposition($folder) === null)
@@ -168,36 +258,12 @@ class FolderSourceService
 			return $result->addError(new Error(FolderError::FOLDER_OPERATION_NOT_SUPPORTED));
 		}
 
-		$foldersByCode = $this->getFoldersByCode($userId);
-
-		$manageable = [];
-		$mandatory = [];
-		/** @var array<string, string> $storedCodeByWireCode */
-		$storedCodeByWireCode = [];
-		foreach (AllFolder::getDefaultDefinition() as $entry)
-		{
-			$sourceFolder = $this->findAvailableFolder($foldersByCode, $entry->code, $userId);
-			if ($sourceFolder !== null)
-			{
-				$manageable[] = $entry->code;
-				$storedCodeByWireCode[(string)$sourceFolder->getRestCode()] = $entry->code;
-			}
-
-			if ($entry->mandatory)
-			{
-				$mandatory[] = $entry->code;
-			}
-		}
-
-		$connection = Application::getConnection();
-		$lockName = self::getLockName($folderId);
-
-		// The snapshot is written as a difference against what is stored, so reading the stored codes
-		// and applying that difference has to be one step for the folder. Two saves that read the same
-		// composition would otherwise each drop what the other keeps, and the folder would end up with
-		// a snapshot neither client sent - "the last successful save wins" only holds while the pair
-		// is serialized. The lock is per folder, so saves of different users never wait for each other.
-		if (!$connection->lock($lockName, self::LOCK_TIMEOUT))
+		// The snapshot is written as a difference against what is stored, and the sources a hidden
+		// folder holds are mandatory in it (AC-015), so the stored codes, the hidden flags and the
+		// write are one step for the owner. Two writers reading the same state would otherwise each
+		// drop what the other keeps - a save from one device could switch off the source of a section
+		// a hide from another one has just taken out of the navigation.
+		if (!$this->visibilityLock->acquire($userId))
 		{
 			// Nothing has been written yet, so the refusal is the whole outcome: the client keeps the
 			// choice on screen and the save can simply be repeated.
@@ -206,10 +272,39 @@ class FolderSourceService
 
 		try
 		{
+			$foldersByCode = $this->getFoldersByCode($userId);
+			$this->refreshHiddenByUser($foldersByCode, $userId);
+			$lockedSourceCodes = $this->getLockedSourceCodes($userId, $foldersByCode);
+
+			$manageable = [];
+			$mandatory = [];
+			/** @var array<string, string> $storedCodeByWireCode */
+			$storedCodeByWireCode = [];
+			foreach (AllFolder::getDefaultDefinition() as $entry)
+			{
+				$sourceFolder = $this->findAvailableFolder($foldersByCode, $entry->code, $userId);
+				if ($sourceFolder !== null)
+				{
+					$manageable[] = $entry->code;
+					$storedCodeByWireCode[(string)$sourceFolder->getRestCode()] = $entry->code;
+				}
+
+				// AC-015: a locked source is mandatory for as long as the folder stays hidden. The
+				// screen shows it switched off nowhere, so the snapshot never carries it back and the
+				// save would drop it; the merge returns it silently instead, and the rest of the same
+				// save applies as it is (AC-018).
+				if ($entry->mandatory || isset($lockedSourceCodes[$entry->code]))
+				{
+					$mandatory[] = $entry->code;
+				}
+			}
+
+			// Read after getFoldersByCode(), which seeds the composition: an earlier snapshot comes back empty.
+			$storedCodes = $this->loadStoredCodes($folderId);
+
 			$diff = SourceComposition::merge(
-				// Read after getFoldersByCode(), which seeds the composition: an earlier snapshot comes back empty.
-				$this->loadStoredCodes($folderId),
-				$this->toStoredCodes($sourceCodes, $storedCodeByWireCode),
+				$storedCodes,
+				$resolveDesiredCodes($storedCodes, $storedCodeByWireCode),
 				$manageable,
 				$mandatory,
 			);
@@ -243,12 +338,18 @@ class FolderSourceService
 		finally
 		{
 			// Released as soon as the rows are settled: everything below reads the result of the write
-			// back and reacts to it, and holding the folder through the pin hygiene would only make the
-			// next save of the same user wait for work that no longer decides anything.
-			$connection->unlock($lockName);
+			// back and reacts to it, and holding the owner through the cache reset and the re-read
+			// would only make the next save of the same user wait for work that no longer decides
+			// anything.
+			$this->visibilityLock->release($userId);
 		}
 
-		$this->applySideEffects($folder, $userId, $diff);
+		// A chat the save took out of "All" entirely loses its pin there, and switching the source back
+		// on does not return it ({@see PinService::syncShadowsOnSourcesRemove()}).
+		$this->pinService->syncShadowsOnSourcesRemove($folder, $diff->toRemove, $diff->enabled);
+
+		// The composition drives the folder list, so the list cache of the user goes with the write.
+		$this->folderCache->clearByUser($userId);
 
 		// The answer and the push are built from one re-read object: getById() goes straight to the
 		// table, past FolderCache, and hands the composition back in the canonical registry order.
@@ -364,6 +465,83 @@ class FolderSourceService
 		$folder = $foldersByCode[$code] ?? null;
 
 		return $folder !== null && $folder->isAvailable($userId) ? $folder : null;
+	}
+
+	/**
+	 * Stored codes of the sources the invariant of a hidden folder holds: their recent section is
+	 * reachable through "All" alone, because the navigation folder of that section is hidden by the
+	 * owner (AC-015). Computed once per call of either half and read by both - the item the reading
+	 * half publishes locked and the code the writing half keeps mandatory are the same fact, and a
+	 * second statement of it would let the screen and the save disagree.
+	 *
+	 * The rule is stated over recent sections and not over codes: a source and the navigation folder
+	 * of its section carry different codes, and the sections are what the invariant is written in
+	 * ({@see FolderVisibilityResolver::getSectionsLockedByHiddenFolders}).
+	 *
+	 * Narrowed to the sources available to the owner, as both halves are: an unavailable source has
+	 * no item and is not manageable, so locking it would only add a row nobody could have removed.
+	 *
+	 * The folders of the user are the ones already read here, and the personal ones missing from that
+	 * list change nothing: a personal folder holds no recent section and locks none.
+	 *
+	 * @param array<string, SystemFolder> $foldersByCode
+	 * @return array<string, true> stored source code => true
+	 */
+	private function getLockedSourceCodes(int $userId, array $foldersByCode): array
+	{
+		$lockedSections = array_fill_keys(
+			$this->visibilityResolver->getSectionsLockedByHiddenFolders(
+				$userId,
+				$this->toFolderCollection($foldersByCode),
+			),
+			true,
+		);
+
+		$lockedCodes = [];
+		foreach (AllFolder::getDefaultDefinition() as $entry)
+		{
+			$section = $this->findAvailableFolder($foldersByCode, $entry->code, $userId)?->getRecentSection();
+			if ($section !== null && isset($lockedSections[$section]))
+			{
+				$lockedCodes[$entry->code] = true;
+			}
+		}
+
+		return $lockedCodes;
+	}
+
+	/**
+	 * The hidden flags of the folders brought up to the rows: the list may come from the cache of this
+	 * hit, while the lock is only worth something if the flags are the ones its previous holder wrote.
+	 *
+	 * @param array<string, SystemFolder> $foldersByCode
+	 */
+	private function refreshHiddenByUser(array $foldersByCode, int $userId): void
+	{
+		$hiddenFolderIds = array_flip($this->folderProvider->getHiddenByUserFolderIds($userId));
+
+		foreach ($foldersByCode as $folder)
+		{
+			$folder->setHiddenByUser(isset($hiddenFolderIds[(int)$folder->getId()]));
+		}
+	}
+
+	/**
+	 * The folders this service has already read, as the collection the visibility rule is stated
+	 * over. Built from that list and not read again: the rule is an addition to both halves and
+	 * must not cost either of them a second query.
+	 *
+	 * @param array<string, SystemFolder> $foldersByCode
+	 */
+	private function toFolderCollection(array $foldersByCode): FolderCollection
+	{
+		$collection = new FolderCollection();
+		foreach ($foldersByCode as $folder)
+		{
+			$collection->add($folder);
+		}
+
+		return $collection;
 	}
 
 	/**
@@ -495,15 +673,6 @@ class FolderSourceService
 	}
 
 	/**
-	 * Keyed by the folder and not by its owner: the composition rows of one user belong to one
-	 * folder, so a wider lock would only make his other folders wait.
-	 */
-	private static function getLockName(int $folderId): string
-	{
-		return "im_folder_source_{$folderId}";
-	}
-
-	/**
 	 * @param string[] $codes
 	 */
 	private function insertRows(int $folderId, int $userId, array $codes): void
@@ -547,30 +716,6 @@ class FolderSourceService
 			'=USER_ID' => $userId,
 			'=SOURCE_FOLDER_CODE' => $codes,
 		]);
-	}
-
-	/**
-	 * Pin shadows of both halves of the change, then the folder list cache. Hygiene runs after the
-	 * composition rows are written and resolves the sources without an owner
-	 * ({@see PinService::syncShadowsOnSourcesRemove}, {@see PinService::syncShadowsOnSourcesEnabled}),
-	 * so a source the user has already lost is still seen; PinCache is reset there, so no reset of
-	 * ours is added.
-	 *
-	 * The order carries meaning - collect first, restore after. The collection matches by the codes
-	 * of the switched-off sources and not by "the chats that left the composition", so it takes down
-	 * the shadow of a chat belonging to a removed and a surviving source at once; the restoration
-	 * goes over the whole enabled composition and brings that shadow back within the same save. The
-	 * reverse order would leave the chat without a shadow until the next pin.
-	 *
-	 * Each half goes in one call - the cost of the hygiene belongs to the save and not to the
-	 * number of sources it touched.
-	 */
-	private function applySideEffects(Folder $folder, int $userId, SourceComposition $diff): void
-	{
-		$this->pinService->syncShadowsOnSourcesRemove($folder, $diff->toRemove);
-		$this->pinService->syncShadowsOnSourcesEnabled($folder, $diff->enabled);
-
-		$this->folderCache->clearByUser($userId);
 	}
 
 	/**

@@ -10,6 +10,8 @@ use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integrity;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Restriction\RestrictionManager;
+use Bitrix\Crm\Search\SearchContentBuilder;
+use Bitrix\Crm\Search\SearchContentChangeDetector;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Statistics;
@@ -158,6 +160,20 @@ class Update extends Operation
 	protected function isCheckRequiredByAttributeUserFields(): bool
 	{
 		return !$this->wasItemMovedToFailStage();
+	}
+
+	/**
+	 * The search content is built only when a field it is built from changed.
+	 */
+	protected function isSearchContentRebuildNeeded(SearchContentBuilder $builder): bool
+	{
+		$itemBeforeSave = $this->getItemBeforeSave();
+		if (!$itemBeforeSave)
+		{
+			return true;
+		}
+
+		return (new SearchContentChangeDetector($builder))->isRebuildNeeded($itemBeforeSave, $this->item);
 	}
 
 	protected function updateDuplicates(): void

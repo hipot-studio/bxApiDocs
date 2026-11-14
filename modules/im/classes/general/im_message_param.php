@@ -306,7 +306,7 @@ class CIMMessageParam
 
 		if ($messageData['MESSAGE_TYPE'] === IM\V2\Chat::IM_TYPE_COMMENT)
 		{
-			CPullWatch::AddToStack('IM_PUBLIC_COMMENT_'.$messageData['CHAT_PARENT_ID'], $pull);
+			IM\V2\Pull\CommentTagPublisher::addToStack((int)$messageData['CHAT_ID'], $pull);
 		}
 		else
 		{
@@ -811,6 +811,7 @@ class CIMMessageParamAttach
 
 	public function SetDescription($text)
 	{
+		$text = is_scalar($text) ? (string)$text : '';
 		$text = self::removeNewLine($text);
 		$text = \Bitrix\Im\Text::convertHtmlToBbCode($text);
 		$this->result['DESCRIPTION'] = trim($text);
@@ -824,7 +825,7 @@ class CIMMessageParamAttach
 		}
 		else if ($color != self::CHAT)
 		{
-			if (!$color || !preg_match('/^#([a-fA-F0-9]){3}(([a-fA-F0-9]){3})?\b$/D', $color))
+			if (!is_string($color) || !preg_match('/^#([a-fA-F0-9]){3}(([a-fA-F0-9]){3})?\b$/D', $color))
 			{
 				$color = Bitrix\Im\Color::getRandomColor();
 			}
@@ -834,7 +835,7 @@ class CIMMessageParamAttach
 
 	public function setColorToken($color): void
 	{
-		$this->result['COLOR_TOKEN'] = IM\V2\Message\Color\Color::validateColor($color);
+		$this->result['COLOR_TOKEN'] = IM\V2\Message\Color\Color::validateColor(is_string($color) ? $color : null);
 	}
 
 	public function AddUser($params)
@@ -1024,7 +1025,10 @@ class CIMMessageParamAttach
 
 	public function AddMessage($message, $asDescription = false)
 	{
-		$message = trim($message);
+		if (!is_scalar($message))
+			return false;
+
+		$message = trim((string)$message);
 		if ($message == '')
 			return false;
 
@@ -1045,14 +1049,19 @@ class CIMMessageParamAttach
 
 		foreach ($params as $grid)
 		{
+			if (!is_array($grid))
+			{
+				continue;
+			}
+
+			$grid['NAME'] = isset($grid['NAME']) && is_scalar($grid['NAME']) ? (string)$grid['NAME'] : '';
+			$grid['VALUE'] = isset($grid['VALUE']) && is_scalar($grid['VALUE']) ? (string)$grid['VALUE'] : '';
+
 			$result = Array();
 
 			if ($grid['DISPLAY'] != 'LINE')
 			{
-				if (
-					!isset($grid['NAME']) && !isset($grid['VALUE'])
-					|| trim($grid['NAME']) == '' && trim($grid['VALUE']) == ''
-				)
+				if (trim($grid['NAME']) === '' && trim($grid['VALUE']) === '')
 				{
 					continue;
 				}
@@ -1079,7 +1088,7 @@ class CIMMessageParamAttach
 
 			$result['VALUE'] = str_replace(['#BR#'], '[BR]', trim($grid['VALUE']));
 
-			if (isset($grid['COLOR']) && preg_match('/^#([a-fA-F0-9]){3}(([a-fA-F0-9]){3})?\b$/D', $grid['COLOR']))
+			if (isset($grid['COLOR']) && is_string($grid['COLOR']) && preg_match('/^#([a-fA-F0-9]){3}(([a-fA-F0-9]){3})?\b$/D', $grid['COLOR']))
 			{
 				$result['COLOR'] = $grid['COLOR'];
 			}
@@ -1099,12 +1108,13 @@ class CIMMessageParamAttach
 			{
 				$result['CHAT_ID'] = intval($grid['CHAT_ID']);
 			}
-			if (isset($grid['LINK']) && preg_match('#^(?:/|https?://)#', $grid['LINK']))
+			if (isset($grid['LINK']) && is_string($grid['LINK']) && preg_match('#^(?:/|https?://)#', $grid['LINK']))
 			{
 				$result['LINK'] = $grid['LINK'];
 			}
 
-			$result['COLOR_TOKEN'] = IM\V2\Message\Color\Color::validateColor($grid['COLOR_TOKEN'] ?? null);
+			$colorToken = isset($grid['COLOR_TOKEN']) && is_string($grid['COLOR_TOKEN']) ? $grid['COLOR_TOKEN'] : null;
+			$result['COLOR_TOKEN'] = IM\V2\Message\Color\Color::validateColor($colorToken);
 
 			$add[] = $result;
 		}
@@ -1124,12 +1134,12 @@ class CIMMessageParamAttach
 		{
 			$result = Array();
 
-			if (!isset($images['LINK']) || isset($images['LINK']) && !preg_match('#^(?:/|https?://)#', $images['LINK']))
+			if (!isset($images['LINK']) || !is_string($images['LINK']) || !preg_match('#^(?:/|https?://)#', $images['LINK']))
 				continue;
 
-			if (isset($images['NAME']) && trim($images['NAME']) <> '')
+			if (isset($images['NAME']) && is_scalar($images['NAME']) && trim((string)$images['NAME']) <> '')
 			{
-				$result['NAME'] = (trim($images['NAME']));
+				$result['NAME'] = trim((string)$images['NAME']);
 			}
 
 			$result['LINK'] = $images['LINK'];
@@ -1143,7 +1153,7 @@ class CIMMessageParamAttach
 				$result['HEIGHT'] = intval($images['HEIGHT']);
 			}
 
-			if (isset($images['PREVIEW']) && preg_match('#^(?:/|https?://)#', $images['PREVIEW']))
+			if (isset($images['PREVIEW']) && is_string($images['PREVIEW']) && preg_match('#^(?:/|https?://)#', $images['PREVIEW']))
 			{
 				$result['PREVIEW'] = $images['PREVIEW'];
 			}

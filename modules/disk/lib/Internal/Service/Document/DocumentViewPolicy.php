@@ -7,7 +7,12 @@ namespace Bitrix\Disk\Internal\Service\Document;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Document\GoogleViewerHandler;
+use Bitrix\Disk\Document\DocumentResolveContext;
+use Bitrix\Disk\Document\Vibeoffice\OpenRoutePolicy;
+use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\File;
+use Bitrix\Disk\Version;
 use Bitrix\Main\Web\MimeType;
 
 class DocumentViewPolicy
@@ -41,6 +46,67 @@ class DocumentViewPolicy
 		return self::$allowedUseCloudsContentTypes[$contentType];
 	}
 
+	/**
+	 * Forgets the answers remembered by {@see self::isAllowedUseClouds()}, so that the next call judges
+	 * the content type anew. Needed by whoever changes the viewer or its options within a running process.
+	 */
+	public static function resetAllowedUseClouds(): void
+	{
+		self::$allowedUseCloudsContentTypes = [];
+	}
+
+	public static function isAllowedUseVibeofficeSource(File $file, ?Version $version, string $contentType): bool
+	{
+		if (self::isAllowedUseClouds($contentType))
+		{
+			return self::getEffectiveHandlerForView($file) !== null;
+		}
+
+		if (
+			$contentType === 'text/plain'
+			|| !Configuration::canCreateFileByCloud()
+			|| !OpenRoutePolicy::isAdditionalOfficeSource($file, $version)
+		)
+		{
+			return false;
+		}
+
+		return self::isAdditionalVibeofficeSource($file, $version);
+	}
+
+	public static function isAdditionalVibeofficeSource(File $file, ?Version $version = null): bool
+	{
+		if (!OpenRoutePolicy::isAdditionalOfficeSource($file, $version))
+		{
+			return false;
+		}
+
+		$handler = self::getEffectiveHandlerForView($file);
+
+		return $handler instanceof VibeofficeHandler;
+	}
+
+	public static function getEffectiveHandlerForView(File $file, ?int $attachedObjectId = null): ?DocumentHandler
+	{
+		return self::resolveEffectiveHandlerForView(DocumentResolveContext::forLoadedFile($file, $attachedObjectId));
+	}
+
+	public static function resolveEffectiveHandlerForView(DocumentResolveContext $context): ?DocumentHandler
+	{
+		$defaultHandler = self::getDefaultHandlerForView();
+		// The portal viewer can stand for a missing OnlyOffice; file routing still needs the saved entry code.
+		$serviceCode = Configuration::getDefaultViewerServiceCode();
+		if (!OfficeEngineRecognizer::isEntryCode($serviceCode))
+		{
+			$serviceCode = $defaultHandler::getCode();
+		}
+
+		return Driver::getInstance()->getDocumentHandlersManager()->resolveEffectiveHandler(
+			$serviceCode,
+			$context,
+		);
+	}
+
 	private static function getInputContentTypes(): array
 	{
 		$types = [
@@ -50,9 +116,9 @@ class DocumentViewPolicy
 		];
 
 		$handler = self::getDefaultHandlerForView();
-		$editableExtensions = $handler::listEditableExtensions();
+		$extensions = $handler::listMimeRoutableExtensions();
 
-		foreach ($editableExtensions as $extension)
+		foreach ($extensions as $extension)
 		{
 			$type = MimeType::getByFileExtension($extension);
 			if ($type === 'application/octet-stream')

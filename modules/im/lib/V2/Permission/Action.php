@@ -42,6 +42,8 @@ enum Action: string
 	case UnpinChat = 'UNPIN_CHAT';
 	case ReadChat = 'READ_CHAT';
 	case OpenSidebarMenu = 'OPEN_SIDEBAR_MENU';
+	case DeleteHistoryForSelf = 'DELETE_HISTORY_FOR_SELF';
+	case DeleteHistoryForAll = 'DELETE_HISTORY_FOR_ALL';
 	case LinkStructureNode = 'LINK_STRUCTURE_NODE';
 
 	public function getRelatedGlobalAction(): ?GlobalAction

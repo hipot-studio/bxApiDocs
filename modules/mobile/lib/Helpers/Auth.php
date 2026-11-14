@@ -87,8 +87,15 @@ class Auth
 
 		if (Loader::includeModule('bitrix24') && ($captchaInfo = CBitrix24::getStoredCaptcha()))
 		{
-			$result["captchaCode"] = $captchaInfo["captchaCode"];
-			$result["captchaURL"] = $captchaInfo["captchaURL"];
+			if (($captchaInfo['captchaContract'] ?? null) === 'web_proof_v1')
+			{
+				return self::getWebProofCaptchaData($captchaInfo);
+			}
+			else
+			{
+				$result["captchaCode"] = $captchaInfo["captchaCode"];
+				$result["captchaURL"] = $captchaInfo["captchaURL"];
+			}
 		}
 		elseif ($APPLICATION->NeedCAPTHAForLogin($login))
 		{
@@ -150,6 +157,44 @@ class Auth
 					$result['canUseRecoveryCodes'] = $otpService->isRecoveryCodesEnabled();
 				}
 			}
+		}
+
+		return $result;
+	}
+
+	private static function getWebProofCaptchaData(array $captchaInfo): array
+	{
+		$captchaUrl = $captchaInfo['captchaURL'] ?? null;
+		if (
+			($captchaInfo['error'] ?? null) !== 'CAPTCHA_REQUIRED'
+			|| ($captchaInfo['captchaTarget'] ?? null) !== 'portal.checkout'
+			|| !is_string($captchaInfo['challengeId'] ?? null)
+			|| $captchaInfo['challengeId'] === ''
+			|| !is_string($captchaUrl)
+			|| filter_var($captchaUrl, FILTER_VALIDATE_URL) === false
+			|| parse_url($captchaUrl, PHP_URL_SCHEME) !== 'https'
+			|| !is_int($captchaInfo['expiresAt'] ?? null)
+			|| $captchaInfo['expiresAt'] <= 0
+		)
+		{
+			return [];
+		}
+
+		$result = [
+			'error' => $captchaInfo['error'],
+			'captchaContract' => $captchaInfo['captchaContract'],
+			'captchaTarget' => $captchaInfo['captchaTarget'],
+			'challengeId' => $captchaInfo['challengeId'],
+			'captchaURL' => $captchaInfo['captchaURL'],
+			'expiresAt' => $captchaInfo['expiresAt'],
+		];
+		if (
+			isset($captchaInfo['provider_type'])
+			&& is_string($captchaInfo['provider_type'])
+			&& in_array($captchaInfo['provider_type'], ['bitrix', 'google', 'yandex'], true)
+		)
+		{
+			$result['provider_type'] = $captchaInfo['provider_type'];
 		}
 
 		return $result;

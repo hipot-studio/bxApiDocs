@@ -113,18 +113,22 @@ class Manager
 		$list = [];
 
 		$filter = $data['filter'] ?? [];
-		if ($server?->getClientId())
-		{
-			$filter['app_code'] = Rest::getApplicationCode($server->getClientId());
-		}
 
-		$res = EngineTable::query()
+		$query = EngineTable::query()
 			->setSelect(['*'])
-			->setFilter($filter)
+			// One parenthesized group: buildWhere joins it with the where() clause
+			// by a bare AND, so a user LOGIC => OR must not leak into the outer level.
+			->setFilter(is_array($filter) ? [$filter] : $filter)
 			->setOrder(['ID' => 'asc'])
 			->setLimit($data['limit'] ?? null)
-			->exec()
 		;
+		if ($server?->getClientId())
+		{
+			// Scope the result to the caller's application on top of any user filter logic.
+			$query->where('app_code', Rest::getApplicationCode($server->getClientId()));
+		}
+
+		$res = $query->exec();
 		while ($engine = $res->fetch())
 		{
 			$engine = array_change_key_case($engine);

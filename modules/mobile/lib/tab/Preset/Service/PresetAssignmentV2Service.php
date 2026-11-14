@@ -29,9 +29,9 @@ final class PresetAssignmentV2Service
 
 	public function __construct(
 		private readonly Manager $manager,
+		private readonly MobileMenuCacheInvalidator $cacheInvalidator,
 		private readonly PresetAccessPolicy $accessPolicy = new PresetAccessPolicy(),
 		?TabPresetConfigProvider $configProvider = null,
-		private readonly MobileMenuCacheInvalidator $cacheInvalidator = new MobileMenuCacheInvalidator(),
 		private readonly PresetWriteTransaction $transaction = new PresetWriteTransaction(),
 	)
 	{
@@ -97,18 +97,18 @@ final class PresetAssignmentV2Service
 		return $version;
 	}
 
-	public function refreshManagedPreset(int $presetId): void
+	public function refreshManagedPreset(int $presetId): array
 	{
 		if ($presetId <= 0)
 		{
-			return;
+			return [];
 		}
 
 		$reference = PresetReference::fromPresetId('managed:' . $presetId);
 		$config = $this->getPresetConfig($reference);
 		if ($config === null)
 		{
-			return;
+			return [];
 		}
 
 		$targetsByAssignerId = [];
@@ -135,10 +135,10 @@ final class PresetAssignmentV2Service
 
 		if (empty($targetsByAssignerId))
 		{
-			return;
+			return [];
 		}
 
-		$affectedUserIds = $this->transaction->run(function () use ($reference, $config, $targetsByAssignerId): array {
+		return $this->transaction->run(function () use ($reference, $config, $targetsByAssignerId): array {
 			$affectedUserIds = $this->deactivateActiveAssignments($reference);
 			foreach ($targetsByAssignerId as $assignerId => $targets)
 			{
@@ -148,24 +148,18 @@ final class PresetAssignmentV2Service
 
 			return $affectedUserIds;
 		});
-		$this->transaction->afterCommit(function () use ($affectedUserIds): void {
-			$this->cacheInvalidator->clearUsers($affectedUserIds);
-		});
 	}
 
-	public function deactivateManagedPreset(int $presetId): void
+	public function deactivateManagedPreset(int $presetId): array
 	{
 		if ($presetId <= 0)
 		{
-			return;
+			return [];
 		}
 
-		$affectedUserIds = $this->transaction->run(
+		return $this->transaction->run(
 			fn(): array => $this->deactivateActiveAssignments(PresetReference::fromPresetId('managed:' . $presetId)),
 		);
-		$this->transaction->afterCommit(function () use ($affectedUserIds): void {
-			$this->cacheInvalidator->clearUsers($affectedUserIds);
-		});
 	}
 
 	public function getLatestAssignment(int $userId): ?array
@@ -231,7 +225,7 @@ final class PresetAssignmentV2Service
 		$managedPresetId = $reference->getManagedPresetId();
 		if (
 			$managedPresetId !== null
-			&& !(new ManagedPresetService($this->manager, $this->accessPolicy))->isPresetOwner($viewerId, $managedPresetId)
+			&& !$this->getManagedPresetService()->isPresetOwner($viewerId, $managedPresetId)
 		)
 		{
 			return [];
@@ -421,7 +415,11 @@ final class PresetAssignmentV2Service
 
 	private function getManagedPresetService(): ManagedPresetService
 	{
-		$this->managedPresetService ??= new ManagedPresetService($this->manager, $this->accessPolicy);
+		$this->managedPresetService ??= new ManagedPresetService(
+			manager: $this->manager,
+			cacheInvalidator: $this->cacheInvalidator,
+			accessPolicy: $this->accessPolicy,
+		);
 
 		return $this->managedPresetService;
 	}

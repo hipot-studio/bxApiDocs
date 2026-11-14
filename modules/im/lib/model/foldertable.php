@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Folder\FolderType;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Data\Internal\MergeTrait;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -26,6 +27,7 @@ use Bitrix\Main\Text\Emoji;
  * <li> CODE string(50) optional
  * <li> TITLE string(255) optional
  * <li> SORT int mandatory default 0
+ * <li> HIDDEN_BY_USER bool mandatory default 'N'
  * </ul>
  *
  * @package Bitrix\Im
@@ -98,6 +100,10 @@ class FolderTable extends DataManager
 			(new IntegerField('SORT'))
 				->configureRequired()
 				->configureDefaultValue(0),
+
+			(new BooleanField('HIDDEN_BY_USER'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue('N'),
 		];
 	}
 }

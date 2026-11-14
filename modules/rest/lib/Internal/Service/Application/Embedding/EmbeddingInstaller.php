@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Internal\Service\Application\Embedding;
 
-use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Rest\Api\Placement;
 use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Entity\Application\Embedding\Embedding;
 use Bitrix\Rest\Internal\Entity\Application\Embedding\EmbeddingLanguage;
 use Bitrix\Rest\Internal\Entity\Application\Embedding\EmbeddingLanguageCollection;
+use Bitrix\Rest\RestException;
 use CRestServer;
 use ReflectionClass;
 
@@ -18,7 +18,7 @@ class EmbeddingInstaller
 	use EmbeddingLegacyTrait;
 
 	/**
-	 * @throws PersistenceException
+	 * @throws RestException
 	 */
 	public function install(App $app, Embedding $embedding, int $userId = 0): bool
 	{
@@ -39,8 +39,9 @@ class EmbeddingInstaller
 		$installResult = Placement::bind($convertedParams, null, $server);
 		if (is_array($installResult))
 		{
-			throw new PersistenceException(
+			throw new RestException(
 				(string)($installResult['error_description'] ?? 'Unable to set placement handler'),
+				(string)($installResult['error'] ?? ''),
 			);
 		}
 

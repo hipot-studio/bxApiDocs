@@ -221,7 +221,7 @@ class Manager
 		foreach ($folders as $folder)
 		{
 			$folderId = $folder->getId();
-			if ($folderId === null || !$folder->isVisible())
+			if ($folderId === null || $folder->isHiddenBySystem())
 			{
 				continue;
 			}
@@ -279,6 +279,7 @@ class Manager
 			'collab'      => new Tab\Collab($folder),
 			'openlines'   => new Tab\OpenLines($this->context, $folder),
 			'vibecodeApp' => new Tab\VibecodeApp($folder),
+			'meeting'     => new Tab\Meeting($folder),
 			default       => null,
 		};
 	}
@@ -386,6 +387,7 @@ class Manager
 					'maxFolders' => FolderLimits::MAX_FOLDERS_PER_USER,
 					'maxChatsPerFolder' => FolderLimits::MAX_CHATS_PER_FOLDER,
 					'maxTitleLength' => FolderLimits::MAX_TITLE_LENGTH,
+					'maxPinnedChats' => FolderLimits::MAX_PINNED_CHATS,
 				],
 			];
 		}
@@ -467,6 +469,7 @@ class Manager
 			'IS_AUTO_TASKS_ENABLED' => Settings::isAutoTaskEnabled(),
 			'IS_AUTO_TASKS_UI_AVAILABLE' => Settings::isAutoTaskUIAvailable(),
 			'IS_VIDEO_NOTE_PLAYBACK_RATE_AVAILABLE' => Settings::isVideoNotePlaybackRateAvailable(),
+			'HAS_CHECK_IN_HISTORY' => Settings::hasCheckInHistory(),
 			'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),
 			'CAN_USE_TELEPHONY' => Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
 			'FIRST_TAB_ID' => $firstTabId,

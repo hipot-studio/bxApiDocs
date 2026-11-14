@@ -44,6 +44,14 @@ class Messages implements Entity
 		return $this->messageIds;
 	}
 
+	public function excludeMessageIds(array $excludedIds): void
+	{
+		foreach ($excludedIds as $id)
+		{
+			unset($this->messageIds[$id], $this->addedMessageIds[$id], $this->updatedMessageIds[$id]);
+		}
+	}
+
 	public static function getRestEntityName(): string
 	{
 		return 'messageSync';

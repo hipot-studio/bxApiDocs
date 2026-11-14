@@ -45,13 +45,13 @@ final class Field extends RestController
 			throw new AccessDeniedException();
 		}
 		$dto = $request->getDtoClass()::create();
-		if (!isset($dto->getFields()[$request->name]))
+		$field = $dto->getFields()->getMeta($request->name);
+		if ($field === null)
 		{
 			throw new FieldNotFoundException($request->name);
 		}
 
 		$selectedFields = $request->select ? $request->select->getList() : [];
-		$field = $dto->getFields()[$request->name];
 		$result = $this->getMapper()->mapOne($field->toArray(), $selectedFields);
 
 		return new GetResponse($result);

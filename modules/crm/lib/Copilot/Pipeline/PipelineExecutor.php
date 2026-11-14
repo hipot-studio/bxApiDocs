@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Copilot\Pipeline;
 
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Enum;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\AbstractOperation;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
+use Bitrix\Crm\Integration\AI\Operation\ScoreCallV2;
+use Bitrix\Crm\Integration\AI\Operation\SelectCallScoreScript;
+use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\MultiValueStoreService;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 use CCrmOwnerType;
 use Psr\Log\LoggerInterface;
 
@@ -56,7 +66,21 @@ final readonly class PipelineExecutor
 		$lastExistingResult = null;
 		foreach ($steps as $index => $operationClass)
 		{
+			if ($operationClass === ScoreCallV2::class && $this->isManualCallAssessment($context))
+			{
+				return $this->launchCallAssessment($context);
+			}
+
 			$existingResult = $this->resultResolver->resolve($operationClass, $context);
+			if ($operationClass === SummarizeCallTranscription::class && $this->isManualCallAssessment($context))
+			{
+				$waitResult = $this->coordinateManualCallAssessmentSummary($existingResult, $context);
+				if ($waitResult !== null)
+				{
+					return $waitResult;
+				}
+			}
+
 			if ($existingResult?->isPending())
 			{
 				return $existingResult;
@@ -98,6 +122,15 @@ final readonly class PipelineExecutor
 		array $contextExtra = [],
 	): void
 	{
+		if ($completedResult->getTypeId() === SummarizeCallTranscription::TYPE_ID)
+		{
+			$waitResult = $this->coordinateManualCallAssessmentSummary($completedResult);
+			if ($waitResult !== null && ($contextExtra['manualCallAssessment'] ?? null) === true)
+			{
+				return;
+			}
+		}
+
 		$scenario = $this->scenarioRegistry->getByName($scenarioName);
 		if (!$scenario)
 		{
@@ -143,7 +176,9 @@ final readonly class PipelineExecutor
 		$nextIndex = $currentIndex + 1;
 		if (isset($steps[$nextIndex]))
 		{
-			$launchResult = $this->launchStep($steps[$nextIndex], $context, $steps, $nextIndex);
+			$launchResult = $this->isManualCallAssessment($context)
+				? $this->startOrResume($context)
+				: $this->launchStep($steps[$nextIndex], $context, $steps, $nextIndex);
 			if ($launchResult === null)
 			{
 				$this->logger->warning(
@@ -176,6 +211,11 @@ final readonly class PipelineExecutor
 		int $stepIndex,
 	): ?Result
 	{
+		if ($operationClass === ScoreCallV2::class && $this->isManualCallAssessment($context))
+		{
+			return $this->launchCallAssessment($context);
+		}
+
 		$this->logger->info(
 			'{date}: PipelineExecutor: Launching step {step} (index {index}) in scenario {scenario}' . PHP_EOL,
 			['step' => $operationClass, 'index' => $stepIndex, 'scenario' => $context->getScenarioName()],
@@ -226,13 +266,158 @@ final readonly class PipelineExecutor
 
 	private function forwardContextExtras(AbstractOperation $operation, StepContext $context): void
 	{
-		foreach (['targetOwnerTypeId', 'targetOwnerId', 'triggerDirection', 'fillFieldsEntityAllowed'] as $key)
+		foreach ([
+			'targetOwnerTypeId',
+			'targetOwnerId',
+			'triggerDirection',
+			'fillFieldsEntityAllowed',
+			'manualCallAssessment',
+		] as $key)
 		{
 			$value = $context->getExtra($key);
 			if ($value !== null)
 			{
 				$operation->setContextExtra($key, $value);
 			}
+		}
+	}
+
+	private function isManualCallAssessment(StepContext $context): bool
+	{
+		return $context->isManualLaunch()
+			&& $context->getScenarioName() === Scenario::CALL_SCORING_V2_SCENARIO
+			&& $context->getExtra('manualCallAssessment') === true;
+	}
+
+	private function launchCallAssessment(StepContext $context): Result
+	{
+		$result = new Result(ScoreCallV2::TYPE_ID);
+		if (!Loader::includeModule('bizproc'))
+		{
+			return $result->addError(ErrorCode::getAIEngineNotFoundError());
+		}
+
+		// Script selection and scoring belong to the workflow; start it only after the prerequisites.
+		$triggerResult = Starter::getByScenario(Enum\Scenario::onEvent)
+			->setContext(new ContextDto('crm'))
+			->addEvent('CrmCallAssessmentTrigger', [], [
+				'ActivityId' => $context->getActivityId(),
+				'AssessmentSettingsId' => 0,
+				'UserId' => $context->getUserId(),
+			])
+			->start()
+		;
+		if (!$triggerResult->isSuccess())
+		{
+			$result->addErrors($triggerResult->getErrors());
+			$result->addError(ErrorCode::getAIEngineNotFoundError());
+		}
+
+		return $result;
+	}
+
+	private function coordinateManualCallAssessmentSummary(?Result $result, ?StepContext $request = null): ?Result
+	{
+		$activityId = $request?->getActivityId() ?? $result?->getTarget()?->getEntityId() ?? 0;
+		if ($activityId <= 0)
+		{
+			return null;
+		}
+
+		// One replaceable wait per activity, tied to the exact summary job and the requesting user.
+		$key = 'crm_manual_call_assessment_summary_' . $activityId;
+		$store = MultiValueStoreService::getInstance();
+		if ($request === null && $store->getFirstValue($key) === null)
+		{
+			return null;
+		}
+
+		$connection = Application::getConnection();
+		while (!$connection->lock($key, 1))
+		{
+		}
+
+		try
+		{
+			$jobId = $result?->getJobId();
+			$value = $store->getFirstValue($key);
+			[$waitingJobId, $userId] = array_map('intval', explode(':', $value ?? '0:0'));
+			if ($request !== null)
+			{
+				if ($jobId === null)
+				{
+					$store->deleteAll($key);
+
+					return null;
+				}
+
+				if ($waitingJobId !== $jobId)
+				{
+					$userId = $request->getUserId();
+					$info = JobRepository::getInstance()->getContextAdditionalInfoByJobId($jobId);
+					if (($info['manualCallAssessment'] ?? null) === true)
+					{
+						$userId = $result->getUserId() ?? $userId;
+					}
+					$value = $jobId . ':' . $userId;
+					$store->set($key, $value);
+					$waitingJobId = $jobId;
+				}
+
+				JobRepository::getInstance()->cleanRuntimeCache();
+				$result = JobRepository::getInstance()->getSummarizeCallTranscriptionResultByActivity($activityId, $jobId);
+				if (
+					$result !== null
+					&& !$result->isPending()
+					&& (
+						JobRepository::getInstance()->getPendingJobByActivity($activityId, ScoreCallV2::TYPE_ID) !== null
+						|| JobRepository::getInstance()->getPendingJobByActivity(
+							$activityId,
+							SelectCallScoreScript::TYPE_ID,
+						) !== null
+					)
+				)
+				{
+					$store->delete($key, $value);
+
+					return $result;
+				}
+			}
+
+			if ($waitingJobId !== $jobId || $value === null)
+			{
+				return null;
+			}
+			if ($result?->isPending())
+			{
+				return $result;
+			}
+
+			$store->delete($key, $value);
+			$context = new StepContext(
+				activityId: $activityId,
+				userId: $userId,
+				scenarioName: Scenario::CALL_SCORING_V2_SCENARIO,
+				isManualLaunch: true,
+			);
+			if ($result === null)
+			{
+				return (new Result(SummarizeCallTranscription::TYPE_ID))->addError(ErrorCode::getNotFoundError());
+			}
+			if (!SummarizeCallTranscription::canProceedToNextStep($result, $context))
+			{
+				return $result;
+			}
+			if (!is_array(Container::getInstance()->getActivityBroker()->getById($activityId)))
+			{
+				return (new Result(SummarizeCallTranscription::TYPE_ID))->addError(ErrorCode::getNotFoundError());
+			}
+
+			return $this->launchCallAssessment($context);
+		}
+		finally
+		{
+			$connection->unlock($key);
 		}
 	}
 
@@ -375,6 +560,10 @@ final readonly class PipelineExecutor
 		if (array_key_exists('fillFieldsEntityAllowed', $additionalInfo))
 		{
 			$extra['fillFieldsEntityAllowed'] = (bool)$additionalInfo['fillFieldsEntityAllowed'];
+		}
+		if (($additionalInfo['manualCallAssessment'] ?? null) === true)
+		{
+			$extra['manualCallAssessment'] = true;
 		}
 
 		if (!$includeOwnerKeys)

@@ -28,6 +28,7 @@ class FileError extends Error
 	public const BLOCK_FILE = 'FILE_BLOCK_FILE';
 	public const NOT_EDITABLE_MESSAGE_TYPE = 'FILE_NOT_EDITABLE_MESSAGE_TYPE';
 	public const WRONG_COMPOSITION = 'FILE_WRONG_COMPOSITION';
+	public const VIDEO_NOTE_DOWNLOAD_RESTRICTED = 'VIDEO_NOTE_DOWNLOAD_RESTRICTED';
 	/**
 	 * Both are contract violations by the caller of im.v2.File.directDownload, not by the person behind it:
 	 * a type outside the enum and a call made inside a REST batch. A correct client reaches neither, and

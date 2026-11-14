@@ -18,7 +18,9 @@ final class Server implements EntityInterface
 	private ?string $startJobId = null;
 	private int $accountId = 0;
 	private ?int $version = null;
+	private ?string $generation = null;
 	private bool $isPortalIdVerified = false;
+	private bool $protocolRequired = false;
 	private ?string $portalId = null;
 	private ?string $portalUrl = null;
 	private ?string $jwtSecret = null;
@@ -207,6 +209,25 @@ final class Server implements EntityInterface
 		return $this;
 	}
 
+	public function getGeneration(): ?string
+	{
+		return $this->generation;
+	}
+
+	public function setGeneration(?string $generation): self
+	{
+		$this->generation = $generation;
+
+		return $this;
+	}
+
+	public function unsetGeneration(): self
+	{
+		$this->generation = null;
+
+		return $this;
+	}
+
 	public function isPortalIdVerified(): bool
 	{
 		return $this->isPortalIdVerified;
@@ -215,6 +236,18 @@ final class Server implements EntityInterface
 	public function setIsPortalIdVerified(bool $isPortalIdVerified): self
 	{
 		$this->isPortalIdVerified = $isPortalIdVerified;
+
+		return $this;
+	}
+
+	public function isProtocolRequired(): bool
+	{
+		return $this->protocolRequired;
+	}
+
+	public function setProtocolRequired(bool $protocolRequired): self
+	{
+		$this->protocolRequired = $protocolRequired;
 
 		return $this;
 	}

@@ -67,6 +67,7 @@ class CIMHistory
 		}
 		if ($chatId > 0)
 		{
+			$startId = $this->getHistoryStartId((int)$chatId, ['START_ID' => $startId]);
 			$where = [
 				'=CHAT_ID'	=> $chatId,
 				'*%MESSAGE'	=> $searchText,
@@ -208,9 +209,10 @@ class CIMHistory
 		}
 		if ($chatId > 0)
 		{
+			$startId = $this->getHistoryStartId((int)$chatId, ['START_ID' => $startId]);
 			if ($startId > 0)
 			{
-				$limitById = 'AND M.ID >= '.intval($startId);
+				$limitById = 'AND M.ID >= '.$startId;
 			}
 
 			if (!$bTimeZone)
@@ -334,9 +336,10 @@ class CIMHistory
 
 		if ($chatId > 0)
 		{
+			$startId = $this->getHistoryStartId((int)$chatId, ['START_ID' => $startId]);
 			if ($startId > 0)
 			{
-				$limitById = 'AND M.ID >= '.intval($startId);
+				$limitById = 'AND M.ID >= '.$startId;
 			}
 			$sqlStr = "
 				SELECT COUNT(M.ID) as CNT
@@ -468,6 +471,11 @@ class CIMHistory
 			$cleaner = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Cleaner::class);
 			$cleaner->onCleanHistory((int)$arRes['CHAT_ID'], $this->user_id);
 
+			$indexService = \Bitrix\Main\DI\ServiceLocator::getInstance()
+				->get(IM\V2\Integration\Search\IndexService::class)
+			;
+			$indexService->onHistoryCleaned((int)$arRes['CHAT_ID'], $this->user_id, (int)$arRes['MAX_ID']);
+
 			if ($arRes['MAX_ID'] >= $arRes['R2_START_ID'] && $arRes['R2_START_ID'] > 0)
 			{
 				$messages = IM\Model\MessageTable::getList(array(
@@ -481,6 +489,10 @@ class CIMHistory
 				{
 					IM\Model\MessageTable::delete($messageInfo['ID']);
 				}
+
+				// these messages bypass the deletion service, so nothing else takes their entries off
+				// addressing them by the boundary walks a history of any size by portions and resumes it
+				$indexService->onHistoryRemoved((int)$arRes['CHAT_ID'], (int)$arRes['R2_START_ID']);
 			}
 
 			$primaryKey = ['USER_ID' => $this->user_id, 'ITEM_TYPE' => IM_MESSAGE_PRIVATE, 'ITEM_ID' => $userId];
@@ -504,9 +516,10 @@ class CIMHistory
 
 		$limitById = '';
 		$ar = \CIMChat::GetRelationById($chatId, $this->user_id, true, false);
-		if ($ar && $ar['START_ID'] > 0)
+		$startId = $this->getHistoryStartId($chatId, $ar);
+		if ($startId > 0)
 		{
-			$limitById = 'AND M.ID >= '.intval($ar['START_ID']);
+			$limitById = 'AND M.ID >= '.$startId;
 		}
 
 		$strSql ="
@@ -529,6 +542,11 @@ class CIMHistory
 
 			$cleaner = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Cleaner::class);
 			$cleaner->onCleanHistory((int)$chatId, $this->user_id);
+
+			\Bitrix\Main\DI\ServiceLocator::getInstance()
+				->get(IM\V2\Integration\Search\IndexService::class)
+				->onHistoryCleaned($chatId, $this->user_id, (int)$arRes['MAX_ID'])
+			;
 
 			$chatType = $ar ? $ar['MESSAGE_TYPE'] : IM_MESSAGE_CHAT;
 			$primaryKey = ['USER_ID' => $this->user_id, 'ITEM_TYPE' => $chatType, 'ITEM_ID' => $chatId];
@@ -567,10 +585,10 @@ class CIMHistory
 			);
 		}
 
-		$ar = \CIMChat::GetRelationById($chatId, $this->user_id, true, false);
-		if ($ar && $ar['START_ID'] > 0)
+		$startId = $this->getHistoryStartId($chatId, \CIMChat::GetRelationById($chatId, $this->user_id, true, false));
+		if ($startId > 0)
 		{
-			$where['>=ID'] = intval($ar['START_ID']);
+			$where['>=ID'] = $startId;
 		}
 
 		$orm = \Bitrix\Im\Model\MessageTable::getList(
@@ -657,9 +675,10 @@ class CIMHistory
 
 		$limitById = '';
 		$ar = \CIMChat::GetRelationById($chatId, $this->user_id, true, false);
-		if ($ar && $ar['START_ID'] > 0)
+		$startId = $this->getHistoryStartId($chatId, $ar);
+		if ($startId > 0)
 		{
-			$limitById = 'AND M.ID >= '.intval($ar['START_ID']);
+			$limitById = 'AND M.ID >= '.$startId;
 		}
 
 		if (!$bTimeZone)
@@ -755,9 +774,10 @@ class CIMHistory
 
 		$limitById = '';
 		$ar = \CIMChat::GetRelationById($chatId, $this->user_id, true, false);
-		if ($ar && $ar['START_ID'] > 0)
+		$startId = $this->getHistoryStartId($chatId, $ar);
+		if ($startId > 0)
 		{
-			$limitById = 'AND M.ID >= '.intval($ar['START_ID']);
+			$limitById = 'AND M.ID >= '.$startId;
 		}
 
 		if (!$bTimeZone)
@@ -980,6 +1000,15 @@ class CIMHistory
 
 		$chatSql = str_pad($chatId, 11, '0', STR_PAD_LEFT);
 
+		// The lower bound of the load: the message the caller asked to start with, raised to the border
+		// the user reads the chat from. A reader of an open chat has no relation at all, and a member the
+		// walk of a cleanup has not reached yet still carries the old one, so the relation alone would
+		// hand them the history the chat has already hidden from everyone.
+		$messageStart = max(
+			$messageStart,
+			$this->getHistoryStartId($chatId, \CIMChat::GetRelationById($chatId, $this->user_id, true, false))
+		);
+
 		global $DB;
 
 		if (!$timezone)
@@ -1002,7 +1031,7 @@ class CIMHistory
 			WHERE 
 				MS.PARAM_NAME='TS' and 
 				MS.PARAM_VALUE between '".$chatSql." ".$dateSql."' and '".$chatSql." 9999-99-99 99:99:99'
-				".($messageStart > 0? 'MS.MESSAGE_ID >= '.$messageStart: "")."
+				".($messageStart > 0? 'and MS.MESSAGE_ID >= '.$messageStart: "")."
 		";
 
 		if (!$timezone)
@@ -1044,7 +1073,7 @@ class CIMHistory
 				'date' => \Bitrix\Main\Type\DateTime::createFromTimestamp($message['DATE_CREATE']),
 				'system' => $message['AUTHOR_ID'] > 0? 'N': 'Y',
 				'text' => \Bitrix\Im\Text::parse($message['MESSAGE']),
-				'textLegacy' => \Bitrix\Im\Text::parseLegacyFormat($arRes['MESSAGE'])
+				'textLegacy' => \Bitrix\Im\Text::parseLegacyFormat($message['MESSAGE'])
 			);
 
 			$usersMessage[$dialogId][] = $message['ID'];
@@ -1137,7 +1166,7 @@ class CIMHistory
 				return false;
 			}
 		}
-		elseif ((int)$messageId < (int)$relations[$this->user_id]['START_ID'])
+		elseif ((int)$messageId < $this->getHistoryStartId((int)$message['CHAT_ID'], $relations[$this->user_id]))
 		{
 			return false;
 		}
@@ -1177,13 +1206,15 @@ class CIMHistory
 		$previousMessages = $this->GetPreviousMessages($messageId, $message['CHAT_ID'], $message['DATE_CREATE'], $previous, $timezone);
 		$nextMessages = $this->GetNextMessages($messageId, $message['CHAT_ID'], $message['DATE_CREATE'], $next, $timezone);
 
-		$startId = (int)($relations[$this->user_id]['START_ID'] ?? 0);
+		$messages = array_replace($previousMessages, $nextMessages);
+
+		// Both selections go by DATE_CREATE, so the "next" one brings back the messages of the same
+		// second as well, hidden ones included - the border is applied to the whole set.
+		$startId = $this->getHistoryStartId((int)$message['CHAT_ID'], $relations[$this->user_id] ?? false);
 		if ($startId > 0)
 		{
-			$previousMessages = array_filter($previousMessages, static fn (array $message) => (int)$message['ID'] >= $startId);
+			$messages = array_filter($messages, static fn (array $message) => (int)$message['ID'] >= $startId);
 		}
-
-		$messages = array_replace($previousMessages, $nextMessages);
 
 		$chatId = $message['CHAT_ID'];
 
@@ -1355,6 +1386,26 @@ class CIMHistory
 		}
 
 		return $messages;
+	}
+
+	/**
+	 * The border a user reads the chat from: their own relation, raised to the border a cleanup for
+	 * everyone has left on the chat itself. A reader of an open chat has no relation at all, and a member
+	 * the walk of the cleanup has not reached yet still carries the old one, so the relation alone would
+	 * show them the history the chat has already hidden from everyone.
+	 *
+	 * @param array|false $relation
+	 */
+	private function getHistoryStartId(int $chatId, $relation): int
+	{
+		$relationStartId = is_array($relation) ? (int)($relation['START_ID'] ?? 0) : 0;
+
+		if ($chatId <= 0)
+		{
+			return $relationStartId;
+		}
+
+		return max($relationStartId, \Bitrix\Im\V2\Chat::getInstance($chatId)->getHistoryStartId());
 	}
 
 	private function checkFullText($searchText): bool

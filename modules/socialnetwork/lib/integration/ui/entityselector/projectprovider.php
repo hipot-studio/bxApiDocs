@@ -75,6 +75,16 @@ class ProjectProvider extends BaseProvider
 			$this->options['landing'] = $options['landing'];
 		}
 
+		if (isset($options['siteId']) && is_string($options['siteId']))
+		{
+			$this->options['siteId'] = $options['siteId'];
+		}
+
+		if (isset($options['closed']) && is_bool($options['closed']))
+		{
+			$this->options['closed'] = $options['closed'];
+		}
+
 		if (isset($options['features']) && is_array($options['features']))
 		{
 			$this->options['features'] = $options['features'];
@@ -206,6 +216,7 @@ class ProjectProvider extends BaseProvider
 		return $this->getProjectItems([
 			'projectId' => $ids,
 			'myProjectsOnly' => false,
+			'includeInvisibleExactItems' => true,
 		]);
 	}
 
@@ -335,6 +346,11 @@ class ProjectProvider extends BaseProvider
 
 	public static function getProjects(array $options = []): EO_Workgroup_Collection
 	{
+		$includeExactItems = (
+			($options['includeInvisibleExactItems'] ?? false) === true
+			&& isset($options['projectId'])
+		);
+
 		$isProjectsEnabled = true;
 		$isScrumEnabled = true;
 		if (Loader::includeModule('intranet'))
@@ -405,7 +421,7 @@ class ProjectProvider extends BaseProvider
 			$query->where('PROJECT', $options['project'] ? 'Y' : 'N');
 		}
 
-		if (!CollabFeature::isFeatureEnabledInPortalSettings())
+		if (!$includeExactItems && !CollabFeature::isFeatureEnabledInPortalSettings())
 		{
 			$options['!type'] ??= [];
 
@@ -708,12 +724,12 @@ class ProjectProvider extends BaseProvider
 			}
 		}
 
-		if (!$isProjectsEnabled)
+		if (!$includeExactItems && !$isProjectsEnabled)
 		{
 			$query->whereNotNull('SCRUM_MASTER_ID');
 		}
 
-		if (!$isScrumEnabled)
+		if (!$includeExactItems && !$isScrumEnabled)
 		{
 			$query->whereNull('SCRUM_MASTER_ID');
 		}
@@ -733,6 +749,7 @@ class ProjectProvider extends BaseProvider
 		{
 			return $eoWorkgroups;
 		}
+
 
 		$workgroups = new EO_Workgroup_Collection();
 		foreach ($eoWorkgroups as $eoWorkgroup)

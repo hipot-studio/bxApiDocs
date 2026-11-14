@@ -321,6 +321,10 @@ final class ItemListFilterStructure extends Structure
 		{
 			return self::normalizeComplexCustomFieldCondition($field, $operator, $value);
 		}
+		if ($value === null && $dto instanceof FilterableByNull && $field->isNullable())
+		{
+			return self::normalizeNullCondition($fieldName, $operator);
+		}
 
 		$value = self::normalizeFloatOperand($field, $value);
 		if (
@@ -339,6 +343,19 @@ final class ItemListFilterStructure extends Structure
 		}
 
 		return $normalized;
+	}
+
+	/**
+	 * The standard validator checks null as a value of the field type, so the comparison is built here.
+	 */
+	private static function normalizeNullCondition(string $fieldName, Operator $operator): Condition
+	{
+		if (!in_array($operator, [Operator::Equal, Operator::NotEqual], true))
+		{
+			throw new InvalidFilterException([$fieldName, $operator->value, null]);
+		}
+
+		return new Condition($fieldName, $operator, null);
 	}
 
 	private static function consumeNode(array &$budget): void

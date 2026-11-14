@@ -36,6 +36,7 @@ use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display;
 use Bitrix\Crm\Service\Router;
+use Bitrix\Crm\Service\StartCatalog\CreateByForm;
 use Bitrix\Crm\Settings\HistorySettings;
 use Bitrix\Crm\UI\SettingsButtonExtender\SettingsButtonExtenderParams;
 use Bitrix\Crm\UserActivityTable;
@@ -49,6 +50,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Security\Sign\Signer;
+use Bitrix\Main\UI\Extension;
 use Bitrix\Main\UserField\Types\BooleanType;
 use Bitrix\Main\Web\Json;
 use Bitrix\UI\Buttons;
@@ -102,6 +104,9 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 	public function getTotalCountAction(int $entityTypeId, string $listFilter = ''): ?string
 	{
+		// the action runs without init(), so the collection has to exist before addError
+		$this->errorCollection ??= new \Bitrix\Main\ErrorCollection();
+
 		$userPermission = Container::getInstance()->getUserPermissions();
 		if (!$userPermission->entityType()->canReadItems($entityTypeId))
 		{
@@ -111,6 +116,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
 		$listFilter = $this->prepareTotalActionFilter($this->unsignParams($listFilter));
+		if ($listFilter === null)
+		{
+			$this->addError(ErrorCode::getGeneralError());
+
+			return null;
+		}
 		$applied = $this->applyRelatedEntitiesFilter($listFilter, $entityTypeId);
 
 		$totalCountRow = $factory->getItemsCountFilteredByPermissions(
@@ -123,20 +134,45 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		return Loc::getMessage('CRM_LIST_ALL_COUNT', ['#COUNT#' => $totalCountRow]);
 	}
 
-	private function prepareTotalActionFilter(array $filter): array
+	/**
+	 * Restores SQL expressions only from the separate list built by prepareListFilterForJs.
+	 * The filter itself may carry values of the user's filter preset, so its keys and values never become raw SQL.
+	 */
+	private function prepareTotalActionFilter(array $params): ?array
 	{
-		foreach ($filter as $key => $value)
+		$filter = $params['filter'] ?? null;
+		$expressions = $params['expressions'] ?? null;
+		if (!is_array($filter) || !is_array($expressions))
 		{
-			if (is_array($value))
+			return null;
+		}
+
+		foreach ($expressions as $expression)
+		{
+			$path = $expression['path'] ?? null;
+			$sql = $expression['sql'] ?? null;
+			if (!is_array($path) || empty($path) || !is_string($sql))
 			{
-				$filter[$key] = $this->prepareTotalActionFilter($value);
+				return null;
 			}
-			elseif (str_starts_with($key, 'COMPILED_EXPRESSION_'))
+
+			$lastKey = array_pop($path);
+			$node = &$filter;
+			foreach ($path as $key)
 			{
-				$newKey = str_replace('COMPILED_EXPRESSION_', '', $key);
-				$filter[$newKey] = new SqlExpression($value);
-				unset($filter[$key]);
+				if (!isset($node[$key]) || !is_array($node[$key]))
+				{
+					return null;
+				}
+				$node = &$node[$key];
 			}
+
+			if (!array_key_exists($lastKey, $node) || $node[$lastKey] !== null)
+			{
+				return null;
+			}
+			$node[$lastKey] = new SqlExpression($sql);
+			unset($node);
 		}
 
 		return $filter;
@@ -598,16 +634,34 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 	private function prepareListFilterForJs(array $filter): array
 	{
+		$expressions = [];
+		$filter = $this->extractSqlExpressions($filter, [], $expressions);
+
+		return [
+			'filter' => $filter,
+			'expressions' => $expressions,
+		];
+	}
+
+	/**
+	 * Replaces SQL expressions with null placeholders and collects them with their paths,
+	 * so only expressions built by the server get back as SqlExpression.
+	 */
+	private function extractSqlExpressions(array $filter, array $path, array &$expressions): array
+	{
 		foreach ($filter as $key => $item)
 		{
 			if (is_array($item))
 			{
-				$filter[$key] = $this->prepareListFilterForJs($item);
+				$filter[$key] = $this->extractSqlExpressions($item, [...$path, $key], $expressions);
 			}
 			elseif ($item instanceof SqlExpression)
 			{
-				$filter['COMPILED_EXPRESSION_' . $key] = $item->compile();
-				unset($filter[$key]);
+				$expressions[] = [
+					'path' => [...$path, $key],
+					'sql' => $item->compile(),
+				];
+				$filter[$key] = null;
 			}
 		}
 
@@ -712,10 +766,31 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		);
 		$addButton = new Button([
 			'text' => $addButtonText,
-			'onclick' => new JsCode("BX.CrmEntityManager.createEntity('" . $entityIdentity . "', { urlParams: " . Json::encode($parentParams) . ' })'),
 			'style' => AirButtonStyle::FILLED,
 			'icon' => Buttons\Icon::ADD,
 		]);
+
+		$openAttributes = (new CreateByForm())->getOpenAttributes($this->entityTypeId, [
+			'parentTypeId' => $parentEntityTypeId,
+			'parentId' => $parentEntityId,
+		]);
+		if ($openAttributes)
+		{
+			// the form replaces the card here rather than joining it: both must not open on one click
+			foreach ($openAttributes as $name => $value)
+			{
+				$addButton->addAttribute($name, $value);
+			}
+
+			Extension::load([CreateByForm::JS_EXTENSION]);
+		}
+		else
+		{
+			$addButton->bindEvent(
+				'click',
+				new JsCode("BX.CrmEntityManager.createEntity('" . $entityIdentity . "', { urlParams: " . Json::encode($parentParams) . ' })'),
+			);
+		}
 
 		$relationCode = $parentEntityTypeId . '-' . $parentEntityId . '-' . $this->entityTypeId;
 		$targetId = 'relation-button-' . $relationCode;
@@ -1520,6 +1595,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			{
 				$result[$key] = (string)$value;
 			}
+			elseif ($this->isNumberFieldZero($value, $field))
+			{
+				// grid editor builds the input via BX.Dom.adjust, which drops an attribute when value == '',
+				// and in JS 0 == '' is true, so a numeric zero would be shown as an empty field
+				$result[$key] = '0';
+			}
 			else
 			{
 				$result[$key] = $value;
@@ -1527,6 +1608,16 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		return $result;
+	}
+
+	private function isNumberFieldZero(mixed $value, ?Field $field): bool
+	{
+		return
+			(is_int($value) || is_float($value))
+			&& $value == 0
+			&& $field !== null
+			&& in_array($field->getType(), [Field::TYPE_INTEGER, Field::TYPE_DOUBLE], true)
+		;
 	}
 
 	private function appendNearestActivityBlockToItem(Item $item, array &$itemData, array &$itemColumn): void
@@ -1550,7 +1641,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 	protected function getContextActions(Item $item): array
 	{
-		$jsEventData = CUtil::PhpToJSObject(['entityTypeId' => $this->entityTypeId, 'id' => $item->getId()]);
+		$jsEventData = CUtil::PhpToJSObject([
+			'entityTypeId' => $this->entityTypeId,
+			'id' => $item->getId(),
+			'gridId' => $this->getGridId(),
+		]);
 
 		$userPermissions = Container::getInstance()->getUserPermissions();
 
@@ -1572,7 +1667,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'HREF' => $editUrl,
 			];
 		}
-		if ($userPermissions->item()->canUpdateItem($item))
+		if ($userPermissions->item()->canCopyItem($item))
 		{
 			$analyticsEventBuilder = CopyOpenEvent::createDefault($this->entityTypeId);
 			$this->configureAnalyticsEventBuilder($analyticsEventBuilder);

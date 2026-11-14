@@ -21,6 +21,7 @@ use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\DeleteItemRequest;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\DeleteFieldValueRequest;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\GetItemRequest;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\ListItemRequest;
+use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\SetPrimaryContactRequest;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\UpdateItemRequest;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Structure\FileFieldInputBag;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Structure\FileFieldInputExtractor;
@@ -37,6 +38,7 @@ use Bitrix\Crm\V2\Public\Command\Item\AddItemCommand;
 use Bitrix\Crm\V2\Public\Command\Item\DeleteItemCommand;
 use Bitrix\Crm\V2\Public\Command\Item\DeleteFieldValueCommand;
 use Bitrix\Crm\V2\Public\Command\Item\Scope;
+use Bitrix\Crm\V2\Public\Command\Item\SetPrimaryContactCommand;
 use Bitrix\Crm\V2\Public\Command\Item\UpdateItemCommand;
 use Bitrix\Crm\V2\Public\Entity\Item\ItemCollection;
 use Bitrix\Crm\V2\Public\Entity\Item\Interface\HasCategoriesInterface;
@@ -56,7 +58,9 @@ use Bitrix\Main\Result;
 use Bitrix\Rest\V3\Attribute\RequiredGroup;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\Generator;
+use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
+use Bitrix\Rest\V3\Exception\RestException;
 use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Interaction\Response\AddResponse;
@@ -74,6 +78,20 @@ use ReflectionClass;
 
 class Item extends AbstractController
 {
+	/**
+	 * Written out rather than imported: the value is literally
+	 * {@see \Bitrix\Crm\Service\Operation::ERROR_CODE_ITEM_UPDATE_ACCESS_DENIED}, and the controller
+	 * reaches for nothing of legacy.
+	 */
+	private const ITEM_UPDATE_ACCESS_DENIED_ERROR_CODE = 'CRM_ITEM_UPDATE_ACCESS_DENIED';
+
+	/**
+	 * The one field `setPrimaryContact` writes, spelled the way the contract publishes it:
+	 * {@see \Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ContactsDto::$contactsId}. The request of
+	 * the method carries no `fields`, so the name the area of access is matched against is fixed here.
+	 */
+	private const PRIMARY_CONTACT_FIELD_NAME = 'contactsId';
+
 	protected function processBeforeAction(Action $action): bool
 	{
 		if (!parent::processBeforeAction($action))
@@ -186,7 +204,7 @@ class Item extends AbstractController
 		}
 		$this->assertRestrictedItemCategoryAllowed($storedItem);
 		$itemId = new ItemId($entityType, $request->id);
-		$this->validateFieldScope($request);
+		$this->validateFieldScope($request, $request->fieldName);
 		$fieldValueElement = (new FieldValueElementMapper())->map(
 			$entityType,
 			$request->fieldName,
@@ -219,6 +237,71 @@ class Item extends AbstractController
 		}
 
 		return new UpdateResponse();
+	}
+
+	public function setPrimaryContactAction(
+		SetPrimaryContactRequest $request,
+		EntityType $entityType,
+	): UpdateResponse
+	{
+		if ($this->getRestItemProvider($entityType)->getById($request->id, ['id']) === null)
+		{
+			throw new EntityNotFoundException($request->id);
+		}
+		$itemId = new ItemId($entityType, $request->id);
+		$this->validateFieldScope($request, self::PRIMARY_CONTACT_FIELD_NAME);
+
+		try
+		{
+			$result =
+				(new SetPrimaryContactCommand(
+					$itemId,
+					$request->contactId,
+					$this->userId,
+				))
+				->setScope(Scope::Rest)
+				->withoutRequiredUserFieldsCheck(!$this->isRequiredCheckEnabled())
+				->run()
+			;
+		}
+		catch (ObjectNotFoundException)
+		{
+			throw new EntityNotFoundException($itemId->getId());
+		}
+
+		if (!$result->isSuccess())
+		{
+			throw $this->getSetPrimaryContactRefusal($result, $request, $entityType);
+		}
+
+		return new UpdateResponse();
+	}
+
+	/**
+	 * What REST answers to a refused change of the primary contact: a user who may not change the item
+	 * at all is answered by access, and everything else - an unknown contact, a contact bound to no
+	 * item, a field held by another operation - is something the client can fix in its input.
+	 *
+	 * The absence of the item itself is not decided here: it is already answered above.
+	 */
+	private function getSetPrimaryContactRefusal(
+		Result $result,
+		SetPrimaryContactRequest $request,
+		EntityType $entityType,
+	): RestException
+	{
+		foreach ($result->getErrors() as $error)
+		{
+			if ($error->getCode() === self::ITEM_UPDATE_ACCESS_DENIED_ERROR_CODE)
+			{
+				return new AccessDeniedException();
+			}
+		}
+
+		return new RequestValidationException(self::normalizeWriteErrors(
+			$result->getErrors(),
+			$this->getWriteErrorFieldNameResolver($request, $entityType),
+		));
 	}
 
 	public function deleteAction(DeleteItemRequest $request, EntityType $entityType): DeleteResponse
@@ -266,7 +349,7 @@ class Item extends AbstractController
 		}
 		$this->assertRestrictedItemCategoryAllowed($storedItem);
 		$itemId = new ItemId($entityType, $request->id);
-		$this->validateFieldScope($request);
+		$this->validateFieldScope($request, $request->fieldName);
 		$value = $this->normalizeDeleteFieldValue($request, $entityType);
 		$fieldValueElement = (new FieldValueElementMapper())->map(
 			$entityType,
@@ -556,13 +639,13 @@ class Item extends AbstractController
 		return new UnknownDtoPropertyException($dtoShortName, $fieldName);
 	}
 
-	private function validateFieldScope(AbstractItemRequest $request): void
+	private function validateFieldScope(AbstractItemRequest $request, string $fieldName): void
 	{
 		$scope = $request->getOptions()['scope'] ?? null;
 		$availableFields = $scope?->fields ?? [];
-		if ($availableFields !== [] && !in_array($request->fieldName, $availableFields, true))
+		if ($availableFields !== [] && !in_array($fieldName, $availableFields, true))
 		{
-			throw $this->createUnknownDtoPropertyException($request->getDtoClass(), $request->fieldName);
+			throw $this->createUnknownDtoPropertyException($request->getDtoClass(), $fieldName);
 		}
 	}
 

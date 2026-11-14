@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service;
 
-use Bitrix\Disk\Configuration;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TypeFile;
 
@@ -21,14 +20,11 @@ final class HtmlViewerPolicy
 
 	public static function isViewable(File $file): bool
 	{
-		return Configuration::isEnabledHtmlViewer()
-			&& self::isViewableFile($file)
-		;
+		return self::isViewableFile($file);
 	}
 
 	/**
-	 * The file half of the answer, for a caller that reports a disabled viewer on its own. The name alone
-	 * does not answer it: an html file is stored as TypeFile::KNOWN, and the stored type is computed once
+	 * The file name alone does not answer it: an html file is stored as TypeFile::KNOWN, computed once
 	 * on upload and not recomputed on rename — so a document renamed to .html keeps TypeFile::DOCUMENT
 	 * and stays with the editors instead of being served as text/html.
 	 */
@@ -41,7 +37,7 @@ final class HtmlViewerPolicy
 
 	/**
 	 * The extension half of the answer, for a caller holding a name but no file (a version carries its
-	 * own). It says nothing about the viewer being enabled — that stays with isViewable().
+	 * own).
 	 */
 	public static function isViewableExtension(?string $extension): bool
 	{

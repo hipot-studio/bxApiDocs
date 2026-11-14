@@ -4,7 +4,7 @@ namespace Bitrix\Mobile\Internal\Onboarding\Dto;
 
 use Bitrix\Mobile\Internal\Onboarding\PushType;
 
-readonly class PushContent
+final readonly class PushContent
 {
 	public function __construct(
 		public string $title,

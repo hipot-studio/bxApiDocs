@@ -177,7 +177,13 @@ class Message extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Message.tailViewers
 	 */
-	public function tailViewersAction(\Bitrix\Im\V2\Message $message, array $filter = [], array $order = [], int $limit = 50): ?array
+	public function tailViewersAction(
+		\Bitrix\Im\V2\Message $message,
+		array $filter = [],
+		array $order = [],
+		int $limit = 50,
+		string $includeViewedCount = 'N',
+	): ?array
 	{
 		$viewFilter = [
 			'LAST_ID' => isset($filter['lastId']) ? (int)$filter['lastId'] : null,
@@ -188,7 +194,13 @@ class Message extends BaseController
 
 		$views = ViewCollection::find($viewFilter, $viewOrder, $limit);
 
-		return $this->toRestFormatWithPaginationData([$views], $limit, $views->count());
+		$rest = $this->toRestFormatWithPaginationData([$views], $limit, $views->getTailPageSize());
+		if ($this->convertCharToBool($includeViewedCount))
+		{
+			$rest['viewedCount'] = $message->getViewedCount();
+		}
+
+		return $rest;
 	}
 
 	/**
@@ -236,6 +248,7 @@ class Message extends BaseController
 	 */
 	public function listAction(Chat $chat, int $limit = self::MESSAGE_ON_PAGE_COUNT, string $ignoreMark = 'N'): ?array
 	{
+		$limit = $this->getContextRadius($limit);
 		$messageService = new MessageService($chat->getLoadContextMessage($this->convertCharToBool($ignoreMark)));
 		$messages = $messageService->getMessageContext($limit, \Bitrix\Im\V2\Message::REST_FIELDS)->getResult();
 
@@ -249,12 +262,23 @@ class Message extends BaseController
 	 */
 	public function getContextAction(\Bitrix\Im\V2\Message $message, int $range = self::MESSAGE_ON_PAGE_COUNT): ?array
 	{
+		$range = $this->getContextRadius($range);
 		$messageService = new MessageService($message);
 		$messages = $messageService->getMessageContext($range, \Bitrix\Im\V2\Message::REST_FIELDS)->getResult();
 
 		return $this->enrichCopilotVotes(
 			$messageService->fillContextPaginationData($this->toRestFormat($messages), $messages, $range)
 		);
+	}
+
+	/**
+	 * The radius of the context around a message, unlike a plain limit: zero and below are not an
+	 * invalid value here but a request for the message itself, and the published methods have always
+	 * answered exactly that. Normalisation touches only the upper bound.
+	 */
+	private function getContextRadius(int $radius): int
+	{
+		return $radius <= 0 ? 0 : $this->getLimit($radius);
 	}
 
 	/**
@@ -300,6 +324,44 @@ class Message extends BaseController
 	public function unpinAction(\Bitrix\Im\V2\Message $message): ?array
 	{
 		$unpinResult = $message->unpin();
+
+		if (!$unpinResult->isSuccess())
+		{
+			$this->addErrors($unpinResult->getErrors());
+
+			return null;
+		}
+
+		return [];
+	}
+
+	/**
+	 * A personal mark carries no right to pin for the whole chat: in a channel a plain member may not
+	 * pin, but marking a message for themselves stays available. Access to the message itself is
+	 * checked by the entity prefilter of the base controller.
+	 *
+	 * @restMethod im.v2.Chat.Message.pinPersonal
+	 */
+	public function pinPersonalAction(\Bitrix\Im\V2\Message $message): ?array
+	{
+		$pinResult = $message->pinPersonal();
+
+		if (!$pinResult->isSuccess())
+		{
+			$this->addErrors($pinResult->getErrors());
+
+			return null;
+		}
+
+		return [];
+	}
+
+	/**
+	 * @restMethod im.v2.Chat.Message.unpinPersonal
+	 */
+	public function unpinPersonalAction(\Bitrix\Im\V2\Message $message): ?array
+	{
+		$unpinResult = $message->unpinPersonal();
 
 		if (!$unpinResult->isSuccess())
 		{

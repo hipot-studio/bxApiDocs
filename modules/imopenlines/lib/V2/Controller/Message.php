@@ -8,12 +8,12 @@ class Message extends BaseController
 	/**
 	 * @restMethod imopenlines.v2.Message.startSession
 	 */
-	public function startSessionAction(Chat $chat, int $messageId): ?array
+	public function startSessionAction(Chat $chat, int $messageId, int $errorMessageId = 0): ?array
 	{
 		$currentUser = $this->getCurrentUser();
 		$operator = new \Bitrix\ImOpenLines\Operator($chat->getChatId(), (int)$currentUser?->getId());
 
-		if ($operator->startSessionByMessage($messageId))
+		if ($operator->startSessionByMessage($messageId, $errorMessageId))
 		{
 			return ['result' => true];
 		}

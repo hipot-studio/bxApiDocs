@@ -7,6 +7,7 @@ namespace Bitrix\Im\V2\Controller;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckDiskFileAccess;
+use Bitrix\Im\V2\Controller\Filter\CheckVideoNoteDownloadPolicy;
 use Bitrix\Im\V2\Controller\Filter\DenyBatchCall;
 use Bitrix\Im\V2\Entity\File\DownloadType;
 use Bitrix\Im\V2\Entity\File\FileError;
@@ -36,12 +37,14 @@ class File extends BaseController
 			'download' => [
 				'+prefilters' => [
 					new CheckDiskFileAccess(),
+					new CheckVideoNoteDownloadPolicy(),
 				],
 			],
 			'directDownload' => [
 				'+prefilters' => [
 					new DenyBatchCall(),
 					new CheckDiskFileAccess(),
+					new CheckVideoNoteDownloadPolicy(),
 				],
 			],
 		];

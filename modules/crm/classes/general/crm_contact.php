@@ -1270,6 +1270,25 @@ class CAllCrmContact
 				$sender->GetTableAlias()
 			);
 		}
+		if (array_key_exists('BINDING_OWNER', $arFilter))
+		{
+			$bindingOwner = Crm\Binding\OwnerBindingFilter::tryCreateOwnerFromFilterValue($arFilter['BINDING_OWNER']);
+			if (
+				$bindingOwner
+				&& Crm\Binding\OwnerBindingFilter::isSupported(CCrmOwnerType::Contact, $bindingOwner->getEntityTypeId())
+			)
+			{
+				$sqlData['FROM'][] = Crm\Binding\OwnerBindingFilter::prepareJoinSql(
+					CCrmOwnerType::Contact,
+					$bindingOwner,
+					$sender->GetTableAlias()
+				);
+			}
+			else
+			{
+				$sqlData['WHERE'][] = '1 = 0';
+			}
+		}
 		if(isset($arFilter['ADDRESSES']))
 		{
 			foreach($arFilter['ADDRESSES'] as $addressTypeID => $addressFilter)
@@ -1990,7 +2009,7 @@ class CAllCrmContact
 		}
 
 		static $arImmutableFilters = array(
-			'FM', 'ID', 'COMPANY_ID', 'COMPANY_ID_value', 'ASSOCIATED_COMPANY_ID', 'ASSOCIATED_DEAL_ID',
+			'FM', 'ID', 'COMPANY_ID', 'COMPANY_ID_value', 'ASSOCIATED_COMPANY_ID', 'ASSOCIATED_DEAL_ID', 'BINDING_OWNER',
 			'ASSIGNED_BY_ID', 'ASSIGNED_BY_ID_value',
 			'CREATED_BY_ID', 'CREATED_BY_ID_value',
 			'MODIFY_BY_ID', 'MODIFY_BY_ID_value',

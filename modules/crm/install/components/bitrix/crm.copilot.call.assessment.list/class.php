@@ -14,16 +14,11 @@ use Bitrix\Crm\Copilot\AiQualityAssessment\RatingCalculator;
 use Bitrix\Crm\Copilot\CallAssessment\Analytics\ClickEventBuilder;
 use Bitrix\Crm\Copilot\CallAssessment\Analytics\ClickEventWrapper;
 use Bitrix\Crm\Copilot\CallAssessment\BiReportButton;
-use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
-use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentAvailabilityController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentClientTypeController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
-use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityWeekdayType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\ClientType;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Filter\ListFilter;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
@@ -49,7 +44,6 @@ class CrmCopilotCallAssessmentListComponent extends Base
 	private ?Options $gridOptions = null;
 	private ?PageNavigation $pageNavigation = null;
 	private array|string|null $defaultDateTimeFormat = null;
-	private array $currentAvailableAssessmentIds = [];
 	private bool $isV2 = false;
 
 	public function executeComponent(): void
@@ -74,11 +68,6 @@ class CrmCopilotCallAssessmentListComponent extends Base
 		Container::getInstance()->getLocalization()->loadMessages();
 
 		$this->isV2 = AIManager::isCallScoringV2Enabled();
-
-		if (Feature::enabled(Feature\CopilotCallAssessmentAvailability::class))
-		{
-			$this->currentAvailableAssessmentIds = CopilotCallAssessmentAvailabilityController::getInstance()->getCurrentAvailableAssessmentIds();
-		}
 
 		$this->arResult['SORT'] = $this->getOrder();
 		$this->arResult['GRID_ID'] = $this->getGridId();
@@ -508,25 +497,11 @@ class CrmCopilotCallAssessmentListComponent extends Base
 			'readOnly' => $this->isReadOnly(),
 		]);
 
-		$className = 'crm-copilot-call-assessment-list-modified-field';
-		$iconContainer = '';
-		if (
-			Feature::enabled(Feature\CopilotCallAssessmentAvailability::class)
-			&& AvailabilityType::isExtendedAvailabilityType($callAssessmentItem->getAvailabilityType())
-			&& !in_array($id, $this->currentAvailableAssessmentIds, true)
-		)
-		{
-			$className .= ' --not-available';
-			$iconContainer = $this->getAvailabilityIconContainer();
-		}
-
 		return <<<HTML
-			<div class="{$className}">
+			<div class="crm-copilot-call-assessment-list-modified-field">
 				<div class="crm-copilot-call-assessment-list-modified-field-switcher-wrapper">
 					<div id="{$switcherId}"></div>
-					{$iconContainer}
 				</div>
-				{$this->getAvailabilityDataContent($callAssessmentItem)}
 			</div>
 			<script>
 				BX.ready(() => {
@@ -538,72 +513,6 @@ class CrmCopilotCallAssessmentListComponent extends Base
 				});
 			</script>
 HTML;
-	}
-
-	private function getAvailabilityDataContent(CopilotCallAssessment $callAssessmentItem): string
-	{
-		if (!Feature::enabled(Feature\CopilotCallAssessmentAvailability::class))
-		{
-			return '';
-		}
-
-		$item = CallAssessmentItem::createFromEntity($callAssessmentItem);
-		$availabilityData = $item->getAvailabilityData();
-		if (empty($availabilityData))
-		{
-			return '';
-		}
-
-		$availabilityType = $item->getAvailabilityType();
-		if ($availabilityType === AvailabilityType::PERIOD->value)
-		{
-			$format = $this->getCultureDateTimeFormat();
-			$result = array_map(
-				static fn($row) => Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_COLUMN_AVAILABILITY_PERIOD', [
-					'#FROM#' => FormatDate($format, CCrmDateTimeHelper::getUserTime($row['startPoint'])->getTimestamp()),
-					'#TO#' => FormatDate($format, CCrmDateTimeHelper::getUserTime($row['endPoint'])->getTimestamp()),
-				]),
-				$availabilityData,
-			);
-
-			return '
-				<div class="crm-copilot-call-assessment-list-modified-field-availability">'
-				. implode('<br>', $result)
-				. '</div>';
-		}
-
-		if ($availabilityType === AvailabilityType::CUSTOM->value)
-		{
-			$result = array_map(
-				static fn($row) => Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_COLUMN_AVAILABILITY_CUSTOM', [
-					'#WEEKDAY_TYPE#' => AvailabilityWeekdayType::getTitle($row['weekdayType']),
-					'#FROM#' => CCrmDateTimeHelper::getUserTime($row['startPoint'])->format('H:i'),
-					'#TO#' => CCrmDateTimeHelper::getUserTime($row['endPoint'])->format('H:i'),
-				]),
-				$availabilityData,
-			);
-
-			return '
-				<div class="crm-copilot-call-assessment-list-modified-field-availability">'
-				. implode('<br>', $result)
-				. '</div>';
-		}
-
-		return '';
-	}
-
-	private function getAvailabilityIconContainer(): string
-	{
-		return '
-			<div class="crm-copilot-call-assessment-list-modified-field-availability-icon-container">
-				<span
-					class="crm-copilot-call-assessment-list-modified-field-availability-icon"
-					data-hint="' . Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_COLUMN_AVAILABILITY_HINT') . '"
-					data-hint-html
-					data-hint-no-icon
-				></span>
-			</div>
-		';
 	}
 
 	private function getAssessmentAvgField(CopilotCallAssessment $callAssessmentItem, array $fieldsData): string
