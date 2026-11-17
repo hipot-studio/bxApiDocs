@@ -22,15 +22,22 @@ class TaskUpdated extends BaseCase
 			return;
 		}
 
+		// zombie task loaded from recyclebin has no CREATED_BY
+		$authorId = (int)$task->getCreatedBy();
+		if ($authorId <= 0)
+		{
+			return;
+		}
+
 		// Check that user exists
 		$rsUser = \CUser::GetList(
 			'ID',
 			'ASC',
-			['ID' => $task->getCreatedBy()],
+			['ID' => $authorId],
 			['FIELDS' => ['ID']]
 		);
 
-		if (!($arUser = $rsUser->Fetch()))
+		if (!$rsUser->Fetch())
 		{
 			return;
 		}
@@ -51,7 +58,6 @@ class TaskUpdated extends BaseCase
 			while ($log = $rsSocNetLogItems->Fetch())
 			{
 				$logId = (int)$log['ID'];
-				$authorId = $task->getCreatedBy();
 
 				$oldForumTopicId = $previosFields['FORUM_TOPIC_ID'] ?? null;
 				$newForumTopicId = $task->getForumTopicId();
@@ -131,14 +137,14 @@ class TaskUpdated extends BaseCase
 			else
 			{
 				$arSoFields['ENTITY_TYPE'] = SONET_ENTITY_USER;
-				$arSoFields['ENTITY_ID'] = $task->getCreatedBy();
+				$arSoFields['ENTITY_ID'] = $authorId;
 			}
 		}
 
 		$arSoFields['PARAMS'] = serialize([
 			'TYPE' => 'modify',
 			'CHANGED_FIELDS' => $arChangesFields,
-			'CREATED_BY'  => $task->getCreatedBy(),
+			'CREATED_BY'  => $authorId,
 			'CHANGED_BY' => ($message->getSender()->getId() ?: $task->getChangedBy()),
 			'PREV_REAL_STATUS' => ($previosFields['REAL_STATUS'] ?? false),
 		]);
@@ -161,7 +167,7 @@ class TaskUpdated extends BaseCase
 		$arSoFields['=LOG_UPDATE'] = $logDate;
 
 		// All tasks posts in live feed should be from director
-		$arSoFields['USER_ID'] = $task->getCreatedBy();
+		$arSoFields['USER_ID'] = $authorId;
 		$rsSocNetLogItems = \CSocNetLog::GetList(
 			['ID' => 'DESC'],
 			$arLogFilter,

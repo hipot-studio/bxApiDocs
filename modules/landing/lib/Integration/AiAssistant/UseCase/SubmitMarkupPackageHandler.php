@@ -250,6 +250,7 @@ class SubmitMarkupPackageHandler extends AbstractSiteHandler
 
 		$generation = $this->createUpdateGeneration($target, $userId);
 		$this->storePackageTransport($generation, $reference, $packageHash, $uploadId);
+		(new MarkupSiteState($generation))->setEditBindingId($dto->bindingId);
 
 		// The package assembly takes time: the selection is asked again right before the generation is saved.
 		$this->assertMarkupModeSelected();

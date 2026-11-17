@@ -7,7 +7,9 @@ namespace Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 use Attribute;
 use Bitrix\Main\Access\AccessibleController;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
+use Bitrix\Tasks\V2\Internal\Access\ExistingEntityIdGuardTrait;
 use Bitrix\Tasks\V2\Internal\Access\Factory\AccessControllerTrait;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -16,9 +18,10 @@ use Bitrix\Tasks\V2\Internal\Entity\EntityCollectionInterface;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
-class Read implements AttributeAccessInterface
+class Read implements AttributeAccessInterface, AccessUserErrorInterface
 {
 	use AccessControllerTrait;
+	use ExistingEntityIdGuardTrait;
 
 	public function __construct(
 		private readonly bool $returnTrueIfNotExist = false,
@@ -30,6 +33,11 @@ class Read implements AttributeAccessInterface
 	public function check(EntityInterface|EntityCollectionInterface $entity, Context $context, array $parameters = []): bool
 	{
 		$accessController = $this->getAccessController(Type::Task, $context);
+
+		if (!$this->guardExistingEntityId($entity))
+		{
+			return false;
+		}
 
 		$preloader = Container::getInstance()->getTaskModelPreloader();
 

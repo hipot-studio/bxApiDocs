@@ -198,26 +198,24 @@ class LPA
 				}
 			}
 
-			// Ok, so we already have array of PHP scripts lets check our new content
-			// LPA-users CAN delete PHP fragments and swap them but CAN'T add new or modify existent:
-			while (preg_match('/#PHP\d{4}#/iu', $filesrc, $res))
-			{
-				$php_begin = mb_strpos($filesrc, $res[0]);
-				$php_fr_num = intval(mb_substr($filesrc, $php_begin + 4, 4)) - 1; // Number of PHP fragment from #PHPXXXX# conctruction
-
-				if (isset($arPHPscripts[$php_fr_num]))
-				{
-					$code = '<?' . $arPHPscripts[$php_fr_num] . '?>';
-				}
-				else
-				{
-					$code = '<??>';
-				}
-				$filesrc = mb_substr($filesrc, 0, $php_begin) . $code . mb_substr($filesrc, $php_begin + 9);
-			}
+			$filesrc = self::RestorePHPFragments($filesrc, $arPHPscripts);
 		}
 
 		return $filesrc;
+	}
+
+	public static function RestorePHPFragments(string $filesrc, array $phpScripts): string
+	{
+		return preg_replace_callback(
+			'/#PHP\d{4}#/i',
+			static function (array $matches) use ($phpScripts): string
+			{
+				$index = intval(substr($matches[0], 4, 4)) - 1;
+
+				return isset($phpScripts[$index]) ? '<?' . $phpScripts[$index] . '?>' : '<??>';
+			},
+			$filesrc
+		);
 	}
 
 	public static function EncodePHPTags($str)

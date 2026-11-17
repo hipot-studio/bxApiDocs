@@ -48,6 +48,9 @@ enum Field: string
 	case Zombie = 'zombie';
 	case SearchIndex = 'searchIndex';
 	case AccessUserId = 'accessUserId';
+	// Раздел «Регулярные задачи»: ролевой срез списка правил (постановщик / исполнитель /
+	// соисполнитель / наблюдатель). Значение — тип роли TemplateMemberTable::MEMBER_TYPE_*.
+	case RoleId = 'roleId';
 	case SubTemplates = 'subTemplates';
 	case EstimatedTime = 'estimatedTime';
 	case UserFields = 'userFields';
@@ -125,6 +128,7 @@ enum Field: string
 		self::SearchIndex,
 		self::BaseTemplateId,
 		self::AccessUserId,
+		self::RoleId,
 		self::StageId,
 	];
 
@@ -185,6 +189,7 @@ enum Field: string
 			self::Priority->value => List\Field::Priority,
 			self::SearchIndex->value => List\Field::SearchIndex,
 			self::AccessUserId->value => List\Field::AccessUserId,
+			self::RoleId->value => List\Field::RoleId,
 			self::UserFields->value => List\Field::UserFields,
 			self::Description->value => List\Field::Description,
 			self::DescriptionInBbcode->value => List\Field::DescriptionInBbcode,

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Config\Feature\ShortPublicLinksFlag;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internals\BaseComponent;
@@ -16,7 +17,10 @@ use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\ParameterSigner;
 use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
 use Bitrix\Disk\View\Video;
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\CurrentUser;
@@ -24,12 +28,23 @@ use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
 use CBitrix24;
 
 class UrlManager implements IErrorable
 {
 	public const ERROR_ACCESS_DENIED = 'ACCESS_DENIED';
+
+	/** The address of the copy carries the signed mark of the link where vibeoffice is on. */
+	public const PUBLIC_LINK_CONSUMER_SIGNED_COPY = 'signed-copy';
+	/** The address of the copy is the plain one of the object, or the HASH one for the rest. */
+	public const PUBLIC_LINK_CONSUMER_UNMARKED_COPY = 'unmarked-copy';
+	/** The address a business process hands out; it falls back the way the signed copy does. */
+	public const PUBLIC_LINK_CONSUMER_BIZPROC = 'bizproc';
+
+	/** Name of the route of the short public entry; the route belongs to the routing of intranet. */
+	public const SHORT_PUBLIC_LINK_ROUTE = 'DiskShortPublicLink';
 
 	/**
 	 * Every refusal of resolveFolderPath() reads the same. A storage that does not exist, one the visitor
@@ -294,6 +309,146 @@ class UrlManager implements IErrorable
 	}
 
 	/**
+	 * Returns the address the given point of issue hands out for a public link. An eligible link gets its short
+	 * code on the first issue whatever the flags say, so the code stays the same through a rollback and a
+	 * re-enable. The short address goes out only where vibeoffice, the issuance flag, the named route of the
+	 * request and a configured origin all allow it; everywhere else, and when the code cannot be reserved,
+	 * the point keeps exactly the address it issued before.
+	 * The name of the method is the capability a consumer of another module, the mobile application among them,
+	 * checks with method_exists() to tell a Disk issuing short addresses from an older one.
+	 *
+	 * @param ExternalLink $externalLink
+	 * @param string $consumer One of the PUBLIC_LINK_CONSUMER_* constants.
+	 * @param BaseObject|null $object The object the point of issue addresses, a file link among others; the plain
+	 * address it issued before is built from it. The object of the link itself when omitted.
+	 * @return string
+	 * @throws ArgumentException
+	 * @throws ArgumentNullException
+	 * @throws LoaderException
+	 */
+	public function getCopyablePublicExternalLinkForConsumer(
+		ExternalLink $externalLink,
+		string $consumer,
+		?BaseObject $object = null,
+	): string
+	{
+		if (!in_array($consumer, [
+			self::PUBLIC_LINK_CONSUMER_SIGNED_COPY,
+			self::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+			self::PUBLIC_LINK_CONSUMER_BIZPROC,
+		], true))
+		{
+			throw new ArgumentException("Unknown consumer of public link: {$consumer}.", 'consumer');
+		}
+
+		// The plain profile names the object itself, so the short address of an exact revision is not issued there.
+		$issuesShortUrl = $externalLink->canHaveShortCode()
+			&& !($consumer === self::PUBLIC_LINK_CONSUMER_UNMARKED_COPY && $externalLink->isSpecificVersion())
+		;
+		$shortUrl = $issuesShortUrl ? $this->getShortPublicExternalLink($externalLink) : null;
+		if ($shortUrl !== null)
+		{
+			return $shortUrl;
+		}
+
+		if ($consumer === self::PUBLIC_LINK_CONSUMER_UNMARKED_COPY)
+		{
+			return $this->getPublicExternalLink(
+				$object ?? $externalLink->getObject(),
+				(string)$externalLink->getHash(),
+			);
+		}
+
+		return $this->getCopyablePublicExternalLink($externalLink);
+	}
+
+	/**
+	 * Reserves the code before any gate is asked, then builds the short address or returns null where it may
+	 * not be issued. A failed reservation is retried by the next issue.
+	 */
+	private function getShortPublicExternalLink(ExternalLink $externalLink): ?string
+	{
+		try
+		{
+			$code = $externalLink->ensureShortCode();
+		}
+		catch (SystemException)
+		{
+			return null;
+		}
+
+		if (!VibeofficeHandler::isEnabled() || !Feature::isEnabled(ShortPublicLinksFlag::class))
+		{
+			return null;
+		}
+
+		$path = $this->getShortPublicLinkPath($code);
+		$hostUrl = $this->getConfiguredHostUrl();
+		if ($path === null || $hostUrl === null)
+		{
+			return null;
+		}
+
+		if (Loader::includeModule('bitrix24') && !CBitrix24::isCustomDomain())
+		{
+			$host = parse_url($hostUrl, PHP_URL_HOST);
+
+			return "https://bitrix24public.com/{$host}{$path}";
+		}
+
+		return $hostUrl . $path;
+	}
+
+	/**
+	 * Returns the path of the short public address of the code, or null where the site has no short entry.
+	 *
+	 * The path comes from the router of the current request, so it carries the directory of the site: the issue
+	 * and the canonical address of an opening build it here alike. A site without the named route (a box on url
+	 * rewrite only, a site of another wizard, an intranet older than the route) keeps the legacy address.
+	 */
+	public function getShortPublicLinkPath(string $code): ?string
+	{
+		try
+		{
+			$path = Application::getInstance()->getRouter()->route(
+				self::SHORT_PUBLIC_LINK_ROUTE,
+				['any' => $code],
+			);
+		}
+		catch (SystemException)
+		{
+			return null;
+		}
+
+		if (!is_string($path) || $path === '')
+		{
+			return null;
+		}
+
+		return '/' . trim($path, '/') . '/';
+	}
+
+	/**
+	 * Unlike {@see UrlManager::getHostUrl()} it never falls back to the host of the request: a public address
+	 * names the origin the portal is configured with or is not issued.
+	 */
+	private function getConfiguredHostUrl(): ?string
+	{
+		$host = defined('SITE_SERVER_NAME') && SITE_SERVER_NAME
+			? SITE_SERVER_NAME
+			: Option::get('main', 'server_name')
+		;
+		if (!is_string($host) || $host === '')
+		{
+			return null;
+		}
+
+		$protocol = \CMain::isHTTPS() ? 'https' : 'http';
+
+		return $protocol . '://' . $this->applyServerPort($host, $protocol);
+	}
+
+	/**
 	 * The mark is signed for the file and revision the address names, so an opening where they stop
 	 * agreeing is refused.
 	 */
@@ -383,6 +538,14 @@ class UrlManager implements IErrorable
 			;
 		}
 
+		return $protocol . '://' . $this->applyServerPort((string)$host, $protocol);
+	}
+
+	/**
+	 * Adds the non-standard port of the request to a host without one, and drops the standard port of the scheme.
+	 */
+	private function applyServerPort(string $host, string $protocol): string
+	{
 		$port = Context::getCurrent()->getServer()->getServerPort();
 		if($port <> 80 && $port <> 443 && $port > 0 && mb_strpos($host, ':') === false)
 		{
@@ -397,7 +560,7 @@ class UrlManager implements IErrorable
 			$host = str_replace(':443', '', $host);
 		}
 
-		return $protocol . '://' . $host;
+		return $host;
 	}
 
 	/**
@@ -537,16 +700,17 @@ class UrlManager implements IErrorable
 	 * Gets url for start create file by cloud services.
 	 * @param string $typeFile Type of file (docx, pptx, xlsx). See in \Bitrix\Disk\Document\BlankFileData (docx, pptx, xslx).
 	 * @param string $service Service which will use to create file. See in subclasses \Bitrix\Disk\Document\DocumentHandler::getCodeName, and event subscribers 'onDocumentHandlerBuildList'.
+	 * @param array $params Array for new optional parameters. Now it's used to provide $targetFolderId from \Bitrix\Disk\Controller\DocumentService
 	 * @return string
 	 */
-	public static function getUrlForStartCreateFile($typeFile, $service)
+	public static function getUrlForStartCreateFile($typeFile, $service, array $params = [])
 	{
-		return static::getUrlDocumentController('', array(
+		return static::getUrlDocumentController('', array_merge([
 			'document_action' => 'start',
 			'primaryAction' => 'publishBlank',
 			'type' => $typeFile,
 			'service' => $service,
-		));
+		], $params));
 	}
 
 	/**
@@ -640,16 +804,17 @@ class UrlManager implements IErrorable
 	 * Gets url for start creating file in cloud service (userfield context).
 	 * @param string $typeFile Type of file (docx, pptx, xlsx). See in \Bitrix\Disk\Document\BlankFileData (docx, pptx, xslx).
 	 * @param string $service Service which will use to create file. See in subclasses \Bitrix\Disk\Document\DocumentHandler::getCodeName, and event subscribers 'onDocumentHandlerBuildList'.
+	 * @param array $params Array for new optional parameters. Now it's used to provide $targetFolderId from \Bitrix\Disk\Controller\DocumentService
 	 * @return string
 	 */
-	public static function getUrlToStartCreateUfFileByService($typeFile, $service)
+	public static function getUrlToStartCreateUfFileByService($typeFile, $service, array $params = [])
 	{
-		return static::getUrlUfController('', array(
+		return static::getUrlUfController('', array_merge([
 			'document_action' => 'start',
 			'primaryAction' => 'publishBlank',
 			'type' => $typeFile,
 			'service' => $service,
-		));
+		], $params));
 	}
 
 	/**

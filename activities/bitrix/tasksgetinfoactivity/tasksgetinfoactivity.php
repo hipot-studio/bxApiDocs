@@ -19,6 +19,10 @@ use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Main\Web\Json;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
+use Bitrix\Bizproc\Automation\Engine\Condition;
+use Bitrix\Bizproc\BaseType\Value;
+use Bitrix\Tasks\Internals\Counter\Role;
+use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -36,6 +40,9 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const TASKS_LIMIT_MAX = 500;
 	private const TASKS_LIMIT_DEFAULT = 50;
 	private const TASKS_LIMIT_MIN = 1;
+	private const TASKS_TOTAL_LIMIT_MAX = 500;
+	private const TASKS_TOTAL_LIMIT_DEFAULT = 0;
+	private const TASKS_TOTAL_LIMIT_MIN = 0;
 	private const USER_NAME_SYSTEM = 'System';
 	private const MESSAGES_DAYS_DEFAULT = 7;
 	private const MESSAGES_DAYS_MAX = 365;
@@ -43,6 +50,8 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const PARAM_USER_ID = 'PARAM_USER_ID';
 	private const PARAM_MESSAGE_COUNT_LIMIT = 'MESSAGE_COUNT_LIMIT';
 	private const PARAM_TASK_LIMIT = 'TaskLimit';
+	private const PARAM_TASK_TOTAL_LIMIT = 'TaskTotalLimit';
+	private const PARAM_ITEM_COLOR = 'ItemColor';
 	private const PARAM_TASK_ACTIVITY_DAYS = 'TaskActivityDays';
 	private const PARAM_MESSAGES_DAYS = 'MessagesDays';
 	private const PARAM_PROJECT_ID = 'ProjectId';
@@ -63,6 +72,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const RETURN_PARAM_TASKS_TITLES_BB_LIST = 'TASKS_TITLES_BB_LIST';
 	private const RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON = 'TASKS_BLOCK_ITEMS_JSON';
 	private const RETURN_PARAM_TASK_IDS = 'TASK_IDS';
+	private const RETURN_PARAM_ALL_IDS = 'TASKS_INFO_ALL_IDS';
+	private const RETURN_PARAM_TOTAL_COUNT = 'TASKS_INFO_TOTAL_COUNT';
+	private const RETURN_PARAM_TOTAL_EXCEEDED = 'TASKS_INFO_TOTAL_EXCEEDED';
+	private const RETURN_PARAM_LIST_URL = 'TASKS_INFO_LIST_URL';
 	private const RETURN_PARAM_HAS_MORE = 'TASKS_INFO_HAS_MORE';
 	private const RETURN_SUCCEEDED = 'Succeeded';
 	private const SELECT_FIELD_ID = 'id';
@@ -76,7 +89,6 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const SELECT_FIELD_CHECKLISTS = 'checklists';
 	private const SELECT_FIELD_RESULTS = 'results';
 	private const SELECT_FIELD_CHAT = 'chat';
-	private const DISPLAY_TITLE_SEPARATOR = " \u{2014} ";
 	private const SELECT_FIELD_ACTIVITY_DATE = 'activityDate';
 	private const SELECT_FIELD_IS_OVERDUE = 'isOverdue';
 	private const SELECT_FIELD_URL = 'url';
@@ -106,6 +118,8 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::PARAM_MESSAGES_DAYS => null,
 			self::PARAM_TASK_ACTIVITY_DAYS => null,
 			self::PARAM_TASK_LIMIT => null,
+			self::PARAM_TASK_TOTAL_LIMIT => null,
+			self::PARAM_ITEM_COLOR => null,
 			self::PARAM_USER_TASK_ROLE => null,
 			self::PARAM_TASK_STATUS_FILTER => null,
 			self::PARAM_TASK_SELECT_FIELD => null,
@@ -121,6 +135,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::RETURN_PARAM_TASKS_TITLES_BB_LIST => null,
 			self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON => null,
 			self::RETURN_PARAM_TASK_IDS => null,
+			self::RETURN_PARAM_ALL_IDS => null,
+			self::RETURN_PARAM_TOTAL_COUNT => null,
+			self::RETURN_PARAM_TOTAL_EXCEEDED => false,
+			self::RETURN_PARAM_LIST_URL => null,
 			self::RETURN_PARAM_HAS_MORE => false,
 			self::RETURN_SUCCEEDED => false,
 		];
@@ -149,6 +167,19 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Type' => FieldType::INT,
 				'Multiple' => true,
 			],
+			self::RETURN_PARAM_ALL_IDS => [
+				'Type' => FieldType::INT,
+				'Multiple' => true,
+			],
+			self::RETURN_PARAM_TOTAL_COUNT => [
+				'Type' => FieldType::INT,
+			],
+			self::RETURN_PARAM_TOTAL_EXCEEDED => [
+				'Type' => FieldType::BOOL,
+			],
+			self::RETURN_PARAM_LIST_URL => [
+				'Type' => FieldType::STRING,
+			],
 			self::RETURN_PARAM_HAS_MORE => [
 				'Type' => FieldType::BOOL,
 			],
@@ -166,6 +197,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		$this->setProperty(self::RETURN_PARAM_TASKS_TITLES_BB_LIST);
 		$this->setProperty(self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON);
 		$this->setProperty(self::RETURN_PARAM_TASK_IDS);
+		$this->setProperty(self::RETURN_PARAM_ALL_IDS);
+		$this->setProperty(self::RETURN_PARAM_TOTAL_COUNT);
+		$this->setProperty(self::RETURN_PARAM_TOTAL_EXCEEDED, false);
+		$this->setProperty(self::RETURN_PARAM_LIST_URL);
 		$this->setProperty(self::RETURN_PARAM_HAS_MORE, false);
 		$this->setProperty(self::RETURN_SUCCEEDED, false);
 	}
@@ -191,11 +226,22 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$this->setProperty(
 				self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON,
 				Json::encode(
-					array_map(static fn(string $title): array => ['text' => substr($title, 2)], $displayBbTitles),
+					$this->buildBlockItems($displayBbTitles),
 					JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
 				),
 			);
 			$this->setProperty(self::RETURN_PARAM_TASK_IDS, array_map('intval', array_keys($tasks)));
+
+			[$allIds, $totalCount, $totalExceeded] = $this->resolveFullTaskIdSet(
+				$userId,
+				$projectId,
+				array_keys($tasks),
+				$hasMore,
+			);
+			$this->setProperty(self::RETURN_PARAM_ALL_IDS, $allIds);
+			$this->setProperty(self::RETURN_PARAM_TOTAL_COUNT, $totalCount);
+			$this->setProperty(self::RETURN_PARAM_TOTAL_EXCEEDED, $totalExceeded);
+			$this->setProperty(self::RETURN_PARAM_LIST_URL, $this->buildTasksListUrl($userId));
 			$this->setProperty(self::RETURN_PARAM_HAS_MORE, $hasMore);
 			$this->setProperty(self::RETURN_SUCCEEDED, true);
 		}
@@ -242,6 +288,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Type' => FieldType::INT,
 				'Default' => self::TASKS_LIMIT_DEFAULT,
 				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_LIMIT_NAME'),
+			],
+			self::PARAM_TASK_TOTAL_LIMIT => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_TOTAL_LIMIT'),
+				'FieldName' => self::PARAM_TASK_TOTAL_LIMIT,
+				'Type' => FieldType::INT,
+				'Default' => self::TASKS_TOTAL_LIMIT_DEFAULT,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_TOTAL_LIMIT_NAME'),
 			],
 			self::PARAM_MESSAGES_DAYS => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_MESSAGE_DAYS'),
@@ -421,7 +474,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return array_merge($errors, parent::ValidateProperties($arTestProperties, $user));
 	}
 
-	private function getTasks(?int $userId, ?int $projectId): array
+	private function buildTaskFilter(?int $userId, ?int $projectId): array
 	{
 		$filter = [];
 
@@ -447,12 +500,16 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$filter = array_merge($filter, $this->getLegacyDateFilter());
 		}
 
+		return array_merge($filter, $this->getExcludedTaskFilter());
+	}
+
+	private function getTasks(?int $userId, ?int $projectId): array
+	{
 		$limit = (int)$this->{self::PARAM_TASK_LIMIT};
-		$filter = array_merge($filter, $this->getExcludedTaskFilter());
 
 		$tasksResult = TaskTable::query()
 			->setSelect($this->getTaskQuerySelectFields())
-			->setFilter($filter)
+			->setFilter($this->buildTaskFilter($userId, $projectId))
 			->setGroup(['ID'])
 			->setOrder($this->getTaskOrder())
 			->setLimit($limit + 1)
@@ -507,6 +564,78 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		}
 
 		return [$tasks, $userIdList, $chatIdList, $hasMore];
+	}
+
+	/**
+	 * A page that is not cut off already holds the whole basket in the same order, so it needs no second query.
+	 * @return array{0: int[], 1: int, 2: bool} identifiers, their count and the overflow flag.
+	 */
+	private function resolveFullTaskIdSet(?int $userId, ?int $projectId, array $pageTaskIds, bool $pageHasMore): array
+	{
+		$limit = $this->getTaskTotalLimit();
+		if ($limit <= 0)
+		{
+			return [[], 0, false];
+		}
+
+		if ($pageHasMore)
+		{
+			return $this->getFullTaskIdSet($userId, $projectId);
+		}
+
+		return $this->collectTaskIds(
+			array_map(static fn($id): array => ['ID' => $id], $pageTaskIds),
+			$limit,
+		);
+	}
+
+	/**
+	 * The whole basket by the same filter and order as the displayed page, capped by its own limit.
+	 * @return array{0: int[], 1: int, 2: bool} identifiers, their count and the overflow flag.
+	 */
+	private function getFullTaskIdSet(?int $userId, ?int $projectId): array
+	{
+		$limit = $this->getTaskTotalLimit();
+		if ($limit <= 0)
+		{
+			return [[], 0, false];
+		}
+
+		$idsResult = TaskTable::query()
+			->setSelect(['ID'])
+			->setFilter($this->buildTaskFilter($userId, $projectId))
+			->setGroup(['ID'])
+			->setOrder($this->getTaskOrder())
+			->setLimit($limit + 1)
+			->exec()
+		;
+
+		return $this->collectTaskIds($idsResult, $limit);
+	}
+
+	private function collectTaskIds(iterable $rows, int $limit): array
+	{
+		$ids = [];
+		$exceeded = false;
+		foreach ($rows as $row)
+		{
+			if (count($ids) >= $limit)
+			{
+				$exceeded = true;
+				break;
+			}
+
+			$ids[] = (int)$row['ID'];
+		}
+
+		return [$ids, count($ids), $exceeded];
+	}
+
+	private function getTaskTotalLimit(): int
+	{
+		$limit = (int)$this->{self::PARAM_TASK_TOTAL_LIMIT};
+
+		return max(self::TASKS_TOTAL_LIMIT_MIN, min($limit, self::TASKS_TOTAL_LIMIT_MAX));
 	}
 
 	private function fetchChecklists(array $taskIds, array &$userIdList): array
@@ -947,7 +1076,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 
 			$taskEntity = new Bitrix\Tasks\V2\Internal\Entity\Task(id: (int)$taskId, group: $group);
 			$url = '/' . ltrim($linkService->get($taskEntity, $linkUserId), '/');
-			$bbTitles[] = '- [url=' . $url . ']' . $title . '[/url]';
+			$bbTitles[] = '- ' . $this->formatTextLink($url, $this->neutralizeMessageText($title));
 		}
 
 		return [$titles, $bbTitles];
@@ -967,43 +1096,70 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		foreach ($tasks as $taskId => $task)
 		{
 			$title = $this->normalizeDisplayTitle((string)($task['TITLE'] ?? ''));
-			$datePrefix = $this->getDisplayTaskDatePrefix($task);
-			$displayTitle = $datePrefix === '' ? $title : $datePrefix . self::DISPLAY_TITLE_SEPARATOR . $title;
-			$titles[] = '- ' . $displayTitle;
+			$titles[] = '- ' . $title;
 
 			$taskEntity = new Bitrix\Tasks\V2\Internal\Entity\Task(id: (int)$taskId, group: $group);
 			$url = '/' . ltrim($linkService->get($taskEntity, $linkUserId), '/');
-			$linkedTitle = '[url=' . $url . ']' . $title . '[/url]';
-			$bbTitles[] = '- ' . (
-				$datePrefix === '' ? $linkedTitle : $datePrefix . self::DISPLAY_TITLE_SEPARATOR . $linkedTitle
-			);
+			$bbTitles[] = '- [url=' . $url . ']' . $title . '[/url]';
 		}
 
 		return [$titles, $bbTitles];
 	}
 
+	private function buildBlockItems(array $displayBbTitles): array
+	{
+		$colorValue = $this->{self::PARAM_ITEM_COLOR};
+		$color = trim((string)(is_array($colorValue) ? reset($colorValue) : $colorValue));
+
+		return array_map(
+			static function(string $title) use ($color): array
+			{
+				$item = ['text' => substr($title, 2)];
+				if ($color !== '')
+				{
+					$item['color'] = $color;
+				}
+
+				return $item;
+			},
+			$displayBbTitles,
+		);
+	}
+
+	private function replaceSquareBrackets(string $text): string
+	{
+		return str_replace(['[', ']'], ['(', ')'], $text);
+	}
+
+	/**
+	 * The message text is converted from Markdown: brackets would open a Markdown link or a BB tag,
+	 * angle brackets an autolink, even across lines, and invisible characters are dropped by the converter,
+	 * joining what they separate.
+	 */
+	private function neutralizeMessageText(string $text): string
+	{
+		$text = preg_replace('/\p{Cf}/u', '', $text) ?? '';
+		$text = $this->replaceSquareBrackets($text);
+
+		return str_replace(['<', '>'], ["\u{2039}", "\u{203A}"], $text);
+	}
+
+	/**
+	 * A title starting with "(" is kept apart from the tag by a plain space, so that "](" is not formed.
+	 */
+	private function formatTextLink(string $url, string $title): string
+	{
+		$guard = str_starts_with($title, '(') ? ' ' : '';
+
+		return '[url=' . $url . ']' . $guard . $title . '[/url]';
+	}
+
 	private function normalizeDisplayTitle(string $title): string
 	{
 		$title = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $title) ?? '';
-		$title = str_replace(['[', ']'], ['(', ')'], $title);
+		$title = $this->replaceSquareBrackets($title);
 
 		return mb_substr(trim(preg_replace('/\s+/u', ' ', $title) ?? ''), 0, 200);
-	}
-
-	private function getDisplayTaskDatePrefix(array $task): string
-	{
-		$field = match ((string)$this->{self::PARAM_ORDER_FIELD})
-		{
-			'DEADLINE' => 'DEADLINE',
-			'STATUS_CHANGED_DATE' => 'STATUS_CHANGED_DATE',
-			'CLOSED_DATE' => 'CLOSED_DATE',
-			'CREATED_DATE' => 'CREATED_DATE',
-			'ACTIVITY_DATE' => 'ACTIVITY_DATE',
-			default => null,
-		};
-		$date = $field === null ? null : ($task[$field] ?? null);
-
-		return $date instanceof DateTime ? $date->format('d.m H:i') : '';
 	}
 
 	private function replaceUserField(array &$list, string $field, array $users, bool $useUnsetEmptyId = false): void
@@ -1071,10 +1227,40 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		{
 			$currentValues = $result->getData();
 			$currentValues[self::PARAM_CONDITION] = static::extractFilterFromProperties($dialog, $fieldsMap)->getData();
-			$result->setData($currentValues);
+			$result->setData(array_merge(self::getNodeInputsOutsideTheDialog($dialog), $currentValues));
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Inputs the template sets and the dialog has no field for: the save replaces all the properties
+	 * of the node, so these are carried over from the node unless the form sent them itself.
+	 */
+	private static function getNodeInputsOutsideTheDialog(PropertiesDialog $dialog): array
+	{
+		$template = $dialog->getWorkflowTemplate();
+		$node = is_array($template)
+			? \CBPWorkflowTemplateLoader::FindActivityByName($template, $dialog->getActivityName())
+			: null
+		;
+		$nodeProperties = is_array($node['Properties'] ?? null) ? $node['Properties'] : [];
+		$formValues = (array)$dialog->getCurrentValues();
+
+		$inputs = [];
+		foreach ([self::PARAM_ITEM_COLOR, self::PARAM_EXCLUDED_TASK_IDS] as $propertyId)
+		{
+			if (array_key_exists($propertyId, $formValues))
+			{
+				$inputs[$propertyId] = $formValues[$propertyId];
+			}
+			elseif (array_key_exists($propertyId, $nodeProperties))
+			{
+				$inputs[$propertyId] = $nodeProperties[$propertyId];
+			}
+		}
+
+		return $inputs;
 	}
 
 	protected static function getFileName(): string
@@ -1317,6 +1503,232 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return CBPHelper::extractFirstUser($this->{self::PARAM_USER_ID}, $this->getDocumentId());
 	}
 
+	/**
+	 * The task list opened with the very selection the node made: the excluded identifiers are left
+	 * out on purpose, so the list stays a superset of the basket.
+	 */
+	private function buildTasksListUrl(?int $userId): string
+	{
+		if (!$userId)
+		{
+			return '';
+		}
+
+		$pathMaker = (new TaskPathMaker(ownerId: $userId))->addQueryParam('apply_filter', 'Y');
+
+		$roleId = $this->getListUrlRoleId();
+		if ($roleId !== null)
+		{
+			$pathMaker->addQueryParam('ROLEID', $roleId);
+		}
+		elseif ($this->isOriginatorWithOwnTasks())
+		{
+			$pathMaker->addQueryParam('CREATED_BY[0]', (string)$userId);
+		}
+
+		foreach ($this->getListUrlStatuses() as $index => $status)
+		{
+			$pathMaker->addQueryParam('STATUS[' . $index . ']', (string)$status);
+		}
+
+		foreach ($this->getListUrlDateRanges($userId) as $fieldId => [$from, $to])
+		{
+			$pathMaker->addQueryParam($fieldId . '_datesel', 'RANGE');
+			$pathMaker->addQueryParam($fieldId . '_from', $from);
+			$pathMaker->addQueryParam($fieldId . '_to', $to);
+		}
+
+		return $pathMaker->makeEntitiesListPath();
+	}
+
+	private function getListUrlRoleId(): ?string
+	{
+		$role = $this->getSingleTaskRole();
+		if ($role === null || $this->isOriginatorWithOwnTasks())
+		{
+			return null;
+		}
+
+		return Role::ROLE_MAP_ID[$role] ?? null;
+	}
+
+	/**
+	 * The list reads the originator role without tasks set to oneself, while the node keeps them
+	 * unless told to exclude them; the creator field of the list keeps them too.
+	 */
+	private function isOriginatorWithOwnTasks(): bool
+	{
+		return
+			$this->getSingleTaskRole() === MemberTable::MEMBER_TYPE_ORIGINATOR
+			&& !\CBPHelper::getBool($this->{self::PARAM_EXCLUDE_RESPONSIBLE_ROLE})
+		;
+	}
+
+	private function getSingleTaskRole(): ?string
+	{
+		$roles = array_values(array_filter(
+			(array)$this->{self::PARAM_USER_TASK_ROLE},
+			static fn($role): bool => (string)$role !== '',
+		));
+
+		return count($roles) === 1 ? (string)$roles[0] : null;
+	}
+
+	/**
+	 * @return int[] Empty when the node takes every status: the list then needs no status at all.
+	 */
+	private function getListUrlStatuses(): array
+	{
+		$allStatuses = array_keys(self::getTaskStatuses());
+		$statusFilter = array_intersect((array)$this->{self::PARAM_TASK_STATUS_FILTER}, $allStatuses);
+		if (empty($statusFilter) || empty(array_diff($allStatuses, $statusFilter)))
+		{
+			return [];
+		}
+
+		return array_values(array_map('intval', $statusFilter));
+	}
+
+	/**
+	 * @return array<string, array{0: string, 1: string}> The narrowest bounds per date field,
+	 * as the wall time of the employee in the site format — the form the list filter reads.
+	 */
+	private function getListUrlDateRanges(int $userId): array
+	{
+		$conditionItems = (new ConditionGroup($this->{self::PARAM_CONDITION}))->getItems();
+		// Bounds of the list filter intersect, so they cannot express a union.
+		foreach ($conditionItems as [, $joiner])
+		{
+			if ($joiner === ConditionGroup::JOINER_OR)
+			{
+				return [];
+			}
+		}
+
+		$fieldsMap = self::getFilteringFieldsMap();
+		$bounds = [];
+
+		foreach ($conditionItems as [$condition])
+		{
+			$fieldId = $condition->getField();
+			if (!isset($fieldsMap[$fieldId]))
+			{
+				continue;
+			}
+
+			foreach ($this->extractConditionBounds($fieldsMap[$fieldId], $condition) as $side => $dateValue)
+			{
+				$known = $bounds[$fieldId][$side] ?? null;
+				if ($known === null || $this->isNarrowerBound($side, $dateValue, $known))
+				{
+					$bounds[$fieldId][$side] = $dateValue;
+				}
+			}
+		}
+
+		$employeeOffset = $this->getEmployeeTimeOffset($userId);
+		$ranges = [];
+		foreach ($bounds as $fieldId => $sides)
+		{
+			$ranges[$fieldId] = [
+				isset($sides['from']) ? $this->formatListUrlBound($sides['from'], $employeeOffset) : '',
+				isset($sides['to']) ? $this->formatListUrlBound($sides['to'], $employeeOffset) : '',
+			];
+		}
+
+		return $ranges;
+	}
+
+	/**
+	 * The offset of the value is not trusted: timeman serializes an absolute one, and the list reads
+	 * the bounds in the zone of the employee.
+	 */
+	private function formatListUrlBound(Value\Date $bound, int $employeeOffset): string
+	{
+		if (!$bound instanceof Value\DateTime)
+		{
+			return (string)$bound;
+		}
+
+		return date(DateTime::getFormat(), $bound->getTimestamp() + $employeeOffset);
+	}
+
+	protected function getEmployeeTimeOffset(int $userId): int
+	{
+		return (int)\CTimeZone::GetOffset($userId, true);
+	}
+
+	/**
+	 * @return array<string, Value\Date>
+	 */
+	private function extractConditionBounds(array $fieldProperties, Condition $condition): array
+	{
+		$value = $condition->getValue();
+		$bounds = match ($condition->getOperator())
+		{
+			\Bitrix\Bizproc\Activity\Operator\BetweenOperator::getCode() => [
+				'from' => is_array($value) ? ($value[0] ?? null) : $value,
+				'to' => is_array($value) ? ($value[1] ?? null) : null,
+			],
+			'>', '>=' => ['from' => $value],
+			'<', '<=' => ['to' => $value],
+			default => [],
+		};
+
+		$dateValues = [];
+		foreach ($bounds as $side => $bound)
+		{
+			$dateValue = $this->makeConditionDateValue($fieldProperties, $bound);
+			if ($dateValue !== null)
+			{
+				$dateValues[$side] = $dateValue;
+			}
+		}
+
+		return $dateValues;
+	}
+
+	private function makeConditionDateValue(array $fieldProperties, mixed $value): ?Value\Date
+	{
+		// As a string the value object keeps its wall time alone and loses the moment.
+		if ($value instanceof Value\Date)
+		{
+			return $value->getTimestamp() === null ? null : $value;
+		}
+
+		if ($value === null || is_array($value) || (string)$value === '')
+		{
+			return null;
+		}
+
+		$extractionResult = $this->extractValue($fieldProperties, (string)$value);
+		if (!$extractionResult->isSuccess())
+		{
+			return null;
+		}
+
+		$extractedValue = $extractionResult->getData()['extractedValue'];
+		if (!is_string($extractedValue) || $extractedValue === '')
+		{
+			return null;
+		}
+
+		$dateValue = ($fieldProperties['Type'] ?? '') === FieldType::DATE
+			? new Value\Date($extractedValue)
+			: new Value\DateTime($extractedValue)
+		;
+
+		return $dateValue->getTimestamp() === null ? null : $dateValue;
+	}
+
+	private function isNarrowerBound(string $side, Value\Date $candidate, Value\Date $known): bool
+	{
+		return $side === 'from'
+			? $candidate->getTimestamp() > $known->getTimestamp()
+			: $candidate->getTimestamp() < $known->getTimestamp()
+		;
+	}
+
 	private function getExcludedTaskFilter(): array
 	{
 		$excludedTaskIds = array_values(array_filter(
@@ -1406,6 +1818,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return match ($propertyId)
 		{
 			self::PARAM_TASK_LIMIT => self::TASKS_LIMIT_MIN,
+			self::PARAM_TASK_TOTAL_LIMIT => self::TASKS_TOTAL_LIMIT_MIN,
 			self::PARAM_MESSAGE_COUNT_LIMIT => self::MESSAGE_COUNT_MIN,
 			self::PARAM_MESSAGES_DAYS => self::MESSAGES_DAYS_MIN,
 			default => null,
@@ -1417,6 +1830,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return match ($propertyId)
 		{
 			self::PARAM_TASK_LIMIT => self::TASKS_LIMIT_MAX,
+			self::PARAM_TASK_TOTAL_LIMIT => self::TASKS_TOTAL_LIMIT_MAX,
 			self::PARAM_MESSAGE_COUNT_LIMIT => self::MAX_MESSAGE_COUNT_LIMIT_MAX,
 			self::PARAM_MESSAGES_DAYS => self::MESSAGES_DAYS_MAX,
 			default => null,

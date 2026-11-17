@@ -34,6 +34,7 @@ class ItemService implements Errorable
 	const ERROR_COULD_NOT_MOVE_ITEM_BEFORE = 'TASKS_IS_16';
 	const ERROR_COULD_NOT_GET_LIST = 'ITEM_LIST_01';
 	private const MIN_SORT_STEP = 0.001;
+	private const QUERY_CHUNK_SIZE = 300;
 
 	private $errorCollection;
 
@@ -236,6 +237,50 @@ class ItemService implements Errorable
 			}
 
 			return $items;
+		}
+		catch (\Exception $exception)
+		{
+			$this->errorCollection->setError(
+				new Error($exception->getMessage(), self::ERROR_COULD_NOT_READ_ALL_ITEMS)
+			);
+
+			return [];
+		}
+	}
+
+	/**
+	 * @param int[] $itemIds
+	 * @return array<int, int> Item id to group id map.
+	 */
+	public function getGroupIdsByItemIds(array $itemIds): array
+	{
+		$itemIds = array_values(array_unique(array_filter(
+			array_map('intval', $itemIds),
+			static fn(int $itemId): bool => $itemId > 0,
+		)));
+		if (!$itemIds)
+		{
+			return [];
+		}
+
+		try
+		{
+			$groupIds = [];
+			foreach (array_chunk($itemIds, self::QUERY_CHUNK_SIZE) as $itemIdsChunk)
+			{
+				$items = ItemTable::query()
+					->setSelect(['ID', 'GROUP_ID' => 'ENTITY.GROUP_ID'])
+					->whereIn('ID', $itemIdsChunk)
+					->exec()
+				;
+
+				while ($item = $items->fetch())
+				{
+					$groupIds[(int)$item['ID']] = (int)$item['GROUP_ID'];
+				}
+			}
+
+			return $groupIds;
 		}
 		catch (\Exception $exception)
 		{

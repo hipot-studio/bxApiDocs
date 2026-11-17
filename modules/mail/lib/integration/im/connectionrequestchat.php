@@ -388,3 +388,4 @@ class ConnectionRequestChat
 		return array_values(array_unique($chatIds));
 	}
 }
+

@@ -8,11 +8,11 @@ use Bitrix\Tasks\V2\Internal\Entity\Template\TemplateReplicateParams;
 
 interface TemplateReplicateParamsRepositoryInterface
 {
-	public function getByTaskId(int $taskId): ?TemplateReplicateParams;
+	public function getByTaskId(int $taskId, bool $includeDeleted = false): ?TemplateReplicateParams;
 
 	/** @return array<int, TemplateReplicateParams> */
 	public function getByTaskIds(array $taskIds): array;
-	public function getByTemplateId(int $templateId): ?TemplateReplicateParams;
+	public function getByTemplateId(int $templateId, bool $includeDeleted = false): ?TemplateReplicateParams;
 
 	/** @return array<int, TemplateReplicateParams> */
 	public function getByTemplateIds(array $templateIds): array;

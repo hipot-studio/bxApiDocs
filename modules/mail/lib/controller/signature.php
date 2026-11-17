@@ -582,3 +582,4 @@ class Signature extends Base
 		}
 	}
 }
+

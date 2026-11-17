@@ -109,6 +109,92 @@ class Group extends Disk
 	}
 
 	/**
+	 * Loads the rows of the groups behind the proxies with one query, so that their titles and
+	 * images are answered without a query per group. Proxies with a loaded row are not reread;
+	 * a group missing from the table gets the same empty row getGroup() would keep for it.
+	 *
+	 * Trade-off: unlike \CSocNetGroup::getByID() in getGroup(), the batch reads the table directly,
+	 * past its static cache and CPHPCache. It costs one query per batch instead of one per group,
+	 * and the rows are fresher than a cached copy could be.
+	 *
+	 * @internal For the docked uploader only.
+	 * @param Group[] $proxyTypes Proxies of group storages.
+	 * @return array<int, int> Id of group => IMAGE_ID, for every passed group with an image.
+	 */
+	public static function preloadGroups(array $proxyTypes): array
+	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return [];
+		}
+
+		/** @var array<int, Group[]> $toLoad */
+		$toLoad = [];
+		$imageIds = [];
+		foreach ($proxyTypes as $proxyType)
+		{
+			if (!$proxyType instanceof self)
+			{
+				continue;
+			}
+
+			$groupId = (int)$proxyType->entityId;
+			if ($groupId <= 0)
+			{
+				continue;
+			}
+
+			if ($proxyType->group !== null)
+			{
+				$imageId = (int)($proxyType->group['IMAGE_ID'] ?? 0);
+				if ($imageId > 0)
+				{
+					$imageIds[$groupId] = $imageId;
+				}
+
+				continue;
+			}
+
+			$toLoad[$groupId][] = $proxyType;
+		}
+
+		if (empty($toLoad))
+		{
+			return $imageIds;
+		}
+
+		$rows = [];
+		$query = \CSocNetGroup::getList(
+			[],
+			['ID' => array_keys($toLoad)],
+			false,
+			false,
+			['ID', 'NAME', 'IMAGE_ID'],
+		);
+		while ($query && $row = $query->getNext())
+		{
+			$rows[(int)$row['ID']] = $row;
+		}
+
+		foreach ($toLoad as $groupId => $proxies)
+		{
+			$row = $rows[$groupId] ?? [];
+			foreach ($proxies as $proxyType)
+			{
+				$proxyType->group = $row;
+			}
+
+			$imageId = (int)($row['IMAGE_ID'] ?? 0);
+			if ($imageId > 0)
+			{
+				$imageIds[$groupId] = $imageId;
+			}
+		}
+
+		return $imageIds;
+	}
+
+	/**
 	 * Return work group params.
 	 * @return array|null
 	 */

@@ -177,3 +177,4 @@ class Label extends Controller
 		return (int)($this->getCurrentUser()?->getId() ?? 0);
 	}
 }
+

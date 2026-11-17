@@ -458,3 +458,4 @@ class ScheduledMessage extends Controller
 		];
 	}
 }
+

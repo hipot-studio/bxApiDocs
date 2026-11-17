@@ -26,7 +26,6 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareParents;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PreparePipeline;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PreparePriority;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareSiteId;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareStage;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareStatus;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareTags;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Prepare\PrepareTitle;
@@ -63,7 +62,6 @@ class PrepareField implements PrepareFieldInterface
 			PrepareGuid::class,
 			PrepareSiteId::class,
 			PrepareGroup::class,
-			PrepareStage::class,
 			PrepareCreator::class,
 			PrepareTitle::class,
 			PrepareDescription::class,

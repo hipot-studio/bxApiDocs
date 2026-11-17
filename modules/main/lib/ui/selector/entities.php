@@ -27,6 +27,9 @@ class Entities
 	const ENTITY_TYPE_DEPARTMENTS = 'DEPARTMENTS';
 
 	const LIST_USER_LIMIT = 11;
+	public const LAST_SORT_LIMIT = 1000;
+	/** CODE_TYPE of FinderDestTable read with a limit of their own; codes of any other type or of none share one more. */
+	private const LAST_SORT_CODE_TYPES = ['U', 'SG', 'D', 'CRM'];
 
 	public static function getList($params = array())
 	{
@@ -325,7 +328,7 @@ class Entities
 		}
 
 		$cacheTtl = defined("BX_COMP_MANAGED_CACHE") ? 3153600 : 3600*4;
-		$cacheId = 'dest_sort_2'.$userId.serialize($params);
+		$cacheId = 'dest_sort_3'.$userId.serialize($params);
 		$cacheDir = self::getCacheDir([
 			'userId' => $userId,
 		]);
@@ -455,23 +458,48 @@ class Entities
 				$dataAdditionalUsers['UCRM'] = $emailCrmUserCodeList;
 			}
 
-			$res = FinderDestTable::getList(array(
-				'order' => $order,
-				'filter' => $filter,
-				'select' => array(
-					'CONTEXT',
-					'CODE',
-					'LAST_USE_DATE'
-				),
-				'runtime' => $runtime
-			));
+			$destAll = self::fetchLastSortRows($filter, $order, $runtime);
 
-			$destAll = array();
-
-			while($dest = $res->fetch())
+			// the shared limit is filled, one code type could push out the others: every type gets its own limit
+			if (
+				count($destAll) >= self::LAST_SORT_LIMIT
+				&& empty($params["CODE_TYPE"])
+			)
 			{
-				$dest["LAST_USE_DATE"] = MakeTimeStamp($dest["LAST_USE_DATE"]->toString());
-				$destAll[] = $dest;
+				$destAll = array();
+				foreach (self::LAST_SORT_CODE_TYPES as $codeType)
+				{
+					if ($codeType === 'CRM' && isset($filter["!=CODE_TYPE"]))
+					{
+						continue;
+					}
+
+					$destAll = array_merge(
+						$destAll,
+						self::fetchLastSortRows($filter + array("=CODE_TYPE" => $codeType), $order, $runtime)
+					);
+				}
+
+				// a code type missing from the list, like a new branch of CODE_TYPE, is read with the codes without a type
+				$otherTypesFilter = $filter;
+				$otherTypesFilter[] = array(
+					"LOGIC" => "OR",
+					"=CODE_TYPE" => null,
+					"!@CODE_TYPE" => self::LAST_SORT_CODE_TYPES,
+				);
+				$destAll = array_merge($destAll, self::fetchLastSortRows($otherTypesFilter, $order, $runtime));
+
+				// the order of the query: the rows of DEST_CONTEXT first, then the newest; the keys are computed once per row
+				$destContext = mb_strtoupper((string)($params["DEST_CONTEXT"] ?? ''));
+				$sortKeys = array_map(
+					static fn(array $dest): array => [mb_strtoupper($dest["CONTEXT"]) === $destContext, $dest["LAST_USE_DATE"]],
+					$destAll
+				);
+				uksort(
+					$destAll,
+					static fn(int $a, int $b): int => $sortKeys[$b] <=> $sortKeys[$a]
+				);
+				$destAll = array_values($destAll);
 			}
 
 			$cache->endDataCache(array(
@@ -510,6 +538,33 @@ class Entities
 		$result['DATA_ADDITIONAL'] = $dataAdditionalUsers;
 
 		return $result;
+	}
+
+	/**
+	 * @return array[] Rows of CONTEXT, CODE and LAST_USE_DATE as a timestamp, no more than LAST_SORT_LIMIT.
+	 */
+	private static function fetchLastSortRows(array $filter, array $order, array $runtime): array
+	{
+		$res = FinderDestTable::getList(array(
+			'order' => $order,
+			'filter' => $filter,
+			'select' => array(
+				'CONTEXT',
+				'CODE',
+				'LAST_USE_DATE'
+			),
+			'runtime' => $runtime,
+			'limit' => self::LAST_SORT_LIMIT,
+		));
+
+		$rows = array();
+		while($dest = $res->fetch())
+		{
+			$dest["LAST_USE_DATE"] = MakeTimeStamp($dest["LAST_USE_DATE"]->toString());
+			$rows[] = $dest;
+		}
+
+		return $rows;
 	}
 
 	public static function fillLastDestination($destSortData, $params = array())

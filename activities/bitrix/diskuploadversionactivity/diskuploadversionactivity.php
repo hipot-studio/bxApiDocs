@@ -77,10 +77,8 @@ class CBPDiskUploadVersionActivity
 
 		foreach ($files as $versionFile)
 		{
-			//$versionFile = (int) $versionFile; // some documents return file field value based on file path, CFile::MakeFileArray handles this situation
-
-			$fileArray = CFile::MakeFileArray($versionFile);
-			if (!is_array($fileArray))
+			$fileArray = self::makeSourceFileArray($versionFile);
+			if ($fileArray === null)
 			{
 				$this->WriteToTrackingService(GetMessage('BPDUV_SOURCE_FILE_ERROR'));
 				continue;
@@ -221,6 +219,46 @@ class CBPDiskUploadVersionActivity
 		$arCurrentActivity["Properties"] = $arProperties;
 
 		return true;
+	}
+
+	/**
+	 * Only an existing b_file id is accepted: a string reaches CFile::MakeFileArray as a local path or a URL.
+	 */
+	private static function makeSourceFileArray(mixed $value): ?array
+	{
+		$fileId = self::normalizeSourceFileId($value);
+		// MakeFileArray falls back to the path branch for an id missing in b_file
+		if ($fileId === null || !CFile::GetFileArray($fileId))
+		{
+			return null;
+		}
+
+		$fileArray = CFile::MakeFileArray($fileId);
+
+		return is_array($fileArray) && !empty($fileArray['tmp_name']) ? $fileArray : null;
+	}
+
+	private static function normalizeSourceFileId(mixed $value): ?int
+	{
+		if (is_int($value))
+		{
+			return $value > 0 ? $value : null;
+		}
+
+		if (!is_string($value))
+		{
+			return null;
+		}
+
+		$value = trim($value, " \t\r\n");
+		if (preg_match('/^[0-9]+$/D', $value) !== 1)
+		{
+			return null;
+		}
+
+		$fileId = (int)$value;
+
+		return $fileId > 0 ? $fileId : null;
 	}
 }
 ?>

@@ -12,6 +12,7 @@ use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatNotice;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatNoticeRegistry;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatPlainText;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatSiteTitleProvider;
+use Bitrix\Landing\Integration\AiAssistant\Service\ImageProviderRefusalText;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -85,6 +86,7 @@ final class AiSiteChatTrigger extends BaseAction
 			AiSiteChatNotice::TYPE_CREATED => (string)Loc::getMessage('LANDING_AI_SITE_CHAT_NOTICE_CREATED', $replace),
 			AiSiteChatNotice::TYPE_FAILED => (string)Loc::getMessage('LANDING_AI_SITE_CHAT_NOTICE_FAILED'),
 			AiSiteChatNotice::TYPE_DELETED => (string)Loc::getMessage('LANDING_AI_SITE_CHAT_NOTICE_DELETED', $replace),
+			AiSiteChatNotice::TYPE_IMAGES_REFUSED => ImageProviderRefusalText::build($notice->providerName),
 			default => '',
 		};
 	}

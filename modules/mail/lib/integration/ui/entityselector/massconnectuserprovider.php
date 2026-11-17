@@ -69,7 +69,7 @@ class MassConnectUserProvider extends UserProvider
 		unset($options['departmentId'], $options['ignoreUserWhitelist']);
 
 		$query = static::buildUserQuery($options);
-		$query->where('IS_REAL_USER', true);
+		$query->where('REAL_USER', 'expr', true);
 
 		if ($currentUserId <= 0 || !static::includeHumanResources())
 		{
@@ -196,3 +196,4 @@ class MassConnectUserProvider extends UserProvider
 		return $query->where('ID', 0);
 	}
 }
+

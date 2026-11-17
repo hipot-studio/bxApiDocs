@@ -15,7 +15,10 @@ class SetDailyTaskRecurrenceTool extends BaseRecurrenceTool
 	{
 		return
 			'Sets up a daily recurrence for a task. '
-			. 'Allows specifying an interval and can restrict the recurrence to workdays only.'
+			. 'Allows specifying an interval and can restrict the recurrence to workdays only. '
+			. 'Provide exactly one of templateId or taskId. When taskId identifies a generated instance, '
+			. 'this updates the recurrence rule of the source template instead of creating a new '
+			. 'series from the instance. Saving the rule activates recurrence, including for an inactive template.'
 		;
 	}
 

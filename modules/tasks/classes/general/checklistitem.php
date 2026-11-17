@@ -769,6 +769,21 @@ final class CTaskCheckListItem extends CTaskSubItemAbstract
 					$returnValue[] = $checkListItem->getData(false);
 				}
 			}
+			elseif ($methodName === 'deleteall')
+			{
+				[$taskId] = $parsedArguments;
+				$deleteResult = TaskCheckListFacade::deleteAll($taskId, $executiveUserId);
+				if (!$deleteResult->isSuccess() && $deleteResult->getErrors())
+				{
+					/** @noinspection PhpDeprecationInspection */
+					throw new TasksException(
+						$deleteResult->getErrors()->getMessages()[0],
+						TasksException::TE_ACTION_FAILED_TO_BE_PROCESSED
+					);
+				}
+
+				$returnValue = true;
+			}
 			else
 			{
 				$returnValue = call_user_func_array(['self', $methodName], $parsedArguments);
@@ -917,6 +932,16 @@ final class CTaskCheckListItem extends CTaskSubItemAbstract
 						],
 						[
 							'description' => 'itemId',
+							'type'        => 'integer',
+						],
+					],
+				],
+				'deleteall'       => [
+					'staticMethod'         => true,
+					'mandatoryParamsCount' => 1,
+					'params'               => [
+						[
+							'description' => 'taskId',
 							'type'        => 'integer',
 						],
 					],

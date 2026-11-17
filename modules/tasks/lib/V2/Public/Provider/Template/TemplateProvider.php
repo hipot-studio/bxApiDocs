@@ -192,7 +192,7 @@ class TemplateProvider
 	{
 		return $this->templateReadRepository->getList(
 			$select->mapToRepository(),
-			new List\Filter([['ID', '=', $id]]),
+			new List\Filter([[List\Field::Id, '=', $id]]),
 			new List\Order(),
 			1,
 		)->findOneById($id);

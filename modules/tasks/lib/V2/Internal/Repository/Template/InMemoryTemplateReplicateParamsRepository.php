@@ -25,14 +25,20 @@ class InMemoryTemplateReplicateParamsRepository implements TemplateReplicatePara
 		$this->repository = $repository;
 	}
 
-	public function getByTaskId(int $taskId): ?TemplateReplicateParams
+	public function getByTaskId(int $taskId, bool $includeDeleted = false): ?TemplateReplicateParams
 	{
 		if (isset($this->cacheByTaskId[$taskId]))
 		{
-			return $this->cacheByTaskId[$taskId];
+			return $includeDeleted || !$this->cacheByTaskId[$taskId]->templateDeleted
+				? $this->cacheByTaskId[$taskId]
+				: null
+			;
 		}
 
-		$templateReplicateParams = $this->repository->getByTaskId($taskId);
+		$templateReplicateParams = $includeDeleted
+			? $this->repository->getByTaskId($taskId, includeDeleted: true)
+			: $this->repository->getByTaskId($taskId)
+		;
 		if ($templateReplicateParams === null)
 		{
 			return null;
@@ -74,7 +80,7 @@ class InMemoryTemplateReplicateParamsRepository implements TemplateReplicatePara
 
 		foreach ($taskIds as $taskId)
 		{
-			if (isset($this->cacheByTaskId[$taskId]))
+			if (isset($this->cacheByTaskId[$taskId]) && !$this->cacheByTaskId[$taskId]->templateDeleted)
 			{
 				$result[$taskId] = $this->cacheByTaskId[$taskId];
 			}
@@ -83,14 +89,20 @@ class InMemoryTemplateReplicateParamsRepository implements TemplateReplicatePara
 		return $result;
 	}
 
-	public function getByTemplateId(int $templateId): ?TemplateReplicateParams
+	public function getByTemplateId(int $templateId, bool $includeDeleted = false): ?TemplateReplicateParams
 	{
 		if (isset($this->cacheByTemplateId[$templateId]))
 		{
-			return $this->cacheByTemplateId[$templateId];
+			return $includeDeleted || !$this->cacheByTemplateId[$templateId]->templateDeleted
+				? $this->cacheByTemplateId[$templateId]
+				: null
+			;
 		}
 
-		$templateReplicateParams = $this->repository->getByTemplateId($templateId);
+		$templateReplicateParams = $includeDeleted
+			? $this->repository->getByTemplateId($templateId, includeDeleted: true)
+			: $this->repository->getByTemplateId($templateId)
+		;
 		if ($templateReplicateParams === null)
 		{
 			return null;
@@ -132,7 +144,7 @@ class InMemoryTemplateReplicateParamsRepository implements TemplateReplicatePara
 
 		foreach ($templateIds as $templateId)
 		{
-			if (isset($this->cacheByTemplateId[$templateId]))
+			if (isset($this->cacheByTemplateId[$templateId]) && !$this->cacheByTemplateId[$templateId]->templateDeleted)
 			{
 				$result[$templateId] = $this->cacheByTemplateId[$templateId];
 			}

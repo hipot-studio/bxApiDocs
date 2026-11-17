@@ -40,6 +40,18 @@ class TaskUpdateHandler
 			->getByIds([$command->config->getUserId()])
 			->findOneById($command->config->getUserId())
 		;
+		$creatorChanged = array_key_exists('creatorId', $changes) || array_key_exists('creator', $changes);
+		unset($changes['creatorId'], $changes['creator']);
+
+		if ($creatorChanged)
+		{
+			$this->handleTaskMembersChanged(
+				task: $command->task,
+				triggeredBy: $triggeredBy,
+				taskBeforeUpdate: $taskBeforeUpdate,
+				key: 'creator',
+			);
+		}
 
 		foreach ($changes as $key => $change)
 		{
@@ -50,12 +62,6 @@ class TaskUpdateHandler
 					triggeredBy: $triggeredBy,
 					taskBeforeUpdate: $taskBeforeUpdate,
 					key: 'responsible',
-				),
-				'creator' => $this->handleTaskMembersChanged(
-					task: $command->task,
-					triggeredBy: $triggeredBy,
-					taskBeforeUpdate: $taskBeforeUpdate,
-					key: 'creator',
 				),
 				'deadlineTs' => $this->chatNotification->notify(
 					type: NotificationType::DeadlineChanged,
@@ -135,7 +141,8 @@ class TaskUpdateHandler
 					'triggeredBy' => $triggeredBy,
 					'oldResponsible' => $taskBeforeUpdate->responsible,
 					'newResponsible' => $task->responsible,
-					'isNewMember' => !$taskBeforeUpdate->getMembers()->findOneById($task->responsible->id),
+					'isNewMember' => $task->responsible?->id !== null
+						&& !$taskBeforeUpdate->getMembers()->findOneById($task->responsible->id),
 				],
 			),
 			'creator' => $this->chatNotification->notify(
@@ -176,8 +183,8 @@ class TaskUpdateHandler
 		{
 			$this->eventDispatcher->dispatch(new OnCreatorUpdatedEvent(
 				task: $task,
-				newCreator: $task->creator,
-				previousCreator: $taskBeforeUpdate->creator,
+				newCreatorId: $task->getCreatorId() ?? 0,
+				previousCreatorId: $taskBeforeUpdate->getCreatorId() ?? 0,
 			));
 		}
 	}

@@ -15,12 +15,12 @@ use Bitrix\Main\UI\Viewer\Renderer;
 use Bitrix\Main\UI\Viewer\Transformation\TransformerManager;
 
 /**
- * Tells whether the picker may offer the standard viewer for a file. Linked objects and stored document
+ * Tells whether the picker may offer the standard viewer for a file. Linked objects and stored file
  * metadata are loaded in batches, so no listed item costs an individual query.
  */
 final class ViewerSupport
 {
-	/** @var array<int, array{CONTENT_TYPE: string, FILE_SIZE: int}|null> */
+	/** @var array<int, array{CONTENT_TYPE: string, FILE_SIZE: int, WIDTH: int, HEIGHT: int}|null> */
 	private array $fileDataByFileId = [];
 	private ?TransformerManager $transformerManager = null;
 
@@ -31,8 +31,8 @@ final class ViewerSupport
 	}
 
 	/**
-	 * Resolves linked objects and reads document metadata once for the set. A link owns no stored file of
-	 * its own, so both reads use the object behind it.
+	 * Resolves linked objects and reads document and extensionless metadata once for the set.
+	 * A link owns no stored file of its own, so both reads use the object behind it.
 	 *
 	 * @param array<BaseObject> $objects
 	 */
@@ -42,7 +42,10 @@ final class ViewerSupport
 		$this->fileDataByFileId = [];
 		foreach ($objects as $object)
 		{
-			if (!$object instanceof File || !TypeFile::isDocument($object->getName()))
+			if (
+				!$object instanceof File
+				|| (!TypeFile::isDocument($object->getName()) && GetFileExtension($object->getName()) !== '')
+			)
 			{
 				continue;
 			}
@@ -60,7 +63,7 @@ final class ViewerSupport
 		}
 
 		$rows = FileTable::query()
-			->setSelect(['ID', 'CONTENT_TYPE', 'FILE_SIZE'])
+			->setSelect(['ID', 'CONTENT_TYPE', 'FILE_SIZE', 'WIDTH', 'HEIGHT'])
 			->whereIn('ID', array_keys($this->fileDataByFileId))
 			->exec()
 		;
@@ -69,6 +72,8 @@ final class ViewerSupport
 			$this->fileDataByFileId[(int)$row['ID']] = [
 				'CONTENT_TYPE' => (string)$row['CONTENT_TYPE'],
 				'FILE_SIZE' => (int)$row['FILE_SIZE'],
+				'WIDTH' => (int)$row['WIDTH'],
+				'HEIGHT' => (int)$row['HEIGHT'],
 			];
 		}
 	}
@@ -86,8 +91,25 @@ final class ViewerSupport
 			return $this->canPreviewDocument($file, $fileId);
 		}
 
+		$storedFileData = null;
 		$contentType = TypeFile::getMimeTypeByFilename((string)$file->getName());
-		$type = FileAttributes::resolveViewerTypeByFileModel($file, $contentType, $fileId);
+		if (GetFileExtension($file->getName()) === '')
+		{
+			$storedFileData = $this->fileDataByFileId[$fileId] ?? null;
+			if ($storedFileData === null)
+			{
+				return false;
+			}
+
+			$contentType = $storedFileData['CONTENT_TYPE'];
+			$extension = TypeFile::getExtensionByMimeType($contentType);
+			if ($extension !== null && TypeFile::isDocument('file.' . $extension))
+			{
+				return $this->canPreviewDocument($file, $fileId);
+			}
+		}
+
+		$type = FileAttributes::resolveViewerTypeByFileModel($file, $contentType, $fileId, $storedFileData);
 
 		// Both the stub and the size-restricted renderer report this type: no viewer renders the file.
 		if ($type === Renderer\Stub::getJsType())

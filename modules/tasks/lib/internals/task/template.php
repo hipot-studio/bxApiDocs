@@ -173,6 +173,8 @@ class TemplateTable extends DataManager
 			(new IntegerField('TPARAM_REPLICATION_COUNT'))
 				->configureDefaultValue(0),
 
+			(new IntegerField('REPLICATE_TYPE')),
+
 			(new TextField('ZOMBIE'))
 				->configureDefaultValue('N'),
 

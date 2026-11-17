@@ -119,3 +119,4 @@ class GetEmailThreadTool extends ToolContract
 		return $result;
 	}
 }
+

@@ -17,8 +17,10 @@ use Bitrix\Intranet\Internal\Integration\Bitrix24\NetworkLogoutUrlProvider;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
+use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Integration\Security\RecoveryCodes;
+use Bitrix\Intranet\Internal\Service\Otp\ChannelRemovalService;
 use Bitrix\Intranet\Internal\Service\Otp\DeferredSkipDeviceConnectAccess;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
@@ -28,7 +30,10 @@ use Bitrix\Intranet\Internal\Service\Otp\SkipDeviceConnectLockException;
 use Bitrix\Intranet\Internal\Service\Otp\TrustedDeviceCheckService;
 use Bitrix\Intranet\Public\Command\Otp\Notification\SendRequestRecoverAccessCommand;
 use Bitrix\Intranet\Public\Command\Otp\SetLegacyOtpAllowedCommand;
+use Bitrix\Intranet\Public\Enum\Otp\MessengerConfirmationTransport;
 use Bitrix\Intranet\Public\Provider\Otp\DayListProvider;
+use Bitrix\Intranet\Public\Service\Otp\MessengerConfirmationEndpoint;
+use Bitrix\Intranet\Public\Type\Otp\OtpChannel;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
@@ -42,6 +47,7 @@ use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
@@ -59,8 +65,25 @@ use Bitrix\Intranet\Entity\User;
 
 class Otp extends Controller
 {
+	private const CHANNEL_REMOVAL_ERROR_PHRASES = [
+		ChannelRemovalService::ERROR_NO_RIGHTS => 'INTRANET_CONTROLLER_OTP_ERROR_CHANNEL_REMOVAL_NO_RIGHTS',
+		ChannelRemovalService::ERROR_NO_TRUSTED_DEVICE => 'INTRANET_CONTROLLER_OTP_ERROR_CHANNEL_REMOVAL_NO_TRUSTED_DEVICE',
+		ChannelRemovalService::ERROR_CHANNEL_EMPTY => 'INTRANET_CONTROLLER_OTP_ERROR_CHANNEL_REMOVAL_CHANNEL_EMPTY',
+		ChannelRemovalService::ERROR_FAILED => 'INTRANET_CONTROLLER_OTP_ERROR_CHANNEL_REMOVAL_FAILED',
+	];
+
 	public function configureActions(): array
 	{
+		$messengerConfirmation = [
+			'-prefilters' => [
+				Authentication::class,
+				HttpMethod::class,
+			],
+			'+prefilters' => [
+				new HttpMethod([HttpMethod::METHOD_POST]),
+			],
+		];
+
 		return [
 			...parent::configureActions(),
 			'activePushOtp' => [
@@ -149,6 +172,14 @@ class Otp extends Controller
 			'sendEmailConfirmation' => $this->getDeferredContactActionConfig(),
 			'confirmationEmail' => $this->getDeferredContactActionConfig(),
 			'isTrusted' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			],
+			'sendMessengerConfirmationRequest' => $messengerConfirmation,
+			'getMessengerConfirmationRequestStatus' => $messengerConfirmation,
+			'cancelMessengerConfirmationRequest' => $messengerConfirmation,
+			'removeChannel' => [
 				'+prefilters' => [
 					new HttpMethod([HttpMethod::METHOD_POST]),
 				],
@@ -569,6 +600,11 @@ class Otp extends Controller
 	protected function isSecurityModuleAvailable(): bool
 	{
 		return Loader::includeModule('security');
+	}
+
+	protected function isOtpEnabled(): bool
+	{
+		return (new OtpSettings())->isEnabled();
 	}
 
 	protected function createPersonalOtp(User $user): PersonalOtp
@@ -1260,6 +1296,75 @@ class Otp extends Controller
 		return (new PersonalOtp($user))->getOtpConfig();
 	}
 
+	public function removeChannelAction(User $user, string $channel): ?array
+	{
+		$otpChannel = $this->prepareChannelRemoval($channel);
+		if ($otpChannel === null)
+		{
+			return null;
+		}
+
+		$result = $this->createChannelRemovalService()->removeChannel($user, $otpChannel);
+
+		if (!$result->isSuccess())
+		{
+			$this->addChannelRemovalErrors($result);
+
+			return null;
+		}
+
+		return [
+			'removed' => true,
+			'phoneNumber' => null,
+			'email' => null,
+			'hasTrustedDeviceBinding' => $result->getData()['hasTrustedDeviceBinding'],
+		];
+	}
+
+	protected function createChannelRemovalService(): ChannelRemovalService
+	{
+		return new ChannelRemovalService();
+	}
+
+	private function prepareChannelRemoval(string $channel): ?OtpChannel
+	{
+		if (!$this->isSecurityModuleAvailable())
+		{
+			$this->addError(new Error('Module Security is not installed'));
+
+			return null;
+		}
+
+		if (!$this->isOtpEnabled())
+		{
+			$this->addError(new Error('Two-factor authentication is disabled', 'CHANNEL_REMOVAL_OTP_DISABLED'));
+
+			return null;
+		}
+
+		$otpChannel = OtpChannel::tryFrom($channel);
+		if ($otpChannel === null)
+		{
+			$this->addError(new Error('Unsupported channel', 'CHANNEL_REMOVAL_INVALID_CHANNEL'));
+		}
+
+		return $otpChannel;
+	}
+
+	private function addChannelRemovalErrors(Result $result): void
+	{
+		foreach ($result->getErrors() as $error)
+		{
+			$phraseCode = self::CHANNEL_REMOVAL_ERROR_PHRASES[$error->getCode()] ?? null;
+
+			$this->addError(
+				$phraseCode === null
+					? $error
+					: new Error((string)Loc::getMessage($phraseCode), $error->getCode()),
+			);
+		}
+	}
+
 	public function logoutAllAction(
 		User $user,
 		string $keepTrustedDevice = 'N',
@@ -1399,5 +1504,43 @@ class Otp extends Controller
 		$httpResponse->setHeaders($headers);
 
 		return $httpResponse;
+	}
+
+	public function sendMessengerConfirmationRequestAction(): ?array
+	{
+		return $this->respondMessengerConfirmation(
+			$this->getMessengerConfirmationEndpoint()->createRequest(withPullConfig: true),
+		);
+	}
+
+	public function getMessengerConfirmationRequestStatusAction(string $requestId): ?array
+	{
+		return $this->respondMessengerConfirmation(
+			$this->getMessengerConfirmationEndpoint()->readStatus($requestId),
+		);
+	}
+
+	public function cancelMessengerConfirmationRequestAction(string $requestId): ?array
+	{
+		return $this->respondMessengerConfirmation(
+			$this->getMessengerConfirmationEndpoint()->cancel($requestId),
+		);
+	}
+
+	private function getMessengerConfirmationEndpoint(): MessengerConfirmationEndpoint
+	{
+		return new MessengerConfirmationEndpoint(MessengerConfirmationTransport::Web->getSessionKey());
+	}
+
+	private function respondMessengerConfirmation(Result $result): ?array
+	{
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
 	}
 }

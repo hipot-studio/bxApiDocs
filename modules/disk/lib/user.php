@@ -108,6 +108,26 @@ class User extends Internals\Model
 	}
 
 	/**
+	 * Same as {@see Internals\Model::loadBatchById()}, one query for the whole batch, but with the narrow select
+	 * of {@see User::loadById()}, {@see User::getSelectForLoad()}, instead of every column of b_user: the models
+	 * it puts into the cache are the ones the single path would build. Cached users keep their models.
+	 * @param array<array-key, int> $ids Ids of users.
+	 * @return static[]
+	 */
+	public static function loadBatchByIdAsSingle(array $ids): array
+	{
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		return static::getModelList([
+			'select' => static::getSelectForLoad(),
+			'filter' => ['@ID' => $ids],
+		]);
+	}
+
+	/**
 	 * Returns attributes of the authorized user which the session already keeps, so the model is built without reading b_user.
 	 * ACTIVE, WORK_POSITION and LID are absent there; EXTERNAL_AUTH_ID is skipped as the kernel leaves a stale value
 	 * in a live session, {@see \CUser::Update()}. All of them are read on demand, {@see User::loadDeferredAttribute()}.

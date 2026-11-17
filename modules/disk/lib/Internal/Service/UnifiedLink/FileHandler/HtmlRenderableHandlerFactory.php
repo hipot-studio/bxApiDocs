@@ -15,6 +15,9 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownTabPolicy;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\ClientContext;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\TypeFile;
@@ -39,8 +42,24 @@ readonly class HtmlRenderableHandlerFactory
 		bool $deferred = false,
 		?ExternalLink $externalLink = null,
 		?UnifiedLinkAccessLevel $accessLevel = null,
+		?ShortLinkOpening $shortLinkOpening = null,
+		ClientContext $client = ClientContext::Web,
 	): HtmlRenderableHandler
 	{
+		if ($shortLinkOpening !== null && $baseObject instanceof File)
+		{
+			return $this->createHandlerForShortLinkOpening(
+				opening: $shortLinkOpening,
+				attachedObject: $attachedObject,
+				analytics: $analytics,
+				currentUser: $currentUser,
+				deferred: $deferred,
+				externalLink: $externalLink,
+				accessLevel: $accessLevel,
+				client: $client,
+			);
+		}
+
 		return match (true) {
 			$baseObject instanceof File => $this->createHandlerForFile(
 				file: $baseObject,
@@ -51,6 +70,7 @@ readonly class HtmlRenderableHandlerFactory
 				deferred: $deferred,
 				externalLink: $externalLink,
 				accessLevel: $accessLevel,
+				client: $client,
 			),
 			$baseObject instanceof Folder => $this->createHandlerForFolder(
 				folder: $baseObject,
@@ -59,6 +79,69 @@ readonly class HtmlRenderableHandlerFactory
 			),
 			default => $this->getDefaultHandler($baseObject),
 		};
+	}
+
+	/**
+	 * The short opening keeps its source and its address whoever follows it. A guest gets the public page of the
+	 * very link the code names. An employee gets the office editors by the usual rules; any other type is shown
+	 * on the public page of the source in view, never moved to a list, a HASH page or the own Disk.
+	 */
+	private function createHandlerForShortLinkOpening(
+		ShortLinkOpening $opening,
+		?AttachedObject $attachedObject,
+		array $analytics,
+		?CurrentUser $currentUser,
+		bool $deferred,
+		?ExternalLink $externalLink,
+		?UnifiedLinkAccessLevel $accessLevel,
+		ClientContext $client,
+	): HtmlRenderableHandler
+	{
+		$sourcePage = static fn (bool $viewOnly): ExternalLinkHandler => new ExternalLinkHandler(
+			$opening->getFile(),
+			$opening->getExternalLink(),
+			null,
+			$opening->getVersion(),
+			$opening,
+			$viewOnly,
+		);
+		if ($externalLink instanceof ExternalLink || !$currentUser instanceof CurrentUser)
+		{
+			return $sourcePage(false);
+		}
+
+		$handler = $this->createHandlerForFile(
+			file: $opening->getFile(),
+			attachedObject: $attachedObject,
+			version: $opening->getVersion(),
+			analytics: $analytics,
+			currentUser: $currentUser,
+			deferred: $deferred,
+			externalLink: null,
+			accessLevel: $accessLevel,
+			client: $client,
+		);
+
+		// The stub of the deferred load goes on at the address of the opening.
+		if ($handler instanceof DeferredOnlyOfficeHtmlRenderableFileHandler)
+		{
+			return new DeferredOnlyOfficeHtmlRenderableFileHandler($opening);
+		}
+
+		if ($handler instanceof VibeofficeHtmlRenderableHandler || $handler instanceof OnlyOfficeHtmlRenderableHandler)
+		{
+			$handler->setShortLinkOpening($opening);
+		}
+
+		return self::isOfficeEditor($handler) ? $handler : $sourcePage(true);
+	}
+
+	private static function isOfficeEditor(HtmlRenderableHandler $handler): bool
+	{
+		return $handler instanceof VibeofficeHtmlRenderableHandler
+			|| $handler instanceof OnlyOfficeHtmlRenderableHandler
+			|| $handler instanceof DeferredOnlyOfficeHtmlRenderableFileHandler
+		;
 	}
 
 	private function createHandlerForFile(
@@ -70,6 +153,7 @@ readonly class HtmlRenderableHandlerFactory
 		bool $deferred,
 		?ExternalLink $externalLink,
 		?UnifiedLinkAccessLevel $accessLevel,
+		ClientContext $client,
 	): HtmlRenderableHandler
 	{
 		if ($externalLink instanceof ExternalLink)
@@ -90,6 +174,16 @@ readonly class HtmlRenderableHandlerFactory
 		if ($this->isHtmlViewerTarget($file, $attachedObject, $version))
 		{
 			return new HtmlFileHandler($documentSource, $accessLevel);
+		}
+
+		// Markdown is TypeFile::KNOWN as well; an attachment and the mobile application keep the viewer they have.
+		if (
+			$client === ClientContext::Web
+			&& $attachedObject === null
+			&& MarkdownTabPolicy::isTabSource($file, $version)
+		)
+		{
+			return new MarkdownFileHandler($file, $version, $accessLevel);
 		}
 
 		$selectedVersion = $version ?? $attachedObject?->getVersion();

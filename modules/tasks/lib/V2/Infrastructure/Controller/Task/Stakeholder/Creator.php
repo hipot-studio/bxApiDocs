@@ -32,7 +32,7 @@ class Creator extends BaseController
 
 		$result = (new UpdateCreatorCommand(
 			taskId: $task->getId(),
-			creatorId: (int)$task->creator?->getId(),
+			creatorId: (int)$task->getCreatorId(),
 			responsibleId: (int)$task->responsible?->getId(),
 			config: $config,
 		))->run();

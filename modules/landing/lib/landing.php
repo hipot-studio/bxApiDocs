@@ -2980,6 +2980,16 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public function favoriteBlock(int $id, array $meta = []): ?int
 	{
+		if (!$this->canEdit())
+		{
+			$this->error->addError(
+				'ACCESS_DENIED',
+				Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
+			);
+
+			return null;
+		}
+
 		$bewBlockId = $this->pasteBlock($id, $id, false, false);
 		if ((int)$bewBlockId > 0)
 		{

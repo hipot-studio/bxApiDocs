@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper\Template;
 
+use Bitrix\Tasks\V2\Internal\Entity\Template\RepeatTill;
 use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
 use Bitrix\Tasks\Validation\Validator\SerializedValidator;
 
@@ -144,6 +145,26 @@ class ReplicateParamsMapper
 			$data['DEADLINE_OFFSET'] = (string)$params->deadlineOffset;
 		}
 
+		if ($params->createOffset !== null)
+		{
+			$data['CREATE_OFFSET'] = (int)$params->createOffset;
+		}
+
+		if ($params->completionDelay !== null)
+		{
+			$data['COMPLETION_DELAY'] = (int)$params->completionDelay;
+		}
+
+		if ($params->offsetDayType !== null)
+		{
+			$data['OFFSET_DAY_TYPE'] = (string)$params->offsetDayType;
+		}
+
+		if ($params->deadlineType !== null)
+		{
+			$data['DEADLINE_TYPE'] = $params->deadlineType;
+		}
+
 		return $data;
 	}
 
@@ -267,13 +288,19 @@ class ReplicateParamsMapper
 			$entityFields['timezoneOffset'] = (string)$params['TIMEZONE_OFFSET'];
 		}
 
-		if (isset($params['REPEAT_TILL']))
+		// old templates may have no usable REPEAT_TILL: a stored END_DATE means 'date', anything else is endless
+		$storedRepeatTill = RepeatTill::tryFrom((string)($params['REPEAT_TILL'] ?? ''));
+		if ($storedRepeatTill !== null)
 		{
-			$entityFields['repeatTill'] = (string)$params['REPEAT_TILL'];
+			$entityFields['repeatTill'] = $storedRepeatTill->value;
 		}
-		elseif ((string)($params['data']['END_DATE'] ?? '') !== '' && !array_key_exists('REPEAT_TILL', $params['data'] ?? []))
+		elseif ((string)($params['END_DATE'] ?? '') !== '')
 		{
-			$entityFields['repeatTill'] = 'date';
+			$entityFields['repeatTill'] = RepeatTill::DATE->value;
+		}
+		else
+		{
+			$entityFields['repeatTill'] = RepeatTill::ENDLESS->value;
 		}
 
 		if (isset($params['TIMES']))
@@ -308,6 +335,26 @@ class ReplicateParamsMapper
 		if (isset($params['DEADLINE_OFFSET']))
 		{
 			$entityFields['deadlineOffset'] = (int)$params['DEADLINE_OFFSET'];
+		}
+
+		if (isset($params['CREATE_OFFSET']))
+		{
+			$entityFields['createOffset'] = (int)$params['CREATE_OFFSET'];
+		}
+
+		if (isset($params['COMPLETION_DELAY']))
+		{
+			$entityFields['completionDelay'] = (int)$params['COMPLETION_DELAY'];
+		}
+
+		if (isset($params['OFFSET_DAY_TYPE']))
+		{
+			$entityFields['offsetDayType'] = (string)$params['OFFSET_DAY_TYPE'];
+		}
+
+		if (isset($params['DEADLINE_TYPE']))
+		{
+			$entityFields['deadlineType'] = is_scalar($params['DEADLINE_TYPE']) ? (string)$params['DEADLINE_TYPE'] : '';
 		}
 
 		return ReplicateParams::mapFromArray($entityFields);

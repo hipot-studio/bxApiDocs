@@ -288,3 +288,4 @@ class SubjectGenerator
 		return Option::get('ai', 'queue_mode', 'Y') === 'Y';
 	}
 }
+

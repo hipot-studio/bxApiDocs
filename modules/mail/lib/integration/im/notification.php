@@ -30,6 +30,62 @@ class Notification
 	 */
 	public const deferredPushCancelWindowSeconds = 900;
 
+	/**
+	 * The reasons a mailbox of a Mailhost operation is left unserviced that the summary names, in the order its
+	 * tail counts them.
+	 */
+	public const MAILHOST_UNSERVICED_REASONS = [
+		'transfer_failed',
+		'skipped_by_the_operator',
+		'credentials_missing',
+		'handover_not_ready',
+	];
+
+	/**
+	 * The codes of a refusal of a transfer to the mail of Bitrix24 the summary of refusals has phrases for, and the
+	 * codes of a hint after them, in the order its tail counts them.
+	 */
+	public const TRANSFER_REJECTION_CODES = [
+		'domain_not_owned',
+		'domain_connected_elsewhere',
+		'domain_public_mail_provider',
+		'domain_platform_name',
+		'source_host_not_public',
+		'mailbox_limit_reached',
+		'state_conflict',
+		'owner_locked',
+		'owner_mismatch',
+	];
+
+	/**
+	 * The codes of the summary that are no refusal: the mailbox works, yet its owner differs from the one bound to it
+	 * in the mail of Bitrix24. They go under a heading of their own after the refusals and push only with no refusal.
+	 */
+	public const TRANSFER_REJECTION_HINT_CODES = ['owner_mismatch'];
+
+	public const TRANSFER_REJECTION_DOMAIN_CODES = [
+		'domain_not_owned',
+		'domain_connected_elsewhere',
+		'domain_public_mail_provider',
+		'domain_platform_name',
+	];
+
+	public const TRANSFER_REJECTIONS_REWRITE_EVENT = 'transfer_rejections_rewrite';
+
+	/** The kinds of a line of the summary of refusals: a domain of no mailbox, mailboxes of a domain, a mailbox. */
+	public const TRANSFER_REJECTION_KINDS = ['domain', 'group', 'address'];
+
+	/** One tag for every summary of refusals: by it im replaces the summary a recipient holds and takes it off. */
+	public const TRANSFER_REJECTIONS_TAG = 'MAIL|TRANSFER_REJECTIONS';
+	public const COMPOSITION_STALL_TAG = 'MAIL|MAILHOST_COMPOSITION_STALLED';
+
+	private const TRANSFER_REJECTIONS_PHRASE = 'MAIL_NOTIFY_TRANSFER_REJECTIONS_';
+
+	/** The parts of the summary, by the prefix of the phrases of their heading and push, in the order they are told. */
+	private const TRANSFER_REJECTIONS_REFUSALS = '';
+	private const TRANSFER_REJECTIONS_HINTS = 'HINTS_';
+	private const TRANSFER_REJECTIONS_PARTS = [self::TRANSFER_REJECTIONS_REFUSALS, self::TRANSFER_REJECTIONS_HINTS];
+
 	//region General methods
 
 	public static function getSchema()
@@ -830,6 +886,340 @@ class Notification
 		]) > 0;
 	}
 
+	/**
+	 * The summary of the mailboxes a Mailhost operation left unserviced: the named ones under the phrases of their
+	 * reasons, the rest counted by reason, and the way to support last. The tag is one per operation, so a later
+	 * summary replaces the earlier one.
+	 *
+	 * @param list<array{email: string, reason: string}> $named
+	 * @param array<string, int> $remainder the mailboxes left unnamed, by the word of their reason
+	 */
+	public static function notifyAdminAboutUnservicedMailhostMailboxes(
+		int $adminUserId,
+		string $operationId,
+		array $named,
+		array $remainder,
+	): bool
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		$items = [];
+		foreach ($named as $item)
+		{
+			$items[] = [
+				'email' => self::escapeMailhostAddress((string)$item['email']),
+				'reason' => (string)$item['reason'],
+			];
+		}
+		$rest = [];
+		foreach (self::MAILHOST_UNSERVICED_REASONS as $reason)
+		{
+			$rest[$reason] = max(0, (int)($remainder[$reason] ?? 0));
+		}
+		$count = count($items) + array_sum($rest);
+
+		return (int)\CIMNotify::Add([
+			'TO_USER_ID' => $adminUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|MAILHOST_UNSERVICED|' . $operationId,
+			'NOTIFY_MESSAGE' => static fn (?string $languageId = null): string => self::getUnservicedMailhostMessage(
+				$items,
+				$rest,
+				$languageId,
+			),
+			'PUSH_MESSAGE' => static fn (?string $languageId = null): string => (string)Loc::getMessagePlural(
+				'MAIL_NOTIFY_MAILHOST_UNSERVICED_RESULT_PUSH',
+				$count,
+				['#COUNT#' => (string)$count],
+				$languageId,
+			),
+		]) > 0;
+	}
+
+	/**
+	 * Escaped once. A zero-width space follows every bracket: an entity of a bracket comes back as the bracket by
+	 * the time the client of im reads the text, and a bracket next to a word opens a BB code or a Markdown link there.
+	 */
+	private static function escapeMailhostAddress(string $email): string
+	{
+		return strtr(htmlspecialcharsbx($email), ['[' => "[\u{200B}", ']' => "]\u{200B}"]);
+	}
+
+	/**
+	 * @param list<array{email: string, reason: string}> $items the addresses escaped already
+	 * @param array<string, int> $rest
+	 */
+	private static function getUnservicedMailhostMessage(array $items, array $rest, ?string $languageId): string
+	{
+		$lines = [(string)Loc::getMessage('MAIL_NOTIFY_MAILHOST_UNSERVICED_RESULT_HEADING', null, $languageId)];
+		foreach ($items as $item)
+		{
+			$lines[] = (string)Loc::getMessage(
+				'MAIL_NOTIFY_MAILHOST_UNSERVICED_ITEM_' . strtoupper($item['reason']),
+				['#EMAIL#' => $item['email']],
+				$languageId,
+			);
+		}
+		foreach ($rest as $reason => $count)
+		{
+			if ($count > 0)
+			{
+				$lines[] = (string)Loc::getMessagePlural(
+					'MAIL_NOTIFY_MAILHOST_UNSERVICED_MORE_' . strtoupper($reason),
+					$count,
+					['#COUNT#' => (string)$count],
+					$languageId,
+				);
+			}
+		}
+		$lines[] = (string)Loc::getMessage('MAIL_NOTIFY_MAILHOST_UNSERVICED_SUPPORT', null, $languageId);
+
+		return implode("\n", $lines);
+	}
+
+	/**
+	 * The summary of the refusals of a transfer to the mail of Bitrix24: the named lines under the phrases of their
+	 * kinds and codes, the rest counted by code. Every summary is under one tag.
+	 *
+	 * The refusals go under their heading, the hints under theirs after them; a part with nothing is left out. The push
+	 * of a new summary counts the refusals, or the hints of a summary of hints alone; a rewrite pushes one phrase of
+	 * its own with no count and goes without mail.
+	 *
+	 * @param list<array{kind: string, name: string, code: string, count: int}> $lines the count is the one of the
+	 * mailboxes of a group, 1 for a line of another kind
+	 * @param array<string, int> $remainder the pairs left unnamed, by the code of their refusal
+	 */
+	public static function notifyAdminAboutTransferRejections(
+		int $adminUserId,
+		array $lines,
+		array $remainder,
+		bool $rewrite = false,
+	): bool
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		// The refusals and the hints by the prefix of the phrases of their heading and push, in the order told.
+		$parts = [];
+		foreach (self::TRANSFER_REJECTIONS_PARTS as $part)
+		{
+			$parts[$part] = ['items' => [], 'rest' => [], 'count' => 0];
+		}
+		foreach ($lines as $line)
+		{
+			$kind = (string)$line['kind'];
+			$code = (string)$line['code'];
+			$count = $kind === 'group' ? max(0, (int)$line['count']) : 1;
+			$part = self::getTransferRejectionsPart($code);
+			$parts[$part]['items'][] = [
+				'kind' => $kind,
+				'name' => self::escapeMailhostAddress((string)$line['name']),
+				'code' => $code,
+				'count' => $count,
+			];
+			$parts[$part]['count'] += $count;
+		}
+		foreach (self::TRANSFER_REJECTION_CODES as $code)
+		{
+			$count = max(0, (int)($remainder[$code] ?? 0));
+			$part = self::getTransferRejectionsPart($code);
+			$parts[$part]['rest'][$code] = $count;
+			$parts[$part]['count'] += $count;
+		}
+
+		$fields = [
+			'TO_USER_ID' => $adminUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => self::TRANSFER_REJECTIONS_TAG,
+			'NOTIFY_MESSAGE' => static fn (?string $languageId = null): string => self::getTransferRejectionsMessage(
+				$parts,
+				$languageId,
+			),
+		];
+		if ($rewrite)
+		{
+			$fields['NOTIFY_EVENT'] = self::TRANSFER_REJECTIONS_REWRITE_EVENT;
+			$fields['NOTIFY_MESSAGE_OUT'] = IM_MAIL_SKIP;
+			$fields['PUSH_MESSAGE'] = static fn (?string $languageId = null): string =>
+				(string)Loc::getMessage('MAIL_NOTIFY_TRANSFER_REJECTIONS_REWRITE_PUSH', null, $languageId);
+		}
+		else
+		{
+			$refusals = $parts[self::TRANSFER_REJECTIONS_REFUSALS]['count'];
+			$part = $refusals === 0 && $parts[self::TRANSFER_REJECTIONS_HINTS]['count'] > 0
+				? self::TRANSFER_REJECTIONS_HINTS
+				: self::TRANSFER_REJECTIONS_REFUSALS
+			;
+			$count = $parts[$part]['count'];
+			$fields['PUSH_MESSAGE'] = static function (?string $languageId = null) use ($part, $count): string {
+				$culture = Main\Context::getCurrent()->getCulture();
+
+				return (string)Loc::getMessagePlural(
+					self::TRANSFER_REJECTIONS_PHRASE . $part . 'PUSH',
+					$count,
+					[
+						'#COUNT#' => number_format(
+							$count,
+							0,
+							$culture->getNumberDecimalSeparator(),
+							$culture->getNumberThousandsSeparator(),
+						),
+					],
+					$languageId,
+				);
+			};
+		}
+
+		return (int)\CIMNotify::Add($fields) > 0;
+	}
+
+	public static function notifyAdminAboutStalledCompositionRead(int $adminUserId, string $reason): bool
+	{
+		$phrase = match ($reason)
+		{
+			'access_refused' => 'MAIL_NOTIFY_COMPOSITION_STALL_ACCESS_REFUSED',
+			'operation_disabled' => 'MAIL_NOTIFY_COMPOSITION_STALL_OPERATION_DISABLED',
+			default => null,
+		};
+		if ($phrase === null || !Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return (int)\CIMNotify::Add([
+			'TO_USER_ID' => $adminUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => self::COMPOSITION_STALL_TAG,
+			'NOTIFY_MESSAGE' => static fn (?string $languageId = null): string =>
+				(string)Loc::getMessage($phrase, null, $languageId),
+			'PUSH_MESSAGE' => static fn (?string $languageId = null): string =>
+				(string)Loc::getMessage('MAIL_NOTIFY_COMPOSITION_STALL_PUSH', null, $languageId),
+		]) > 0;
+	}
+
+	public static function withdrawStalledCompositionReadNotice(): bool
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return (bool)\CIMNotify::DeleteByTag(self::COMPOSITION_STALL_TAG);
+	}
+
+	/** Takes the summary of refusals off everyone who holds it. */
+	public static function withdrawTransferRejectionsNotice(): bool
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return (bool)\CIMNotify::DeleteByTag(self::TRANSFER_REJECTIONS_TAG);
+	}
+
+	private static function getTransferRejectionsPart(string $code): string
+	{
+		return in_array($code, self::TRANSFER_REJECTION_HINT_CODES, true)
+			? self::TRANSFER_REJECTIONS_HINTS
+			: self::TRANSFER_REJECTIONS_REFUSALS
+		;
+	}
+
+	/**
+	 * Every part with anything in it under its heading, in the order of the parts.
+	 *
+	 * @param array<string, array{items: list<array>, rest: array<string, int>, count: int}> $parts by the prefix of
+	 * their phrases, the names of the items escaped already
+	 */
+	private static function getTransferRejectionsMessage(array $parts, ?string $languageId): string
+	{
+		$lines = [];
+		foreach ($parts as $part => ['items' => $items, 'rest' => $rest])
+		{
+			$partLines = self::getTransferRejectionsLines($items, $rest, $languageId);
+			if ($partLines !== [])
+			{
+				$heading = self::TRANSFER_REJECTIONS_PHRASE . $part . 'HEADING';
+				$lines[] = (string)Loc::getMessage($heading, null, $languageId);
+				array_push($lines, ...$partLines);
+			}
+		}
+
+		return implode("\n", $lines);
+	}
+
+	/**
+	 * The named lines in the order given, then the tail of every code with something left.
+	 *
+	 * @param list<array{kind: string, name: string, code: string, count: int}> $items the names escaped already
+	 * @param array<string, int> $rest
+	 * @return list<string>
+	 */
+	private static function getTransferRejectionsLines(array $items, array $rest, ?string $languageId): array
+	{
+		$prefix = self::TRANSFER_REJECTIONS_PHRASE;
+		$culture = Main\Context::getCurrent()->getCulture();
+		$lines = [];
+		foreach ($items as $item)
+		{
+			$code = strtoupper($item['code']);
+			$line = match ($item['kind'])
+			{
+				'address' => Loc::getMessage($prefix . 'ADDRESS_' . $code, ['#EMAIL#' => $item['name']], $languageId),
+				'domain' => Loc::getMessage($prefix . 'DOMAIN_' . $code, ['#DOMAIN#' => $item['name']], $languageId),
+				'group' => Loc::getMessagePlural(
+					$prefix . 'GROUP_' . $code,
+					$item['count'],
+					[
+						'#DOMAIN#' => $item['name'],
+						'#COUNT#' => number_format(
+							$item['count'],
+							0,
+							$culture->getNumberDecimalSeparator(),
+							$culture->getNumberThousandsSeparator(),
+						),
+					],
+					$languageId,
+				),
+				default => null,
+			};
+			if ($line !== null)
+			{
+				$lines[] = (string)$line;
+			}
+		}
+		foreach ($rest as $code => $count)
+		{
+			if ($count > 0)
+			{
+				$lines[] = (string)Loc::getMessagePlural(
+					$prefix . 'MORE_' . strtoupper($code),
+					$count,
+					[
+						'#COUNT#' => number_format(
+							$count,
+							0,
+							$culture->getNumberDecimalSeparator(),
+							$culture->getNumberThousandsSeparator(),
+						),
+					],
+					$languageId,
+				);
+			}
+		}
+
+		return $lines;
+	}
+
 	public static function dispatchOrphanedMailboxAutoDisconnectNotifications(
 		int $mailboxId,
 		string $mailboxEmail,
@@ -982,3 +1372,4 @@ class Notification
 		return (int)($row['MAILBOX_ID'] ?? 0);
 	}
 }
+

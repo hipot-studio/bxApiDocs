@@ -43,15 +43,31 @@ final class SystemRoleMap
 	/** @var array<int, array<string, array{path: string, hash: string}>> Generation => role => its folder */
 	private array $folderOfRole = [];
 
+	/**
+	 * @var array<int, array<string, true>> Generation => the hashes of the folders declaring drafts.
+	 *      Kept apart from the roles above, so the rules built on {@see ROLES} never see a draft folder.
+	 */
+	private array $draftFolders = [];
+
 	private function __construct(array $rows)
 	{
 		foreach ($rows as $row)
 		{
 			$generationId = (int)$row['GENERATION_ID'];
 			$hash = (string)$row['DIR_MD5'];
-			$roles = self::rolesOfRow($row);
 
-			if ($hash === '' || $roles === [])
+			if ($hash === '')
+			{
+				continue;
+			}
+
+			if ((int)($row[MailboxDirectoryTable::TYPE_DRAFT] ?? 0) === MailboxDirectoryTable::ACTIVE)
+			{
+				$this->draftFolders[$generationId][$hash] = true;
+			}
+
+			$roles = self::rolesOfRow($row);
+			if ($roles === [])
 			{
 				continue;
 			}
@@ -81,7 +97,7 @@ final class SystemRoleMap
 		}
 
 		return new self(MailboxDirectoryTable::getList([
-			'select' => ['GENERATION_ID', 'DIR_MD5', 'PATH', ...self::ROLES],
+			'select' => ['GENERATION_ID', 'DIR_MD5', 'PATH', ...self::ROLES, MailboxDirectoryTable::TYPE_DRAFT],
 			'filter' => ['=MAILBOX_ID' => $mailboxId],
 			/*
 				The order a role is resolved by when several folders declare it, kept the same
@@ -89,6 +105,26 @@ final class SystemRoleMap
 			*/
 			'order' => ['LEVEL' => 'ASC', 'ID' => 'ASC'],
 		])->fetchAll());
+	}
+
+	/**
+	 * The map of folder rows already read by the caller.
+	 *
+	 * @param array<int, array<string, mixed>> $rows Rows of b_mail_mailbox_dir with GENERATION_ID,
+	 *        DIR_MD5, PATH and the role flags, IS_DRAFT among them, in the order a role is resolved by.
+	 */
+	public static function fromRows(array $rows): self
+	{
+		return new self($rows);
+	}
+
+	/**
+	 * Whether that folder declares drafts - a role apart from {@see ROLES}, asked only by the
+	 * placement of a letter in the folder of the same role.
+	 */
+	public function holdsDrafts(int $generationId, string $dirHash): bool
+	{
+		return isset($this->draftFolders[$generationId][$dirHash]);
 	}
 
 	/**

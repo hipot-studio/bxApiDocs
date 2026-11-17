@@ -6,8 +6,12 @@ namespace Bitrix\Main\Engine\ActionFilter;
 
 enum FilterType: string
 {
+	case Filter = 'filters';
 	case Prefilter = 'prefilters';
 	case Postfilter = 'postfilters';
+
+	case EnableFilter = '+filters';
+	case DisableFilter = '-filters';
 
 	case EnablePrefilter = '+prefilters';
 	case DisablePrefilter = '-prefilters';
@@ -17,6 +21,6 @@ enum FilterType: string
 
 	public function isNegative(): bool
 	{
-		return in_array($this, [self::DisablePrefilter, self::DisablePostfilter], true);
+		return in_array($this, [self::DisableFilter, self::DisablePrefilter, self::DisablePostfilter], true);
 	}
 }

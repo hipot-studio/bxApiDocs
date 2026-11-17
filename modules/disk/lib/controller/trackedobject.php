@@ -368,6 +368,11 @@ class TrackedObject extends BaseObject
 		return $this->disableExternalLink($object->getFile());
 	}
 
+	protected function canManageExternalLink(Disk\BaseObject $object): bool
+	{
+		return $this->externalLinkAccessService->canManageExternalLink($object, true);
+	}
+
 	public function getExternalLinkAction(Disk\Document\TrackedObject $object)
 	{
 		return $this->extendExternalLinkResponse(

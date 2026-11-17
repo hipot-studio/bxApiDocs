@@ -6,18 +6,16 @@ namespace Bitrix\Tasks\V2\Internal\Service\Template\Task\Add;
 
 use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Replication\Replicator\TemplateTaskReplicator;
-use Bitrix\Tasks\V2\Internal\Service\Template\Task\Add\Trait\ConfigTrait;
+use Bitrix\Tasks\V2\Internal\Service\Template\Task\Add\Config\AddTaskConfig;
 
 class AddSubTasks
 {
-	use ConfigTrait;
-
 	/**
 	 * @throws TaskAddException
 	 */
-	public function __invoke(int $taskId, int $templateId): void
+	public function __invoke(int $taskId, int $templateId, AddTaskConfig $config): void
 	{
-		$replicator = new TemplateTaskReplicator($this->config->userId);
+		$replicator = new TemplateTaskReplicator($config->userId);
 		$result = $replicator->setParentTaskId($taskId)->replicate($templateId);
 
 		if (!$result->isSuccess())

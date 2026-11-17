@@ -35,6 +35,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\RunIntegration;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendAnalytics;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendNotification;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\SendPush;
+use Bitrix\Tasks\V2\Internal\LoggerInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
@@ -47,6 +48,7 @@ class AddService
 		private readonly TaskRepositoryInterface $repository,
 		private readonly EgressInterface $egressController,
 		private readonly Counter\Service $counterService,
+		private readonly LoggerInterface $logger,
 	)
 	{
 	}
@@ -137,7 +139,7 @@ class AddService
 
 		(new Pin($config))($fields);
 
-		(new RunIntegration($config))($fields, $source);
+		(new RunIntegration($config, $this->logger))($fields, $source);
 
 		(new SendAnalytics($config))($fields);
 

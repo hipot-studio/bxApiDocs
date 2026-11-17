@@ -101,3 +101,4 @@ class CreateFeedPostFromEmailTool extends ToolContract
 		];
 	}
 }
+

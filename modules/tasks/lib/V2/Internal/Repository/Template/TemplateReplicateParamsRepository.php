@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Repository\Template;
 
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\V2\Internal\Entity\Template\TemplateReplicateParams;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\ReplicateParamsMapper;
 
@@ -17,8 +18,24 @@ class TemplateReplicateParamsRepository implements TemplateReplicateParamsReposi
 	{
 	}
 
-	public function getByTaskId(int $taskId): ?TemplateReplicateParams
+	public function getByTaskId(int $taskId, bool $includeDeleted = false): ?TemplateReplicateParams
 	{
+		if ($includeDeleted)
+		{
+			$template =
+				TemplateTable::query()
+					->setSelect(['ID', 'TASK_ID', 'REPLICATE', 'REPLICATE_PARAMS', 'REPLICATE_TYPE', 'ZOMBIE'])
+					->where('TASK_ID', $taskId)
+					->addOrder('ZOMBIE', 'ASC')
+					->addOrder('ID', 'DESC')
+					->setLimit(1)
+					->exec()
+					->fetch()
+			;
+
+			return is_array($template) ? $this->mapRowToTemplateReplicateParams($template) : null;
+		}
+
 		return $this->getByTaskIds([$taskId])[$taskId] ?? null;
 	}
 
@@ -33,7 +50,7 @@ class TemplateReplicateParamsRepository implements TemplateReplicateParamsReposi
 
 		$templates =
 			TemplateTable::query()
-				->setSelect(['ID', 'TASK_ID', 'REPLICATE', 'REPLICATE_PARAMS'])
+				->setSelect(['ID', 'TASK_ID', 'REPLICATE', 'REPLICATE_PARAMS', 'REPLICATE_TYPE', 'ZOMBIE'])
 				->whereIn('TASK_ID', $taskIds)
 				->where('ZOMBIE', 'N')
 				->exec()
@@ -51,8 +68,22 @@ class TemplateReplicateParamsRepository implements TemplateReplicateParamsReposi
 		return $result;
 	}
 
-	public function getByTemplateId(int $templateId): ?TemplateReplicateParams
+	public function getByTemplateId(int $templateId, bool $includeDeleted = false): ?TemplateReplicateParams
 	{
+		if ($includeDeleted)
+		{
+			$template =
+				TemplateTable::query()
+					->setSelect(['ID', 'REPLICATE', 'REPLICATE_PARAMS', 'REPLICATE_TYPE', 'ZOMBIE'])
+					->where('ID', $templateId)
+					->setLimit(1)
+					->exec()
+					->fetch()
+			;
+
+			return is_array($template) ? $this->mapRowToTemplateReplicateParams($template) : null;
+		}
+
 		return $this->getByTemplateIds([$templateId])[$templateId] ?? null;
 	}
 
@@ -67,7 +98,7 @@ class TemplateReplicateParamsRepository implements TemplateReplicateParamsReposi
 
 		$templates =
 			TemplateTable::query()
-				->setSelect(['ID', 'REPLICATE', 'REPLICATE_PARAMS'])
+				->setSelect(['ID', 'REPLICATE', 'REPLICATE_PARAMS', 'REPLICATE_TYPE', 'ZOMBIE'])
 				->whereIn('ID', $templateIds)
 				->where('ZOMBIE', 'N')
 				->exec()
@@ -95,12 +126,16 @@ class TemplateReplicateParamsRepository implements TemplateReplicateParamsReposi
 
 	private function mapRowToTemplateReplicateParams(array $template): TemplateReplicateParams
 	{
+		$templateDeleted = ($template['ZOMBIE'] ?? '') === 'Y';
+
 		return new TemplateReplicateParams(
 			templateId: (int)($template['ID'] ?? 0),
 			replicateParams: $this->replicateParamsMapper->mapToValueObject(
 				$template['REPLICATE_PARAMS'] ?? null,
 			),
-			replicate: ($template['REPLICATE'] ?? '') === 'Y',
+			replicate: !$templateDeleted && ($template['REPLICATE'] ?? '') === 'Y',
+			regularityType: RegularityType::fromValue($template['REPLICATE_TYPE'] ?? null),
+			templateDeleted: $templateDeleted,
 		);
 	}
 }

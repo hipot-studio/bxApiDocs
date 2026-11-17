@@ -6,6 +6,7 @@ use Bitrix\Intranet\Repository;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Rest\AccessException;
+use Bitrix\Rest\Exceptions\ArgumentNullException;
 use Bitrix\Rest\Exceptions\ObjectNotFoundException;
 use Bitrix\Rest\RestException;
 
@@ -146,6 +147,15 @@ class CIntranetRestService extends IRestService
 			CModule::IncludeModule('iblock');
 
 			$params = array_change_key_case($params, CASE_UPPER);
+			if (!array_key_exists('PARENT', $params))
+			{
+				throw new ArgumentNullException('PARENT');
+			}
+
+			if (isset($params['PARENT']) && is_string($params['PARENT']) && !is_numeric($params['PARENT']))
+			{
+				throw new RestException('PARENT must be numeric.', RestException::ERROR_ARGUMENT);
+			}
 
 			/** @var Repository\HrDepartmentRepository | Repository\IblockDepartmentRepository $departmentRepository */
 			$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
@@ -194,6 +204,11 @@ class CIntranetRestService extends IRestService
 
 			$params = array_change_key_case($params, CASE_UPPER);
 
+			if (isset($params['PARENT']) && is_string($params['PARENT']) && !is_numeric($params['PARENT']))
+			{
+				throw new RestException('PARENT must be numeric.', RestException::ERROR_ARGUMENT);
+			}
+
 			/** @var Repository\HrDepartmentRepository | Repository\IblockDepartmentRepository $departmentRepository */
 			$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
 				->departmentRepository();
@@ -207,6 +222,7 @@ class CIntranetRestService extends IRestService
 					id: $oldDepartment->getId(),
 					parentId: $params['PARENT'] ?? $oldDepartment->getParentId(),
 					sort: $sort > 0 ? $sort : null,
+					isActive: $oldDepartment->isActive(),
 				);
 				/** @var Repository\HrDepartmentRepository | Repository\IblockDepartmentRepository $departmentRepository */
 				$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()

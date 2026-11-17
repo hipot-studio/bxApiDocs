@@ -88,3 +88,4 @@ final class EventHandler
 		return self::isTextCategoryAvailable();
 	}
 }
+

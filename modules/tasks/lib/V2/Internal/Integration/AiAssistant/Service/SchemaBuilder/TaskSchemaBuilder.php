@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder;
 
+use Bitrix\Main\Config\Feature;
+use Bitrix\Tasks\Feature\RegularTaskTypesFeature;
+use Bitrix\Tasks\Replication\Template\Enum\DeadlineType;
 use Bitrix\Tasks\V2\Internal\Entity\Priority;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
 use Bitrix\Tasks\V2\Internal\Entity\Template\RepeatTill;
@@ -11,6 +14,9 @@ use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Enum\ProjectTasksForAnalysisSort;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\GetProjectTasksForAnalysisDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\GetTaskForAnalysisDto;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\MakeTaskRecurringDto;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\Recurrence\RecurrenceRuleTargetDto;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\Recurrence\SetRecurringInstanceDeadlineDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\ClearTaskDeadlineTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\CreateTaskTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DeleteTaskTool;
@@ -18,9 +24,11 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DetachTas
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetProjectTasksForAnalysisTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskForAnalysisTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskByIdTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetAfterCompletionTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetDailyTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByMonthDaysTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByWeekDaysTaskRecurrenceTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetRecurringInstanceDeadlineTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetWeeklyTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetYearlyByMonthDaysTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetYearlyByWeekDaysTaskRecurrenceTool;
@@ -29,6 +37,21 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\UpdateTas
 
 class TaskSchemaBuilder extends BaseSchemaBuilder
 {
+	public function build(?string $action): array
+	{
+		$schema = parent::build($action);
+		if ($action === SetRecurringInstanceDeadlineTool::ACTION_NAME)
+		{
+			$schema['oneOf'] = SetRecurringInstanceDeadlineDto::getIdentifierOneOf();
+		}
+		elseif ($this->isRecurrenceRuleAction($action))
+		{
+			$schema['oneOf'] = RecurrenceRuleTargetDto::getIdentifierOneOf();
+		}
+
+		return $schema;
+	}
+
 	protected function getProperties(?string $action): array
 	{
 		return match ($action)
@@ -39,12 +62,14 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			DetachTaskFromGroupTool::ACTION_NAME => $this->buildClearTaskFieldProperties(),
 			DeleteTaskTool::ACTION_NAME => $this->buildDeleteTaskProperties(),
 			SearchTasksTool::ACTION_NAME => $this->buildSearchTasksProperties(),
+			SetAfterCompletionTaskRecurrenceTool::ACTION_NAME => $this->buildSetAfterCompletionRecurrenceProperties(),
 			SetDailyTaskRecurrenceTool::ACTION_NAME => $this->buildSetDailyRecurrenceProperties(),
 			SetMonthlyByMonthDaysTaskRecurrenceTool::ACTION_NAME => $this->buildSetMonthlyByDaysRecurrenceProperties(),
 			SetMonthlyByWeekDaysTaskRecurrenceTool::ACTION_NAME => $this->buildSetMonthlyByWeeksRecurrenceProperties(),
 			SetWeeklyTaskRecurrenceTool::ACTION_NAME => $this->buildSetWeeklyRecurrenceProperties(),
 			SetYearlyByMonthDaysTaskRecurrenceTool::ACTION_NAME => $this->buildSetYearlyByDaysRecurrenceProperties(),
 			SetYearlyByWeekDaysTaskRecurrenceTool::ACTION_NAME => $this->buildSetYearlyByWeeksRecurrenceProperties(),
+			SetRecurringInstanceDeadlineTool::ACTION_NAME => $this->buildSetRecurringInstanceDeadlineProperties(),
 			GetTaskByIdTool::ACTION_NAME => $this->buildGetTaskByIdProperties(),
 			GetTaskForAnalysisTool::ACTION_NAME => $this->buildGetTaskForAnalysisProperties(),
 			GetProjectTasksForAnalysisTool::ACTION_NAME => $this->buildGetProjectTasksForAnalysisProperties(),
@@ -59,20 +84,112 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			UpdateTaskTool::ACTION_NAME,
 			ClearTaskDeadlineTool::ACTION_NAME,
 			DetachTaskFromGroupTool::ACTION_NAME,
-			SetDailyTaskRecurrenceTool::ACTION_NAME,
-			SetMonthlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
-			SetMonthlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
-			SetWeeklyTaskRecurrenceTool::ACTION_NAME,
-			SetYearlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
-			SetYearlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
 			DeleteTaskTool::ACTION_NAME,
 			GetTaskByIdTool::ACTION_NAME,
 			GetTaskForAnalysisTool::ACTION_NAME
 			=> ['taskId'],
+			SetWeeklyTaskRecurrenceTool::ACTION_NAME => ['weekDays'],
+			SetAfterCompletionTaskRecurrenceTool::ACTION_NAME,
+			SetDailyTaskRecurrenceTool::ACTION_NAME,
+			SetMonthlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
+			SetMonthlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
+			SetYearlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
+			SetYearlyByWeekDaysTaskRecurrenceTool::ACTION_NAME => [],
+			SetRecurringInstanceDeadlineTool::ACTION_NAME => [],
 			CreateTaskTool::ACTION_NAME => ['title'],
 			GetProjectTasksForAnalysisTool::ACTION_NAME => ['projectId'],
 			default => [],
 		};
+	}
+
+	private function buildSetAfterCompletionRecurrenceProperties(): array
+	{
+		return [
+			...$this->buildRecurrenceRuleTargetProperties(),
+			'completionDelay' => [
+				'type' => 'integer',
+				'description' => 'Delay in days after completion before creating the next task. Default is 0.',
+				'minimum' => 0,
+				'default' => 0,
+			],
+			...$this->buildDeadlineProperties('Deadline offset in seconds from the next task creation time.'),
+			'workdayOnly' => [
+				'type' => 'boolean',
+				'description' => 'If true, the delay is counted in workdays. Default is false.',
+				'default' => false,
+			],
+			'time' => [
+				'type' => 'string',
+				'pattern' => MakeTaskRecurringDto::TIME_PATTERN,
+				'description' =>
+					"Current user's local wall-clock time of day in 'HH:MM' 24-hour format. "
+					. "Legacy 'HH:MM:SS' values are accepted and normalized to minute precision. "
+					. 'The MCP adapter converts it to server time; do not add a timezone suffix or convert it to UTC. '
+					. 'Default is '
+					. ReplicateParams::DEFAULT_TIME . '.'
+				,
+				'default' => ReplicateParams::DEFAULT_TIME,
+			],
+			'startDate' => [
+				'type' => 'string',
+				'format' => 'date-time',
+				'description' =>
+					'Recurrence start date. Default is save date.' . BaseSchemaBuilder::DATE_TIME_NOTE
+				,
+			],
+			'repeatTill' => [
+				'type' => 'string',
+				'description' => 'Condition for stopping recurrence. Default is endless.',
+				'enum' => RepeatTill::values(),
+				'default' => RepeatTill::ENDLESS->value,
+			],
+			'endDate' => [
+				'type' => 'string',
+				'format' => 'date-time',
+				'description' =>
+					"End date for recurrence if repeatTill is 'date'." . BaseSchemaBuilder::DATE_TIME_NOTE
+				,
+			],
+			'times' => [
+				'type' => 'integer',
+				'description' => 'Number of repeats if repeatTill is "times". Default is 0.',
+				'minimum' => 0,
+				'default' => 0,
+			],
+		];
+	}
+
+	private function buildSetRecurringInstanceDeadlineProperties(): array
+	{
+		return [
+			...SetRecurringInstanceDeadlineDto::getIdentifierProperties(),
+			'deadlineAfter' => [
+				'type' => 'integer',
+				'description' =>
+					'Deadline offset in seconds for task instances created from the template. '
+					. 'Provide deadlineAfter, deadlineType, or both. '
+					. '0 without deadlineType removes the deadline, including a previously set '
+					. DeadlineType::CreationDay->value . '. '
+					. '0 with deadlineType=' . DeadlineType::CreationDay->value
+					. ' puts the deadline on the creation day. '
+					. 'A positive value replaces deadlineType.'
+				,
+				'minimum' => 0,
+			],
+			'matchesWorkTime' => [
+				'type' => 'boolean',
+				'description' => 'If true, the deadline is adjusted to work time.',
+			],
+			'deadlineType' => [
+				'type' => 'string',
+				'enum' => [DeadlineType::CreationDay->value],
+				'description' =>
+					'Set to ' . DeadlineType::CreationDay->value . ' to put the deadline on the task creation day; '
+					. 'use it with deadlineAfter 0 or absent. A positive deadlineAfter replaces it. '
+					. 'Provide deadlineAfter, deadlineType, or both.'
+				,
+			],
+		];
 	}
 
 	private function buildCreateTaskProperties(): array
@@ -349,7 +466,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'minimum' => 1,
 			],
 			'weekDays' => [
-				'type' => ['array', 'null'],
+				'type' => 'array',
 				'items' => [
 					'type' => 'integer',
 					'description' => 'Number of the day of the week. Starts with 1 and ends with 7.',
@@ -357,6 +474,8 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 					'maximum' => 7,
 				],
 				'description' => 'The numbers of the days of the week.',
+				'minItems' => 1,
+				'uniqueItems' => true,
 			],
 		];
 	}
@@ -367,21 +486,16 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			...$this->buildGeneralRecurrenceProperties(),
 			'monthlyDayNum' => [
 				'type' => ['integer', 'null'],
-				'description' => 'The date on which the task repetition in the month will be created. Starts with 1.',
+				'description' => 'Calendar day of the month, from 1 to 31. Default is 1.',
 				'minimum' => 1,
+				'maximum' => 31,
+				'default' => 1,
 			],
 			'monthlyMonthNum1' => [
 				'type' => ['integer', 'null'],
-				'description' => 'The month on which the task repetition will be created. Starts with 0.',
-				'minimum' => 0,
-			],
-			'monthlyMonthNum2' => [
-				'type' => ['integer', 'null'],
-				'description' =>
-					'The month in which the task repetition will be created in the week is specified here. '
-					. 'Starts with 0.'
-				,
-				'minimum' => 0,
+				'description' => 'Number of months between repetitions. Default is 1.',
+				'minimum' => 1,
+				'default' => 1,
 			],
 		];
 	}
@@ -392,21 +506,23 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			...$this->buildGeneralRecurrenceProperties(),
 			'monthlyWeekDayNum' => [
 				'type' => ['integer', 'null'],
-				'description' => 'Which week the task will be repeated. Starts with 0.',
+				'description' => 'Zero-based ordinal occurrence of the weekday in the month, from 0 to 4. Default is 0.',
 				'minimum' => 0,
+				'maximum' => 4,
+				'default' => 0,
 			],
 			'monthlyWeekDay' => [
 				'type' => ['integer', 'null'],
-				'description' => 'The day of the week on which the task will be repeated is reflected. Starts with 0.',
+				'description' => 'Zero-based weekday index from 0 to 6. Default is 0.',
 				'minimum' => 0,
+				'maximum' => 6,
+				'default' => 0,
 			],
 			'monthlyMonthNum2' => [
 				'type' => ['integer', 'null'],
-				'description' =>
-					'The month in which the task repetition will be created in the week is specified here. '
-					. 'Starts with 0.'
-				,
-				'minimum' => 0,
+				'description' => 'Number of months between repetitions. Default is 1.',
+				'minimum' => 1,
+				'default' => 1,
 			],
 		];
 	}
@@ -417,21 +533,17 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			...$this->buildGeneralRecurrenceProperties(),
 			'yearlyDayNum' => [
 				'type' => ['integer', 'null'],
-				'description' => 'The date on which the task repetition in the month will be created. Starts with 1.',
+				'description' => 'Calendar day of the month, from 1 to 31. Default is 1.',
 				'minimum' => 1,
+				'maximum' => 31,
+				'default' => 1,
 			],
 			'yearlyMonth1' => [
 				'type' => ['integer', 'null'],
-				'description' => 'The month on which the task repetition will be created. Starts with 0.',
+				'description' => 'Zero-based month index from 0 to 11; for example, November is 10. Default is 0.',
 				'minimum' => 0,
-			],
-			'yearlyMonth2' => [
-				'type' => ['integer', 'null'],
-				'description' =>
-					'The month in which the task repetition will be created in the week is specified here. '
-					. 'Starts with 0.'
-				,
-				'minimum' => 0,
+				'maximum' => 11,
+				'default' => 0,
 			],
 		];
 	}
@@ -442,21 +554,24 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			...$this->buildGeneralRecurrenceProperties(),
 			'yearlyWeekDayNum' => [
 				'type' => ['integer', 'null'],
-				'description' => 'In which week the task will be repeated. Starts with 0.',
+				'description' => 'Zero-based ordinal occurrence of the weekday in the month, from 0 to 4. Default is 0.',
 				'minimum' => 0,
+				'maximum' => 4,
+				'default' => 0,
 			],
 			'yearlyWeekDay' => [
 				'type' => ['integer', 'null'],
-				'description' => 'The day of the week on which the task repetition will be created. Starts with 0.',
+				'description' => 'Zero-based weekday index from 0 to 6. Default is 0.',
 				'minimum' => 0,
+				'maximum' => 6,
+				'default' => 0,
 			],
 			'yearlyMonth2' => [
 				'type' => ['integer', 'null'],
-				'description' =>
-					'The month in which the task repetition will be created in the week is specified here. '
-					. 'Starts with 0.'
-				,
+				'description' => 'Zero-based month index from 0 to 11; for example, November is 10. Default is 0.',
 				'minimum' => 0,
+				'maximum' => 11,
+				'default' => 0,
 			],
 		];
 	}
@@ -464,20 +579,20 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 	private function buildGeneralRecurrenceProperties(): array
 	{
 		return [
-			'taskId' => [
-				'type' => 'integer',
-				'description' => 'Identifier of the task. Must be a positive integer.',
-				'minimum' => 1,
-			],
+			...$this->buildRecurrenceRuleTargetProperties(),
+			...$this->buildDeadlineRecurrenceProperties(),
 			'workdayOnly' => [
 				'type' => ['boolean', 'null'],
 				'description' => 'If true, the task will only recur on workdays. Default is false.',
 			],
 			'time' => [
 				'type' => ['string', 'null'],
-				'format' => 'time',
+				'pattern' => MakeTaskRecurringDto::TIME_PATTERN,
 				'description' =>
-					"Time of day for the recurrence in 'HH:MM:SS' format. Default is "
+					"Current user's local wall-clock time of day in 'HH:MM' 24-hour format. "
+					. "Legacy 'HH:MM:SS' values are accepted and normalized to minute precision. "
+					. 'The MCP adapter converts it to server time; do not add a timezone suffix or convert it to UTC. '
+					. 'Default is '
 					. ReplicateParams::DEFAULT_TIME . '.'
 				,
 			],
@@ -506,6 +621,102 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'minimum' => 0,
 			],
 		];
+	}
+
+	/**
+	 * The deadline-driven recurrence settings ship with the release flag, so they are not announced to
+	 * the agent while the flag is off.
+	 */
+	private function buildDeadlineRecurrenceProperties(): array
+	{
+		if (!Feature::isEnabled(RegularTaskTypesFeature::class))
+		{
+			return [];
+		}
+
+		return [
+			'anchorToDeadline' => [
+				'type' => 'object',
+				'description' => 'Creates task instances before the deadline of the previous instance.',
+				'properties' => [
+					'leadDays' => [
+						'type' => 'integer',
+						'description' => 'Number of days before the deadline. Default is 0.',
+						'minimum' => 0,
+						'default' => 0,
+					],
+				],
+				'additionalProperties' => false,
+			],
+			...$this->buildDeadlineProperties('Deadline offset in seconds from the task creation time.'),
+		];
+	}
+
+	private function buildDeadlineProperties(string $offsetDescription): array
+	{
+		return [
+			'deadlineOffset' => [
+				'type' => 'integer',
+				'description' =>
+					$offsetDescription . ' '
+					. 'On update, omit both deadlineOffset and deadlineType to keep the current deadline. '
+					. 'On create, omitting both creates instances without a deadline. '
+					. 'Set 0 without deadlineType to clear the deadline. A positive value replaces deadlineType.'
+				,
+				'minimum' => 0,
+			],
+			'matchesWorkTime' => [
+				'type' => 'boolean',
+				'description' => 'If true, the deadline is adjusted to work time.',
+			],
+			'deadlineType' => [
+				'type' => 'string',
+				'enum' => [DeadlineType::CreationDay->value],
+				'description' =>
+					'Set to ' . DeadlineType::CreationDay->value . ' to put the deadline on the task creation day; '
+					. 'use it with deadlineOffset 0 or absent. A positive deadlineOffset replaces it. '
+					. 'On update, omit both deadline fields to keep the current deadline; on create, omitting both '
+					. 'creates instances without a deadline. Set deadlineOffset 0 alone to clear the deadline.'
+				,
+			],
+		];
+	}
+
+	private function buildRecurrenceRuleTargetProperties(): array
+	{
+		return [
+			'taskId' => [
+				'type' => 'integer',
+				'description' =>
+					'ID of the task to make recurring, an original recurring task, or one of its generated instances. '
+					. 'A generated instance updates the rule of its source template; no new recurring series is created '
+					. 'from the instance. Use this field instead of templateId.'
+				,
+				'minimum' => 1,
+			],
+			'templateId' => [
+				'type' => 'integer',
+				'description' => 'ID of an existing recurring task template. Use this field instead of taskId.',
+				'minimum' => 1,
+			],
+		];
+	}
+
+	private function isRecurrenceRuleAction(?string $action): bool
+	{
+		return in_array(
+			$action,
+			[
+				SetAfterCompletionTaskRecurrenceTool::ACTION_NAME,
+				SetDailyTaskRecurrenceTool::ACTION_NAME,
+				SetWeeklyTaskRecurrenceTool::ACTION_NAME,
+				SetMonthlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
+				SetMonthlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
+				SetYearlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
+				SetYearlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
+			],
+			true,
+		);
 	}
 
 	private function buildGetTaskByIdProperties(): array

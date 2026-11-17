@@ -37,6 +37,7 @@ use Bitrix\Tasks\Item;
 use Bitrix\Tasks\Util;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary;
 use Exception;
 
 final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
@@ -114,13 +115,32 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 	public function add(array $data)
 	{
 		$result = array();
+		unset($data['ID']);
 
 		$this->prepareMembers($data);
 		$this->prepareReplicateParams($data);
 
 		$templateModel = TemplateModel::createFromArray($data);
 
-		if (!TemplateAccessController::can($this->userId, ActionDictionary::ACTION_TEMPLATE_CREATE, null, $templateModel))
+		if (
+			!TemplateAccessController::can($this->userId, ActionDictionary::ACTION_TEMPLATE_CREATE, null, $templateModel)
+			|| (
+				$templateModel->getParentId() > 0
+				&& !TemplateAccessController::can(
+					$this->userId,
+					ActionDictionary::ACTION_TEMPLATE_READ,
+					$templateModel->getParentId(),
+				)
+			)
+			|| (
+				$templateModel->getParentTaskId() > 0
+				&& !TaskAccessController::can(
+					$this->userId,
+					ActionDictionary::ACTION_TASK_READ,
+					$templateModel->getParentTaskId(),
+				)
+			)
+		)
 		{
 			$this->errors->add('TEMPLATE_CREATE_TASK_NOT_ACCESSIBLE', Loc::getMessage('TASKS_TEMPLATE_CREATE_TASK_NOT_ACCESSIBLE_MSGVER_1'));
 			return $result;
@@ -129,8 +149,8 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 		// todo: check $data here, check for publicly-readable\writable keys\values
 
 		if (
-			array_key_exists('REPLICATE', $data)
-			&& $data['REPLICATE'] === 'Y'
+			($data['REPLICATE'] ?? null) === 'Y'
+			|| (int)($data['TPARAM_TYPE'] ?? 0) === TypeDictionary::NEW_USERS
 		)
 		{
 			if (!TemplateAccessController::can($this->userId, ActionDictionary::ACTION_TEMPLATE_SAVE, null, $templateModel))
@@ -239,9 +259,14 @@ final class Template extends \Bitrix\Tasks\Dispatcher\PublicAction
 			return $result;
 		}
 
+		$data ??= [];
 		if (($data['CREATED_BY'] ?? null) <= 0)
 		{
-			$data['CREATED_BY'] = $this->userId;
+			$storedTemplate = \CTaskTemplates::GetByID($id, ['select' => ['ID', 'TPARAM_TYPE']])->Fetch();
+			if ((int)($storedTemplate['TPARAM_TYPE'] ?? 0) !== TypeDictionary::NEW_USERS)
+			{
+				$data['CREATED_BY'] = $this->userId;
+			}
 		}
 
 		$result['ID'] = $id;

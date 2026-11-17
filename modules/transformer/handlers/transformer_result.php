@@ -2,7 +2,8 @@
 
 use Bitrix\Main\Web\Json;
 use Bitrix\Transformer\Command;
-use Bitrix\Transformer\File;
+use Bitrix\Transformer\Command\ResultFile;
+use Bitrix\Transformer\Command\ResultFileResolver;
 use Bitrix\Transformer\FileUploader;
 
 global $APPLICATION;
@@ -35,11 +36,29 @@ if (empty($id))
 	return;
 }
 
+$logContext = [
+	'guid' => $id,
+];
+
+if ($httpRequest->getPost('check_result_expected') === 'y')
+{
+	$command = Command::getByGuid($id);
+
+	echo Json::encode([
+		'success' => true,
+		'result' => [
+			'expected' => $command ? $command->isResultExpected() : false,
+		],
+	]);
+
+	return;
+}
+
 $command = Command::getByGuid($id);
 if (!$command)
 {
 	$message = 'Command '.$id.' not found';
-	\Bitrix\Transformer\Log::logger()->error($message, ['guid' => $id]);
+	\Bitrix\Transformer\Log::logger()->error($message, $logContext);
 	echo Json::encode([
 		'error' => $message,
 	]);
@@ -52,7 +71,7 @@ $locker = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('transformer.servic
 if (!$locker->lock($command))
 {
 	$message = 'Could not acquire lock for command ' . $id;
-	\Bitrix\Transformer\Log::logger()->error($message, ['guid' => $id]);
+	\Bitrix\Transformer\Log::logger()->error($message, $logContext);
 	echo Json::encode([
 		'error' => $message,
 	]);
@@ -60,10 +79,10 @@ if (!$locker->lock($command))
 	return;
 }
 
-if ($command->getStatus() != Command::STATUS_SEND)
+if ($command->getStatus() !== Command::STATUS_SEND)
 {
-	$message = 'Error: Wrong command status '.$command->getStatus();
-	\Bitrix\Transformer\Log::logger()->error($message, ['guid' => $id, 'status' => $command->getStatus()]);
+	$message = 'Error: Wrong command status ' . $command->getStatus();
+	\Bitrix\Transformer\Log::logger()->error($message, [...$logContext, 'status' => $command->getStatus()]);
 	echo Json::encode([
 		'error' => $message,
 	]);
@@ -72,14 +91,28 @@ if ($command->getStatus() != Command::STATUS_SEND)
 	return;
 }
 
+$resolver = new ResultFileResolver();
 $fileSize = $httpRequest->getPost('file_size');
 
 //region get upload info
 if ($httpRequest->getPost('upload') === 'where')
 {
 	$fileId = $httpRequest->getPost('file_id');
-	$uploadInfo = FileUploader::getUploadInfo($id, $fileId, $fileSize);
-	echo Json::encode($uploadInfo);
+	$uploadInfo = FileUploader::getUploadInfo($command, $fileId, (int)$fileSize);
+	if ($uploadInfo->isSuccess())
+	{
+		echo Json::encode($uploadInfo->getData());
+	}
+	else
+	{
+		\Bitrix\Transformer\Log::logger()->error('Result file rejected', [
+			'guid' => $command->getGuid(),
+			'branch' => 'upload_info',
+			'format' => is_string($fileId) ? mb_substr($fileId, 0, 255) : get_debug_type($fileId),
+			'name' => get_debug_type($fileId),
+		]);
+		echo Json::encode(['error' => $uploadInfo->getErrorMessages()]);
+	}
 
 	$locker->unlock($command);
 	return;
@@ -89,12 +122,37 @@ if ($httpRequest->getPost('upload') === 'where')
 //region upload file part
 $fileName = $httpRequest->getPost('file_name');
 $uploadedFile = $httpRequest->getFile('file');
-$filePart = null;
-if ($uploadedFile)
+if ($fileName && $uploadedFile)
 {
+	$isLastPart = ($httpRequest->getPost('last_part') === 'y');
+	$bucket = intval($httpRequest->getPost('bucket'));
+	if (!$resolver->isUploadAllowed($command, $fileName, $bucket))
+	{
+		echo Json::encode(['error' => 'Wrong upload name']);
+		$locker->unlock($command);
+		return;
+	}
+
+	$logContext = [
+		...$logContext,
+		'fileName' => $fileName,
+		'isLastPart' => $isLastPart,
+		'bucket' => $bucket,
+		'fileSize' => $fileSize
+	];
+
 	if (isset($uploadedFile['error']) && $uploadedFile['error'] > 0)
 	{
 		$message = 'client web-server error uploading file part';
+
+		\Bitrix\Transformer\Log::logger()->error(
+			'Error uploading file part: {errors}',
+			[
+				...$logContext,
+				'errors' => $message,
+			],
+		);
+
 		echo Json::encode([
 			'error' => $message,
 		]);
@@ -102,26 +160,78 @@ if ($uploadedFile)
 		$locker->unlock($command);
 		return;
 	}
-	$file = fopen($uploadedFile['tmp_name'], 'rb');
-	if ($file)
-	{
-		$filePart = fread($file, filesize($uploadedFile['tmp_name']));
-	}
-}
-else
-{
-	$filePart = $httpRequest->getPost('file');
-}
 
-$isLastPart = ($httpRequest->getPost('last_part') === 'y');
-$bucket = intval($httpRequest->getPost('bucket'));
-if ($fileName && $filePart)
-{
+	if (
+		empty($uploadedFile['tmp_name'])
+		|| !is_uploaded_file($uploadedFile['tmp_name'])
+	)
+	{
+		$message = 'file not found';
+
+		\Bitrix\Transformer\Log::logger()->error(
+			'Error uploading file part: {errors}',
+			[
+				...$logContext,
+				'errors' => $message,
+			]
+		);
+
+		echo Json::encode([
+			'error' => $message,
+		]);
+
+		$locker->unlock($command);
+		return;
+	}
+
+	$ioFile = new \Bitrix\Main\IO\File($uploadedFile['tmp_name']);
+	if (!$ioFile->isExists() || !$ioFile->isReadable())
+	{
+		$message = 'uploaded file part is not readable';
+
+		\Bitrix\Transformer\Log::logger()->error(
+			'Error uploading file part: {errors}',
+			[
+				...$logContext,
+				'errors' => $message,
+			]
+		);
+
+		echo Json::encode([
+			'error' => $message,
+		]);
+
+		$locker->unlock($command);
+		return;
+	}
+
+	$filePart = $ioFile->getContents();
+	if ($filePart === false)
+	{
+		$message = 'error reading uploaded file part';
+
+		\Bitrix\Transformer\Log::logger()->error(
+			'Error uploading file part: {errors}',
+			[
+				...$logContext,
+				'errors' => $message,
+			]
+		);
+
+		echo Json::encode([
+			'error' => $message,
+		]);
+
+		$locker->unlock($command);
+		return;
+	}
+
 	$saveResult = FileUploader::saveUploadedPart($fileName, $filePart, $fileSize, $isLastPart, $bucket);
 	if ($saveResult->isSuccess())
 	{
 		$saveData = $saveResult->getData();
 		$message = 'file saved to '.$saveData['result'];
+
 		echo Json::encode([
 			'success' => $message,
 		]);
@@ -132,18 +242,14 @@ if ($fileName && $filePart)
 		\Bitrix\Transformer\Log::logger()->error(
 			'Error uploading file part: {errors}',
 			[
-				'guid' => $id,
+				...$logContext,
 				'errors' => $message,
-				'fileName' => $fileName,
-				'isLastPart' => $isLastPart,
-				'bucket' => $bucket,
-				'fileSize' => $fileSize
 			]
 		);
+
 		echo Json::encode([
 			'error' => $message,
-			]
-		);
+		]);
 	}
 
 	$locker->unlock($command);
@@ -168,28 +274,34 @@ if ($error || $errorCode)
 	}
 	\Bitrix\Transformer\Log::logger()->error(
 		'Error on server: {error}',
-		['error' => $error, 'errorCode' => $errorCode, 'guid' => $id],
+		[...$logContext, 'error' => $error, 'errorCode' => $errorCode],
 	);
 
 	$result = $httpRequest->getPost('result');
-	if (is_array($result) && isset($result['files']) && is_array($result['files']))
+	foreach ($resolver->resolveAll($command, $result['files'] ?? [], 'error') as $file)
 	{
-		foreach ($result['files'] as $key => $fileName)
-		{
-			$file = new File($fileName);
-			$file->delete();
-		}
+		$file->delete();
 	}
+
 	$command->updateStatus(Command::STATUS_ERROR, $error, $errorCode);
 
 	$analyticsRegistrar->registerCommandFinish($command);
 
-	$command->callback(['error' => $error]);
+	\Bitrix\Main\Application::getInstance()->addBackgroundJob(static function () use ($command, $error, $locker) {
+		try
+		{
+			$command->callback(['error' => $error]);
+		}
+		finally
+		{
+			$locker->unlock($command);
+		}
+	});
+
 	echo Json::encode([
 		'success' => 'error received'
 	]);
 
-	$locker->unlock($command);
 	return;
 }
 //endregion
@@ -198,14 +310,13 @@ if ($error || $errorCode)
 $finish = ($httpRequest->getPost('finish') === 'y');
 if ($finish)
 {
-	/** @var File[] $files */
 	$files = [];
 	$updateStatusResult = $command->updateStatus(Command::STATUS_UPLOAD);
 	if (!$updateStatusResult->isSuccess())
 	{
 		\Bitrix\Transformer\Log::logger()->critical(
 			'Cant mark command as uploaded: {errors}',
-			['errors' => $updateStatusResult->getErrorMessages(), 'guid' => $id],
+			[...$logContext, 'errors' => $updateStatusResult->getErrorMessages()],
 		);
 
 		echo Json::encode([
@@ -224,42 +335,38 @@ if ($finish)
 	{
 		$result = [];
 	}
-	if (!isset($result['files']) || !is_array($result['files']))
-	{
-		$result['files'] = [];
-	}
-	foreach ($result['files'] as $key => $fileName)
-	{
-		$files[$key] = new File($fileName);
-		$result['files'][$key] = $files[$key]->getAbsolutePath();
-	}
-	try
-	{
-		if ($command->callback($result))
-		{
-			$command->updateStatus(Command::STATUS_SUCCESS);
-			$command->push();
-			echo Json::encode([
-				'success' => 'OK'
-			]);
-		}
-		else
-		{
-			$command->updateStatus(Command::STATUS_ERROR, 'Callback error', Command::ERROR_CALLBACK);
-			echo Json::encode([
-				'error' => 'Error of the callback',
-			]);
-		}
-	}
-	finally
-	{
-		foreach ($result['files'] as $key => $file)
-		{
-			$files[$key]->delete();
-		}
-	}
+	$files = $resolver->resolveAll($command, $result['files'] ?? [], 'finish');
+	$result['files'] = array_map(static fn(ResultFile $file) => $file->getAbsolutePath(), $files);
 
-	$locker->unlock($command);
+	\Bitrix\Main\Application::getInstance()->addBackgroundJob(static function () use ($command, $result, $files, $locker) {
+		try
+		{
+			if ($command->callback($result))
+			{
+				$command->updateStatus(Command::STATUS_SUCCESS);
+				$command->push();
+			}
+			else
+			{
+				$command->updateStatus(Command::STATUS_ERROR, 'Callback error', Command::ERROR_CALLBACK);
+			}
+		}
+		finally
+		{
+			foreach ($files as $file)
+			{
+				$file->delete();
+			}
+
+			$locker->unlock($command);
+		}
+	});
+
+	// controller will never know if there was callback error, but it doesn't care really
+	echo Json::encode([
+		'success' => 'OK'
+	]);
+
 	return;
 }
 //endregion

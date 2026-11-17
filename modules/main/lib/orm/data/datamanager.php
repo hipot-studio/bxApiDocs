@@ -450,7 +450,7 @@ abstract class DataManager
 				case 'group':
 					$query->setGroup($value);
 					break;
-				case 'order';
+				case 'order':
 					$query->setOrder($value);
 					break;
 				case 'limit':

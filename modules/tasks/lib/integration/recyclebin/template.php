@@ -19,6 +19,7 @@ use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Recyclebin\Internals\Entity;
 use Bitrix\Recyclebin\Internals\Contracts\Recyclebinable;
 use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
+use Bitrix\Tasks\Replication\Template\AfterCompletionChainStarter;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use CTaskTemplates;
 use Exception;
@@ -81,6 +82,12 @@ class Template implements Recyclebinable
 			{
 				$replicator = new RegularTemplateTaskReplicator();
 				$replicator->startReplication($templateId);
+
+				// after_completion has no recurrent agent, so the call above arms nothing, while the safe
+				// delete has already removed the one-shot: restart the chain the same way EnableReplication
+				// does. The starter's guards keep this a no-op for schedule / deadline and for a chain whose
+				// tail is still running.
+				(new AfterCompletionChainStarter())->startIfNeeded($templateId);
 			}
 		}
 		catch (Exception $e)

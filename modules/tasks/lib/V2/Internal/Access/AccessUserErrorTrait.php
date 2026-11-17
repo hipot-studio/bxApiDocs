@@ -16,6 +16,11 @@ trait AccessUserErrorTrait
 		return $this->userError;
 	}
 
+	protected function setUserError(Error $error): void
+	{
+		$this->userError = $error;
+	}
+
 	private function resolveUserError(AccessibleController $accessController): void
 	{
 		if (!$accessController instanceof UserErrorInterface)

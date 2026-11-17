@@ -263,3 +263,4 @@ class Chat
 		return $result;
 	}
 }
+

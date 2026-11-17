@@ -67,6 +67,7 @@ class Task
 
 	private array $skipTimeZoneFields = [];
 	private ?AnalyticsData $analyticsData = null;
+	private ?bool $manualDeadline = null;
 	private bool $useConsistency = false;
 
 	public function __construct(private int $userId)
@@ -174,6 +175,13 @@ class Task
 		return $this;
 	}
 
+	public function withManualDeadline(?bool $manualDeadline): static
+	{
+		$this->manualDeadline = $manualDeadline;
+
+		return $this;
+	}
+
 	public function skipBP(): self
 	{
 		$this->skipBP = true;
@@ -232,6 +240,7 @@ class Task
 			checkUserFields: $this->checkUserFields,
 			eventGuid: $this->eventGuid,
 			analyticsData: $this->analyticsData,
+			manualDeadline: $this->manualDeadline,
 		);
 
 		$mapper = Container::getInstance()->getOrmTaskMapper();
@@ -267,6 +276,21 @@ class Task
 		}
 
 		$this->reset();
+
+		if (array_key_exists('STAGE_ID', $fields))
+		{
+			$stageId = Container::getInstance()->getStageCompatibilityService()->normalizeStageId(
+				$fields['STAGE_ID'],
+			);
+			if ($stageId === null)
+			{
+				unset($fields['STAGE_ID']);
+			}
+			else
+			{
+				$fields['STAGE_ID'] = $stageId;
+			}
+		}
 
 		$config = new UpdateConfig(
 			userId: $this->userId,

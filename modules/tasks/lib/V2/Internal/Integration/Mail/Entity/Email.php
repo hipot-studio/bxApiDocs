@@ -20,6 +20,8 @@ class Email extends AbstractEntity
 		public readonly ?string $from = null,
 		public readonly ?int $dateTs = null,
 		public readonly ?string $link = null,
+		public readonly ?string $sourceType = null,
+		public readonly ?int $sourceId = null,
 	)
 	{
 
@@ -27,6 +29,11 @@ class Email extends AbstractEntity
 	public function getId(): ?int
 	{
 		return $this->id;
+	}
+
+	public function getSourceId(): ?int
+	{
+		return $this->sourceId;
 	}
 
 	public static function mapFromArray(array $props): static
@@ -40,6 +47,8 @@ class Email extends AbstractEntity
 			from: static::mapString($props, 'from'),
 			dateTs: static::mapInteger($props, 'dateTs'),
 			link: static::mapString($props, 'link'),
+			sourceType: static::mapString($props, 'sourceType'),
+			sourceId: static::mapInteger($props, 'sourceId'),
 		);
 	}
 
@@ -54,6 +63,8 @@ class Email extends AbstractEntity
 			'from' => $this->from,
 			'dateTs' => $this->dateTs,
 			'link' => $this->link,
+			'sourceType' => $this->sourceType,
+			'sourceId' => $this->sourceId,
 		];
 	}
 }

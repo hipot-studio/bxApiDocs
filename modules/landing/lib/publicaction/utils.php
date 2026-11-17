@@ -4,7 +4,9 @@ namespace Bitrix\Landing\PublicAction;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Error;
 use \Bitrix\Landing\PublicActionResult;
+use \Bitrix\Landing\Rights;
 use \Bitrix\Main\Loader;
+use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\UrlPreview\UrlPreview;
 
 class Utils
@@ -91,6 +93,7 @@ class Utils
 		// make some magic
 		$filter = [
 			'IBLOCK_ID' => $iblockId,
+			'CHECK_PERMISSIONS' => 'Y',
 			array_merge(
 				['LOGIC' => 'AND'],
 				array_map(function($fragment) {
@@ -432,6 +435,16 @@ class Utils
 		static $internal = true;
 
 		$result = new PublicActionResult();
+
+		if (!Rights::canChangePortalOptions())
+		{
+			$error = new Error;
+			$error->addError('ACCESS_DENIED', Loc::getMessage('LANDING_ACCESS_DENIED2'));
+			$result->setError($error);
+
+			return $result;
+		}
+
 		$result->setResult(true);
 		$allowedKeys = ['google_images_key'];
 

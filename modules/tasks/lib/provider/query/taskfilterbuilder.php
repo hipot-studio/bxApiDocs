@@ -13,6 +13,7 @@ use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity\DateField;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\ORM\Fields\BooleanField;
+use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\Entity\Query\Filter\ConditionTree;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
@@ -27,6 +28,7 @@ use Bitrix\Tasks\Comments\Internals\Comment;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
 use Bitrix\Tasks\Internals\Counter\CounterTable;
 use Bitrix\Tasks\Internals\Counter\Deadline;
+use Bitrix\Tasks\Internals\DataBase\CrmItemIndex;
 use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\Internals\Task\LabelTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
@@ -37,6 +39,7 @@ use Bitrix\Tasks\Internals\Task\SearchIndexTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\Task\TaskTagTable;
 use Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable;
+use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\Internals\Task\UserOptionTable;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Internals\UserOption\Option;
@@ -83,6 +86,9 @@ class TaskFilterBuilder
 	private const CAST_DATE = 'date';
 	private const CAST_DATE_STRING = 'date_string';
 	private const CAST_LEFT_EXIST = 'left_existence';
+
+	// Subquery alias for the CRM binding storage, so its columns stay distinguishable from the outer task.
+	private const CRM_ITEM_ALIAS = 'm';
 
 	private TaskQuery $query;
 	private TasksUFManager $ufManager;
@@ -202,6 +208,16 @@ class TaskFilterBuilder
 				{
 					throw new ArgumentException('Invalid filter value: ' . var_export($val, true));
 				}
+				if ($key === '::SUBFILTER-MEMBER_UNION' && in_array('COUNT', $this->query->getSelect(), true))
+				{
+					$subFilter = $this->buildMemberUnionIdsFilter($val);
+					if ($subFilter !== null)
+					{
+						$conditionTree->where($subFilter);
+
+						continue;
+					}
+				}
 				$subFilter = $this->translateFilter($val);
 				$subFilter && $conditionTree->where($subFilter);
 				continue;
@@ -257,8 +273,29 @@ class TaskFilterBuilder
 					}
 					break;
 
-				case "PARENT_ID":
 				case "GROUP_ID":
+					$subFilter = $this->createSubfilter($field, $val, $operation, self::CAST_NUMBER);
+					if ($subFilter)
+					{
+						if (
+							$operation === self::OPERATION_NOT
+							&& is_array($val)
+							&& count(array_unique(array_values($val))) > 1
+						)
+						{
+							// Multi-value exclusion runs through whereNotIn, which drops GROUP_ID IS NULL rows
+							// (NULL NOT IN (...) is unknown); keep "no project" tasks (NULL or 0) in the selection.
+							$subFilter = Query::filter()
+								->logic('or')
+								->where($subFilter)
+								->whereNull('GROUP_ID')
+								->where('GROUP_ID', 0);
+						}
+						$conditionTree->where($subFilter);
+					}
+					break;
+
+				case "PARENT_ID":
 				case "STATUS_CHANGED_BY":
 				case "FORUM_TOPIC_ID":
 					$subFilter = $this->createSubfilter($field, $val, $operation, self::CAST_NUMBER);
@@ -425,9 +462,7 @@ class TaskFilterBuilder
 					break;
 
 				case 'TAG':
-					if (
-						empty($val)
-					)
+					if (empty($val))
 					{
 						break;
 					}
@@ -448,6 +483,17 @@ class TaskFilterBuilder
 					);
 
 					$tagsCount = count($tags);
+					if ($tagsCount === 0)
+					{
+						break;
+					}
+
+					if ($operation === self::OPERATION_NOT)
+					{
+						// Per-task exclusion: drop a task if it carries any of the named tags (any tag count).
+						$conditionTree->where($this->buildTagExclusionSubfilter($tags));
+						break;
+					}
 
 					if ($tagsCount === 1) // simplify in case of 1 tag
 					{
@@ -457,39 +503,36 @@ class TaskFilterBuilder
 						break;
 					}
 
-					$subQuery = TaskQueryBuilder::createQuery(
-						TaskQueryBuilder::ALIAS_TASK_TAG,
-						LabelTable::getEntity()
+					// Union of >=2 tags: the sibling key META:TAG_UNION selects "any" (OR); the default is "all" (AND).
+					$union = mb_strtolower((string)($filter['META:TAG_UNION'] ?? 'and'));
+					if ($union === 'or')
+					{
+						// "Any of the names" is the single-tag join with a list of names instead of one: the
+						// uncorrelated "ID IN (SELECT TASK_ID ...)" would build every task carrying a popular tag
+						// before the outer filter, the access check and the pagination narrow the candidate set.
+						// Registering the join is what makes the query DISTINCT, so a task carrying several of the
+						// names stays a single row (see TaskQueryBuilder::buildJoin).
+						$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_TAG_NAME);
+						$conditionTree->whereIn(TaskQueryBuilder::ALIAS_TASK_TAG_NAME . '.NAME', $tags);
+
+						break;
+					}
+
+					$conditionTree->whereIn(
+						'ID',
+						new SqlExpression($this->buildAllTagsTaskIdSubQuery($tags, $tagsCount))
 					);
+					break;
 
-					$join = Join::on('this.ID', 'ref.TAG_ID');
+				case 'META:TAG_UNION':
+					// Consumed as a sibling of the TAG case; produces no condition on its own.
+					break;
 
-					$subQuery->setSelect([
-						TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID',
-					]);
-
-					$subQuery->registerRuntimeField(
-						TaskQueryBuilder::ALIAS_TASK_TAG,
-						(new ReferenceField(
-							TaskQueryBuilder::ALIAS_TASK_TAG,
-							TaskTagTable::getEntity(),
-							$join
-						))->configureJoinType('inner')
-					);
-
-					$subQuery->registerRuntimeField(
-						'CNT',
-						new ExpressionField(
-							'CNT',
-							'COUNT(%s)',
-							TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID')
-					);
-
-					$subQuery->whereIn('NAME', $tags);
-					$subQuery->addGroup(TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID');
-					$subQuery->having('CNT', $tagsCount);
-
-					$conditionTree->whereIn('ID', new SqlExpression($subQuery->getQuery()));
+				case 'META:TAG_IS_EMPTY':
+					if ($val)
+					{
+						$conditionTree->where($this->buildTagAbsenceSubfilter());
+					}
 					break;
 
 				case 'TAG_ID':
@@ -710,6 +753,30 @@ class TaskFilterBuilder
 					}
 					break;
 
+				case 'REPLICATE': // "Active repeat" (SC-S-011): active repeat, resolved via the source
+					// flag for source tasks and via the parent template for forked instances.
+					$conditionTree->where($this->createActiveReplicationSubfilter((string)$val));
+					break;
+
+				case 'REGULAR': // "Regular task" (ALG-03): regular = REPLICATE='Y' OR FORKED_BY_TEMPLATE_ID>0
+					$conditionTree->where($this->createRegularityScopeSubfilter((string)$val));
+					break;
+
+				case 'REPLICATE_TYPE': // "Regularity type" (ALG-03): always gated by the regular predicate
+					// An unselected type arrives from the filter UI as an empty array. It must be a
+					// no-op - NOT (int)[]=0="By schedule", which would silently drop every non-schedule
+					// active repeat. The schedule type (0) is a valid falsy value and must still apply.
+					if (is_array($val))
+					{
+						$val = $val === [] ? null : reset($val);
+					}
+					if ($val === null || $val === '' || $val === false)
+					{
+						break;
+					}
+					$this->applyRegularityTypeFilter($conditionTree, (int)$val);
+					break;
+
 				case "END_DATE_PLAN":
 				case "START_DATE_PLAN":
 				case "DATE_START":
@@ -729,6 +796,15 @@ class TaskFilterBuilder
 					$dateFiltersToWrap['CREATED_DATE'][] = $this->createSubfilter('CREATED_DATE', $val, $operation, self::CAST_DATE);
 					break;
 
+				case 'META:ACCOMPLICE_IS_EMPTY':
+				case 'META:AUDITOR_IS_EMPTY':
+					$memberType = ($field === 'META:ACCOMPLICE_IS_EMPTY')
+						? MemberTable::MEMBER_TYPE_ACCOMPLICE
+						: MemberTable::MEMBER_TYPE_AUDITOR;
+
+					$conditionTree->where($this->buildMemberAbsenceSubfilter($memberType));
+					break;
+
 				case "ACCOMPLICE":
 				case "AUDITOR":
 					if (!is_array($val))
@@ -745,29 +821,39 @@ class TaskFilterBuilder
 						? MemberTable::MEMBER_TYPE_ACCOMPLICE
 						: MemberTable::MEMBER_TYPE_AUDITOR;
 
+					if ($operation === self::OPERATION_NOT)
+					{
+						// Per-task exclusion: keep a task only if it has no member of this type among $val.
+						$conditionTree->where($this->buildMemberAbsenceSubfilter($memberType, $val));
+						break;
+					}
+
+					// Inside the OR group of member fields the sibling key META:MEMBER_UNION marks the condition as
+					// a variant of the match. The join would multiply the rows of every task with several members
+					// of this type, and the DISTINCT that hides the fanout is set over the whole selection, not
+					// over the branch (see TaskQueryBuilder::buildJoin).
+					if (mb_strtolower((string)($filter['META:MEMBER_UNION'] ?? '')) === 'or')
+					{
+						$conditionTree->where($this->buildMemberPresenceSubfilter($memberType, $val));
+
+						break;
+					}
+
 					$alias = ($field === 'ACCOMPLICE')
 						? TaskQueryBuilder::ALIAS_TASK_MEMBER_ACCOMPLICE
 						: TaskQueryBuilder::ALIAS_TASK_MEMBER_AUDITOR;
 
-					if ($operation === self::OPERATION_NOT)
-					{
-						$conditionTree->where(
-							Query::filter()
-								->logic('and')
-								->where($alias . '.TYPE', $memberType)
-								->whereNotIn($alias . '.USER_ID', $val)
-						);
-					}
-					else
-					{
-						$conditionTree->where(
-							Query::filter()
-								->logic('and')
-								->where($alias . '.TYPE', $memberType)
-								->whereIn($alias . '.USER_ID', $val)
-						);
-					}
+					$conditionTree->where(
+						Query::filter()
+							->logic('and')
+							->where($alias . '.TYPE', $memberType)
+							->whereIn($alias . '.USER_ID', $val)
+					);
 					$this->registerRuntimeField($alias);
+					break;
+
+				case 'META:MEMBER_UNION':
+					// Consumed as a sibling of the ACCOMPLICE and AUDITOR cases; produces no condition on its own.
 					break;
 
 				case "PERIOD":
@@ -1369,7 +1455,11 @@ class TaskFilterBuilder
 
 				// internal translation layer; field registration is feature-gated, so no flag check here is safe
 				case 'CRM_ITEM':
-					$subFilter = $this->buildCrmItemFilter($val, $helper);
+					$subFilter = $this->buildCrmItemFilter(
+						$val,
+						$helper,
+						$operation === self::OPERATION_NOT,
+					);
 					if ($subFilter)
 					{
 						$conditionTree->where($subFilter);
@@ -2500,6 +2590,147 @@ class TaskFilterBuilder
 	}
 
 	/**
+	 * "Regular task" scope (ALG-03, SC-S-011). Regularity means "a repeat template exists", NOT
+	 * the mutable b_tasks.REPLICATE flag: pausing a repeat flips REPLICATE to 'N' on the source task,
+	 * yet the task stays regular because its non-zombie template survives. We mirror
+	 * TemplateRepository::getByTaskId() - the canonical "regular template of a task" lookup - through
+	 * a correlated EXISTS on the source template (TASK_ID + ZOMBIE='N'). "With repeats" (Y) = a forked
+	 * instance OR a non-zombie source template exists; "Without repeats" (N) = its NULL-safe negation
+	 * (FORKED is nullable, so a plain NOT would drop rows with NULL FORKED). The pause/active axis lives
+	 * in the separate "Active repeat" (REPLICATE) field.
+	 *
+	 * Perf (H3): the source branch is a correlated EXISTS instead of a `TPLS.ID IS (NOT) NULL` predicate
+	 * over a LEFT JOIN. The old OR-between-a-joined-column-and-a-base-column forced a full base scan plus
+	 * `Using temporary` for the DISTINCT dedup of the join fanout. EXISTS lets each branch hit its own
+	 * index (`b_tasks_template.TASK_ID` for the source template, `ix_b_tasks_forked_created_date` for
+	 * the fork) and removes the join-driven `Using temporary`. The result set is byte-for-byte identical
+	 * to the previous join form (verified on the stand).
+	 */
+	private function createRegularityScopeSubfilter(string $value): ConditionTree
+	{
+		if ($value === 'N')
+		{
+			return Query::filter()
+				->whereExpr('NOT EXISTS(' . $this->createSourceTemplateExistsSubquery() . ')', ['ID'])
+				->where(
+					Query::filter()
+						->logic('or')
+						->whereNull('FORKED_BY_TEMPLATE_ID')
+						->where('FORKED_BY_TEMPLATE_ID', '<=', 0)
+				);
+		}
+
+		return Query::filter()
+			->logic('or')
+			->whereExpr('EXISTS(' . $this->createSourceTemplateExistsSubquery() . ')', ['ID'])
+			->where('FORKED_BY_TEMPLATE_ID', '>', 0);
+	}
+
+	/**
+	 * Correlated subquery SQL for "a non-zombie source template of this task exists", mirroring
+	 * TemplateRepository::getByTaskId(). The single `%s` placeholder is bound by whereExpr() to the
+	 * outer task's ID column. NOT EXISTS over the same SQL is NULL-safe (no join, so no NULL rows to
+	 * drop), preserving the exact negation semantics the previous whereNull(TPLS.ID) branch relied on.
+	 */
+	private function createSourceTemplateExistsSubquery(): string
+	{
+		$subQuery = TaskQueryBuilder::createQuery(
+			TaskQueryBuilder::ALIAS_TASK_TEMPLATE_SRC,
+			TemplateTable::getEntity()
+		);
+		$subQuery->setSelect([new ExpressionField('1', '1')]);
+		$subQuery->where('TASK_ID', new SqlExpression('%s'));
+		$subQuery->where('ZOMBIE', 'N');
+
+		return $subQuery->getQuery();
+	}
+
+	/**
+	 * "Active repeat" scope (SC-S-011). "Active" means the repeat behind the task is currently
+	 * running (not paused). A source task carries the flag itself (b_tasks.REPLICATE), but a forked
+	 * instance always has REPLICATE='N' - its active state lives on the parent template
+	 * (FORKED_BY_TEMPLATE_ID -> template.REPLICATE). So "Yes" (Y) = an active source OR an instance of a
+	 * non-zombie active template; "No" (N) = its NULL-safe negation (the instance join is nullable,
+	 * so a plain NOT would drop non-instance rows).
+	 */
+	private function createActiveReplicationSubfilter(string $value): ConditionTree
+	{
+		$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_TEMPLATE_INST);
+		$instanceReplicate = TaskQueryBuilder::ALIAS_TASK_TEMPLATE_INST . '.REPLICATE';
+		$instanceZombie = TaskQueryBuilder::ALIAS_TASK_TEMPLATE_INST . '.ZOMBIE';
+
+		if ($value === 'N')
+		{
+			return Query::filter()
+				->where('REPLICATE', 'N')
+				->where(
+					Query::filter()
+						->logic('or')
+						->whereNull($instanceReplicate)
+						->where($instanceReplicate, 'N')
+						->where($instanceZombie, 'Y')
+				);
+		}
+
+		return Query::filter()
+			->logic('or')
+			->where('REPLICATE', 'Y')
+			->where(
+				Query::filter()
+					->where($instanceReplicate, 'Y')
+					->where($instanceZombie, 'N')
+			);
+	}
+
+	/**
+	 * "Regularity type" (ALG-03). The type is resolved via two b_tasks_template joins (instance
+	 * link + source link) with instance priority. The regular predicate is applied first and is
+	 * mandatory: without it a schedule-type (0) match would classify every non-regular row as schedule.
+	 *
+	 * Perf (H2): the resolved type used to be `COALESCE(inst.REPLICATE_TYPE, src.REPLICATE_TYPE, 0)`
+	 * wrapped in an ExpressionField, then compared to :type. COALESCE over columns is non-sargable - it
+	 * blocks any index on those columns. We replace it with an explicit disjunction that reproduces the
+	 * exact COALESCE priority and NULL semantics but compares the raw columns directly:
+	 *   inst.REPLICATE_TYPE = :type                                                    (instance wins)
+	 *   OR (inst.REPLICATE_TYPE IS NULL AND src.REPLICATE_TYPE = :type)                (fall through to src)
+	 *   OR (inst.REPLICATE_TYPE IS NULL AND src.REPLICATE_TYPE IS NULL AND :type = 0)  (COALESCE default 0)
+	 * The gate on the fall-through branches is `inst.REPLICATE_TYPE IS NULL` (not `inst.ID IS NULL`),
+	 * matching COALESCE, which skips inst whenever inst.REPLICATE_TYPE is NULL even if the instance row
+	 * exists. Result sets are identical to the old COALESCE form for every type value (verified on the
+	 * stand). The last branch is a constant PHP-side comparison, so it collapses to a no-op for :type != 0.
+	 */
+	private function applyRegularityTypeFilter(ConditionTree $conditionTree, int $type): void
+	{
+		$conditionTree->where($this->createRegularityScopeSubfilter('Y'));
+
+		$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_TEMPLATE_INST);
+		$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_TEMPLATE_SRC);
+
+		$instanceType = TaskQueryBuilder::ALIAS_TASK_TEMPLATE_INST . '.REPLICATE_TYPE';
+		$sourceType = TaskQueryBuilder::ALIAS_TASK_TEMPLATE_SRC . '.REPLICATE_TYPE';
+
+		$typeFilter = Query::filter()
+			->logic('or')
+			->where($instanceType, $type)
+			->where(
+				Query::filter()
+					->whereNull($instanceType)
+					->where($sourceType, $type)
+			);
+
+		if ($type === 0)
+		{
+			$typeFilter->where(
+				Query::filter()
+					->whereNull($instanceType)
+					->whereNull($sourceType)
+			);
+		}
+
+		$conditionTree->where($typeFilter);
+	}
+
+	/**
 	 * @throws InvalidFilterException
 	 * @throws ObjectException
 	 */
@@ -2576,11 +2807,14 @@ class TaskFilterBuilder
 	/**
 	 * Builds a filter over the multiple userfield storage b_utm_tasks_task for the "CRM element" field.
 	 *
-	 * Values follow DTO-01: concrete element `{ABBR}_{id}`, whole static type `ALL_{entityTypeId}`,
+	 * Values: concrete element `{ABBR}_{id}`, whole static type `ALL_{entityTypeId}`,
 	 * all smart processes `ALL_T`, no binding `NONE`. Filtering runs on the VALUE slug column of
 	 * b_utm_tasks_task; the FIELD_ID index narrows the scan (VALUE itself is not indexed).
+	 *
+	 * $exclude inverts the whole selection per De Morgan - NOT (A OR B) = NOT A AND NOT B - so a task
+	 * survives only when it matches none of the picked values, and "no binding" flips into "has any binding".
 	 */
-	private function buildCrmItemFilter($fieldValues, $helper): ?ConditionTree
+	private function buildCrmItemFilter($fieldValues, $helper, bool $exclude = false): ?ConditionTree
 	{
 		if (empty($fieldValues) || !Loader::includeModule('crm'))
 		{
@@ -2598,7 +2832,8 @@ class TaskFilterBuilder
 			return null;
 		}
 
-		$positives = [];
+		$slugs = [];
+		$prefixes = [];
 		$wantNone = false;
 
 		foreach ($fieldValues as $value)
@@ -2612,14 +2847,14 @@ class TaskFilterBuilder
 			elseif ($token === 'ALL_T')
 			{
 				// Every smart-process slug starts with the dynamic-type prefix 'T'.
-				$positives[] = $this->buildCrmPrefixCondition('T');
+				$prefixes[] = 'T';
 			}
 			elseif (str_starts_with($token, 'ALL_'))
 			{
 				$prefix = $this->resolveCrmTypeAbbr((int)mb_substr($token, 4));
 				if ($prefix !== '')
 				{
-					$positives[] = $this->buildCrmPrefixCondition($prefix . '_');
+					$prefixes[] = $prefix . '_';
 				}
 			}
 			else
@@ -2629,41 +2864,595 @@ class TaskFilterBuilder
 				$slug = $entityId === null ? $token : $this->mapCrmSelectorValueToSlug($entityId, $token);
 				if ($slug !== null && $slug !== '')
 				{
-					$positives[] = "VALUE = '" . $this->prepareForSprintf($helper->forSql($slug)) . "'";
+					$slugs[] = $slug;
 				}
 			}
 		}
 
-		if (empty($positives) && !$wantNone)
+		if (empty($slugs) && empty($prefixes) && !$wantNone)
 		{
 			return null;
 		}
 
-		$table = 'b_utm_tasks_task';
+		return $exclude
+			? $this->buildCrmItemExcludeFilter($slugs, $prefixes, $wantNone, $fieldId, $helper)
+			: $this->buildCrmItemEqualFilter($slugs, $prefixes, $wantNone, $fieldId, $helper)
+		;
+	}
+
+	/**
+	 * Positive match: the task carries at least one of the picked bindings - or, for the synthetic
+	 * "no binding" value, carries none at all.
+	 *
+	 * The value set is resolved uncorrelated through (FIELD_ID, VALUE), which ix_utm_tasks_task_field_value
+	 * serves directly; only the "no binding" branch has to be evaluated per task.
+	 */
+	private function buildCrmItemEqualFilter(
+		array $slugs,
+		array $prefixes,
+		bool $wantNone,
+		int $fieldId,
+		$helper,
+	): ConditionTree
+	{
 		$tree = Query::filter();
 		$tree->logic('or');
 
-		// The ORM sprintf()s whereExpr() expressions, so every literal % is doubled (see buildCrmPrefixCondition
-		// and prepareForSprintf) to keep the only real placeholder the %1$s task id.
-		if (!empty($positives))
+		$conditions = $this->buildCrmValueConditions($slugs, $prefixes, 'VALUE', $helper);
+		if (!empty($conditions))
 		{
-			$posSub =
-				"SELECT VALUE_ID FROM {$table}"
-				. " WHERE FIELD_ID = {$fieldId} AND (" . implode(' OR ', $positives) . ")"
-			;
-			$tree->whereExpr('%1$s IN (' . $posSub . ')', ['ID']);
+			$tree->whereExpr(
+				'%1$s IN (SELECT VALUE_ID FROM ' . CrmItemIndex::TABLE
+					. " WHERE FIELD_ID = {$fieldId} AND (" . implode(' OR ', $conditions) . '))',
+				['ID'],
+			);
 		}
 
 		if ($wantNone)
 		{
-			$noneSub =
-				"NOT EXISTS (SELECT 1 FROM {$table} m"
-				. " WHERE m.VALUE_ID = %1\$s AND m.FIELD_ID = {$fieldId})"
-			;
-			$tree->whereExpr($noneSub, ['ID']);
+			$tree->whereExpr($this->buildCrmBindingExpression($fieldId, negated: true), ['ID']);
 		}
 
 		return $tree;
+	}
+
+	/**
+	 * Exclusion. Every branch of the positive selection is negated and the tree switches to AND, so a task
+	 * bound to several CRM elements drops out as soon as one of those bindings is excluded. Correlated
+	 * NOT EXISTS rather than "ID NOT IN (...)" for the reason spelled out in buildTagAbsenceSubfilter().
+	 */
+	private function buildCrmItemExcludeFilter(
+		array $slugs,
+		array $prefixes,
+		bool $wantNone,
+		int $fieldId,
+		$helper,
+	): ConditionTree
+	{
+		$tree = Query::filter();
+		$tree->logic('and');
+
+		$conditions = $this->buildCrmValueConditions(
+			$slugs,
+			$prefixes,
+			self::CRM_ITEM_ALIAS . '.VALUE',
+			$helper,
+		);
+		if (!empty($conditions))
+		{
+			$tree->whereExpr(
+				$this->buildCrmBindingExpression(
+					$fieldId,
+					negated: true,
+					valueFilter: '(' . implode(' OR ', $conditions) . ')',
+				),
+				['ID'],
+			);
+		}
+
+		// Excluding "no binding" is the same as requiring one.
+		if ($wantNone)
+		{
+			$tree->whereExpr($this->buildCrmBindingExpression($fieldId), ['ID']);
+		}
+
+		return $tree;
+	}
+
+	/**
+	 * VALUE predicates of the picked bindings, built against $column so one set serves both the
+	 * uncorrelated positive subquery (bare VALUE) and the correlated one (alias-qualified).
+	 *
+	 * @return string[]
+	 */
+	private function buildCrmValueConditions(array $slugs, array $prefixes, string $column, $helper): array
+	{
+		$conditions = [];
+
+		foreach ($slugs as $slug)
+		{
+			$conditions[] = $column . " = '" . $this->prepareForSprintf($helper->forSql($slug)) . "'";
+		}
+
+		foreach ($prefixes as $prefix)
+		{
+			$conditions[] = $this->buildCrmPrefixCondition($prefix, $column);
+		}
+
+		return $conditions;
+	}
+
+	/**
+	 * EXISTS / NOT EXISTS over the CRM bindings of a single task, correlated by VALUE_ID to the outer task
+	 * id (%1$s). $valueFilter narrows the check to specific bindings; without it it asks for any binding.
+	 *
+	 * The ORM sprintf()s whereExpr() expressions, so every literal % inside $valueFilter is doubled (see
+	 * buildCrmPrefixCondition and prepareForSprintf) to keep the only real placeholder the %1$s task id.
+	 */
+	private function buildCrmBindingExpression(
+		int $fieldId,
+		bool $negated = false,
+		string $valueFilter = '',
+	): string
+	{
+		$alias = self::CRM_ITEM_ALIAS;
+
+		return ($negated ? 'NOT EXISTS' : 'EXISTS')
+			. ' (SELECT 1 FROM ' . CrmItemIndex::TABLE . " {$alias}"
+			. " WHERE {$alias}.VALUE_ID = %1\$s AND {$alias}.FIELD_ID = {$fieldId}"
+			. ($valueFilter === '' ? '' : " AND {$valueFilter}")
+			. ')'
+		;
+	}
+
+	/**
+	 * Per-task member absence: NOT EXISTS over b_tasks_member correlated by TASK_ID.
+	 * $userIds set  -> exclusion ("no member of $memberType among these users");
+	 * $userIds null -> emptiness ("no member of $memberType at all").
+	 */
+	private function buildMemberAbsenceSubfilter(string $memberType, ?array $userIds = null): ConditionTree
+	{
+		$subQuery = TaskQueryBuilder::createQuery(
+			TaskQueryBuilder::ALIAS_TASK_MEMBER,
+			MemberTable::getEntity()
+		);
+		$subQuery->setSelect([new ExpressionField('MEMBER_EXISTS', '1')]);
+		$subQuery->where('TASK_ID', new SqlExpression('%s')); // correlated to the outer task ID
+		$subQuery->where('TYPE', $memberType);
+		if (!empty($userIds))
+		{
+			$subQuery->whereIn('USER_ID', array_map('intval', $userIds));
+		}
+
+		return Query::filter()->whereExpr("NOT EXISTS({$subQuery->getQuery()})", ['ID']);
+	}
+
+	/**
+	 * Per-task member presence: EXISTS over b_tasks_member correlated by TASK_ID and narrowed to the named
+	 * users. Mirror of buildMemberAbsenceSubfilter(), used inside the OR group of member fields: the row of
+	 * a task is kept once no matter how many of the named users are members of it, so the selection needs
+	 * neither the join nor the DISTINCT its fanout forces.
+	 *
+	 * @param array $userIds Non empty; an empty list is dropped by the caller before it gets here.
+	 */
+	private function buildMemberPresenceSubfilter(string $memberType, array $userIds): ConditionTree
+	{
+		$subQuery = TaskQueryBuilder::createQuery(
+			TaskQueryBuilder::ALIAS_TASK_MEMBER,
+			MemberTable::getEntity()
+		);
+		$subQuery->setSelect([new ExpressionField('MEMBER_EXISTS', '1')]);
+		$subQuery->where('TASK_ID', new SqlExpression('%s')); // correlated to the outer task ID
+		$subQuery->where('TYPE', $memberType);
+		$subQuery->whereIn('USER_ID', array_map('intval', $userIds));
+
+		return Query::filter()->whereExpr("EXISTS({$subQuery->getQuery()})", ['ID']);
+	}
+
+	/**
+	 * Indexed id set of the page: the union of the branches of the OR group, handed to the outer query as a
+	 * condition on ids. Which of the two forms it takes depends on the order the page is read in.
+	 *
+	 * Ordered by ID alone the union is bounded: every branch is intersected with the whole result filter and
+	 * cut at offset + limit in the order of the page, so no branch is read deeper than the page reaches.
+	 *
+	 * Under any other deterministic order every branch repeats the complete result query, adds its role and
+	 * keeps its first offset + limit rows. The union of those branch prefixes contains the prefix of their
+	 * union, so the outer query can still apply the original order and page without reading every member id.
+	 */
+	public function buildMemberUnionPageFilter(Query $resultQuery): ?ConditionTree
+	{
+		$where = $this->query->getWhere();
+		if (($where['::LOGIC'] ?? 'AND') !== 'AND')
+		{
+			return null;
+		}
+
+		$branches = $where['::SUBFILTER-MEMBER_UNION'] ?? [];
+		if (($branches['::LOGIC'] ?? null) !== 'OR')
+		{
+			return null;
+		}
+
+		$order = $resultQuery->getOrder();
+		if ($order === [])
+		{
+			return $this->buildMemberUnionIdsFilter($branches);
+		}
+		if (array_keys($order) !== ['ID'])
+		{
+			return $this->buildMemberUnionOrderedPageFilter($branches, $resultQuery);
+		}
+
+		unset($branches['::LOGIC']);
+		$matchingIds = clone $resultQuery;
+		$matchingIds->setSelect(['ID'])->setDistinct(false)->setOrder([])->setLimit(null)->setOffset(0);
+		$union = null;
+		foreach ($branches as $key => $branch)
+		{
+			if (!$this->isSubFilter($key) || !is_array($branch))
+			{
+				return null;
+			}
+
+			$query = $this->buildMemberUnionBranchQuery($branch);
+			if ($query === null)
+			{
+				return null;
+			}
+
+			// Apply the complete result filter, including the original OR for parents, before limiting a branch.
+			$idField = $query->getEntity()->getDataClass() === MemberTable::class ? 'TASK_ID' : 'ID';
+			$query->whereIn($idField, $matchingIds)
+				->setDistinct(true)
+				->setOrder(['ID' => $resultQuery->getOrder()['ID']])
+				->setLimit($this->query->getOffset() + $this->query->getLimit())
+			;
+			if ($union === null)
+			{
+				$union = $query;
+			}
+			else
+			{
+				$union->union($query);
+			}
+		}
+
+		if ($union === null)
+		{
+			return null;
+		}
+
+		$ids = (new Query(Entity::getInstanceByQuery($union)))->setSelect(['ID']);
+
+		return Query::filter()->whereIn('ID', $ids);
+	}
+
+	private function buildMemberUnionOrderedPageFilter(array $branches, Query $resultQuery): ?ConditionTree
+	{
+		$order = $resultQuery->getOrder();
+		if (!array_key_exists('ID', $order))
+		{
+			return $this->buildMemberUnionIdsFilter($branches);
+		}
+
+		$select = $this->getMemberUnionOrderedPageSelect($resultQuery);
+		if ($select === null)
+		{
+			return $this->buildMemberUnionIdsFilter($branches);
+		}
+
+		unset($branches['::LOGIC']);
+		$limit = $this->query->getOffset() + $this->query->getLimit();
+		$union = null;
+		foreach ($branches as $key => $branch)
+		{
+			if (!$this->isSubFilter($key) || !is_array($branch))
+			{
+				return null;
+			}
+
+			$branchQuery = $this->buildMemberUnionBranchQuery($branch);
+			if ($branchQuery === null)
+			{
+				return null;
+			}
+
+			$query = clone $resultQuery;
+			$query
+				->setSelect($select)
+				->whereIn('ID', $branchQuery)
+				->setDistinct(true)
+				->setOffset(0)
+				->setLimit($limit)
+			;
+			if ($union === null)
+			{
+				$union = $query;
+			}
+			else
+			{
+				$union->union($query);
+			}
+		}
+
+		if ($union === null)
+		{
+			return null;
+		}
+
+		$ids = (new Query(Entity::getInstanceByQuery($union)))->setSelect(['ID']);
+
+		return Query::filter()->whereIn('ID', $ids);
+	}
+
+	private function getMemberUnionOrderedPageSelect(Query $resultQuery): ?array
+	{
+		$resultSelect = $resultQuery->getSelect();
+		$select = ['ID'];
+		foreach (array_keys($resultQuery->getOrder()) as $field)
+		{
+			if ($field === 'ID')
+			{
+				continue;
+			}
+
+			if (array_key_exists($field, $resultSelect))
+			{
+				$select[$field] = $resultSelect[$field];
+
+				continue;
+			}
+
+			$key = array_search($field, $resultSelect, true);
+			if ($key === false)
+			{
+				return null;
+			}
+
+			if (is_string($key))
+			{
+				$select[$key] = $resultSelect[$key];
+			}
+			else
+			{
+				$select[] = $field;
+			}
+		}
+
+		return $select;
+	}
+
+	private function getRequiredProjectIds(array $filter): array
+	{
+		if (($filter['::LOGIC'] ?? 'AND') !== 'AND')
+		{
+			return [];
+		}
+
+		foreach ($filter as $key => $value)
+		{
+			if (in_array($key, ['GROUP_ID', '=GROUP_ID'], true))
+			{
+				$ids = (array)$value;
+				$invalidIds = array_filter(
+					$ids,
+					static fn($id): bool => !is_scalar($id) || preg_match('/^[0-9]+$/D', (string)$id) !== 1 || (int)$id <= 0,
+				);
+				if ($ids !== [] && $invalidIds === [])
+				{
+					return array_map('intval', $ids);
+				}
+			}
+			elseif ($this->isSubFilter($key) && is_array($value))
+			{
+				$ids = $this->getRequiredProjectIds($value);
+				if ($ids !== [])
+				{
+					return $ids;
+				}
+			}
+		}
+
+		return [];
+	}
+
+	/**
+	 * Unbounded union of the branches of the OR group: every task of the group, as an indexed id set and
+	 * with no dependency on the order or on the page. Read by the counter, and by the page whenever the
+	 * bounded form of buildMemberUnionPageFilter() does not apply.
+	 */
+	private function buildMemberUnionIdsFilter(array $filter): ?ConditionTree
+	{
+		if (($filter['::LOGIC'] ?? null) !== 'OR')
+		{
+			return null;
+		}
+
+		unset($filter['::LOGIC']);
+		$union = null;
+		$projectIds = $this->getRequiredProjectIds($this->query->getWhere());
+		foreach ($filter as $key => $branch)
+		{
+			if (!$this->isSubFilter($key) || !is_array($branch))
+			{
+				return null;
+			}
+
+			$query = $this->buildMemberUnionBranchQuery($branch, $projectIds);
+			if ($query === null)
+			{
+				return null;
+			}
+
+			if ($union === null)
+			{
+				$union = $query;
+			}
+			else
+			{
+				$union->union($query);
+			}
+		}
+
+		if ($union === null)
+		{
+			return null;
+		}
+
+		// Materialize only participant IDs; the outer query retains access, hierarchy and other filters.
+		$ids = (new Query(Entity::getInstanceByQuery($union)))->setSelect(['ID']);
+
+		return Query::filter()->whereIn('ID', $ids);
+	}
+
+	private function buildMemberUnionBranchQuery(array $branch, array $projectIds = []): ?Query
+	{
+		$memberUnion = mb_strtolower((string)($branch['META:MEMBER_UNION'] ?? ''));
+		unset($branch['META:MEMBER_UNION']);
+		$key = array_key_first($branch);
+		$memberTypes = [
+			'ACCOMPLICE' => MemberTable::MEMBER_TYPE_ACCOMPLICE,
+			'=ACCOMPLICE' => MemberTable::MEMBER_TYPE_ACCOMPLICE,
+			'AUDITOR' => MemberTable::MEMBER_TYPE_AUDITOR,
+			'=AUDITOR' => MemberTable::MEMBER_TYPE_AUDITOR,
+		];
+		if (count($branch) === 1 && isset($memberTypes[$key]) && $memberUnion === 'or')
+		{
+			$userIds = array_filter((array)$branch[$key]);
+			if ($userIds === [])
+			{
+				return null;
+			}
+
+			$query = MemberTable::query()
+				->setSelect(['ID' => 'TASK_ID'])
+				->where('TYPE', $memberTypes[$key])
+				->whereIn('USER_ID', array_map('intval', $userIds))
+			;
+			if ($projectIds !== [])
+			{
+				$query->whereIn('TASK.GROUP_ID', $projectIds);
+			}
+
+			return $query;
+		}
+
+		$columnKeys = ['RESPONSIBLE_ID', '=RESPONSIBLE_ID', 'CREATED_BY', '=CREATED_BY', '!REFERENCE:RESPONSIBLE_ID'];
+		if (array_diff(array_keys($branch), $columnKeys) !== [])
+		{
+			return null;
+		}
+
+		$condition = $this->translateFilter($branch);
+		if ($condition === null)
+		{
+			return null;
+		}
+
+		$query = TaskTable::query()->setSelect(['ID'])->where($condition);
+		if ($projectIds !== [])
+		{
+			$query->whereIn('GROUP_ID', $projectIds);
+		}
+
+		return $query;
+	}
+
+	/**
+	 * Per-task tag absence: NOT EXISTS over b_tasks_task_tag correlated by TASK_ID. The uncorrelated
+	 * "ID NOT IN (SELECT TASK_ID ...)" form makes the database read the whole link table before the outer
+	 * filter, access check and pagination narrow the candidate set.
+	 */
+	private function buildTagAbsenceSubfilter(): ConditionTree
+	{
+		$subQuery = TaskQueryBuilder::createQuery(
+			TaskQueryBuilder::ALIAS_TASK_TAG,
+			TaskTagTable::getEntity()
+		);
+		$subQuery->setSelect([new ExpressionField('TAG_EXISTS', '1')]);
+		$subQuery->where('TASK_ID', new SqlExpression('%s')); // correlated to the outer task ID
+
+		return Query::filter()->whereExpr("NOT EXISTS({$subQuery->getQuery()})", ['ID']);
+	}
+
+	/**
+	 * Per-task tag exclusion: NOT EXISTS over the labels linked to the task, correlated by TASK_ID and narrowed
+	 * to the named tags. Same reason as buildTagAbsenceSubfilter(): the uncorrelated "ID NOT IN (SELECT TASK_ID ...)"
+	 * form makes the database read every task carrying a popular tag before the outer filter, access check and
+	 * pagination narrow the candidate set.
+	 *
+	 * The names are embedded into the sub-SQL, and whereExpr() runs the whole expression through sprintf() once,
+	 * so every % of a tag name is doubled: otherwise "100%" is read as a format specifier (ValueError) and
+	 * "%1$s" would eat the correlation argument. The %s placeholder itself stays raw - it is the live argument.
+	 *
+	 * @param string[] $tags
+	 */
+	private function buildTagExclusionSubfilter(array $tags): ConditionTree
+	{
+		$subQuery = TaskQueryBuilder::createQuery(
+			TaskQueryBuilder::ALIAS_TASK_TAG,
+			LabelTable::getEntity()
+		);
+		$subQuery->setSelect([new ExpressionField('TAG_EXISTS', '1')]);
+
+		$subQuery->registerRuntimeField(
+			TaskQueryBuilder::ALIAS_TASK_TAG,
+			(new ReferenceField(
+				TaskQueryBuilder::ALIAS_TASK_TAG,
+				TaskTagTable::getEntity(),
+				Join::on('this.ID', 'ref.TAG_ID')
+			))->configureJoinType('inner')
+		);
+
+		$subQuery->whereIn('NAME', array_map(fn (string $tag): string => $this->prepareForSprintf($tag), $tags));
+		// correlated to the outer task ID
+		$subQuery->where(TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID', new SqlExpression('%s'));
+
+		return Query::filter()->whereExpr("NOT EXISTS({$subQuery->getQuery()})", ['ID']);
+	}
+
+	/**
+	 * Builds the per-task subquery over labels linked to tasks, selecting TASK_ID for the tasks bound to every one
+	 * of the named tags (AND union). The counting form is what the join path cannot express, so the "any of them"
+	 * union goes through ALIAS_TASK_TAG_NAME instead of this subquery.
+	 *
+	 * @param string[] $tags
+	 */
+	private function buildAllTagsTaskIdSubQuery(array $tags, int $tagsCount): string
+	{
+		$subQuery = TaskQueryBuilder::createQuery(
+			TaskQueryBuilder::ALIAS_TASK_TAG,
+			LabelTable::getEntity()
+		);
+
+		$subQuery->setSelect([
+			TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID',
+		]);
+
+		$subQuery->registerRuntimeField(
+			TaskQueryBuilder::ALIAS_TASK_TAG,
+			(new ReferenceField(
+				TaskQueryBuilder::ALIAS_TASK_TAG,
+				TaskTagTable::getEntity(),
+				Join::on('this.ID', 'ref.TAG_ID')
+			))->configureJoinType('inner')
+		);
+
+		$subQuery->whereIn('NAME', $tags);
+
+		$subQuery->registerRuntimeField(
+			'CNT',
+			new ExpressionField(
+				'CNT',
+				'COUNT(%s)',
+				TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID'
+			)
+		);
+		$subQuery->addGroup(TaskQueryBuilder::ALIAS_TASK_TAG . '.TASK_ID');
+		$subQuery->having('CNT', $tagsCount);
+
+		return $subQuery->getQuery();
 	}
 
 	/**
@@ -2694,7 +3483,7 @@ class TaskFilterBuilder
 	}
 
 	/**
-	 * Maps an entity-selector concrete pick to the stored UF_CRM_TASK slug (DTO-01): static types resolve via
+	 * Maps an entity-selector concrete pick to the stored UF_CRM_TASK slug: static types resolve via
 	 * CCrmOwnerType (token is the bare entity id), smart processes arrive as `{typeId}:{id}`. Mirrors the
 	 * tasks.v2 CrmIdMapper / mappers.js contract.
 	 */
@@ -2760,12 +3549,12 @@ class TaskFilterBuilder
 	 * ESCAPE requires exactly one). prepareForSprintf() then doubles every % because whereExpr() feeds
 	 * the expression through sprintf() (the trailing wildcard % survives as %%).
 	 */
-	private function buildCrmPrefixCondition(string $prefix): string
+	private function buildCrmPrefixCondition(string $prefix, string $column = 'VALUE'): string
 	{
 		$escaped = str_replace(['\\', '%', '_', "'"], ['\\\\', '\\%', '\\_', "\\'"], $prefix);
 		$pattern = $escaped . '%';
 
-		return "VALUE LIKE '" . $this->prepareForSprintf($pattern) . "'";
+		return $column . " LIKE '" . $this->prepareForSprintf($pattern) . "'";
 	}
 
 	/**
@@ -2789,6 +3578,11 @@ class TaskFilterBuilder
 	}
 
 	/**
+	 * Pre-escapes the values the root sub-select embeds into SQL of its own, so that they survive the sprintf()
+	 * of the outer whereExpr() (see the ONLY_ROOT_TASKS case). Tag names are not listed here on purpose: the only
+	 * tag condition that reaches sprintf() is the exclusion subfilter, which escapes them for its own pass, and
+	 * escaping them twice would leave a doubled % in the pattern.
+	 *
 	 * @param array $filter
 	 * @return array
 	 */
@@ -2820,18 +3614,6 @@ class TaskFilterBuilder
 						{
 							$filter[$filterKey][$fieldKey] = $this->prepareForSprintf((string)$fieldValue);
 						}
-					}
-					break;
-
-				case '::SUBFILTER-TAG':
-					$tags = [];
-					foreach ($field as $fieldKey => $fieldValue)
-					{
-						foreach ($fieldValue as $tag)
-						{
-							$tags[] = $this->prepareForSprintf((string)$tag);
-						}
-						$filter[$filterKey][$fieldKey] = $tags;
 					}
 					break;
 

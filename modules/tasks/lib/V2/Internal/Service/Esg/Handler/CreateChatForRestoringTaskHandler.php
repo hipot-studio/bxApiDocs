@@ -31,10 +31,15 @@ class CreateChatForRestoringTaskHandler
 		$result = $this->chatIntegration->addChat($task);
 
 		$chatId = $result->getId();
-		if ($chatId <= 0 || !$result->isSuccess())
+		if (!$result->isSuccess())
 		{
 			Logger::logErrors($result->getErrorCollection());
 			throw new RuntimeException('There was an error while creating new task chat');
+		}
+
+		if ($chatId <= 0)
+		{
+			return $task;
 		}
 
 		$this->chatRepository->save($chatId, $task->getId());

@@ -17,6 +17,7 @@ use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessContext;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessTokenService;
 use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainUrlResolver;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSignature;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
@@ -81,6 +82,7 @@ class HtmlViewerPageService
 			),
 		];
 		$this->addEditUrl($params, $file);
+		$this->removeFileChatWithoutEditUrl($params);
 
 		return $this->preparePublicDomainParams($params, $file->getRealObject());
 	}
@@ -141,6 +143,7 @@ class HtmlViewerPageService
 		{
 			$this->addEditUrl($params, $attached->getFile(), (int)$attached->getId());
 		}
+		$this->removeFileChatWithoutEditUrl($params);
 
 		return $this->preparePublicDomainParams($params);
 	}
@@ -160,38 +163,56 @@ class HtmlViewerPageService
 	 * The description of the header says the same in its own terms: an unlinked logo, no access
 	 * control and no identifiers of the object inside the portal. The copy button stays and hands out
 	 * the public link itself - the only address this reader can open at all (D-1).
+	 *
+	 * A short opening keeps the content, the download and the copied address on its own address, so the
+	 * page names no HASH of the link.
 	 */
 	public function buildParamsByExternalLink(
 		File $file,
 		ExternalLink $link,
 		string $token,
 		?Version $pinnedVersion,
+		?ShortLinkOpening $shortLinkOpening = null,
 	): array
 	{
-		$urlManager = Driver::getInstance()->getUrlManager();
-		$downloadUrl = $urlManager->getUrlExternalLink([
-			'hash' => $link->getHash(),
-			'action' => 'download',
-			'token' => $token,
-		]);
+		$downloadUrl = $this->getExternalLinkActionUrl($link, 'download', $token, $shortLinkOpening);
 		$userId = $this->getCurrentUserId();
 		$name = $this->resolveExternalLinkName($file, $pinnedVersion);
 
 		return [
 			'NAME' => $name,
 			'EDIT_URL' => '',
-			'CONTENT_URL' => $urlManager->getUrlExternalLink([
-				'hash' => $link->getHash(),
-				'action' => 'showHtml',
-				'token' => $token,
-			]),
+			'CONTENT_URL' => $this->getExternalLinkActionUrl($link, 'showHtml', $token, $shortLinkOpening),
 			'HEADER_COMPOSITION' => $this->composeHeader(
-				$this->getOpeningContextFactory()->fromExternalLink($file, $link, $pinnedVersion, $userId, $downloadUrl),
+				$this->getOpeningContextFactory()->fromExternalLink(
+					$file,
+					$link,
+					$pinnedVersion,
+					$userId,
+					$downloadUrl,
+					$shortLinkOpening,
+				),
 				$userId,
 				$name,
 				$downloadUrl,
 			),
 		];
+	}
+
+	private function getExternalLinkActionUrl(
+		ExternalLink $link,
+		string $action,
+		string $token,
+		?ShortLinkOpening $shortLinkOpening,
+	): string
+	{
+		$params = ['action' => $action, 'token' => $token];
+		if ($shortLinkOpening !== null)
+		{
+			return $shortLinkOpening->getCanonicalUrl() . '?' . http_build_query($params);
+		}
+
+		return Driver::getInstance()->getUrlManager()->getUrlExternalLink(['hash' => $link->getHash()] + $params);
 	}
 
 	/**
@@ -226,14 +247,9 @@ class HtmlViewerPageService
 		]);
 	}
 
-	/**
-	 * Where the logo leads back to — the root of the current site. Only the portal branches call it:
-	 * the external link one omits PORTAL_URL altogether and so leaves its logo unlinked, as a page
-	 * reachable without a session needs — a portal address would only lead its reader to a login form.
-	 */
 	private function getPortalUrl(): string
 	{
-		return defined('SITE_DIR') ? (string)SITE_DIR : '/';
+		return (string)Driver::getInstance()->getUrlManager()->getUrlForUserDisk((int)CurrentUser::get()->getId());
 	}
 
 	private function preparePublicDomainParams(array $params, ?BaseObject $unifiedLinkObject = null): array
@@ -248,7 +264,7 @@ class HtmlViewerPageService
 			'access_token' => $accessToken,
 		]);
 		$params['EDIT_URL'] = '';
-		$params['PORTAL_URL'] = $this->getCanonicalUrl($params['PORTAL_URL']);
+		$params['PORTAL_URL'] = $this->getCanonicalUrl(defined('SITE_DIR') ? (string)SITE_DIR : '/');
 
 		$composition = $params['HEADER_COMPOSITION'];
 		if (!is_array($composition))
@@ -260,10 +276,15 @@ class HtmlViewerPageService
 			(array)$composition['elements'],
 			static fn(string $element): bool => !in_array(
 				$element,
-				[DocumentHeaderElement::Access->value, DocumentHeaderElement::Edit->value],
+				[
+					DocumentHeaderElement::Access->value,
+					DocumentHeaderElement::Edit->value,
+					DocumentHeaderElement::BitrixGpt->value,
+				],
 				true,
 			),
 		));
+		$composition['fileChat'] = null;
 		$composition['urls']['download'] = $this->getCanonicalUrl($composition['urls']['download']);
 
 		if ($unifiedLinkObject !== null && $composition['urls']['unifiedLink'] !== '')
@@ -298,6 +319,20 @@ class HtmlViewerPageService
 			$file,
 			$attachedObjectId,
 		);
+	}
+
+	private function removeFileChatWithoutEditUrl(array &$params): void
+	{
+		if ($params['EDIT_URL'] !== '' || !is_array($params['HEADER_COMPOSITION']))
+		{
+			return;
+		}
+
+		$params['HEADER_COMPOSITION']['elements'] = array_values(array_filter(
+			$params['HEADER_COMPOSITION']['elements'],
+			static fn(string $element): bool => $element !== DocumentHeaderElement::BitrixGpt->value,
+		));
+		$params['HEADER_COMPOSITION']['fileChat'] = null;
 	}
 
 	protected function getPublicDomainAccessToken(): ?string

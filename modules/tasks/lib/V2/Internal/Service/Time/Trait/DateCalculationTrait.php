@@ -38,4 +38,22 @@ trait DateCalculationTrait
 
 		return $userTimeClosestDate->add("{$toServerTimeOffset} seconds");
 	}
+
+	/**
+	 * Deadline for a zero offset ("on the creation day"): the end of the user's shift today,
+	 * so the task is due this evening instead of the very moment it was created.
+	 */
+	private function calculateCreationDayDeadline(int $userId): DateTime
+	{
+		$calendar = Calendar::createFromPortalSchedule();
+
+		$userTimeOffset = User::getTimeZoneOffset($userId, false, true);
+		$userDateTime = (new DateTime())->add("{$userTimeOffset} seconds");
+
+		$userTimeShiftEnd = $calendar->getSchedule()->getShiftEnd($userDateTime);
+
+		$toServerTimeOffset = -$userTimeOffset;
+
+		return $userTimeShiftEnd->add("{$toServerTimeOffset} seconds");
+	}
 }

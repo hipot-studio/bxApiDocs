@@ -4,8 +4,6 @@ namespace Bitrix\Intranet\AI;
 
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Bitrix24\Integration\AssistantApp;
-use Bitrix\Faceid\AgreementTable;
-use Bitrix\FaceId\FaceId;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Rest\AppTable;

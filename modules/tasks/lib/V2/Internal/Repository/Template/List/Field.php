@@ -36,6 +36,7 @@ enum Field: string
 	case TParamType = 'TPARAM_TYPE';
 	case TParamReplicationCount = 'TPARAM_REPLICATION_COUNT';
 	case ReplicateParams = 'REPLICATE_PARAMS';
+	case ReplicateType = 'REPLICATE_TYPE';
 	case CreatedByName = 'CREATOR.NAME';
 	case CreatedByLastName = 'CREATOR.LAST_NAME';
 	case CreatedBySecondName = 'CREATOR.SECOND_NAME';
@@ -54,6 +55,17 @@ enum Field: string
 	case Zombie = 'ZOMBIE';
 	case SearchIndex = 'SEARCH_INDEX';
 	case AccessUserId = 'ACCESS_USER_ID';
+	case SectionProjectOrder = 'SECTION_PROJECT_ORDER';
+	case SectionAssigneeOrder = 'SECTION_ASSIGNEE_ORDER';
+	case SectionTypeOrder = 'SECTION_TYPE_ORDER';
+	case SectionNameOrder = 'SECTION_NAME_ORDER';
+	case SectionDeadlineOrder = 'SECTION_DEADLINE_ORDER';
+	case SectionOriginatorOrder = 'SECTION_ORIGINATOR_ORDER';
+	case SectionPriorityOrder = 'SECTION_PRIORITY_ORDER';
+	// Раздел «Регулярные задачи»: видимость строки (своё правило + право на чтение) и ролевой
+	// срез (не влияют на обычный список шаблонов — тот эти поля не запрашивает).
+	case ViewerId = 'SECTION_VIEWER_ID';
+	case RoleId = 'SECTION_ROLE_ID';
 	case SubTemplates = 'SUB_TEMPLATES';
 	case Members = 'MEMBERS';
 	case UserFields = 'UF_*';

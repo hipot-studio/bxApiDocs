@@ -77,6 +77,40 @@ final class UserDepartmentProvider
 		;
 	}
 
+	/** @return array<int> */
+	public function getExistingDepartmentIds(int $userId): array
+	{
+		$members = HrContainer::getNodeMemberRepository()->findAllByEntityIdAndEntityTypeAndNodeType(
+			$userId, MemberEntityType::USER, NodeEntityType::DEPARTMENT,
+			activeFilter: NodeActiveFilter::ALL,
+		);
+
+		return array_map(static fn ($member): int => $member->nodeId, $members->getValues());
+	}
+
+	public function hasSelectedEmployeeDepartments(int $userId, array $departmentIds): bool
+	{
+		$roles = [
+			HrContainer::getRoleHelperService()->getEmployeeRoleId(),
+			HrContainer::getRoleHelperService()->getHeadRoleId(),
+			HrContainer::getRoleHelperService()->getDeputyRoleId(),
+		];
+		$members = HrContainer::getNodeMemberRepository()->findAllByEntityIdAndEntityTypeAndNodeType(
+			$userId, MemberEntityType::USER, NodeEntityType::DEPARTMENT,
+			activeFilter: NodeActiveFilter::ALL,
+		);
+		$assignedIds = [];
+		foreach ($members as $member)
+		{
+			if (array_intersect($roles, $member->roles ?? []))
+			{
+				$assignedIds[] = $member->nodeId;
+			}
+		}
+
+		return !array_diff($departmentIds, $assignedIds);
+	}
+
 	public function hasExactEmployeeDepartments(int $userId, array $departmentIds): bool
 	{
 		$members = PublicHrContainer::getNodeMemberService()->findAllByEntityIds(

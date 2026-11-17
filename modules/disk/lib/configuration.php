@@ -521,6 +521,13 @@ final class Configuration
 		Option::set(Driver::INTERNAL_MODULE_ID, 'default_viewer_service', $code);
 	}
 
+	/** Checks the saved custom server selection without contacting that server. */
+	public static function isCustomServerSaved(): bool
+	{
+		return self::getDefaultViewerServiceCode(false) === OnlyOfficeHandler::getCode()
+			&& self::getDefaultViewerCustomConfigType() !== null;
+	}
+
 	public static function setDefaultViewerCustomConfigType(CustomServerTypes $type): void
 	{
 		Option::set(

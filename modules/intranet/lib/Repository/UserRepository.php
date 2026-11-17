@@ -30,6 +30,36 @@ class UserRepository implements UserRepositoryContract
 {
 	use UserUpdateError;
 
+	public function getGroupMemberships(int $userId): array
+	{
+		$groups = [];
+		foreach (\Bitrix\Main\UserGroupTable::getList(['filter' => ['=USER_ID' => $userId]])->fetchAll() as $group)
+		{
+			$groups[(int)$group['GROUP_ID']] = [
+				'GROUP_ID' => (int)$group['GROUP_ID'],
+				'DATE_ACTIVE_FROM' => $group['DATE_ACTIVE_FROM']?->toString(),
+				'DATE_ACTIVE_TO' => $group['DATE_ACTIVE_TO']?->toString(),
+			];
+		}
+		ksort($groups);
+
+		return array_values($groups);
+	}
+
+	public function updateGroupMemberships(int $userId, array $groups): bool
+	{
+		return (new \CUser())->Update($userId, ['GROUP_ID' => $groups]);
+	}
+
+	public function allGroupsExist(array $groupIds): bool
+	{
+		$groups = \Bitrix\Main\GroupTable::getList([
+			'select' => ['ID'], 'filter' => ['@ID' => $groupIds],
+		])->fetchAll();
+
+		return !array_diff($groupIds, array_map('intval', array_column($groups, 'ID')));
+	}
+
 	public function findUsersByLogins(array $logins): UserCollection
 	{
 		if (empty($logins))
@@ -230,6 +260,33 @@ class UserRepository implements UserRepositoryContract
 				'PERSONAL_MOBILE',
 				'PERSONAL_PHOTO',
 				'PERSONAL_GENDER',
+			])
+			->fetchAll()
+		;
+
+		return $this->makeUserCollectionFromModelArray($userList);
+	}
+
+	public function findSubordinateUsersByIds(array $ids): UserCollection
+	{
+		if (empty($ids))
+		{
+			return new UserCollection();
+		}
+
+		$userList = UserTable::query()
+			->whereIn('ID', $ids)
+			->setSelect([
+				'ID',
+				'NAME',
+				'LAST_NAME',
+				'SECOND_NAME',
+				'ACTIVE',
+				'CONFIRM_CODE',
+				'LOGIN',
+				'EXTERNAL_AUTH_ID',
+				'PERSONAL_PHOTO',
+				'WORK_POSITION',
 			])
 			->fetchAll()
 		;

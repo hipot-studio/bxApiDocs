@@ -3,6 +3,25 @@ namespace Bitrix\Main\DB;
 
 class PgsqlResult extends Result
 {
+	/*
+	 * OIDs of built-in types are fixed in PostgreSQL. Only the types distinguished by
+	 * PgsqlSqlHelper::getFieldByColumnType() are listed; any other type maps to a string field.
+	 * pg_field_type() is not used: it makes the extension read the whole pg_type catalog.
+	 */
+	private const FIELD_TYPE_BY_OID = [
+		17 => 'bytea',
+		20 => 'int8',
+		21 => 'int2',
+		23 => 'int4',
+		700 => 'float4',
+		701 => 'float8',
+		1082 => 'date',
+		1114 => 'timestamp',
+		1184 => 'timestamptz',
+		1700 => 'numeric',
+	];
+	private const BYTEA_OID = 17;
+
 	/** @var \PgSql\Result */
 	protected $resource;
 
@@ -52,7 +71,7 @@ class PgsqlResult extends Result
 					for ($i = 0; $i < $fields; $i++)
 					{
 						$fieldName = mb_strtoupper(pg_field_name($this->resource, $i));
-						$fieldType = pg_field_type($this->resource, $i);
+						$fieldType = self::FIELD_TYPE_BY_OID[(int)pg_field_type_oid($this->resource, $i)] ?? 'text';
 						$this->resultFields[$fieldName] = $helper->getFieldByColumnType($fieldName, $fieldType);
 					}
 				}
@@ -80,10 +99,9 @@ class PgsqlResult extends Result
 				$fieldNum = 0;
 				foreach ($result as $fieldName => $_)
 				{
-					$fieldType = pg_field_type($this->resource, $fieldNum);
-					if ($fieldType === 'bytea')
+					if ((int)pg_field_type_oid($this->resource, $fieldNum) === self::BYTEA_OID)
 					{
-						$this->byteaFields[$fieldName] = $fieldType;
+						$this->byteaFields[$fieldName] = 'bytea';
 					}
 					$fieldNum++;
 				}

@@ -18,6 +18,7 @@ use Bitrix\Tasks\DI\Container;
 use Bitrix\Tasks\V2\Infrastructure\Controller\Request\TaskListRequest;
 use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
+use Bitrix\Tasks\V2\Internal\Access\ExistingEntityId;
 use Bitrix\Tasks\V2\Infrastructure\Controller\ActionFilter\IsEnabledFilter;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Entity\EntityCollectionInterface;
@@ -29,7 +30,6 @@ use Bitrix\Tasks\V2\Internal\Integration\Im\Entity\Message;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskSelect;
-use Bitrix\Tasks\V2\Public\Provider\Params\TaskList\TaskListFilter;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateSelect;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\TemplateParams;
@@ -54,7 +54,7 @@ abstract class BaseController extends JsonController
 	{
 		return array_merge(
 			parent::getDefaultPreFilters(),
-			[new IsEnabledFilter()]
+			[new IsEnabledFilter()],
 		);
 	}
 
@@ -98,194 +98,162 @@ abstract class BaseController extends JsonController
 			new ExactParameter(
 				Entity\Task::class,
 				'task',
-				fn (string $className, array $task): ?EntityInterface
-				=> $this->getWithAccess($this, 'task', Entity\Task::mapFromArray($task)),
+				fn (string $className, array $task): ?EntityInterface => $this->getWithAccess($this, 'task', Entity\Task::mapFromArray($task)),
 			),
 			new ExactParameter(
 				Entity\Task::class,
 				'task',
-				fn (string $className, int $taskId): ?EntityInterface
-				=> $this->getWithAccess($this, 'task', new Entity\Task(id: $taskId)),
+				fn (string $className, int $taskId): ?EntityInterface => $this->getWithAccess($this, 'task', new Entity\Task(id: $taskId)),
 			),
 			new ExactParameter(
 				Entity\Task::class,
 				'targetTask',
-				fn (string $className, int $targetTaskId): ?EntityInterface
-				=> $this->getWithAccess($this, 'targetTask', new Entity\Task(id: $targetTaskId)),
+				fn (string $className, int $targetTaskId): ?EntityInterface => $this->getWithAccess($this, 'targetTask', new Entity\Task(id: $targetTaskId)),
 			),
 			new ExactParameter(
 				Entity\Task::class,
 				'relatedTask',
-				fn (string $className, array $relatedTask): ?EntityInterface
-				=> $this->getWithAccess($this, 'relatedTask', Entity\Task::mapFromArray($relatedTask)),
+				fn (string $className, array $relatedTask): ?EntityInterface => $this->getWithAccess($this, 'relatedTask', Entity\Task::mapFromArray($relatedTask)),
 			),
 			new ExactParameter(
 				Entity\Task::class,
 				'relatedTask',
-				fn (string $className, int $relatedTaskId): ?EntityInterface
-				=> $this->getWithAccess($this, 'relatedTask',new Entity\Task(id: $relatedTaskId)),
+				fn (string $className, int $relatedTaskId): ?EntityInterface => $this->getWithAccess($this, 'relatedTask',new Entity\Task(id: $relatedTaskId)),
 			),
 			new ExactParameter(
 				Message::class,
 				'message',
-				fn (string $className, array $message): ?EntityInterface
-				=> $this->getWithAccess($this, 'message', Message::mapFromArray($message)),
+				fn (string $className, array $message): ?EntityInterface => $this->getWithAccess($this, 'message', Message::mapFromArray($message)),
 			),
 			new ExactParameter(
 				Message::class,
 				'message',
-				fn (string $className, int $messageId): ?EntityInterface
-				=> $this->getWithAccess($this, 'message', new Message(id: $messageId)),
+				fn (string $className, int $messageId): ?EntityInterface => $this->getWithAccess($this, 'message', new Message(id: $messageId)),
 			),
 			new ExactParameter(
 				Entity\TaskCollection::class,
 				'tasks',
-				fn (string $className, array $tasks): ?Entity\EntityCollectionInterface
-				=> $this->getWithAccess($this, 'tasks', Entity\TaskCollection::mapFromArray($tasks)),
+				fn (string $className, array $tasks): ?Entity\EntityCollectionInterface => $this->getWithAccess($this, 'tasks', Entity\TaskCollection::mapFromArray($tasks)),
 			),
 			new ExactParameter(
 				Entity\TaskCollection::class,
 				'tasks',
-				fn (string $className, array $taskIds): ?Entity\EntityCollectionInterface
-				=> $this->getWithAccess($this, 'tasks', Entity\TaskCollection::mapFromIds($taskIds)),
+				fn (string $className, array $taskIds): ?Entity\EntityCollectionInterface => $this->getWithAccess($this, 'tasks', Entity\TaskCollection::mapFromIds($taskIds)),
 			),
 			new ExactParameter(
 				Entity\Template::class,
 				'template',
-				fn (string $className, int $templateId): ?EntityInterface
-				=> $this->getWithAccess($this, 'template', new Entity\Template(id: $templateId)),
+				fn (string $className, int $templateId): ?EntityInterface => $this->getWithAccess($this, 'template', new Entity\Template(id: $templateId)),
 			),
 			new ExactParameter(
 				Entity\Template::class,
 				'template',
-				fn (string $className, array $template): ?EntityInterface
-				=> $this->getWithAccess($this, 'template', Entity\Template::mapFromArray($template)),
+				fn (string $className, array $template): ?EntityInterface => $this->getWithAccess($this, 'template', Entity\Template::mapFromArray($template)),
 			),
 			new ExactParameter(
 				Entity\Template\TemplateCollection::class,
 				'templates',
-				fn (string $className, array $templateIds): ?Entity\EntityCollectionInterface
-				=> $this->getWithAccess($this, 'templates', Entity\Template\TemplateCollection::mapFromIds($templateIds)),
+				fn (string $className, array $templateIds): ?Entity\EntityCollectionInterface => $this->getWithAccess($this, 'templates', Entity\Template\TemplateCollection::mapFromIds($templateIds)),
 			),
 			new ExactParameter(
 				Entity\Group::class,
 				'group',
-				fn (string $className, array $group): ?EntityInterface
-				=> $this->getWithAccess($this, 'group', Entity\Group::mapFromArray($group)),
+				fn (string $className, array $group): ?EntityInterface => $this->getWithAccess($this, 'group', Entity\Group::mapFromArray($group)),
 			),
 			new ExactParameter(
 				Entity\Group::class,
 				'group',
-				fn (string $className, int $groupId): ?EntityInterface
-				=> $this->getWithAccess($this, 'group', new Entity\Group(id: $groupId)),
+				fn (string $className, int $groupId): ?EntityInterface => $this->getWithAccess($this, 'group', new Entity\Group(id: $groupId)),
 			),
 			new ExactParameter(
 				Entity\Flow::class,
 				'flow',
-				fn (string $className, array $flow): ?EntityInterface
-				=> $this->getWithAccess($this, 'flow', Entity\Flow::mapFromArray($flow)),
+				fn (string $className, array $flow): ?EntityInterface => $this->getWithAccess($this, 'flow', Entity\Flow::mapFromArray($flow)),
 			),
 			new ExactParameter(
 				Entity\Flow::class,
 				'flow',
-				fn (string $className, int $flowId): ?EntityInterface
-				=> $this->getWithAccess($this, 'flow', new Entity\Flow(id: $flowId)),
+				fn (string $className, int $flowId): ?EntityInterface => $this->getWithAccess($this, 'flow', new Entity\Flow(id: $flowId)),
 			),
 			new ExactParameter(
 				Entity\Result::class,
 				'result',
-				fn (string $className, array $result): ?EntityInterface
-				=> $this->getWithAccess($this, 'result', Entity\Result::mapFromArray($result)),
+				fn (string $className, array $result): ?EntityInterface => $this->getWithAccess($this, 'result', Entity\Result::mapFromArray($result)),
 			),
 			new ExactParameter(
 				Entity\Result::class,
 				'result',
-				fn (string $className, int $resultId): ?EntityInterface
-				=> $this->getWithAccess($this, 'result', new Entity\Result(id: $resultId)),
+				fn (string $className, int $resultId): ?EntityInterface => $this->getWithAccess($this, 'result', new Entity\Result(id: $resultId)),
 			),
 			new ExactParameter(
 				Entity\ResultCollection::class,
 				'results',
-				fn (string $className, array $results): ?EntityCollectionInterface
-				=> $this->getWithAccess($this, 'results', Entity\ResultCollection::mapFromArray($results)),
+				fn (string $className, array $results): ?EntityCollectionInterface => $this->getWithAccess($this, 'results', Entity\ResultCollection::mapFromArray($results)),
 			),
 			new ExactParameter(
 				Entity\ResultCollection::class,
 				'results',
-				fn (string $className, array $resultIds): ?EntityCollectionInterface
-				=> $this->getWithAccess($this, 'results', Entity\ResultCollection::mapFromIds($resultIds)),
+				fn (string $className, array $resultIds): ?EntityCollectionInterface => $this->getWithAccess($this, 'results', Entity\ResultCollection::mapFromIds($resultIds)),
 			),
 			new ExactParameter(
 				Entity\UserCollection::class,
 				'users',
-				fn (string $className, array $userIds): ?EntityCollectionInterface
-				=> $this->getWithAccess($this, 'users', Entity\UserCollection::mapFromIds($userIds)),
+				fn (string $className, array $userIds): ?EntityCollectionInterface => $this->getWithAccess($this, 'users', Entity\UserCollection::mapFromIds($userIds)),
 			),
 			new ExactParameter(
 				Entity\Task\Reminder::class,
 				'reminder',
-				fn (string $className, array $reminder): ?EntityInterface
-				=> $this->getWithAccess($this, 'reminder', Entity\Task\Reminder::mapFromArray($reminder)),
+				fn (string $className, array $reminder): ?EntityInterface => $this->getWithAccess($this, 'reminder', Entity\Task\Reminder::mapFromArray($reminder)),
 			),
 			new ExactParameter(
 				Entity\Task\ElapsedTime::class,
 				'elapsedTime',
-				fn (string $className, array $elapsedTime): ?EntityInterface
-				=> $this->getWithAccess($this, 'elapsedTime', Entity\Task\ElapsedTime::mapFromArray($elapsedTime)),
+				fn (string $className, array $elapsedTime): ?EntityInterface => $this->getWithAccess($this, 'elapsedTime', Entity\Task\ElapsedTime::mapFromArray($elapsedTime)),
 			),
 			new ExactParameter(
 				Entity\Task\ElapsedTime::class,
 				'elapsedTime',
-				fn (string $className, int $elapsedTimeId): ?EntityInterface
-				=> $this->getWithAccess($this, 'elapsedTime', new Entity\Task\ElapsedTime(id: $elapsedTimeId)),
+				fn (string $className, int $elapsedTimeId): ?EntityInterface => $this->getWithAccess($this, 'elapsedTime', new Entity\Task\ElapsedTime(id: $elapsedTimeId)),
 			),
 			new ExactParameter(
 				SelectInterface::class,
 				'relationTaskSelect',
-				fn (string $className, array $relationTaskSelect): ?SelectInterface
-				=> new RelationTaskSelect($relationTaskSelect),
+				fn (string $className, array $relationTaskSelect): ?SelectInterface => new RelationTaskSelect($relationTaskSelect),
 			),
 			new ExactParameter(
 				SelectInterface::class,
 				'relationTemplateSelect',
-				fn (string $className, array $relationTemplateSelect): ?SelectInterface
-				=> new RelationTemplateSelect($relationTemplateSelect),
+				fn (string $className, array $relationTemplateSelect): ?SelectInterface => new RelationTemplateSelect($relationTemplateSelect),
 			),
 			new ExactParameter(
 				TemplateParams::class,
 				'templateSelect',
-				fn (string $className, ?array $templateSelect = null): ?TemplateParams
-				=> TemplateParams::mapFromArray($templateSelect),
+				fn (string $className, ?array $templateSelect = null): ?TemplateParams => TemplateParams::mapFromArray($templateSelect),
 			),
 			new ExactParameter(
 				TaskParams::class,
 				'taskSelect',
-				fn (string $className, ?array $taskSelect = null): ?TaskParams
-				=> TaskParams::mapFromArray($taskSelect),
+				fn (string $className, ?array $taskSelect = null): ?TaskParams => TaskParams::mapFromArray($taskSelect),
 			),
 			new ExactParameter(
 				Entity\Task\GanttLink::class,
 				'ganttLink',
-				fn (string $className, array $ganttLink): ?EntityInterface
-				=> $this->getWithAccess($this, 'ganttLink', Entity\Task\GanttLink::mapFromArray($ganttLink)),
+				fn (string $className, array $ganttLink): ?EntityInterface => $this->getWithAccess($this, 'ganttLink', Entity\Task\GanttLink::mapFromArray($ganttLink)),
 			),
 			new ExactParameter(
 				Entity\Task\State::class,
 				'state',
-				fn (string $className, array $state): ?EntityInterface
-				=> Entity\Task\State::mapFromArray($state),
+				fn (string $className, array $state): ?EntityInterface => Entity\Task\State::mapFromArray($state),
 			),
 			new ExactParameter(
 				StateFlags::class,
 				'flags',
-				fn (string $className, array $flags): ?ValueObjectInterface
-				=> StateFlags::mapFromArray($flags),
+				fn (string $className, array $flags): ?ValueObjectInterface => StateFlags::mapFromArray($flags),
 			),
 			new ExactParameter(
 				Entity\UserFieldCollection::class,
 				'userFields',
-				fn (string $className, array $userFields): ?EntityCollectionInterface
-				=> $this->getWithAccess($this, 'userFields', Entity\UserFieldCollection::mapFromArray($userFields))
+				fn (string $className, array $userFields): ?EntityCollectionInterface => $this->getWithAccess($this, 'userFields', Entity\UserFieldCollection::mapFromArray($userFields)),
 			),
 			new ValidationParameter(
 				TaskListRequest::class,
@@ -309,14 +277,19 @@ abstract class BaseController extends JsonController
 		array $parameters = [],
 	): null|EntityInterface|EntityCollectionInterface
 	{
-		$request = $controller->getRequest();
-		$parameters = array_merge(
-			$request->toArray(),
-			$request->getJsonList()->toArray(),
-			$parameters
-		);
+		$parameters = array_merge($this->getRequestParameters(), $parameters);
 
 		$accessAttributes = $this->getArgumentAccessAttributes($controller, $parameterName);
+		if (
+			$this->attributesRequireExistingId($accessAttributes)
+			&& !$this->hasPositiveExistingEntityId($entity, $parameterName, $parameters)
+		)
+		{
+			$this->addError(ExistingEntityId::errorFor($entity));
+
+			return null;
+		}
+
 		foreach ($accessAttributes as $accessAttribute)
 		{
 			/** @var AttributeAccessInterface $accessAttribute */
@@ -332,6 +305,124 @@ abstract class BaseController extends JsonController
 		}
 
 		return $entity;
+	}
+
+	protected function getRequestParameters(): array
+	{
+		$request = $this->getRequest();
+
+		return array_merge(
+			$request->toArray(),
+			$request->getJsonList()->toArray(),
+		);
+	}
+
+	protected function attributesRequireExistingId(array $attributes): bool
+	{
+		if ($attributes === [])
+		{
+			return false;
+		}
+
+		foreach ($attributes as $attribute)
+		{
+			if (!$this->isCreateEntityAttribute($attribute))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	protected function isCreateEntityAttribute(AttributeAccessInterface $attribute): bool
+	{
+		return $attribute instanceof \Bitrix\Tasks\V2\Internal\Access\Task\Permission\Add
+			|| $attribute instanceof \Bitrix\Tasks\V2\Internal\Access\Template\Permission\Add
+			|| $attribute instanceof \Bitrix\Tasks\V2\Internal\Access\Task\Result\Permission\Add
+			|| $attribute instanceof \Bitrix\Tasks\V2\Internal\Access\Task\Reminder\Permission\Add;
+	}
+
+	protected function hasPositiveExistingEntityId(
+		EntityInterface|EntityCollectionInterface $entity,
+		string $parameterName,
+		array $parameters,
+	): bool
+	{
+		if ($entity instanceof Entity\UserFieldCollection)
+		{
+			return true;
+		}
+
+		if (!$this->rawRequestIdsAreValid($parameterName, $parameters))
+		{
+			return false;
+		}
+
+		if ($entity instanceof EntityCollectionInterface)
+		{
+			foreach ($entity as $item)
+			{
+				if (!$item instanceof EntityInterface || !ExistingEntityId::isPositive($item->getId()))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		return ExistingEntityId::isPositive($entity->getId());
+	}
+
+	protected function rawRequestIdsAreValid(string $parameterName, array $parameters): bool
+	{
+		$payload = $parameters[$parameterName] ?? null;
+		if (is_array($payload))
+		{
+			if ($payload !== [] && array_is_list($payload))
+			{
+				foreach ($payload as $item)
+				{
+					if (is_array($item) && !$this->rawItemIdIsValid($item))
+					{
+						return false;
+					}
+
+					if (!is_array($item) && !ExistingEntityId::isPositive($item))
+					{
+						return false;
+					}
+				}
+
+				return true;
+			}
+
+			return $this->rawItemIdIsValid($payload);
+		}
+
+		$idKey = $parameterName . 'Id';
+		if (array_key_exists($idKey, $parameters))
+		{
+			return ExistingEntityId::isPositive($parameters[$idKey]);
+		}
+
+		return true;
+	}
+
+	protected function rawItemIdIsValid(array $item): bool
+	{
+		if (array_key_exists('id', $item))
+		{
+			return ExistingEntityId::isPositive($item['id']);
+		}
+
+		if (array_key_exists('taskId', $item))
+		{
+			return ExistingEntityId::isPositive($item['taskId']);
+		}
+
+		return true;
 	}
 
 	protected function getArgumentAccessAttributes(Controller $controller, string $parameterName): array
@@ -351,7 +442,7 @@ abstract class BaseController extends JsonController
 
 			return array_map(
 				static fn (ReflectionAttribute $attribute): AttributeAccessInterface => $attribute->newInstance(),
-				$arg->getAttributes(AttributeAccessInterface::class, ReflectionAttribute::IS_INSTANCEOF)
+				$arg->getAttributes(AttributeAccessInterface::class, ReflectionAttribute::IS_INSTANCEOF),
 			);
 		}
 

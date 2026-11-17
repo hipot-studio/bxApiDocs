@@ -41,6 +41,11 @@ final class PlainText extends Body
 		return $names;
 	}
 
+	public function getMultiplyingBlockNames(): array
+	{
+		return [];
+	}
+
 	public function getFileExtension()
 	{
 		return 'txt';

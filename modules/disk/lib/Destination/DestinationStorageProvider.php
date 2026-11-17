@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Destination;
 
-use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Service\Storage\AvailableStorageService;
 use Bitrix\Disk\Internal\Service\Storage\StorageType;
-use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Storage;
 
 /**
@@ -47,7 +45,8 @@ class DestinationStorageProvider
 	 */
 	public function getGroupedStorages(int $userId): array
 	{
-		$storages = $this->getWritableStorages($userId);
+		// a right to add may stand on a folder deep inside a read-only disk, so the rights are weighed per folder
+		$storages = $this->availableStorageService->getReadableStorages($userId);
 		$groupTitles = $this->availableStorageService->loadGroupTitlesForStorages($storages);
 
 		$sections = [];
@@ -81,36 +80,6 @@ class DestinationStorageProvider
 		}
 
 		return $groups;
-	}
-
-	/**
-	 * @return Storage[]
-	 */
-	protected function getWritableStorages(int $userId): array
-	{
-		$writableStorages = [];
-		foreach ($this->availableStorageService->getReadableStorages($userId) as $storage)
-		{
-			if ($this->canWriteToRootObject($storage, $userId))
-			{
-				$writableStorages[] = $storage;
-			}
-		}
-
-		return $writableStorages;
-	}
-
-	protected function getSecurityContext(Storage $storage, int $userId): SecurityContext
-	{
-		return $storage->getSecurityContext($userId);
-	}
-
-	private function canWriteToRootObject(Storage $storage, int $userId): bool
-	{
-		$rootObject = $storage->getRootObject();
-
-		return $rootObject instanceof Folder
-			&& $rootObject->canAdd($this->getSecurityContext($storage, $userId));
 	}
 
 	private function normalizeStorage(Storage $storage, StorageType $type, array $groupTitles): ?array

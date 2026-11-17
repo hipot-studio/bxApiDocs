@@ -27,6 +27,7 @@ class Vibe extends Scope
 {
 	private const ALLOWED_EXTENSIONS = [
 		'landing.widgetvue',
+		'landing.ui.a11y',
 		'landing_carousel',
 		'landing_jquery',
 		'landing_icon_fonts',
@@ -231,6 +232,7 @@ class Vibe extends Scope
 			'block',
 			'cards',
 			'nodes',
+			'envelopes',
 			'style',
 			'assets',
 			'callbacks',

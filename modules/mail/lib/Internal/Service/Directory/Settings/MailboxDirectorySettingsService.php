@@ -86,8 +86,10 @@ final readonly class MailboxDirectorySettingsService
 					));
 				}
 
-				$pointer = (int)($state['sourceGenerationId'] ?? 0);
-				$scope = $pointer > 0 ? GenerationScope::active($pointer) : GenerationScope::withoutPreparedGenerations($mailboxId);
+				$scope = GenerationScope::servingMailboxWithPointer(
+					$mailboxId,
+					(int)($state['sourceGenerationId'] ?? 0),
+				);
 				$syncResult = $this->syncUpdater->update($mailboxId, $dirs, $scope, activateSync: false);
 				if (!$syncResult->isSuccess())
 				{

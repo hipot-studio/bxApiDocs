@@ -15,6 +15,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\Bitrix24SiteUrlResolver;
 use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionService;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\User;
@@ -339,13 +340,22 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 			->get(HeaderCompositionService::class)
 			->composeForPage(
 				$locator->get(OpeningContextFactory::class)->fromDocumentSession(
-					$this->session,
-					$userId,
-					$this->hasUnifiedLinkProof(),
+					documentSession: $this->session,
+					userId: $userId,
+					hasUnifiedLinkProof: $this->hasUnifiedLinkProof(),
+					shortLinkOpening: $this->getShortLinkOpening(),
 				),
 				$userId,
 			)
 		;
+	}
+
+	/** The short opening the public page of a link draws the board for: the header copies its address. */
+	private function getShortLinkOpening(): ?ShortLinkOpening
+	{
+		$opening = $this->arParams['SHORT_LINK_OPENING'] ?? null;
+
+		return $opening instanceof ShortLinkOpening ? $opening : null;
 	}
 
 	/**

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandValidationException;
+use Bitrix\Main\Data\ConnectionPool;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Exception\TemplateAddException;
@@ -23,6 +26,12 @@ use InvalidArgumentException;
 
 class ReplicationService
 {
+	private const CREATE_LOCK_TIMEOUT = 5;
+	private const CREATE_LOCK_PREFIX = 'tasks.replication.task.';
+
+	private readonly Connection $connection;
+	private readonly ConnectionPool $connectionPool;
+
 	public function __construct(
 		private readonly TemplateRepositoryInterface $templateRepository,
 		private readonly TemplateAccessService $templateAccessService,
@@ -31,8 +40,12 @@ class ReplicationService
 		private readonly UpdateTaskService $updateTaskService,
 		private readonly TemplateFromTaskCreator $templateFromTaskCreator,
 		private readonly PushService $pushService,
+		?Connection $connection = null,
+		?ConnectionPool $connectionPool = null,
 	)
 	{
+		$this->connection = $connection ?? Application::getConnection();
+		$this->connectionPool = $connectionPool ?? Application::getInstance()->getConnectionPool();
 	}
 
 	/**
@@ -40,6 +53,7 @@ class ReplicationService
 	 * @throws TaskNotExistsException
 	 * @throws TaskUpdateException
 	 * @throws TemplateAddException
+	 * @throws TemplateUpdateException
 	 * @throws WrongTaskIdException
 	 */
 	public function createTemplate(Entity\Task $task, int $userId): int
@@ -49,17 +63,71 @@ class ReplicationService
 			throw new TemplateAddException('ReplicationService: property replicateParams is not passed');
 		}
 
-		if ($this->templateRepository->getByTaskId((int)$task->getId()) !== null)
+		$taskId = (int)$task->getId();
+		$lockName = self::CREATE_LOCK_PREFIX . $taskId;
+		$templateId = 0;
+		$isLocked = false;
+
+		$this->connectionPool->useMasterOnly(true);
+		try
 		{
-			throw new TemplateAddException('ReplicationService: template already exists for this task');
+			if (!$this->connection->lock($lockName, self::CREATE_LOCK_TIMEOUT))
+			{
+				throw new TemplateAddException('ReplicationService: failed to lock template creation');
+			}
+
+			$isLocked = true;
+			$existingTemplate = $this->templateRepository->getByTaskId($taskId);
+			if ($existingTemplate !== null)
+			{
+				$templateId = (int)$existingTemplate->getId();
+				$replicateParams = $this->templateRepository->getReplicateParams($templateId);
+				if ($templateId <= 0 || $replicateParams === null || $replicateParams === [])
+				{
+					throw new TemplateAddException('ReplicationService: template already exists for this task');
+				}
+
+				$templateToUpdate = new Entity\Template(id: $templateId);
+				if (!$this->templateAccessService->canSave($userId, $templateToUpdate))
+				{
+					throw new TemplateAddException('ReplicationService: no permissions to update template');
+				}
+
+				$this->updateTemplateService->update(
+					template: new Entity\Template(
+						id: $templateId,
+						matchesWorkTime: $task->matchesWorkTime,
+						requireResult: $task->requireResult,
+						replicate: true,
+						replicateParams: $task->replicateParams,
+						regularityType: $task->regularityType,
+					),
+					config: new Template\Action\Update\Config\UpdateConfig(userId: $userId),
+				);
+			}
+			else
+			{
+				$config = new AddConfig(userId: $userId, withReplication: true);
+				$template = $this->templateFromTaskCreator->create($task, $config);
+				$templateId = (int)$template->getId();
+			}
+
+			$this->updateTaskReplication($task, $userId, true);
 		}
-
-		$config = new AddConfig(userId: $userId, withReplication: true);
-		$template = $this->templateFromTaskCreator->create($task, $config);
-
-		$this->updateTaskReplication($task, $userId, true);
-
-		$templateId = (int)$template->getId();
+		finally
+		{
+			try
+			{
+				if ($isLocked)
+				{
+					$this->connection->unlock($lockName);
+				}
+			}
+			finally
+			{
+				$this->connectionPool->useMasterOnly(false);
+			}
+		}
 
 		$this->sendPush($userId, $templateId);
 

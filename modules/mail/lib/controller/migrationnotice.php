@@ -8,6 +8,7 @@ use Bitrix\Mail\Access\MailActionDictionary;
 use Bitrix\Mail\Access\MailboxAccessController;
 use Bitrix\Mail\Access\Model\MailboxModel;
 use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Integration\MailService\MigrationEntryService;
 use Bitrix\Mail\Internal\Service\MigrationNotice\NoticeCode;
 use Bitrix\Mail\Internal\Service\MigrationNotice\NoticeDecisionService;
 use Bitrix\Mail\Internal\Service\MigrationNotice\NoticeSurface;
@@ -25,7 +26,7 @@ Loc::loadMessages(__FILE__);
  * Messages about the migration of mail to Bitrix24 Mail. Scope: api.
  *
  *   get   POST {surface, mailboxId?}        -> {decision}  (API-01)
- *   react POST {reactionToken, reaction}    -> {decision}  (API-02)
+ *   react POST {reactionToken, shown}       -> {decision}  (API-02)
  *
  * The controller carries no rule of the display and knows none: which message is due, and what a
  * reaction spends, belong to {@see NoticeDecisionService} alone. What lives here is the boundary -
@@ -47,16 +48,10 @@ final class MigrationNotice extends Controller
 	public const ERROR_UNKNOWN_REACTION = 'unknown_reaction';
 	public const ERROR_INVALID_TOKEN = NoticeDecisionService::ERROR_INVALID_TOKEN;
 	public const ERROR_TOKEN_EXPIRED = NoticeDecisionService::ERROR_TOKEN_EXPIRED;
+	public const ERROR_INVALID_MIGRATION_TOKEN = 'invalid_migration_token';
+	public const ERROR_MIGRATION_TOKEN_EXPIRED = 'migration_token_expired';
 
 	public const REACTION_SHOWN = NoticeDecisionService::REACTION_SHOWN;
-	public const REACTION_REMIND_LATER = NoticeDecisionService::REACTION_REMIND_LATER;
-	public const REACTION_DISMISSED = NoticeDecisionService::REACTION_DISMISSED;
-
-	private const REACTIONS = [
-		self::REACTION_SHOWN,
-		self::REACTION_REMIND_LATER,
-		self::REACTION_DISMISSED,
-	];
 
 	private const ERROR_MESSAGE_KEYS = [
 		self::ERROR_ACCESS_DENIED => 'MAIL_MIGRATION_NOTICE_ERROR_ACCESS_DENIED',
@@ -64,6 +59,8 @@ final class MigrationNotice extends Controller
 		self::ERROR_UNKNOWN_REACTION => 'MAIL_MIGRATION_NOTICE_ERROR_UNKNOWN_REACTION',
 		self::ERROR_INVALID_TOKEN => 'MAIL_MIGRATION_NOTICE_ERROR_INVALID_TOKEN',
 		self::ERROR_TOKEN_EXPIRED => 'MAIL_MIGRATION_NOTICE_ERROR_TOKEN_EXPIRED',
+		self::ERROR_INVALID_MIGRATION_TOKEN => 'MAIL_MIGRATION_NOTICE_ERROR_INVALID_TOKEN',
+		self::ERROR_MIGRATION_TOKEN_EXPIRED => 'MAIL_MIGRATION_NOTICE_ERROR_TOKEN_EXPIRED',
 	];
 
 	protected function getDefaultPreFilters(): array
@@ -111,14 +108,12 @@ final class MigrationNotice extends Controller
 	}
 
 	/**
-	 * API-02. POST {reactionToken, reaction} -> {decision}
-	 *
-	 * The answer is the decision in force once the reaction is written down: closing a popup is what
-	 * lets the banner appear, and the client learns that from the same call.
+	 * API-02. POST {reactionToken, shown} -> {decision}
+	 * The general announcement is the only message that reports being shown.
 	 */
 	public function reactAction(NoticeDecisionService $notices, string $reactionToken, string $reaction): ?array
 	{
-		if (!in_array($reaction, self::REACTIONS, true))
+		if ($reaction !== self::REACTION_SHOWN)
 		{
 			$this->addFailure(422, self::ERROR_UNKNOWN_REACTION);
 
@@ -153,6 +148,47 @@ final class MigrationNotice extends Controller
 	}
 
 	/**
+	 * POST {migrationToken} -> {domain, consentGranted, url, error?}
+	 */
+	public function transferAction(
+		NoticeDecisionService $notices,
+		string $migrationToken,
+		?MigrationEntryService $migrationEntry = null,
+	): ?array
+	{
+		$userId = $this->getUserId();
+		$verified = $notices->verifyMigrationToken($migrationToken, $userId);
+		if (!$verified->isSuccess())
+		{
+			$this->addFailure(422, (string)$verified->getErrors()[0]->getCode());
+
+			return null;
+		}
+
+		$data = $verified->getData();
+		$migrationEntry ??= new MigrationEntryService();
+		$result = $migrationEntry->enter(
+			(string)$data['domain'],
+			$userId,
+			(string)$data['textVersion'],
+			$this->displayNameOf($userId),
+		);
+
+		$answer = $result->getData();
+		if (($answer['consentGranted'] ?? false) === true)
+		{
+			// One press of the panel stands for every domain of the portal, not only the one it was shown for
+			$migrationEntry->grantConsents(
+				array_values(array_diff($notices->getDomainsAwaitingConsent(), [(string)$data['domain']])),
+				$userId,
+				(string)$data['textVersion'],
+			);
+		}
+
+		return $answer;
+	}
+
+	/**
 	 * The same boundary the neighbouring controller of the migration statuses keeps: a mailbox a person
 	 * may not even see is not a mailbox they may react about.
 	 */
@@ -174,6 +210,26 @@ final class MigrationNotice extends Controller
 		return (int)CurrentUser::get()->getId();
 	}
 
+	private function displayNameOf(int $userId): string
+	{
+		$user = Main\UserTable::getRow([
+			'select' => ['NAME', 'LAST_NAME', 'LOGIN'],
+			'filter' => ['=ID' => $userId],
+		]);
+
+		if ($user === null)
+		{
+			return '';
+		}
+
+		$name = trim(implode(' ', array_filter([
+			(string)($user['NAME'] ?? ''),
+			(string)($user['LAST_NAME'] ?? ''),
+		])));
+
+		return $name === '' ? trim((string)($user['LOGIN'] ?? '')) : $name;
+	}
+
 	private function addFailure(int $status, string $code): void
 	{
 		Context::getCurrent()->getResponse()->setStatus($status);
@@ -184,3 +240,4 @@ final class MigrationNotice extends Controller
 		));
 	}
 }
+

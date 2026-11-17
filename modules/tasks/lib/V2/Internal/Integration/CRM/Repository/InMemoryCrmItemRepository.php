@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\CRM\Repository;
 
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Dto\CrmItemPreviewResult;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 
 class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
@@ -12,12 +13,10 @@ class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
 
 	private array $idCache = [];
 	private array $templateIdCache = [];
-	private CrmItemCollection $itemCache;
 
 	public function __construct(CrmItemRepository $crmItemRepository)
 	{
 		$this->crmItemRepository = $crmItemRepository;
-		$this->itemCache = new CrmItemCollection();
 	}
 
 	public function getIdsByTaskId(int $taskId): array
@@ -72,23 +71,14 @@ class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
 		return $result;
 	}
 
-	public function getByIds(array $ids): CrmItemCollection
+	public function getReadableByIds(array $ids, int $userId): CrmItemCollection
 	{
-		$crmItems = CrmItemCollection::mapFromIds(ids: $ids);
-		$stored = $this->itemCache->findAllByIds($ids);
+		return $this->crmItemRepository->getReadableByIds($ids, $userId);
+	}
 
-		$notStoredIds = $crmItems->diff($stored)->getIdList();
-
-		if (empty($notStoredIds))
-		{
-			return $stored;
-		}
-
-		$crmItems = $this->crmItemRepository->getByIds($notStoredIds);
-
-		$this->itemCache->merge($crmItems);
-
-		return $this->itemCache->findAllByIds($ids);
+	public function getPreviewByIds(array $ids, int $userId, int $limit): CrmItemPreviewResult
+	{
+		return $this->crmItemRepository->getPreviewByIds($ids, $userId, $limit);
 	}
 
 	public function invalidate(int $taskId): void

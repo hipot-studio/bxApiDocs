@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\Analytics\Enum\DocumentTypeEnum;
+use Bitrix\Disk\Controller\ShortLink;
 use Bitrix\Disk\Analytics\Enum\OpenTypeEnum;
 use Bitrix\Disk\Document\DocumentSessionResult;
 use Bitrix\Disk\Document\DocumentSource;
@@ -17,6 +18,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\TrackedObjectManager;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internal\Service\SessionCommandFactory;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
@@ -37,6 +39,8 @@ class VibeofficeHtmlRenderableHandler implements
 	private DocumentSessionManager $documentSessionManager;
 	private ?string $openingNoticeCode = null;
 	private ?string $editTransitionUrl = null;
+	private ?ShortLinkOpening $shortLinkOpening = null;
+	private ?int $requestedType = null;
 
 	public function __construct(
 		private readonly File $file,
@@ -68,6 +72,20 @@ class VibeofficeHtmlRenderableHandler implements
 		$this->openingNoticeCode = in_array($code, OpeningNoticeCodeAware::ALLOWED_CODES, true) ? $code : null;
 	}
 
+	/**
+	 * The short opening the editor is shown for: it reaches the shell apart from the access context of the
+	 * session, together with the mode the opening was allowed.
+	 */
+	public function setShortLinkOpening(ShortLinkOpening $shortLinkOpening): void
+	{
+		$this->shortLinkOpening = $shortLinkOpening;
+	}
+
+	public function getShortLinkOpening(): ?ShortLinkOpening
+	{
+		return $this->shortLinkOpening;
+	}
+
 	public function setEditTransitionUrl(?string $url): void
 	{
 		$this->editTransitionUrl = ($url === null || $url === '') ? null : $url;
@@ -96,6 +114,7 @@ class VibeofficeHtmlRenderableHandler implements
 
 	private function handle(int $type): HandlerOperationResult
 	{
+		$this->requestedType = $type;
 		if ($type === DocumentSession::TYPE_VIEW && $this->documentSource->getVersion() === null)
 		{
 			try
@@ -243,6 +262,11 @@ class VibeofficeHtmlRenderableHandler implements
 			'LINK_TO_EDIT' => $editTransitionUrl,
 			'UNIFIED_LINK_MODE' => true,
 			'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
+			'SHORT_LINK_OPENING' => $this->shortLinkOpening,
+			'SHORT_LINK_MODE' => $this->requestedType === DocumentSession::TYPE_EDIT
+				? ShortLink::MODE_EDIT
+				: ShortLink::MODE_VIEW
+			,
 		];
 	}
 

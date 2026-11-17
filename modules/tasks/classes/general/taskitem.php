@@ -19,6 +19,7 @@ use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Log\Logger;
+use Bitrix\Tasks\Internals\Log\LogFacade;
 use \Bitrix\Tasks\Internals\Task\FavoriteTable;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
 use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
@@ -779,9 +780,6 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		'SPAWNED_BY_AGENT' => false,
 	))
 	{
-		CTaskAssert::assertLaxIntegers($executiveUserId);
-		CTaskAssert::assert($executiveUserId > 0);
-
 		$templateId = (int) $templateId;
 		if ( ! $templateId )
 		{
@@ -804,21 +802,48 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 
 		// read template data
 
-		if(is_array($parameters['TEMPLATE_DATA'] ?? null) && !empty($parameters['TEMPLATE_DATA'] ?? null))
+		try
 		{
-			$arTemplate = $parameters['TEMPLATE_DATA'];
-		}
-		else
-		{
-			$arFilter   = array('ID' => $templateId);
-			$rsTemplate = CTaskTemplates::GetList(array(), $arFilter, array(), array(), array('*', 'UF_*'));
-			$arTemplate = $rsTemplate->Fetch();
-
-			if ( ! $arTemplate )
+			if(is_array($parameters['TEMPLATE_DATA'] ?? null) && !empty($parameters['TEMPLATE_DATA'] ?? null))
 			{
-				return array();	// nothing to do
+				$arTemplate = $parameters['TEMPLATE_DATA'];
+			}
+			else
+			{
+				$arFilter = array('ID' => $templateId);
+				$rsTemplate = CTaskTemplates::GetList(array(), $arFilter, array(), array(), array('*', 'UF_*'));
+				$arTemplate = $rsTemplate->Fetch();
 			}
 		}
+		catch (\Throwable $exception)
+		{
+			self::logTemplateExecutionFailure($templateId, 'Template read failed', $exception);
+			return array();
+		}
+
+		if (!is_array($arTemplate) || !$arTemplate)
+		{
+			self::logTemplateExecutionFailure($templateId, 'Template is unreadable');
+			return array();
+		}
+
+		if ((int)($arTemplate['TPARAM_TYPE'] ?? 0) === CTaskTemplates::TYPE_FOR_NEW_USER)
+		{
+			if ((int)($arTemplate['CREATED_BY'] ?? 0) <= 0)
+			{
+				self::logTemplateExecutionFailure($templateId, 'Invalid template creator');
+				return array();
+			}
+
+			if ((int)$executiveUserId <= 0)
+			{
+				self::logTemplateExecutionFailure($templateId, 'Invalid executive user');
+				return array();
+			}
+		}
+
+		CTaskAssert::assertLaxIntegers($executiveUserId);
+		CTaskAssert::assert($executiveUserId > 0);
 
 		$arTemplate = array_merge($arTemplate, $overrideTaskData);
 
@@ -980,6 +1005,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 				}
 				catch(Exception $e)
 				{
+					self::logTemplateExecutionFailure($templateId, 'Creation failed', $e);
 				}
 
 				if ($taskId)
@@ -1049,6 +1075,27 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		}
 
 		return $created;
+	}
+
+	private static function logTemplateExecutionFailure(
+		int $templateId,
+		string $reason,
+		?\Throwable $exception = null,
+	): void
+	{
+		try
+		{
+			LogFacade::log(
+				[
+					'templateId' => $templateId,
+					'reason' => $reason . ($exception ? ': ' . $exception->getMessage() : ''),
+				],
+				'TASKS_TEMPLATE_EXECUTION',
+			);
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 
 	/**
@@ -3872,6 +3919,38 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function deleteFile($attachmentId)
 	{
+		$attachmentId = (int)$attachmentId;
+		$container = Container::getInstance();
+		$currentAttachmentIds = array_map(
+			'intval',
+			$container->getTaskReadRepository()->getAttachmentIds($this->getId())
+		);
+
+		if (!in_array($attachmentId, $currentAttachmentIds, true))
+		{
+			throw new TasksException('Access denied', TasksException::TE_ACTION_NOT_ALLOWED);
+		}
+
+		$diskFileRepository = $container->getDiskFileRepository();
+		$attachments = $diskFileRepository->getByIds([$attachmentId]);
+		$attachmentsCreatedByMap = $diskFileRepository->getOwnerIdsByFileIds(
+			[$attachmentId],
+			$this->getId()
+		);
+
+		if (
+			!$this->checkAccess(
+				ActionDictionary::ACTION_TASK_DETACH_FILE,
+				[
+					'attachments' => $attachments->toArray(),
+					'attachmentsCreatedByMap' => $attachmentsCreatedByMap,
+				]
+			)
+		)
+		{
+			throw new TasksException('Access denied', TasksException::TE_ACTION_NOT_ALLOWED);
+		}
+
 		Attachment::delete($this->getId(), $attachmentId, array(
 			'USER_ID' => $GLOBALS['USER']->GetId(),
 			'ENTITY_ID' => UserField::getTargetEntityId(),

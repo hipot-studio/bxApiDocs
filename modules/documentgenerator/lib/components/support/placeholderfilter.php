@@ -32,6 +32,15 @@ final class PlaceholderFilter
 		return $placeholders;
 	}
 
+	public function getPredicate(array $uiFilter): callable
+	{
+		$placeholderChain = $this->getPlaceholderChain($uiFilter);
+
+		return function (string $placeholder, array $field) use ($uiFilter, $placeholderChain): bool {
+			return $this->isPlaceholderIncluded($placeholder, $field, $uiFilter, $placeholderChain);
+		};
+	}
+
 	private function getPlaceholderChain(array $uiFilter): string
 	{
 		$placeholderChain = '';

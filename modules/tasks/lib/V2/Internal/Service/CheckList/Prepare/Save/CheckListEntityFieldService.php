@@ -32,6 +32,11 @@ class CheckListEntityFieldService
 			$items = $this->removeStakeholders($items);
 		}
 
+		if ($type === Type::Template)
+		{
+			return $items;
+		}
+
 		return $this->filterBelongsToEntity($items, $entityId, $type);
 	}
 

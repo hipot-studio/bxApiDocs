@@ -82,8 +82,9 @@ final class OpenRoutePolicy
 	{
 		$type = (int)$file->getTypeFile();
 		$isDocumentVersion = $type === TypeFile::DOCUMENT && $version !== null;
-		$isLegacyXlsm = $type === TypeFile::DOCUMENT && mb_strtolower($file->getExtension()) === 'xlsm';
-		if (!in_array($type, [TypeFile::KNOWN, TypeFile::UNKNOWN], true) && !$isDocumentVersion && !$isLegacyXlsm)
+		$isNormalizedOffice = $type === TypeFile::DOCUMENT
+			&& in_array(mb_strtolower($file->getExtension()), ['xlsm', 'odp'], true);
+		if (!in_array($type, [TypeFile::KNOWN, TypeFile::UNKNOWN], true) && !$isDocumentVersion && !$isNormalizedOffice)
 		{
 			return false;
 		}

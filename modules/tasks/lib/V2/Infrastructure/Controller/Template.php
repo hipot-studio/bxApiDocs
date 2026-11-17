@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Infrastructure\Controller;
 
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Config\UpdateConfig;
@@ -59,7 +60,10 @@ class Template extends BaseController
 	{
 		$result = (new AddTemplateCommand(
 			template: $template,
-			config: new AddConfig(userId: $this->userId),
+			config: new AddConfig(
+				userId: $this->userId,
+				authorSubject: AuthorAssignmentSubject::fromAuthenticatedUser(),
+			),
 		))->run();
 
 		if (!$result->isSuccess())
@@ -84,7 +88,10 @@ class Template extends BaseController
 	{
 		$result = (new UpdateTemplateCommand(
 			template: $template,
-			config: new UpdateConfig(userId: $this->userId),
+			config: new UpdateConfig(
+				userId: $this->userId,
+				authorSubject: AuthorAssignmentSubject::fromAuthenticatedUser(),
+			),
 		))->run();
 
 		if (!$result->isSuccess())

@@ -16,6 +16,7 @@ use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
@@ -365,7 +366,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 	 * @param Disk\BaseObject $object
 	 * @return bool
 	 */
-	private function canManageExternalLink(Disk\BaseObject $object): bool
+	protected function canManageExternalLink(Disk\BaseObject $object): bool
 	{
 		return $this->externalLinkAccessService->canManageExternalLink($object);
 	}
@@ -383,9 +384,10 @@ abstract class BaseObject extends Internals\Engine\Controller
 	private function parseExternalLinkObject(Disk\ExternalLink $extLink, Disk\BaseObject $object): array
 	{
 		$driver = Driver::getInstance();
-		$link = new Uri($driver->getUrlManager()->getPublicExternalLink(
-			object: $object,
-			hash: $extLink->getHash(),
+		$link = new Uri($driver->getUrlManager()->getCopyablePublicExternalLinkForConsumer(
+			$extLink,
+			UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+			$object,
 		));
 
 		$isBoard = false;

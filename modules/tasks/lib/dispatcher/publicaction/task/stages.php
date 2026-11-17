@@ -18,6 +18,7 @@ use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Service\EntityService;
 use Bitrix\Tasks\Scrum\Service\ItemService;
+use Bitrix\Tasks\Scrum\Service\KanbanService;
 use \Bitrix\Tasks\Util;
 use \Bitrix\Tasks\Kanban\StagesTable;
 use \Bitrix\Tasks\Kanban\TaskStageTable;
@@ -330,27 +331,12 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 		// check if new and old stages in different Kanbans
 		if ($this->errors->checkNoFatals())
 		{
-			if (
-				$stage['ENTITY_TYPE'] == StagesTable::WORK_MODE_GROUP &&
-				$task['GROUP_ID'] != $stage['ENTITY_ID']
-			)
-			{
-				$this->errors->add(
-					'DIFFERENT_STAGES',
-					Loc::getMessage('STAGES_ERROR_DIFFERENT_STAGES')
-				);
-			}
-		}
-
-		// no errors - move task
-		if ($this->errors->checkNoFatals())
-		{
 			if ($stage['ENTITY_TYPE'] == StagesTable::WORK_MODE_GROUP)
 			{
-				$taskObj = new \CTasks;
-				$taskObj->update($task['ID'], array(
-					'STAGE_ID' => $stageId
-				));
+				if ($this->updateTaskStageId((int)$task['ID'], $stageId))
+				{
+					$success = true;
+				}
 			}
 			else
 			{
@@ -377,9 +363,14 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 						);
 					}
 				}
+				$success = true;
 			}
-			$success = true;
 		}
+		if (!$success)
+		{
+			return null;
+		}
+
 		// and set sorting
 		$sortingGroup = $stage['ENTITY_TYPE'] == StagesTable::WORK_MODE_GROUP
 			? $task['GROUP_ID']
@@ -641,8 +632,6 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 			return false;
 		}
 
-		$taskObject = new \CTasks;
-
 		$queryObject = TaskStageTable::getList([
 			'filter' => [
 				'TASK_ID' => $taskId,
@@ -651,12 +640,18 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 			]
 		]);
 
-		$stageService = Container::getInstance()->getTaskStageService();
 		if ($taskStage = $queryObject->fetch())
 		{
-			$stageService->move((int)$taskStage['ID'], (int)$stage['ID']);
+			$kanbanService = new KanbanService();
+			if (!$kanbanService->updateTaskStageWithRelations($taskId, (int)$stage['ID'], [(int)$taskStage['ID']]))
+			{
+				foreach ($kanbanService->getErrors() as $error)
+				{
+					$this->errors->add($error->getCode(), $error->getMessage());
+				}
 
-			$taskObject->update($taskId, ['STAGE_ID' => $stage['ID']]);
+				return false;
+			}
 		}
 
 		// todo maybe need add push here
@@ -671,6 +666,25 @@ final class Stages extends \Bitrix\Tasks\Dispatcher\RestrictedAction
 		}
 
 		return true;
+	}
+
+	private function updateTaskStageId(int $taskId, int $stageId): bool
+	{
+		$taskObject = new \CTasks();
+		if ($taskObject->update($taskId, ['STAGE_ID' => $stageId]) !== false)
+		{
+			return true;
+		}
+
+		foreach ($taskObject->GetErrors() as $error)
+		{
+			$this->errors->add(
+				(string)($error['id'] ?? 'ERROR_UNKNOWN_UPDATE_TASK_ERROR'),
+				(string)($error['text'] ?? ''),
+			);
+		}
+
+		return false;
 	}
 
 	private function completeTask(int $taskId)

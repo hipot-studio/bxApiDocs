@@ -32,6 +32,17 @@ IncludeModuleLangFile(__FILE__);
  */
 class CAllUserTypeEntity extends CDBResult
 {
+	public const CREATE_LIMIT_ERROR_CODE = 'MAIN_USER_FIELD_LIMIT_EXCEEDED';
+
+	private const STORAGE_LIMIT_MESSAGE_MARKERS = [
+		'Too many columns',
+		'Row size too large',
+		'tables can have at most 1600 columns',
+		'row is too big',
+		'too many indexes',
+		'too many keys specified',
+	];
+
 	protected static $cache = [];
 
 	protected function CreatePropertyTables($entityId)
@@ -62,6 +73,31 @@ class CAllUserTypeEntity extends CDBResult
 				'VALUE_ID' => new Fields\IntegerField('VALUE_ID'),
 			], ['VALUE_ID']);
 		}
+	}
+
+	private static function hasStorageLimitMarker($message)
+	{
+		foreach (self::STORAGE_LIMIT_MESSAGE_MARKERS as $marker)
+		{
+			if (stripos($message, $marker) !== false)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function getCreateLimitErrorMessage($arFields)
+	{
+		\Bitrix\Main\Localization\Loc::loadMessages(__DIR__ . '/../../lib/controller/userfieldconfig.php');
+
+		return \Bitrix\Main\Localization\Loc::getMessage('MAIN_USER_FIELD_CONTROLLER_CREATE_LIMIT_ERROR')
+			?: GetMessage("USER_TYPE_ADD_ERROR", [
+				"#FIELD_NAME#" => htmlspecialcharsbx($arFields["FIELD_NAME"]),
+				"#ENTITY_ID#" => htmlspecialcharsbx($arFields["ENTITY_ID"]),
+			])
+		;
 	}
 
 	/**
@@ -331,15 +367,6 @@ class CAllUserTypeEntity extends CDBResult
 			$aMsg[] = ["id" => "USER_TYPE_ID", "text" => GetMessage("USER_TYPE_USER_TYPE_ID_INVALID")];
 		}
 
-		if (
-			$ID <= 0
-			&& ($arFields["USER_TYPE_ID"] ?? '') === 'rich_text'
-			&& \Bitrix\Main\Config\Feature::isDisabled('Bitrix\\UI\\Config\\Feature\\RichTextUserFieldFlag')
-		)
-		{
-			$aMsg[] = ["id" => "USER_TYPE_ID", "text" => GetMessage("USER_TYPE_USER_TYPE_ID_INVALID")];
-		}
-
 		if (!empty($aMsg))
 		{
 			$e = new CAdminException($aMsg);
@@ -539,12 +566,18 @@ class CAllUserTypeEntity extends CDBResult
 
 			if (!$result)
 			{
-				$aMsg = [[
-					"id" => "FIELD_NAME",
-					"text" => GetMessage("USER_TYPE_ADD_ERROR", [
+				$isCreateLimitError = self::hasStorageLimitMarker((string)$DB->db_Error);
+				$errorId = $isCreateLimitError ? self::CREATE_LIMIT_ERROR_CODE : "FIELD_NAME";
+				$errorText = $isCreateLimitError
+					? self::getCreateLimitErrorMessage($arFields)
+					: GetMessage("USER_TYPE_ADD_ERROR", [
 						"#FIELD_NAME#" => htmlspecialcharsbx($arFields["FIELD_NAME"]),
 						"#ENTITY_ID#" => htmlspecialcharsbx($arFields["ENTITY_ID"]),
-					]),
+					])
+				;
+				$aMsg = [[
+					"id" => $errorId,
+					"text" => $errorText,
 				]];
 				$e = new CAdminException($aMsg);
 				$APPLICATION->ThrowException($e);

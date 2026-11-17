@@ -295,7 +295,7 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 				'ID' => $department->getId()
 			],
 			false,
-			['ID', 'NAME', 'IBLOCK_ID', 'XML_ID', 'IBLOCK_SECTION_ID'],
+			['ID', 'NAME', 'IBLOCK_ID', 'XML_ID', 'IBLOCK_SECTION_ID', 'SORT', 'ACTIVE'],
 		);
 		$departmentData = $departmentResult->Fetch();
 

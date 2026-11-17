@@ -364,7 +364,7 @@ class TemplateProvider
 			elseif ($by == "id")
 				$arSqlOrder[] = " TT.ID ".$order." ";
 			elseif ($by == "group_id")
-				$arSqlOrder[] = " TT.GROUP_ID ".$order." ";
+				$arSqlOrder[] = " ".$helper->getIsNullFunction('TT.GROUP_ID', 0)." ".$order." ";
 			elseif ($by == "title")
 				$arSqlOrder[] = " TT.TITLE ".$order." ";
 			elseif ($by == "deadline")
@@ -616,6 +616,7 @@ class TemplateProvider
 			'TASK_ID' 					=> ['FIELD' => 'TT.TASK_ID', 'DEFAULT' => true],
 			'TPARAM_TYPE' 				=> ['FIELD' => 'TT.TPARAM_TYPE', 'DEFAULT' => true],
 			'TPARAM_REPLICATION_COUNT' 	=> ['FIELD' => 'TT.TPARAM_REPLICATION_COUNT', 'DEFAULT' => true],
+			'REPLICATE_TYPE' 			=> ['FIELD' => 'TT.REPLICATE_TYPE', 'DEFAULT' => true],
 			'REPLICATE_PARAMS' 			=> ['FIELD' => 'TT.REPLICATE_PARAMS', 'DEFAULT' => true],
 
 			// virtual

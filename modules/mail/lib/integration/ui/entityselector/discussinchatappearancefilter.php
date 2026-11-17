@@ -111,3 +111,4 @@ class DiscussInChatAppearanceFilter extends BaseFilter
 		return sprintf("url('%s')", $path);
 	}
 }
+

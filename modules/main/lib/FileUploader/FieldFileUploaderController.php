@@ -4,8 +4,10 @@ namespace Bitrix\Main\FileUploader;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\UserField\File\UploadSession;
+use Bitrix\UI\FileUploader\CanUploadResult;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\FileOwnershipCollection;
+use Bitrix\UI\FileUploader\UploadRequest;
 use Bitrix\UI\FileUploader\UploaderController;
 use Bitrix\UI\FileUploader\UploadResult;
 use CUser;
@@ -106,7 +108,7 @@ class FieldFileUploaderController extends UploaderController
 		return $configuration;
 	}
 
-	public function canUpload()
+	public function canUpload(?UploadRequest $uploadRequest = null): CanUploadResult|bool
 	{
 		return (bool)$this->loadSession();
 	}

@@ -13,6 +13,8 @@ class InMemoryChatRepository implements ChatRepositoryInterface
 	private array $cache = [];
 	/** @var array<string, int[]> */
 	private array $chatIdsByTaskIdsCache = [];
+	/** @var array<string, int[]> */
+	private array $taskIdsByChatIdsCache = [];
 	/** @var array<int, int[]> */
 	private array $chatIdsByUserIdCache = [];
 
@@ -65,7 +67,17 @@ class InMemoryChatRepository implements ChatRepositoryInterface
 
 	public function findTaskIdsByChatIds(array $chatIds): array
 	{
-		return $this->chatRepository->findTaskIdsByChatIds($chatIds);
+		$indices = array_unique(array_map('intval', $chatIds));
+		sort($indices);
+
+		$key = implode(',', $indices);
+
+		if (!array_key_exists($key, $this->taskIdsByChatIdsCache))
+		{
+			$this->taskIdsByChatIdsCache[$key] = $this->chatRepository->findTaskIdsByChatIds($chatIds);
+		}
+
+		return $this->taskIdsByChatIdsCache[$key];
 	}
 
 	public function save(int $chatId, int $taskId): void
@@ -76,6 +88,7 @@ class InMemoryChatRepository implements ChatRepositoryInterface
 		}
 
 		$this->chatRepository->save($chatId, $taskId);
+		$this->taskIdsByChatIdsCache = [];
 
 		$this->cache[$taskId] = new Im\Entity\Chat(
 			id: $chatId,
@@ -87,6 +100,7 @@ class InMemoryChatRepository implements ChatRepositoryInterface
 	public function delete(int $taskId): void
 	{
 		$this->chatRepository->delete($taskId);
+		$this->taskIdsByChatIdsCache = [];
 
 		if (isset($this->cache[$taskId]))
 		{

@@ -1285,9 +1285,26 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			return null;
 		}
 
-		$execute = $insideSavepoint
+		$runTransaction = $insideSavepoint
 			? $transaction->executeInsideSavepoint(...)
 			: $transaction->execute(...);
+		// the source goes to the trash can as a step of the move, its author is not told about a deletion;
+		// the notification is collected and sent by after-commit callbacks, which run inside the transaction call
+		$deletionNotifyManager = Driver::getInstance()->getDeletionNotifyManager();
+		$execute = static function (callable $command) use (
+			$runTransaction,
+			$deletionNotifyManager,
+		): AuditTransactionResult {
+			$deletionNotifyManager->mute();
+			try
+			{
+				return $runTransaction($command);
+			}
+			finally
+			{
+				$deletionNotifyManager->unmute();
+			}
+		};
 		$originalName = $this->name;
 		$newObject = null;
 		$result = $execute(

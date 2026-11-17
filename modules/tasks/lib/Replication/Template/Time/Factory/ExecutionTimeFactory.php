@@ -8,6 +8,8 @@ use Bitrix\Tasks\Replication\Template\Time\Enum\Day;
 use Bitrix\Tasks\Replication\Template\Time\Enum\DayType;
 use Bitrix\Tasks\Replication\Template\Time\Enum\Ordinal;
 use Bitrix\Tasks\Replication\Template\Time\Enum\Period;
+use Bitrix\Tasks\Replication\Template\Time\Service\DeadlineCreationTime;
+use Bitrix\Tasks\Replication\Template\Time\Service\OccurrenceSearchResult;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Calendar;
 use Bitrix\Tasks\Util\Type\DateTime;
@@ -24,6 +26,7 @@ final class ExecutionTimeFactory
 	private int $baseExecutionTimeTS;
 	private int $creatorPreferredTimeTS;
 	private array $parsedReplicateParameter;
+	private bool $shiftDatePeriodsToWorkday = false;
 
 	private function __construct()
 	{
@@ -47,18 +50,32 @@ final class ExecutionTimeFactory
 		return $this;
 	}
 
+	private function setShiftDatePeriodsToWorkday(bool $shiftDatePeriodsToWorkday): self
+	{
+		$this->shiftDatePeriodsToWorkday = $shiftDatePeriodsToWorkday;
+		return $this;
+	}
 
+
+	/**
+	 * @param bool $shiftDatePeriodsToWorkday extend the WORKDAY_ONLY "skip weekends" shift of the
+	 *        creation date from the daily period to the monthly/yearly BY-DATE periods (weekly and
+	 *        any by-weekday pattern keep the chosen day). Enabled only by callers that resolved a
+	 *        non-null REPLICATE_TYPE (unified working-days semantics); off ≡ legacy master behaviour.
+	 */
 	public static function getNextExecutionTime(
 		int $baseExecutionTimeTS,
 		int $creatorPreferredTimeTS,
-		AbstractParameter $parameter
+		AbstractParameter $parameter,
+		bool $shiftDatePeriodsToWorkday = false
 	): int
 	{
 		$factory =
 			(new self())
 				->setBaseExecutionTimeTS($baseExecutionTimeTS)
 				->setCreatorPreferredTimeTS($creatorPreferredTimeTS)
-				->setReplicateParameter($parameter);
+				->setReplicateParameter($parameter)
+				->setShiftDatePeriodsToWorkday($shiftDatePeriodsToWorkday);
 
 		$nextExecutionTimeTS = 0;
 
@@ -85,6 +102,217 @@ final class ExecutionTimeFactory
 		return $nextExecutionTimeTS;
 	}
 
+	/**
+	 * @param null|callable('step'|'jump'|'century', int): void $transitionObserver
+	 */
+	public static function getNextExecutionTimeAtOrAfter(
+		int $baseExecutionTimeTS,
+		int $boundaryTS,
+		int $creatorPreferredTimeTS,
+		AbstractParameter $parameter,
+		bool $shiftDatePeriodsToWorkday = false,
+		?callable $transitionObserver = null,
+	): OccurrenceSearchResult
+	{
+		$nextExecutionTimeTS = self::getNextExecutionTime(
+			$baseExecutionTimeTS,
+			$creatorPreferredTimeTS,
+			$parameter,
+			$shiftDatePeriodsToWorkday,
+		);
+		self::notifyTransition($transitionObserver, 'step', 1);
+		if ($nextExecutionTimeTS <= 0 || $nextExecutionTimeTS >= $boundaryTS)
+		{
+			return new OccurrenceSearchResult(
+				new DeadlineCreationTime($nextExecutionTimeTS, $nextExecutionTimeTS),
+				0,
+			);
+		}
+
+		$factory =
+			(new self())
+				->setReplicateParameter($parameter)
+			;
+
+		return $factory->getCyclicExecutionTimeAtOrAfter(
+			$nextExecutionTimeTS,
+			$boundaryTS,
+			$creatorPreferredTimeTS,
+			$parameter,
+			$shiftDatePeriodsToWorkday,
+			$transitionObserver,
+		);
+	}
+
+	private function getCyclicExecutionTimeAtOrAfter(
+		int $nextExecutionTimeTS,
+		int $boundaryTS,
+		int $creatorPreferredTimeTS,
+		AbstractParameter $parameter,
+		bool $shiftDatePeriodsToWorkday,
+		?callable $transitionObserver,
+	): OccurrenceSearchResult
+	{
+		$calendarSettings = Calendar::getSettings();
+		$hasHolidays = !empty($calendarSettings['HOLIDAYS']);
+		$isDailyWorkday =
+			$this->getReplicationType() === Period::DAILY
+			&& $this->parsedReplicateParameter['WORKDAY_ONLY'] === 'Y'
+		;
+		$isDateDependent =
+			$this->getReplicationType() === Period::MONTHLY
+			|| $this->getReplicationType() === Period::YEARLY
+			|| ($isDailyWorkday && $hasHolidays)
+		;
+		$seen = [];
+		$skipped = 0;
+
+		while ($nextExecutionTimeTS < $boundaryTS)
+		{
+			$state = $isDateDependent
+				? ((int)date('Y', $nextExecutionTimeTS) % 4)
+					. '-'
+					. date('m-d-N-L-H:i:s', $nextExecutionTimeTS)
+				: date('N-H:i:s', $nextExecutionTimeTS)
+			;
+			if (isset($seen[$state]))
+			{
+				$cycleDays =
+					$this->getDayNumber($nextExecutionTimeTS)
+					- $this->getDayNumber($seen[$state]['timestamp'])
+				;
+				$cycleOccurrences = $skipped - $seen[$state]['skipped'];
+				if ($cycleDays > 0 && $cycleOccurrences > 0)
+				{
+					$cycles = $this->getSafeCycleCount(
+						$nextExecutionTimeTS,
+						$boundaryTS,
+						$cycleDays,
+					);
+					if ($cycles > 0)
+					{
+						$nextExecutionTimeTS = $this->shiftLocalDays(
+							$nextExecutionTimeTS,
+							$cycles * $cycleDays,
+						);
+						$skipped += $cycles * $cycleOccurrences;
+						self::notifyTransition($transitionObserver, 'jump', $cycles * $cycleOccurrences);
+						$seen = [];
+
+						continue;
+					}
+				}
+			}
+			else
+			{
+				$seen[$state] = [
+					'timestamp' => $nextExecutionTimeTS,
+					'skipped' => $skipped,
+				];
+			}
+
+			$baseExecutionTimeTS = $nextExecutionTimeTS + 1;
+			$gregorianExceptionDay = $this->getNextGregorianExceptionDayNumber($nextExecutionTimeTS);
+			$skipped++;
+			$nextExecutionTimeTS = self::getNextExecutionTime(
+				$baseExecutionTimeTS,
+				$creatorPreferredTimeTS,
+				$parameter,
+				$shiftDatePeriodsToWorkday,
+			);
+			self::notifyTransition($transitionObserver, 'step', 1);
+			if ($nextExecutionTimeTS <= $baseExecutionTimeTS)
+			{
+				return new OccurrenceSearchResult(new DeadlineCreationTime(0, 0), $skipped);
+			}
+			if ($this->getDayNumber($nextExecutionTimeTS) >= $gregorianExceptionDay)
+			{
+				$seen = [];
+				self::notifyTransition($transitionObserver, 'century', 0);
+			}
+		}
+
+		return new OccurrenceSearchResult(
+			new DeadlineCreationTime($nextExecutionTimeTS, $nextExecutionTimeTS),
+			$skipped,
+		);
+	}
+
+	private static function notifyTransition(?callable $observer, string $type, int $occurrences): void
+	{
+		if ($observer !== null)
+		{
+			$observer($type, $occurrences);
+		}
+	}
+
+	private function getSafeCycleCount(int $timestamp, int $boundaryTS, int $cycleDays): int
+	{
+		$currentDay = $this->getDayNumber($timestamp);
+		$boundaryDay = $this->getDayNumber($boundaryTS);
+		$cycles = intdiv(max(0, $boundaryDay - $currentDay), $cycleDays);
+		$exceptionDay = $this->getNextGregorianExceptionDayNumber($timestamp);
+		if ($exceptionDay <= $boundaryDay)
+		{
+			// The short calendar cycle is valid only until the next omitted century leap day.
+			$cycles = min(
+				$cycles,
+				intdiv(max(0, $exceptionDay - 1 - $currentDay), $cycleDays),
+			);
+		}
+
+		return $cycles;
+	}
+
+	private function getDayNumber(int $timestamp): int
+	{
+		return intdiv(
+			(int)gmmktime(
+				0,
+				0,
+				0,
+				(int)date('n', $timestamp),
+				(int)date('j', $timestamp),
+				(int)date('Y', $timestamp),
+			),
+			self::SECONDS_IN_DAY,
+		);
+	}
+
+	private function getNextGregorianExceptionDayNumber(int $timestamp): int
+	{
+		$year = (int)date('Y', $timestamp);
+		$candidate = intdiv($year + 99, 100) * 100;
+
+		while (true)
+		{
+			if ($candidate % 400 !== 0)
+			{
+				$exceptionDay = intdiv((int)gmmktime(0, 0, 0, 3, 1, $candidate), self::SECONDS_IN_DAY);
+				if ($exceptionDay > $this->getDayNumber($timestamp))
+				{
+					return $exceptionDay;
+				}
+			}
+
+			$candidate += 100;
+		}
+	}
+
+	private function shiftLocalDays(int $timestamp, int $days): int
+	{
+		$shiftedDay = ($this->getDayNumber($timestamp) + $days) * self::SECONDS_IN_DAY;
+
+		return (int)mktime(
+			(int)date('G', $timestamp),
+			(int)date('i', $timestamp),
+			(int)date('s', $timestamp),
+			(int)gmdate('n', $shiftedDay),
+			(int)gmdate('j', $shiftedDay),
+			(int)gmdate('Y', $shiftedDay),
+		);
+	}
+
 	private function getTemplateDailyExecutionDate(): int
 	{
 		$everyDay = (int)$this->parsedReplicateParameter['EVERY_DAY'];
@@ -101,18 +329,45 @@ final class ExecutionTimeFactory
 
 		if ($this->parsedReplicateParameter['WORKDAY_ONLY'] === 'Y')
 		{
-			// get server datetime as string and create an utc-datetime object with this string, as Calendar works only with utc datetime object
-			$dateInst = DateTime::createFromUserTimeGmt(UI::formatDateTime($date));
-			$calendar = new Calendar();
+			$date = $this->shiftToClosestWorkday($date);
+		}
 
-			if (!$calendar->isWorkTime($dateInst))
-			{
-				$cwt = $calendar->getClosestWorkTime($dateInst); // get the closest time in UTC
-				$cwt = $cwt->convertToLocalTime(); // change timezone to server timezone
+		return $date;
+	}
 
-				$date = $cwt->getTimestamp(); // set server timestamp
-				$date = $this->stripTime($date) + $this->creatorPreferredTimeTS;
-			}
+	/**
+	 * Move a creation date landing on a non-working day/time forward to the closest working time,
+	 * then re-apply the preferred HH:MM. Mirrors the legacy daily behaviour so the extended
+	 * monthly/yearly shift lands identically.
+	 */
+	private function shiftToClosestWorkday(int $date): int
+	{
+		// get server datetime as string and create an utc-datetime object with this string, as Calendar works only with utc datetime object
+		$dateInst = DateTime::createFromUserTimeGmt(UI::formatDateTime($date));
+		$calendar = new Calendar();
+
+		if (!$calendar->isWorkTime($dateInst))
+		{
+			$cwt = $calendar->getClosestWorkTime($dateInst); // get the closest time in UTC
+			$cwt = $cwt->convertToLocalTime(); // change timezone to server timezone
+
+			$date = $cwt->getTimestamp(); // set server timestamp
+			$date = $this->stripTime($date) + $this->creatorPreferredTimeTS;
+		}
+
+		return $date;
+	}
+
+	/**
+	 * Apply {@see shiftToClosestWorkday()} to a BY-DATE monthly/yearly creation date, but only when
+	 * the caller opted into the unified working-days semantics (non-null REPLICATE_TYPE) and the
+	 * template asks to skip non-working days.
+	 */
+	private function maybeShiftDatePeriodToWorkday(int $date): int
+	{
+		if ($this->shiftDatePeriodsToWorkday && ($this->parsedReplicateParameter['WORKDAY_ONLY'] ?? 'N') === 'Y')
+		{
+			return $this->shiftToClosestWorkday($date);
 		}
 
 		return $date;
@@ -185,7 +440,9 @@ final class ExecutionTimeFactory
 			$weekDay = $this->getWeekDay('MONTHLY_WEEK_DAY');
 			$num = $this->getMonthlyMonthNum('MONTHLY_MONTH_NUM_2');
 
-			$date = strtotime("{$ordinal} {$weekDay} of this month") + $this->creatorPreferredTimeTS;
+			$date = strtotime(
+				"{$ordinal} {$weekDay} of " . date('Y-m-01', $this->baseExecutionTimeTS)
+			) + $this->creatorPreferredTimeTS;
 
 			if ($date <= $this->baseExecutionTimeTS)
 			{
@@ -198,13 +455,17 @@ final class ExecutionTimeFactory
 			$day = $this->getDayNum('MONTHLY_DAY_NUM');
 			$num = $this->getMonthlyMonthNum('MONTHLY_MONTH_NUM_1');
 
-			$date = $this->stripTime(strtotime(date('Y-m-' . sprintf('%02d', $day), $this->baseExecutionTimeTS))) + $this->creatorPreferredTimeTS;
+			$date = $this->stripTime(
+				strtotime(date('Y-m-' . sprintf('%02d', $day), $this->baseExecutionTimeTS))
+			) + $this->creatorPreferredTimeTS;
 
 			if ($date <= $this->baseExecutionTimeTS)
 			{
 				$date = $this->addMonthsToDate(new \DateTime(date('Y-m-d H:i:s', $date)), $num)->getTimestamp();
 				$date = strtotime(date('Y-m-' . sprintf('%02d', $day), $date)) + $this->creatorPreferredTimeTS;
 			}
+
+			$date = $this->maybeShiftDatePeriodToWorkday($date);
 		}
 
 		return $date;
@@ -261,6 +522,8 @@ final class ExecutionTimeFactory
 						. sprintf('%02d', $day)
 					) + $this->creatorPreferredTimeTS;
 			}
+
+			$date = $this->maybeShiftDatePeriodToWorkday($date);
 		}
 
 		return $date;

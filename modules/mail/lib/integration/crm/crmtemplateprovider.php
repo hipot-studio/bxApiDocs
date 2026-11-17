@@ -357,3 +357,4 @@ final class CrmTemplateProvider implements TemplateProvider
 		return new Error('Template is not available.', self::ERROR_TEMPLATE_NOT_AVAILABLE);
 	}
 }
+

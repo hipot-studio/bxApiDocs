@@ -757,3 +757,4 @@ class Secretary extends Controller
 		return  \Bitrix\Mail\MessageAccess::createByMessageId($messageId, $userId)->canModifyMessage();
 	}
 }
+

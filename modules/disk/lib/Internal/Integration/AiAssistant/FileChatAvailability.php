@@ -31,6 +31,7 @@ class FileChatAvailability
 		'docx', 'doc', 'rtf', 'odt', 'pdf',
 		'xlsx', 'xls', 'ods',
 		'pptx', 'ppt', 'odp',
+		'html', 'htm',
 	];
 
 	private bool $registrationAttempted = false;
@@ -151,6 +152,7 @@ class FileChatAvailability
 		if (
 			$userId <= 0
 			|| !$feature->isBitrixGptV2Available()
+			|| !$feature->isBitrixGptV2AvailableForUser($userId, 'bitrixgpt_v2_available', 'im')
 			|| !$feature->isCopilotTriggersEnabled()
 			|| !$feature->isSuggestsEnabled()
 			|| !$this->getGuardService()->canUseMarta($userId)

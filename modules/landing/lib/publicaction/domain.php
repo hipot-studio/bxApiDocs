@@ -6,6 +6,8 @@ use \Bitrix\Landing\Domain as DomainCore;
 use \Bitrix\Landing\PublicActionResult;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Domain\Register;
+use \Bitrix\Landing\Rights;
+use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\SystemException;
 
 class Domain
@@ -105,6 +107,18 @@ class Domain
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 
+		$id = (int)$id;
+		if (!self::canDelete($id))
+		{
+			$error->addError(
+				'ACCESS_DENIED',
+				Loc::getMessage('LANDING_ACCESS_DENIED2')
+			);
+			$result->setError($error);
+
+			return $result;
+		}
+
 		$res = DomainCore::delete($id);
 
 		if ($res->isSuccess())
@@ -118,6 +132,30 @@ class Domain
 		}
 
 		return $result;
+	}
+
+	/**
+	 * A free domain has no site whose rights could answer: only an administrator or its author may delete it.
+	 * @param int $id Domain id.
+	 * @return bool
+	 */
+	private static function canDelete(int $id): bool
+	{
+		if (
+			Manager::isAdmin()
+			// without the permissions feature Rights::isAdmin() is true for anyone
+			|| (Manager::checkFeature(Manager::FEATURE_PERMISSIONS_AVAILABLE) && Rights::isAdmin())
+		)
+		{
+			return true;
+		}
+
+		$domain = DomainCore::getList([
+			'select' => ['CREATED_BY_ID'],
+			'filter' => ['=ID' => $id],
+		])->fetch();
+
+		return $domain && (int)$domain['CREATED_BY_ID'] === Manager::getUserId();
 	}
 
 	/**

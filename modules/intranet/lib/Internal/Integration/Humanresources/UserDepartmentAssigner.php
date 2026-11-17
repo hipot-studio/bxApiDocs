@@ -41,6 +41,12 @@ final class UserDepartmentAssigner
 		);
 	}
 
+	public function assignToDepartments(int $userId, array $departmentIds): void
+	{
+		Container::getUserDepartmentService()
+			->assignToDepartments($userId, $departmentIds, replaceExisting: false);
+	}
+
 	public function removeAssignedDepartments(int $userId, array $departmentIds): void
 	{
 		$repository = HrContainer::getNodeMemberRepository();

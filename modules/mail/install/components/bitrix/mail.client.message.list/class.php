@@ -5,6 +5,7 @@ use Bitrix\Mail\Helper\Enum\Mailbox\FolderSortMode;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Mailbox\Options\EntityDataHelper;
 use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\Mailbox\MailboxGridButtonCounterRefreshService;
 use Bitrix\Mail\Helper\Mailbox\MailboxGridCounterAggregator;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
 use Bitrix\Mail\Internal\Service\FavoritesCountersService;
@@ -702,6 +703,12 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		$this->arResult['MAILBOX_GRID_BUTTON_COUNTER'] = $this->arResult['HAS_ACCESS_TO_MAILBOX_GRID']
 			? $this->getMailboxGridButtonCounter((int)Main\Engine\CurrentUser::get()->getId())
 			: 0;
+		$this->arResult['MAILBOX_GRID_COUNTER_WATCH_TAG'] = (
+			$this->arResult['HAS_ACCESS_TO_MAILBOX_GRID']
+			&& !$this->isDraftMode
+		)
+			? (new MailboxGridButtonCounterRefreshService())->watchForCurrentUser()
+			: null;
 
 		$this->includeComponentTemplate();
 	}

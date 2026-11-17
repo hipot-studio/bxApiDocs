@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Integration\AiAssistant\UseCase;
 
+use Bitrix\Landing\Integration\AiAssistant\Service\MarkupEditorReloadNotifier;
 use Bitrix\Landing\Internals\BlockTable;
+use Bitrix\Landing\Manager;
 use Bitrix\Landing\Markup\Manifest;
 use Bitrix\Landing\Subtype\Form;
 
@@ -121,6 +123,16 @@ abstract class AbstractCrmFormHandler extends AbstractSiteHandler
 	protected function findMarkupBlockManifest(int $pageId, int $blockId): ?Manifest
 	{
 		return $this->findMarkupBlocks($pageId)[$blockId] ?? null;
+	}
+
+	/**
+	 * Reloads the open editor of the markup page: its block is not reloaded in place, it would lose its frame.
+	 */
+	protected function notifyMarkupPageChanged(int $pageId, int $blockId, ?int $initiatorUserId, string $reason): void
+	{
+		$userId = (int)$initiatorUserId > 0 ? (int)$initiatorUserId : Manager::getUserId();
+
+		(new MarkupEditorReloadNotifier())->notify($userId, $pageId, $blockId, $reason);
 	}
 
 	/**

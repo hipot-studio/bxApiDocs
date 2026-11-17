@@ -9,6 +9,7 @@ use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContext;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
 use Bitrix\Disk\Internal\Service\DocumentHeader\RenameService;
 use Bitrix\Disk\Internal\Service\DocumentPresence\InitialRosterService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\Engine;
@@ -140,6 +141,7 @@ class DocumentHeader extends Engine\Controller
 		CurrentUser $currentUser,
 		HeaderCompositionService $headerCompositionService,
 		?DocumentSession $documentSession = null,
+		?string $shortLinkCode = null,
 	): ?array
 	{
 		if (!$documentSession)
@@ -149,9 +151,23 @@ class DocumentHeader extends Engine\Controller
 			return null;
 		}
 
+		// A header asking again for the description of a short opening names its code: the opening is
+		// resolved anew and must open the file and revision of the session, so the copy stays its address.
+		$shortLinkOpening = null;
+		if ($shortLinkCode !== null)
+		{
+			$shortLinkOpening = $this->resolveShortLinkOpening($shortLinkCode, $documentSession);
+			if ($shortLinkOpening === null)
+			{
+				$this->addSessionNotFoundError();
+
+				return null;
+			}
+		}
+
 		$userId = (int)$currentUser->getId();
 		$result = $headerCompositionService->compose(
-			$this->buildOpeningContext($documentSession, $userId),
+			$this->buildOpeningContext($documentSession, $userId, $shortLinkOpening),
 			$userId,
 		);
 
@@ -253,13 +269,33 @@ class DocumentHeader extends Engine\Controller
 	 * The description is composed from the context of the opening; the session is the way this
 	 * controller builds one, and the only thing about the header that still knows about a session.
 	 */
-	protected function buildOpeningContext(DocumentSession $documentSession, int $userId): ?OpeningContext
+	protected function buildOpeningContext(
+		DocumentSession $documentSession,
+		int $userId,
+		?ShortLinkOpening $shortLinkOpening = null,
+	): ?OpeningContext
 	{
 		return $this->getOpeningContextFactory()->fromDocumentSession(
 			$documentSession,
 			$userId,
 			$this->hasUnifiedLinkProof($documentSession),
+			shortLinkOpening: $shortLinkOpening,
 		);
+	}
+
+	private function resolveShortLinkOpening(string $code, DocumentSession $documentSession): ?ShortLinkOpening
+	{
+		$opening = ShortLinkOpening::resolve($code);
+		if (
+			$opening === null
+			|| (int)$documentSession->getObject()?->getRealObjectId() !== (int)$opening->getFile()->getRealObjectId()
+			|| (int)$documentSession->getVersionId() !== (int)$opening->getVersion()?->getId()
+		)
+		{
+			return null;
+		}
+
+		return $opening;
 	}
 
 	/**

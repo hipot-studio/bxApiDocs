@@ -49,6 +49,15 @@ class AcceptanceFolderLedger
 		$pairs = array_values((array)($folderOutcomes['pairs'] ?? []));
 		$ledger = $this->read($mailboxId, $operationId);
 
+		// This acceptance finds the folders an earlier attempt created: they are still the created ones
+		foreach ($pairs as $index => $pair)
+		{
+			if (isset($ledger[(string)$pair['source']]))
+			{
+				$pairs[$index]['created'] = true;
+			}
+		}
+
 		$paired = array_fill_keys(array_map(static fn (array $pair): string => (string)$pair['source'], $pairs), true);
 		$taken = array_fill_keys(array_map(static fn (array $pair): string => (string)$pair['target'], $pairs), true);
 		foreach ($ledger as $source => $target)

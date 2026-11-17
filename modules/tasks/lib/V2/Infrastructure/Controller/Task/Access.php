@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Infrastructure\Controller\Task;
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
 use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
+use Bitrix\Tasks\V2\Internal\Access\ExistingEntityId;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Public\Command\Task\Access\AddObserverCommand;
@@ -22,8 +23,15 @@ class Access extends BaseController
 	public function getAction(
 		Entity\Task $task,
 		TaskRightService $taskRightService,
-	): array
+	): ?array
 	{
+		if (!$this->hasPositiveExistingEntityId($task, 'task', $this->getRequestParameters()))
+		{
+			$this->addError(ExistingEntityId::errorFor($task));
+
+			return null;
+		}
+
 		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $task->getId(), $this->userId);
 
 		return [

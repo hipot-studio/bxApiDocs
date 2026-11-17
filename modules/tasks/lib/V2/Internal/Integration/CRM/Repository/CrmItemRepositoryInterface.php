@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\CRM\Repository;
 
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Dto\CrmItemPreviewResult;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 
 interface CrmItemRepositoryInterface
@@ -13,6 +14,7 @@ interface CrmItemRepositoryInterface
 
 	public function getIdsByTaskIds(array $taskIds): array;
 
-	public function getByIds(array $ids): CrmItemCollection;
+	public function getReadableByIds(array $ids, int $userId): CrmItemCollection;
+	public function getPreviewByIds(array $ids, int $userId, int $limit): CrmItemPreviewResult;
 	public function invalidate(int $taskId): void;
 }

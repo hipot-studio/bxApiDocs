@@ -116,6 +116,31 @@ class Task
 		self::$groupId = $groupId;
 	}
 
+	public static function prepareDefaultListState(
+		int $targetUserId,
+		int $relationToId,
+		bool $isExport,
+		int $viewMode,
+	): ?CTaskListState
+	{
+		$listState = CTaskListState::getInstance($targetUserId);
+
+		if (
+			$targetUserId !== Util\User::getId()
+			|| $relationToId > 0
+			|| $isExport
+			|| $viewMode !== CTaskListState::VIEW_MODE_LIST
+			|| $listState->hasStoredState()
+		)
+		{
+			return null;
+		}
+
+		$listState->switchOnSubmode(CTaskListState::VIEW_SUBMODE_WITH_SUBTASKS);
+
+		return $listState;
+	}
+
 	/**
 	 * @return CTaskListState|null
 	 */
@@ -167,8 +192,21 @@ class Task
 			}
 		}
 
-		if (!$relationToId)
+		$isExport = !empty($request['EXPORT_AS']);
+		$defaultListState = static::prepareDefaultListState(
+			(int)static::getUserId(),
+			(int)$relationToId,
+			$isExport,
+			$listStateInstance->getViewMode(),
+		);
+
+		if (!$relationToId && !$isExport)
 		{
+			if ($defaultListState !== null && $defaultListState !== $listStateInstance)
+			{
+				$defaultListState->saveState();
+			}
+
 			$listStateInstance->saveState(); // to db
 		}
 

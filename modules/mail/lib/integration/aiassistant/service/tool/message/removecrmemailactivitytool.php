@@ -97,3 +97,4 @@ class RemoveCrmEmailActivityTool extends ToolContract
 		];
 	}
 }
+

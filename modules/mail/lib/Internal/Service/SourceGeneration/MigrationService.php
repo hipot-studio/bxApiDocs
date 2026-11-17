@@ -1275,10 +1275,16 @@ class MigrationService
 				// And the replay of the same stage walks the letters of the mailbox from theirs
 				self::STATE_REPLAY_CURSOR => 0,
 			]);
-			if ((bool)($manualState['manualControlled'] ?? false))
-			{
-				return $result->setData(['stage' => $stage]);
-			}
+
+			/*
+				The delta pass may spend most of the time quota of the agent process, and the final
+				synchronization of the switch has no bound of its own. The switch is left to the next
+				pass, which starts it with a fresh quota; the stage stored above is the progress the
+				outer pass sees in the fingerprint {@see run()}.
+			*/
+			$metrics->save();
+
+			return $result->setData(['stage' => $stage]);
 		}
 
 		if ($stage === MigrationStage::AwaitingSwitchAuthorization)
@@ -1842,19 +1848,14 @@ class MigrationService
 			);
 		}
 
-		$added = self::folderOutcomeOptions($outcomes);
-		$progress = [];
-		foreach ([self::STATE_FOLDER_PAIRS, self::STATE_FOLDER_NOT_CREATED] as $key)
-		{
-			if (isset($added[$key]))
-			{
-				$progress[$key] = array_merge((array)($options[$key] ?? []), $added[$key]);
-			}
-		}
+		$progress = self::lateFolderProgress($options, self::folderOutcomeOptions($outcomes));
 
 		if (!$outcomes['returned'])
 		{
-			$this->store($generationId, null, $progress);
+			if ($progress !== [])
+			{
+				$this->store($generationId, null, $progress);
+			}
 
 			return new Result();
 		}
@@ -1866,6 +1867,68 @@ class MigrationService
 		$stage = $this->store($generationId, MigrationStage::TailAppend, $progress);
 
 		return (new Result())->setData([self::PASS_CONTINUES => true, 'stage' => $stage]);
+	}
+
+	/**
+	 * The state keys the reconciled folders change. The pairs are merged into the stored ones
+	 * {@see mergeFolderPairs()} and left out when nothing changed: every hand over finds the same folders
+	 * in the registry again, and a pass must not look like progress for that alone.
+	 *
+	 * @param array<string, mixed> $options The stored options of the generation.
+	 * @param array<string, array> $added The outcomes of the pass {@see folderOutcomeOptions()}.
+	 */
+	private static function lateFolderProgress(array $options, array $added): array
+	{
+		$progress = [];
+		if (isset($added[self::STATE_FOLDER_PAIRS]))
+		{
+			$stored = (array)($options[self::STATE_FOLDER_PAIRS] ?? []);
+			$merged = self::mergeFolderPairs($stored, $added[self::STATE_FOLDER_PAIRS]);
+			if ($merged !== $stored)
+			{
+				$progress[self::STATE_FOLDER_PAIRS] = $merged;
+			}
+		}
+		if (isset($added[self::STATE_FOLDER_NOT_CREATED]))
+		{
+			$progress[self::STATE_FOLDER_NOT_CREATED] = array_merge(
+				(array)($options[self::STATE_FOLDER_NOT_CREATED] ?? []),
+				$added[self::STATE_FOLDER_NOT_CREATED],
+			);
+		}
+
+		return $progress;
+	}
+
+	/**
+	 * One pair per folder of the old server: an added pair replaces the stored one of the same source,
+	 * in its place. A folder created on the target server stays a created one when it is found there
+	 * later {@see FolderPairMap::targetOf()}; a stored pair without the flag counts as created.
+	 *
+	 * @param array<int, array{source: string, target: string, created?: bool}> $stored
+	 * @param array<int, array{source: string, target: string, created: bool}> $added
+	 * @return array<int, array{source: string, target: string, created?: bool}>
+	 */
+	private static function mergeFolderPairs(array $stored, array $added): array
+	{
+		$merged = [];
+		foreach ($stored as $pair)
+		{
+			$merged[(string)$pair['source']] = $pair;
+		}
+
+		foreach ($added as $pair)
+		{
+			$source = (string)$pair['source'];
+			$wasCreated = isset($merged[$source]) && (bool)($merged[$source]['created'] ?? true);
+			$merged[$source] = [
+				'source' => $source,
+				'target' => (string)$pair['target'],
+				'created' => $wasCreated || (bool)$pair['created'],
+			];
+		}
+
+		return array_values($merged);
 	}
 
 	/**
@@ -4137,6 +4200,10 @@ class MigrationService
 	): ?array
 	{
 		$options = [self::STATE_STAGE => MigrationStage::PreparingG2->value] + self::folderOutcomeOptions($folderOutcomes);
+		if (isset($options[self::STATE_FOLDER_PAIRS]))
+		{
+			$options[self::STATE_FOLDER_PAIRS] = self::mergeFolderPairs([], $options[self::STATE_FOLDER_PAIRS]);
+		}
 
 		if ($migratorService !== '')
 		{

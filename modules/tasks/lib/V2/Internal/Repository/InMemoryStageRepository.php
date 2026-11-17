@@ -66,4 +66,29 @@ class InMemoryStageRepository implements StageRepositoryInterface
 
 		return $this->firstIdCache[$groupId];
 	}
+
+	/**
+	 * Not cached: reordering the kanban columns moves SYSTEM_TYPE = NEW to another stage,
+	 * and the value would go stale within the lifetime of the DI instance.
+	 */
+	public function getSystemStageIdByGroupId(int $groupId): ?int
+	{
+		return $this->stageRepository->getSystemStageIdByGroupId($groupId);
+	}
+
+	/**
+	 * Not cached: a column may be deleted within the same process, and the value would go stale.
+	 */
+	public function isGroupStage(int $stageId, int $groupId): bool
+	{
+		return $this->stageRepository->isGroupStage($stageId, $groupId);
+	}
+
+	/**
+	 * Not cached: a sprint may start within the same process and turn its stages valid.
+	 */
+	public function isActiveSprintStage(int $stageId, int $groupId): bool
+	{
+		return $this->stageRepository->isActiveSprintStage($stageId, $groupId);
+	}
 }

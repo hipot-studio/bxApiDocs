@@ -8,19 +8,23 @@ use Bitrix\Landing\AI\SiteBuilder\Html\AiBlockHtmlPayloadProcessor;
 use Bitrix\Landing\Copilot\Services\Manifest\NodeCollector;
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
+use Bitrix\Landing\Copilot\Connector\AI\ProviderRefusal;
 use Bitrix\Landing\Copilot\Data\Block\Operator;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Generation\Error;
+use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Log;
 use Bitrix\Landing\Copilot\Generation\Request;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Type\Errors;
+use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
 use Bitrix\Landing\AI\SiteBuilder\Dto\EnhancedInputDto;
 use Bitrix\Landing\AI\SiteBuilder\ImageStyle\ImageStyleBriefResolver;
+use Bitrix\Landing\Integration\AiAssistant\Service\ImageProviderRefusalText;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Rights;
 use Bitrix\Main\ORM\Query\Query;
@@ -30,6 +34,9 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 {
 	private const EVENT_NAME = 'onCopilotImageCreate';
 	private const TIMEOUT_ERROR_MESSAGE = 'timeout waiting AI image response';
+	private const DATA_REFUSAL_STREAK_KEY = 'htmlBlockImagesProviderRefusalStreak';
+	private const REFUSAL_STREAK_REASON = 'the provider refused the requests in a row, the image was not sent';
+	private const LOG_PREFIX = 'HTML block images: ';
 	private AiBlockHtmlPayloadProcessor $htmlPayloadProcessor;
 
 	public function __construct()
@@ -107,6 +114,12 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 				continue;
 			}
 
+			if ($this->getRefusalStreak() >= ProviderRefusal::STREAK_LIMIT)
+			{
+				$this->recordEntityWithoutSending($entity);
+				continue;
+			}
+
 			$this->assertTimerNotExceeded();
 			$request = $this->sendEntityRequestWithRetry(
 				$entity,
@@ -114,19 +127,13 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 			);
 			if ($request)
 			{
+				$this->resetRefusalStreak();
+
 				$requestId = $request->getId();
 				$this->requests[$requestId] = $request;
 				$entity->requestId = $requestId;
 				$this->bindEntityRequest($entityKey, $requestId);
-
-				RequestToEntitiesTable::add([
-					'REQUEST_ID' => $requestId,
-					'ENTITY_TYPE' => RequestEntities::Image->value,
-					'LANDING_ID' => $entity->landingId,
-					'BLOCK_ID' => $entity->blockId,
-					'NODE_CODE' => $entity->nodeCode,
-					'POSITION' => $entity->position,
-				]);
+				$this->linkRequestToEntity($requestId, $entity);
 
 				if ($request->isReceived() && $this->applyResponses())
 				{
@@ -178,7 +185,54 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 
 	protected function handleEntitySendFailure(RequestEntityDto $entity, string $reason): bool
 	{
-		return $this->attachAppliedEntityErrorRequest($entity, RequestEntities::Image, $reason);
+		if (!$this->attachAppliedEntityErrorRequest($entity, RequestEntities::Image, $reason))
+		{
+			return false;
+		}
+
+		$failure = $this->getLastSendFailure();
+		$provider = $failure === null ? null : ProviderRefusal::findProvider($failure);
+		if ($provider !== null)
+		{
+			$this->registerRefusal($entity, $provider);
+			// the refusals have their own limit, the streak, and the site is created with the images of the template
+			$this->excludeFromSendFailureLimit($entity);
+		}
+
+		return true;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function clearErrors(): void
+	{
+		parent::clearErrors();
+
+		// the retried step asks the provider again: an old streak would record every image without sending
+		$this->generation->deleteData(self::DATA_REFUSAL_STREAK_KEY);
+	}
+
+	protected function createRequest(): Request
+	{
+		return new Request($this->generation->getId(), $this->stepId);
+	}
+
+	protected function linkRequestToEntity(int $requestId, RequestEntityDto $entity): void
+	{
+		RequestToEntitiesTable::add([
+			'REQUEST_ID' => $requestId,
+			'ENTITY_TYPE' => RequestEntities::Image->value,
+			'LANDING_ID' => $entity->landingId,
+			'BLOCK_ID' => $entity->blockId,
+			'NODE_CODE' => $entity->nodeCode,
+			'POSITION' => $entity->position,
+		]);
+	}
+
+	protected function getLog(): Log
+	{
+		return new Log($this->generation->getId());
 	}
 
 	protected function handleExpiredRequest(Request $request): bool
@@ -193,6 +247,53 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 		}
 
 		return false;
+	}
+
+	private function getRefusalStreak(): int
+	{
+		return max(0, (int)$this->generation->getData(self::DATA_REFUSAL_STREAK_KEY));
+	}
+
+	private function resetRefusalStreak(): void
+	{
+		if ($this->getRefusalStreak() > 0)
+		{
+			$this->generation->deleteData(self::DATA_REFUSAL_STREAK_KEY);
+			$this->changed = true;
+		}
+	}
+
+	private function registerRefusal(RequestEntityDto $entity, string $provider): void
+	{
+		$streak = $this->getRefusalStreak() + 1;
+		$this->generation->setData(self::DATA_REFUSAL_STREAK_KEY, $streak);
+
+		$message = self::LOG_PREFIX . 'provider "' . ImageProviderRefusalText::provider($provider)
+			. '" refused the request for "' . $entity->nodeCode . '" (streak ' . $streak . ')'
+		;
+		if ($streak >= ProviderRefusal::STREAK_LIMIT)
+		{
+			$message .= ', ' . $this->countEntitiesToSend() . ' pending picture(s) stopped';
+		}
+		$this->getLog()->add($message);
+	}
+
+	private function countEntitiesToSend(): int
+	{
+		return count(array_filter($this->getEntitiesToRequest(), $this->canSendEntityRequest(...)));
+	}
+
+	private function recordEntityWithoutSending(RequestEntityDto $entity): void
+	{
+		if (!$this->attachAppliedEntityErrorRequest($entity, RequestEntities::Image, self::REFUSAL_STREAK_REASON))
+		{
+			throw new GenerationException(
+				GenerationErrors::errorInRequest,
+				"Failed to record the stopped image for generation {$this->generation->getId()}, step {$this->stepId}.",
+			);
+		}
+
+		$this->changed = true;
 	}
 
 	/**
@@ -794,7 +895,7 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 		$markers = $this->buildPromptMarkers($entityKey);
 		$prompt->setMarkers($markers);
 
-		$request = new Request($this->generation->getId(), $this->stepId);
+		$request = $this->createRequest();
 		if (Log::isEnabled())
 		{
 			(new Log($this->generation->getId()))->addRequestPrompt(

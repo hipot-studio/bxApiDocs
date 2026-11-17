@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Extension;
 
 use Bitrix\Main\Access\AccessCode;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Tasks\Feature\RegularTaskTypesFeature;
+use Bitrix\Tasks\Feature\RegularTasksSectionFeature;
 use Bitrix\Tasks\Integration\AI;
 use Bitrix\Tasks\Integration\Extranet\User;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
@@ -108,6 +111,8 @@ class ConfigService
 				'disk' => ModuleManager::isModuleInstalled('disk'),
 				'allowedGroups' => FormV2Feature::getAllowedGroups(), // @todo Remove 'team_form' before release
 				'isNewProjectsOn' => $projectFeatureService->isNewProjectsOn(),
+				'isRegularTaskTypesEnabled' => Feature::isEnabled(RegularTaskTypesFeature::class),
+				'isRegularTasksSectionEnabled' => Feature::isEnabled(RegularTasksSectionFeature::class),
 			],
 			'paths' => [
 				'editPath' => $this->linkService->getCreateTask($userId),

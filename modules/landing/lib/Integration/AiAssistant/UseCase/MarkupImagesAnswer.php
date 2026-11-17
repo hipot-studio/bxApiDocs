@@ -8,6 +8,7 @@ use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateMarkupSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\MarkupSiteState;
 use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
+use Bitrix\Landing\Integration\AiAssistant\Service\ImageProviderRefusalText;
 use Bitrix\Landing\Markup\Image\GenerationProgress;
 
 /**
@@ -15,7 +16,8 @@ use Bitrix\Landing\Markup\Image\GenerationProgress;
  * completed job names how many pictures it got, inherited and failed to get, with the token and the
  * reason of every failed one, so the agent tells the user; a job on the step of the pictures names
  * its progress; a spent AI limit travels with its slider, worded by the helper of the ordinary limit
- * refusal. A package without pictures has no field at all.
+ * refusal; a completed job whose provider refused pictures names the provider, the hint and what became
+ * of the message in the chat. A package without pictures has no field at all.
  *
  * Reading state only, as every answer builder of the markup path.
  */
@@ -46,6 +48,16 @@ trait MarkupImagesAnswer
 				'sliderCode' => $limit['sliderCode'] ?? null,
 			]);
 			$images['limit'] = ['sliderCode' => $normalized['sliderCode'], 'text' => $normalized['text']];
+		}
+
+		$refusal = $progress->getRefusal();
+		if ($refusal !== null && $generation->isFinished())
+		{
+			$images['providerRefusal'] = [
+				'provider' => ImageProviderRefusalText::provider($refusal['provider']),
+				'text' => ImageProviderRefusalText::build($refusal['provider']),
+				'notice' => $state->getImageNoticeStatus(),
+			];
 		}
 
 		return ['images' => $images];

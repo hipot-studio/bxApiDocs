@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Template\Task\Convert\Field;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Service\Template\Task\Convert\TaskBuilder;
 use Bitrix\Tasks\V2\Internal\Service\Template\Task\Convert\Trait\ConfigTrait;
+use Bitrix\Tasks\V2\Internal\Service\Template\Deadline\DeadlineOffsetResolver;
 use Bitrix\Tasks\V2\Internal\Service\Time\Trait\DateCalculationTrait;
 
 class ConvertDeadline implements ConvertFieldInterface
@@ -16,7 +17,9 @@ class ConvertDeadline implements ConvertFieldInterface
 
 	public function __invoke(Template $template, TaskBuilder $taskBuilder): void
 	{
-		if (!$template->deadlineAfter)
+		$deadlineOffset = DeadlineOffsetResolver::fromTemplate($template);
+
+		if ($deadlineOffset === null)
 		{
 			$taskBuilder->set('deadlineTs', 0);
 
@@ -24,9 +27,17 @@ class ConvertDeadline implements ConvertFieldInterface
 		}
 
 		$userId = $this->config->userId;
+
+		if ($deadlineOffset === 0)
+		{
+			$taskBuilder->set('deadlineTs', $this->calculateCreationDayDeadline($userId)->getTimestamp());
+
+			return;
+		}
+
 		$matchesWorkTime = $template->matchesWorkTime ?? false;
 
-		$deadlineTs = $this->calculateClosestDate($template->deadlineAfter, $matchesWorkTime, $userId, false);
+		$deadlineTs = $this->calculateClosestDate($deadlineOffset, $matchesWorkTime, $userId, false);
 
 		if ($deadlineTs)
 		{

@@ -16,6 +16,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSignature;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Engine\Response\Render;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
@@ -58,6 +59,11 @@ class HtmlEditorPageService
 
 	public function renderPage(array $componentParams): string
 	{
+		if (Application::getInstance()->getContext()->getRequest()->get('IFRAME') !== 'Y')
+		{
+			return $this->renderStandalonePage($componentParams);
+		}
+
 		return (string)$GLOBALS['APPLICATION']->includeComponent('bitrix:ui.sidepanel.wrapper', '', [
 			'RETURN_CONTENT' => true,
 			'POPUP_COMPONENT_NAME' => 'bitrix:disk.file.editor-html',
@@ -68,6 +74,16 @@ class HtmlEditorPageService
 			'PREVENT_LOADING_WITHOUT_IFRAME' => false,
 			'USE_PADDING' => false,
 		]);
+	}
+
+	protected function renderStandalonePage(array $componentParams): string
+	{
+		return (new Render\Component(
+			'bitrix:disk.file.editor-html',
+			'',
+			$componentParams,
+			withSiteTemplate: true,
+		))->getContent();
 	}
 
 	private function buildParams(File $file, ?AttachedObject $attachedObject): Result
@@ -134,7 +150,7 @@ class HtmlEditorPageService
 		return (new Result())->setData([
 			'NAME' => $name,
 			'HEADER_COMPOSITION' => $composition,
-			'PORTAL_URL' => defined('SITE_DIR') ? (string)SITE_DIR : '/',
+			'PORTAL_URL' => (string)$urlManager->getUrlForUserDisk($userId),
 			'BUSY_URL' => $busyUrl,
 			'SOURCE' => [
 				'fileId' => (int)$realFile->getId(),

@@ -224,36 +224,63 @@ final class DeliveryTable extends DataManager
 		$report = $result->getData();
 		$complete = (bool)($report['complete'] ?? false);
 		$message =
-			'Vibeoffice maintenance pass in mode {mode} took {elapsed} s: complete={complete}, busy={busy},'
+			'Vibeoffice maintenance pass code={code} in mode {mode} took {elapsed} s: complete={complete}, busy={busy},'
 			. ' deleted {deleted}, skipped {skipped}, categories {categories}.'
 		;
 		$context = [
-			'mode' => (string)($report['mode'] ?? ''),
-			'elapsed' => (string)($report['elapsedSeconds'] ?? ''),
+			'code' => $complete ? 'pass_complete' : 'pass_incomplete',
+			'mode' => in_array($report['mode'] ?? null, [MaintenanceAgent::MODE_OFF, MaintenanceAgent::MODE_APPLY], true)
+				? $report['mode']
+				: 'unknown',
+			'elapsed' => is_float($report['elapsedSeconds'] ?? null) || is_int($report['elapsedSeconds'] ?? null)
+				? (string)max(0, $report['elapsedSeconds'])
+				: '0',
 			'complete' => self::formatFlag($complete),
 			'busy' => self::formatFlag((bool)($report['busy'] ?? false)),
-			'deleted' => self::formatCounters((array)($report['deleted'] ?? [])),
-			'skipped' => self::formatCounters((array)($report['skipped'] ?? [])),
-			'categories' => self::formatCounters((array)($report['categories'] ?? [])),
+			'deleted' => self::formatCounters((array)($report['deleted'] ?? []), [
+				'pending', 'terminated', 'deliveries', 'files', 'detached',
+			]),
+			'skipped' => self::formatCounters((array)($report['skipped'] ?? []), [
+				'busyDocuments', 'referenced', 'openTransaction', 'missingDocumentKey',
+				'invalidStagedFile', 'refusedDeletes', 'openObligations', 'openObligationBytes',
+			]),
+			'categories' => self::formatCounters((array)($report['categories'] ?? []), [
+				'pending', 'terminated', 'stagedFiles', 'deliveries',
+			]),
 		];
 
-		$logger = MaintenanceAgent::logger();
-		if ($complete)
+		try
 		{
-			$logger?->info($message, $context);
+			$logger = MaintenanceAgent::logger();
+			if ($complete)
+			{
+				$logger?->info($message, $context);
+			}
+			else
+			{
+				$logger?->warning($message, $context);
+			}
 		}
-		else
+		catch (\Throwable)
 		{
-			$logger?->warning($message, $context);
+			// A diagnostic failure must not change the maintenance agent result.
 		}
 	}
 
-	private static function formatCounters(array $counters): string
+	private static function formatCounters(array $counters, array $allowedNames): string
 	{
 		$parts = [];
-		foreach ($counters as $name => $value)
+		foreach ($allowedNames as $name)
 		{
-			$parts[] = $name . '=' . (is_bool($value) ? self::formatFlag($value) : (string)$value);
+			$value = $counters[$name] ?? null;
+			if (is_bool($value))
+			{
+				$parts[] = $name . '=' . self::formatFlag($value);
+			}
+			elseif (is_int($value) && $value >= 0)
+			{
+				$parts[] = $name . '=' . $value;
+			}
 		}
 
 		return $parts ? implode(', ', $parts) : 'none';

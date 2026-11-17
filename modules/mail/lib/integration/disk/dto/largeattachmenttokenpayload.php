@@ -285,3 +285,4 @@ final class LargeAttachmentTokenPayload
 		return $normalized;
 	}
 }
+

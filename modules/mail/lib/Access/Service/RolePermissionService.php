@@ -8,6 +8,7 @@ use Bitrix\Mail\Access\Repository\RoleRelationRepository;
 use Bitrix\Mail\Access\Repository\RoleRepository;
 use Bitrix\Mail\Access\Role\RoleDictionary;
 use Bitrix\Mail\Access\SectionDictionary;
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\UI\AccessRights\DataProvider;
 
@@ -179,6 +180,12 @@ class RolePermissionService
 					$right['maxValue'] = $maxValue;
 				}
 
+				if ($permissionId === PermissionDictionary::MAIL_MESSAGE_DELETE)
+				{
+					$right['defaultValue'] = PermissionDictionary::VALUE_YES;
+					$right['emptyValue'] = PermissionDictionary::VALUE_YES;
+				}
+
 				$rights[] = $right;
 			}
 
@@ -249,6 +256,14 @@ class RolePermissionService
 		$accessRights = [];
 		$rolePermissions = $this->permissionRepository->getPermissionsForRole($roleId);
 
+		if (
+			Feature::isMessageDeletePermissionAvailable()
+			&& !array_key_exists(PermissionDictionary::MAIL_MESSAGE_DELETE, $rolePermissions)
+		)
+		{
+			$rolePermissions[PermissionDictionary::MAIL_MESSAGE_DELETE] = PermissionDictionary::VALUE_YES;
+		}
+
 		foreach ($rolePermissions as $id => $value)
 		{
 			$accessRights[] = [
@@ -292,11 +307,8 @@ class RolePermissionService
 	}
 
 	/**
-	 * While the feature is off the right is out of the screen inventory: the screen sends no value
-	 * for it, so a role created by then would lose deletion the moment the feature is on. Once the
-	 * screen offers the toggle it is drawn off until the administrator switches it, so a missing
-	 * value is the denial he sees. A sent value wins only while the right is in that inventory:
-	 * outside it saveRolePermissions() drops the value, so the default has to be written anyway.
+	 * Missing deletion values preserve access. A sent value wins only while the right is offered:
+	 * outside the screen inventory saveRolePermissions() drops it, so the default must be written.
 	 *
 	 * @param $accessRights array<array{id: string, value: string}>
 	 * @param $availablePermissionIds array<string>
@@ -322,16 +334,11 @@ class RolePermissionService
 			return [];
 		}
 
-		$defaultValue = $isOfferedByTheScreen
-			? PermissionDictionary::VALUE_NO
-			: PermissionDictionary::VALUE_YES
-		;
-
 		return [
 			[
 				'ROLE_ID' => $roleId,
 				'PERMISSION_ID' => PermissionDictionary::MAIL_MESSAGE_DELETE,
-				'VALUE' => $defaultValue,
+				'VALUE' => PermissionDictionary::VALUE_YES,
 			],
 		];
 	}

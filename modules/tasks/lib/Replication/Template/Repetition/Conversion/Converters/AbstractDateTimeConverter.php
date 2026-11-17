@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters;
 
 use Bitrix\Tasks\Replication\Template\Repetition\Conversion\ConverterInterface;
 use Bitrix\Tasks\Replication\RepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\Template\Deadline\DeadlineOffsetResolver;
 use Bitrix\Tasks\V2\Internal\Service\Time\Trait\DateCalculationTrait;
 
 abstract class AbstractDateTimeConverter implements ConverterInterface
@@ -20,10 +21,19 @@ abstract class AbstractDateTimeConverter implements ConverterInterface
 			return $taskFields;
 		}
 
-		if ($template->getDeadlineAfter() > 0)
+		$deadlineOffset = DeadlineOffsetResolver::fromRawParams(
+			$template->getReplicateParams(),
+			$template->getDeadlineAfter(),
+		);
+
+		if ($deadlineOffset === 0)
+		{
+			$taskFields['DEADLINE'] = $this->calculateCreationDayDeadline($template->getResponsibleId());
+		}
+		elseif ($deadlineOffset !== null)
 		{
 			$taskFields['DEADLINE'] = $this->calculateClosestDate(
-				$template->getDeadlineAfter(),
+				$deadlineOffset,
 				$template->getMatchWorkTime(),
 				$template->getResponsibleId(),
 				false,

@@ -57,3 +57,4 @@ class MailboxMessageAgent extends BaseAgent
 		);
 	}
 }
+

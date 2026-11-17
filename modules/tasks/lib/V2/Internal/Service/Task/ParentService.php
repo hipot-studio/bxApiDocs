@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
+use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\ParentTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
@@ -18,15 +19,23 @@ class ParentService
 	{
 	}
 
+	/**
+	 * @throws TaskUpdateException
+	 */
 	public function setParent(int $taskId, int $parentId, int $userId): Entity\Task
 	{
+		if ($parentId === $taskId || $this->isDescendantOf($parentId, $taskId))
+		{
+			throw new TaskUpdateException();
+		}
+
 		$entity = new Entity\Task(
 			id: $taskId, parent: new Entity\Task(id: $parentId),
 		);
 
 		$config = new UpdateConfig(userId: $userId);
 
-		return $this->updateService->update(task: $entity, config: $config);;
+		return $this->updateService->update(task: $entity, config: $config);
 	}
 
 	public function deleteParent(int $taskId, int $userId): Entity\Task

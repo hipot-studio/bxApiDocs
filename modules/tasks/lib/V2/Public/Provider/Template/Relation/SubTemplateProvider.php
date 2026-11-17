@@ -13,6 +13,7 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Template\TemplateCollection;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\RelationTemplateMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Template\ReadableTemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Template\SubTemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateByIdsParams;
@@ -25,6 +26,7 @@ class SubTemplateProvider
 	private readonly TemplateRightService $templateRightService;
 	private readonly RelationTemplateMapper $relationTemplateMapper;
 	private readonly SubTemplateRepositoryInterface $subTemplateRepository;
+	private readonly ReadableTemplateRepositoryInterface $readableTemplateRepository;
 
 	public function __construct()
 	{
@@ -32,6 +34,7 @@ class SubTemplateProvider
 		$this->templateRightService = Container::getInstance()->get(TemplateRightService::class);
 		$this->relationTemplateMapper = Container::getInstance()->get(RelationTemplateMapper::class);
 		$this->subTemplateRepository = Container::getInstance()->get(SubTemplateRepositoryInterface::class);
+		$this->readableTemplateRepository = Container::getInstance()->get(ReadableTemplateRepositoryInterface::class);
 	}
 
 	public function getTemplates(RelationTemplateParams $relationTemplateParams): TemplateCollection
@@ -88,7 +91,7 @@ class SubTemplateProvider
 		$subTemplateIds = [];
 		if ($relationTemplateParams->withSubTemplates)
 		{
-			$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($templateIds);
+			$subTemplateIds = $this->getReadableSubTemplateIds($templateIds, $relationTemplateParams->userId);
 		}
 
 		return $this->relationTemplateMapper->mapToCollection(
@@ -142,7 +145,7 @@ class SubTemplateProvider
 		$subTemplateIds = [];
 		if ($params->withSubTemplates)
 		{
-			$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($templateIds);
+			$subTemplateIds = $this->getReadableSubTemplateIds($templateIds, $params->userId);
 		}
 
 		return $this->relationTemplateMapper->mapToCollection(
@@ -174,7 +177,7 @@ class SubTemplateProvider
 		);
 	}
 
-	public function getTemplatesWithSubTemplateIds(array $ids): TemplateCollection
+	public function getTemplatesWithSubTemplateIds(array $ids, int $userId): TemplateCollection
 	{
 		Collection::normalizeArrayValuesByInt($ids, false);
 
@@ -183,11 +186,11 @@ class SubTemplateProvider
 			return new TemplateCollection();
 		}
 
-		$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($ids);
+		$readableParentIds = $this->filterByReadAccess($ids, $userId);
 
 		return $this->relationTemplateMapper->mapSubTemplateIdsCollection(
 			ids: $ids,
-			subTemplateIds: $subTemplateIds,
+			subTemplateIds: $this->getReadableSubTemplateIds($readableParentIds, $userId),
 		);
 	}
 
@@ -352,6 +355,57 @@ class SubTemplateProvider
 		Collection::normalizeArrayValuesByInt($responsibleIds, false);
 
 		return $responsibleIds;
+	}
+
+	/**
+	 * Parents are expected to be readable already; only their children are checked.
+	 */
+	protected function getReadableSubTemplateIds(array $readableParentIds, int $userId): array
+	{
+		if ($readableParentIds === [])
+		{
+			return [];
+		}
+
+		$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($readableParentIds);
+
+		return $this->filterSubTemplateIdsByReadAccess($subTemplateIds, $userId, $readableParentIds);
+	}
+
+	/**
+	 * Read access is resolved by the same access SQL the neighbour actions use
+	 * (list, listByIds, getTemplateIds), so one screen keeps one access boundary.
+	 */
+	protected function filterByReadAccess(array $templateIds, int $userId): array
+	{
+		if ($templateIds === [])
+		{
+			return [];
+		}
+
+		return $this->readableTemplateRepository->filterReadableIds($templateIds, $userId);
+	}
+
+	protected function filterSubTemplateIdsByReadAccess(
+		array $subTemplateIds,
+		int $userId,
+		array $readableParentIds,
+	): array
+	{
+		$childIds = array_unique(array_merge(...array_values($subTemplateIds)));
+		$unknownIds = array_values(array_diff($childIds, $readableParentIds));
+
+		$readableIds = array_flip([
+			...$readableParentIds,
+			...$this->filterByReadAccess($unknownIds, $userId),
+		]);
+
+		$filtered = array_map(
+			static fn (array $ids): array => array_keys(array_intersect_key(array_flip($ids), $readableIds)),
+			$subTemplateIds,
+		);
+
+		return array_filter($filtered);
 	}
 
 	protected function getRelationRights(array $templateIds, int $templateId, int $userId): array

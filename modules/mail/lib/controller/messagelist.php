@@ -263,3 +263,4 @@ final class MessageList extends Controller
 		return (int)CurrentUser::get()->getId();
 	}
 }
+

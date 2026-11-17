@@ -29,6 +29,23 @@ trait MapTypeTrait
 		return (int)$value;
 	}
 
+	public static function mapEntityId(array $props, string $key): ?int
+	{
+		$id = static::mapInteger($props, "{$key}Id");
+		if ($id !== null)
+		{
+			return $id;
+		}
+
+		$value = $props[$key] ?? null;
+		if ($value instanceof AbstractEntity)
+		{
+			return $value->getId();
+		}
+
+		return is_array($value) ? static::mapInteger($value, 'id') : null;
+	}
+
 	public static function mapString(array $props, string $key, ?string $default = null): ?string
 	{
 		if (!isset($props[$key]))

@@ -186,12 +186,6 @@ class SprintService implements Errorable
 			}
 			$completedTaskIds = array_merge($completedTaskIds, $completedSubTaskIds);
 
-			$itemIds = $itemService->getItemIdsBySourceIds($completedTaskIds, [$sprint->getId()]);
-			if (!$itemService->getErrors())
-			{
-				$itemService->moveItemsToEntity($itemIds, $backlog->getId(), $pushService);
-			}
-
 			$subTaskIds = [];
 			foreach ($taskIds as $taskId)
 			{
@@ -216,16 +210,26 @@ class SprintService implements Errorable
 				return $sprint;
 			}
 
-			$kanbanService->addTasksToKanban(
-				$sprint->getId(),
+			$taskIdsToAdd = array_values(array_diff(
 				array_unique(array_merge($taskIds, $subTaskIds)),
+				array_unique($completedTaskIds),
+			));
+			$itemIds = $itemService->getItemIdsBySourceIds($completedTaskIds, [$sprint->getId()]);
+
+			if ($taskIdsToAdd !== [] && !$kanbanService->addTasksToKanban(
+				$sprint->getId(),
+				$taskIdsToAdd,
 				$lastSprintId
-			);
-			if ($kanbanService->getErrors())
+			))
 			{
 				$this->errorCollection->add($kanbanService->getErrors());
 
 				return $sprint;
+			}
+
+			if (!$itemService->getErrors())
+			{
+				$itemService->moveItemsToEntity($itemIds, $backlog->getId(), $pushService);
 			}
 
 			if ($lastSprintId && $robotService)

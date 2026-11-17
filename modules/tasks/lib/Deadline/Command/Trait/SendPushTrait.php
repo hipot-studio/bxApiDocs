@@ -8,6 +8,11 @@ use Bitrix\Tasks\Integration\Pull\PushService;
 
 trait SendPushTrait
 {
+	protected function sendDefaultDeadlineUpdatedPush(int $userId, array $params = []): void
+	{
+		$this->sendPush($userId, 'default_deadline_changed', $params);
+	}
+
 	private function sendPush(int $userId, string $command, array $params = []): void
 	{
 		PushService::addEvent($userId, [

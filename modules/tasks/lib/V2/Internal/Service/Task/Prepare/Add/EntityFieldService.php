@@ -13,6 +13,7 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\CheckUserFields;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\PrepareFields;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\ReconcileStage;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\RunBeforeAddEvent;
 use Bitrix\Tasks\V2\Internal\Entity;
 use CTimeZone;
@@ -27,6 +28,7 @@ class EntityFieldService
 
 		$fields = (new PrepareFields($config))($fields);
 		$fields = (new RunBeforeAddEvent($config))($fields);
+		$fields = (new ReconcileStage($config))($fields);
 
 		(new CheckUserFields($config))($fields);
 
@@ -46,7 +48,8 @@ class EntityFieldService
 		$tariffService = Container::getInstance()->getTariffService();
 		if (!$tariffService->isProjectAvailable((int)($fields['GROUP_ID'] ?? 0)))
 		{
-			unset($fields['GROUP_ID']);
+			// a stage belongs to the group kanban and makes no sense without the group
+			unset($fields['GROUP_ID'], $fields['STAGE_ID']);
 		}
 
 		if (!$tariffService->isStakeholderAvailable())

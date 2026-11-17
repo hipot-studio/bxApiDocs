@@ -8,6 +8,7 @@ use Bitrix\Landing\Block;
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\BaseConnector;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
+use Bitrix\Landing\Copilot\Connector\AI\ProviderRefusal;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Generation\GenerationAbortedException;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
@@ -21,6 +22,7 @@ use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
+use Bitrix\Landing\Integration\AiAssistant\Service\ImageProviderRefusalText;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Markup\Dev\FailureInjection;
 use Bitrix\Landing\Markup\Image\GenerationProgress;
@@ -41,9 +43,12 @@ use Bitrix\Main\Config\Option;
  * nothing is written to a block - the intake copies the generated files when the package is applied.
  *
  * A failure of the model fails its picture only: the error of an answer, the expiry of a request,
- * the deadline of the step; the unavailable model and the spent AI limit fail the rest. The step
- * blocks the scenario until every picture has its outcome and fails only on an own technical
- * failure, recorded as the neutral text of the markup steps.
+ * the deadline of the step; the unavailable model and the spent AI limit fail the rest. A request
+ * the provider refused fails its picture by the own reason and the next picture is still sent, the
+ * error may be temporary; ProviderRefusal::STREAK_LIMIT refusals in a row fail the pictures not sent
+ * yet, and the ones already sent wait for their answers. The step blocks the scenario until every
+ * picture has its outcome and fails only on an own technical failure, recorded as the neutral text
+ * of the markup steps.
  */
 class RequestMarkupPackageImages extends AbstractAiImageRequest
 {
@@ -229,12 +234,18 @@ class RequestMarkupPackageImages extends AbstractAiImageRequest
 
 			if ($request === null)
 			{
+				if ($this->isRefusalStreakReached())
+				{
+					return true;
+				}
+
 				continue;
 			}
 
 			$requestId = (int)$request->getId();
 			$this->requests[$requestId] = $request;
 			$progress->markSent((string)$entity->nodeCode, $requestId);
+			$progress->resetRefusalStreak();
 			$this->saveProgress();
 		}
 
@@ -306,6 +317,15 @@ class RequestMarkupPackageImages extends AbstractAiImageRequest
 	 */
 	protected function handleEntitySendFailure(RequestEntityDto $entity, string $reason): bool
 	{
+		$failure = $this->getLastSendFailure();
+		$provider = $failure !== null ? ProviderRefusal::findProvider($failure) : null;
+		if ($provider !== null)
+		{
+			$this->settleRefusedPicture((string)$entity->nodeCode, $provider);
+
+			return true;
+		}
+
 		$this->getProgress()->markFailed((string)$entity->nodeCode, GenerationProgress::REASON_ERROR);
 		$this->saveProgress();
 		$this->getLog()->add('Markup package images: the picture "' . $entity->nodeCode . '" was not sent: ' . $reason);
@@ -316,6 +336,35 @@ class RequestMarkupPackageImages extends AbstractAiImageRequest
 	protected function isSendFailureLimitEnabled(): bool
 	{
 		return false;
+	}
+
+	/**
+	 * The refused picture, the streak and the stop of the rest reach the state together: a pause of
+	 * the run or the next run reads the streak back and never sends what the threshold has stopped.
+	 */
+	private function settleRefusedPicture(string $token, string $provider): void
+	{
+		$progress = $this->getProgress();
+		$progress->markFailed($token, GenerationProgress::REASON_PROVIDER_REFUSED);
+		$streak = $progress->registerRefusal($provider);
+		$message = 'Markup package images: provider "' . ImageProviderRefusalText::provider($provider)
+			. '" refused the request for "' . $token . '" (streak ' . $streak . ')'
+		;
+
+		if ($this->isRefusalStreakReached())
+		{
+			$settled = count($progress->getOutcomes());
+			$progress->failPending(GenerationProgress::REASON_PROVIDER_REFUSED);
+			$message .= ', ' . (count($progress->getOutcomes()) - $settled) . ' pending picture(s) stopped';
+		}
+
+		$this->saveProgress();
+		$this->getLog()->add($message);
+	}
+
+	private function isRefusalStreakReached(): bool
+	{
+		return $this->getProgress()->getRefusalStreak() >= ProviderRefusal::STREAK_LIMIT;
 	}
 
 	/**

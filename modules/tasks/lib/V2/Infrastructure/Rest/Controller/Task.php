@@ -23,15 +23,19 @@ use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 use Bitrix\Rest\V3\Interaction\Response\UpdateResponse;
+use Bitrix\Rest\V3\Structure\FieldsStructure;
+use Bitrix\Tasks\Control\Exception\TaskStageValidationException;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Controller\ActionFilter\IsEnabledFilter;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\Mapping\TaskDtoMapper;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\Mapping\TaskListRequestMapper;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\TaskDto;
+use Bitrix\Tasks\V2\Infrastructure\Rest\Exception\StageValidationException;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Add;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Delete;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Read;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Update;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Analytics;
 use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 use Bitrix\Tasks\V2\Internal\Entity\Task as TaskEntity;
@@ -76,9 +80,8 @@ class Task extends RestController
 		{
 			throw new RequiredFieldInRequestException('id');
 		}
-		/** @var TaskDto $taskDto */
-		$taskDto = $request->fields->convertToDto((RequiredGroup::Update)->value);
 
+		$taskDto = $this->prepareUpdateTaskDto($request);
 		$taskDto->id = $request->id;
 		$taskDtoMapper = new TaskDtoMapper();
 		$task = $taskDtoMapper->getTaskByDto($taskDto);
@@ -105,10 +108,65 @@ class Task extends RestController
 
 		if (!$result->isSuccess())
 		{
+			$error = $result->getErrors()[0] ?? null;
+			$errorCode = $error?->getCode();
+			if (
+				$errorCode === TaskStageValidationException::ERROR_NOT_FOUND
+				|| $errorCode === TaskStageValidationException::ERROR_DIFFERENT_STAGES
+			)
+			{
+				throw new StageValidationException(
+					new TaskStageValidationException((string)$error?->getMessage(), $errorCode),
+				);
+			}
+
 			throw new DtoValidationException($result->getErrors());
 		}
 
 		return new UpdateResponse(true);
+	}
+
+	private function prepareUpdateTaskDto(UpdateRequest $request): TaskDto
+	{
+		$fields = $request->fields->getItems();
+		$hasStageId = array_key_exists('stageId', $fields);
+		$stageId = null;
+		if ($hasStageId)
+		{
+			try
+			{
+				$stageId = Container::getInstance()->getStageCompatibilityService()->normalizeStageId(
+					$fields['stageId'],
+				);
+			}
+			catch (TaskStageValidationException $exception)
+			{
+				throw new StageValidationException($exception);
+			}
+		}
+
+		if ($hasStageId)
+		{
+			if ($stageId === null)
+			{
+				unset($fields['stageId']);
+			}
+			else
+			{
+				$fields['stageId'] = $stageId;
+			}
+
+			$request->fields = FieldsStructure::create(
+				array_merge($fields, $request->fields->getUserFields()),
+				$request->getDtoClass(),
+				$request,
+			);
+		}
+
+		/** @var TaskDto $taskDto */
+		$taskDto = $request->fields->convertToDto((RequiredGroup::Update)->value);
+
+		return $taskDto;
 	}
 
 	public function deleteAction(DeleteRequest $request): DeleteResponse

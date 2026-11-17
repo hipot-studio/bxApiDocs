@@ -44,8 +44,8 @@ class AddConfig
 		RuntimeData $runtime = new RuntimeData(),
 		?AnalyticsData $analyticsData = null,
 		// Explicit client marker that the user set the deadline manually.
-		// null means the caller did not report it (mobile app, legacy CTaskItem,
-		// REST), in which case RunAddEvent falls back to the DEADLINE heuristic.
+		// null means the caller did not report it (legacy CTaskItem or REST),
+		// in which case RunAddEvent falls back to the DEADLINE heuristic.
 		?bool $manualDeadline = null,
 		InteractionOrigin $origin = InteractionOrigin::System,
 	) {

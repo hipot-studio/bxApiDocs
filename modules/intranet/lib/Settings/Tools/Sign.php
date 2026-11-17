@@ -2,8 +2,10 @@
 
 namespace Bitrix\Intranet\Settings\Tools;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Sign\Config\Storage;
 
 class Sign extends Tool
 {
@@ -19,7 +21,9 @@ class Sign extends Tool
 
 	public function isAvailable(): bool
 	{
-		return ModuleManager::isModuleInstalled('sign');
+		return ModuleManager::isModuleInstalled('sign')
+			&& Loader::includeModule('sign')
+			&& Storage::instance()->canBeEnabled();
 	}
 
 	public function getSubgroupsIds(): array

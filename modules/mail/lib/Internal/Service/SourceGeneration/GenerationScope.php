@@ -116,10 +116,7 @@ final class GenerationScope
 			return self::exact($context->generationId);
 		}
 
-		return $context->generationId > 0
-			? self::active($context->generationId)
-			: self::withoutPreparedGenerations($context->mailboxId)
-		;
+		return self::servingMailboxWithPointer($context->mailboxId, $context->generationId);
 	}
 
 	/**
@@ -148,12 +145,47 @@ final class GenerationScope
 	 */
 	public static function servingMailbox(int $mailboxId): self
 	{
-		$pointer = self::readActivePointer($mailboxId);
+		return self::servingMailboxWithPointer($mailboxId, self::readActivePointer($mailboxId));
+	}
 
+	/**
+	 * The rule of the folders itself, for a pointer the caller already holds - one read under a
+	 * lock, or the one a context carries. Every other form of the serving scope reduces to it.
+	 */
+	public static function servingMailboxWithPointer(int $mailboxId, int $pointer): self
+	{
 		return $pointer > 0
 			? self::active($pointer)
 			: self::withoutPreparedGenerations($mailboxId)
 		;
+	}
+
+	/**
+	 * The serving scopes of several mailboxes at once {@see servingMailbox()}: the unknown pointers
+	 * are read by one query, the prepared generations of the mailboxes without a pointer by one more,
+	 * and a mailbox with a pointer does not touch the generation table at all.
+	 *
+	 * @param int[] $mailboxIds
+	 * @return array<int, self> Mailbox id => its scope, in the order of the normalized argument.
+	 */
+	public static function servingMailboxes(array $mailboxIds): array
+	{
+		$mailboxIds = self::normalizeMailboxIds($mailboxIds);
+		$pointers = self::readActivePointers($mailboxIds);
+
+		// Warms the process cache the rule reads through, one query for all of them
+		self::readPreparedGenerationsOf(array_keys(array_filter(
+			$pointers,
+			static fn (int $pointer): bool => $pointer <= 0,
+		)));
+
+		$scopes = [];
+		foreach ($mailboxIds as $mailboxId)
+		{
+			$scopes[$mailboxId] = self::servingMailboxWithPointer($mailboxId, $pointers[$mailboxId]);
+		}
+
+		return $scopes;
 	}
 
 	/**
@@ -192,40 +224,72 @@ final class GenerationScope
 	 */
 	public static function forMailboxes(array $mailboxIds): array
 	{
-		$mailboxIds = array_values(array_unique(array_filter(array_map('intval', $mailboxIds))));
-
-		$unknown = array_diff($mailboxIds, array_keys(self::$activePointers));
-		if ($unknown !== [])
-		{
-			// A mailbox missing from the table keeps the pointer 0, as a single lookup would give
-			foreach ($unknown as $mailboxId)
-			{
-				self::$activePointers[$mailboxId] = 0;
-			}
-
-			$rows = self::isSchemaInstalled()
-				? Application::getConnection()->query(sprintf(
-					'SELECT ID, %s FROM %s WHERE ID IN (%s)',
-					self::POINTER_COLUMN,
-					self::MAILBOX_TABLE,
-					implode(', ', array_map('intval', $unknown)),
-				))->fetchAll()
-				: []
-			;
-
-			foreach ($rows as $row)
-			{
-				self::$activePointers[(int)$row['ID']] = (int)$row[self::POINTER_COLUMN];
-			}
-		}
+		$mailboxIds = self::normalizeMailboxIds($mailboxIds);
 
 		$scopes = [];
-		foreach ($mailboxIds as $mailboxId)
+		foreach (self::readActivePointers($mailboxIds) as $mailboxId => $pointer)
 		{
-			$scopes[$mailboxId] = self::active(self::$activePointers[$mailboxId]);
+			$scopes[$mailboxId] = self::active($pointer);
 		}
 
 		return $scopes;
+	}
+
+	/**
+	 * The pointers of the mailboxes, the ones unknown to the process read by one query.
+	 *
+	 * The cache is written only from the answer: a failed query leaves no zero behind, it reaches
+	 * the caller, and the next scope of the same mailboxes reads the database again. A mailbox
+	 * missing from the table keeps the pointer 0, as a single lookup would give.
+	 *
+	 * @param int[] $mailboxIds Normalized {@see normalizeMailboxIds()}
+	 * @return array<int, int> Mailbox id => its pointer, in the order of the argument
+	 */
+	private static function readActivePointers(array $mailboxIds): array
+	{
+		if (!self::isSchemaInstalled())
+		{
+			return array_fill_keys($mailboxIds, 0);
+		}
+
+		$unknown = array_values(array_diff($mailboxIds, array_keys(self::$activePointers)));
+		if ($unknown !== [])
+		{
+			$rows = Application::getConnection()->query(sprintf(
+				'SELECT ID, %s FROM %s WHERE ID IN (%s)',
+				self::POINTER_COLUMN,
+				self::MAILBOX_TABLE,
+				implode(', ', $unknown),
+			))->fetchAll();
+
+			$read = array_fill_keys($unknown, 0);
+			foreach ($rows as $row)
+			{
+				$read[(int)$row['ID']] = (int)$row[self::POINTER_COLUMN];
+			}
+
+			self::$activePointers = $read + self::$activePointers;
+		}
+
+		$pointers = [];
+		foreach ($mailboxIds as $mailboxId)
+		{
+			$pointers[$mailboxId] = self::$activePointers[$mailboxId];
+		}
+
+		return $pointers;
+	}
+
+	/**
+	 * @param array $ids Mailbox ids of any shape a caller holds
+	 * @return int[] Positive, distinct, in the order of the first occurrence
+	 */
+	private static function normalizeMailboxIds(array $ids): array
+	{
+		return array_values(array_unique(array_filter(
+			array_map('intval', $ids),
+			static fn (int $id): bool => $id > 0,
+		)));
 	}
 
 	/**
@@ -282,27 +346,60 @@ final class GenerationScope
 	 */
 	private static function readPreparedGenerations(int $mailboxId): array
 	{
-		if ($mailboxId <= 0 || !self::isSchemaInstalled())
+		if ($mailboxId <= 0)
 		{
 			return [];
 		}
 
-		if (!array_key_exists($mailboxId, self::$preparedGenerations))
+		return self::$preparedGenerations[$mailboxId]
+			?? self::readPreparedGenerationsOf([$mailboxId])[$mailboxId];
+	}
+
+	/**
+	 * The generations the mailboxes are preparing, the ones unknown to the process read by one
+	 * query. The cache is written only from the answer, the way the pointers are
+	 * {@see readActivePointers()}: a mailbox without rows gets its empty list after the query and
+	 * never before it.
+	 *
+	 * @param int[] $mailboxIds Positive ids
+	 * @return array<int, int[]> Mailbox id => the generations it is preparing, in the order of the argument
+	 */
+	private static function readPreparedGenerationsOf(array $mailboxIds): array
+	{
+		if (!self::isSchemaInstalled())
+		{
+			return array_fill_keys($mailboxIds, []);
+		}
+
+		$unknown = array_values(array_filter(
+			$mailboxIds,
+			static fn (int $mailboxId): bool => !array_key_exists($mailboxId, self::$preparedGenerations),
+		));
+		if ($unknown !== [])
 		{
 			// Raw SQL for the same reason the pointer is read that way
 			$rows = Application::getConnection()->query(sprintf(
-				'SELECT ID FROM %s WHERE %s',
+				'SELECT ID, MAILBOX_ID FROM %s WHERE %s',
 				MailboxSourceGenerationTable::getTableName(),
-				MailboxSourceGenerationTable::preparedGenerationSqlCondition($mailboxId),
+				MailboxSourceGenerationTable::preparedGenerationsSqlCondition($unknown),
 			))->fetchAll();
 
-			self::$preparedGenerations[$mailboxId] = array_map(
-				static fn (array $row): int => (int)$row['ID'],
-				$rows,
-			);
+			$read = array_fill_keys($unknown, []);
+			foreach ($rows as $row)
+			{
+				$read[(int)$row['MAILBOX_ID']][] = (int)$row['ID'];
+			}
+
+			self::$preparedGenerations = $read + self::$preparedGenerations;
 		}
 
-		return self::$preparedGenerations[$mailboxId];
+		$prepared = [];
+		foreach ($mailboxIds as $mailboxId)
+		{
+			$prepared[$mailboxId] = self::$preparedGenerations[$mailboxId];
+		}
+
+		return $prepared;
 	}
 
 	/**

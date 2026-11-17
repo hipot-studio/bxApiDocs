@@ -99,3 +99,4 @@ class SubjectAvailability
 		return Permissions::getInstance()->canReadEntity($entityTypeId, $ownerId);
 	}
 }
+

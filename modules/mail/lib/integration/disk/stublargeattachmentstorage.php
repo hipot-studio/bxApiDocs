@@ -56,3 +56,4 @@ final class StubLargeAttachmentStorage implements LargeAttachmentStorageInterfac
 		));
 	}
 }
+

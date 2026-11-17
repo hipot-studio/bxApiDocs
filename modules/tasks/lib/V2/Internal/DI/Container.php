@@ -85,6 +85,7 @@ use Bitrix\Tasks\V2\Internal\Service\Counter\Collector\MentionedCollector;
 use Bitrix\Tasks\V2\Internal\Service\Counter\Collector\UserCollector;
 use Bitrix\Tasks\V2\Internal\Service\Task\TaskStageService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ScenarioService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Stage\StageCompatibilityService;
 use Bitrix\Tasks\V2\Internal\Service\Task\TimeManagementService;
 use Bitrix\Tasks\V2\Internal\Service\Task\TimerService;
 use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
@@ -313,6 +314,11 @@ class Container extends AbstractContainer
 	public function getStageRepository(): StageRepositoryInterface
 	{
 		return $this->get(StageRepositoryInterface::class);
+	}
+
+	public function getStageCompatibilityService(): StageCompatibilityService
+	{
+		return $this->get(StageCompatibilityService::class);
 	}
 
 	public function getTaskAccessService(): TaskAccessService

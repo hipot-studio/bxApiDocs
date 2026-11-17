@@ -96,6 +96,47 @@ class DocxXml extends Xml
 		return $placeholders;
 	}
 
+	public function getMultiplyingBlockNames(): array
+	{
+		$marker = '.' . static::BLOCK_START_PLACEHOLDER;
+		if (
+			!$this->isFileProcessable()
+			|| !str_contains($this->content, '{')
+			|| !str_contains($this->content, $marker)
+		)
+		{
+			return [];
+		}
+
+		$this->initDomDocument();
+		$names = [];
+		$nodes = $this->xpath->query('//w:t[text()[contains(.,"' . $marker . '")]]');
+		foreach ($nodes as $node)
+		{
+			if (!preg_match_all(static::$valuesPattern, $node->nodeValue, $placeholders, PREG_SET_ORDER))
+			{
+				continue;
+			}
+
+			foreach ($placeholders as $placeholder)
+			{
+				$placeholderName = $placeholder[2];
+				if (!str_ends_with($placeholderName, $marker))
+				{
+					continue;
+				}
+
+				$name = substr($placeholderName, 0, -strlen($marker));
+				if ($name !== '')
+				{
+					$names[$name] = $name;
+				}
+			}
+		}
+
+		return $names;
+	}
+
 	/**
 	 * Normalizes content of the document, removing unnecessary tags between {}
 	 */
@@ -366,6 +407,10 @@ class DocxXml extends Xml
 				{
 					$this->processMultiplyingBlock($list, $placeholder, $block);
 					$this->saveContent();
+					if (isset($block['startNode']))
+					{
+						$this->initDomDocument();
+					}
 					$block = $this->collectMultiplyNodes($placeholder);
 				}
 				$this->saveContent();
@@ -383,6 +428,8 @@ class DocxXml extends Xml
 			$indexToPrint = 0;
 		}
 		$fieldNamesCache = [];
+		$nodeToLoad = $block['nodes'][count($block['nodes']) - 1];
+		$redundantDeclarations = $this->getRootNamespaceDeclarations($nodeToLoad->parentNode);
 		foreach ($dataProvider as $index => $value)
 		{
 			if ($indexToPrint !== null && $index !== $indexToPrint)
@@ -453,9 +500,12 @@ class DocxXml extends Xml
 					$temporaryPlaceholdersWithNodes,
 					$values,
 				);
-				$nodeToLoad = $block['nodes'][count($block['nodes']) - 1];
 				$blockDocument = new \DOMDocument();
 				$blockContentWithoutXmlDeclaration = str_replace('<?xml version="1.0"?>' . PHP_EOL, '', $blockContent);
+				$blockContentWithoutXmlDeclaration = self::detachRedundantNamespaceDeclarations(
+					$blockContentWithoutXmlDeclaration,
+					$redundantDeclarations,
+				);
 				$validXmlWithContent =
 					Xml::getValidXmlWithContent($blockContentWithoutXmlDeclaration, 'w', static::getNamespaces());
 				try
@@ -488,6 +538,83 @@ class DocxXml extends Xml
 		{
 			$block['endNode']->parentNode->removeChild($block['endNode']);
 		}
+	}
+
+	private function getRootNamespaceDeclarations(\DOMNode $insertionParent): array
+	{
+		$rootNode = $this->document?->documentElement;
+		if (!$rootNode)
+		{
+			return [];
+		}
+
+		$rootPrefix = (string)$rootNode->prefix;
+		$hasDeclarationBesidesRootPrefix = false;
+		foreach ($this->xpath->query('namespace::*', $rootNode) as $namespaceNode)
+		{
+			$declaredPrefix = $namespaceNode->localName;
+			if ($declaredPrefix === 'xml')
+			{
+				continue;
+			}
+
+			$declaredPrefix = $declaredPrefix === 'xmlns' ? '' : $declaredPrefix;
+			if ($declaredPrefix !== $rootPrefix)
+			{
+				$hasDeclarationBesidesRootPrefix = true;
+				break;
+			}
+		}
+
+		if (!$hasDeclarationBesidesRootPrefix)
+		{
+			return [];
+		}
+
+		$declarations = [];
+		foreach (static::getNamespaces() as $prefix => $uri)
+		{
+			if (
+				$rootNode->lookupNamespaceUri($prefix) !== $uri
+				|| $insertionParent->lookupNamespaceURI($prefix) !== $uri
+			)
+			{
+				continue;
+			}
+
+			$declarations[] = ' xmlns:' . $prefix . '="' . $uri . '"';
+		}
+
+		return $declarations;
+	}
+
+	private static function detachRedundantNamespaceDeclarations(string $content, array $declarations): string
+	{
+		if (!$declarations || !preg_match('/^<[^?!]/', $content))
+		{
+			return $content;
+		}
+
+		$quote = null;
+		for ($index = 0, $length = strlen($content); $index < $length; $index++)
+		{
+			$character = $content[$index];
+			if ($character === $quote)
+			{
+				$quote = null;
+			}
+			elseif ($quote === null && ($character === '"' || $character === "'"))
+			{
+				$quote = $character;
+			}
+			elseif ($quote === null && $character === '>')
+			{
+				return str_replace($declarations, '', substr($content, 0, $index + 1))
+					. substr($content, $index + 1);
+			}
+		}
+
+		return $content;
 	}
 
 	/**

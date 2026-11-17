@@ -17,7 +17,7 @@ use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterfa
 use Bitrix\Tasks\V2\Internal\Repository\CheckListRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TemplateMapper;
-use Bitrix\Tasks\V2\Internal\Repository\Template\List\AccessChecker;
+use Bitrix\Tasks\V2\Internal\Repository\Template\List\AccessCheckerFactory;
 use Bitrix\Tasks\V2\Internal\Repository\Template\List\Field;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 
@@ -35,6 +35,7 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 		private readonly SubTemplateRepositoryInterface $subTemplateRepository,
 		private readonly TemplateMapper $mapper,
 		private readonly List\QueryBuilder $queryBuilder,
+		private readonly AccessCheckerFactory $accessCheckerFactory,
 	)
 	{
 	}
@@ -211,7 +212,7 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 		$userId = $filter->getUserIdForAccessCheck();
 		if ($userId !== null)
 		{
-			$accessChecker = new AccessChecker($userId);
+			$accessChecker = $this->accessCheckerFactory->getChecker($userId);
 			if (!$accessChecker->hasAccess())
 			{
 				return new TemplateCollection();

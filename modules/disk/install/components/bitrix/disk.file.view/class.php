@@ -5,6 +5,7 @@ use Bitrix\Bizproc\Starter\Enum\ManualStartSurface;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
@@ -203,9 +204,10 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$externalLinkData['DEATH_TIME_TIMESTAMP'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->getTimestamp() : null;
 			$externalLinkData['DEATH_TIME'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->toString() : null;
 
-			$externalLinkData['LINK'] = Driver::getInstance()->getUrlManager()->getPublicExternalLink(
-				object: $this->file,
-				hash: $externalLink->getHash(),
+			$externalLinkData['LINK'] = $urlManager->getCopyablePublicExternalLinkForConsumer(
+				$externalLink,
+				UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+				$this->file,
 			);
 		}
 
@@ -261,6 +263,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			->setUnifiedLinkOptions([
 				'noRedirect' => true,
 			])
+			->setMarkdownTabAllowed()
 		;
 
 		if ($canUpdate && \Bitrix\Disk\Document\DocumentHandler::isEditable($this->file->getExtension()))
@@ -392,6 +395,8 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			),
 			'CAN_UPDATE' => $canUpdate,
 			'CAN_DELETE' => $this->file->canDelete($securityContext),
+			// The markDeleted endpoint checks direct rights only, without unified link.
+			'CAN_MARK_DELETED' => $this->file->canMarkDeleted($this->storage->getCurrentUserSecurityContext()),
 			'CAN_RESTORE' => $this->file->canRestore($securityContext),
 			'CAN_SHARE' => $this->file->canShare($securityContext) && Bitrix24Manager::isFeatureEnabled('disk_file_sharing'),
 			'CAN_CHANGE_RIGHTS' => $this->file->canChangeRights($securityContext),

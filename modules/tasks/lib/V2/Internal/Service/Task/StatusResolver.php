@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
-use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\UserRoleCheckerInterface;
 
 class StatusResolver
 {
 	public function __construct(
 		private readonly TaskRepositoryInterface $taskRepository,
+		private readonly UserRoleCheckerInterface $userRoleChecker,
 	)
 	{
 
@@ -26,7 +27,7 @@ class StatusResolver
 			throw new TaskNotExistsException();
 		}
 
-		$creatorId = $task->creator?->getId();
+		$creatorId = $task->getCreatorId();
 		$responsibleId = $task->responsible?->getId();
 
 		if (
@@ -38,14 +39,21 @@ class StatusResolver
 			return Status::Completed;
 		}
 
+		// Mapper leaves creator null when the profile is gone; creatorId still holds the ghost id.
+		// Without a living creator, admin finishes TASK_CONTROL in one step, not only from SupposedlyCompleted.
+		if ($task->creator === null && $this->userRoleChecker->isSuper($userId))
+		{
+			return Status::Completed;
+		}
+
 		if ($task->status === Status::SupposedlyCompleted)
 		{
-			if (User::isSuper($userId))
+			if ($this->userRoleChecker->isSuper($userId))
 			{
 				return Status::Completed;
 			}
 
-			if (User::isBoss($creatorId, $userId))
+			if ($creatorId > 0 && $this->userRoleChecker->isBoss($creatorId, $userId))
 			{
 				return Status::Completed;
 			}

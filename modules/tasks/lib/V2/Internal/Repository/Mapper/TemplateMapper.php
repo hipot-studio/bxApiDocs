@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
 use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
@@ -60,6 +61,7 @@ class TemplateMapper
 			replicate: $templateObject->getReplicate(),
 			replicateParams: $this->replicateParamsMapper->mapToValueObject($templateObject->getReplicateParams()),
 			replicateCount: $templateObject->getTparamReplicationCount(),
+			regularityType: RegularityType::fromValue($templateObject->getReplicateType()),
 			group: $group,
 			estimatedTime: $templateObject->getTimeEstimate(),
 			tags: $tags,

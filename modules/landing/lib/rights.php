@@ -262,6 +262,17 @@ class Rights
 	}
 
 	/**
+	 * Can current user change the options of the module shared by the whole portal.
+	 * @return bool
+	 */
+	public static function canChangePortalOptions(): bool
+	{
+		return Manager::isAdmin()
+			// without the permissions feature isAdmin() is true for anyone
+			|| (self::isFeatureOn() && self::isAdmin());
+	}
+
+	/**
 	 * Returns allowed sites with full access.
 	 * @return int[]
 	 */

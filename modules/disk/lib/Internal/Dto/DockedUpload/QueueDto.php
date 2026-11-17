@@ -45,6 +45,11 @@ final class QueueDto implements JsonSerializable
 	 * @param string|null $targetFolderName name of the folder the queue lands in, null for
 	 *   the ROOT of the storage - the root folder is the storage itself and carries no name
 	 *   a user would recognise, so the client shows the storage alone there.
+	 * @param string|null $storageImageSrc picture of the storage the widget draws as the
+	 *   avatar of the section - {@see \Bitrix\Disk\ProxyType\Base::getEntityImageSrc()}.
+	 *   Published under the same access check as the names, null whenever they are.
+	 * @param string|null $storageKind kind of the storage that shapes the avatar - one of
+	 *   the QueueTargetNames::STORAGE_KIND_* values, null whenever the names are.
 	 */
 	public function __construct(
 		public readonly string $queueId,
@@ -59,6 +64,8 @@ final class QueueDto implements JsonSerializable
 		public readonly array $items,
 		public readonly ?string $storageName = null,
 		public readonly ?string $targetFolderName = null,
+		public readonly ?string $storageImageSrc = null,
+		public readonly ?string $storageKind = null,
 	)
 	{
 	}
@@ -216,6 +223,8 @@ final class QueueDto implements JsonSerializable
 			items: $itemDtos,
 			storageName: $targetNames->storageName,
 			targetFolderName: $targetNames->targetFolderName,
+			storageImageSrc: $targetNames->storageImageSrc,
+			storageKind: $targetNames->storageKind,
 		);
 	}
 
@@ -352,6 +361,8 @@ final class QueueDto implements JsonSerializable
 			'items' => array_map(static fn(ItemDto $item) => $item->toArray(), $this->items),
 			'storageName' => $this->storageName,
 			'targetFolderName' => $this->targetFolderName,
+			'storageImageSrc' => $this->storageImageSrc,
+			'storageKind' => $this->storageKind,
 		];
 	}
 }

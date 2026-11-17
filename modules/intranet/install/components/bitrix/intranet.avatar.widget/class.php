@@ -22,7 +22,8 @@ class IntranetAvatarWidget extends \CBitrixComponent
 		$this->arResult['userId'] = $user->getId();
 		$this->arResult['signDocumentsCounter'] = Content\Tool\MyDocuments::getCount();
 		$this->arResult['signDocumentsPullEventName'] = Content\Tool\MyDocuments::getCounterEventName();
-		$this->arResult['verifyPhoneCounter'] = Content\Tool\Security::hasCounter();
+		$this->arResult['verifyPhoneCounter'] = Content\Tool\Security::hasPhoneConfirmationCounter();
+		$this->arResult['hasLostDevice'] = Content\Tool\Security::hasLostDevice();
 		$this->arResult['verifyPhonePullEventName'] = Content\Tool\Security::getPullEventName();
 		$this->arResult['workTimeData'] = $this->getWorkTimeData($user->getId());
 

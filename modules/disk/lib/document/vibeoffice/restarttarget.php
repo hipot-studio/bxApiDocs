@@ -9,6 +9,7 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\OnlyOffice\Editor\ConfigBuilder;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\Security\Sign\Signer;
@@ -17,6 +18,9 @@ use Bitrix\Main\Web\Json;
 final class RestartTarget
 {
 	private const SIGNATURE_SALT = 'disk_vibeoffice_opening_v1';
+	private const CAPACITY_CONTINUATIONS = 'disk_vibeoffice_capacity_views';
+	private const CAPACITY_CONTINUATION_TTL = 86400;
+	private const MAX_CAPACITY_CONTINUATIONS = 32;
 
 	public static function build(DocumentSession $session, array $trustedOpening): ?string
 	{
@@ -132,6 +136,69 @@ final class RestartTarget
 		}
 
 		return $opening;
+	}
+
+	// Keep the old shell address resolvable after exact failed-EDIT cleanup. This is navigation state, not ACL.
+	public static function rememberCapacityView(
+		array $source,
+		DocumentSession $view,
+		array $trustedOpening,
+		string $openingToken,
+		int $userId,
+	): void
+	{
+		if ($source['type'] !== DocumentSession::TYPE_EDIT
+			|| $source['service'] !== \Bitrix\Disk\Document\Models\DocumentService::Vibeoffice->value
+			|| $userId <= 0 || !$view->isView() || !$view->belongsToUser($userId)
+			|| (int)$source['externalLinkId'] !== (int)$view->getExternalLinkId()
+			|| $source['objectId'] !== (int)$view->getObjectId()
+			|| $source['versionId'] !== $view->getVersionId()
+			|| $source['attachedObjectId'] !== $view->getContext()?->getAttachedObjectId())
+		{
+			return;
+		}
+		$session = Application::getInstance()->getSession();
+		$continuations = $session->get(self::CAPACITY_CONTINUATIONS) ?? [];
+		$continuations = array_filter($continuations, static fn(array $entry): bool => $entry['expires'] > time());
+		$key = self::capacityKey($source['sessionId'], $source['externalHash'], $openingToken, $userId);
+		unset($continuations[$key]);
+		$continuations[$key] = [
+			'source' => $source,
+			'view' => DocumentSessionManager::snapshotSession($view),
+			'opening' => $trustedOpening,
+			'expires' => time() + self::CAPACITY_CONTINUATION_TTL,
+		];
+		$session->set(self::CAPACITY_CONTINUATIONS,
+			array_slice($continuations, -self::MAX_CAPACITY_CONTINUATIONS, null, true));
+	}
+
+	public static function restoreCapacityView(int $sourceId, string $sourceHash, string $token, int $userId): array
+	{
+		if ($sourceId <= 0 || $sourceHash === '' || $userId <= 0)
+		{
+			return [];
+		}
+		$session = Application::getInstance()->getSession();
+		$continuations = $session->get(self::CAPACITY_CONTINUATIONS) ?? [];
+		$key = self::capacityKey($sourceId, $sourceHash, $token, $userId);
+		$entry = $continuations[$key] ?? null;
+		if ($entry === null || $entry['expires'] <= time())
+		{
+			return [];
+		}
+		$view = DocumentSession::loadById($entry['view']['sessionId']);
+		if (!$view || !$view->isView() || !$view->belongsToUser($userId)
+			|| DocumentSessionManager::snapshotSession($view) !== $entry['view'])
+		{
+			return [];
+		}
+
+		return ['session' => $view, 'opening' => $entry['opening'], 'source' => $entry['source']];
+	}
+
+	private static function capacityKey(int $sourceId, string $sourceHash, string $token, int $userId): string
+	{
+		return hash('sha256', Json::encode([$userId, $sourceId, $sourceHash, $token]));
 	}
 
 	private static function matches(DocumentSession $session, array $opening): bool

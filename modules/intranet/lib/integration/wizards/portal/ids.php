@@ -12,6 +12,7 @@ class Ids
 
 	private static ?array $voteChannelSId = [];
 	private static ?array $blogs = [];
+	private static array $extranetBlogGroups = [];
 	private static ?array $iblockIds = [];
 	private static ?array $diskIds = [];
 	private static ?array $forumIds = [];
@@ -148,6 +149,14 @@ class Ids
 	{
 		$siteId = $siteId ?: SITE_ID;
 
+		if (
+			Main\Loader::includeModule('extranet')
+			&& \CExtranet::IsExtranetSite($siteId)
+		)
+		{
+			return self::getExtranetBlogGroupId($siteId);
+		}
+
 		if (empty(self::$blogs))
 		{
 			$cacheId = 'blogId';
@@ -165,7 +174,46 @@ class Ids
 			}
 			self::$blogs = $val;
 		}
-		return isset(self::$blogs[$siteId]) ? (string) self::$blogs[$siteId] : null;
+		if (isset(self::$blogs[$siteId]))
+		{
+			return (string) self::$blogs[$siteId];
+		}
+
+		return null;
+	}
+
+	private static function getExtranetBlogGroupId(string $siteId): ?string
+	{
+		if (!Main\Loader::includeModule('blog'))
+		{
+			return null;
+		}
+
+		$groupOption = Main\Config\Option::get('socialnetwork', 'userbloggroup_id', false, $siteId);
+		$groupId = (int) $groupOption;
+		if ($groupOption !== false && $groupId <= 0)
+		{
+			return null;
+		}
+
+		$cacheKey = serialize([$siteId, $groupOption]);
+		if (!array_key_exists($cacheKey, self::$extranetBlogGroups))
+		{
+			$filter = ['SITE_ID' => $siteId];
+			if ($groupId > 0)
+			{
+				$filter['ID'] = $groupId;
+			}
+
+			$groups = \CBlogGroup::GetList(['ID' => 'ASC'], $filter, false, ['nTopCount' => 1], ['ID']);
+			$group = $groups->Fetch();
+			self::$extranetBlogGroups[$cacheKey] = $group
+				? (string) $group['ID']
+				: null
+			;
+		}
+
+		return self::$extranetBlogGroups[$cacheKey];
 	}
 
 	public static function getIblockId(string $iBlockCode, string $siteId = null): ?string
@@ -229,6 +277,3 @@ class Ids
 		return self::$voteChannelSId[$siteId];
 	}
 }
-
-
-

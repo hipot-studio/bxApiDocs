@@ -12,6 +12,7 @@ use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Mail\Internals\MailMessageMarkTable;
 use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Localization;
@@ -60,6 +61,7 @@ class MailMessageUidTable extends Entity\DataManager
 
 	private const REMAINING_MESSAGES_PORTION = 1000;
 	private const ACTIVITY_REFRESH_LIMIT = 500;
+	private const UNSIGNED_INT_FIELDS = ['DIR_UIDV', 'MSG_UID'];
 	private const ACTIVITY_FIELDS = [
 		'DIR_MD5',
 		'INTERNALDATE',
@@ -85,7 +87,7 @@ class MailMessageUidTable extends Entity\DataManager
 		$mutationCompleted = false;
 		try
 		{
-			$result = parent::add($data);
+			$result = parent::add(self::keepUnsignedIntValues($data));
 			$mutationCompleted = true;
 
 			return $result;
@@ -107,7 +109,7 @@ class MailMessageUidTable extends Entity\DataManager
 		$mutationCompleted = false;
 		try
 		{
-			$result = parent::update($primary, $data);
+			$result = parent::update($primary, self::keepUnsignedIntValues($data));
 			$mutationCompleted = true;
 
 			return $result;
@@ -167,7 +169,10 @@ class MailMessageUidTable extends Entity\DataManager
 			$result = $connection->query(sprintf(
 				"UPDATE %s SET %s WHERE %s",
 				$connection->getSqlHelper()->quote($entity->getDbTableName()),
-				$connection->getSqlHelper()->prepareUpdate($entity->getDbTableName(), $fields)[0],
+				$connection->getSqlHelper()->prepareUpdate(
+					$entity->getDbTableName(),
+					self::keepUnsignedIntValues($fields),
+				)[0],
 				Entity\Query::buildFilterSql($entity, $filter)
 			));
 			if ($sendEvent)
@@ -716,7 +721,12 @@ class MailMessageUidTable extends Entity\DataManager
 			$connection = $entity->getConnection();
 			$helper = $connection->getSqlHelper();
 
-			$sql = $helper->prepareMerge($entity->getDBTableName(), $entity->getPrimaryArray(), $insert, $update);
+			$sql = $helper->prepareMerge(
+				$entity->getDBTableName(),
+				$entity->getPrimaryArray(),
+				self::keepUnsignedIntValues($insert),
+				self::keepUnsignedIntValues($update),
+			);
 
 			$sql = current($sql);
 			if($sql <> '')
@@ -730,6 +740,24 @@ class MailMessageUidTable extends Entity\DataManager
 		{
 			self::finishActivityMutation($activityMutation, $mutationCompleted);
 		}
+	}
+
+	/**
+	 * The SQL helpers take the column types from the table description, where an unsigned int is a 4-byte
+	 * integer, and clamp a value above 2147483647 to it - the raw writes and the ORM add and update alike.
+	 * An expression is passed as it is.
+	 */
+	private static function keepUnsignedIntValues(array $fields): array
+	{
+		foreach (self::UNSIGNED_INT_FIELDS as $fieldName)
+		{
+			if (isset($fields[$fieldName]) && is_numeric($fields[$fieldName]))
+			{
+				$fields[$fieldName] = new SqlExpression('?i', $fields[$fieldName]);
+			}
+		}
+
+		return $fields;
 	}
 
 	private static function activityFieldsChanged(array $fields): bool

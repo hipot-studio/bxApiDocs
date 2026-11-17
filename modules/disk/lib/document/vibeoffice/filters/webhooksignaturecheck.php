@@ -43,12 +43,14 @@ class WebhookSignatureCheck extends ActionFilter\Base
 	public const MAX_SKEW = 300;
 
 	private string $secret;
+	private ?string $previousSecret;
 
-	public function __construct(string $secret)
+	public function __construct(string $secret, ?string $previousSecret = null)
 	{
 		parent::__construct();
 
 		$this->secret = $secret;
+		$this->previousSecret = $previousSecret;
 	}
 
 	public function onBeforeAction(Event $event)
@@ -79,7 +81,14 @@ class WebhookSignatureCheck extends ActionFilter\Base
 		$expected = self::sign($this->secret, $timestamp, $rawBody);
 		if (!hash_equals($expected, $signature))
 		{
-			return $this->deny('Invalid webhook signature.');
+			if (
+				$this->previousSecret === null
+				|| $this->previousSecret === ''
+				|| !hash_equals(self::sign($this->previousSecret, $timestamp, $rawBody), $signature)
+			)
+			{
+				return $this->deny('Invalid webhook signature.');
+			}
 		}
 
 		return null;

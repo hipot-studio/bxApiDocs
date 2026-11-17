@@ -7,6 +7,7 @@ use Bitrix\Landing\Manager;
 use Bitrix\Landing\File;
 use Bitrix\Landing\Folder;
 use Bitrix\Landing\Metrika;
+use Bitrix\Landing\Rights;
 use Bitrix\Landing\Sanitizer;
 use Bitrix\Landing\Site;
 use Bitrix\Landing\Block as BlockCore;
@@ -726,6 +727,18 @@ class Landing
 			}
 			if (isset($data['images']) && is_array($data['images']))
 			{
+				if (!$landing->canEdit())
+				{
+					$error = new \Bitrix\Landing\Error;
+					$error->addError(
+						'ACCESS_DENIED',
+						Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
+					);
+					$result->setError($error);
+
+					return $result;
+				}
+
 				foreach ($data['images'] as $item)
 				{
 					if (isset($blocks[$item['block']]))
@@ -1125,6 +1138,18 @@ class Landing
 	{
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
+
+		// the table does not check rights of a page the user cannot read
+		if (!Rights::hasAccessForLanding($lid, Rights::ACCESS_TYPES['delete']))
+		{
+			$error->addError(
+				'ACCESS_DENIED',
+				Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
+			);
+			$result->setError($error);
+
+			return $result;
+		}
 
 		if ($mark)
 		{

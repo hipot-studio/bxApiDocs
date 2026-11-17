@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Copy\Config\CopyConfig;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentException;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Exception;
 
@@ -36,6 +37,17 @@ class CopyTemplateCommand extends AbstractCommand
 		}
 		catch (Exception $e)
 		{
+			if ($e instanceof AuthorAssignmentException)
+			{
+				return $result->addError($e->toError());
+			}
+
+			$previous = $e->getPrevious();
+			if ($previous instanceof AuthorAssignmentException)
+			{
+				return $result->addError($previous->toError());
+			}
+
 			return $result->addError(Error::createFromThrowable($e));
 		}
 	}

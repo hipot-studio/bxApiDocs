@@ -25,6 +25,9 @@ use Bitrix\Tasks\Helper\FilterRegistry;
 use Bitrix\Tasks\Helper\Grid;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk\Connector\Task as ConnectorTask;
+use Bitrix\Tasks\Integration\IMBot;
+use Bitrix\Tasks\Integration\Mail;
+use Bitrix\Tasks\Integration\Replica;
 use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Integration\Socialnetwork\Context\Context;
 use Bitrix\Tasks\Internals\Counter;
@@ -39,6 +42,7 @@ use Bitrix\Tasks\Onboarding\DI\OnboardingContainer;
 use Bitrix\Tasks\Promotion\TasksNewCard;
 use Bitrix\Tasks\Promotion\TasksNewChatButton;
 use Bitrix\Tasks\TourGuide;
+use Bitrix\Tasks\Ui;
 use Bitrix\Tasks\Ui\Controls\Column;
 use Bitrix\Tasks\Util\Error\Collection;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
@@ -60,6 +64,11 @@ class TasksTaskListComponent extends TasksBaseComponent
 	implements \Bitrix\Main\Errorable, \Bitrix\Main\Engine\Contract\Controllerable
 {
 	private const STORAGE_KEY = 'TASK_LIST_PAGING';
+
+	private const USER_DATA_CHUNK_SIZE = 300;
+
+	/** Grid column code => row field holding its member ids. */
+	private const MEMBER_COLUMN_FIELDS = ['A' => 'ACCOMPLICES', 'U' => 'AUDITORS'];
 
 	/** @var Filter */
 	protected $filter;
@@ -92,6 +101,11 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 
 		return [
+			'getMemberList' => [
+				'+prefilters' => [
+					new \Bitrix\Tasks\Action\Filter\BooleanFilter(),
+				],
+			],
 			'getTotalCount' => [
 				'+prefilters' => [
 					new \Bitrix\Tasks\Action\Filter\BooleanFilter(),
@@ -268,6 +282,71 @@ class TasksTaskListComponent extends TasksBaseComponent
 		return $result;
 	}
 
+	public function getMemberListAction(int $taskId, string $memberRole, int $selectedUserId = 0): array
+	{
+		$roleData = $this->getMemberRoleData($memberRole);
+		if ($taskId <= 0 || $roleData === null)
+		{
+			return ['html' => ''];
+		}
+
+		if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_READ, $taskId))
+		{
+			$this->addForbiddenError();
+
+			return ['html' => ''];
+		}
+
+		$memberIds = [];
+		$memberRows = MemberTable::getList([
+			'select' => ['USER_ID'],
+			'filter' => [
+				'=TASK_ID' => $taskId,
+				'=TYPE' => $roleData['TYPE'],
+			],
+		]);
+		while ($member = $memberRows->fetch())
+		{
+			$memberIds[] = (int)$member['USER_ID'];
+		}
+
+		$field = $roleData['FIELD'];
+		$rowData = [
+			'ID' => $taskId,
+			$field => $memberIds,
+			'MEMBERS' => [
+				$field => self::loadUserData($memberIds),
+			],
+		];
+		$parameters = [
+			'FILTER_FIELDS' => $selectedUserId > 0 ? [$memberRole => [$selectedUserId]] : [],
+		];
+
+		$contentClass = $roleData['CONTENT_CLASS'];
+		/** @var Task\Row\Content\MemberList $content */
+		$content = new $contentClass($rowData, $parameters);
+
+		return ['html' => $content->preparePopup()];
+	}
+
+	private function getMemberRoleData(string $memberRole): ?array
+	{
+		$memberRoleData = [
+			'ACCOMPLICE' => [
+				'FIELD' => 'ACCOMPLICES',
+				'TYPE' => MemberTable::MEMBER_TYPE_ACCOMPLICE,
+				'CONTENT_CLASS' => Task\Row\Content\MemberList\Accomplice::class,
+			],
+			'AUDITOR' => [
+				'FIELD' => 'AUDITORS',
+				'TYPE' => MemberTable::MEMBER_TYPE_AUDITOR,
+				'CONTENT_CLASS' => Task\Row\Content\MemberList\Auditor::class,
+			],
+		];
+
+		return $memberRoleData[$memberRole] ?? null;
+	}
+
 	public function sortTaskAction($data)
 	{
 		$result = [];
@@ -379,6 +458,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 
 		$listState = \CTaskListState::getInstance($userId);
+		$this->prepareEffectiveListState($userId, $relationToId);
 		$groupBySubtasks = $listState->isSubmode(\CTaskListState::VIEW_SUBMODE_WITH_SUBTASKS);
 		if (!$groupBySubtasks)
 		{
@@ -472,6 +552,10 @@ class TasksTaskListComponent extends TasksBaseComponent
 		{
 			$arParams['FILTER_FIELDS'] = (new Options($arParams['FILTER_ID']))->getFilter();
 		}
+
+		// Same gate as the main list path: only the visible avatar profiles are loaded for rebuilt rows.
+		$arParams['MEMBER_CELL_FIELDS'] = self::getMemberFieldsForColumns((array)($arParams['COLUMNS'] ?? []));
+		$tasks = self::setUserData($tasks, $arParams['MEMBER_CELL_FIELDS']);
 
 		return (new Task\Grid($tasks, $arParams))->prepareRows();
 	}
@@ -797,6 +881,21 @@ class TasksTaskListComponent extends TasksBaseComponent
 		return $listState->isSubmode(\CTaskListState::VIEW_SUBMODE_WITH_SUBTASKS);
 	}
 
+	protected function prepareEffectiveListState(int $targetUserId, int $relationToId): void
+	{
+		if (static::class !== self::class)
+		{
+			return;
+		}
+
+		Ui\Filter\Task::prepareDefaultListState(
+			$targetUserId,
+			$relationToId,
+			$this->exportAs !== false,
+			\CTaskListState::VIEW_MODE_LIST,
+		);
+	}
+
 	/**
 	 * @return array|string[][]
 	 */
@@ -850,6 +949,10 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 
 		$this->loadGrid();
+		$this->prepareEffectiveListState(
+			(int)$this->arParams['USER_ID'],
+			(int)($this->arParams['relationToId'] ?? 0),
+		);
 
 		$this->arResult['USER_ID'] = $this->userId;
 		$this->arResult['OWNER_ID'] = $this->arParams['USER_ID'];
@@ -1151,6 +1254,50 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 
 		return array_unique($columns);
+	}
+
+	/**
+	 * Row fields whose member profiles have to be hydrated for the grid cells. Both member columns are
+	 * hidden by default, so the regular list must not pay for their user query and markup.
+	 *
+	 * Export needs neither: it writes the raw EXPORT_LIST saved before the rows are rendered, and its own
+	 * member names come from mergeWithMembers(), which reads MemberTable directly.
+	 *
+	 * @return string[]
+	 */
+	private function getVisibleMemberFields(): array
+	{
+		if ($this->exportAs !== false)
+		{
+			return [];
+		}
+
+		return self::getMemberFieldsForColumns($this->grid->getVisibleColumns());
+	}
+
+	/**
+	 * Single gate of the member cell hydration: the columns come from the saved user settings, so A/U can
+	 * outlive the feature toggle there and would otherwise keep paying for the bulk profile load.
+	 *
+	 * @param string[] $columns
+	 * @return string[]
+	 */
+	private static function getMemberFieldsForColumns(array $columns): array
+	{
+		if (!CRM\CrmInTasksFeature::isOn())
+		{
+			return [];
+		}
+
+		$columns = array_flip($columns);
+
+		return array_values(
+			array_filter(
+				self::MEMBER_COLUMN_FIELDS,
+				static fn(string $column): bool => isset($columns[$column]),
+				ARRAY_FILTER_USE_KEY
+			)
+		);
 	}
 
 	/**
@@ -1462,7 +1609,9 @@ class TasksTaskListComponent extends TasksBaseComponent
 		$this->arResult['LIST'] = self::setFilesCount($this->arResult['LIST']);
 		$this->arResult['LIST'] = self::setCheckListCount($this->arResult['LIST']);
 		$this->arResult['LIST'] = self::setGroupData($this->arResult['LIST']);
-		$this->arResult['LIST'] = self::setUserData($this->arResult['LIST']);
+		// One gate for both places: only visible member columns preload their avatar profiles.
+		$this->arParams['MEMBER_CELL_FIELDS'] = $this->getVisibleMemberFields();
+		$this->arResult['LIST'] = self::setUserData($this->arResult['LIST'], $this->arParams['MEMBER_CELL_FIELDS']);
 
 		if (($this->arParams['relationType'] ?? 'subTasks') === 'gantt')
 		{
@@ -1676,11 +1825,127 @@ class TasksTaskListComponent extends TasksBaseComponent
 		);
 	}
 
-	private static function setUserData(array $list)
+	/**
+	 * @param string[] $memberFields Row fields with member ids to hydrate on top of the single user columns.
+	 */
+	private static function setUserData(array $list, array $memberFields = [])
 	{
 		$userIds = array_merge(array_column($list, 'CREATED_BY'), array_column($list, 'RESPONSIBLE_ID'));
-		$userIds = array_unique($userIds);
+		$memberIdsByRow = [];
+		$allMemberIds = [];
+		foreach ($list as $id => $row)
+		{
+			foreach ($memberFields as $memberField)
+			{
+				$memberIds = self::getMemberIds($row, $memberField);
+				$memberIdsByRow[$id][$memberField] = $memberIds;
+				foreach ($memberIds as $memberId)
+				{
+					$allMemberIds[] = $memberId;
+				}
+			}
+		}
 
+		$existingUserIds = self::loadExistingUserIds($allMemberIds);
+		foreach ($memberIdsByRow as $id => $memberIdsByField)
+		{
+			foreach ($memberIdsByField as $memberField => $memberIds)
+			{
+				$memberIds = array_values(
+					array_filter(
+						$memberIds,
+						static fn(int $memberId): bool => isset($existingUserIds[$memberId])
+					)
+				);
+				$list[$id]['MEMBER_IDS'][$memberField] = $memberIds;
+
+				foreach (array_slice($memberIds, 0, Task\Row\Content\MemberList::VISIBLE_MEMBERS_COUNT) as $memberId)
+				{
+					$userIds[] = $memberId;
+				}
+			}
+		}
+		$users = self::loadUserData($userIds);
+
+		foreach ($list as $id => $row)
+		{
+			// A hard-deleted user is absent from the bulk load; the cell renderer degrades to an empty cell.
+			$list[$id]['MEMBERS']['CREATED_BY'] = $users[$row['CREATED_BY']] ?? null;
+			$list[$id]['MEMBERS']['RESPONSIBLE_ID'] = $users[$row['RESPONSIBLE_ID']] ?? null;
+
+			foreach ($memberFields as $memberField)
+			{
+				$list[$id]['MEMBERS'][$memberField] = [];
+
+				foreach (self::getInitialMemberIds($list[$id], $memberField) as $memberId)
+				{
+					if (isset($users[$memberId]))
+					{
+						$list[$id]['MEMBERS'][$memberField][$memberId] = $users[$memberId];
+					}
+				}
+			}
+		}
+
+		return $list;
+	}
+
+	private static function getInitialMemberIds(array $row, string $memberField): array
+	{
+		return array_slice(
+			self::getMemberIds($row, $memberField),
+			0,
+			Task\Row\Content\MemberList::VISIBLE_MEMBERS_COUNT
+		);
+	}
+
+	private static function getMemberIds(array $row, string $memberField): array
+	{
+		$memberIds = $row['MEMBER_IDS'][$memberField] ?? $row[$memberField] ?? [];
+		$memberIds = array_values(array_unique(array_map('intval', (array)$memberIds)));
+
+		return array_values(array_filter($memberIds, static fn(int $memberId): bool => $memberId > 0));
+	}
+
+	private static function loadExistingUserIds(array $userIds): array
+	{
+		$userIds = array_values(array_unique(array_map('intval', $userIds)));
+		$userIds = array_values(array_filter($userIds, static fn(int $userId): bool => $userId > 0));
+		$externalAuthIds = array_diff(
+			User::getArtificialExternalAuthIds(),
+			[
+				Mail\User::getExternalCode(),
+				Replica\User::getExternalCode(),
+				IMBot\User::getExternalCode(),
+			]
+		);
+
+		$existingUserIds = [];
+		foreach (array_chunk($userIds, self::USER_DATA_CHUNK_SIZE) as $userIdsChunk)
+		{
+			$filter = ['=ID' => $userIdsChunk];
+			if (!empty($externalAuthIds))
+			{
+				$filter['!=EXTERNAL_AUTH_ID'] = $externalAuthIds;
+			}
+
+			$userRows = Main\UserTable::getList([
+				'select' => ['ID'],
+				'filter' => $filter,
+			]);
+			while ($user = $userRows->fetch())
+			{
+				$existingUserIds[(int)$user['ID']] = true;
+			}
+		}
+
+		return $existingUserIds;
+	}
+
+	private static function loadUserData(array $userIds): array
+	{
+		$userIds = array_values(array_unique(array_map('intval', $userIds)));
+		$userIds = array_values(array_filter($userIds, static fn(int $userId): bool => $userId > 0));
 		$select = [
 			'ID',
 			'PERSONAL_PHOTO',
@@ -1689,17 +1954,16 @@ class TasksTaskListComponent extends TasksBaseComponent
 			'LAST_NAME',
 			'SECOND_NAME',
 			'TITLE',
-			'EMAIL'
+			'EMAIL',
 		];
-		$users = User::getData($userIds, $select);
 
-		foreach ($list as $id => $row)
+		$users = [];
+		foreach (array_chunk($userIds, self::USER_DATA_CHUNK_SIZE) as $userIdsChunk)
 		{
-			$list[$id]['MEMBERS']['CREATED_BY'] = $users[$row['CREATED_BY']];
-			$list[$id]['MEMBERS']['RESPONSIBLE_ID'] = $users[$row['RESPONSIBLE_ID']];
+			$users += User::getData($userIdsChunk, $select);
 		}
 
-		return $list;
+		return $users;
 	}
 
 	private static function setLinkTypeData(array $list, int $relationToId): array

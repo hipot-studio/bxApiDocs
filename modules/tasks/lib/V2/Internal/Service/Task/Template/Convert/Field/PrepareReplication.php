@@ -26,6 +26,7 @@ class PrepareReplication implements PrepareFieldInterface
 		return $template->cloneWith([
 			'replicate' => true,
 			'replicateParams' => $task->replicateParams,
+			'regularityType' => $task->regularityType,
 		]);
 	}
 }

@@ -1,8 +1,11 @@
 <?php
 namespace Bitrix\Disk\Uf;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\IO\File;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\UrlRewriter;
 use Bitrix\Socialnetwork\CommentAux;
 use Bitrix\Disk\Configuration;
 
@@ -14,6 +17,7 @@ final class ForumMessageConnector extends StubConnector
 	protected static $topics = array();
 
 	private static $meetingRoles = array();
+	private static array $meetingSectionFolders = [];
 
 	private $canRead = array();
 
@@ -199,6 +203,19 @@ final class ForumMessageConnector extends StubConnector
 							"OWNER_ID" => $topic["OWNER_ID"],
 							"PARAM1" => $message["PARAM1"],
 							"PARAM2" => $entityId));
+					if (
+						($entityType === 'MEETING' || $entityType === 'MEETING_ITEM')
+						&& (int)$entityId > 0
+						&& ($meetingSectionFolder = self::getMeetingSectionFolder()) !== null
+					)
+					{
+						$messageId = (int)$message['ID'];
+						$return['DETAIL_URL'] =
+							$meetingSectionFolder
+							. ($entityType === 'MEETING' ? 'meeting/' : 'item/')
+							. (int)$entityId . '/?MID=' . $messageId . '#com' . $messageId
+						;
+					}
 					switch ($entityType)
 					{
 						case "EVENT":
@@ -218,6 +235,7 @@ final class ForumMessageConnector extends StubConnector
 							$return["TITLE"] = Loc::getMessage("DISK_UF_FORUM_MESSAGE_CONNECTOR_MESSAGE13");
 							break;
 						case "MEETING":
+						case "MEETING_ITEM":
 							$return["TITLE"] = Loc::getMessage("DISK_UF_FORUM_MESSAGE_CONNECTOR_MESSAGE16");
 							break;
 					}
@@ -225,6 +243,50 @@ final class ForumMessageConnector extends StubConnector
 			}
 		}
 		return $return;
+	}
+
+	private static function getMeetingSectionFolder(): ?string
+	{
+		if (!array_key_exists(SITE_ID, self::$meetingSectionFolders))
+		{
+			self::$meetingSectionFolders[SITE_ID] = self::findMeetingSectionFolder();
+		}
+
+		return self::$meetingSectionFolders[SITE_ID];
+	}
+
+	private static function findMeetingSectionFolder(): ?string
+	{
+		$timemanFolder = SITE_DIR . 'timeman/meeting/';
+
+		$ruleFolders = [];
+		foreach (UrlRewriter::getList(SITE_ID, ['ID' => 'bitrix:meetings']) as $rule)
+		{
+			$path = (string)($rule['PATH'] ?? '');
+			if ($path === '')
+			{
+				continue;
+			}
+
+			$folder = rtrim(dirname($path), '/') . '/';
+			if ($folder === $timemanFolder)
+			{
+				return $folder;
+			}
+			$ruleFolders[] = $folder;
+		}
+
+		if (!empty($ruleFolders))
+		{
+			return $ruleFolders[0];
+		}
+
+		if (File::isFileExists(Application::getDocumentRoot() . $timemanFolder . 'index.php'))
+		{
+			return $timemanFolder;
+		}
+
+		return null;
 	}
 
 	private static function getDataToCheck($messageId)

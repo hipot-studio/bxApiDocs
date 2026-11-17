@@ -36,6 +36,16 @@ final class Signer
 	}
 
 	/**
+	 * Identity of the key pair: a rotation of the key id or of the secret changes it. It is an HMAC of the
+	 * key id keyed by the secret, not a plain hash of the secret. The value itself is neither stored nor
+	 * logged, but it enters the fingerprint of an open request, and that fingerprint is stored.
+	 */
+	public function getKeyIdentity(): string
+	{
+		return hash_hmac('sha256', 'vo-key-identity|' . strlen($this->keyId) . ':' . $this->keyId, $this->apiSecret);
+	}
+
+	/**
 	 * Generates a crypto-random nonce (16 bytes -> 32 hex chars).
 	 */
 	public static function generateNonce(): string

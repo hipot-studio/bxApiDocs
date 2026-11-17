@@ -16,3 +16,4 @@ class Exclusion
 		\Bitrix\Crm\Exclusion\Store::add(\Bitrix\Crm\Communication\Type::EMAIL, $email);
 	}
 }
+

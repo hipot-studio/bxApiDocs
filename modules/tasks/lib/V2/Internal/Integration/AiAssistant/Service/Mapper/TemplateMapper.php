@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Mapper;
 
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\MakeTaskRecurringDto;
 
 class TemplateMapper
 {
-	public function convertFromRecurringTask(Task $task, ReplicateParams $replicateParams): Template
+	public function convertFromRecurringTask(
+		Task $task,
+		ReplicateParams $replicateParams,
+		MakeTaskRecurringDto $dto,
+		?RegularityType $regularityType,
+	): Template
 	{
 		return new Template(
 			task: $task,
@@ -28,6 +35,8 @@ class TemplateMapper
 			auditors: $task->auditors,
 			parent: $task->parent,
 			replicateParams: $replicateParams,
+			regularityType: $regularityType,
+			matchesWorkTime: $dto->matchesWorkTime,
 		);
 	}
 }

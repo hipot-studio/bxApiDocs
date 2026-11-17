@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\Internals;
 
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity;
 
 /**
@@ -38,6 +39,9 @@ class SourceGenerationTailMarkTable extends Entity\DataManager
 	/** The reverse read has recognized the letter by this mark: the row is terminal */
 	public const STATE_USED = 'USED';
 
+	/** The coordinates of IMAP: unsigned 32-bit numbers, past the signed range of a 4-byte integer */
+	private const UNSIGNED_INT_FIELDS = ['DIR_UIDV', 'MSG_UID'];
+
 	public static function getFilePath()
 	{
 		return __FILE__;
@@ -46,6 +50,16 @@ class SourceGenerationTailMarkTable extends Entity\DataManager
 	public static function getTableName()
 	{
 		return 'b_mail_source_generation_tail_mark';
+	}
+
+	public static function add(array $data)
+	{
+		return parent::add(self::keepUnsignedIntValues($data));
+	}
+
+	public static function update($primary, array $data)
+	{
+		return parent::update($primary, self::keepUnsignedIntValues($data));
 	}
 
 	public static function getMap()
@@ -85,10 +99,12 @@ class SourceGenerationTailMarkTable extends Entity\DataManager
 			],
 			'DIR_UIDV' => [
 				'data_type' => 'integer',
+				'size' => 8,
 				'default_value' => 0,
 			],
 			'MSG_UID' => [
 				'data_type' => 'integer',
+				'size' => 8,
 				'default_value' => 0,
 			],
 			'ATTEMPTS' => [
@@ -107,5 +123,22 @@ class SourceGenerationTailMarkTable extends Entity\DataManager
 				'reference' => ['=this.GENERATION_ID' => 'ref.ID'],
 			],
 		];
+	}
+
+	/**
+	 * The SQL helpers write an integer as a 4-byte one unless told otherwise and clamp a value above
+	 * 2147483647 to it, whatever the bigint column could hold. An expression is passed as it is.
+	 */
+	private static function keepUnsignedIntValues(array $fields): array
+	{
+		foreach (self::UNSIGNED_INT_FIELDS as $fieldName)
+		{
+			if (isset($fields[$fieldName]) && is_numeric($fields[$fieldName]))
+			{
+				$fields[$fieldName] = new SqlExpression('?i', $fields[$fieldName]);
+			}
+		}
+
+		return $fields;
 	}
 }

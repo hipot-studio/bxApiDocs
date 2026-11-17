@@ -51,7 +51,7 @@ class RequestPreviewImage extends RequestSingle
 
 		if (!isset($this->request))
 		{
-			$this->request = $this->sendPreviewRequest();
+			$this->sendFirstPreviewRequest();
 
 			return true;
 		}
@@ -431,9 +431,19 @@ class RequestPreviewImage extends RequestSingle
 		;
 	}
 
+	protected function createRequest(): Request
+	{
+		return new Request($this->generation->getId(), $this->stepId);
+	}
+
+	protected function getLog(): Log
+	{
+		return new Log($this->generation->getId());
+	}
+
 	protected function sendPreviewRequest(): Request
 	{
-		$request = new Request($this->generation->getId(), $this->stepId);
+		$request = $this->createRequest();
 		$prompt = $this->getPrompt();
 		if (Log::isEnabled())
 		{
@@ -453,6 +463,42 @@ class RequestPreviewImage extends RequestSingle
 		}
 
 		return $request;
+	}
+
+	/**
+	 * A preview is optional for the site: only the spent quota stops the generation here, and a failure
+	 * that cannot be recorded, because the step would have no request to finish with.
+	 */
+	private function sendFirstPreviewRequest(): void
+	{
+		try
+		{
+			$this->request = $this->sendPreviewRequest();
+		}
+		catch (GenerationException $exception)
+		{
+			if ($exception->getErrorCode() === GenerationErrors::requestQuotaExceeded)
+			{
+				throw $exception;
+			}
+
+			$this->finishWithoutSending($exception);
+		}
+	}
+
+	private function finishWithoutSending(GenerationException $exception): void
+	{
+		$request = $this->createRequest();
+		$error = Error::createError(Errors::requestFail);
+		$error->message .= ': ' . $exception->getMessage();
+		if (!$request->saveError($error))
+		{
+			throw $exception;
+		}
+
+		$this->getLog()->add('AI request: preview image was not sent: ' . $exception->getMessage());
+		$this->request = $request;
+		$this->finishWithoutPreview();
 	}
 
 	private function markTimedOutRequestAsError(): void

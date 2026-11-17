@@ -44,14 +44,19 @@ class AddUsersToAuditors
 		}
 
 		$currentUserId = (int)CurrentUser::get()?->getId();
+		$initiatorId = method_exists($event, 'getInitiatorId') ? (int)$event->getInitiatorId() : 0;
+		$liveActorId = (int)($task->creator?->id ?? $task->responsible?->id ?? 0);
+		$actorId = $currentUserId > 0 ? $currentUserId : ($initiatorId > 0 ? $initiatorId : $liveActorId);
+		if ($actorId <= 0)
+		{
+			return;
+		}
 
 		(new AddAuditorsCommand(
 			taskId: $task->getId(),
 			auditorIds: $newUserIds,
 			config: new UpdateConfig(
-				// TODO: After complete task https://bitrix24.team/workgroups/group/2553/tasks/task/view/652963/
-				// should be replaced with $event->getTriggetedUser() or something similar.
-				userId: $currentUserId > 0 ? $currentUserId : $task->creator->getId(),
+				userId: $actorId,
 			),
 		))->run();
 	}

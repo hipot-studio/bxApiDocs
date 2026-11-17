@@ -284,3 +284,4 @@ final class Migration extends Controller
 		\CPullWatch::DeferredSql($userId);
 	}
 }
+

@@ -380,8 +380,11 @@ class CheckList extends CompositeTreeItem
 		$facade = $this->facade;
 
 		/** @noinspection PhpUndefinedVariableInspection */
-		$oldItemFields = (($facade::$oldItemsToMerge[$id] ?? null) ?: $facade::getList([], ['ID' => $id])[$id]);
-		$oldItem = new CheckList(0, $this->userId, $facade, $oldItemFields);
+		$oldItemFields = (($facade::$oldItemsToMerge[$id] ?? null) ?: $facade::getList([], [
+			'ID' => $id,
+			$facade::$entityIdName => $this->fields->getEntityId(),
+		])[$id]);
+		$oldItem = new self(0, $this->userId, $facade, $oldItemFields);
 
 		$changedFields = $this->getChangedFields($oldItem->getFields());
 		$tableFields = $changedFields['TABLE'];

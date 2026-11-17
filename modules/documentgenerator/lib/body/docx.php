@@ -34,6 +34,11 @@ class Docx extends ZipDocument
 	protected $contentTypesDocument;
 	protected $innerDocuments = [];
 	protected $numbering = [];
+	/** One physical file with unchanged size and mtime has one media part per process. */
+	private array $importedMediaParts = [];
+	private ?array $multiplyingBlockNames = null;
+	private ?string $multiplyingBlockFingerprint = null;
+	private array $multiplyingBlockPaths = [];
 
 	/**
 	 * @return string
@@ -72,6 +77,9 @@ class Docx extends ZipDocument
 	 */
 	public function process(): Result
 	{
+		$this->multiplyingBlockNames = null;
+		$this->multiplyingBlockFingerprint = null;
+		$this->importedMediaParts = [];
 		$result = new Result();
 
 		if (!$this->isFileProcessable())
@@ -109,7 +117,18 @@ class Docx extends ZipDocument
 					$result->addErrors($documentResult->getErrors());
 				}
 			}
-			$this->zip->close();
+			try
+			{
+				$saved = $this->zip->close();
+			}
+			catch (\Throwable)
+			{
+				$saved = false;
+			}
+			if (!$saved)
+			{
+				return $result->addError(new Error('Cannot save zip archive', 'ZIP_NOT_SAVED'));
+			}
 			$this->content = $this->file->getContents();
 		}
 		else
@@ -141,11 +160,98 @@ class Docx extends ZipDocument
 		return $placeholders;
 	}
 
+	public function getMultiplyingBlockNames(): ?array
+	{
+		$fingerprint = $this->getMultiplyingBlockFingerprint();
+		if ($fingerprint !== null && $fingerprint === $this->multiplyingBlockFingerprint)
+		{
+			return $this->multiplyingBlockNames;
+		}
+
+		$this->multiplyingBlockNames = null;
+		$this->multiplyingBlockFingerprint = null;
+		if ($fingerprint === null || !$this->isFileProcessable() || $this->open() !== true)
+		{
+			return [];
+		}
+
+		$names = [];
+		$this->innerDocuments = [];
+		$this->fillInnerDocuments();
+		if (!$this->contentTypesDocument->documentElement)
+		{
+			return null;
+		}
+		foreach ($this->innerDocuments as $data)
+		{
+			/** @var DocxXml $document */
+			$document = $data['document'];
+			$innerNames = $document->getMultiplyingBlockNames();
+			if ($innerNames === null || !$document->isFileProcessable()
+				|| ($document->getDomDocument() && !$document->getDomDocument()->documentElement))
+			{
+				return null;
+			}
+			$names += $innerNames;
+		}
+		$this->multiplyingBlockPaths = [static::PATH_CONTENT_TYPES];
+		foreach ($this->innerDocuments as $path => $data)
+		{
+			$this->multiplyingBlockPaths[] = $path;
+			$this->multiplyingBlockPaths[] = $this->getRelationshipPath($path);
+		}
+		$this->multiplyingBlockNames = $names;
+		$this->multiplyingBlockFingerprint = $this->getMultiplyingBlockFingerprint();
+
+		return $names;
+	}
+
+	private function getMultiplyingBlockFingerprint(): ?string
+	{
+		$path = $this->file ? $this->file->getPhysicalPath() : null;
+		if (!$path || !is_file($path) || !is_readable($path))
+		{
+			return null;
+		}
+
+		$archive = new \ZipArchive();
+		if ($archive->open($path) !== true)
+		{
+			return null;
+		}
+
+		$parts = [];
+		for ($index = 0; $index < $archive->numFiles; ++$index)
+		{
+			$part = $archive->statIndex($index);
+			if ($part === false)
+			{
+				return null;
+			}
+			$name = $part['name'];
+			if (str_ends_with($name, '.xml') || str_ends_with($name, '.rels'))
+			{
+				$parts[] = [$name, $part['crc'], $part['size'], $part['comp_size']];
+			}
+		}
+
+		foreach ($this->multiplyingBlockPaths as $name)
+		{
+			$part = $archive->statName($name);
+			$parts[] = $part === false ? [$name, null] : [$name, $part['crc'], $part['size'], $part['comp_size']];
+		}
+
+		// Only ZIP directory metadata is read; media payload does not affect marker inventory.
+		return hash('sha256', serialize($parts));
+	}
+
 	/**
 	 * Normalizes content of the document, removing unnecessary tags between {}
 	 */
 	public function normalizeContent(): void
 	{
+		$this->multiplyingBlockNames = null;
+		$this->multiplyingBlockFingerprint = null;
 		if ($this->isFileProcessable() && $this->open() === true)
 		{
 			$this->fillInnerDocuments();
@@ -156,7 +262,22 @@ class Docx extends ZipDocument
 				$document->normalizeContent();
 				$this->addContentToZip($document->getContent(), $path);
 			}
-			$this->zip->close();
+			try
+			{
+				$saved = $this->zip->close();
+			}
+			catch (\Throwable $exception)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+				return;
+			}
+			if (!$saved)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog(
+					new \RuntimeException('Cannot save zip archive')
+				);
+				return;
+			}
 			$this->content = $this->file->getContents();
 		}
 	}
@@ -201,6 +322,8 @@ class Docx extends ZipDocument
 	 */
 	public function setNodes(array $nodes): bool
 	{
+		$this->multiplyingBlockNames = null;
+		$this->multiplyingBlockFingerprint = null;
 		if (!$this->isFileProcessable() || $this->open() !== true)
 		{
 			return false;
@@ -227,9 +350,20 @@ class Docx extends ZipDocument
 			$document->normalizeContent();
 			$document->setNodes($documentNodes->nodes);
 			$this->addContentToZip($document->getContent(), $path);
-			$this->zip->close();
-			$this->content = $this->file->getContents();
 		}
+		try
+		{
+			$saved = $this->zip->close();
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+		if (!$saved)
+		{
+			return false;
+		}
+		$this->content = $this->file->getContents();
 
 		return true;
 	}
@@ -611,10 +745,24 @@ class Docx extends ZipDocument
 	 */
 	protected function importImage(File $image, \DOMElement $relationshipNode, string $newId = ''): void
 	{
-		$mimeType = $this->getMimeType($image);
-		$extension = $image->getExtension() ?: $this->getPrintableMimeTypes()[$mimeType] ?? '';
-		$newName = Random::getString(15) . '.' . $extension;
-		$this->zip->addFile($image->getPhysicalPath(), 'word/media/' . $newName);
+		$identity = $this->getImageIdentity($image);
+		if (isset($this->importedMediaParts[$identity]))
+		{
+			$newName = $this->importedMediaParts[$identity];
+		}
+		else
+		{
+			$mimeType = $this->getMimeType($image);
+			$extension = $image->getExtension() ?: $this->getPrintableMimeTypes()[$mimeType] ?? '';
+			$newName = Random::getString(15) . '.' . $extension;
+			$this->zip->addFile($image->getPhysicalPath(), 'word/media/' . $newName);
+			$this->addRecordToContentTypes([
+				'path' => '/word/media/' . $newName,
+				'type' => $mimeType,
+			]);
+			$this->importedMediaParts[$identity] = $newName;
+		}
+
 		$relationshipNode->removeAttribute('Target');
 		$relationshipNode->setAttribute('Target', 'media/' . $newName);
 		if (is_string($newId) && !empty($newId))
@@ -622,11 +770,11 @@ class Docx extends ZipDocument
 			$relationshipNode->removeAttribute('Id');
 			$relationshipNode->setAttribute('Id', $newId);
 		}
+	}
 
-		$this->addRecordToContentTypes([
-			'path' => '/word/media/' . $newName,
-			'type' => $mimeType,
-		]);
+	private function getImageIdentity(File $image): string
+	{
+		return $image->getPhysicalPath() . '|' . $image->getSize() . '|' . $image->getModificationTime();
 	}
 
 	protected function getPrintableMimeTypes(): array

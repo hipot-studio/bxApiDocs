@@ -3,6 +3,7 @@
 namespace Bitrix\Main\Controller;
 
 use Bitrix\Intranet\ActionFilter;
+use Bitrix\Main\DB;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
@@ -17,6 +18,18 @@ use Bitrix\Main\Engine\Response\DataType\Page;
 
 class UserFieldConfig extends Controller
 {
+	private const CREATE_USER_FIELD_ERROR_PREFIX = 'Could not create new user field ';
+	private const CREATE_LIMIT_ERROR_CODE = 'MAIN_USER_FIELD_LIMIT_EXCEEDED';
+
+	private const STORAGE_LIMIT_MESSAGE_MARKERS = [
+		'Too many columns',
+		'Row size too large',
+		'tables can have at most 1600 columns',
+		'row is too big',
+		'too many indexes',
+		'too many keys specified',
+	];
+
 	protected function getDefaultPreFilters()
 	{
 		$defaultPreFilters = parent::getDefaultPreFilters();
@@ -101,6 +114,14 @@ class UserFieldConfig extends Controller
 	protected function getCommonError(): Error
 	{
 		return new Error(Loc::getMessage('MAIN_USER_FIELD_CONTROLLER_ERROR'));
+	}
+
+	protected function getCreateLimitError(): Error
+	{
+		return new Error(
+			Loc::getMessage('MAIN_USER_FIELD_CONTROLLER_CREATE_LIMIT_ERROR'),
+			self::CREATE_LIMIT_ERROR_CODE
+		);
 	}
 
 	public function getTypesAction(string $moduleId, ?\CRestServer $restServer = null): ?array
@@ -213,7 +234,7 @@ class UserFieldConfig extends Controller
 				];
 			}
 		}
-		$settings = $field['SETTINGS'];
+		$settings = $field['SETTINGS'] ?? null;
 
 		/** @noinspection CallableParameterUseCaseInTypeContextInspection */
 		$field = (
@@ -235,7 +256,11 @@ class UserFieldConfig extends Controller
 		global $APPLICATION;
 
 		$exception = $APPLICATION->GetException();
-		if (($exception instanceof \CAdminException) && is_array($exception->messages))
+		if ($this->isCreateLimitError($exception))
+		{
+			$this->addError($this->getCreateLimitError());
+		}
+		elseif (($exception instanceof \CAdminException) && is_array($exception->messages))
 		{
 			foreach ($exception->messages as $message)
 			{
@@ -248,6 +273,101 @@ class UserFieldConfig extends Controller
 		}
 
 		$APPLICATION->ResetException();
+	}
+
+	protected function isCreateLimitError(mixed $error): bool
+	{
+		if ($error instanceof Error && $error->getCode() === self::CREATE_LIMIT_ERROR_CODE)
+		{
+			return true;
+		}
+
+		if ($this->hasAdminExceptionLimitSignal($error))
+		{
+			return true;
+		}
+
+		$message = $this->getErrorMessage($error);
+		if (!str_starts_with($message, self::CREATE_USER_FIELD_ERROR_PREFIX))
+		{
+			return false;
+		}
+
+		return $this->hasStorageLimitMarker($message)
+			|| ($error instanceof \Throwable && $this->hasThrowableStorageLimitMarker($error))
+		;
+	}
+
+	private function getErrorMessage(mixed $error): string
+	{
+		if ($error instanceof \Throwable)
+		{
+			return $error->getMessage();
+		}
+
+		if (is_object($error) && method_exists($error, 'GetString'))
+		{
+			return (string)$error->GetString();
+		}
+
+		return (string)$error;
+	}
+
+	private function hasAdminExceptionLimitSignal(mixed $error): bool
+	{
+		if (!is_object($error) || !method_exists($error, 'GetMessages'))
+		{
+			return false;
+		}
+
+		foreach ((array)$error->GetMessages() as $message)
+		{
+			if (!is_array($message))
+			{
+				continue;
+			}
+
+			if (($message['id'] ?? null) === self::CREATE_LIMIT_ERROR_CODE)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function hasThrowableStorageLimitMarker(\Throwable $throwable): bool
+	{
+		do
+		{
+			if ($throwable instanceof DB\Exception && $this->hasStorageLimitMarker($throwable->getDatabaseMessage()))
+			{
+				return true;
+			}
+
+			if ($this->hasStorageLimitMarker($throwable->getMessage()))
+			{
+				return true;
+			}
+
+			$throwable = $throwable->getPrevious();
+		}
+		while ($throwable !== null);
+
+		return false;
+	}
+
+	private function hasStorageLimitMarker(string $message): bool
+	{
+		foreach (self::STORAGE_LIMIT_MESSAGE_MARKERS as $marker)
+		{
+			if (stripos($message, $marker) !== false)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	protected function prepareEnums(array $newEnums, array $currentEnums): array
@@ -355,6 +475,31 @@ class UserFieldConfig extends Controller
 		return null;
 	}
 
+	private function prepareSelect(array $select, Converter $converter): array
+	{
+		$entity = UserFieldTable::getEntity();
+
+		foreach ($select as $key => $fieldName)
+		{
+			if (
+				$key === 'LANGUAGE'
+				|| !is_string($fieldName)
+				|| $entity->hasField($fieldName)
+			)
+			{
+				continue;
+			}
+
+			$normalizedFieldName = $converter->process($fieldName);
+			if ($entity->hasField($normalizedFieldName))
+			{
+				$select[$key] = $normalizedFieldName;
+			}
+		}
+
+		return $select;
+	}
+
 	public function listAction(
 		string $moduleId,
 		array $select = ['*'],
@@ -385,6 +530,7 @@ class UserFieldConfig extends Controller
 		}
 		/** @noinspection CallableParameterUseCaseInTypeContextInspection */
 		$filter = $access->prepareFilter($filter);
+		$select = $this->prepareSelect($select, $converter);
 
 		$runtime = [];
 		if (!empty($select['LANGUAGE']) && is_string($select['LANGUAGE']))
@@ -440,7 +586,21 @@ class UserFieldConfig extends Controller
 		}
 
 		$userTypeEntity = new \CUserTypeEntity();
-		$id = $userTypeEntity->Add($field);
+		try
+		{
+			$id = $userTypeEntity->Add($field);
+		}
+		catch (\Throwable $exception)
+		{
+			if ($this->isCreateLimitError($exception))
+			{
+				$this->addError($this->getCreateLimitError());
+
+				return null;
+			}
+
+			throw $exception;
+		}
 		if ($id > 0)
 		{
 			if ($field['USER_TYPE_ID'] === 'enumeration')

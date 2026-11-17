@@ -33,6 +33,11 @@ class AddService
 
 	public function add(Entity\Template $template, AddConfig $config): array
 	{
+		if ($template->getId() !== null && $template->getId() !== 0)
+		{
+			throw new TemplateAddException('Template ID must not be set when creating a template');
+		}
+
 		$this->loadMessages();
 
 		[$template, $fields] = (new EntityFieldService())->prepare($template, $config);

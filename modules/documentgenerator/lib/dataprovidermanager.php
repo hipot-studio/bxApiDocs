@@ -6,12 +6,17 @@ use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\DataProvider\HashDataProvider;
 use Bitrix\DocumentGenerator\DataProvider\Rest;
 use Bitrix\DocumentGenerator\DataProvider\User;
+use Bitrix\DocumentGenerator\Feature\IdCollections;
 use Bitrix\DocumentGenerator\Model\RegionPhraseTable;
 use Bitrix\DocumentGenerator\Value\DateTime;
 use Bitrix\DocumentGenerator\Value\Multiple;
 use Bitrix\DocumentGenerator\Value\Name;
 use Bitrix\DocumentGenerator\Value\PhoneNumber;
 use Bitrix\Main\Context\Culture;
+use Bitrix\Main\Config\Feature;
+use Bitrix\DocumentGenerator\Retention\PressurePolicy;
+use Bitrix\DocumentGenerator\Retention\MemoryLimitPressurePolicy;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\EventResult;
@@ -42,6 +47,18 @@ class DataProviderManager
 
 	/** @var \SplStack<Context> */
 	private \SplStack $contextStack;
+	private ?bool $isIdCollectionsEnabled = null;
+	private array $itemIdMethods = [];
+	private array $layerTicks = [];
+	private array $layerRecords = [];
+	private array $layerAccessByKey = [];
+	private int $layerTick = 0;
+	private ?\WeakMap $layerKeys = null;
+	private ?\WeakMap $layerChildren = null;
+	private ?\WeakMap $layerAccess = null;
+	private ?\WeakMap $collectionItems = null;
+	private ?PressurePolicy $pressurePolicy = null;
+	private ?array $expectedCollectionItem = null;
 
 	public function __construct()
 	{
@@ -265,6 +282,12 @@ class DataProviderManager
 		if(isset($values[$placeholder]))
 		{
 			$value = $values[$placeholder];
+		}
+
+		$ids = $this->resolveItemIds($fieldDescription, $dataProvider, $placeholder);
+		if ($ids !== null)
+		{
+			return $ids ? $this->createIdCollection($fieldDescription, $ids, $dataProvider, $placeholder) : [];
 		}
 
 		$calculatedValue = false;
@@ -534,7 +557,52 @@ class DataProviderManager
 		DataProvider $parentDataProvider = null
 	): ?DataProvider
 	{
-		$valueHash = $this->getValueHash($value, $options);
+		$expected = $this->expectedCollectionItem;
+		$isCollectionItem = $expected !== null && $expected[0] === $providerClassName && $expected[1] === $value;
+		$valueHash = $isCollectionItem ? $expected[2] : $this->getValueHash($value, $options);
+		if($this->isProviderArray($providerClassName))
+		{
+			$valueHash .= $parentDataProvider ? '|p' . spl_object_hash($parentDataProvider) : '|n';
+		}
+		if($this->isIdCollectionsEnabled())
+		{
+			$isNew = !isset($this->providersCache[$providerClassName][$valueHash]);
+			if(!isset($this->providersCache[$providerClassName][$valueHash]))
+			{
+				$provider = null;
+				if(self::checkProviderName($providerClassName))
+				{
+					$providerClassToInstantiate = $providerClassName;
+					if(!isset($options['noSubstitution']) || $options['noSubstitution'] !== true)
+					{
+						$substitutionProvider = $this->getSubstitutionProvider($providerClassName);
+						if($substitutionProvider)
+						{
+							$providerClassToInstantiate = $substitutionProvider;
+						}
+					}
+					/** @var DataProvider $provider */
+					$provider = new $providerClassToInstantiate($value, $options);
+					if($parentDataProvider)
+					{
+						$provider->setParentProvider($parentDataProvider);
+					}
+				}
+
+				$this->providersCache[$providerClassName][$valueHash] = $provider;
+			}
+
+			$provider = $this->providersCache[$providerClassName][$valueHash];
+			if ($provider)
+			{
+				$this->trackLayerProvider(
+					$provider, $providerClassName, $valueHash, $parentDataProvider, $isCollectionItem, $isNew,
+				);
+			}
+
+			return $provider;
+		}
+
 		if(!isset($this->providersCache[$providerClassName][$valueHash]))
 		{
 			$provider = null;
@@ -560,6 +628,318 @@ class DataProviderManager
 		}
 
 		return $this->providersCache[$providerClassName][$valueHash];
+	}
+
+	private function resolveItemIds(array $field, DataProvider $owner, $placeholder): ?array
+	{
+		if (!$this->isIdCollectionsEnabled() || !is_string($field['ITEM_IDS'] ?? null)
+			|| !is_string($field['PROVIDER'] ?? null))
+		{
+			return null;
+		}
+		$class = $field['PROVIDER'];
+		if (($field['OPTIONS']['noSubstitution'] ?? false) !== true)
+		{
+			$class = $this->getSubstitutionProvider($class) ?? $class;
+		}
+		if (strcasecmp($class, ArrayDataProvider::class) !== 0)
+		{
+			return null;
+		}
+		$method = $field['ITEM_IDS'];
+		$key = get_class($owner) . '::' . $method;
+		if (!array_key_exists($key, $this->itemIdMethods))
+		{
+			$valid = false;
+			if (method_exists($owner, $method))
+			{
+				$reflection = new \ReflectionMethod($owner, $method);
+				$valid = $reflection->isPublic() && !$reflection->isStatic();
+			}
+			$this->itemIdMethods[$key] = $valid;
+		}
+		if (!$this->itemIdMethods[$key])
+		{
+			return null;
+		}
+		$ids = $owner->$method($placeholder);
+		if (!is_array($ids) || !array_is_list($ids))
+		{
+			return null;
+		}
+		foreach ($ids as $id)
+		{
+			if (!is_int($id) || $id <= 0)
+			{
+				return null;
+			}
+		}
+
+		return $ids;
+	}
+
+	private function createIdCollection(array $field, array $ids, DataProvider $owner, $placeholder): ArrayDataProvider
+	{
+		$options = $field['OPTIONS'] ?? [];
+		$options['VALUES'] ??= [];
+		$parentOptions = $owner->getOptions();
+		if (isset($parentOptions['VALUES']) && is_array($parentOptions['VALUES']) && $placeholder !== null)
+		{
+			$options['VALUES'] = array_merge(
+				$options['VALUES'], $this->reformOptionValues($parentOptions['VALUES'], $placeholder),
+			);
+		}
+		$key = 'ids|' . $this->getValueHash($ids, $options)
+			. $this->getValueHash($owner->getSource(), ['class' => get_class($owner)])
+			. '|p' . spl_object_hash($owner);
+		$isNew = !isset($this->providersCache[ArrayDataProvider::class][$key]);
+		if ($isNew)
+		{
+			$collection = new ArrayDataProvider($ids, $options);
+			$collection->setParentProvider($owner);
+			$collection->enableItemIds($this);
+			$this->providersCache[ArrayDataProvider::class][$key] = $collection;
+			$this->collectionItems ??= new \WeakMap();
+			$itemOptions = $options['ITEM_OPTIONS'] ?? [];
+			$this->collectionItems[$collection] = [
+				$options['ITEM_PROVIDER'], $itemOptions, $this->getValueHash('', $itemOptions),
+			];
+		}
+
+		$collection = $this->providersCache[ArrayDataProvider::class][$key];
+		$this->trackLayerProvider($collection, ArrayDataProvider::class, $key, $owner, false, $isNew);
+
+		return $collection;
+	}
+
+	/** @internal */
+	public function getCollectionItem(ArrayDataProvider $collection, int $id): ?DataProvider
+	{
+		$this->collectionItems ??= new \WeakMap();
+		if (!isset($this->collectionItems[$collection]))
+		{
+			$collectionOptions = $collection->getOptions();
+			$itemOptions = $collectionOptions['ITEM_OPTIONS'] ?? [];
+			$this->collectionItems[$collection] = [
+				$collectionOptions['ITEM_PROVIDER'], $itemOptions, $this->getValueHash('', $itemOptions),
+			];
+		}
+		[$class, $options, $optionsHash] = $this->collectionItems[$collection];
+		$previous = $this->expectedCollectionItem;
+		$this->expectedCollectionItem = [$class, $id, $id . $optionsHash];
+		try
+		{
+			return $this->getDataProvider($class, $id, $options, $collection->getParentProvider());
+		}
+		finally
+		{
+			$this->expectedCollectionItem = $previous;
+		}
+	}
+
+	/** @internal */
+	public function isCollectionItemRetained(?DataProvider $provider): bool
+	{
+		if ($provider === null || !isset($this->layerKeys[$provider]))
+		{
+			return false;
+		}
+		$key = $this->layerKeys[$provider];
+		if (!isset($this->layerRecords[$key]))
+		{
+			return false;
+		}
+		[$class, $hash] = $this->layerRecords[$key];
+
+		return ($this->providersCache[$class][$hash] ?? null) === $provider;
+	}
+
+	private function trackLayerProvider(
+		DataProvider $provider, string $class, string $hash, ?DataProvider $parent, bool $isCollectionItem, bool $isNew
+	): void
+	{
+		$key = serialize([$class, $hash]);
+		$isLayer = isset($this->contextStack) && $this->contextStack->count() > 1
+			&& ($isCollectionItem || ($parent && $this->isCollectionItemRetained($parent)));
+		if (isset($this->layerTicks[$key]))
+		{
+			if ($isLayer)
+			{
+				$this->layerTicks[$key] = ++$this->layerTick;
+			}
+			else
+			{
+				$this->promoteLayerProvider($provider);
+			}
+
+			return;
+		}
+		// An evicted record recreated outside the layer keeps the decisions of its first instance.
+		if (!$isLayer && $isNew && isset($this->layerAccessByKey[$key]))
+		{
+			$this->accessCache[spl_object_hash($provider)] = $this->layerAccessByKey[$key];
+			unset($this->layerAccessByKey[$key]);
+		}
+		// Existing legacy records must retain their original lifetime and access cache.
+		if (!$isLayer || !$isNew)
+		{
+			return;
+		}
+		$this->layerKeys ??= new \WeakMap();
+		$this->layerChildren ??= new \WeakMap();
+		$this->layerAccess ??= new \WeakMap();
+		$this->layerKeys[$provider] = $key;
+		$this->layerTicks[$key] = ++$this->layerTick;
+		$this->layerRecords[$key] = [$class, $hash];
+		if ($parent && $this->isCollectionItemRetained($parent))
+		{
+			if (!isset($this->layerChildren[$parent]))
+			{
+				$this->layerChildren[$parent] = new \ArrayObject();
+			}
+			$this->layerChildren[$parent][$key] = true;
+		}
+		$this->checkLayerPressure($provider);
+	}
+
+	private function promoteLayerProvider(DataProvider $provider): void
+	{
+		$key = $this->layerKeys[$provider];
+		$decisions = ($this->layerAccessByKey[$key] ?? []) + ($this->layerAccess[$provider] ?? []);
+		if ($decisions)
+		{
+			$this->accessCache[spl_object_hash($provider)] = $decisions;
+		}
+		foreach ($this->getLayerChildKeys($provider) as $childKey)
+		{
+			if (isset($this->layerRecords[$childKey]))
+			{
+				[$class, $hash] = $this->layerRecords[$childKey];
+				$this->promoteLayerProvider($this->providersCache[$class][$hash]);
+			}
+		}
+		$this->detachLayerChild($provider, $key);
+		unset($this->layerTicks[$key], $this->layerRecords[$key], $this->layerAccessByKey[$key]);
+		unset($this->layerKeys[$provider], $this->layerChildren[$provider], $this->layerAccess[$provider]);
+	}
+
+	/** @internal */
+	public function onCollectionStep(): void
+	{
+		if ($this->pressurePolicy !== null)
+		{
+			$this->checkLayerPressure();
+		}
+	}
+
+	private function checkLayerPressure(?DataProvider $newProvider = null): void
+	{
+		if ($this->pressurePolicy === null)
+		{
+			$locator = ServiceLocator::getInstance();
+			$service = 'documentgenerator.dataProviderManager.pressurePolicy';
+			$policy = $locator->has($service) ? $locator->get($service) : null;
+			$this->pressurePolicy = $policy instanceof PressurePolicy ? $policy : new MemoryLimitPressurePolicy();
+		}
+		if (!$this->pressurePolicy->isUnderPressure() || $this->layerTicks === [])
+		{
+			return;
+		}
+		$pinned = [];
+		foreach ($this->collectionItems ?? [] as $collection => $metadata)
+		{
+			foreach ($collection->getPinnedItems() as $item)
+			{
+				$pinned[spl_object_hash($item)] = true;
+			}
+		}
+		if ($newProvider)
+		{
+			$pinned[spl_object_hash($newProvider)] = true;
+		}
+		$target = (int)ceil(count($this->layerTicks) * $this->pressurePolicy->getBatchShare());
+		$ticks = $this->layerTicks;
+		asort($ticks, SORT_NUMERIC);
+		$evicted = 0;
+		foreach ($ticks as $key => $tick)
+		{
+			if ($evicted >= $target)
+			{
+				break;
+			}
+			$evicted += $this->evictLayerRecord($key, $pinned);
+		}
+		$this->pressurePolicy->afterBatch($evicted);
+	}
+
+	private function evictLayerRecord(string $key, array $pinned): int
+	{
+		if (!isset($this->layerRecords[$key]))
+		{
+			return 0;
+		}
+		[$class, $hash] = $this->layerRecords[$key];
+		$provider = $this->providersCache[$class][$hash];
+		if ($this->hasPinnedDescendant($provider, $pinned))
+		{
+			return 0;
+		}
+		$evicted = 1;
+		foreach ($this->getLayerChildKeys($provider) as $childKey)
+		{
+			$evicted += $this->evictLayerRecord($childKey, $pinned);
+		}
+		$this->detachLayerChild($provider, $key);
+		unset($this->providersCache[$class][$hash], $this->layerTicks[$key], $this->layerRecords[$key]);
+		unset($this->layerChildren[$provider]);
+
+		return $evicted;
+	}
+
+	private function getLayerChildKeys(DataProvider $provider): array
+	{
+		return isset($this->layerChildren[$provider])
+			? array_keys($this->layerChildren[$provider]->getArrayCopy()) : [];
+	}
+
+	private function detachLayerChild(DataProvider $provider, string $key): void
+	{
+		$parent = $provider->getParentProvider();
+		if ($parent && isset($this->layerChildren[$parent]))
+		{
+			unset($this->layerChildren[$parent][$key]);
+		}
+	}
+
+	private function hasPinnedDescendant(DataProvider $provider, array $pinned): bool
+	{
+		if (isset($pinned[spl_object_hash($provider)]))
+		{
+			return true;
+		}
+		foreach ($this->getLayerChildKeys($provider) as $key)
+		{
+			if (isset($this->layerRecords[$key]))
+			{
+				[$class, $hash] = $this->layerRecords[$key];
+				if ($this->hasPinnedDescendant($this->providersCache[$class][$hash], $pinned))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private function isIdCollectionsEnabled(): bool
+	{
+		if($this->isIdCollectionsEnabled === null)
+		{
+			$this->isIdCollectionsEnabled = Feature::isEnabled(IdCollections::class);
+		}
+
+		return $this->isIdCollectionsEnabled;
 	}
 
 	/**
@@ -727,6 +1107,72 @@ class DataProviderManager
 		}
 
 		return $fields;
+	}
+
+	public function resolveProviderFields(DataProvider $root, array $paths, bool $isCopyFields = false): array
+	{
+		return ProviderFieldCatalog::resolveFields($this, $root, $paths, $isCopyFields, false);
+	}
+
+	public function resolveProviderPlaceholders(DataProvider $root, array $codes, bool $isCopyFields = false): array
+	{
+		return ProviderFieldCatalog::resolveFields($this, $root, $codes, $isCopyFields, true);
+	}
+
+	public function getProviderNodeChildren(
+		DataProvider $root,
+		string $path = '',
+		?string $cursor = null,
+		int $limit = 100,
+		array $query = [],
+		bool $isCopyFields = false
+	): array
+	{
+		return ProviderFieldCatalog::getNodeChildren(
+			$this, $this->getProviderFieldCursor(), $root, $path, $cursor, $limit, $query, $isCopyFields,
+		);
+	}
+
+	protected function getProviderFieldCursor(): ProviderFieldCursor
+	{
+		return new ProviderFieldCursor();
+	}
+
+	/**
+	 * Iterates provider fields in the same order and shape as the full legacy traversal.
+	 *
+	 * @return \Generator<int, array>
+	 */
+	public function iterateProviderFields(DataProvider $root, bool $isCopyFields = false): \Generator
+	{
+		yield from ProviderFieldIterator::iterate($this, $root, $isCopyFields);
+	}
+
+	/**
+	 * Iterates the first raw occurrence of each default template field code.
+	 *
+	 * @return \Generator<string, array, mixed, array{exhausted: bool, matchedCount: ?int, scannedMatches: int}>
+	 */
+	public function iterateDefaultTemplateFields(
+		string $providerClass,
+		array $options = [],
+		bool $addRootGroups = true,
+		bool $isCopyFields = false,
+		?callable $predicate = null,
+		int $offset = 0,
+		?int $limit = null
+	): \Generator
+	{
+		return yield from ProviderFieldCatalog::iterateDefaultTemplateFields(
+			$this,
+			$providerClass,
+			$options,
+			$addRootGroups,
+			$isCopyFields,
+			$predicate,
+			$offset,
+			$limit,
+		);
 	}
 
 	/**
@@ -985,37 +1431,111 @@ class DataProviderManager
 		}
 		elseif(is_array($value))
 		{
-			$valueHash = md5(serialize($this->sortArrayRecursive($value)));
+			$valueHash = $this->hashCanonicalForm($value);
 		}
 
 		// 'data' option contains pre-fetched entity fields and can be very large.
 		// Provider identity is already determined by $value (entity ID), so we exclude it.
 		unset($options['data']);
-		$valueHash .= md5(serialize($this->sortArrayRecursive($options)));
+		$valueHash .= $this->hashCanonicalForm($options);
 
 		return $valueHash;
 	}
 
-	private function sortArrayRecursive(array $array): array
+	private function hashCanonicalForm(array $value): string
 	{
-		if (array_is_list($array))
-		{
-			ksort($array);
-		}
-		else
-		{
-			sort($array);
-		}
+		$context = hash_init('md5');
+		$providerHashes = [];
+		$providersInPath = [];
+		$this->feedCanonicalForm($context, $value, $providerHashes, $providersInPath);
 
-		foreach ($array as &$value)
+		return hash_final($context);
+	}
+
+	private function feedCanonicalForm(\HashContext $context, mixed $value, array &$providerHashes, array &$providersInPath): bool
+	{
+		if (is_string($value))
 		{
-			if (is_array($value))
+			hash_update($context, 's' . strlen($value) . ':');
+			hash_update($context, $value);
+
+			return false;
+		}
+		if (is_array($value))
+		{
+			$isList = array_is_list($value);
+			hash_update($context, ($isList ? 'l' : 'a') . count($value) . '[');
+			if (!$isList)
 			{
-				$value = $this->sortArrayRecursive($value);
+				ksort($value, SORT_STRING);
 			}
-		}
+			$hasCycle = false;
+			foreach ($value as $key => $item)
+			{
+				if (!$isList)
+				{
+					$this->feedCanonicalForm($context, $key, $providerHashes, $providersInPath);
+				}
+				$hasCycle = $this->feedCanonicalForm($context, $item, $providerHashes, $providersInPath) || $hasCycle;
+			}
+			hash_update($context, ']');
 
-		return $array;
+			return $hasCycle;
+		}
+		if ($value instanceof DataProvider)
+		{
+			$providerKey = spl_object_hash($value);
+			if (isset($providersInPath[$providerKey]))
+			{
+				hash_update($context, 'c' . $providerKey . ';');
+
+				return true;
+			}
+			if (!isset($providerHashes[$providerKey]))
+			{
+				$providersInPath[$providerKey] = true;
+				$providerContext = hash_init('md5');
+				$hasCycle = $this->feedCanonicalForm($providerContext, get_class($value), $providerHashes, $providersInPath);
+				$hasCycle = $this->feedCanonicalForm($providerContext, $value->getSource(), $providerHashes, $providersInPath) || $hasCycle;
+				$options = $value->getOptions();
+				unset($options['data']);
+				$hasCycle = $this->feedCanonicalForm($providerContext, $options, $providerHashes, $providersInPath) || $hasCycle;
+				$parent = $value->getParentProvider();
+				hash_update($providerContext, $parent instanceof DataProvider ? 'o' . spl_object_hash($parent) . ';' : 'n;');
+				if ($value instanceof HashDataProvider && ($revision = $value->getExplicitDataRevision()) > 0)
+				{
+					hash_update($providerContext, 'u' . $providerKey . ':' . $revision . ';');
+				}
+				if ($value instanceof ArrayDataProvider && ($modifiedItems = $value->getModifiedItems()) !== null)
+				{
+					hash_update($providerContext, 'm');
+					$hasCycle = $this->feedCanonicalForm($providerContext, $modifiedItems, $providerHashes, $providersInPath) || $hasCycle;
+				}
+				unset($providersInPath[$providerKey]);
+				$providerHash = hash_final($providerContext);
+				if (!$hasCycle)
+				{
+					$providerHashes[$providerKey] = $providerHash;
+				}
+			}
+			else
+			{
+				$providerHash = $providerHashes[$providerKey];
+				$hasCycle = false;
+			}
+			hash_update($context, 'p' . $providerHash . ';');
+
+			return $hasCycle;
+		}
+		if (is_object($value))
+		{
+			hash_update($context, 'o' . spl_object_hash($value) . ';');
+
+			return false;
+		}
+		hash_update($context, serialize($value));
+
+		return false;
 	}
 
 	/**
@@ -1213,7 +1733,21 @@ class DataProviderManager
 			return true;
 		}
 
-		$providerHash = $this->getValueHash($dataProvider);
+		if (isset($this->layerKeys[$dataProvider]))
+		{
+			$key = $this->layerKeys[$dataProvider];
+			$decisions = $this->layerAccess[$dataProvider] ?? [];
+			if (!array_key_exists($userId, $decisions))
+			{
+				$decisions[$userId] = $this->layerAccessByKey[$key][$userId] ?? $dataProvider->hasAccess($userId);
+				$this->layerAccessByKey[$key][$userId] = $decisions[$userId];
+				$this->layerAccess[$dataProvider] = $decisions;
+			}
+
+			return $decisions[$userId];
+		}
+
+		$providerHash = spl_object_hash($dataProvider);
 		if(!isset($this->accessCache[$providerHash][$userId]))
 		{
 			$this->accessCache[$providerHash][$userId] = $dataProvider->hasAccess($userId);

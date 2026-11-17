@@ -59,3 +59,4 @@ class ListMailSendersTool extends ToolContract
 		];
 	}
 }
+

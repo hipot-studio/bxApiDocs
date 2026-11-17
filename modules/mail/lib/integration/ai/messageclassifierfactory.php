@@ -17,3 +17,4 @@ final class MessageClassifierFactory
 		return new TritonMessageClassifier(TritonMessageClassifier::CONTEXT_ID);
 	}
 }
+

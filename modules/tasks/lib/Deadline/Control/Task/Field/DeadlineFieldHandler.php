@@ -10,25 +10,32 @@ use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Tasks\Deadline\Internals\Repository\Cache\Managed\CacheDeadlineUserOptionRepository;
-use Bitrix\Tasks\Deadline\Internals\Repository\DeadlineUserOptionRepositoryInterface;
+use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Tasks\Deadline\Service\DefaultDeadlineStateProvider;
 use Bitrix\Tasks\Integration\Socialnetwork\Internals\Registry\GroupRegistry;
+use Bitrix\Tasks\Util\Type;
 use Psr\Container\NotFoundExceptionInterface;
 
 class DeadlineFieldHandler
 {
-	private DeadlineUserOptionRepositoryInterface $deadlineUserOptionRepository;
+	private DefaultDeadlineStateProvider $defaultDeadlineStateProvider;
 	private ?\Bitrix\Socialnetwork\Internals\Registry\GroupRegistry $groupRegistry;
 
 	/**
 	 * @throws ObjectNotFoundException
 	 * @throws NotFoundExceptionInterface
 	 */
-	public function __construct(private readonly int $userId)
+	public function __construct(
+		private readonly int $userId,
+		?DefaultDeadlineStateProvider $defaultDeadlineStateProvider = null,
+	)
 	{
 		$serviceLocator = ServiceLocator::getInstance();
 
-		$this->deadlineUserOptionRepository = $serviceLocator->get(CacheDeadlineUserOptionRepository::class);
+		$this->defaultDeadlineStateProvider =
+			$defaultDeadlineStateProvider
+			?? $serviceLocator->get(DefaultDeadlineStateProvider::class)
+		;
 
 		$this->groupRegistry = GroupRegistry::getInstance();
 	}
@@ -57,13 +64,37 @@ class DeadlineFieldHandler
 			return $fields;
 		}
 
-		$deadlineUserOption = $this->deadlineUserOptionRepository->getByUserId($this->userId);
+		$deadline = $this->defaultDeadlineStateProvider->getDefaultDeadline(
+			userId: $this->userId,
+			now: new DateTime(),
+		);
+		if (!$this->isDeadlineInProjectRange($deadline, $group))
+		{
+			return $fields;
+		}
 
-		$matchWorkTime = $fields['MATCH_WORK_TIME'] ?? false;
-		$deadline = $deadlineUserOption->getDefaultDeadlineDate($matchWorkTime);
-
-		$fields['DEADLINE'] = $deadline?->format(DateTime::getFormat());
+		$fields['DEADLINE'] = $deadline?->toString();
 
 		return $fields;
+	}
+
+	private function isDeadlineInProjectRange(?DateTime $deadline, ?Workgroup $group): bool
+	{
+		if ($deadline === null || !$group?->isProject())
+		{
+			return true;
+		}
+
+		$groupFields = $group->getFields();
+		$projectStartDate = Type\DateTime::createFrom($groupFields['PROJECT_DATE_START'] ?? null);
+		$projectFinishDate = Type\DateTime::createFrom($groupFields['PROJECT_DATE_FINISH'] ?? null);
+		if ($projectFinishDate)
+		{
+			$projectFinishDate->addSecond(86399);
+		}
+
+		$projectDeadline = Type\DateTime::createFrom($deadline);
+
+		return $projectDeadline?->checkInRange($projectStartDate, $projectFinishDate) ?? true;
 	}
 }

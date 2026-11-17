@@ -55,11 +55,11 @@ class NotifyTaskStatusPinged extends AbstractNotify implements ShouldSend
 		protected readonly ?Entity\User $triggeredBy,
 	)
 	{
-		if ($this->triggeredBy?->isEquals($this->task->creator))
+		if ($this->task->creator !== null && $this->triggeredBy?->isEquals($this->task->creator))
 		{
 			$this->role = MemberTable::MEMBER_TYPE_ORIGINATOR;
 		}
-		elseif ($this->triggeredBy?->isEquals($this->task->responsible))
+		elseif ($this->task->responsible !== null && $this->triggeredBy?->isEquals($this->task->responsible))
 		{
 			$this->role = MemberTable::MEMBER_TYPE_RESPONSIBLE;
 		}
@@ -79,7 +79,7 @@ class NotifyTaskStatusPinged extends AbstractNotify implements ShouldSend
 
 	public function getMessageCode(): string
 	{
-		if (null === $this->triggeredBy)
+		if ($this->triggeredBy === null)
 		{
 			return $this->messageCodesDefaults[$this->role];
 		}
@@ -91,7 +91,10 @@ class NotifyTaskStatusPinged extends AbstractNotify implements ShouldSend
 	{
 		/** @var Entity\User[] $audience */
 		$entities = [];
-		$entities[$this->task->responsible->getId()] = $this->task->responsible;
+		if ($this->task->responsible !== null)
+		{
+			$entities[$this->task->responsible->getId()] = $this->task->responsible;
+		}
 
 		foreach ($this->task->accomplices->getEntities() as $user)
 		{

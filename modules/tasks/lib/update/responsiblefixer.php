@@ -48,6 +48,7 @@ final class ResponsibleFixer extends Stepper
 				->setSelect(['ID', 'RESPONSIBLE_ID', 'CREATED_BY'])
 				->where('RESPONSIBLE_ID', 0)
 				->where('ID', '>', $this->lastId)
+				->setOrder(['ID' => 'ASC'])
 				->setLimit(self::LIMIT);
 			$this->tasks = $query->exec()->fetchCollection();
 		}

@@ -6,6 +6,9 @@ use Bitrix\DocumentGenerator\DataProvider;
 
 abstract class HashDataProvider extends DataProvider
 {
+	private bool $initializingData = true;
+	private int $explicitDataRevision = 0;
+
 	public function __construct($source, array $options = [])
 	{
 		parent::__construct($source, $options);
@@ -14,6 +17,7 @@ abstract class HashDataProvider extends DataProvider
 		{
 			$this->setData($source);
 		}
+		$this->initializingData = false;
 	}
 
 	public function setData(array $data): HashDataProvider
@@ -26,8 +30,17 @@ abstract class HashDataProvider extends DataProvider
 				$this->data[$placeholder] = $data[$placeholder];
 			}
 		}
+		if (!$this->initializingData)
+		{
+			++$this->explicitDataRevision;
+		}
 
 		return $this;
+	}
+
+	public function getExplicitDataRevision(): int
+	{
+		return $this->explicitDataRevision;
 	}
 
 	public function getData(): array

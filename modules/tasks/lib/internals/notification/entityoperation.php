@@ -11,6 +11,7 @@ class EntityOperation
 	public const ADD = 'ADD';
 	public const REPLICATE_REGULAR = 'REPLICATE_REGULAR';
 	public const START_REGULAR = 'START_REGULAR';
+	public const REGULAR_REPLICATION_FAILED = 'REGULAR_REPLICATION_FAILED';
 	public const UPDATE = 'UPDATE';
 	public const DELETE = 'DELETE';
 	public const REPLY = 'REPLY';

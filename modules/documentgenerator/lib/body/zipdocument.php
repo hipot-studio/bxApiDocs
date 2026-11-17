@@ -80,14 +80,10 @@ abstract class ZipDocument extends Body
 	/**
 	 * @param string $content
 	 * @param string $localName
+	 * An added entry is readable immediately and reaches disk on the final close.
 	 */
 	protected function addContentToZip($content, $localName)
 	{
-		if($this->zip)
-		{
-			$this->zip->addFromString($localName, $content);
-			$this->zip->close();
-			$this->zip->open($this->file->getPhysicalPath());
-		}
+		$this->zip->addFromString($localName, $content);
 	}
 }

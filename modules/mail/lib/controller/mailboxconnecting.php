@@ -1271,3 +1271,4 @@ class MailboxConnecting extends Controller
 		};
 	}
 }
+

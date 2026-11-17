@@ -32,6 +32,15 @@ final class TrashCan extends Engine\Controller
 			return;
 		}
 
+		// a repeated request must not measure the trash can anew: it would replace the queued task
+		// and the progress of the owner would count the same objects twice
+		if ($this->hasActiveTask($storage))
+		{
+			Disk\Volume\Cleaner::addWorker();
+
+			return;
+		}
+
 		$indicator = new Disk\Volume\Storage\TrashCan();
 		$indicator
 			->setOwner($this->getCurrentUser()->getId())
@@ -62,6 +71,25 @@ final class TrashCan extends Engine\Controller
 			(int)$storage->getId(),
 			(int)$this->getCurrentUser()->getId(),
 		);
+	}
+
+	private function hasActiveTask(Disk\Storage $storage): bool
+	{
+		$task = Disk\Internals\VolumeTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=INDICATOR_TYPE' => Disk\Volume\Storage\TrashCan::className(),
+				'=OWNER_ID' => (int)$this->getCurrentUser()->getId(),
+				'=STORAGE_ID' => (int)$storage->getId(),
+				'=AGENT_LOCK' => [
+					Disk\Volume\Task::TASK_STATUS_WAIT,
+					Disk\Volume\Task::TASK_STATUS_RUNNING,
+				],
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return $task !== false;
 	}
 
 	private function acceptTaskWithAudit(

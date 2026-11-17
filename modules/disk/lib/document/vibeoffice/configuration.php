@@ -5,12 +5,24 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\Vibeoffice;
 
 use Bitrix\Disk\Driver;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\IO\File;
+use Bitrix\Main\Web\Json;
 
 final class Configuration
 {
 	public const DEFAULT_MAX_FILESIZE = 104857600;
+	public const PREVIOUS_CREDENTIALS_TTL = 900;
+
+	private const MANAGED_OPTION = 'disk_vibeoffice_managed';
+	private const CREDENTIAL_KEYS = [
+		'server' => 'server',
+		'key_id' => 'keyId',
+		'api_secret' => 'apiSecret',
+		'webhook_secret' => 'webhookSecret',
+	];
+	private const STATE_KEYS = ['hostId', 'domain', 'keyConfirmed', 'activated', 'documentServerHost'];
 
 	/**
 	 * Ceilings of the ALG-RETRY settings. The open cycle waits inside the synchronous request the
@@ -51,6 +63,103 @@ final class Configuration
 		Option::set(Driver::INTERNAL_MODULE_ID, 'disk_vibeoffice_enabled', 'N');
 	}
 
+	/** Enables Vibeoffice for new document opens on the portal. */
+	public function enableOnPortal(): void
+	{
+		Option::set(Driver::INTERNAL_MODULE_ID, 'disk_vibeoffice_enabled', 'Y');
+	}
+
+	/** Returns connection metadata without credential material. */
+	public function getManagedState(): ?array
+	{
+		$managed = $this->getManagedValues();
+		if ($managed === null)
+		{
+			return null;
+		}
+
+		$state = array_intersect_key($managed, array_flip(self::STATE_KEYS));
+		$state['previousUntil'] = $this->getPreviousCredentials($managed)['expiresAt'] ?? null;
+
+		return $state;
+	}
+
+	/** Updates metadata under the administrator operation lock, preserving credentials. */
+	public function saveManagedState(array $patch): void
+	{
+		$managed = $this->getManagedValues() ?? [];
+		$managed = array_replace($managed, array_intersect_key($patch, array_flip(self::STATE_KEYS)));
+		$managed['previous'] = $this->getPreviousCredentials($managed);
+		$this->storeManagedValues($managed);
+	}
+
+	/** Publishes credentials and supplied metadata together under the administrator operation lock. */
+	public function replaceManagedCredentials(array $credentials, bool $keepPrevious, array $state = []): void
+	{
+		$current = [];
+		$replacement = [];
+		foreach (self::CREDENTIAL_KEYS as $key => $managedKey)
+		{
+			$value = $credentials[$managedKey] ?? null;
+			if (!is_string($value) || $value === '')
+			{
+				throw new ArgumentException('Incomplete Vibeoffice credentials.', 'credentials');
+			}
+			$replacement[$managedKey] = $value;
+			$current[$managedKey] = $this->getValue($key, 'disk_vibeoffice_' . $key);
+		}
+
+		$managed = array_replace(
+			$this->getManagedValues() ?? [],
+			array_intersect_key($state, array_flip(self::STATE_KEYS)),
+		);
+		$managed['previous'] = null;
+		if ($keepPrevious && !in_array(null, $current, true) && !in_array('', $current, true))
+		{
+			$managed['previous'] = [
+				'keyId' => $current['keyId'],
+				'apiSecret' => $current['apiSecret'],
+				'webhookSecret' => $current['webhookSecret'],
+				'expiresAt' => time() + self::PREVIOUS_CREDENTIALS_TTL,
+			];
+		}
+		$managed['credentials'] = $replacement;
+		$this->storeManagedValues($managed);
+	}
+
+	/** Returns the previous API secret while its acceptance window is open. */
+	public function getPreviousApiSecret(): ?string
+	{
+		return $this->getPreviousCredentials($this->getManagedValues() ?? [])['apiSecret'] ?? null;
+	}
+
+	/** Returns the previous webhook secret while its acceptance window is open. */
+	public function getPreviousWebhookSecret(): ?string
+	{
+		return $this->getPreviousCredentials($this->getManagedValues() ?? [])['webhookSecret'] ?? null;
+	}
+
+	/** Detects file overrides even when their values are empty or null. */
+	public function hasLocalCredentialOverride(): bool
+	{
+		return array_intersect_key($this->localValues ?? [], self::CREDENTIAL_KEYS) !== [];
+	}
+
+	/** Checks whether all four effective credential values are present. */
+	public function hasReadableCredentials(): bool
+	{
+		foreach (array_keys(self::CREDENTIAL_KEYS) as $key)
+		{
+			$value = $this->getValue($key, 'disk_vibeoffice_' . $key);
+			if ($value === null || $value === '')
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	public function isStableDocumentKeyEnabled(): bool
 	{
 		return in_array(
@@ -58,6 +167,17 @@ final class Configuration
 			['Y', '1'],
 			true,
 		);
+	}
+
+	/**
+	 * Raw `client_origin` of the php_interface override, never the module option: the origin of the
+	 * portal page is set by the administrator of the server only. A value of another type is absent.
+	 */
+	public function getClientOrigin(): ?string
+	{
+		$value = $this->getLocalValues('client_origin');
+
+		return is_string($value) ? $value : null;
 	}
 
 	/**
@@ -224,7 +344,7 @@ final class Configuration
 	}
 
 	/**
-	 * Resolves a value, giving the php_interface override priority over the module option.
+	 * Resolves file overrides, managed credentials and legacy options in that order.
 	 */
 	private function getValue(string $key, string $optionName): ?string
 	{
@@ -233,8 +353,60 @@ final class Configuration
 		{
 			return (string)$local;
 		}
+		$managedKey = self::CREDENTIAL_KEYS[$key] ?? null;
+		if ($managedKey !== null)
+		{
+			$managed = $this->getManagedValues();
+			$value = $managed['credentials'][$managedKey] ?? null;
+			if (is_string($value))
+			{
+				return $value;
+			}
+		}
 
 		return Option::get(Driver::INTERNAL_MODULE_ID, $optionName, null);
+	}
+
+	private function getManagedValues(): ?array
+	{
+		$value = Option::get(Driver::INTERNAL_MODULE_ID, self::MANAGED_OPTION, '');
+		if ($value === '')
+		{
+			return null;
+		}
+		try
+		{
+			$managed = Json::decode($value);
+		}
+		catch (ArgumentException)
+		{
+			return null;
+		}
+
+		return is_array($managed) && $managed !== [] ? $managed : null;
+	}
+
+	private function getPreviousCredentials(array $managed): ?array
+	{
+		$previous = $managed['previous'] ?? null;
+		if (!is_array($previous) || (int)($previous['expiresAt'] ?? 0) <= time())
+		{
+			return null;
+		}
+		foreach (['keyId', 'apiSecret', 'webhookSecret'] as $key)
+		{
+			if (!is_string($previous[$key] ?? null) || $previous[$key] === '')
+			{
+				return null;
+			}
+		}
+
+		return $previous;
+	}
+
+	private function storeManagedValues(array $managed): void
+	{
+		Option::set(Driver::INTERNAL_MODULE_ID, self::MANAGED_OPTION, Json::encode($managed));
 	}
 
 	/**

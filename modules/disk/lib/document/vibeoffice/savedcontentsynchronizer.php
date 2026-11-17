@@ -12,16 +12,22 @@ use Bitrix\Disk\Document\Vibeoffice\Webhook\DeliveryTable;
 use Bitrix\Disk\Document\Vibeoffice\Webhook\WebhookProcessor;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\VersionTable;
+use Bitrix\Main\Application;
+use Bitrix\Main\Data\ConnectionPool;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
+use Closure;
 
 final class SavedContentSynchronizer
 {
 	public const ERROR_TIMEOUT = 'vibeoffice_sync_timeout';
 	public const ERROR_UNKNOWN_OUTCOME = 'vibeoffice_sync_unknown_outcome';
+	public const SYNC_LOCK_PREFIX = 'disk_vo_sync_';
+	public const SYNC_LOCK_CONNECTION_NAME = 'disk_vo_sync';
 
 	private const QUEUED_BUDGET_SEC = 6.0;
 	private const RECENT_CLOSED_BUDGET_SEC = 3.0;
@@ -35,16 +41,29 @@ final class SavedContentSynchronizer
 	/** These replies still require delivery confirmation while the local session is active. */
 	private const NOTHING_TO_SAVE_CODES = ['not_active', 'no_editor_session'];
 
+	/** Sync locks this process holds on the dedicated connection, by lock name. */
+	private static array $heldSyncLocks = [];
+
 	private ProtocolClientInterface $protocolClient;
+	private readonly Closure $sleeper;
 
 	public function __construct(
 		?ProtocolClientInterface $protocolClient = null,
 		private readonly float $queuedBudgetSec = self::QUEUED_BUDGET_SEC,
 		private readonly float $recentClosedBudgetSec = self::RECENT_CLOSED_BUDGET_SEC,
 		private readonly int $pollIntervalMs = self::POLL_INTERVAL_MS,
+		?Closure $sleeper = null,
 	)
 	{
 		$this->protocolClient = $protocolClient ?? ProtocolClientFactory::create();
+		$this->sleeper = $sleeper ?? static function (int $microseconds): void {
+			usleep($microseconds);
+		};
+	}
+
+	public static function getSyncLockName(int $realObjectId): string
+	{
+		return self::SYNC_LOCK_PREFIX . $realObjectId;
 	}
 
 	/**
@@ -53,27 +72,80 @@ final class SavedContentSynchronizer
 	 * The editor can be closed before the saved webhook finishes applying the new version, so this
 	 * method is called only for live views. Each key needs its own applied delivery, because another
 	 * editor can advance the shared file version. A just-closed session gets a shorter wait budget.
+	 *
+	 * Only one request of a document waits: the one that takes the sync lock. The other viewers
+	 * return the current version at once and get the newer one by the contentUpdated pull command.
+	 *
+	 * @return Result data: globalContentVersion, savingInProgress
 	 */
 	public function synchronize(File $file): Result
 	{
 		$fileId = (int)$file->getRealObjectId();
+		$result = new Result();
+		$sessionsByKey = $this->selectSessionsByKey($fileId, $result);
+		if ($sessionsByKey === [])
+		{
+			return $result->isSuccess() ? $this->currentVersionResult($fileId, false) : $result;
+		}
 
+		$syncLockName = $this->tryAcquireSyncLock($fileId);
+		if ($syncLockName === null)
+		{
+			return $result->isSuccess() ? $this->currentVersionResult($fileId, true) : $result;
+		}
+
+		try
+		{
+			$failure = $this->waitAsInitiator($fileId, $sessionsByKey, $result);
+		}
+		finally
+		{
+			self::releaseSyncLock($syncLockName);
+		}
+		if ($failure !== null)
+		{
+			return $failure;
+		}
+
+		return $result->isSuccess() ? $this->currentVersionResult($fileId, false) : $result;
+	}
+
+	/**
+	 * The recency window lives in SQL, so neither the rows nor their CONTEXT grow with the history.
+	 *
+	 * @return array<string, DocumentSession> the session to synchronize of each document key
+	 */
+	private function selectSessionsByKey(int $fileId, Result $result): array
+	{
 		$sessions = DocumentSession::getModelList([
 			'select' => ['ID', 'EXTERNAL_HASH', 'STATUS', 'CONTEXT', 'CREATE_TIME'],
 			'filter' => [
 				'=OBJECT_ID' => $fileId,
 				'=VERSION_ID' => null,
 				'=TYPE' => DocumentSession::TYPE_EDIT,
-				'@STATUS' => [DocumentSession::STATUS_ACTIVE, DocumentSession::STATUS_NON_ACTIVE],
 				'=SERVICE' => DocumentService::Vibeoffice->value,
+				[
+					'LOGIC' => 'OR',
+					['=STATUS' => DocumentSession::STATUS_ACTIVE],
+					[
+						'=STATUS' => DocumentSession::STATUS_NON_ACTIVE,
+						'>=CREATE_TIME' => DateTime::createFromTimestamp(
+							time() - self::RECENT_NON_ACTIVE_SESSION_MAX_AGE_SEC,
+						),
+					],
+				],
 			],
 			'order' => ['ID' => 'DESC'],
 		]);
 
-		$result = new Result();
 		$sessionsByKey = [];
 		foreach ($sessions as $session)
 		{
+			if (!$session->isActive() && !$this->isRecentNonActiveSession($session))
+			{
+				continue;
+			}
+
 			$docKey = HostDocumentKey::resolve($session);
 			if ($docKey === '')
 			{
@@ -87,17 +159,27 @@ final class SavedContentSynchronizer
 			}
 		}
 
+		return $sessionsByKey;
+	}
+
+	/**
+	 * All keys share one deadline; a just-closed session waits no longer than its own budget inside it.
+	 *
+	 * @param array<string, DocumentSession> $sessionsByKey
+	 * @return Result|null a failure that ends the synchronization at once
+	 */
+	private function waitAsInitiator(int $fileId, array $sessionsByKey, Result $result): ?Result
+	{
+		$deadline = microtime(true) + $this->queuedBudgetSec;
 		foreach ($sessionsByKey as $docKey => $session)
 		{
-			$metadata = DocumentSessionManager::extractVoMetadata($session);
-			$snapshot = $metadata[DocumentSessionManager::CONTEXT_VO_SAVED_VERSION_ID_KEY] ?? null;
-			$snapshot = is_int($snapshot) && $snapshot >= 0 ? $snapshot : null;
 			if (!$session->isActive())
 			{
-				if (
-					$this->isRecentNonActiveSession($session)
-					&& !$this->waitForVersion($fileId, $snapshot, $docKey, $this->recentClosedBudgetSec)
-				)
+				$metadata = DocumentSessionManager::extractVoMetadata($session);
+				$snapshot = $metadata[DocumentSessionManager::CONTEXT_VO_SAVED_VERSION_ID_KEY] ?? null;
+				$snapshot = is_int($snapshot) && $snapshot >= 0 ? $snapshot : null;
+				$budget = min($this->recentClosedBudgetSec, $deadline - microtime(true));
+				if (!$this->waitForVersion($fileId, $snapshot, $docKey, $budget))
 				{
 					$result->addError($this->createTimeoutError());
 				}
@@ -131,22 +213,67 @@ final class SavedContentSynchronizer
 			{
 				continue;
 			}
-			if (!$this->waitForVersion($fileId, $activeBaseline, $docKey, $this->queuedBudgetSec))
+			if (!$this->waitForVersion($fileId, $activeBaseline, $docKey, $deadline - microtime(true)))
 			{
 				$result->addError($this->createTimeoutError());
 			}
 		}
-		if (!$result->isSuccess())
-		{
-			return $result;
-		}
+
+		return null;
+	}
+
+	private function currentVersionResult(int $fileId, bool $savingInProgress): Result
+	{
 		$currentFile = File::loadById($fileId);
 		if ($currentFile === null)
 		{
 			return (new Result())->addError(new Error('The document is unavailable.', 'vibeoffice_sync_file_missing'));
 		}
 
-		return $result->setData(['globalContentVersion' => (int)$currentFile->getGlobalContentVersion()]);
+		return (new Result())->setData([
+			'globalContentVersion' => (int)$currentFile->getGlobalContentVersion(),
+			'savingInProgress' => $savingInProgress,
+		]);
+	}
+
+	/**
+	 * Returns the taken lock name, or null for a viewer. A process under a document lock is a viewer:
+	 * the save confirmation is applied under that very lock and would never reach the wait.
+	 */
+	private function tryAcquireSyncLock(int $realObjectId): ?string
+	{
+		if (DocumentStateRepository::holdsAnyLock() || self::$heldSyncLocks !== [])
+		{
+			return null;
+		}
+
+		$lockName = self::getSyncLockName($realObjectId);
+		if (!self::getSyncLockConnection()->lock($lockName, 0))
+		{
+			return null;
+		}
+		self::$heldSyncLocks[$lockName] = true;
+
+		return $lockName;
+	}
+
+	private static function releaseSyncLock(string $lockName): void
+	{
+		unset(self::$heldSyncLocks[$lockName]);
+		self::getSyncLockConnection()->unlock($lockName);
+	}
+
+	/**
+	 * MySQL 5.6 keeps one GET_LOCK per connection and a new one drops the previous, so the sync lock
+	 * lives on its own connection and never touches the locks of the main one.
+	 */
+	private static function getSyncLockConnection(): Connection
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+
+		return $pool->getConnection(self::SYNC_LOCK_CONNECTION_NAME)
+			?? $pool->cloneConnection(ConnectionPool::DEFAULT_CONNECTION_NAME, self::SYNC_LOCK_CONNECTION_NAME)
+		;
 	}
 
 	/**
@@ -279,7 +406,7 @@ final class SavedContentSynchronizer
 				return false;
 			}
 
-			usleep(min($intervalUsec, $remainingUsec));
+			($this->sleeper)(min($intervalUsec, $remainingUsec));
 			$intervalUsec = min($intervalUsec * self::POLL_INTERVAL_GROWTH, $maxIntervalUsec);
 		}
 	}

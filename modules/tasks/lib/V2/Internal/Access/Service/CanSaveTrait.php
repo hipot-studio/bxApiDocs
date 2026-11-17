@@ -73,6 +73,25 @@ trait CanSaveTrait
 		EntityInterface $entity,
 	): bool
 	{
+		return $this->canUpdateWithCurrentInternal(
+			type: $type,
+			controllerFactory: $controllerFactory,
+			saveAction: $saveAction,
+			userId: $userId,
+			entity: $entity,
+			current: $this->getEntityById($entity->getId()),
+		);
+	}
+
+	private function canUpdateWithCurrentInternal(
+		Type $type,
+		ControllerFactoryInterface $controllerFactory,
+		string $saveAction,
+		int $userId,
+		EntityInterface $entity,
+		?EntityInterface $current,
+	): bool
+	{
 		$adapter = $controllerFactory->createAdapter($entity);
 
 		$before = $adapter?->create();
@@ -81,7 +100,6 @@ trait CanSaveTrait
 			return false;
 		}
 
-		$current = $this->getEntityById($entity->getId());
 		if ($current === null)
 		{
 			return false;

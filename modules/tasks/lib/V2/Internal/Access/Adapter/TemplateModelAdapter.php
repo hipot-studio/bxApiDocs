@@ -17,7 +17,7 @@ class TemplateModelAdapter implements EntityModelAdapterInterface
 
 	}
 
-	public function transform(): ?AccessibleItem
+	public function transform(?Entity\EntityInterface $current = null): ?AccessibleItem
 	{
 		if (!$this->entity instanceof Entity\Template)
 		{
@@ -67,6 +67,14 @@ class TemplateModelAdapter implements EntityModelAdapterInterface
 
 		if (!$hasMembers)
 		{
+			if ($current instanceof Entity\Template && $current->getId() > 0)
+			{
+				/** @var Model\TemplateModel $currentModel */
+				$currentModel = Model\TemplateModel::createFromId($current->getId());
+
+				return $model->setMembers($currentModel->getMembers());
+			}
+
 			return $model->setMembers(null);
 		}
 

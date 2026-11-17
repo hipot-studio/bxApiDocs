@@ -239,3 +239,4 @@ class Secretary
 		return new \Bitrix\Mail\Storage\Message();
 	}
 }
+

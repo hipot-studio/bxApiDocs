@@ -15,9 +15,32 @@ final class DeletionNotifyManager
 	private $map = [];
 	/** @var array */
 	private $notifiedFolderKeys = [];
+	private int $muteCounter = 0;
+
+	/**
+	 * Silences the manager until the matching unmute(): a deletion that is a step of another operation,
+	 * such as a move to another storage, is not reported to the author.
+	 */
+	public function mute(): void
+	{
+		$this->muteCounter++;
+	}
+
+	public function unmute(): void
+	{
+		if ($this->muteCounter > 0)
+		{
+			$this->muteCounter--;
+		}
+	}
 
 	public function put(BaseObject $object, int $deletedBy): void
 	{
+		if ($this->muteCounter > 0)
+		{
+			return;
+		}
+
 		//author can delete object without notification
 		if ($object->getCreatedBy() && ($object->getCreatedBy() == $deletedBy))
 		{

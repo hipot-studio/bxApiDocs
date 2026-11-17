@@ -73,7 +73,7 @@ class TaskObject extends EO_Task implements Arrayable
 			return 0;
 		}
 
-		return (int)$regularFields['DEADLINE_OFFSET'];
+		return (int)($regularFields['DEADLINE_OFFSET'] ?? 0);
 	}
 
 	public function getFileFields(bool $force = false): array

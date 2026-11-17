@@ -3,8 +3,10 @@
 namespace Bitrix\Landing;
 
 use Bitrix\Landing\Block\BlockRepo;
+use Bitrix\Landing\Block\ContentRenderer;
 use Bitrix\Landing\Block\Menu;
 use Bitrix\Landing\Block\StickyWrapperDetector;
+use Bitrix\Landing\Block\TemplatePlaceholders;
 use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeAssetPolicy;
 use Bitrix\Landing\Site\Type;
@@ -92,6 +94,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	 * @var string
 	 */
 	public static $internalClass = 'BlockTable';
+
+	/**
+	 * Codes of the blocks waiting for the update stepper, read once per hit.
+	 * @var array|null
+	 */
+	private static ?array $updateQueueCodes = null;
 
 	/**
 	 * Id of current block.
@@ -653,17 +661,15 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			return null;
 		}
 
+		$content = null;
+
 		if (strpos($code, '@'))
 		{
 			$normalizedBlock = self::getNormalizedBlock($code);
-
-			return $normalizedBlock['CONTENT'] ?? null;
+			$content = $normalizedBlock['CONTENT'] ?? null;
 		}
-
-		$content = null;
-
 		// local repo
-		if (preg_match(self::REPO_MASK, $code, $matches))
+		elseif (preg_match(self::REPO_MASK, $code, $matches))
 		{
 			$repo = Repo::getById($matches[1])->fetch();
 			$content = $repo['CONTENT'];
@@ -695,7 +701,8 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 		}
 
-		return $content;
+		// the template is ready the moment it is read: no reader of it knows a placeholder by name
+		return is_string($content) ? TemplatePlaceholders::fill($content) : null;
 	}
 
 	/**
@@ -844,8 +851,8 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 
 			$blockContentOriginal = $block->getContent();
-			$blockContent = self::prepareBlockContentFromRepository($blockContentOriginal);
-			$blockContent = self::prepareBlockVideoPlaceholders($blockContent);
+			// a content given from outside may still hold the placeholders of the template
+			$blockContent = TemplatePlaceholders::fill($blockContentOriginal);
 			if ($blockContent !== $blockContentOriginal)
 			{
 				$block->saveContent($blockContent);
@@ -919,28 +926,6 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Replaces simple placeholders in the block content, like #YEAR# and #COUNTDOWN#.
-	 *
-	 * @param string $content Block content to process.
-	 *
-	 * @return string Modified content with placeholders replaced.
-	 */
-	private static function prepareBlockContentFromRepository(string $content): string
-	{
-		if (str_contains($content, '#YEAR#'))
-		{
-			$content = str_replace('#YEAR#', date("Y"), $content);
-		}
-
-		if (str_contains($content, '#COUNTDOWN#'))
-		{
-			$content = str_replace('#COUNTDOWN#', Countdown::getTimestamp(), $content);
-		}
-
-		return $content;
-	}
-
-	/**
 	 * Checks if the block code points to an AI repo block.
 	 * @param string $code Block code (repo_<id> or repo_<id>@<blockId>).
 	 * @return bool
@@ -968,45 +953,6 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	private static function isValidManifestNode($node): bool
 	{
 		return is_array($node) && isset($node['type']) && is_string($node['type']);
-	}
-
-	/**
-	 * Replaces video-related placeholders in the block content depending on the current zone.
-	 *
-	 * @param string $content Block content to process.
-	 *
-	 * @return string Modified content with video placeholders replaced.
-	 */
-	private static function prepareBlockVideoPlaceholders(string $content): string
-	{
-		if (!str_contains($content, '#DEFAULT_VIDEO_SRC#'))
-		{
-			return $content;
-		}
-
-		$replace = Manager::getZone() === 'ru'
-			? [
-				'#DEFAULT_VIDEO_SRC#' => 'data-src=""',
-				'#DEFAULT_VIDEO_SOURCE#' => 'data-source=""',
-				'#DEFAULT_VIDEO_PREVIEW#' => 'data-preview=""',
-				'#DEFAULT_VIDEO_STYLE#' => 'style=""',
-				'#DEFAULT_VIDEO_SRC_2#' => 'data-src=""',
-				'#DEFAULT_VIDEO_SOURCE_2#' => 'data-source=""',
-				'#DEFAULT_VIDEO_PREVIEW_2#' => 'data-preview=""',
-				'#DEFAULT_VIDEO_STYLE_2#' => 'style=""',
-			]
-			: [
-				'#DEFAULT_VIDEO_SRC#' => 'data-src="//www.youtube.com/embed/q4d8g9Dn3ww?autoplay=0&controls=1&loop=1&mute=0&rel=0"',
-				'#DEFAULT_VIDEO_SOURCE#' => 'data-source="https://www.youtube.com/watch?v=q4d8g9Dn3ww"',
-				'#DEFAULT_VIDEO_PREVIEW#' => 'data-preview="//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg"',
-				'#DEFAULT_VIDEO_STYLE#' => 'style="background-image:url(//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg)"',
-				'#DEFAULT_VIDEO_SRC_2#' => 'data-src="//www.youtube.com/embed/IISycTRZ-UA?autoplay=0&controls=1&loop=1&mute=0&rel=0"',
-				'#DEFAULT_VIDEO_SOURCE_2#' => 'data-source="https://www.youtube.com/watch?v=IISycTRZ-UA"',
-				'#DEFAULT_VIDEO_PREVIEW_2#' => 'data-preview="//img.youtube.com/vi/q4d8g9Dn3ww/sddefault.jpg"',
-				'#DEFAULT_VIDEO_STYLE_2#' => 'style="background-image:url(//img.youtube.com/vi/IISycTRZ-UA/sddefault.jpg)"',
-			];
-
-		return str_replace(array_keys($replace), array_values($replace), $content);
 	}
 
 	/**
@@ -2310,6 +2256,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 					$classes[$path] = $afterClasses[$i];
 				}
 			}
+
+			$declared = isset($classes[$path]) ? null : self::findBlockClassOfFile($path);
+			if ($declared !== null)
+			{
+				$classes[$path] = $declared;
+			}
 		}
 
 		$landingId = $this->getLandingId();
@@ -2327,6 +2279,38 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		return $calledClasses[$landingPath];
+	}
+
+	/**
+	 * Returns the class of a block declared by a file which was included before, or null when the
+	 * file declares none: include_once tells nothing about a file already included under another
+	 * spelling of the same path, so the class is looked up by the file it was declared in.
+	 * @param string $path Path of block class.
+	 * @return string|null
+	 */
+	private static function findBlockClassOfFile(string $path): ?string
+	{
+		$realPath = realpath($path);
+		if ($realPath === false)
+		{
+			return null;
+		}
+
+		foreach (get_declared_classes() as $class)
+		{
+			if (!is_subclass_of($class, LandingBlock::class))
+			{
+				continue;
+			}
+
+			$file = (new \ReflectionClass($class))->getFileName();
+			if ($file !== false && realpath($file) === $realPath)
+			{
+				return $class;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -2553,11 +2537,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				}
 				if (mb_strpos($this->content, '2x)') !== false)
 				{
-					$this->content = preg_replace(
+					$cleanedContent = preg_replace(
 						"#(, url\('[^'^\"]+'\) 2x)#",
 						'',
 						$this->content,
 					);
+					$this->content = Sanitizer::publishableContent($this->content, $cleanedContent ?? $this->content);
 				}
 			}
 		}
@@ -2576,9 +2561,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				}
 				else
 				{
-					$anchor = $this->anchor
-						? \htmlspecialcharsbx($this->anchor)
-						: $this->getAnchor($this->id);
+					$anchor = $this->anchor ?: $this->getAnchor($this->id);
 				}
 			}
 			else
@@ -2595,7 +2578,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			{
 				$content .= "<a id=\"editor{$this->getId()}\"></a>";
 			}
-			$content .= '<div id="' . $anchor . '" '
+			$content .= '<div id="' . \htmlspecialcharsbx($anchor) . '" '
 							. ($edit ? 'data-id="' . $this->id . '" ' : '')
 							. (($edit && isset($manifest['block']['subtype'])) ? 'data-subtype="' . $manifest['block']['subtype'] . '" ' : '')
 							. 'class="block-wrapper'
@@ -2615,12 +2598,10 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		// replace in requisite page, marker to company title
 		if (mb_strpos($this->content, '#requisiteCompanyTitle') !== false)
 		{
-			$replace = Connector\Crm::getReplaceRequisiteCompanyNameForContent($landing->getXmlId());
-			$content = str_replace(
-				array_keys($replace),
-				array_values($replace),
-				$content,
-			);
+			// the title is put into the ready output of the block, below
+			$requisiteReplace = Connector\Crm::getReplaceRequisiteCompanyNameForContent($landing->getXmlId());
+			$requisiteBufferLevel = ob_get_level();
+			ob_start();
 		}
 
 		if ($edit)
@@ -2695,28 +2676,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 			else
 			{
-				try
-				{
-					eval('?>' . $content . '<?');
-				}
-				catch (\ParseError $e)
-				{
-					$errMessage = $this::getMessageBlock([
-						'MESSAGE' => Loc::getMessage('LANDING_BLOCK_MESSAGE_ERROR_EVAL'),
-						'MESSAGE_TYPE' => 'alert',
-					]);
-					if ($params['wrapper_show'])
-					{
-						echo '<div id="' . $anchor . '" data-id="' . $this->id . '" class="block-wrapper'
-							 	. (!$this->active ? ' landing-block-deactive' : '') . '">'
-							 		. $errMessage
-							 . '</div>';
-					}
-					else
-					{
-						echo $errMessage;
-					}
-				}
+				$this->outContent($content, true, $params['wrapper_show'], $anchor ?? null, $classBlock ?? null);
 			}
 		}
 		elseif ($this->active || $params['force_unactive'])
@@ -2771,11 +2731,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 			if (!empty($sysPages))
 			{
-				$content = preg_replace(
-					array_keys($sysPages),
-					array_values($sysPages),
-					$content,
-				);
+				$content = Security\SyspageUrl::substitute($content, $sysPages);
 			}
 
 			$event = new \Bitrix\Main\Event('landing', 'onBlockPublicView', [
@@ -2794,16 +2750,133 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 			else
 			{
-				try
-				{
-					eval('?>' . $content . '<?');
-				}
-				catch (\ParseError $e)
-				{
-				}
+				$this->outContent(
+					$content,
+					false,
+					$params['wrapper_show'],
+					$anchor ?? null,
+					$classBlock ?? null,
+					$sysPages,
+				);
 			}
 		}
+		if (isset($requisiteBufferLevel))
+		{
+			Security\ContentMarkers::flushBuffer($requisiteBufferLevel, $requisiteReplace);
+		}
 		Assets\PreProcessing::blockViewProcessing($this, $edit);
+	}
+
+	/**
+	 * Out the content of the block by the grammar of the block contract: php beyond the grammar is
+	 * never executed, the block is replaced by a message or is not printed at all.
+	 * @param string $content Content of the block, wrapper included.
+	 * @param bool $edit Out block in edit mode.
+	 * @param bool $wrapperShow Print the message inside the wrapper of the block.
+	 * @param string|null $anchor Anchor of the wrapper.
+	 * @param LandingBlock|null $classBlock Class of the block.
+	 * @param array $sysPages System page markers of the current site, the same map the public branch of
+	 *    view() replaces in the raw content, handed to the renderer for a value ={$classBlock->get()}
+	 *    resolves at render time - after that replace of the raw content already ran.
+	 * @return void
+	 */
+	private function outContent(
+		string $content,
+		bool $edit,
+		bool $wrapperShow,
+		?string $anchor,
+		?LandingBlock $classBlock,
+		array $sysPages = [],
+	): void
+	{
+		$manifest = $this->getManifestInternal();
+		$renderer = new ContentRenderer(
+			$classBlock,
+			$edit,
+			(array)($manifest['nodes'] ?? []),
+			$sysPages,
+			(array)($manifest['envelopes'] ?? []),
+		);
+		$renderer->analyze($content);
+		if ($renderer->canRender())
+		{
+			$renderer->render();
+
+			return;
+		}
+
+		if ($this->isCodeInUpdateQueue())
+		{
+			$this->outMessageBlock(
+				(string)Loc::getMessage('LANDING_BLOCK_MESSAGE_UPDATING'),
+				'status',
+				$wrapperShow,
+				$anchor,
+			);
+
+			return;
+		}
+
+		if ($edit)
+		{
+			$this->outMessageBlock(
+				(string)Loc::getMessage('LANDING_BLOCK_MESSAGE_ERROR_PHP_UNSUPPORTED'),
+				'alert',
+				$wrapperShow,
+				$anchor,
+			);
+		}
+	}
+
+	/**
+	 * Out the message instead of the block.
+	 * @param string $message Message text.
+	 * @param string $type Message type of the component.
+	 * @param bool $wrapperShow Print the message inside the wrapper of the block.
+	 * @param string|null $anchor Anchor of the wrapper.
+	 * @return void
+	 */
+	private function outMessageBlock(string $message, string $type, bool $wrapperShow, ?string $anchor): void
+	{
+		$messageBlock = $this::getMessageBlock([
+			'MESSAGE' => $message,
+			'MESSAGE_TYPE' => $type,
+		]);
+
+		if ($wrapperShow && $anchor !== null)
+		{
+			echo '<div id="' . \htmlspecialcharsbx($anchor) . '" data-id="' . (int)$this->id . '" class="block-wrapper'
+					. (!$this->active ? ' landing-block-deactive' : '') . '">'
+						. $messageBlock
+				. '</div>';
+		}
+		else
+		{
+			echo $messageBlock;
+		}
+	}
+
+	/**
+	 * Checks if the code of the block waits for the update stepper.
+	 * @return bool
+	 */
+	private function isCodeInUpdateQueue(): bool
+	{
+		if (self::$updateQueueCodes === null)
+		{
+			self::$updateQueueCodes = [];
+			$res = UpdateBlock::getList([
+				'select' => [
+					'CODE',
+				],
+			]);
+			while ($row = $res->fetch())
+			{
+				self::$updateQueueCodes[$row['CODE']] = true;
+			}
+		}
+
+		return isset(self::$updateQueueCodes[$this->code]);
 	}
 
 	/**
@@ -4978,19 +5051,14 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 			$breadcrumb = ob_get_contents();
 			ob_end_clean();
-			$content = str_replace(
-				'#breadcrumb#',
-				$breadcrumb,
-				$content,
-			);
+			$content = Security\ContentMarkers::replace($content, ['#breadcrumb#' => $breadcrumb]);
 		}
 
 		if (mb_strpos($content, '#title#') !== false)
 		{
-			$content = str_replace(
-				'#title#',
-				Loc::getMessage('LANDING_BLOCK_TITLE'),
+			$content = Security\ContentMarkers::replace(
 				$content,
+				['#title#' => Loc::getMessage('LANDING_BLOCK_TITLE')],
 			);
 		}
 
@@ -5095,6 +5163,29 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		return $search ? implode(' ', $search) : '';
+	}
+
+	/**
+	 * Exports the block as if the given content were its own; the content of the block itself and its
+	 * dom stay what they were.
+	 * @param string $content Content to export from.
+	 * @param array $params Params of export().
+	 * @return array
+	 */
+	public function exportContent(string $content, array $params = []): array
+	{
+		$own = $this->content;
+		$this->content = $content;
+		$this->getDom(true);
+		try
+		{
+			return $this->export($params);
+		}
+		finally
+		{
+			$this->content = $own;
+			$this->getDom(true);
+		}
 	}
 
 	/**

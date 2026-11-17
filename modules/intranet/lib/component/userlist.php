@@ -443,7 +443,10 @@ class UserList extends \CBitrixComponent implements Controllerable, Errorable
 				else
 				{
 					$ex = $APPLICATION->getException();
-					$error = $ex->getString();
+					$error = $ex
+						? $ex->getString()
+						: Loc::getMessage('INTRANET_USER_LIST_DELETE_FAILED')
+					;
 				}
 				$this->addError(new Error($error));
 

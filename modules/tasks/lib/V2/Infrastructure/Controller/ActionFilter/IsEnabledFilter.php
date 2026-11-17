@@ -17,6 +17,7 @@ class IsEnabledFilter extends Base
 {
 	protected const ENABLED_ACTIONS = [
 		Infrastructure\Controller\Task::class => ['add', 'get', 'list'],
+		Infrastructure\Controller\Task\State::class => ['getDefaultDeadline', 'setDefaultDeadlineValue'],
 		Infrastructure\Rest\Controller\Task::class => ['get', 'list'],
 		Infrastructure\Controller\CheckList::class => ['save'],
 		Infrastructure\Controller\Group::class => ['get'],

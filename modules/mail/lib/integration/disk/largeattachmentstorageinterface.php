@@ -66,3 +66,4 @@ interface LargeAttachmentStorageInterface
 	 */
 	public function deleteUploaded(int $userId, string $token): Result;
 }
+

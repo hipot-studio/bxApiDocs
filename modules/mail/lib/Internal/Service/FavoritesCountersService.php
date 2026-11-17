@@ -64,7 +64,7 @@ class FavoritesCountersService
 			$query->whereNotIn('UID.DIR_MD5', $excludedDirs);
 		}
 
-		$this->limitToActiveGeneration($query, $mailboxIds, 'UID.');
+		QueryBuilder::addGenerationScope($query, $mailboxIds, 'UID.');
 
 		$row = $query->fetch();
 
@@ -91,7 +91,7 @@ class FavoritesCountersService
 				->where('IS_TRASH', MailboxDirectoryTable::ACTIVE))
 		;
 
-		$this->limitToActiveGeneration($query, $mailboxIds);
+		QueryBuilder::addGenerationScope($query, $mailboxIds);
 
 		$hashes = array_filter(
 			array_map('strval', array_column($query->fetchAll(), 'DIR_MD5')),
@@ -119,24 +119,9 @@ class FavoritesCountersService
 			$query->whereNotIn('DIR_MD5', $excludedDirs);
 		}
 
-		$this->limitToActiveGeneration($query, $mailboxIds);
+		QueryBuilder::addGenerationScope($query, $mailboxIds);
 
 		return $query;
-	}
-
-	/**
-	 * The counter counts what the user sees, and the user is served by the active source generation of
-	 * every mailbox of the scope. The ready form is asked for the whole set at once: it reads the
-	 * pointers by one query and leaves a mailbox without generations untouched.
-	 *
-	 * @param int[] $mailboxIds
-	 */
-	private function limitToActiveGeneration(Query $query, array $mailboxIds, string $fieldPrefix = ''): void
-	{
-		foreach (QueryBuilder::generationScopeFilter($mailboxIds, $fieldPrefix) as $key => $condition)
-		{
-			$query->addFilter(is_int($key) ? null : $key, $condition);
-		}
 	}
 
 	/**

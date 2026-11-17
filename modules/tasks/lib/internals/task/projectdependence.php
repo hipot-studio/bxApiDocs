@@ -39,6 +39,7 @@ final class ProjectDependenceTable extends Mesh
 	public const LINK_TYPE_START_FINISH = 0x01;
 	public const LINK_TYPE_FINISH_START = 0x02;
 	public const LINK_TYPE_FINISH_FINISH = 0x03;
+	private const DIRECT_LINKS_TASK_ID_CHUNK_SIZE = 300;
 
 	public static function getTableName(): string
 	{
@@ -231,6 +232,29 @@ final class ProjectDependenceTable extends Mesh
 		$parameters['filter']['=DIRECT'] = '1';
 
 		return self::getList($parameters);
+	}
+
+	public static function getDirectLinksByTaskIds(array $taskIds): \Generator
+	{
+		$taskIds = array_values(array_unique(array_filter(
+			array_map('intval', $taskIds),
+			static fn(int $taskId): bool => $taskId > 0,
+		)));
+
+		foreach (array_chunk($taskIds, self::DIRECT_LINKS_TASK_ID_CHUNK_SIZE) as $taskIdChunk)
+		{
+			$links = self::query()
+				->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE', 'CREATOR_ID', 'DIRECT', 'MPCITY'])
+				->whereIn('TASK_ID', $taskIdChunk)
+				->where('DIRECT', 1)
+				->exec()
+			;
+
+			while ($link = $links->fetch())
+			{
+				yield $link;
+			}
+		}
 	}
 
 	public static function getMap(): array

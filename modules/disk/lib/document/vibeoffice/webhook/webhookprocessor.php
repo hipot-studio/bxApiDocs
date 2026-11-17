@@ -29,7 +29,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Diag\LoggerFactory;
+use Bitrix\Disk\Document\Vibeoffice\Logging\LoggerProvider;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
@@ -118,6 +118,9 @@ final class WebhookProcessor
 	private Closure $savedSideEffectsHandler;
 	private SessionRegistry $registry;
 	private WebhookScopeResolver $scopeResolver;
+	private array $deliveryObservation = ['result' => null, 'outcome' => null];
+	private ?int $activeDeliveryId = null;
+	private ?string $activeEvent = null;
 	private readonly SavedDocumentWriterInterface $savedDocumentWriter;
 	private readonly bool $legacyUploaderInjected;
 
@@ -160,8 +163,16 @@ final class WebhookProcessor
 		);
 	}
 
+	public function getDeliveryObservation(): array
+	{
+		return $this->deliveryObservation;
+	}
+
 	public function process(int $deliveryId, string $event, array $payload): Result
 	{
+		$this->deliveryObservation = ['result' => null, 'outcome' => null];
+		$this->activeDeliveryId = $deliveryId > 0 ? $deliveryId : null;
+		$this->activeEvent = $event;
 		$result = $this->dispatch($deliveryId, $event, $payload);
 		if ($result->isSuccess())
 		{
@@ -228,6 +239,10 @@ final class WebhookProcessor
 				'PROCESSED_TIME' => new DateTime(),
 			]);
 
+			if ($updated->isSuccess())
+			{
+				$this->deliveryObservation = ['result' => 'refused', 'outcome' => DeliveryTable::OUTCOME_REFUSED];
+			}
 			return $updated->isSuccess() ? new Result() : null;
 		}
 		finally
@@ -255,6 +270,13 @@ final class WebhookProcessor
 		}
 
 		$outcome = $delivery['OUTCOME'] ?? null;
+		if ($this->deliveryObservation['result'] === null
+			&& in_array($outcome, [
+				DeliveryTable::OUTCOME_APPLIED, DeliveryTable::OUTCOME_REFUSED, DeliveryTable::OUTCOME_IGNORED,
+			], true))
+		{
+			$this->deliveryObservation = ['result' => $outcome, 'outcome' => $outcome];
+		}
 		$ack = ['deliveryId' => $deliveryId, 'outcome' => $outcome];
 		if ($outcome === DeliveryTable::OUTCOME_APPLIED
 			&& (int)$delivery['RESULT_OBJECT_ID'] > 0
@@ -303,12 +325,17 @@ final class WebhookProcessor
 			if ($delivery && $delivery['STATUS'] === DeliveryTable::STATUS_DONE
 				&& ($event !== self::EVENT_SAVED || $delivery['HOST_DOC_KEY'] === null || (int)$delivery['RESULT_OBJECT_ID'] <= 0))
 			{
+				$this->deliveryObservation = [
+					'result' => 'duplicate',
+					'outcome' => $this->knownDeliveryOutcome($delivery['OUTCOME'] ?? null),
+				];
 				return new Result();
 			}
 
 			if (!in_array($event, [self::EVENT_SAVED, self::EVENT_FAILOVER, self::EVENT_SESSION_CLOSED], true))
 			{
 				$this->handleUnsupportedEvent($event);
+				$this->deliveryObservation = ['result' => 'ignored', 'outcome' => DeliveryTable::OUTCOME_IGNORED];
 
 				return $this->markDeliveryProcessed($deliveryId, $event, $this->extractExternalHash($payload));
 			}
@@ -346,6 +373,15 @@ final class WebhookProcessor
 				if (($delivery['SNAPSHOT_SEQ'] === null ? null : (int)$delivery['SNAPSHOT_SEQ']) !== $policy['snapshotSeq'])
 				{
 					return (new Result())->addError(new Error('Delivery snapshot changed.', 'validation'));
+				}
+				// DONE can precede the notification checkpoint. A retry that completes
+				// those side effects is applied work, not a duplicate delivery.
+				if ((int)$delivery['NOTIFIED'] === 1)
+				{
+					$this->deliveryObservation = [
+						'result' => 'duplicate',
+						'outcome' => $this->knownDeliveryOutcome($delivery['OUTCOME'] ?? null),
+					];
 				}
 
 				return $this->completeSavedDelivery((int)$delivery['ID'], $policy);
@@ -421,7 +457,7 @@ final class WebhookProcessor
 		}
 		catch (Throwable $exception)
 		{
-			$this->logDeliveryException($exception, $event, $deliveryId);
+			$this->logDeliveryException($exception);
 
 			return (new Result())->addError(new Error('Could not process the Vibeoffice delivery.', 'vibeoffice_delivery_failed'));
 		}
@@ -457,6 +493,13 @@ final class WebhookProcessor
 	 * already reached PENDING and then took another branch on a retry - has to be updated, never
 	 * inserted a second time.
 	 */
+	private function knownDeliveryOutcome(mixed $outcome): ?string
+	{
+		return in_array($outcome, [
+			DeliveryTable::OUTCOME_APPLIED, DeliveryTable::OUTCOME_REFUSED, DeliveryTable::OUTCOME_IGNORED,
+		], true) ? $outcome : null;
+	}
+
 	private function markDeliveryProcessed(int $deliveryId, string $event, ?string $externalHash, array $extra = []): Result
 	{
 		$existing = $this->getDelivery($deliveryId);
@@ -465,13 +508,24 @@ final class WebhookProcessor
 			$extra['ID'] = (int)$existing['ID'];
 		}
 
-		return $this->writeDelivery($extra + [
+		$result = $this->writeDelivery($extra + [
 			'DELIVERY_ID' => $deliveryId,
 			'EXTERNAL_HASH' => $externalHash,
 			'EVENT' => $event,
 			'STATUS' => DeliveryTable::STATUS_DONE,
 			'PROCESSED_TIME' => new DateTime(),
 		]);
+		if ($result->isSuccess() && ($extra['STATUS'] ?? DeliveryTable::STATUS_DONE) === DeliveryTable::STATUS_DONE
+			&& $this->deliveryObservation['result'] === null)
+		{
+			$outcome = $this->knownDeliveryOutcome($extra['OUTCOME'] ?? $existing['OUTCOME'] ?? null);
+			$this->deliveryObservation = [
+				'result' => $outcome ?? 'applied',
+				'outcome' => $outcome ?? DeliveryTable::OUTCOME_APPLIED,
+			];
+		}
+
+		return $result;
 	}
 
 	private function writeDelivery(array $fields): Result
@@ -492,7 +546,11 @@ final class WebhookProcessor
 		{
 			return (new Result())->addError(new Error('Saved document scope is unknown.', $reason));
 		}
-		$this->acknowledgePermanent("Vibeoffice webhook: {$reason}; event={$event}; delivery={$deliveryId}.");
+		$this->acknowledgePermanent(
+			"Vibeoffice webhook: {$reason}; event={$event}; delivery={$deliveryId}.",
+			'ignored',
+		);
+		$this->deliveryObservation = ['result' => 'ignored', 'outcome' => DeliveryTable::OUTCOME_IGNORED];
 
 		return $this->markDeliveryProcessed($deliveryId, $event, null, ['HOST_DOC_KEY' => $key]);
 	}
@@ -1119,7 +1177,8 @@ final class WebhookProcessor
 			// row) and log instead of a non-2xx that triggers an endless retry storm. Mirrors
 			// self::handleUnsupportedEvent(). Transient failures (download) stay retryable below.
 			return $this->acknowledgePermanent(
-				"Vibeoffice webhook: no local session for document.saved key '{$externalHash}', acknowledging."
+				"Vibeoffice webhook: no local session for document.saved key '{$externalHash}', acknowledging.",
+				'session_missing',
 			)->setData(['savedContentApplied' => false]);
 		}
 
@@ -1129,7 +1188,8 @@ final class WebhookProcessor
 			// Permanent not-found: the session's file was removed. Acknowledge + log; a
 			// retry would fail identically forever.
 			return $this->acknowledgePermanent(
-				"Vibeoffice webhook: no file for document.saved session (key '{$externalHash}'), acknowledging."
+				"Vibeoffice webhook: no file for document.saved session (key '{$externalHash}'), acknowledging.",
+				'file_missing',
 			)->setData(['savedContentApplied' => false]);
 		}
 
@@ -1162,7 +1222,8 @@ final class WebhookProcessor
 		{
 			return $this->acknowledgePermanent(
 				"Vibeoffice webhook: downloaded document ({$fileSize} bytes) exceeds the max file size"
-				. " ({$maxFileSize} bytes) for key '{$externalHash}'; skipping upload."
+				. " ({$maxFileSize} bytes) for key '{$externalHash}'; skipping upload.",
+				'file_too_large',
 			)->setData(['savedContentApplied' => false]);
 		}
 
@@ -1432,9 +1493,10 @@ final class WebhookProcessor
 	 * non-2xx here would only cause an endless retry storm and log spam. Mirrors
 	 * {@see self::handleUnsupportedEvent()}.
 	 */
-	private function acknowledgePermanent(string $message): Result
+	private function acknowledgePermanent(string $_message, string $code = 'permanent_refusal'): Result
 	{
-		AddMessage2Log($message, 'disk');
+		$this->deliveryObservation = ['result' => 'refused', 'outcome' => null];
+		$this->logWebhookDiagnostic('acknowledge', $code);
 
 		return new Result();
 	}
@@ -1524,7 +1586,8 @@ final class WebhookProcessor
 
 		return $this
 			->acknowledgePermanent(
-				"Vibeoffice webhook: the new version for key '{$externalHash}' was refused ({$reason})."
+				"Vibeoffice webhook: the new version for key '{$externalHash}' was refused ({$reason}).",
+				'save_refused',
 			)
 			->setData([
 				self::RESULT_KEY_LEDGER_EVENT => self::EVENT_SAVE_REFUSED,
@@ -1553,17 +1616,24 @@ final class WebhookProcessor
 	 * trace of a deadlock, a lock timeout or a CFile failure. The record names the event, the
 	 * delivery and the exception, and carries neither payload nor session hash.
 	 */
-	private function logDeliveryException(Throwable $exception, string $event, int $deliveryId): void
+	private function logDeliveryException(Throwable $exception): void
 	{
-		(new LoggerFactory())
-			->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false)
-			?->error('Vibeoffice webhook: event={event}, deliveryId={deliveryId}, {exception}: {message}.', [
-				'event' => $event,
-				'deliveryId' => $deliveryId,
-				'exception' => $exception::class,
-				'message' => $exception->getMessage(),
-			])
-		;
+		$this->logWebhookDiagnostic('dispatch', 'delivery_exception', $exception);
+	}
+
+	private function logWebhookDiagnostic(string $operation, string $code, ?Throwable $exception = null): void
+	{
+		LoggerProvider::get(self::LOGGER_ID)->log(
+			$exception === null ? 'warning' : 'error',
+			'vibeoffice webhook diagnostic',
+			[
+				'operation' => $operation,
+				'code' => $code,
+				'exception_class' => $exception !== null ? $exception::class : null,
+				'delivery_id' => $this->activeDeliveryId,
+				'event' => $this->activeEvent,
+			],
+		);
 	}
 
 	/**
@@ -1610,7 +1680,7 @@ final class WebhookProcessor
 	 */
 	private function handleUnsupportedEvent(string $event): Result
 	{
-		AddMessage2Log("Vibeoffice webhook: acknowledging unsupported event '{$event}'.", 'disk');
+		$this->logWebhookDiagnostic('unsupported', 'unsupported_event');
 
 		return new Result();
 	}

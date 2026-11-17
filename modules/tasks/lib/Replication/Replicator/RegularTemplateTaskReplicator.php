@@ -2,9 +2,12 @@
 
 namespace Bitrix\Tasks\Replication\Replicator;
 
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Feature\RegularTaskTypesFeature;
+use Bitrix\Tasks\Integration\IM\Notification\UseCase\Regularity\RegularTaskReplicationFailed;
 use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
@@ -15,6 +18,7 @@ use Bitrix\Tasks\Replication\AbstractReplicator;
 use Bitrix\Tasks\Replication\ReplicationResult;
 use Bitrix\Tasks\Replication\Repository\TemplateRepository;
 use Bitrix\Tasks\Replication\RepositoryInterface;
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\Replication\Template\Repetition\RegularTemplateTaskProducer;
 use Bitrix\Tasks\Replication\Template\Repetition\RegularTemplateTaskRepeater;
 use Bitrix\Tasks\Replication\Template\Repetition\RegularTemplateTaskReplicationChecker;
@@ -64,6 +68,12 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 
 	public function startReplication(int $templateId): void
 	{
+		// after_completion has no recurrent agent (event-driven); nothing to arm here.
+		if (!$this->isRecurrentAgentSupported($templateId))
+		{
+			return;
+		}
+
 		$this->onBeforeReplicate();
 		try
 		{
@@ -83,6 +93,14 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 	public function startReplicationAndUpdateTemplate(int $templateId, array $replicateParameters): void
 	{
 		$this->lazyInit($templateId);
+
+		// after_completion is event-driven: skip the whole recurrent scheduling (NEXT_EXECUTION_TIME,
+		// history, agent) — also for the recalc / restorer paths that reach the replicator this way.
+		if (!$this->isRecurrentAgentSupported($templateId))
+		{
+			return;
+		}
+
 		$this->onBeforeReplicate();
 		try
 		{
@@ -198,10 +216,38 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 			return $this->replicationResult;
 		}
 
-		$this->currentResults[] = $this->producer->produceTask();
+		$produceResult = $this->producer->produceTask();
+		$this->currentResults[] = $produceResult;
+
+		if (!$produceResult->isSuccess())
+		{
+			$this->notifyReplicationFailed();
+		}
+
 		$this->currentResults[] = $this->repeater->repeatTask();
 
 		return $this->replicationResult->merge(...$this->currentResults)->writeToLog();
+	}
+
+	private function notifyReplicationFailed(): void
+	{
+		// Flag off ≡ today: schedule ran before the feature, so the notification is new behavior — only under the flag.
+		if (!Feature::isEnabled(RegularTaskTypesFeature::class))
+		{
+			return;
+		}
+
+		$template = $this->getRepository()->getEntity();
+		if ($template === null)
+		{
+			return;
+		}
+
+		(new RegularTaskReplicationFailed())->send(
+			(int)$template->getCreatedBy(),
+			(int)$template->getId(),
+			(string)$template->getTitle(),
+		);
 	}
 
 	protected function liftLogCleanerAgent(): void
@@ -255,6 +301,14 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 
 	protected function addAgent(int $templateId, string $nextTime): void
 	{
+		// after_completion is event-driven: the recurrent agent must not be armed here — nor via
+		// RecalculateAgentService / RegularTemplateAgentRestorer, which also flow through addAgent().
+		// Placing the gate in the replicator (not only the controller) keeps every arming path consistent.
+		if (!$this->isRecurrentAgentSupported($templateId))
+		{
+			return;
+		}
+
 		CAgent::AddAgent(
 			static::getAgentName($templateId),
 			'tasks',
@@ -265,5 +319,22 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 			$nextTime,
 			static::AGENT_SORT
 		);
+	}
+
+	private function isRecurrentAgentSupported(int $templateId): bool
+	{
+		// Flag off ≡ today: every regular template runs on the recurrent agent (schedule).
+		if (!Feature::isEnabled(RegularTaskTypesFeature::class))
+		{
+			return true;
+		}
+
+		$template = TemplateRepository::getInstance($templateId)->getEntity();
+		if ($template === null)
+		{
+			return true;
+		}
+
+		return RegularityType::fromValue($template->getReplicateType()) !== RegularityType::AfterCompletion;
 	}
 }

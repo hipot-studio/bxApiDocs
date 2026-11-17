@@ -1941,6 +1941,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		];
 	}
 
+	/**
+	 * The rows of the grid and of the search open Markdown on a page of its own; the trashcan keeps the
+	 * viewer, as a deleted file has no page to open.
+	 */
 	private function buildItemAttributes(File $file, Uri $sourceUri, array $possibleFileData = [])
 	{
 		if (isset($possibleFileData['ID'], $possibleFileData['CONTENT_TYPE']))
@@ -1949,11 +1953,13 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 			return FileAttributes::buildByFileData($possibleFileData, $sourceUri)
 				->setObjectId($file->getId())
+				->setMarkdownTabAllowed(!$this->isTrashMode())
 			;
 		}
 
 		return FileAttributes::tryBuildByFileId($file->getFileId(), $sourceUri, $file)
 			->setObjectId($file->getId())
+			->setMarkdownTabAllowed(!$this->isTrashMode())
 		;
 	}
 

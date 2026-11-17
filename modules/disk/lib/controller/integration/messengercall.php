@@ -32,10 +32,14 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Response;
 use Bitrix\Main\Web\Uri;
 
 final class MessengerCall extends Engine\Controller
 {
+	/** @var Vibeoffice[] */
+	private array $forwardedVibeofficeControllers = [];
+
 	public function configureActions()
 	{
 		return [
@@ -58,6 +62,31 @@ final class MessengerCall extends Engine\Controller
 			],
 			'selectTemplate' => ['-prefilters' => [Csrf::class]],
 		];
+	}
+
+	public function forward($controller, string $actionName, ?array $parameters = null)
+	{
+		if ($controller === Vibeoffice::class)
+		{
+			$controller = new Vibeoffice();
+		}
+		if ($controller instanceof Vibeoffice)
+		{
+			$this->forwardedVibeofficeControllers[spl_object_id($controller)] = $controller;
+		}
+
+		return parent::forward($controller, $actionName, $parameters);
+	}
+
+	public function finalizeResponse(Response $response)
+	{
+		parent::finalizeResponse($response);
+		$controllers = $this->forwardedVibeofficeControllers;
+		$this->forwardedVibeofficeControllers = [];
+		foreach ($controllers as $controller)
+		{
+			$controller->finalizeResponse($response);
+		}
 	}
 
 	public function getAutoWiredParameters()

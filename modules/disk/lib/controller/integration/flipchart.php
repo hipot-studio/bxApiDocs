@@ -20,6 +20,7 @@ use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Integration\Collab\CollabDocumentCreationService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
@@ -29,9 +30,9 @@ use Bitrix\Disk\Type\JwtHolder;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\OldBoardUrlToUnifiedRedirect;
 use Bitrix\Disk\User;
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Disk\Controller\Integration\Filter\JwtFilter;
 use Bitrix\Disk\Internals\Engine\Controller;
@@ -219,6 +220,8 @@ final class Flipchart extends Controller implements JwtHolder
 		}
 
 		$boardService = new BoardService($session);
+		// The session found may belong to a guest while a registered user edits under the same hash.
+		$findAuthorId = static fn(): ?int => $manager->findEditingParticipantId((int)$userId);
 
 		/*
 		 * - WAS_MODIFIED
@@ -261,7 +264,7 @@ final class Flipchart extends Controller implements JwtHolder
 					&& $this->isSaveByChanceNeeded($session)
 				)
 				{
-					$saveRefusal = $this->saveBoard($boardService, $isNewBoard, $cElement);
+					$saveRefusal = $this->saveBoard($boardService, $isNewBoard, $cElement, $findAuthorId());
 				}
 
 				break;
@@ -269,7 +272,7 @@ final class Flipchart extends Controller implements JwtHolder
 			case WebhookEventType::UserLeft->value:
 				$boardWasLeftToViewing = !$editAllowed;
 				$saveRefusal = $editAllowed
-					? $this->saveBoard($boardService, $isNewBoard, $cElement)
+					? $this->saveBoard($boardService, $isNewBoard, $cElement, $findAuthorId())
 					: $this->refusalOfABoardLeftToViewing($session)
 				;
 
@@ -297,7 +300,7 @@ final class Flipchart extends Controller implements JwtHolder
 				{
 					$boardWasLeftToViewing = !$editAllowed;
 					$saveRefusal = $editAllowed
-						? $this->saveBoard($boardService, $isNewBoard, $cElement)
+						? $this->saveBoard($boardService, $isNewBoard, $cElement, $findAuthorId())
 						: $this->refusalOfABoardLeftToViewing($session)
 					;
 
@@ -330,9 +333,14 @@ final class Flipchart extends Controller implements JwtHolder
 	 * deferred by {@see BoardService::saveDocument()} to its own retry and keeps the flow it had,
 	 * analytics included. A refusal ends the analytics of a save that never happened.
 	 */
-	private function saveBoard(BoardService $boardService, mixed $isNewBoard, mixed $cElement): ?Main\Error
+	private function saveBoard(
+		BoardService $boardService,
+		mixed $isNewBoard,
+		mixed $cElement,
+		?int $authorId = null,
+	): ?Main\Error
 	{
-		$saveResult = $boardService->saveDocument($isNewBoard);
+		$saveResult = $boardService->saveDocument($isNewBoard, authorId: $authorId);
 		if ($saveResult instanceof Main\Error)
 		{
 			return $saveResult;
@@ -676,12 +684,47 @@ final class Flipchart extends Controller implements JwtHolder
 		return $this->viewDocumentAction($session, $currentUser, $file);
 	}
 
-	public function createDocumentAction(CurrentUser $currentUser): ?array
+	public function createDocumentAction(CurrentUser $currentUser, ?int $collabId = null): ?array
 	{
-		$userStorage = Driver::getInstance()->getStorageByUserId((int)$currentUser->getId());
-		$folder = $userStorage->getFolderForCreatedFiles();
+		$userId = (int)$currentUser->getId();
+		$user = User::loadById($userId);
 
-		$res = BoardService::createNewDocument(User::loadById($currentUser->getId()), $folder);
+		// TODO: remove if (false) when frontend sends $collabId
+		if (false)
+		{
+			$isCollaber = $user?->isCollaber() ?? false;
+			if ($isCollaber && (int)$collabId < 1)
+			{
+				$this->addError(new Error('No collab ID for collab user'));
+				return null;
+			}
+		}
+
+		if ((int)$collabId > 0)
+		{
+			$collabDocumentCreationService = ServiceLocator::getInstance()->get(CollabDocumentCreationService::class);
+
+			$folder = $collabDocumentCreationService->getCreatedFilesFolderByCollabId($collabId, $userId);
+			if ($folder === null)
+			{
+				$this->addError(new Error('There is no such collab, or the user is not a collab member'));
+				return null;
+			}
+
+			$storage = $folder->getStorage();
+			if ($storage === null || !$folder->canAdd($storage->getSecurityContext($userId)))
+			{
+				$this->addError(new Error('Bad rights. Could not add file to the folder.'));
+				return null;
+			}
+		}
+		else
+		{
+			$userStorage = Driver::getInstance()->getStorageByUserId($userId);
+			$folder = $userStorage->getFolderForCreatedFiles();
+		}
+
+		$res = BoardService::createNewDocument($user, $folder);
 
 		$st = $this->request->getQuery('st');
 		$cElement = null;

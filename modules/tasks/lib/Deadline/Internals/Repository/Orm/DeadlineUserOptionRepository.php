@@ -82,4 +82,25 @@ class DeadlineUserOptionRepository implements DeadlineUserOptionRepositoryInterf
 
 		DeadlineUserOptionTable::merge($insertFields, $updateFields, $uniqueFields);
 	}
+
+	public function saveDefaultDeadlineValue(
+		int $userId,
+		int $defaultDeadlineInSeconds,
+		bool $isExactDeadlineTime,
+	): DeadlineUserOption
+	{
+		$insertFields = [
+			'USER_ID' => $userId,
+			'DEFAULT_DEADLINE' => $defaultDeadlineInSeconds,
+			'IS_EXACT_DEADLINE_TIME' => $isExactDeadlineTime,
+		];
+		$updateFields = [
+			'DEFAULT_DEADLINE' => $defaultDeadlineInSeconds,
+			'IS_EXACT_DEADLINE_TIME' => $isExactDeadlineTime,
+		];
+
+		DeadlineUserOptionTable::merge($insertFields, $updateFields, ['USER_ID']);
+
+		return $this->getByUserId($userId);
+	}
 }

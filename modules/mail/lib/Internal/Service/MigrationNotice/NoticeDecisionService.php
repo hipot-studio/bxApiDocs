@@ -4,40 +4,22 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Internal\Service\MigrationNotice;
 
+use Bitrix\Mail\Access\Model\UserModel;
 use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
-use Bitrix\Mail\Helper\Mailbox\ProviderAccessRestriction;
 use Bitrix\Mail\Integration\MailService\MigrationStatusProvider;
-use Bitrix\Mail\MailboxTable;
-use Bitrix\Mail\MailServicesTable;
 use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 use Bitrix\Main\Data\Storage\StorageInterface;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Security\Sign\Signer;
 
 Loc::loadMessages(__FILE__);
 
-/**
- * The only place where the features of a person and of their mailboxes add up to one decision:
- * which message to show on this surface, about which mailbox, with which buttons and texts.
- *
- * The priority and the displacement rules are ALG-01 and live here alone. Nothing of them reaches
- * the clients, and nothing of them is duplicated in the entry points of the module. One rule joins
- * them outside ALG-01: where no migration message is due about a mailbox whose mail stopped
- * arriving, the decision carries the offer that goes next to the red alert of that mailbox
- * ({@see self::offerOrNothing()}).
- *
- * None of the features is computed here: the problem state of a mailbox comes from the state
- * service of the module, the transfer status from the public provider, and the mailboxes from the
- * ownership selection - each read for the whole set at once. The states of what a person has
- * already seen belong to {@see NoticeStateStorage} and are never read or written past it; the only
- * thing the service keeps on its own is the short-lived mark of a fullscreen message of the sitting.
- *
- * The decision is not cached: it depends on states a person changes by hand.
- */
+/** Selects the settings consent panel or the general announcement. */
 class NoticeDecisionService
 {
 	public const ERROR_INVALID_TOKEN = 'invalid_reaction_token';
@@ -45,8 +27,6 @@ class NoticeDecisionService
 
 	/** API-02. What a person can answer a message with, as it travels between the clients and here. */
 	public const REACTION_SHOWN = 'shown';
-	public const REACTION_REMIND_LATER = 'remind_later';
-	public const REACTION_DISMISSED = 'dismissed';
 
 	private const TOKEN_VERSION = 1;
 	private const TOKEN_SALT = 'mail.migration_notice.reaction';
@@ -63,26 +43,32 @@ class NoticeDecisionService
 
 	/** The switch of the mailbox to the new source is done; the import of the history may go on. */
 	private const TRANSFERRED_STATUS = 'done';
+	private const MAILSERVICE_MODULE_ID = 'mailservice';
 
 	/** The connection form of the Mail section, as the rest of the module addresses it. */
 	private const MAILBOX_CONNECT_URL = '/mail/config/';
 
 	private const BUTTON_PHRASES = [
 		NoticeDecision::TRANSFER_MAIL => 'MAIL_MIGRATION_NOTICE_BTN_TRANSFER',
-		NoticeDecision::REMIND_LATER => 'MAIL_MIGRATION_NOTICE_BTN_REMIND',
 		NoticeDecision::DETAILS => 'MAIL_MIGRATION_NOTICE_BTN_DETAILS',
 		NoticeDecision::CREATE_COMPANY_MAIL => 'MAIL_MIGRATION_NOTICE_BTN_CREATE',
 		NoticeDecision::CONNECT_EXTERNAL => 'MAIL_MIGRATION_NOTICE_BTN_CONNECT_EXTERNAL',
-		NoticeDecision::CONNECT_B24_MAIL => 'MAIL_MIGRATION_NOTICE_BTN_CONNECT_B24',
 	];
+
+	private readonly MigrationEntryToken $migrationTokens;
+	private readonly NoticeMailboxCandidates $mailboxCandidates;
 
 	public function __construct(
 		private readonly NoticeStateStorage $states = new NoticeStateStorage(),
 		private readonly MigrationStatusProvider $migrationStatuses = new MigrationStatusProvider(),
 		private readonly Signer $signer = new Signer(),
 		private ?StorageInterface $storage = null,
+		?MigrationEntryToken $migrationTokens = null,
+		?NoticeMailboxCandidates $mailboxCandidates = null,
 	)
 	{
+		$this->migrationTokens = $migrationTokens ?? new MigrationEntryToken();
+		$this->mailboxCandidates = $mailboxCandidates ?? new NoticeMailboxCandidates();
 	}
 
 	/**
@@ -95,6 +81,14 @@ class NoticeDecisionService
 		if ($userId <= 0 || !$this->isAvailable())
 		{
 			return NoticeDecision::none();
+		}
+
+		if ($surface === NoticeSurface::MailboxSettings)
+		{
+			return $this->isAdmin($userId)
+				? $this->decideForMailboxSettings($userId, $surface, $mailboxId)
+				: NoticeDecision::none()
+			;
 		}
 
 		if ($this->isAnnouncementAvailable() && !$this->states->wasAnnouncementShown($userId))
@@ -113,8 +107,8 @@ class NoticeDecisionService
 				The one announcement of a lifetime is spent on the person who saw it and not on the
 				request that fetched it: between handing it out and drawing it lie a lazy extension, a
 				queue of the portal banners and, in the application, a neighbouring request that may
-				fail for both. The client reports the showing, exactly as it does for the migration
-				popup, and until it does the announcement stays owed (AC-002, ERR-001).
+				fail for both. The client reports the showing, and until it does the announcement
+				stays owed (AC-002, ERR-001).
 
 				The mark of the sitting is what keeps that from becoming two announcements at once: the
 				application asks on its way into mail and mounts the list right after, and the first
@@ -132,35 +126,7 @@ class NoticeDecisionService
 			return $this->build(NoticeCode::Announcement, $userId, $surface, null);
 		}
 
-		if (!$surface->carriesMigrationMessages())
-		{
-			return NoticeDecision::none();
-		}
-
-		if ($this->wasFullscreenIssued($userId))
-		{
-			return NoticeDecision::none();
-		}
-
-		$selection = $this->selectMailboxes($userId, $mailboxId);
-
-		/*
-			The state of the display belongs to a mailbox and not to the person, so a mailbox that has
-			nothing left to say hands the turn on instead of silencing the rest (ERR-002). The order of
-			the candidates is the priority itself - the broken ones stand in front - and the first
-			mailbox with a message due takes it: two migration messages are never shown at once.
-		*/
-		$states = $this->states->getMailboxStates(array_column($selection['candidates'], 'id'));
-		foreach ($selection['candidates'] as $candidate)
-		{
-			$decision = $this->decideForMailbox($candidate, $states[$candidate['id']], $userId, $surface);
-			if ($decision !== null)
-			{
-				return $decision;
-			}
-		}
-
-		return $this->offerOrNothing($selection['brokenMailboxId'], $userId, $surface);
+		return NoticeDecision::none();
 	}
 
 	/**
@@ -186,31 +152,20 @@ class NoticeDecisionService
 			return false;
 		}
 
+		if ($surface === NoticeSurface::MailboxSettings)
+		{
+			return $this->isAdmin($userId);
+		}
+
 		if ($this->isAnnouncementAvailable() && !$this->states->wasAnnouncementShown($userId))
 		{
 			return $surface->carriesAnnouncement();
 		}
 
-		return $surface->carriesMigrationMessages();
+		return false;
 	}
 
-	/**
-	 * API-02. What the person did with the message, written down by the states that message has.
-	 *
-	 * Which reaction spends which message is a rule of the display like the order of ALG-01 itself,
-	 * and lives here for the same reason: the entry point that takes a reaction knows the shape of the
-	 * request and is meant to know nothing else.
-	 *
-	 * Drawing the migration popup is not the person answering it. The banner takes its place once the
-	 * popup is closed and not before (AC-024, and the precondition of SC-004), so the report of the
-	 * showing writes nothing about a mailbox: somebody who left for the helpdesk article the popup
-	 * links to is in the middle of that showing and not past it, and the article is neither a decision
-	 * nor a refusal. The announcement is the other way round - it belongs to the person, is due once
-	 * for a lifetime, and the showing is the only reaction it has (AC-002).
-	 *
-	 * A reaction a message carries no button for writes nothing, and the same reaction twice leaves
-	 * the same value behind.
-	 */
+	/** Records the shown reaction of the general announcement. */
 	public function recordReaction(int $userId, NoticeCode $code, ?int $mailboxId, string $reaction): void
 	{
 		if ($code === NoticeCode::Announcement)
@@ -219,107 +174,7 @@ class NoticeDecisionService
 			{
 				$this->states->markAnnouncementShown($userId);
 			}
-
-			return;
 		}
-
-		// Every other message is about a mailbox
-		if ($mailboxId === null)
-		{
-			return;
-		}
-
-		if ($code === NoticeCode::Banner)
-		{
-			if ($reaction === self::REACTION_DISMISSED)
-			{
-				$this->states->markBannerDismissed($mailboxId);
-			}
-
-			return;
-		}
-
-		if ($code !== NoticeCode::MigrationVariantA && $code !== NoticeCode::MigrationVariantB)
-		{
-			return;
-		}
-
-		if ($reaction === self::REACTION_REMIND_LATER)
-		{
-			// Only the variant A offers to postpone: a mailbox that fell off leaves nothing to postpone
-			if ($code === NoticeCode::MigrationVariantA)
-			{
-				$this->states->remindLater($mailboxId);
-			}
-
-			return;
-		}
-
-		if ($reaction === self::REACTION_DISMISSED)
-		{
-			$this->states->markPopupShown($mailboxId, $code->value);
-		}
-	}
-
-	/**
-	 * ALG-01 for one mailbox: which migration message its state has left, or `null` when it has none
-	 * and the turn goes to the mailbox behind it.
-	 *
-	 * @param array{id: int, isProblem: bool} $target
-	 * @param array{popupShown: string|null, remindUntil: int|null, bannerDismissed: bool} $state
-	 */
-	private function decideForMailbox(
-		array $target,
-		array $state,
-		int $userId,
-		NoticeSurface $surface,
-	): ?NoticeDecision
-	{
-		/*
-			A mailbox that fell off after the variant A was shown is a new state and not a repeat of a
-			message a person has already dealt with, so the variant B follows even when the banner was
-			closed: the banner itself never comes back, the popup of the variant B does.
-		*/
-		$brokenAfterVariantA = $target['isProblem']
-			&& $state['popupShown'] === NoticeCode::MigrationVariantA->value
-		;
-
-		if ($state['bannerDismissed'])
-		{
-			return $brokenAfterVariantA
-				? $this->build(NoticeCode::MigrationVariantB, $userId, $surface, $target['id'])
-				: null
-			;
-		}
-
-		/*
-			A postponed popup outranks the mark that it has been through, and the order of these two
-			checks is what makes "remind later" mean anything: it moves the very popup a person is
-			looking at to another day, and a mark left by an earlier showing would put the banner in
-			its place instead (AC-011, AC-024). A mailbox that fell off meanwhile is postponed by
-			nothing - the variant B follows at once.
-		*/
-		if ($state['remindUntil'] !== null && $state['remindUntil'] > time() && !$target['isProblem'])
-		{
-			return null;
-		}
-
-		if ($state['popupShown'] !== null)
-		{
-			return $this->build(
-				$brokenAfterVariantA ? NoticeCode::MigrationVariantB : NoticeCode::Banner,
-				$userId,
-				$surface,
-				$target['id'],
-			);
-		}
-
-		return $this->build(
-			$target['isProblem'] ? NoticeCode::MigrationVariantB : NoticeCode::MigrationVariantA,
-			$userId,
-			$surface,
-			$target['id'],
-		);
 	}
 
 	/**
@@ -358,9 +213,10 @@ class NoticeDecisionService
 			(int)$version !== self::TOKEN_VERSION
 			|| (int)$tokenUserId !== $userId
 			|| $userId <= 0
-			|| $noticeCode === null
-			|| $noticeCode === NoticeCode::None
+			|| $noticeCode !== NoticeCode::Announcement
 			|| $noticeSurface === null
+			|| !$noticeSurface->carriesAnnouncement()
+			|| (int)$mailboxId !== 0
 		)
 		{
 			return $this->invalidTokenResult();
@@ -380,10 +236,172 @@ class NoticeDecisionService
 		]);
 	}
 
+	/**
+	 * @return Result Data: actor, mailboxId, domain, surface, code, textVersion.
+	 */
+	public function verifyMigrationToken(string $token, int $userId): Result
+	{
+		if (!$this->isAvailable())
+		{
+			return (new Result())->addError(
+				new Error('Migration entry is unavailable.', MigrationEntryToken::ERROR_INVALID),
+			);
+		}
+
+		if (!$this->isAdmin($userId))
+		{
+			return (new Result())->addError(
+				new Error('Migration entry is forbidden.', MigrationEntryToken::ERROR_INVALID),
+			);
+		}
+
+		$verified = $this->migrationTokens->verify($token, $userId);
+		if (!$verified->isSuccess())
+		{
+			return $verified;
+		}
+
+		$data = $verified->getData();
+		$domain = $this->resolveMailboxDomain((int)$data['mailboxId']);
+		if (!$domain->isSuccess())
+		{
+			return (new Result())->addError(
+				new Error('Mailbox domain is unavailable.', MigrationEntryToken::ERROR_INVALID),
+			);
+		}
+
+		$domainData = $domain->getData();
+		if (
+			($domainData['eligible'] ?? false) !== true
+			|| (int)($domainData['mailboxId'] ?? 0) !== (int)$data['mailboxId']
+			|| (string)($domainData['domain'] ?? '') !== (string)$data['domain']
+		)
+		{
+			return (new Result())->addError(
+				new Error('Mailbox domain has changed.', MigrationEntryToken::ERROR_INVALID),
+			);
+		}
+
+		foreach ($this->getMailboxSettingsCandidatePages([(int)$data['mailboxId'] => true]) as $mailboxes)
+		{
+			$selection = $this->selectFromMailboxes($mailboxes, $this->getProblemMailboxIds($userId));
+			if (in_array((int)$data['mailboxId'], array_column($selection['candidates'], 'id'), true))
+			{
+				return $verified;
+			}
+		}
+
+		return (new Result())->addError(
+			new Error('Mailbox is no longer eligible.', MigrationEntryToken::ERROR_INVALID),
+		);
+	}
+
+	/**
+	 * The domains the consent panel stands for: every domain of a mailbox of the portal it is shown for -
+	 * a domain of a public mail service and a mailbox already switched are not - that has no consent yet. One press of the
+	 * panel gives the consent for all of them, so that it is not pressed again for every domain.
+	 *
+	 * @return list<string> Empty when the domains or the consents cannot be read.
+	 */
+	public function getDomainsAwaitingConsent(): array
+	{
+		$domains = [];
+		foreach ($this->getMailboxSettingsCandidatePages() as $mailboxes)
+		{
+			$candidates = $this->selectFromMailboxes($mailboxes, [])['candidates'];
+			if ($candidates === [])
+			{
+				continue;
+			}
+
+			$resolved = $this->resolveMailboxDomains(array_column($candidates, 'id'));
+			if (!$resolved->isSuccess())
+			{
+				return [];
+			}
+
+			foreach (($resolved->getData()['mailboxes'] ?? []) as $data)
+			{
+				$domain = is_array($data) ? (string)($data['domain'] ?? '') : '';
+				if (
+					($data['eligible'] ?? false) === true
+					&& $domain !== ''
+					&& !ConsentExcludedDomains::isExcludedDomain($domain)
+				)
+				{
+					$domains[$domain] = $domain;
+				}
+			}
+		}
+
+		if ($domains === [])
+		{
+			return [];
+		}
+
+		$read = $this->getGrantedMigrationDomains(array_values($domains));
+		$granted = $read->isSuccess() ? ($read->getData()['domains'] ?? null) : null;
+		if (!is_array($granted))
+		{
+			return [];
+		}
+
+		return array_values(array_diff_key($domains, $granted));
+	}
+
 	/** The switch of the feature, owned by the configuration helper of the module. */
 	protected function isAvailable(): bool
 	{
 		return Feature::isMigrationNoticeAvailable();
+	}
+
+	protected function isAdmin(int $userId): bool
+	{
+		return $userId > 0 && UserModel::createFromId($userId)->isAdmin();
+	}
+
+	protected function resolveMailboxDomain(int $mailboxId): Result
+	{
+		if (
+			!Loader::includeModule(self::MAILSERVICE_MODULE_ID)
+			|| !class_exists(\Bitrix\MailService\Public\Provider\MailboxDomainProvider::class)
+		)
+		{
+			return (new Result())->addError(new Error('Mailbox domain provider is unavailable.'));
+		}
+
+		return (new \Bitrix\MailService\Public\Provider\MailboxDomainProvider())->resolve($mailboxId);
+	}
+
+	/** @param list<int> $mailboxIds */
+	protected function resolveMailboxDomains(array $mailboxIds): Result
+	{
+		if (
+			!Loader::includeModule(self::MAILSERVICE_MODULE_ID)
+			|| !class_exists(\Bitrix\MailService\Public\Provider\MailboxDomainProvider::class)
+			|| !method_exists(\Bitrix\MailService\Public\Provider\MailboxDomainProvider::class, 'resolveMany')
+		)
+		{
+			return (new Result())->addError(new Error('Mailbox domain provider is unavailable.'));
+		}
+
+		return (new \Bitrix\MailService\Public\Provider\MailboxDomainProvider())->resolveMany($mailboxIds);
+	}
+
+	/** @param list<string> $canonicalDomains */
+	protected function getGrantedMigrationDomains(array $canonicalDomains): Result
+	{
+		if (
+			!Loader::includeModule(self::MAILSERVICE_MODULE_ID)
+			|| !class_exists(\Bitrix\MailService\Public\Provider\MigrationConsentStatusProvider::class)
+		)
+		{
+			return (new Result())->addError(new Error('Migration consent status provider is unavailable.'));
+		}
+
+		return (new \Bitrix\MailService\Public\Provider\MigrationConsentStatusProvider())
+			->grantedDomains($canonicalDomains)
+		;
 	}
 
 	/**
@@ -421,41 +439,6 @@ class NoticeDecisionService
 	protected function getMailboxConnectUrl(): string
 	{
 		return self::MAILBOX_CONNECT_URL;
-	}
-
-	/**
-	 * Mailboxes the person owns. A mailbox shared with them never takes part: a migration message is
-	 * addressed to the owner, and the owner of a mailbox is one.
-	 *
-	 * @return array<int, array{id: int, serviceName: string, email: string}>
-	 */
-	protected function getOwnedMailboxes(int $userId): array
-	{
-		$rows = MailboxTable::getTheOwnersMailboxes($userId);
-		if ($rows === [])
-		{
-			return [];
-		}
-
-		$serviceNames = $this->getServiceNames($rows);
-
-		$mailboxes = [];
-		foreach ($rows as $row)
-		{
-			$mailboxId = (int)($row['ID'] ?? 0);
-			if ($mailboxId <= 0)
-			{
-				continue;
-			}
-
-			$mailboxes[] = [
-				'id' => $mailboxId,
-				'serviceName' => $serviceNames[(int)($row['SERVICE_ID'] ?? 0)] ?? '',
-				'email' => (string)($row['EMAIL'] ?? ''),
-			];
-		}
-
-		return $mailboxes;
 	}
 
 	/**
@@ -508,52 +491,14 @@ class NoticeDecisionService
 	}
 
 	/**
-	 * The mailboxes the decision may be about, chosen in one pass over the same features.
-	 *
-	 * `candidates` are the mailboxes a migration message may be due about, in the order they are
-	 * asked: the broken ones first, because the state "fell off" displaces the state "still works"
-	 * (AC-022). It is an order and not a single answer, because every mailbox carries a state of the
-	 * display of its own and the message due about it dies with that state alone (ERR-002). Which of
-	 * them has anything left to say is read afterwards, one by one, and the first that has takes the
-	 * message - two migration messages are never shown at once.
-	 *
-	 * `brokenMailboxId` is the mailbox of the offer that goes next to the red alert - there the
-	 * provider is not looked at all (AC-029), only the fact that the mail stopped arriving.
-	 *
-	 * Two conditions take a mailbox out of both answers. A mailbox already switched to the new source
-	 * is gone from them, because its mail arrives again and there is nothing left to move (ERR-005):
-	 * the criterion is the switch itself, not the finished import of the history. A mailbox that is no
-	 * longer a problem one is gone from `brokenMailboxId` the moment the synchronization recovers, so
-	 * the offer leaves together with the alert it was added to (AC-032).
-	 *
-	 * The two features are read in the order of what they cost. The provider of a mailbox and the fact
-	 * that its mail stopped arriving are answered without a query of their own - one from the address,
-	 * the other from the state the module keeps warm for the whole set - and a mailbox that neither
-	 * names is in no answer of this method whatever its transfer says. The transfer is the query, so it
-	 * is asked last and only about the mailboxes still standing: a working mailbox of an ordinary
-	 * provider is due neither a message nor an offer, and nothing about it is worth a row.
-	 *
-	 * @return array{candidates: array<int, array{id: int, isProblem: bool}>, brokenMailboxId: int|null}
+	 * @param array<int, array{id: int, serviceName: string, email: string}> $mailboxes
+	 * @param array<int, true> $problem
+	 * @return array{candidates: array<int, array{id: int, isProblem: bool}>}
 	 */
-	private function selectMailboxes(int $userId, ?int $mailboxId): array
+	private function selectFromMailboxes(array $mailboxes, array $problem): array
 	{
-		$nothing = ['candidates' => [], 'brokenMailboxId' => null];
-
-		$mailboxes = $this->getOwnedMailboxes($userId);
-		if ($mailboxId !== null)
-		{
-			$mailboxes = array_values(array_filter(
-				$mailboxes,
-				static fn (array $mailbox): bool => $mailbox['id'] === $mailboxId,
-			));
-		}
-
-		if ($mailboxes === [])
-		{
-			return $nothing;
-		}
-
-		$considered = $this->considerByProviderAndProblem($mailboxes, $this->getProblemMailboxIds($userId));
+		$nothing = ['candidates' => []];
+		$considered = $this->considerByAddressAndProblem($mailboxes, $problem);
 		if ($considered === [])
 		{
 			return $nothing;
@@ -563,20 +508,9 @@ class NoticeDecisionService
 
 		$broken = [];
 		$working = [];
-		$firstProblemMailboxId = null;
 		foreach ($considered as $mailbox)
 		{
 			if (isset($transferred[$mailbox['id']]))
-			{
-				continue;
-			}
-
-			if ($firstProblemMailboxId === null && $mailbox['isProblem'])
-			{
-				$firstProblemMailboxId = $mailbox['id'];
-			}
-
-			if (!$mailbox['isRestricted'])
 			{
 				continue;
 			}
@@ -593,98 +527,209 @@ class NoticeDecisionService
 
 		return [
 			'candidates' => array_merge($broken, $working),
-			'brokenMailboxId' => $broken === [] ? $firstProblemMailboxId : $broken[0]['id'],
 		];
 	}
 
-	/**
-	 * The mailboxes either answer of {@see self::selectMailboxes()} could still be about, in the order
-	 * they were given: a company domain at one of the two providers may be due a migration message, a
-	 * mailbox whose mail stopped arriving may be due the offer, and a mailbox that is neither is due
-	 * nothing at all.
-	 *
-	 * @param array<int, array{id: int, serviceName: string, email: string}> $mailboxes
-	 * @param array<int, true> $problem
-	 * @return array<int, array{id: int, isProblem: bool, isRestricted: bool}>
-	 */
-	private function considerByProviderAndProblem(array $mailboxes, array $problem): array
+	private function decideForMailboxSettings(
+		int $userId,
+		NoticeSurface $surface,
+		?int $mailboxId,
+	): NoticeDecision
 	{
-		$considered = [];
+		$problem = $this->getProblemMailboxIds($userId);
+		if ($mailboxId !== null)
+		{
+			foreach ($this->getMailboxSettingsCandidatePages([$mailboxId => true]) as $mailboxes)
+			{
+				$selection = $this->selectFromMailboxes($mailboxes, $problem);
+				$ordered = $this->orderCandidatesAsMailboxes($selection['candidates'], $mailboxes);
+				$filtered = $this->withoutGrantedDomains($ordered);
+				if ($filtered === null || $filtered === [])
+				{
+					return NoticeDecision::none();
+				}
+
+				return $this->buildConsentPanel($userId, $surface, $filtered[0]['id']);
+			}
+
+			return NoticeDecision::none();
+		}
+
+		if ($problem !== [])
+		{
+			foreach ($this->getMailboxSettingsCandidatePages($problem) as $mailboxes)
+			{
+				$selection = $this->selectFromMailboxes($mailboxes, $problem);
+				$ordered = $this->orderCandidatesAsMailboxes($selection['candidates'], $mailboxes);
+				$filtered = $this->withoutGrantedDomains($ordered);
+				if ($filtered === null)
+				{
+					return NoticeDecision::none();
+				}
+				if ($filtered !== [])
+				{
+					return $this->buildConsentPanel($userId, $surface, $filtered[0]['id']);
+				}
+			}
+		}
+
+		foreach ($this->getMailboxSettingsCandidatePages() as $mailboxes)
+		{
+			if ($problem !== [])
+			{
+				$mailboxes = array_values(array_filter(
+					$mailboxes,
+					static fn (array $candidate): bool => !isset($problem[$candidate['id']]),
+				));
+			}
+			$selection = $this->selectFromMailboxes($mailboxes, $problem);
+			$ordered = $this->orderCandidatesAsMailboxes($selection['candidates'], $mailboxes);
+			$filtered = $this->withoutGrantedDomains($ordered);
+			if ($filtered === null)
+			{
+				return NoticeDecision::none();
+			}
+
+			foreach ($filtered as $candidate)
+			{
+				if (!$candidate['isProblem'])
+				{
+					return $this->buildConsentPanel($userId, $surface, $candidate['id']);
+				}
+			}
+		}
+
+		return NoticeDecision::none();
+	}
+
+	/**
+	 * @param array<int, array{id: int, isProblem: bool}> $candidates
+	 * @param array<int, array{id: int, serviceName: string, email: string}> $mailboxes
+	 * @return array<int, array{id: int, isProblem: bool}>
+	 */
+	private function orderCandidatesAsMailboxes(array $candidates, array $mailboxes): array
+	{
+		$byId = [];
+		foreach ($candidates as $candidate)
+		{
+			$byId[$candidate['id']] = $candidate;
+		}
+
+		$ordered = [];
 		foreach ($mailboxes as $mailbox)
 		{
-			$isProblem = isset($problem[$mailbox['id']]);
-			$isRestricted = ProviderAccessRestriction::isMigrationRestricted(
-				$mailbox['serviceName'],
-				$mailbox['email'],
-			);
-
-			if ($isProblem || $isRestricted)
+			if (isset($byId[$mailbox['id']]))
 			{
-				$considered[] = [
-					'id' => $mailbox['id'],
-					'isProblem' => $isProblem,
-					'isRestricted' => $isRestricted,
-				];
+				$ordered[] = $byId[$mailbox['id']];
 			}
 		}
 
-		return $considered;
+		return $ordered;
 	}
 
 	/**
-	 * What is left for a mailbox no migration message is due about: the offer to connect Bitrix24 Mail
-	 * next to the red alert, and only while the mail of that mailbox does not arrive.
-	 *
-	 * The migration message wins whenever both could be shown: it carries a way out, while this one
-	 * only offers a new address (ERR-008). The offer keeps no state of its own - it lasts exactly as
-	 * long as the mailbox is a problem one (NFR-001).
-	 *
-	 * Not every surface takes it ({@see NoticeSurface::carriesBrokenMailboxOffer()}), and a surface
-	 * that does not is answered with nothing rather than with a message carrying no buttons: this
-	 * offer is buttons and nothing else - the alert beside it is drawn by somebody else, with words of
-	 * its own - so a decision with none of them would be an order to show what does not exist.
+	 * @param array<int, array{id: int, isProblem: bool}> $candidates
+	 * @return array<int, array{id: int, isProblem: bool}>|null Null means the consent source is unavailable.
 	 */
-	private function offerOrNothing(?int $brokenMailboxId, int $userId, NoticeSurface $surface): NoticeDecision
+	private function withoutGrantedDomains(array $candidates): ?array
 	{
-		return $brokenMailboxId === null || !$surface->carriesBrokenMailboxOffer()
-			? NoticeDecision::none()
-			: $this->build(NoticeCode::BrokenMailboxOffer, $userId, $surface, $brokenMailboxId)
-		;
-	}
-
-	/**
-	 * @param array<int|string, array<string, mixed>> $rows
-	 * @return array<int, string> Service names by service identifier.
-	 */
-	private function getServiceNames(array $rows): array
-	{
-		$serviceIds = [];
-		foreach ($rows as $row)
-		{
-			$serviceId = (int)($row['SERVICE_ID'] ?? 0);
-			if ($serviceId > 0)
-			{
-				$serviceIds[$serviceId] = $serviceId;
-			}
-		}
-
-		if ($serviceIds === [])
+		if ($candidates === [])
 		{
 			return [];
 		}
 
-		$services = MailServicesTable::getList([
-			'select' => ['ID', 'NAME'],
-			'filter' => ['@ID' => array_values($serviceIds)],
-		])->fetchAll();
-
-		$names = [];
-		foreach ($services as $service)
+		$domainsByMailbox = [];
+		$domains = [];
+		$resolved = $this->resolveMailboxDomains(array_column($candidates, 'id'));
+		if (!$resolved->isSuccess())
 		{
-			$names[(int)$service['ID']] = (string)$service['NAME'];
+			return null;
 		}
 
-		return $names;
+		foreach (($resolved->getData()['mailboxes'] ?? []) as $mailboxId => $data)
+		{
+			if (!is_array($data))
+			{
+				continue;
+			}
+
+			$domain = (string)($data['domain'] ?? '');
+			if (
+				($data['eligible'] ?? false) !== true
+				|| $domain === ''
+				|| ConsentExcludedDomains::isExcludedDomain($domain)
+			)
+			{
+				continue;
+			}
+
+			$domainsByMailbox[(int)$mailboxId] = $domain;
+			$domains[$domain] = $domain;
+		}
+
+		if ($domains === [])
+		{
+			return [];
+		}
+
+		$read = $this->getGrantedMigrationDomains(array_values($domains));
+		if (!$read->isSuccess())
+		{
+			return null;
+		}
+
+		$granted = $read->getData()['domains'] ?? [];
+		if (!is_array($granted))
+		{
+			return null;
+		}
+
+		return array_values(array_filter(
+			$candidates,
+			static fn (array $candidate): bool => isset($domainsByMailbox[$candidate['id']])
+				&& !isset($granted[$domainsByMailbox[$candidate['id']]]),
+		));
+	}
+
+	private function buildConsentPanel(int $userId, NoticeSurface $surface, int $mailboxId): NoticeDecision
+	{
+		return $this->build(NoticeCode::MigrationVariantA, $userId, $surface, $mailboxId);
+	}
+
+	/**
+	 * @param array<int, true>|null $onlyIds
+	 * @return iterable<int, array<int, array{id: int, serviceName: string, email: string}>>
+	 */
+	protected function getMailboxSettingsCandidatePages(?array $onlyIds = null): iterable
+	{
+		return $this->mailboxCandidates->iterateForMailboxSettings($onlyIds);
+	}
+
+	/**
+	 * The provider of a mailbox is not asked: the panel is due to every mailbox the New mail can move.
+	 * A mailbox on a domain of a public mail service is the one it cannot move, so that mailbox stays out.
+	 *
+	 * @param array<int, array{id: int, serviceName: string, email: string}> $mailboxes
+	 * @param array<int, true> $problem
+	 * @return array<int, array{id: int, isProblem: bool}>
+	 */
+	private function considerByAddressAndProblem(array $mailboxes, array $problem): array
+	{
+		$considered = [];
+		foreach ($mailboxes as $mailbox)
+		{
+			if (ConsentExcludedDomains::isExcludedAddress($mailbox['email']))
+			{
+				continue;
+			}
+
+			$considered[] = [
+				'id' => $mailbox['id'],
+				'isProblem' => isset($problem[$mailbox['id']]),
+			];
+		}
+
+		return $considered;
 	}
 
 	private function build(
@@ -694,14 +739,45 @@ class NoticeDecisionService
 		?int $mailboxId,
 	): NoticeDecision
 	{
+		$migrationToken = '';
+		$buttons = $this->getButtons($code);
+		if (
+			$mailboxId !== null
+			&& $code === NoticeCode::MigrationVariantA
+		)
+		{
+			$domain = $this->resolveMailboxDomain($mailboxId);
+			$domainData = $domain->isSuccess() ? $domain->getData() : [];
+			if (($domainData['eligible'] ?? false) === true && (string)($domainData['domain'] ?? '') !== '')
+			{
+				$migrationToken = $this->migrationTokens->issue(
+					$userId,
+					$mailboxId,
+					(string)$domainData['domain'],
+					$surface,
+					$code,
+				);
+			}
+			else
+			{
+				$buttons = array_values(array_filter(
+					$buttons,
+					static fn (array $button): bool => $button['id'] !== NoticeDecision::TRANSFER_MAIL,
+				));
+			}
+		}
+
 		return new NoticeDecision(
 			code: $code,
 			mailboxId: $mailboxId,
 			title: $this->getTitle($code),
 			text: $this->getText($code),
-			buttons: $this->getButtons($code),
-			dismissHint: $this->getDismissHint($code),
-			reactionToken: $this->issueReactionToken($userId, $code, $surface, $mailboxId),
+			buttons: $buttons,
+			dismissHint: '',
+			reactionToken: $code === NoticeCode::Announcement
+				? $this->issueReactionToken($userId, $code, $surface, $mailboxId)
+				: '',
+			migrationToken: $migrationToken,
 		);
 	}
 
@@ -710,10 +786,7 @@ class NoticeDecisionService
 		return match ($code)
 		{
 			NoticeCode::Announcement => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_ANN_1_TITLE'),
-			NoticeCode::MigrationVariantA => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_MIG_A_TITLE'),
-			NoticeCode::MigrationVariantB => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_MIG_B_TITLE'),
-			NoticeCode::Banner => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_BAN_1_TITLE'),
-			NoticeCode::BrokenMailboxOffer => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_ERR_1_TITLE'),
+			NoticeCode::MigrationVariantA => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_MIG_A_TITLE_MSGVER_1'),
 			NoticeCode::None => '',
 		};
 	}
@@ -723,10 +796,7 @@ class NoticeDecisionService
 		return match ($code)
 		{
 			NoticeCode::Announcement => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_ANN_1_TEXT'),
-			NoticeCode::MigrationVariantA => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_MIG_A_TEXT'),
-			NoticeCode::MigrationVariantB => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_MIG_B_TEXT'),
-			NoticeCode::Banner => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_BAN_1_TEXT'),
-			NoticeCode::BrokenMailboxOffer => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_ERR_1_TEXT'),
+			NoticeCode::MigrationVariantA => (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_MIG_A_TEXT_MSGVER_1'),
 			NoticeCode::None => '',
 		};
 	}
@@ -747,17 +817,7 @@ class NoticeDecisionService
 		return $buttons;
 	}
 
-	/**
-	 * DTO-02. "Remind later" belongs to the variant A alone: a mailbox that no longer works leaves
-	 * nothing to postpone.
-	 *
-	 * ANN-1. The announcement offers the mail of the company first, on every surface. It is settled in
-	 * the control panel and nowhere else, and the application has no screen of its own for it - but it
-	 * has a way there, the same handover to a computer its other messages take, so the button is one
-	 * the application can see through as well.
-	 *
-	 * @return string[] Ordered as the clients render them.
-	 */
+	/** @return string[] Ordered as the clients render them. */
 	private function getButtonIds(NoticeCode $code): array
 	{
 		return match ($code)
@@ -768,15 +828,8 @@ class NoticeDecisionService
 			],
 			NoticeCode::MigrationVariantA => [
 				NoticeDecision::TRANSFER_MAIL,
-				NoticeDecision::REMIND_LATER,
 				NoticeDecision::DETAILS,
 			],
-			NoticeCode::MigrationVariantB => [
-				NoticeDecision::TRANSFER_MAIL,
-				NoticeDecision::DETAILS,
-			],
-			NoticeCode::Banner => [NoticeDecision::TRANSFER_MAIL],
-			NoticeCode::BrokenMailboxOffer => [NoticeDecision::CONNECT_B24_MAIL],
 			NoticeCode::None => [],
 		};
 	}
@@ -794,20 +847,9 @@ class NoticeDecisionService
 		return match ($buttonId)
 		{
 			NoticeDecision::TRANSFER_MAIL,
-			NoticeDecision::CREATE_COMPANY_MAIL,
-			NoticeDecision::CONNECT_B24_MAIL => $this->getControlPanelUrl(),
+			NoticeDecision::CREATE_COMPANY_MAIL => $this->getControlPanelUrl(),
 			NoticeDecision::DETAILS => $this->getHelpdeskUrl(),
 			NoticeDecision::CONNECT_EXTERNAL => $this->getMailboxConnectUrl(),
-			default => '',
-		};
-	}
-
-	private function getDismissHint(NoticeCode $code): string
-	{
-		return match ($code)
-		{
-			NoticeCode::MigrationVariantA, NoticeCode::MigrationVariantB
-				=> (string)Loc::getMessage('MAIL_MIGRATION_NOTICE_DISMISS_HINT'),
 			default => '',
 		};
 	}
@@ -855,10 +897,7 @@ class NoticeDecisionService
 		}
 	}
 
-	/**
-	 * A storage that is not there costs the sitting its mark, and the migration popup may follow the
-	 * announcement. That is the cheaper mistake: a page of the portal must render either way.
-	 */
+	/** A storage failure may repeat the announcement, but must not prevent the page from rendering. */
 	private function markFullscreenIssued(int $userId): void
 	{
 		try

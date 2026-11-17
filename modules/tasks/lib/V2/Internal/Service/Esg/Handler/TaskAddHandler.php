@@ -33,9 +33,14 @@ class TaskAddHandler
 		$result = $this->chatIntegration->addChatByTaskId($command->task->getId());
 
 		$chatId = $result->getId();
-		if (!$result->isSuccess() || $chatId <= 0)
+		if (!$result->isSuccess())
 		{
 			throw new RuntimeException('There was an error while saving task chat');
+		}
+
+		if ($chatId <= 0)
+		{
+			return $command->task;
 		}
 
 		$this->chatRepository->save($chatId, $command->task->getId());

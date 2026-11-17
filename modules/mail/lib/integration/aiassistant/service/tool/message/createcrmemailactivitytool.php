@@ -95,3 +95,4 @@ class CreateCrmEmailActivityTool extends ToolContract
 		];
 	}
 }
+

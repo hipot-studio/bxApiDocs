@@ -12,6 +12,9 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Preview\CrmItemsGridValueBuilder;
 
 Loc::loadLanguageFile(__FILE__);
 
@@ -70,6 +73,7 @@ class Task
 			return false;
 		}
 
+		// Keep CRM access aligned with the existing task preview user context.
 		$userId = static::getUser()?->getId() ?: Locator::getContext()->getUserId();
 
 		$task = new \CTaskItem($taskId, $userId);
@@ -89,6 +93,7 @@ class Task
 				'REAL_STATUS',
 				'DEADLINE',
 				'GROUP_ID',
+				UserField::TASK_CRM,
 			];
 			$taskData = $task->getData(false, ['select' => $select], false);
 		}
@@ -115,7 +120,7 @@ class Task
 			'LINK' => $taskData['LINK'],
 		]);
 		$attach->AddDelimiter();
-		$attach->AddGrid(static::getImAttachGrid($taskData));
+		$attach->AddGrid(static::getImAttachGrid($taskData, $userId));
 
 		return $attach;
 	}
@@ -186,11 +191,11 @@ class Task
 		return $richData;
 	}
 
-	protected static function getImAttachGrid(array $taskData): array
+	protected static function getImAttachGrid(array $taskData, int $userId): array
 	{
 		$grid = [];
 		$display = 'COLUMN';
-		$columnWidth = 120;
+		$columnWidth = 150;
 
 		if ($taskData['REAL_STATUS'] > 0)
 		{
@@ -258,7 +263,59 @@ class Task
 			}
 		}
 
+		$crmGridRow = static::getCrmGridRow($taskData, $userId, $display, $columnWidth);
+		if ($crmGridRow !== null)
+		{
+			$grid[] = $crmGridRow;
+		}
+
 		return $grid;
+	}
+
+	protected static function getCrmGridRow(
+		array $taskData,
+		int $userId,
+		string $display,
+		int $columnWidth,
+	): ?array
+	{
+		try
+		{
+			$moreLink = new Uri(
+				\CTaskNotifications::getNotificationPath(
+					['ID' => $taskData['RESPONSIBLE_ID']],
+					$taskData['ID'],
+				),
+			);
+			$moreLink->addParams([
+				'ta_sec' => Analytics::SECTION['chat'],
+				'ta_el' => Analytics::ELEMENT['task_link'],
+			]);
+
+			$value = Container::getInstance()
+				->get(CrmItemsGridValueBuilder::class)
+				->build(
+					is_array($taskData[UserField::TASK_CRM] ?? null) ? $taskData[UserField::TASK_CRM] : [],
+					$userId,
+					$moreLink->getUri(),
+				)
+			;
+			if ($value === '')
+			{
+				return null;
+			}
+
+			return [
+				'NAME' => Loc::getMessage('TASK_PREVIEW_FIELD_CRM') . ':',
+				'VALUE' => $value,
+				'DISPLAY' => $display,
+				'WIDTH' => $columnWidth,
+			];
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
 	}
 
 	protected static function formatDeadline(string $deadline): string
@@ -311,12 +368,7 @@ class Task
 			return '';
 		}
 
-		if (mb_strlen($description) > 100)
-		{
-			$description = mb_substr($description, 0, 100) . '...';
-		}
-
-		return $description;
+		return TextTruncator::truncate($description, 100);
 	}
 
 	protected static function getUser()

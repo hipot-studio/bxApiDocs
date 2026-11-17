@@ -31,8 +31,8 @@ class TaskItemFactory
 			->setTitle($task->title)
 			->setDeadline($deadline)
 			->setStatus($taskStatus)
-			->setCreatorId($task->creator->id)
-			->setResponsibleId($task->responsible->id)
+			->setCreatorId($task->getCreatorId() ?? 0)
+			->setResponsibleId($task->responsible?->id ?? 0)
 			->setMembersIds($task->getMemberIds())
 		;
 	}

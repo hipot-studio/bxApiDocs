@@ -266,9 +266,10 @@ abstract class BaseObject extends Base
 			return null;
 		}
 
-		return Driver::getInstance()->getUrlManager()->getPublicExternalLink(
-			object: $object,
-			hash: $extModel->getHash(),
+		return Driver::getInstance()->getUrlManager()->getCopyablePublicExternalLinkForConsumer(
+			$extModel,
+			Disk\UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+			$object,
 		);
 	}
 

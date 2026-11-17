@@ -8,8 +8,9 @@ use Attribute;
 use Bitrix\Main\Access\AccessibleController;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TemplateAccessController;
-use Bitrix\Tasks\V2\Internal\Access\Adapter\TemplateModelAdapter;
+use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
+use Bitrix\Tasks\V2\Internal\Access\ExistingEntityIdGuardTrait;
 use Bitrix\Tasks\V2\Internal\Access\Factory\AccessControllerTrait;
 use Bitrix\Tasks\V2\Internal\Access\Registry\TemplateAccessCacheLoader;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -17,13 +18,18 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
-class Update implements AttributeAccessInterface
+class Update implements AttributeAccessInterface, AccessUserErrorInterface
 {
 	use AccessControllerTrait;
+	use ExistingEntityIdGuardTrait;
 
 	public function check(Entity\EntityInterface|Entity\EntityCollectionInterface $entity, Context $context, array $parameters = []): bool
 	{
 		$accessController = TemplateAccessController::getInstance($context->getUserId());
+		if (!$this->guardExistingEntityId($entity))
+		{
+			return false;
+		}
 
 		if ($entity instanceof Entity\EntityInterface)
 		{

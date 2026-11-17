@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Landing\PublicAction;
 
+use \Bitrix\Landing\Connector\SocialNetwork;
 use \Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\File;
@@ -795,6 +796,20 @@ class Site
 
 		if ($res->fetch())
 		{
+			if (
+				!Rights::hasAccessForSite($id, Rights::ACCESS_TYPES['edit'])
+				&& !Rights::hasAccessForSite($id, Rights::ACCESS_TYPES['sett'])
+			)
+			{
+				$error->addError(
+					'ACCESS_DENIED',
+					Loc::getMessage('LANDING_TABLE_ERROR_ACCESS_DENIED')
+				);
+				$result->setError($error);
+
+				return $result;
+			}
+
 			$file = Manager::savePicture($picture, $ext, $params);
 			if ($file)
 			{
@@ -991,7 +1006,13 @@ class Site
 	{
 		$result = new PublicActionResult();
 		\Bitrix\Landing\Site\Type::setScope('GROUP');
-		$bindings = \Bitrix\Landing\Binding\Group::getList($groupId);
+		$bindings = array_filter(
+			\Bitrix\Landing\Binding\Group::getList($groupId),
+			static fn (array $binding): bool => Manager::isAdmin() || SocialNetwork::canPerformOperation(
+				(int)$binding['BINDING_ID'],
+				Rights::ACCESS_TYPES['read']
+			)
+		);
 		$result->setResult(self::removeEmptyBindings($bindings));
 		return $result;
 	}

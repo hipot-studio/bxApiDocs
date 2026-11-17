@@ -668,7 +668,14 @@ class ThemePicker
 
 	public function remove($themeId)
 	{
-		if ($this->getCustomTheme($themeId) === null)
+		$customThemes = $this->getCustomThemesOptions();
+		if (!is_string($themeId) || !isset($customThemes[$themeId]) || !is_array($customThemes[$themeId]))
+		{
+			return false;
+		}
+
+		$fileIds = $this->getRemovableImageIds($customThemes[$themeId]);
+		if ($fileIds === null)
 		{
 			return false;
 		}
@@ -681,7 +688,7 @@ class ThemePicker
 					'ENTITY_ID' => 0,
 					'=CONTEXT' => $this->getContext(),
 				],
-				'select' => [ 'ID' ],
+				'select' => ['ID'],
 				'cache' => static::getSelectCacheParams(),
 			]);
 			while($themeFields = $res->fetch())
@@ -695,15 +702,9 @@ class ThemePicker
 			}
 		}
 
-		$customThemes = $this->getCustomThemesOptions();
-		if (isset($customThemes[$themeId]['bgImage']))
+		foreach ($fileIds as $fileId)
 		{
-			\CFile::delete($customThemes[$themeId]['bgImage']);
-		}
-
-		if (isset($customThemes[$themeId]['bgImageBlurred']))
-		{
-			\CFile::delete($customThemes[$themeId]['bgImageBlurred']);
+			\CFile::delete($fileId);
 		}
 
 		$customThemes = $this->getCustomThemesOptions();
@@ -720,7 +721,7 @@ class ThemePicker
 					'ENTITY_ID' => $this->getEntityId(),
 					'=CONTEXT' => $this->getContext(),
 				],
-				'select' => [ 'ID' ],
+				'select' => ['ID'],
 				'cache' => static::getSelectCacheParams(),
 			]);
 			while($themeFields = $res->fetch())
@@ -730,6 +731,26 @@ class ThemePicker
 		}
 
 		return true;
+	}
+
+	protected function getRemovableImageIds(array $customTheme): ?array
+	{
+		$fileIds = [];
+		foreach (['bgImage', 'bgImageBlurred'] as $option)
+		{
+			$fileId = (int)($customTheme[$option] ?? 0);
+			if ($fileId <= 0)
+			{
+				continue;
+			}
+			if (!$this->validateBgImage($customTheme, $option))
+			{
+				return null;
+			}
+			$fileIds[] = $fileId;
+		}
+
+		return $fileIds;
 	}
 
 	public function getCustomThemes()

@@ -107,7 +107,7 @@ class OrmTaskMapper
 
 		if (isset($fields['CREATED_BY']))
 		{
-			$entityFields['creator'] = $this->castMember((int)$fields['CREATED_BY']);
+			$entityFields['creatorId'] = (int)$fields['CREATED_BY'];
 		}
 
 		if (isset($fields['STATUS_CHANGED_DATE']))
@@ -227,7 +227,7 @@ class OrmTaskMapper
 
 		if (isset($fields['CHANGED_BY']))
 		{
-			$entityFields['changedBy'] = ['id' => (int)$fields['CHANGED_BY']];
+			$entityFields['changedById'] = (int)$fields['CHANGED_BY'];
 		}
 
 		if (isset($fields['CLOSED_DATE']))
@@ -526,9 +526,10 @@ class OrmTaskMapper
 			$fields['END_DATE_PLAN'] = $task->endPlanTs;
 		}
 
-		if ($task->creator?->id)
+		$creatorId = $task->getCreatorId();
+		if ($creatorId !== null)
 		{
-			$fields['CREATED_BY'] = $task->creator->id;
+			$fields['CREATED_BY'] = $creatorId;
 		}
 
 		if ($task->statusChangedTs)
@@ -636,9 +637,10 @@ class OrmTaskMapper
 			$fields['CLOSED_BY'] = $task->closedBy->id;
 		}
 
-		if ($task->changedBy?->id)
+		$changedById = $task->getChangedById();
+		if ($changedById !== null)
 		{
-			$fields['CHANGED_BY'] = $task->changedBy->id;
+			$fields['CHANGED_BY'] = $changedById;
 		}
 
 		if ($task->closedTs)

@@ -10,7 +10,6 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Entity\User;
-use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFile;
 use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
@@ -108,32 +107,44 @@ class AttachmentService
 
 		if (empty($currentAttachmentIds))
 		{
-			return;
+			throw new \RuntimeException('Task attachment state has changed.');
 		}
 
+		$currentAttachmentIdsMap = array_fill_keys(array_map('intval', $currentAttachmentIds), true);
 		$fileIdsToRemove = [];
-		$currentAttachments = Container::getInstance()->getDiskFileRepository()->getByIds($currentAttachmentIds);
+		$attachmentIdsByObjectId = null;
 
 		foreach ($fileIds as $fileId)
 		{
 			[$type, $realValue] = FileUserType::detectType($fileId);
 			if ($type === FileUserType::TYPE_NEW_OBJECT)
 			{
-				/** @var DiskFile $attachment */
-				foreach ($currentAttachments as $attachment)
-				{
-					if ($attachment->customData['objectId'] === (int)$realValue)
-					{
-						$fileIdsToRemove[] = $attachment->id;
+				$attachmentIdsByObjectId ??= Container::getInstance()
+					->getDiskFileRepository()
+					->getUniqueAttachmentIdsByObjectIds($currentAttachmentIds)
+				;
 
-						break;
-					}
+				$attachmentId = $attachmentIdsByObjectId[(int)$realValue] ?? null;
+				if ($attachmentId === null)
+				{
+					throw new \RuntimeException('Task attachment state has changed.');
 				}
+
+				$fileIdsToRemove[] = $attachmentId;
+			}
+			elseif (isset($currentAttachmentIdsMap[(int)$realValue]))
+			{
+				$fileIdsToRemove[] = (int)$realValue;
 			}
 			else
 			{
-				$fileIdsToRemove[] = $fileId;
+				throw new \RuntimeException('Task attachment state has changed.');
 			}
+		}
+
+		if (count(array_unique($fileIdsToRemove)) !== count($fileIds))
+		{
+			throw new \RuntimeException('Task attachment state has changed.');
 		}
 
 		$new = array_diff($currentAttachmentIds, $fileIdsToRemove);

@@ -9,6 +9,9 @@
 
 class CDBResult extends CAllDBResult
 {
+	// Fixed OID of the built-in bytea type; pg_field_type() would make the extension read the whole pg_type catalog
+	private const BYTEA_OID = 17;
+
 	protected $byteaFields = false;
 
 	protected function FetchRow()
@@ -24,10 +27,9 @@ class CDBResult extends CAllDBResult
 					$fieldNum = 0;
 					foreach ($result as $fieldName => $_)
 					{
-						$fieldType = pg_field_type($this->result, $fieldNum);
-						if ($fieldType === 'bytea')
+						if ((int)pg_field_type_oid($this->result, $fieldNum) === self::BYTEA_OID)
 						{
-							$this->byteaFields[$fieldName] = $fieldType;
+							$this->byteaFields[$fieldName] = 'bytea';
 						}
 						$fieldNum++;
 					}

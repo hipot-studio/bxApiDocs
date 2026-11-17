@@ -151,3 +151,4 @@ class ReplyToEmailTool extends ToolContract
 		);
 	}
 }
+

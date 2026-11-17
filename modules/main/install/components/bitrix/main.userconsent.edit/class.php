@@ -67,6 +67,11 @@ class MainUserConsentEditComponent extends CBitrixComponent
 		$this->agreement->save();
 
 		$pathTo = str_replace('#id#', $this->agreement->getId(), $this->arParams['PATH_TO_EDIT']);
+		if ($this->isCrmWebFormContext())
+		{
+			$pathTo .= !str_contains($pathTo, '?') ? '?' : '&';
+			$pathTo .= 'crm_webform_consent=Y';
+		}
 		if ($this->arParams['IFRAME'])
 		{
 			$pathTo .= !str_contains($pathTo, '?') ? '?' : '&';
@@ -98,8 +103,13 @@ class MainUserConsentEditComponent extends CBitrixComponent
 
 	protected function prepareResult()
 	{
-		$this->arResult['IS_SAVED'] = ($this->request->get('IS_SAVED') == 'Y');
+		$this->arResult['IS_SAVED'] = !$this->request->isPost() && $this->request->get('IS_SAVED') === 'Y';
 		$this->arResult['AJAX_REQUEST'] = $this->request->isAjaxRequest();
+		$this->arResult['IS_AGREEMENT_CONTEXT'] = $this->isCrmWebFormContext();
+		if ($this->arResult['IS_AGREEMENT_CONTEXT'])
+		{
+			$this->arResult['AGREEMENT_NAME_LABEL'] = Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_NAME_AGREEMENT');
+		}
 		$this->arResult['ERRORS'] = array();
 		$this->agreement = new Agreement($this->arParams['ID']);
 
@@ -114,6 +124,7 @@ class MainUserConsentEditComponent extends CBitrixComponent
 		}
 
 		/* Set data */
+		$this->arResult['AGREEMENT_ID'] = (int)$this->agreement->getId();
 		$this->arResult['DATA'] = $this->agreement->getData();
 
 		/* Set data providers */
@@ -129,9 +140,9 @@ class MainUserConsentEditComponent extends CBitrixComponent
 			$GLOBALS['APPLICATION']->SetTitle(
 				$this->agreement->getId()
 				?
-				Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_TITLE_EDIT_1')
+				$this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_TITLE_EDIT_1')
 				:
-				Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_TITLE_ADD')
+				$this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_TITLE_ADD')
 			);
 		}
 
@@ -159,8 +170,8 @@ class MainUserConsentEditComponent extends CBitrixComponent
 					'INPUT_NAME' => 'AGREEMENT_TEXT',
 					'CODE' => 'AGREEMENT_TEXT',
 					'TYPE' => 'text',
-					'CAPTION' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_AGREEMENT_TEXT_1'),
-					'PLACEHOLDER' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_AGREEMENT_TEXT_HINT'),
+					'CAPTION' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_AGREEMENT_TEXT_1'),
+					'PLACEHOLDER' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_AGREEMENT_TEXT_HINT'),
 					'VALUE' => $data['AGREEMENT_TEXT'],
 					'TAB' => 'text',
 				],
@@ -168,7 +179,7 @@ class MainUserConsentEditComponent extends CBitrixComponent
 					'INPUT_NAME' => 'IS_AGREEMENT_TEXT_HTML',
 					'CODE' => 'IS_AGREEMENT_TEXT_HTML',
 					'TYPE' => 'checkbox',
-					'CAPTION' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_IS_AGREEMENT_TEXT_HTML_1'),
+					'CAPTION' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_IS_AGREEMENT_TEXT_HTML_1'),
 					'VALUE' => $data['IS_AGREEMENT_TEXT_HTML'],
 					'TAB' => 'text',
 				],
@@ -176,9 +187,9 @@ class MainUserConsentEditComponent extends CBitrixComponent
 					'INPUT_NAME' => 'LABEL_TEXT',
 					'CODE' => 'LABEL_TEXT',
 					'TYPE' => 'string',
-					'CAPTION' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_LABEL_TEXT'),
-					'PLACEHOLDER' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_LABEL_TEXT_HINT'),
-					'VALUE' => $data['LABEL_TEXT'] ? $data['LABEL_TEXT'] : Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_LABEL_TEXT_DEFAULT_VALUE'),
+					'CAPTION' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_LABEL_TEXT'),
+					'PLACEHOLDER' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_LABEL_TEXT_HINT'),
+					'VALUE' => $data['LABEL_TEXT'] ? $data['LABEL_TEXT'] : $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_FIELD_LABEL_TEXT_DEFAULT_VALUE'),
 					'TAB' => 'settings',
 				],
 				[
@@ -299,9 +310,10 @@ class MainUserConsentEditComponent extends CBitrixComponent
 	{
 		$this->arResult['MENU_ITEMS'] = [
 			'text' => [
-				'NAME' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_TAB_TEXT_1'),
+				'NAME' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_TAB_TEXT_1'),
 				'ATTRIBUTES' => [
 					'onclick' => 'BX.Main.UserConsent.Edit.showTextTab();',
+					'data-testid' => 'main-userconsent-edit-text-tab',
 				],
 				'ACTIVE' => true
 			],
@@ -309,6 +321,7 @@ class MainUserConsentEditComponent extends CBitrixComponent
 				'NAME' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_TAB_SETTINGS_1'),
 				'ATTRIBUTES' => [
 					'onclick' => 'BX.Main.UserConsent.Edit.showSettingsTab();',
+					'data-testid' => 'main-userconsent-edit-settings-tab',
 				],
 			],
 		];
@@ -316,11 +329,31 @@ class MainUserConsentEditComponent extends CBitrixComponent
 		if ($this->arParams['ID'])
 		{
 			$this->arResult['MENU_ITEMS']['list'] = [
-				'NAME' => Loc::getMessage('MAIN_USER_CONSENT_EDIT_COMP_TAB_LIST_1'),
+				'NAME' => $this->getContextMessage('MAIN_USER_CONSENT_EDIT_COMP_TAB_LIST_1'),
 				'ATTRIBUTES' => [
 					'onclick' => 'BX.Main.UserConsent.Edit.showListTab();',
+					'data-testid' => 'main-userconsent-edit-consents-tab',
 				],
 			];
 		}
+	}
+
+	private function isCrmWebFormContext(): bool
+	{
+		return $this->request->get('crm_webform_consent') === 'Y';
+	}
+
+	private function getContextMessage(string $code): string
+	{
+		if ($this->isCrmWebFormContext())
+		{
+			$message = Loc::getMessage($code . '_AGREEMENT');
+			if ($message !== null)
+			{
+				return $message;
+			}
+		}
+
+		return Loc::getMessage($code);
 	}
 }

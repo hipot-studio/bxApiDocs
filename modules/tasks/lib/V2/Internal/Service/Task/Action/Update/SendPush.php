@@ -74,6 +74,12 @@ class SendPush
 			'requireDeadlineChangeReason' => $requireDeadlineChangeReason,
 		];
 
+		$forkedByTemplateId = (int)($fullTaskData['FORKED_BY_TEMPLATE_ID'] ?? 0);
+		if ($forkedByTemplateId > 0)
+		{
+			$params['FORKED_BY_TEMPLATE_ID'] = $forkedByTemplateId;
+		}
+
 		if (isset($after['STAGE']) || $after['GROUP_ID'] !== $before['GROUP_ID'])
 		{
 			$stageId = (int)$fullTaskData['STAGE_ID'];

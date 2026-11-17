@@ -4,6 +4,7 @@ namespace Bitrix\Disk\Controller\Integration;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Document;
+use Bitrix\Disk\Internal\Integration\B24Boards\MenuCacheInvalidator;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\UserConfiguration;
@@ -58,6 +59,7 @@ final class B24Boards extends Engine\Controller
 			Option::set('disk', 'boards_enabled', 'N');
 			Option::set('disk', 'boards_use_documentproxy', 'N');
 			Option::set('disk', 'disk_boards_proxy_server', null);
+			MenuCacheInvalidator::invalidate();
 
 			Document\Models\DocumentSessionTable::deleteByFilter([
 				'=SERVICE' => Document\Models\DocumentService::FlipChart->value,
@@ -96,6 +98,7 @@ final class B24Boards extends Engine\Controller
 			Option::set('disk', 'boards_enabled', 'Y');
 			Option::set('disk', 'boards_use_documentproxy', 'Y');
 			Option::set('disk', 'disk_boards_proxy_server', $result->getData()['documentServer']['host']);
+			MenuCacheInvalidator::invalidate();
 
 			Document\Models\DocumentSessionTable::deleteByFilter([
 				'=SERVICE' => Document\Models\DocumentService::FlipChart->value,

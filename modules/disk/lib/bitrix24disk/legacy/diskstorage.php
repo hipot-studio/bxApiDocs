@@ -6,6 +6,7 @@ use Bitrix\Disk\Bitrix24Disk\PageState;
 use Bitrix\Disk\Bitrix24Disk\TmpFile;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\Internals\Path;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\Sharing;
@@ -1420,9 +1421,10 @@ class DiskStorage extends AbstractStorage
 			return '';
 		}
 
-		return Driver::getInstance()->getUrlManager()->getPublicExternalLink(
-			object: $object,
-			hash: $extModel->getHash(),
+		return Driver::getInstance()->getUrlManager()->getCopyablePublicExternalLinkForConsumer(
+			$extModel,
+			UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+			$object,
 		);
 	}
 

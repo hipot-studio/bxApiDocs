@@ -2285,6 +2285,7 @@ function PrepareTxtForEmail($text, $lang = false, $convert_url_tag = true, $conv
 	$text = preg_replace("#\\[b\\](.+?)\\[/b\\]#is", "\\1", $text);
 	$text = preg_replace("#\\[i\\](.+?)\\[/i\\]#is", "\\1", $text);
 	$text = preg_replace("#\\[u\\](.+?)\\[/u\\]#is", "_\\1_", $text);
+	$text = preg_replace("#\\[icode\\](.*?)\\[/icode\\]#is", "\\1", $text);
 
 	$text = preg_replace("#<(/?)quote(.*?)>#is", "[\\1quote]", $text);
 

@@ -202,7 +202,10 @@ abstract class BaseComponent extends \CBitrixComponent implements Errorable
 			Diag::getInstance()->collectDebugInfo($this->componentId, $this->getName());
 
 			$this->resolveAction();
-			$this->checkAction();
+			if ($this->checkAction() === false)
+			{
+				return;
+			}
 
 			$this->checkRequiredModules();
 			$this->prepareParams();
@@ -484,9 +487,13 @@ abstract class BaseComponent extends \CBitrixComponent implements Errorable
 				else
 				{
 					$this->showAccessDenied();
+
+					return false;
 				}
 			}
 		}
+
+		return true;
 	}
 
 	/**

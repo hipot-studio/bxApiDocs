@@ -22,6 +22,7 @@ use Bitrix\Tasks\Item\Result;
 use Bitrix\Tasks\Item\Task\Template\Field;
 use Bitrix\Tasks\Item\Field\Scalar;
 use Bitrix\Tasks\Util\Replicator;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 use Bitrix\Tasks\Item\SystemLog;
 use Bitrix\Tasks\Item\Access;
 
@@ -399,6 +400,7 @@ final class Template extends \Bitrix\Tasks\Item
 
 		$result = new Result();
 		$manager = new \Bitrix\Tasks\Control\Template($this->userId);
+		$manager->withAuthorAssignmentSubject(AuthorAssignmentSubject::fromAuthenticatedUser());
 
 		try
 		{

@@ -9,6 +9,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Filter\Field\ModeMountData;
 use Bitrix\Tasks\Helper\Filter;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Scrum\Service\SprintService;
@@ -495,6 +496,34 @@ class TasksInterfaceFilterComponent extends TasksBaseComponent
 			'sectionType' => $sectionType,
 			'viewState' => $viewState,
 		];
+
+		$this->arResult['FILTER_FIELD_MODE'] = $this->getFilterFieldModeMountData();
+	}
+
+	/**
+	 * Mode affordances of the filter fields, for every view sharing this filter row. No field declares a mode in
+	 * groups, collabs and scrum, and none does anywhere once the toggle is off - the satellite values saved while
+	 * it was on still travel with this, because the page is the only one that can send them back on an apply.
+	 */
+	private function getFilterFieldModeMountData(): ModeMountData
+	{
+		$filterId = $this->arParams['FILTER_ID'] ?? null;
+		$filterFields = $this->arParams['FILTER'] ?? null;
+
+		return ModeMountData::forFilter(
+			$filterId,
+			is_array($filterFields) ? $filterFields : [],
+			$this->getFilterHelper($filterId)->getSatelliteFieldIds(),
+		);
+	}
+
+	/**
+	 * The helper of this very filter row: getInstance() hands back the instance the page has already built for this
+	 * id, scope and context included, instead of a fresh one that would read the scope as the regular task list.
+	 */
+	private function getFilterHelper(?string $filterId): Filter
+	{
+		return Filter::getInstance($this->userId, (int)($this->arParams['GROUP_ID'] ?? 0), $filterId);
 	}
 
 	private function getTasksViewList(): array

@@ -221,6 +221,7 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 				->setGroupBy($this->componentId)
 				->setVersionId($version->getId())
 				->setDownloadDisabled(!$canDownload)
+				->setMarkdownTabAllowed()
 			;
 
 			if ((int)$this->file->getTypeFile() === TypeFile::FLIPCHART)

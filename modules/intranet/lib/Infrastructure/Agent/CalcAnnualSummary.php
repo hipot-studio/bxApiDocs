@@ -90,7 +90,7 @@ class CalcAnnualSummary extends Stepper
 			->where('REAL_USER', 'expr', true)
 			->where('ACTIVE', true)
 			->where('ID', '>', $lastId)
-			->where('DATE_REGISTER', '<', new DateTime('2025-10-01', 'Y-m-d'))
+			->where('DATE_REGISTER', '<', new DateTime('2026-10-01', 'Y-m-d'))
 			->setLimit($step)
 			->addOrder('ID')
 			->fetchCollection()

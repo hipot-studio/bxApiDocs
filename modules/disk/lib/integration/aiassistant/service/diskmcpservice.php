@@ -8,10 +8,12 @@ use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Repository\ExternalLinkBitrixOrmRepository;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internal\Service\Folder\DeletionRestriction;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Internals\ObjectNameKey;
@@ -29,6 +31,7 @@ use Bitrix\Disk\Storage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\Destination;
 use Bitrix\Disk\Version;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
@@ -60,6 +63,7 @@ class DiskMcpService
 	private ?SupportedStoragePolicy $supportedStoragePolicy;
 	private ?TrashService $trashService;
 	private ?StorageUsageService $storageUsageService;
+	private ?ExternalLinkAccessService $externalLinkAccessService = null;
 
 	public function __construct(
 		?FolderAccessManager $folderAccessManager = null,
@@ -840,6 +844,11 @@ class DiskMcpService
 			throw new McpException("Access denied to manage a public link for file {$fileId}.");
 		}
 
+		if (!$this->getExternalLinkAccessService()->isExternalLinkEnabledOnPortal())
+		{
+			$this->assertPublicLinkExistsWhileDisabledOnPortal($file);
+		}
+
 		if (!$confirmed)
 		{
 			return $this->buildConfirmationResponse('create_public_link', [[
@@ -862,6 +871,11 @@ class DiskMcpService
 		if ($externalLink)
 		{
 			return $this->buildPublicLinkResponse($file, $externalLink, false);
+		}
+
+		if (!$this->getExternalLinkAccessService()->isExternalLinkEnabledOnPortal())
+		{
+			throw $this->buildPublicLinksDisabledOnPortalException($file);
 		}
 
 		try
@@ -1502,6 +1516,41 @@ class DiskMcpService
 	private function getStorageUsageService(): StorageUsageService
 	{
 		return $this->storageUsageService ??= new StorageUsageService();
+	}
+
+	private function getExternalLinkAccessService(): ExternalLinkAccessService
+	{
+		return $this->externalLinkAccessService ??= ServiceLocator::getInstance()->get(ExternalLinkAccessService::class);
+	}
+
+	/**
+	 * With public links switched off on the portal a new link must not be made; an existing one is still returned.
+	 *
+	 * @throws McpException
+	 */
+	private function assertPublicLinkExistsWhileDisabledOnPortal(File $file): void
+	{
+		try
+		{
+			$externalLink = (new ExternalLinkBitrixOrmRepository())->getForUse($file->getRealObjectId());
+		}
+		catch (\Throwable)
+		{
+			$externalLink = null;
+		}
+
+		if (!$externalLink)
+		{
+			throw $this->buildPublicLinksDisabledOnPortalException($file);
+		}
+	}
+
+	private function buildPublicLinksDisabledOnPortalException(File $file): McpException
+	{
+		return new McpException(
+			"Public links are disabled in the Disk settings of the portal, a public link for file {$file->getId()}"
+			. ' cannot be created. Ask the Bitrix24 administrator to allow public links.'
+		);
 	}
 
 	private function collectTrashCandidates(int $userId, Storage $storage, int $limit): array
@@ -2322,9 +2371,10 @@ class DiskMcpService
 
 	private function buildPublicLinkResponse(File $file, ExternalLink $externalLink, bool $created): array
 	{
-		$link = Driver::getInstance()->getUrlManager()->getPublicExternalLink(
+		$link = Driver::getInstance()->getUrlManager()->getCopyablePublicExternalLinkForConsumer(
+			$externalLink,
+			UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
 			$file,
-			$externalLink->getHash(),
 		);
 
 		return [

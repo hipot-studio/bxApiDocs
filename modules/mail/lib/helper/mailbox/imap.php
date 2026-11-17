@@ -43,6 +43,17 @@ class Imap extends Mail\Helper\Mailbox
 	*/
 	const GENERATION_RECONCILE_PROPERTY = 'SYNC_UIDV_RECONCILE';
 	/*
+		The UIDVALIDITY of the dir its rows clamped to 2147483647 have been looked through for: a row whose id
+		proves that version has been brought back to it, so no clamped row of it is left. Value: the version,
+		or {version}: for a look cut short by the time quota.
+	*/
+	const CLAMPED_FOLDER_VERSION_CHECK_PROPERTY = 'SYNC_UIDV_CLAMP_CHECKED';
+	/*
+		The id of the row a look through the clamped rows of the dir, cut short by the time quota, stopped
+		after: the next look carries it on from there. Kept apart from the check mark, the value holds 32 chars.
+	*/
+	const CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY = 'SYNC_UIDV_CLAMP_CURSOR';
+	/*
 		The moment the mailbox was last looked through for rows pointing at a folder the database does not
 		know, as a unix timestamp. Value of the MAILBOX entity type.
 	*/
@@ -157,6 +168,11 @@ class Imap extends Mail\Helper\Mailbox
 	private const PLACEMENT_REBIND_SYNC_BATCH_SIZE = 10;
 	private const PLACEMENT_REBIND_MESSAGE_QUERY_BATCH_SIZE = 500;
 
+	/** What a write clamping the folder version to a signed 32-bit integer left in b_mail_message_uid */
+	private const CLAMPED_FOLDER_VERSION = 2147483647;
+	private const CLAMPED_FOLDER_VERSION_UPDATE_BATCH_SIZE = 500;
+	private const CLAMPED_FOLDER_VERSION_SCAN_QUOTA_STEP = 500;
+
 	/** The previous syncMessages() stopped because the time quota of the hit ran out */
 	protected bool $stoppedOnTimeQuota = false;
 
@@ -178,6 +194,9 @@ class Imap extends Mail\Helper\Mailbox
 
 	/** The records behind the one time marks of the tail append stage */
 	private ?TailMarkService $tailMarkService = null;
+
+	/** @var array<string, true> The folders and versions whose clamped rows are known to be repaired whole */
+	private array $repairedClampedFolderVersions = [];
 
 	protected function __construct($mailbox)
 	{
@@ -1092,6 +1111,223 @@ class Imap extends Mail\Helper\Mailbox
 	}
 
 	/**
+	 * Brings the rows of a folder written by the clamping write back to the version the server reports.
+	 *
+	 * The raw writes of b_mail_message_uid used to clamp a UIDVALIDITY above 2147483647 to that value,
+	 * while the id of the row was built from the real one. Such rows are taken for rows of a previous
+	 * version of the folder by everything that compares versions. A row is repaired only when its id
+	 * proves the version: a row of another version clamped to the same value is left as it is, for the
+	 * reconciliation of generations to deal with.
+	 *
+	 * The writes clamp nothing any more, so a folder looked through once for a version stays repaired for
+	 * it: the dir is marked, and its rows are not read again. The rows are looked through in the order of
+	 * their ids, and a look cut short by the time quota marks the row it stopped after: the next hit carries
+	 * it on from there instead of reading again the rows it has already left as they are.
+	 */
+	protected function repairClampedFolderVersion(Mail\Internals\Entity\MailboxDirectory $dir, int $uidValidity): void
+	{
+		$dirPath = (string)$dir->getPath();
+		$dirMd5 = (string)$dir->getDirMd5();
+
+		if ($uidValidity <= self::CLAMPED_FOLDER_VERSION || $dirPath === '' || $dirMd5 === '')
+		{
+			return;
+		}
+
+		$key = $dirMd5 . ':' . $uidValidity;
+		if (isset($this->repairedClampedFolderVersions[$key]))
+		{
+			return;
+		}
+
+		$stored = $this->readClampedFolderVersionOptions($dir);
+		$checkMarker = $stored[self::CLAMPED_FOLDER_VERSION_CHECK_PROPERTY] ?? null;
+		if ($checkMarker === (string)$uidValidity)
+		{
+			$this->repairedClampedFolderVersions[$key] = true;
+
+			return;
+		}
+
+		$cursor = $checkMarker === $uidValidity . ':'
+			? (string)($stored[self::CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY] ?? '')
+			: ''
+		;
+
+		$filter = $this->getGenerationScope()->apply([
+			'=MAILBOX_ID' => (int)$this->mailbox['ID'],
+			'=DIR_MD5' => $dirMd5,
+			'=DIR_UIDV' => self::CLAMPED_FOLDER_VERSION,
+		]);
+		$rows = Mail\MailMessageUidTable::getList([
+			'select' => ['ID', 'MSG_UID'],
+			'filter' => $filter + ['>MSG_UID' => 0] + ($cursor !== '' ? ['>ID' => $cursor] : []),
+			'order' => ['ID' => 'ASC'],
+		]);
+
+		$ids = [];
+		$scanned = 0;
+		$quotaStep = $this->getClampedFolderVersionScanQuotaStep();
+		while ($row = $rows->fetch())
+		{
+			if ($row['ID'] === $this->buildMessageIdForDataBase($dirPath, $uidValidity, $row['MSG_UID']))
+			{
+				$ids[] = $row['ID'];
+			}
+
+			if (count($ids) >= self::CLAMPED_FOLDER_VERSION_UPDATE_BATCH_SIZE)
+			{
+				$this->updateClampedFolderVersion($filter, $ids, $uidValidity);
+				$ids = [];
+			}
+
+			if (++$scanned % $quotaStep === 0 && $this->isTimeQuotaExceeded())
+			{
+				$this->updateClampedFolderVersion($filter, $ids, $uidValidity);
+				$this->writeClampedFolderVersionOption(
+					$dir,
+					self::CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY,
+					(string)$row['ID'],
+					array_key_exists(self::CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY, $stored),
+				);
+				$this->writeClampedFolderVersionOption(
+					$dir,
+					self::CLAMPED_FOLDER_VERSION_CHECK_PROPERTY,
+					$uidValidity . ':',
+					$checkMarker !== null,
+				);
+
+				return;
+			}
+		}
+
+		$this->updateClampedFolderVersion($filter, $ids, $uidValidity);
+		$this->writeClampedFolderVersionOption(
+			$dir,
+			self::CLAMPED_FOLDER_VERSION_CHECK_PROPERTY,
+			(string)$uidValidity,
+			$checkMarker !== null,
+		);
+		if (array_key_exists(self::CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY, $stored))
+		{
+			Mail\Internals\MailEntityOptionsTable::delete(
+				$this->getClampedFolderVersionOptionPrimary($dir, self::CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY),
+			);
+		}
+		$this->repairedClampedFolderVersions[$key] = true;
+	}
+
+	/** How many rows the repair looks through between two checks of the time quota */
+	protected function getClampedFolderVersionScanQuotaStep(): int
+	{
+		return self::CLAMPED_FOLDER_VERSION_SCAN_QUOTA_STEP;
+	}
+
+	/** @return array<string, string> The stored check mark and cursor of the dir, by property name */
+	private function readClampedFolderVersionOptions(Mail\Internals\Entity\MailboxDirectory $dir): array
+	{
+		$rows = Mail\Internals\MailEntityOptionsTable::getList([
+			'select' => ['PROPERTY_NAME', 'VALUE'],
+			'filter' => [
+				'=MAILBOX_ID' => (int)$this->mailbox['ID'],
+				'=ENTITY_TYPE' => Mail\Internals\MailEntityOptionsTable::DIR_TYPE_NAME,
+				'=ENTITY_ID' => (string)$dir->getId(),
+				'@PROPERTY_NAME' => [
+					self::CLAMPED_FOLDER_VERSION_CHECK_PROPERTY,
+					self::CLAMPED_FOLDER_VERSION_CURSOR_PROPERTY,
+				],
+			],
+		])->fetchAll();
+
+		return array_column($rows, 'VALUE', 'PROPERTY_NAME');
+	}
+
+	/** @param bool $isStored - whether the dir already carries the property, known to the caller that read it */
+	private function writeClampedFolderVersionOption(
+		Mail\Internals\Entity\MailboxDirectory $dir,
+		string $property,
+		string $value,
+		bool $isStored,
+	): void
+	{
+		if (!$isStored)
+		{
+			Mail\Internals\MailEntityOptionsTable::insertIgnore(
+				(int)$this->mailbox['ID'],
+				(string)$dir->getId(),
+				Mail\Internals\MailEntityOptionsTable::DIR_TYPE_NAME,
+				$property,
+				$value,
+			);
+
+			return;
+		}
+
+		Mail\Internals\MailEntityOptionsTable::update(
+			$this->getClampedFolderVersionOptionPrimary($dir, $property),
+			[
+				'VALUE' => $value,
+				'DATE_INSERT' => new Main\Type\DateTime(),
+			],
+		);
+	}
+
+	private function getClampedFolderVersionOptionPrimary(
+		Mail\Internals\Entity\MailboxDirectory $dir,
+		string $property,
+	): array
+	{
+		return [
+			'MAILBOX_ID' => (int)$this->mailbox['ID'],
+			'ENTITY_TYPE' => Mail\Internals\MailEntityOptionsTable::DIR_TYPE_NAME,
+			'ENTITY_ID' => (string)$dir->getId(),
+			'PROPERTY_NAME' => $property,
+		];
+	}
+
+	private function updateClampedFolderVersion(array $filter, array $ids, int $uidValidity): void
+	{
+		if ($ids === [])
+		{
+			return;
+		}
+
+		Mail\MailMessageUidTable::updateList(
+			$filter + ['@ID' => $ids],
+			['DIR_UIDV' => $uidValidity],
+			[],
+			false,
+		);
+	}
+
+	/**
+	 * The rows among those given that hold the version the server reports by now: the clamped rows the
+	 * repair has brought to it still carry the clamped value in what the caller read before.
+	 *
+	 * @param string[] $rowIds
+	 * @return array<string, true>
+	 */
+	private function selectRowsHoldingFolderVersion(string $dirMd5, int $uidValidity, array $rowIds): array
+	{
+		if ($rowIds === [])
+		{
+			return [];
+		}
+
+		$rows = Mail\MailMessageUidTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=MAILBOX_ID' => (int)$this->mailbox['ID'],
+				'=DIR_MD5' => $dirMd5,
+				'=DIR_UIDV' => $uidValidity,
+				'@ID' => $rowIds,
+			],
+		])->fetchAll();
+
+		return array_fill_keys(array_column($rows, 'ID'), true);
+	}
+
+	/**
 	 * The rows of a folder the server has recreated, brought to the numbers that folder keeps their
 	 * letters under now.
 	 *
@@ -1132,7 +1368,8 @@ class Imap extends Mail\Helper\Mailbox
 
 			if (!array_key_exists($dirMd5, $currentVersions))
 			{
-				$dirPath = $this->getDirsHelper()->getDirPathByHash($dirMd5);
+				$dirEntity = $this->getDirsHelper()->getDirByHash($dirMd5);
+				$dirPath = $dirEntity?->getPath();
 
 				if (empty($dirPath))
 				{
@@ -1151,6 +1388,7 @@ class Imap extends Mail\Helper\Mailbox
 					'path' => $dirPath,
 					'version' => $currentVersion,
 				];
+				$this->repairClampedFolderVersion($dirEntity, $currentVersion);
 			}
 
 			$dirPath = $currentVersions[$dirMd5]['path'];
@@ -1169,6 +1407,34 @@ class Imap extends Mail\Helper\Mailbox
 				'messageId' => $messageId,
 				'pair' => $row,
 			];
+		}
+
+		foreach ($candidatesByDir as $dirMd5 => $dir)
+		{
+			$clampedRowIds = [];
+			foreach ($dir['rows'] as $row)
+			{
+				if ((int)$row['pair']['DIR_UIDV'] === self::CLAMPED_FOLDER_VERSION)
+				{
+					$clampedRowIds[] = $row['id'];
+				}
+			}
+
+			$repaired = $this->selectRowsHoldingFolderVersion($dirMd5, $dir['version'], $clampedRowIds);
+			if ($repaired === [])
+			{
+				continue;
+			}
+
+			$rebound = array_diff_key($rebound, $repaired);
+			$candidatesByDir[$dirMd5]['rows'] = array_values(array_filter(
+				$dir['rows'],
+				static fn (array $row): bool => !isset($repaired[$row['id']]),
+			));
+			if ($candidatesByDir[$dirMd5]['rows'] === [])
+			{
+				unset($candidatesByDir[$dirMd5]);
+			}
 		}
 
 		if ($candidatesByDir === [])
@@ -2110,6 +2376,7 @@ class Imap extends Mail\Helper\Mailbox
 
 			return $result;
 		}
+		$this->repairClampedFolderVersion($dir, (int)$uidtoken);
 
 		$deliveryBoundary = $this->getDeliveryBoundaryService()->resolve(
 			(int)$dir->getId(),
@@ -2599,6 +2866,7 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		$this->getDirsHelper()->updateMessageCount($dir->getId(), $meta['exists']);
+		$this->repairClampedFolderVersion($dir, (int)$meta['uidvalidity']);
 		$historySyncRequired = $this->isHistorySyncRequired(
 			$dir,
 			(int)$meta['uidvalidity'],
@@ -3168,6 +3436,7 @@ class Imap extends Mail\Helper\Mailbox
 
 		$uidtoken = $meta['uidvalidity'];
 		$this->walkedDirLetterCount = isset($meta['exists']) ? (int)$meta['exists'] : null;
+		$this->repairClampedFolderVersion($dir, (int)$uidtoken);
 
 		if ($meta['exists'] > 0)
 		{
@@ -5952,6 +6221,7 @@ class Imap extends Mail\Helper\Mailbox
 		$isRunDropped = (
 			!$pass->isSucceeded()
 			&& !$pass->hasStoppedOnTimeQuota()
+			&& !$pass->hasIncompleteList()
 		) || count($this->client->getErrors()) - $pass->getMessageClientErrorCount() > $clientErrorsBefore;
 
 		/*

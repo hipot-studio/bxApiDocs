@@ -141,3 +141,4 @@ final class Settings
 		;
 	}
 }
+

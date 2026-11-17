@@ -149,6 +149,7 @@ class Sanitizer
 		$sanitizer = $this->getSanitizer($splitter);
 		if ($needSanitize && $sanitizer !== null)
 		{
+			$text = self::revealObfuscatedScriptSchemes($text);
 			if ($sanitizer->process($text))
 			{
 				$bad = true;
@@ -255,6 +256,33 @@ class Sanitizer
 	}
 
 	/**
+	 * Prepares an html-escaped value for a marker the block author may put anywhere, an open tag
+	 * included: a character reference reads the same in a text node and in an attribute value, and
+	 * cannot end an attribute or start one in any of the quoting styles. Character references of
+	 * the escaped value stay as they are; bytes of multibyte characters are not html syntax.
+	 * Letters and digits are encoded too: a browser does not read a reference in the name of a tag or
+	 * an attribute, so the value cannot complete a name with the text around the marker.
+	 * In a url attribute a browser reads the decoded value as the url, so a value starting with a
+	 * script scheme loses that colon to a fullwidth one, which looks the same in the text.
+	 * @param string $escaped Value after htmlspecialcharsbx.
+	 * @return string
+	 */
+	public static function encodeContentMarkerValue(string $escaped): string
+	{
+		$compact = (string)preg_replace('/[\s\x00-\x1F\x7F]+/', '', $escaped);
+		if (preg_match('/^(?:javascript|vbscript|data):/i', $compact))
+		{
+			$escaped = (string)preg_replace('/:/', "\u{FF1A}", $escaped, 1);
+		}
+
+		return preg_replace_callback(
+			'/&(?:[a-z][a-z0-9]*+|#[0-9]++|#x[0-9a-f]++);(*SKIP)(*FAIL)|[^\x80-\xFF]/i',
+			static fn(array $match): string => '&#' . ord($match[0]) . ';',
+			$escaped
+		) ?? '';
+	}
+
+	/**
 	 * Validates a physical block CODE (format "namespace:code" or just "code") before it is
 	 * used to build an include path. Not for theme TPL_CODE — those go through the closed
 	 * LocalTemplates whitelist instead.
@@ -294,6 +322,48 @@ class Sanitizer
 	{
 		// a failure of the engine itself returns null, and the text is then left as it is
 		return preg_replace('/(<st) (yle)(?!\w)/i', '$1$2', $text) ?? $text;
+	}
+
+	/**
+	 * Writes a script scheme spelled with character references in plain form, so the text auditor
+	 * reaches its usual verdict: it reads the source of the text, while a browser decodes the
+	 * references of an attribute value and then drops tab and newlines from the url, and
+	 * `jav&#x09;ascript:` runs just as `javascript:` does.
+	 */
+	private static function revealObfuscatedScriptSchemes(string $text): string
+	{
+		if (!str_contains($text, '&'))
+		{
+			return $text;
+		}
+
+		// a failure of the engine itself returns null, and the text is then left as it is
+		return preg_replace(
+			[self::buildObfuscatedSchemePattern('javascript'), self::buildObfuscatedSchemePattern('vbscript')],
+			['javascript:', 'vbscript:'],
+			$text
+		) ?? $text;
+	}
+
+	private static function buildObfuscatedSchemePattern(string $scheme): string
+	{
+		$reference = static fn(int $code): string => sprintf('&\#(?:0*%d|x0*%x);?', $code, $code);
+		$dropped = '(?:[\t\n\r]|' . $reference(9) . '|' . $reference(10) . '|' . $reference(13) . '|&Tab;|&NewLine;)*+';
+
+		$letters = [];
+		foreach (str_split($scheme) as $letter)
+		{
+			$letters[] = '(?:'
+				. $letter
+				. '|' . $reference(ord($letter))
+				. '|' . $reference(ord(strtoupper($letter)))
+				. ')'
+			;
+		}
+
+		$colon = '(?::|&colon;|' . $reference(ord(':')) . ')';
+
+		return '/' . implode($dropped, $letters) . $dropped . $colon . '/i';
 	}
 
 	private function getSanitizer(string $splitter): ?Filter\Auditor\Xss

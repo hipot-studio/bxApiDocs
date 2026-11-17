@@ -322,3 +322,4 @@ class AddressBookProvider extends BaseProvider
 		}
 	}
 }
+

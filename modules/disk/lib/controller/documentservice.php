@@ -10,6 +10,7 @@ use Bitrix\Disk\Document\OnlyOffice\RestrictionManager;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
+use Bitrix\Disk\Integration\Collab\CollabDocumentCreationService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
@@ -24,11 +25,14 @@ use Bitrix\Main\Error;
 use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Request;
+use Bitrix\Main\Response as MainResponse;
 use Bitrix\Main\Web\Uri;
 
 final class DocumentService extends Engine\Controller
 {
 	protected UnifiedLinkUrl $unifiedLinkUrl;
+	/** @var Vibeoffice[] */
+	private array $forwardedVibeofficeControllers = [];
 
 	public function __construct(?Request $request = null)
 	{
@@ -83,6 +87,31 @@ final class DocumentService extends Engine\Controller
 				new CloseSession(),
 			]],
 		];
+	}
+
+	public function forward($controller, string $actionName, ?array $parameters = null)
+	{
+		if ($controller === Vibeoffice::class)
+		{
+			$controller = new Vibeoffice();
+		}
+		if ($controller instanceof Vibeoffice)
+		{
+			$this->forwardedVibeofficeControllers[spl_object_id($controller)] = $controller;
+		}
+
+		return parent::forward($controller, $actionName, $parameters);
+	}
+
+	public function finalizeResponse(MainResponse $response)
+	{
+		parent::finalizeResponse($response);
+		$controllers = $this->forwardedVibeofficeControllers;
+		$this->forwardedVibeofficeControllers = [];
+		foreach ($controllers as $controller)
+		{
+			$controller->finalizeResponse($response);
+		}
 	}
 
 	public function restoreDocumentInteractionAction(Document\Models\DocumentSession $documentSession)
@@ -452,7 +481,19 @@ final class DocumentService extends Engine\Controller
 			if ($availableSessionBoost)
 			{
 				$userId = (int)$this->getCurrentUser()?->getId();
-				$isAllowedEdit = (new RestrictionManager())->isAllowedEditByObjectId($objectIdForSessionCheck, $userId);
+				try
+				{
+					$isAllowedEdit = (new RestrictionManager())->isAllowedEditByObjectId($objectIdForSessionCheck, $userId);
+				}
+				catch (\RuntimeException $exception)
+				{
+					if (ServiceLocator::getInstance()->get(Disk\Internal\Service\Environment::class)->isCloudPortal())
+					{
+						throw $exception;
+					}
+
+					return $this->goToEditAction($serviceCode, $attachedObjectId, $objectId);
+				}
 			}
 
 			if (!$availableSessionBoost || $isAllowedEdit)
@@ -630,9 +671,11 @@ final class DocumentService extends Engine\Controller
 		$targetFolderId = null,
 		bool $createByUnifiedLink = false,
 		array $analytics = [],
+		?int $collabId = null,
 	)
 	{
 		$driver = Driver::getInstance();
+		$userId = (int)$this->getCurrentUser()?->getId();
 		$handlersManager = $driver->getDocumentHandlersManager();
 		$documentHandler = $handlersManager->resolveEffectiveHandler(
 			$serviceCode,
@@ -646,6 +689,52 @@ final class DocumentService extends Engine\Controller
 			$this->addError(new Error('There is no document service by code'));
 
 			return null;
+		}
+
+		$collabDocumentCreationService = ServiceLocator::getInstance()->get(CollabDocumentCreationService::class);
+		$hasExplicitTargetFolderId = is_numeric($targetFolderId) && (int)$targetFolderId > 0;
+		$targetFolder = $collabDocumentCreationService->getFolderByFolderId($targetFolderId);
+		if ($hasExplicitTargetFolderId && $targetFolder === null)
+		{
+			$this->addError(new Error('Target folder was not found'));
+
+			return null;
+		}
+
+		if ($targetFolder === null)
+		{
+			$targetFolderId = null;
+		}
+
+		// TODO: remove if (false) when frontend sends $collabId
+		if (false)
+		{
+			$isCollaber = $collabDocumentCreationService->isCollaberUserById($userId);
+			if ($isCollaber)
+			{
+				if ($targetFolder !== null && !$collabDocumentCreationService->isFolderInCollabStorage($targetFolder))
+				{
+					$this->addError(new Error('Wrong target folder for collab user'));
+					return null;
+				}
+
+				if ($targetFolder === null && (int)$collabId < 1)
+				{
+					$this->addError(new Error('No collab ID for collab user'));
+					return null;
+				}
+			}
+		}
+
+		if ((int)$collabId > 0 && (int)$targetFolderId < 1)
+		{
+			$collabFolder = $collabDocumentCreationService->getCreatedFilesFolderByCollabId($collabId, $userId);
+			if ($collabFolder === null)
+			{
+				$this->addError(new Error('There is no such collab or user has no access to it'));
+				return null;
+			}
+			$targetFolderId = $collabFolder->getId();
 		}
 
 		if ($documentHandler instanceof VibeofficeHandler)
@@ -687,15 +776,24 @@ final class DocumentService extends Engine\Controller
 			return $this->forward(OnlyOffice::class, 'loadCreateDocumentEditor', $parameters);
 		}
 
+		$externalHandlerParameters = [];
 		$urlManager = $driver->getUrlManager();
+		if ($targetFolderId > 0)
+		{
+			$externalHandlerParameters['targetFolderId'] = $targetFolderId;
+		}
+
 		if ($attachedObjectId)
 		{
-			LocalRedirect($urlManager::getUrlToStartCreateUfFileByService($typeFile, $documentHandler::getCode()));
-
+			LocalRedirect($urlManager::getUrlToStartCreateUfFileByService(
+				$typeFile, $documentHandler::getCode(), $externalHandlerParameters)
+			);
 		}
 		else
 		{
-			LocalRedirect($urlManager::getUrlForStartCreateFile($typeFile, $documentHandler::getCode()));
+			LocalRedirect($urlManager::getUrlForStartCreateFile(
+				$typeFile, $documentHandler::getCode(), $externalHandlerParameters)
+			);
 		}
 	}
 

@@ -131,7 +131,7 @@ class EntityUsageTable extends Data\DataManager
 				UserTable::class,
 				Join::on("this.ITEM_ID_INT", "ref.ID")
 					->where('this.ENTITY_ID', 'user')
-					->where('this.USER_ID', $GLOBALS['USER']->getId())
+					->where('this.USER_ID', is_object($GLOBALS['USER']) ? (int)$GLOBALS['USER']->getId() : 0)
 			),
 		];
 	}

@@ -117,6 +117,7 @@ class ReplicateParams extends \Bitrix\Tasks\Item\Field\Scalar
 			}),
 			"NEXT_EXECUTION_TIME" => array('VALUE' => StructureChecker::TYPE_STRING, 'DEFAULT' => ''),
 			'DEADLINE_OFFSET' => ['VALUE' => StructureChecker::TYPE_INT_POSITIVE, 'DEFAULT' => 0],
+			'DEADLINE_TYPE' => ['VALUE' => StructureChecker::TYPE_STRING],
 		));
 
 		return $structure;

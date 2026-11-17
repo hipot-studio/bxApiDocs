@@ -146,15 +146,25 @@ class FinderDestTable extends Main\UI\EntitySelector\EntityUsageTable
 					'PREFIX' => mb_strtoupper($prefix)
 			  	]);
 
-				$cache = new \CPHPCache;
-				$cache->cleanDir('/sonet/log_dest_sort/'.intval($userId / 100));
-				$cache->cleanDir(\Bitrix\Main\UI\Selector\Entities::getCacheDir([
-					'userId' => $userId,
-				]));
+				self::cleanSortCache($userId);
 
 				return;
 			}
 		}
+	}
+
+	/**
+	 * Cleans the cached sort of the last used destinations of the user, built from the rows of the user.
+	 *
+	 * @param int $userId
+	 * @return void
+	 */
+	public static function cleanSortCache(int $userId): void
+	{
+		$cache = new \CPHPCache;
+		$cache->cleanDir(\Bitrix\Main\UI\Selector\Entities::getCacheDir([
+			'userId' => $userId,
+		]));
 	}
 
 	/**

@@ -2161,26 +2161,31 @@ class CAllMailMessage
 				 * If the id of the parent (IN_REPLY_TO) matches the id of the message itself(MSG_ID),
 				 * skip the chain creation step.
 				 * */
-				if (isset($arFields['IN_REPLY_TO']) && isset($arFields['MSG_ID']) && (string)isset($arFields['IN_REPLY_TO']) !== $arFields['MSG_ID'])
+				if (
+					!empty($arFields['IN_REPLY_TO'])
+					&& (string)$arFields['IN_REPLY_TO'] !== (string)($arFields['MSG_ID'] ?? '')
+				)
 				{
 					self::makeMessageClosureChain($message_id, $mailboxId, (string)$arFields['IN_REPLY_TO']);
 				}
 
 				/*
-					The letters that already answer this one are linked to it here, and only on the
-					import of a migration. The chain is written forward - a letter takes the ancestors
-					it can see at its own save - so a parent arriving afterwards stays a stranger to its
-					own children forever. A migration brings the whole history the portal has never
-					seen, and it brings it in the order of the folders of the new source, so a parent
-					after its answer is the ordinary case there rather than an accident.
-
-					The delayed history load of the ordinary synchronization has the same gap, and
-					closing it for everyone belongs to the owner of that path: this call would then
-					lose its condition.
+					The chain is written forward - a letter takes the ancestors it can see at its own save -
+					so the letters that already answer this one are linked to it here. Synchronization does
+					not bring a thread in order: a parent saved after its answers would otherwise stay a
+					stranger to its own children forever. A failure here must not lose the saved letter,
+					so it is only logged.
 				*/
-				if (!empty($params['migration_import']) && !empty($arFields['MSG_ID']))
+				if (!empty($arFields['MSG_ID']))
 				{
-					self::makeMessageClosureChainOfDescendants($message_id, $mailboxId, (string)$arFields['MSG_ID']);
+					try
+					{
+						self::makeMessageClosureChainOfDescendants($message_id, $mailboxId, (string)$arFields['MSG_ID']);
+					}
+					catch (\Bitrix\Main\DB\SqlQueryException $e)
+					{
+						Application::getInstance()->getExceptionHandler()->writeToLog($e);
+					}
 				}
 
 				static $cachedMailboxes = [];
@@ -2404,7 +2409,11 @@ class CAllMailMessage
 			FROM b_mail_message CH
 			INNER JOIN b_mail_message_closure D ON D.PARENT_ID = CH.ID
 			INNER JOIN b_mail_message_closure A ON A.MESSAGE_ID = %1\$u
-			WHERE CH.MAILBOX_ID = %2\$u AND CH.IN_REPLY_TO = '%3\$s' AND CH.ID <> %1\$u",
+			WHERE CH.MAILBOX_ID = %2\$u AND CH.IN_REPLY_TO = '%3\$s' AND CH.ID <> %1\$u
+				AND (CH.MSG_ID IS NULL OR CH.MSG_ID <> CH.IN_REPLY_TO)
+				AND NOT EXISTS (
+					SELECT 1 FROM b_mail_message_closure X WHERE X.MESSAGE_ID = %1\$u AND X.PARENT_ID = CH.ID
+				)",
 			$messageId,
 			$mailboxId,
 			$helper->forSql($msgId)));
@@ -2423,13 +2432,36 @@ class CAllMailMessage
 			return;
 		}
 
-		self::makeMessageClosureChain($messageId, $mailboxId, trim($inReplyTo, " \t\r\n<>"));
+		$addedAncestors = self::makeMessageClosureChain($messageId, $mailboxId, trim($inReplyTo, " \t\r\n<>"));
+
+		/*
+			The answers to this letter may already be in the mailbox: a migration takes the folders
+			in its own order, so the folder of an answer often comes before the folder of the letter.
+			They copied the chain of this letter as it was then, without the parent named only now.
+			A letter whose chain gained nothing has nothing new to pass down, and the walk over its
+			subtree is too costly in a long conversation to run for every matched letter.
+		*/
+		if ($addedAncestors <= 0)
+		{
+			return;
+		}
+
+		$message = MailMessageTable::getRow([
+			'select' => ['MSG_ID'],
+			'filter' => ['=ID' => $messageId],
+		]);
+
+		self::makeMessageClosureChainOfDescendants($messageId, $mailboxId, (string)($message['MSG_ID'] ?? ''));
 	}
 
-	private static function makeMessageClosureChain(int $messageId, int $mailboxId, string $inReply): void
+	/**
+	 * @return int The number of links written.
+	 */
+	private static function makeMessageClosureChain(int $messageId, int $mailboxId, string $inReply): int
 	{
 		$helper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
-		MessageClosureTable::insertIgnoreFromSelect(sprintf("SELECT DISTINCT %u, C.PARENT_ID
+
+		return MessageClosureTable::insertIgnoreFromSelect(sprintf("SELECT DISTINCT %u, C.PARENT_ID
 			FROM b_mail_message M 
 			INNER JOIN b_mail_message_closure C ON M.ID = C.MESSAGE_ID
 			WHERE M.MAILBOX_ID = %u AND M.MSG_ID = '%s'",

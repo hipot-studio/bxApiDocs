@@ -625,7 +625,12 @@ class CAllSQLWhere
 			if(is_object($FIELD_VALUE))
 				$result[] = $FIELD_NAME." IN (".$FIELD_VALUE->compile().")";
 			elseif(is_array($FIELD_VALUE))
-				$result[] = $FIELD_NAME." IN (".implode(",", $FIELD_VALUE).")";
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." IN (".implode(",", $FIELD_VALUE).")";
+				else
+					$result[] = "1=0";
+			}
 			else
 				$result[] = $FIELD_NAME." IN (".$FIELD_VALUE.")";
 			break;
@@ -633,7 +638,12 @@ class CAllSQLWhere
 			if(is_object($FIELD_VALUE))
 				$result[] = $FIELD_NAME." NOT IN (".$FIELD_VALUE->compile().")";
 			elseif(is_array($FIELD_VALUE))
-				$result[] = $FIELD_NAME." NOT IN (".implode(",", $FIELD_VALUE).")";
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." NOT IN (".implode(",", $FIELD_VALUE).")";
+				else
+					$result[] = "1=1";
+			}
 			else
 				$result[] = $FIELD_NAME." NOT IN (".$FIELD_VALUE.")";
 			break;
@@ -802,10 +812,30 @@ class CAllSQLWhere
 				$this->bDistinctReqired = true;
 			break;
 		case "IN":
-			$result[] = $FIELD_NAME." IN (".$FIELD_VALUE->compile().")";
+			if (is_object($FIELD_VALUE))
+				$result[] = $FIELD_NAME." IN (".$FIELD_VALUE->compile().")";
+			elseif (is_array($FIELD_VALUE))
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." IN (".implode(",", $FIELD_VALUE).")";
+				else
+					$result[] = "1=0";
+			}
+			else
+				$result[] = $FIELD_NAME." IN (".$FIELD_VALUE.")";
 			break;
 		case "NIN":
-			$result[] = $FIELD_NAME." NOT IN (".$FIELD_VALUE->compile().")";
+			if (is_object($FIELD_VALUE))
+				$result[] = $FIELD_NAME." NOT IN (".$FIELD_VALUE->compile().")";
+			elseif (is_array($FIELD_VALUE))
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." NOT IN (".implode(",", $FIELD_VALUE).")";
+				else
+					$result[] = "1=1";
+			}
+			else
+				$result[] = $FIELD_NAME." NOT IN (".$FIELD_VALUE.")";
 			break;
 		}
 	}
@@ -1068,7 +1098,12 @@ class CAllSQLWhere
 			if(is_object($FIELD_VALUE))
 				$result[] = $FIELD_NAME." IN (".$FIELD_VALUE->compile().")";
 			elseif(is_array($FIELD_VALUE))
-				$result[] = $FIELD_NAME." IN ('".implode("', '", $FIELD_VALUE)."')";
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." IN ('".implode("', '", $FIELD_VALUE)."')";
+				else
+					$result[] = "1=0";
+			}
 			else
 				$result[] = $FIELD_NAME." IN ('".$FIELD_VALUE."')";
 			break;
@@ -1076,7 +1111,12 @@ class CAllSQLWhere
 			if(is_object($FIELD_VALUE))
 				$result[] = $FIELD_NAME." NOT IN (".$FIELD_VALUE->compile().")";
 			elseif(is_array($FIELD_VALUE))
-				$result[] = $FIELD_NAME." NOT IN ('".implode("', '", $FIELD_VALUE)."')";
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." NOT IN ('".implode("', '", $FIELD_VALUE)."')";
+				else
+					$result[] = "1=1";
+			}
 			else
 				$result[] = $FIELD_NAME." NOT IN ('".$FIELD_VALUE."')";
 			break;
@@ -1156,7 +1196,11 @@ class CAllSQLWhere
 		case "M":
 			if (is_array($FIELD_VALUE))
 			{
-				$result[] = $FIELD_NAME." in (".implode(", ", $FIELD_VALUE).")";
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." in (".implode(", ", $FIELD_VALUE).")";
+				else
+					$result[] = "1=0";
+
 				if ($isMultiple)
 					$this->bDistinctReqired = true;
 			}
@@ -1170,7 +1214,12 @@ class CAllSQLWhere
 		case "NS":
 		case "NM":
 			if (is_array($FIELD_VALUE))
-				$result[] = $FIELD_NAME." not in (".implode(", ", $FIELD_VALUE).")";
+			{
+				if (!empty($FIELD_VALUE))
+					$result[] = $FIELD_NAME." not in (".implode(", ", $FIELD_VALUE).")";
+				else
+					$result[] = "1=1";
+			}
 			elseif ($value == '')
 				$result[] = "(".$FIELD_NAME." IS NOT NULL)";
 			else

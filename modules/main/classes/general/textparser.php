@@ -61,6 +61,7 @@ class CTextParser
 		'PROJECT' => 'Y',
 		'DEPARTMENT' => 'Y',
 		'P' => 'Y',
+		'HEADINGS' => 'N',
 		'TAG' => 'N',
 		'SPOILER' => 'Y',
 	];
@@ -78,11 +79,18 @@ class CTextParser
 	public $useTypography = false;
 	protected $tagClasses = [
 		'p' => 'ui-typography-paragraph',
+		'h1' => 'ui-typography-heading-h1',
+		'h2' => 'ui-typography-heading-h2',
+		'h3' => 'ui-typography-heading-h3',
+		'h4' => 'ui-typography-heading-h4',
+		'h5' => 'ui-typography-heading-h5',
+		'h6' => 'ui-typography-heading-h6',
 		'b' => 'ui-typography-text-bold',
 		'i' => 'ui-typography-text-italic',
 		'u' => 'ui-typography-text-underline',
 		's' => 'ui-typography-text-strikethrough',
 		'code' => 'ui-typography-code',
+		'icode' => 'ui-typography-text-code',
 		'quote' => 'ui-typography-quote',
 		'url' => 'ui-typography-link',
 		'image-container' => 'ui-typography-image-container',
@@ -262,6 +270,19 @@ class CTextParser
 				[$this, 'convertCode'],
 				$text
 			);
+		}
+		if (
+			($this->allow['ICODE'] ?? $this->allow['BIU'] ?? '') === 'Y'
+			&& stripos($text, '[icode]') !== false
+			&& stripos($text, '[/icode]') !== false
+		)
+		{
+			// Unclosed tags after the last closing one must not make the regex rescan the tail
+			$end = strripos($text, '[/icode]') + strlen('[/icode]');
+			$head = substr($text, 0, $end);
+			$text = (
+				preg_replace_callback('#\[icode\](.*?)\[/icode\]#isu', $this->convertInlineCode(...), $head) ?? $head
+			) . substr($text, $end);
 		}
 		if (($this->allow['HTML'] ?? '') != 'Y' && ($this->allow['NL2BR'] ?? '') == 'Y')
 		{
@@ -653,6 +674,157 @@ class CTextParser
 					}
 					while ($replaced > 0);
 					break;
+				case 'HEADINGS':
+					if (($this->allow['HEADINGS'] ?? '') !== 'Y')
+					{
+						break;
+					}
+					$headingCount = preg_match_all(
+						'#\\[(/?)h([1-6])]#iu',
+						$text,
+						$headingMatches,
+						PREG_SET_ORDER | PREG_OFFSET_CAPTURE,
+					);
+					if ($headingCount === false)
+					{
+						$text = null;
+
+						break;
+					}
+					if ($headingCount === 0)
+					{
+						break;
+					}
+
+					$headingTokens = [];
+					$headingGaps = [];
+					$headingIndices = [];
+					$headingPositions = [];
+					$headingNext = [];
+					$headingTails = [];
+					$offset = 0;
+					foreach ($headingMatches as $index => $match)
+					{
+						$headingTokens[] = $match[0][0];
+						$headingGaps[] = substr($text, $offset, $match[0][1] - $offset);
+						$offset = $match[0][1] + strlen($match[0][0]);
+						$key = $match[1][0] . $match[2][0];
+						$position = count($headingIndices[$key] ?? []);
+						$headingIndices[$key][] = $index;
+						$headingPositions[$index] = [$key, $position];
+					}
+					$headingGaps[] = substr($text, $offset);
+					foreach ($headingIndices as $key => $indices)
+					{
+						$headingNext[$key] = range(0, count($indices));
+						$headingTails[$key] = count($indices) - 1;
+					}
+
+					$findHeadingIndex = static function ($key, int $position) use (&$headingNext): int {
+						$root = $position;
+						while ($headingNext[$key][$root] !== $root)
+						{
+							$root = $headingNext[$key][$root];
+						}
+						while ($headingNext[$key][$position] !== $position)
+						{
+							$next = $headingNext[$key][$position];
+							$headingNext[$key][$position] = $root;
+							$position = $next;
+						}
+
+						return $root;
+					};
+					$findHeadingToken = static function ($key, int $cursor) use (
+						&$headingIndices,
+						$findHeadingIndex,
+					): int {
+						$left = 0;
+						$right = count($headingIndices[$key]);
+						while ($left < $right)
+						{
+							$middle = intdiv($left + $right, 2);
+							if ($headingIndices[$key][$middle] < $cursor)
+							{
+								$left = $middle + 1;
+							}
+							else
+							{
+								$right = $middle;
+							}
+						}
+
+						return $findHeadingIndex($key, $left);
+					};
+
+					$cursor = 0;
+					while (true)
+					{
+						$opening = $headingCount;
+						for ($level = 1; $level <= 6; $level++)
+						{
+							$closeKey = '/' . $level;
+							if (!isset($headingIndices[$level], $headingIndices[$closeKey]))
+							{
+								continue;
+							}
+							$tail = $headingTails[$closeKey];
+							while ($tail >= 0 && $headingNext[$closeKey][$tail] !== $tail)
+							{
+								$tail--;
+							}
+							$headingTails[$closeKey] = $tail;
+							if ($tail < 0)
+							{
+								continue;
+							}
+							$position = $findHeadingToken($level, $cursor);
+							$candidate = $headingIndices[$level][$position] ?? $headingCount;
+							if ($candidate < $headingIndices[$closeKey][$tail] && $candidate < $opening)
+							{
+								$opening = $candidate;
+							}
+						}
+						if ($opening === $headingCount)
+						{
+							if ($cursor === 0)
+							{
+								break;
+							}
+							$cursor = 0;
+
+							continue;
+						}
+
+						// Preserve non-overlapping lazy replacement rounds, including crossed pairs.
+						$level = $headingMatches[$opening][2][0];
+						$closeKey = '/' . $level;
+						$position = $findHeadingToken($closeKey, $opening + 1);
+						$closing = $headingIndices[$closeKey][$position];
+						$tag = 'h' . $level;
+						$className = $this->useTypography ? ' class="' . $this->tagClasses[$tag] . '"' : '';
+						$headingTokens[$opening] = "<$tag$className>";
+						$headingTokens[$closing] = "</$tag>";
+						$headingGaps[$opening + 1] = preg_replace('/^\\r?\\n/u', '', $headingGaps[$opening + 1]);
+						$headingGaps[$closing] = preg_replace('/\\r?\\n$/u', '', $headingGaps[$closing]);
+						$headingGaps[$closing + 1] = preg_replace('/^[ \\r\\t]*\\n?/u', '', $headingGaps[$closing + 1]);
+						foreach ([$opening, $closing] as $index)
+						{
+							[$key, $position] = $headingPositions[$index];
+							$headingNext[$key][$position] = $findHeadingIndex($key, $position + 1);
+						}
+						$cursor = $closing + 1;
+					}
+
+					$headingParts = [$headingGaps[0]];
+					foreach ($headingTokens as $index => $token)
+					{
+						$headingParts[] = $token;
+						$headingParts[] = $headingGaps[$index + 1];
+					}
+					$text = implode('', $headingParts);
+
+					break;
 				case 'P':
 					$replaced  = 0;
 					do
@@ -1013,7 +1185,11 @@ class CTextParser
 
 		if ($this->preg['counter'] > 0)
 		{
-			$text = str_replace(array_reverse($this->preg['pattern']), array_reverse($this->preg['replace']), $text);
+			$text = str_replace(
+				array_reverse($this->preg['pattern']),
+				array_reverse($this->preg['replace']),
+				$text,
+			);
 		}
 
 		foreach (GetModuleEvents('main', 'TextParserAfter', true) as $arEvent)
@@ -1089,6 +1265,9 @@ class CTextParser
 
 		$arPattern[] = "/\\[s\\](.+?)\\[\\/s\\]/isu";
 		$arReplace[] = "_\\1_";
+
+		$arPattern[] = "/\\[icode\\](.*?)\\[\\/icode\\]/isu";
+		$arReplace[] = "\\1";
 
 		$arPattern[] = "/\\[(\\/?)(color|font|size|left|right|center)([^\\]]*)\\]/isu";
 		$arReplace[] = "";
@@ -1402,6 +1581,24 @@ class CTextParser
 		$text = $this->useTypography ? self::trimLineBreaks($text) : "<pre>" . $text . "</pre>";
 
 		return $this->defended_tags($this->convert_open_tag('code') . $text  . $this->convert_close_tag('code'));
+	}
+
+	private function convertInlineCode(array $matches): string
+	{
+		if ($matches[1] === '')
+		{
+			return '';
+		}
+
+		$text = str_replace(
+			['[nomodify]', '[/nomodify]', '&#91;', '&#93;', '&', '<', '>', '\\r', '\\n', '\\"', '\\', '[', ']'],
+			['', '', '[', ']', '&#38;', '&#60;', '&#62;', '&#92;r', '&#92;n', '&#92;"', '&#92;', '&#91;', '&#93;'],
+			preg_replace('/\r\n|[\r\n\t]/', ' ', $matches[1])
+		);
+
+		$className = $this->useTypography ? ' class="' . $this->tagClasses['icode'] . '"' : '';
+
+		return $this->defended_tags('<code' . $className . '>' . $text . '</code>');
 	}
 
 	public function convertQuote($matches)
@@ -2459,7 +2656,10 @@ class CTextParser
 				'ALIGN' => 'Y',
 				'P' => 'Y',
 			],
-			['HTML' => 'N']
+			[
+				'HTML' => 'N',
+				'ICODE' => 'N',
+			],
 		);
 
 		$html = $this->convertText($html);

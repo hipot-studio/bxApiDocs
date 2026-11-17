@@ -16,10 +16,18 @@ use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DB\TransactionException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use CBXShortUri;
+use Random\Engine;
+use Random\Engine\Secure;
+use Random\RandomException;
+use Random\Randomizer;
 
 final class ExternalLink extends Internals\Model
 {
@@ -29,6 +37,9 @@ final class ExternalLink extends Internals\Model
 	public const ACCESS_RIGHT_VIEW = ExternalLinkTable::ACCESS_RIGHT_VIEW;
 	public const ACCESS_RIGHT_EDIT = ExternalLinkTable::ACCESS_RIGHT_EDIT;
 	public const ERROR_SETTINGS_EDIT_DENIED = 'DISK_EL_22001';
+
+	private const SHORT_CODE_BYTES = 16;
+	private const SHORT_CODE_RESERVE_ATTEMPTS = 3;
 
 	/** @var int */
 	protected $objectId;
@@ -66,6 +77,8 @@ final class ExternalLink extends Internals\Model
 	protected $canEditSettings;
 	/** @var string|null */
 	protected $scenario;
+	/** @var string|null */
+	protected $code;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -304,6 +317,56 @@ final class ExternalLink extends Internals\Model
 	}
 
 	/**
+	 * Tells whether a short code already issued to the link still opens it: a manual link outside any special
+	 * scenario. Unlike the issue, the opening does not depend on the unified link support of the portal.
+	 */
+	public function canBeOpenedByShortCode(): bool
+	{
+		return (int)$this->type === self::TYPE_MANUAL && $this->scenario === null;
+	}
+
+	/**
+	 * Tells whether the link may have a short public code: a manual link of a file under unified links
+	 * outside any special scenario. Folders, automatic and scenario links keep their legacy addresses.
+	 */
+	public function canHaveShortCode(): bool
+	{
+		if (!$this->canBeOpenedByShortCode())
+		{
+			return false;
+		}
+
+		$object = $this->getObject();
+
+		return $object instanceof File && $object->supportsUnifiedLink();
+	}
+
+	/**
+	 * Returns short public code of the link, null until it is reserved by {@see ExternalLink::ensureShortCode()}.
+	 */
+	public function getShortCode(): ?string
+	{
+		return $this->code;
+	}
+
+	/**
+	 * Returns short public code of the link and reserves a random one on the first call.
+	 * The code never changes once stored: a concurrent reservation of the same link returns the code of the winner.
+	 * @param Engine|null $engine Source of the random bytes, the secure one by default.
+	 * @return string
+	 * @throws SystemException When the code is not reserved; there is no fallback to a weaker generator.
+	 */
+	public function ensureShortCode(?Engine $engine = null): string
+	{
+		if ($this->code === null)
+		{
+			$this->code = $this->reserveShortCode(new Randomizer($engine ?? new Secure()));
+		}
+
+		return $this->code;
+	}
+
+	/**
 	 * Returns access right (view, edit).
 	 * @return int
 	 */
@@ -448,6 +511,7 @@ final class ExternalLink extends Internals\Model
 			'CAN_DOWNLOAD_WITH_READ_ACCESS' => 'canDownloadWithReadAccess',
 			'CAN_EDIT_SETTINGS' => 'canEditSettings',
 			'SCENARIO' => 'scenario',
+			'CODE' => 'code',
 		);
 	}
 
@@ -815,12 +879,13 @@ final class ExternalLink extends Internals\Model
 	}
 
 	/**
-	 * Scenario is assigned on creation only, so it is dropped from any update.
+	 * Scenario is assigned on creation only and the short code by {@see ExternalLink::ensureShortCode()} only,
+	 * so both are dropped from any update.
 	 * @inheritDoc
 	 */
 	protected function update(array $data)
 	{
-		unset($data['SCENARIO']);
+		unset($data['SCENARIO'], $data['CODE']);
 
 		return parent::update($data);
 	}
@@ -989,10 +1054,105 @@ final class ExternalLink extends Internals\Model
 		}
 	}
 
+	private function reserveShortCode(Randomizer $randomizer): string
+	{
+		$connection = Application::getConnection();
+		$tableName = ExternalLinkTable::getTableName();
+
+		for ($attempt = 0; $attempt < self::SHORT_CODE_RESERVE_ATTEMPTS; $attempt++)
+		{
+			$code = $this->generateShortCode($randomizer);
+
+			// A nested level is a savepoint, so a collision leaves the transaction of the caller usable.
+			$connection->startTransaction();
+			try
+			{
+				$connection->queryExecute((new SqlExpression(
+					'UPDATE ?# SET CODE = ?s WHERE ID = ?i AND CODE IS NULL',
+					$tableName,
+					$code,
+					$this->getId(),
+				))->compile());
+				$reservedCode = $connection->getAffectedRowsCount() === 1
+					? $code
+					: $this->readReservedShortCode($connection)
+				;
+				$connection->commitTransaction();
+			}
+			catch (DuplicateEntryException)
+			{
+				self::rollbackOwnTransactionLevel($connection);
+
+				continue;
+			}
+			catch (\Throwable $exception)
+			{
+				self::rollbackOwnTransactionLevel($connection);
+
+				throw $exception;
+			}
+
+			if ($reservedCode === null)
+			{
+				throw new SystemException('External link is not found to reserve its short code.');
+			}
+
+			return $reservedCode;
+		}
+
+		throw new SystemException('Short code of external link collides on every attempt.');
+	}
+
+	/**
+	 * A competing reservation won: its code is read with a locking read, which sees the committed row
+	 * instead of the snapshot of an outer transaction.
+	 */
+	private function readReservedShortCode(Connection $connection): ?string
+	{
+		$row = $connection->query((new SqlExpression(
+			'SELECT CODE FROM ?# WHERE ID = ?i FOR UPDATE',
+			ExternalLinkTable::getTableName(),
+			$this->getId(),
+		))->compile())->fetch();
+
+		return $row['CODE'] ?? null;
+	}
+
+	private function generateShortCode(Randomizer $randomizer): string
+	{
+		try
+		{
+			return bin2hex($randomizer->getBytes(self::SHORT_CODE_BYTES));
+		}
+		catch (RandomException $exception)
+		{
+			throw new SystemException('Random source is not available to generate short code.', 0, '', 0, $exception);
+		}
+	}
+
+	/** The core undoes a nested level on its own and only then reports it by throwing. */
+	private static function rollbackOwnTransactionLevel(Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (TransactionException $exception)
+		{
+			if ($exception->getMessage() !== 'Nested rollbacks are unsupported.')
+			{
+				throw $exception;
+			}
+		}
+	}
+
 	public function generateUrl(): Uri
 	{
 		$driver = Driver::getInstance();
 
-		return new Uri($driver->getUrlManager()->getCopyablePublicExternalLink($this));
+		return new Uri($driver->getUrlManager()->getCopyablePublicExternalLinkForConsumer(
+			$this,
+			UrlManager::PUBLIC_LINK_CONSUMER_SIGNED_COPY,
+		));
 	}
 }

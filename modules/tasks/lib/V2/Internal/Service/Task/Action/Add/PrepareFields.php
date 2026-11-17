@@ -49,7 +49,7 @@ class PrepareFields
 		// onboarding "days without a manual deadline" counter: it is carried to
 		// OnTaskAdd via RuntimeData (read in RunAddEvent) and used only when the
 		// caller did not send the explicit AddConfig::getManualDeadline() marker
-		// (mobile app, legacy CTaskItem, REST). The explicit marker takes priority.
+		// (legacy CTaskItem, REST). The explicit marker takes priority.
 		$this->config->getRuntime()->setClientDeadlineProvided(!empty($fields['DEADLINE']));
 
 		try

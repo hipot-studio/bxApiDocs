@@ -19,6 +19,12 @@ final class OperationTracker
 {
 	private const RUN_LEASE_SECONDS = 300;
 
+	/** The errors an operation waits with while the rollout does not admit it, and nothing of its own */
+	private const ROLLOUT_PAUSE_ERRORS = [
+		MigrationService::ERROR_MIGRATION_STOPPED,
+		MigrationService::ERROR_FEATURE_DISABLED,
+	];
+
 	public function find(int $mailboxId, string $operationId): ?array
 	{
 		$row = MigrationOperationTable::getList([
@@ -131,6 +137,10 @@ final class OperationTracker
 		])->fetchAll();
 	}
 
+	/**
+	 * Makes due now the automatic waits the rollout paused - by the emergency brake or by the New mail switched
+	 * off - so the next pass of the agent takes them as soon as the rollout admits them again.
+	 */
 	public function wakeStoppedOperations(int $limit, ?DateTime $now = null): void
 	{
 		if ($limit <= 0)
@@ -159,7 +169,7 @@ final class OperationTracker
 						[
 							'=EXEC_STATE' => MigrationOperationTable::STATE_WAITING,
 							'=AUTO_RETRY' => 'Y',
-							'=LAST_ERROR_CODE' => MigrationService::ERROR_MIGRATION_STOPPED,
+							'@LAST_ERROR_CODE' => self::ROLLOUT_PAUSE_ERRORS,
 							'>NEXT_RUN' => $now,
 						],
 					]],
@@ -177,18 +187,22 @@ final class OperationTracker
 		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
 		$nowSql = $helper->convertToDbDateTime($now);
+		$pauseErrors = implode(', ', array_map(
+			static fn(string $code): string => "'" . $helper->forSql($code) . "'",
+			self::ROLLOUT_PAUSE_ERRORS,
+		));
 
 		$connection->queryExecute(sprintf(
 			"UPDATE %s SET NEXT_RUN = %s, DATE_MODIFY = %s"
 			. ' WHERE ID IN (%s)'
 			. " AND EXEC_STATE = '%s' AND AUTO_RETRY = 'Y'"
-			. " AND LAST_ERROR_CODE = '%s' AND NEXT_RUN > %s",
+			. ' AND LAST_ERROR_CODE IN (%s) AND NEXT_RUN > %s',
 			MigrationOperationTable::getTableName(),
 			$nowSql,
 			$nowSql,
 			implode(', ', $operationIds),
 			$helper->forSql(MigrationOperationTable::STATE_WAITING),
-			$helper->forSql(MigrationService::ERROR_MIGRATION_STOPPED),
+			$pauseErrors,
 			$nowSql,
 		));
 	}

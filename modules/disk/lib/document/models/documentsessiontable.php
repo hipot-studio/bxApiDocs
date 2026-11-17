@@ -3,11 +3,15 @@
 namespace Bitrix\Disk\Document\Models;
 
 use Bitrix\Disk\Document\OnlyOffice;
+use Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository;
+use Bitrix\Disk\Document\Vibeoffice\OpenDebtCarrier;
 use Bitrix\Disk\Internal\Service\UploadCleanup\MarkerService;
 use Bitrix\Disk\Internals\DataManager;
-use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Entity\BooleanField;
 use Bitrix\Main\ORM\Data\AddResult;
+use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\EntityError;
@@ -44,6 +48,9 @@ final class DocumentSessionTable extends DataManager
 	public const STATUS_NON_ACTIVE = 2;
 
 	public const EXTERNAL_HASH_LENGTH = 128;
+
+	private const DELETE_CHUNK_SIZE = 500;
+	private const CONTEXT_READ_CHUNK_SIZE = 100;
 
 	public static function onBeforeAdd(Event $event): EventResult
 	{
@@ -143,33 +150,201 @@ final class DocumentSessionTable extends DataManager
 
 	public static function tryToAddInfo(array $fields): ?AddResult
 	{
-		try
+		$infoFields = DocumentInfoTable::createObject()
+			->setExternalHash($fields['EXTERNAL_HASH'])
+			->setObjectId($fields['OBJECT_ID'])
+			->setVersionId($fields['VERSION_ID'])
+			->setOwnerId($fields['OWNER_ID'])
+			->collectValues()
+		;
+		$result = new AddResult();
+		DocumentInfoTable::checkFields($result, null, $infoFields);
+		if (!$result->isSuccess())
 		{
-			return DocumentInfoTable::add([
-				'EXTERNAL_HASH' => $fields['EXTERNAL_HASH'],
-				'OBJECT_ID' => $fields['OBJECT_ID'],
-				'VERSION_ID' => $fields['VERSION_ID'],
-				'OWNER_ID' => $fields['OWNER_ID'],
-			]);
+			return $result;
 		}
-		catch (SqlQueryException $exception)
+
+		$connection = DocumentInfoTable::getEntity()->getConnection();
+		$sql = $connection->getSqlHelper()->prepareMerge(
+			DocumentInfoTable::getTableName(),
+			['EXTERNAL_HASH'],
+			$infoFields,
+			['EXTERNAL_HASH' => $infoFields['EXTERNAL_HASH']],
+		);
+		$connection->queryExecute($sql[0]);
+		DocumentInfoTable::cleanCache();
+
+		$info = DocumentInfoTable::getById($infoFields['EXTERNAL_HASH'])->fetch();
+		if (!$info)
 		{
-			if (self::isDuplicateKeyError($exception))
-			{
-				return null;
-			}
+			return null;
 		}
-		return null;
+
+		$result->setPrimary(['EXTERNAL_HASH' => $info['EXTERNAL_HASH']]);
+		$result->setData($info);
+
+		return $result;
 	}
 
-	private static function isDuplicateKeyError(SqlQueryException $exception): bool
+	/**
+	 * A Vibeoffice row that carries an unresolved open attempt is deleted only logically: it stays as an
+	 * inactive tombstone, the durable carrier of the attempt. The carrier is checked and deleted under the
+	 * row lock the registry takes before it changes the attempt, so a send admitted meanwhile is not lost.
+	 * Registry rows are not locked here: their writers take them in either order with the session row, under
+	 * the document lock only. The settled rows of a deleted carrier age out by the maintenance.
+	 */
+	public static function delete($primary)
 	{
-		return mb_strpos($exception->getDatabaseMessage(), '(1062)') !== false;
+		$id = (int)(is_array($primary) ? ($primary['ID'] ?? 0) : $primary);
+		$row = $id > 0 ? static::query()->setSelect(['SERVICE'])->where('ID', $id)->setLimit(1)->fetch() : null;
+		if (($row['SERVICE'] ?? null) !== DocumentService::Vibeoffice->value)
+		{
+			return parent::delete($primary);
+		}
+
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			if (OpenDebtCarrier::filterProtectedRows(self::lockVibeofficeRows([$id])) !== [])
+			{
+				self::deactivateByIds([$id]);
+				$result = new DeleteResult();
+			}
+			else
+			{
+				$result = parent::delete($primary);
+			}
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $exception)
+		{
+			self::rollbackKeepingCause($connection);
+
+			throw $exception;
+		}
+
+		return $result;
 	}
 
 	public static function deleteBatch(array $filter)
 	{
-		parent::deleteBatch($filter);
+		if (
+			$filter === []
+			|| (array_key_exists('SERVICE', $filter) && $filter['SERVICE'] !== DocumentService::Vibeoffice->value)
+		)
+		{
+			parent::deleteBatch($filter);
+
+			return;
+		}
+		$where = [];
+		foreach ($filter as $key => $value)
+		{
+			$where['=' . $key] = $value;
+		}
+		$where['=SERVICE'] = DocumentService::Vibeoffice->value;
+		$vibeofficeIds = array_map('intval', array_column(static::getList([
+			'select' => ['ID'],
+			'filter' => $where,
+		])->fetchAll(), 'ID'));
+		if ($vibeofficeIds === [])
+		{
+			parent::deleteBatch($filter);
+
+			return;
+		}
+		sort($vibeofficeIds);
+
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			// One small portion of contexts is held at a time; the row locks stay until the commit.
+			foreach (array_chunk($vibeofficeIds, self::DELETE_CHUNK_SIZE) as $chunk)
+			{
+				$lockedIds = [];
+				$protected = [];
+				foreach (array_chunk($chunk, self::CONTEXT_READ_CHUNK_SIZE) as $portion)
+				{
+					$locked = self::lockVibeofficeRows($portion);
+					array_push($protected, ...OpenDebtCarrier::filterProtectedRows($locked));
+					array_push($lockedIds, ...array_map('intval', array_column($locked, 'ID')));
+					unset($locked);
+				}
+				self::deactivateByIds($protected);
+				$deletable = array_values(array_diff($lockedIds, $protected));
+				if ($deletable !== [])
+				{
+					$connection->queryExecute(
+						'DELETE FROM ' . $connection->getSqlHelper()->quote(static::getTableName())
+						. ' WHERE ID IN (' . implode(', ', $deletable) . ')'
+					);
+				}
+			}
+			self::deleteOtherServicesBatch($filter);
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $exception)
+		{
+			self::rollbackKeepingCause($connection);
+
+			throw $exception;
+		}
+	}
+
+	/**
+	 * Locks the Vibeoffice rows among the given IDs in the order of their keys and reads their CONTEXT.
+	 *
+	 * @param int[] $ids
+	 * @return array[]
+	 */
+	private static function lockVibeofficeRows(array $ids): array
+	{
+		$ids = array_values(array_unique($ids));
+		sort($ids);
+		$rows = [];
+		foreach (array_chunk($ids, self::DELETE_CHUNK_SIZE) as $chunk)
+		{
+			array_push($rows, ...DocumentStateRepository::fetchAllForUpdate(static::query()
+				->setSelect(['ID', 'CONTEXT'])
+				->whereIn('ID', $chunk)
+				->where('SERVICE', DocumentService::Vibeoffice->value)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(count($chunk))));
+		}
+
+		return $rows;
+	}
+
+	/** A failed statement may have rolled the whole transaction back already: its error is the one to keep. */
+	private static function rollbackKeepingCause(Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (\Throwable)
+		{
+		}
+	}
+
+	/** The rows of the filter that are not Vibeoffice ones, in one statement. */
+	private static function deleteOtherServicesBatch(array $filter): void
+	{
+		$tableName = static::getTableName();
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		$where = [];
+		foreach ($filter as $key => $value)
+		{
+			$where[] = $helper->prepareAssignment($tableName, $key, $value);
+		}
+		$service = $helper->quote('SERVICE');
+		$where[] = "({$service} IS NULL OR {$service} <> '"
+			. $helper->forSql(DocumentService::Vibeoffice->value) . "')";
+
+		$connection->queryExecute('DELETE FROM ' . $helper->quote($tableName) . ' WHERE ' . implode(' AND ', $where));
 	}
 
 	public static function deleteByService(DocumentService $service): void

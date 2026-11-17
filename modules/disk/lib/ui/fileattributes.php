@@ -7,6 +7,7 @@ use Bitrix\Disk\Document\BitrixHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownTabPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\UI\Viewer\Renderer\Html;
@@ -61,6 +62,8 @@ final class FileAttributes extends ItemAttributes
 	private bool $unifiedLinkDisabled = false;
 	private array $unifiedLinkOptions = [];
 	private bool $useUnifiedEditLink = false;
+	private bool $markdownTabAllowed = false;
+	private bool $isMarkdownTab = false;
 	private ?string $tiffPreviewUrlOverride = null;
 	private array $tiffPreviewUrlParams = [];
 
@@ -99,18 +102,22 @@ final class FileAttributes extends ItemAttributes
 	 * A caller that already knows the stored file id of the model hands it over: a link owns none, so
 	 * asking the model for it resolves the object behind the link.
 	 */
-	public static function resolveViewerTypeByFileModel(File $file, string $contentType, ?int $fileId = null): string
+	public static function resolveViewerTypeByFileModel(
+		File $file,
+		string $contentType,
+		?int $fileId = null,
+		?array $storedFileData = null,
+	): string
 	{
 		return (string)static::getViewerTypeByFile([
 			'ID' => $fileId ?? (int)$file->getFileId(),
 			'ORIGINAL_NAME' => (string)$file->getName(),
 			'CONTENT_TYPE' => $contentType,
-			'FILE_SIZE' => (int)$file->getSize(),
-			// The model carries no image dimensions. The placeholder stands for "valid, but unknown":
-			// without it an image would be downgraded to a plain file by a rule that judges dimensions,
-			// while the file size keeps deciding the size restrictions as it does for any other type.
-			'WIDTH' => self::UNKNOWN_IMAGE_SIDE,
-			'HEIGHT' => self::UNKNOWN_IMAGE_SIDE,
+			'FILE_SIZE' => (int)($storedFileData['FILE_SIZE'] ?? $file->getSize()),
+			// Callers without stored dimensions keep the existing model-only estimate.
+			// Batch readers pass the actual dimensions to enforce the image policy.
+			'WIDTH' => $storedFileData === null ? self::UNKNOWN_IMAGE_SIDE : (int)($storedFileData['WIDTH'] ?? 0),
+			'HEIGHT' => $storedFileData === null ? self::UNKNOWN_IMAGE_SIDE : (int)($storedFileData['HEIGHT'] ?? 0),
 			self::KEY_FILE_OBJECT => $file,
 			self::KEY_VERSION_OBJECT => null,
 			self::KEY_WITHOUT_SIDE_EFFECTS => true,
@@ -188,7 +195,8 @@ final class FileAttributes extends ItemAttributes
 			}
 
 			$urlManager = Driver::getInstance()->getUrlManager();
-			$unifiedLink = $this->useUnifiedEditLink
+			// The Markdown page has no editing mode, so its item always opens the view link.
+			$unifiedLink = $this->useUnifiedEditLink && !$this->isMarkdownTab
 				? $urlManager->getUnifiedEditLink($file, $unifiedLinkOptions)
 				: $urlManager->getUnifiedLink($file, $unifiedLinkOptions);
 
@@ -205,7 +213,7 @@ final class FileAttributes extends ItemAttributes
 	 */
 	private function setMarkdownUrl(): void
 	{
-		if ($this->getViewerType() !== Markdown::getJsType())
+		if ($this->isMarkdownTab || $this->getViewerType() !== Markdown::getJsType())
 		{
 			return;
 		}
@@ -309,6 +317,22 @@ final class FileAttributes extends ItemAttributes
 	public function setUnifiedLinkOptions(array $options): self
 	{
 		$this->unifiedLinkOptions = $options;
+
+		return $this;
+	}
+
+	/**
+	 * Lets a surface of Disk open a Markdown file on a page of its own, by its unified link in a new tab,
+	 * instead of the Markdown item of the viewer. Only a surface that asks for it gets it: attachments,
+	 * pickers and the rest keep the item. The decision is made on output, once the version and the
+	 * attachment context are known, so the order of the setters does not matter.
+	 *
+	 * @param bool $allowed
+	 * @return $this
+	 */
+	public function setMarkdownTabAllowed(bool $allowed = true): self
+	{
+		$this->markdownTabAllowed = $allowed;
 
 		return $this;
 	}
@@ -527,6 +551,36 @@ final class FileAttributes extends ItemAttributes
 		]);
 	}
 
+	/**
+	 * Turns the item into the one that opens the Markdown page, when the surface allowed it and the page
+	 * can be reached: the source is a Markdown file or revision, the file has a unified link to open (the
+	 * constructor already asked, see setDefaultAttributes()), and the item is not an attachment.
+	 */
+	private function applyMarkdownTab(): void
+	{
+		if ($this->isMarkdownTab || !$this->markdownTabAllowed)
+		{
+			return;
+		}
+
+		$file = $this->getFileObject();
+		if (
+			$file === null
+			|| !$this->needSetUnifiedLink
+			|| $this->unifiedLinkDisabled
+			|| (int)$this->getAttribute(self::ATTRIBUTE_ATTACHED_OBJECT_ID) > 0
+			|| !MarkdownTabPolicy::isTabSource($file, self::getVersionObject($this->fileData))
+		)
+		{
+			return;
+		}
+
+		$this->isMarkdownTab = true;
+		$this->unsetAttribute(self::ATTRIBUTE_MARKDOWN_URL);
+		$this->setUnifiedLinkViewer();
+		$this->unsetGroupBy();
+	}
+
 	private function setUnifiedLinkViewer(): void
 	{
 		$this
@@ -643,7 +697,17 @@ final class FileAttributes extends ItemAttributes
 
 		if ($type === Renderer\Image::getJsType())
 		{
-			$treatImageAsFile = DiskUploaderController::shouldTreatImageAsFile($fileArray);
+			$imageData = $fileArray;
+			if (GetFileExtension((string)($imageData['ORIGINAL_NAME'] ?? '')) === '')
+			{
+				$extension = TypeFile::getExtensionByMimeType((string)($imageData['CONTENT_TYPE'] ?? ''));
+				if ($extension !== null)
+				{
+					$imageData['ORIGINAL_NAME'] .= '.' . $extension;
+				}
+			}
+
+			$treatImageAsFile = DiskUploaderController::shouldTreatImageAsFile($imageData);
 			if ($treatImageAsFile)
 			{
 				$type = Renderer\Stub::getJsType();
@@ -744,6 +808,8 @@ final class FileAttributes extends ItemAttributes
 
 	public function __toString()
 	{
+		$this->applyMarkdownTab();
+
 		$extension = $this->getExtension();
 		if ($extension)
 		{
@@ -759,6 +825,7 @@ final class FileAttributes extends ItemAttributes
 
 	public function toDataSet()
 	{
+		$this->applyMarkdownTab();
 		$this->setUnifiedLink();
 		$this->setMarkdownUrl();
 		$this->setTiffPreviewUrl();
@@ -768,6 +835,7 @@ final class FileAttributes extends ItemAttributes
 
 	public function toVueBind(): array
 	{
+		$this->applyMarkdownTab();
 		$this->setUnifiedLink();
 		$this->setMarkdownUrl();
 		$this->setTiffPreviewUrl();

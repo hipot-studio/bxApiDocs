@@ -8,10 +8,12 @@ use Bitrix\Intranet\Internal\Access\Otp\UserPermission;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
+use Bitrix\Intranet\Internal\Integration\Main\TrustedDeviceBindingProvider;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Repository\BackupEmailConfirmationRepository;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
+use Bitrix\Intranet\Internal\Service\Otp\DeviceReconnect;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
 use Bitrix\Intranet\Public\Provider\Otp\DayListProvider;
@@ -105,6 +107,7 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$this->arResult["OTP"]["TYPE"] = $personalOtp->getType();
 		$this->arResult["OTP"]["DEVICE_INFO"] = $mobilePush->getDeviceInfo();
 		$this->arResult['OTP']['HAS_CONNECTED_PUSH_DEVICE'] = $personalOtp->hasConnectedPushDevice();
+		$this->arResult['OTP']['IS_PUSH_DEVICE_LOST'] = (new DeviceReconnect())->isDeviceLost($userId);
 		$this->arResult["OTP"]["ARE_RECOVERY_CODES_ENABLED"] = $otpSettings->isRecoveredCodesEnabled();
 		$this->arResult["OTP"]["CAN_USE_RECOVERED_CODES"] = $personalOtp->isActivated()
 			&& $otpSettings->isRecoveredCodesEnabled()
@@ -128,6 +131,15 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$this->arResult['OTP']['PHONE_NUMBER'] = $authPhone->format(Format::INTERNATIONAL);
 		$this->arResult['OTP']['PHONE_NUMBER_CONFIRMED'] = $verifyPhone->isConfirmed($authPhone);
 		$this->arResult['OTP']['EMAIL'] = $otpConfig['email'] ?? '';
+
+		$trustedDeviceBinding = new TrustedDeviceBindingProvider($user, $personalOtp);
+		$this->arResult['OTP']['CAN_REMOVE_CHANNEL'] = $permission->canRemoveChannel();
+		$this->arResult['OTP']['CAN_REMOVE_AUTH_PHONE'] = $permission->canRemoveChannel()
+			&& $verifyPhone->canRemoveAuthPhone();
+		$this->arResult['OTP']['AUTH_PHONE_REMOVAL_UNAVAILABLE_REASON'] =
+			$verifyPhone->getAuthPhoneRemovalUnavailableReason();
+		$this->arResult['OTP']['HAS_TRUSTED_DEVICE_BINDING'] = $trustedDeviceBinding->isBound();
+
 		$this->arResult['PROVIDE_EMAIL_OTP'] = $verifyEmail->canSendEmail();
 		$this->arResult['PROVIDE_SMS_OTP'] = $verifyPhone->canSendSms();
 		$this->arResult['OTP']['CAN_SKIP_DEVICE_CONNECT'] = $user->isCurrent()

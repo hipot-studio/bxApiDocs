@@ -837,7 +837,7 @@ final class FromTemplate extends Util\Replicator\Task
 			$weekDay = array_key_exists($replicateParams["MONTHLY_WEEK_DAY"], $weekDays) ? $weekDays[$replicateParams["MONTHLY_WEEK_DAY"]] : $weekDays[0];
 			$num = intval($replicateParams["MONTHLY_MONTH_NUM_2"]) > 0 ? intval($replicateParams["MONTHLY_MONTH_NUM_2"]) : 1;
 
-			$date = strtotime($ordinal." ".$weekDay." of this month") + $preferredTime;
+			$date = strtotime($ordinal." ".$weekDay." of ".date("Y-m-01", $startDate)) + $preferredTime;
 
 			if ($date <= $startDate)
 			{

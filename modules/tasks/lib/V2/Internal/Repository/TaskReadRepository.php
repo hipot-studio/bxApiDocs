@@ -18,7 +18,6 @@ use Bitrix\Tasks\Provider\Query\TaskQueryBuilder;
 use Bitrix\Tasks\Provider\TaskQuery;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\TagCollection;
-use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Mail\Repository\EmailRepositoryInterface;
@@ -62,7 +61,6 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		private readonly TaskElapsedTimeProvider $elapsedTimeProvider,
 		private readonly TaskLegacyFeatureService $taskLegacyFeatureService,
 		private readonly TaskMemberRepositoryInterface $taskMemberRepository,
-		private readonly CrmAccessService $crmAccessService,
 		private readonly TemplateReplicateParamsRepositoryInterface $templateReplicateParamsRepository,
 	)
 	{
@@ -347,11 +345,17 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			$forkedByTemplateId = $task->getForkedByTemplateId();
 			if ($forkedByTemplateId > 0)
 			{
-				$templateReplication = $this->templateReplicateParamsRepository->getByTemplateId($forkedByTemplateId);
+				$templateReplication = $this->templateReplicateParamsRepository->getByTemplateId(
+					$forkedByTemplateId,
+					includeDeleted: true,
+				);
 			}
 			else
 			{
-				$templateReplication = $this->templateReplicateParamsRepository->getByTaskId($id);
+				$templateReplication = $this->templateReplicateParamsRepository->getByTaskId(
+					$id,
+					includeDeleted: true,
+				);
 			}
 		}
 
@@ -463,9 +467,8 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		{
 			$currentUserId = (int)CurrentUser::get()->getId();
 			$crmItemsIds = array_unique(array_merge(...array_filter(array_column($tasks, 'UF_CRM_TASK'))));
-			$crmItemsIds = $this->crmAccessService->filterCrmItemsWithAccess($crmItemsIds, $currentUserId);
 
-			$crmItemCollection = $this->crmItemRepository->getByIds($crmItemsIds);
+			$crmItemCollection = $this->crmItemRepository->getReadableByIds($crmItemsIds, $currentUserId);
 		}
 
 		$tagCollection = $select->has('tags')

@@ -16,10 +16,12 @@ class ManagedCache
 {
 	protected const BASE_DIR = "managed_cache";
 	protected const FLAG_DIR = "_flags";
-	protected const FLAG_TTL = 30;
+	protected const FLAG_TTL = 60;
 
 	/** @var CacheEntry[] */
 	protected $cache = [];
+	private array $cacheByDir = [];
+	private bool $useDirectoryIndex = true;
 	protected $vars = [];
 	protected $dbType;
 	protected $flagDir;
@@ -37,9 +39,23 @@ class ManagedCache
 	{
 		if (!isset($this->cache[$uniqueId]))
 		{
-			$this->cache[$uniqueId] = (new CacheEntry($ttl, $uniqueId, $this->getDir($tableId), static::BASE_DIR))
-				->initialize()
-			;
+			$dir = $this->getDir($tableId);
+			$cacheEntry = (new CacheEntry($ttl, $uniqueId, $dir, static::BASE_DIR))->initialize();
+			if ($this->useDirectoryIndex && static::class === self::class)
+			{
+				if (isset($this->cache[$uniqueId]))
+				{
+					// Reentrant initialization can change the native iteration order within a directory.
+					$this->useDirectoryIndex = false;
+					$this->cacheByDir = [];
+				}
+				else
+				{
+					$this->cacheByDir[$dir][$uniqueId] = true;
+				}
+			}
+			$this->cache[$uniqueId] = $cacheEntry;
+			unset($cacheEntry);
 		}
 
 		return $this->cache[$uniqueId]->isInitialized() || array_key_exists($uniqueId, $this->vars);
@@ -97,14 +113,14 @@ class ManagedCache
 		}
 
 		$initTime = $this->cache[$uniqueId]->getInitTime();
-		$write = true;
+		$write = (hrtime(true) - $initTime) < static::FLAG_TTL * 1_000_000_000;
 
 		// real value changed - cache entry was deleted
-		if ($this->checkFlag('flag.' . $uniqueId, $initTime))
+		if ($write && $this->checkFlag('flag.' . $uniqueId, $initTime))
 		{
 			$write = false;
 		}
-		else
+		elseif ($write)
 		{
 			$cachePath = $this->cache[$uniqueId]->getCachePath();
 
@@ -120,6 +136,7 @@ class ManagedCache
 			$this->cache[$uniqueId]->write($val);
 		}
 
+		$this->removeFromDirectoryIndex($uniqueId);
 		unset($this->cache[$uniqueId]);
 		unset($this->vars[$uniqueId]);
 	}
@@ -160,6 +177,7 @@ class ManagedCache
 
 		if (isset($this->cache[$uniqueId]))
 		{
+			$this->removeFromDirectoryIndex($uniqueId);
 			unset($this->cache[$uniqueId]);
 			unset($this->vars[$uniqueId]);
 		}
@@ -174,6 +192,32 @@ class ManagedCache
 		$this->writeFlag('dir.' . $dir);
 
 		Cache::createInstance()->cleanDir($dir, static::BASE_DIR);
+
+		if ($this->useDirectoryIndex && static::class === self::class)
+		{
+			// Preserve the native foreach snapshot and payload destruction order during callbacks.
+			$cacheEntries = $this->cache;
+			try
+			{
+				foreach ($this->cacheByDir[$dir] ?? [] as $uniqueId => $_)
+				{
+					$cacheEntry = $cacheEntries[$uniqueId];
+					$this->removeFromDirectoryIndex($uniqueId);
+					unset($this->cache[$uniqueId]);
+					unset($this->vars[$uniqueId]);
+				}
+				if ($cacheEntries)
+				{
+					$cacheEntry = $cacheEntries[array_key_last($cacheEntries)];
+				}
+			}
+			finally
+			{
+				unset($cacheEntries);
+			}
+
+			return;
+		}
 
 		foreach ($this->cache as $uniqueId => $cacheEntry)
 		{
@@ -190,6 +234,7 @@ class ManagedCache
 	{
 		Cache::createInstance()->cleanDir(false, static::BASE_DIR);
 
+		$this->cacheByDir = [];
 		$this->cache = [];
 		$this->vars = [];
 	}
@@ -226,6 +271,21 @@ class ManagedCache
 		$path = "/" . SITE_ID . $relativePath . $salt;
 
 		return $path;
+	}
+
+	private function removeFromDirectoryIndex(mixed $uniqueId): void
+	{
+		if (!$this->useDirectoryIndex || static::class !== self::class || !isset($this->cache[$uniqueId]))
+		{
+			return;
+		}
+
+		$dir = $this->cache[$uniqueId]->getCachePath();
+		unset($this->cacheByDir[$dir][$uniqueId]);
+		if (empty($this->cacheByDir[$dir]))
+		{
+			unset($this->cacheByDir[$dir]);
+		}
 	}
 
 	protected function getDir($tableId): string

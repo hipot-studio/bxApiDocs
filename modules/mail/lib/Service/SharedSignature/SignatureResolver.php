@@ -280,7 +280,12 @@ class SignatureResolver
 		{
 			$senderKey = (string)$sender['key'];
 			$emailKey = AssignmentResolver::normalizeSenderKey((string)$sender['email']);
-			$ownerGroups = $this->groupOwnerSignaturesForSender($ownerSignatures, $senderKey, $emailKey);
+			$ownerGroups = $this->groupOwnerSignaturesForSender(
+				$ownerSignatures,
+				$senderKey,
+				$emailKey,
+				(int)$sender['mailboxId'],
+			);
 			$sharedSignatures = $sharedSignaturesByMailbox[(int)$sender['mailboxId']] ?? [];
 
 			$availableSignatureIds = [];
@@ -332,6 +337,7 @@ class SignatureResolver
 	 *     scope: string,
 	 *     senderKey: string|null,
 	 *     senderKeys: string[],
+	 *     mailboxNames: array<int, string[]>,
 	 *     hasAssignments: bool,
 	 *     hasGeneralSenderAssignment: bool,
 	 * }>
@@ -350,7 +356,7 @@ class SignatureResolver
 		if (!empty($signatureIds))
 		{
 			$assignments = SharedSignatureAssignmentTable::query()
-				->setSelect(['ID', 'SIGNATURE_ID', 'TARGET_TYPE', 'TARGET_VALUE'])
+				->setSelect(['ID', 'SIGNATURE_ID', 'TARGET_TYPE', 'TARGET_ID', 'TARGET_VALUE'])
 				->whereIn('SIGNATURE_ID', $signatureIds)
 				->setOrder(['ID' => 'ASC'])
 				->exec()
@@ -359,6 +365,14 @@ class SignatureResolver
 			{
 				$signatureId = (int)$assignment['SIGNATURE_ID'];
 				$assignmentsBySignature[$signatureId]['hasAssignments'] = true;
+				if ((string)$assignment['TARGET_TYPE'] === SharedSignatureAssignmentTable::TARGET_MAILBOX)
+				{
+					$assignmentsBySignature[$signatureId]['mailboxNames'][(int)$assignment['TARGET_ID']][] =
+						(string)($assignment['TARGET_VALUE'] ?? '')
+					;
+
+					continue;
+				}
 				if ((string)$assignment['TARGET_TYPE'] !== SharedSignatureAssignmentTable::TARGET_SENDER)
 				{
 					continue;
@@ -387,6 +401,7 @@ class SignatureResolver
 				'scope' => SharedSignatureTable::SCOPE_OWNER,
 				'senderKey' => $senderKeys[0] ?? null,
 				'senderKeys' => $senderKeys,
+				'mailboxNames' => $assignmentsBySignature[$signatureId]['mailboxNames'] ?? [],
 				'hasAssignments' => (bool)($assignmentsBySignature[$signatureId]['hasAssignments'] ?? false),
 				'hasGeneralSenderAssignment' => (bool)(
 					$assignmentsBySignature[$signatureId]['hasGeneralSenderAssignment'] ?? false
@@ -409,6 +424,7 @@ class SignatureResolver
 				'scope' => SharedSignatureTable::SCOPE_OWNER,
 				'senderKey' => $senderKey !== '' ? $senderKey : null,
 				'senderKeys' => $senderKey !== '' ? [$senderKey] : [],
+				'mailboxNames' => [],
 				'hasAssignments' => false,
 				'hasGeneralSenderAssignment' => false,
 			];
@@ -424,14 +440,20 @@ class SignatureResolver
 	 *     scope: string,
 	 *     senderKey: string|null,
 	 *     senderKeys?: string[],
+	 *     mailboxNames?: array<int, string[]>,
 	 *     hasAssignments?: bool,
 	 *     hasGeneralSenderAssignment?: bool,
 	 * }> $signatures
-	 * @return array{exact: array, email: array, general: array}
+	 * @return array{exact: array, mailboxNamed: array, mailboxAddress: array, email: array, general: array}
 	 */
-	private function groupOwnerSignaturesForSender(array $signatures, string $senderKey, string $emailKey): array
+	private function groupOwnerSignaturesForSender(
+		array $signatures,
+		string $senderKey,
+		string $emailKey,
+		int $mailboxId,
+	): array
 	{
-		$groups = ['exact' => [], 'email' => [], 'general' => []];
+		$groups = ['exact' => [], 'mailboxNamed' => [], 'mailboxAddress' => [], 'email' => [], 'general' => []];
 		foreach ($signatures as $signature)
 		{
 			$senderKeys = $signature['senderKeys'] ?? [];
@@ -439,10 +461,18 @@ class SignatureResolver
 			{
 				$senderKeys = [$signature['senderKey']];
 			}
+			$mailboxGroup = $mailboxId > 0
+				? self::getMailboxAssignmentGroup($signature['mailboxNames'][$mailboxId] ?? [], $emailKey, $senderKey)
+				: null
+			;
 
 			if (in_array($senderKey, $senderKeys, true))
 			{
 				$groups['exact'][] = $signature;
+			}
+			elseif ($mailboxGroup !== null)
+			{
+				$groups[$mailboxGroup][] = $signature;
 			}
 			elseif (in_array($emailKey, $senderKeys, true))
 			{
@@ -461,9 +491,30 @@ class SignatureResolver
 	}
 
 	/**
+	 * @param string[] $mailboxNames
+	 */
+	private static function getMailboxAssignmentGroup(array $mailboxNames, string $emailKey, string $senderKey): ?string
+	{
+		$hasAddressAssignment = false;
+		foreach ($mailboxNames as $mailboxName)
+		{
+			if (trim($mailboxName) === '')
+			{
+				$hasAddressAssignment = true;
+			}
+			elseif (SignatureChoiceStorage::buildSenderKey($emailKey, $mailboxName) === $senderKey)
+			{
+				return 'mailboxNamed';
+			}
+		}
+
+		return $hasAddressAssignment ? 'mailboxAddress' : null;
+	}
+
+	/**
 	 * @param int[] $availableSignatureIds
 	 * @param array<int, array{ID: int, SIGNATURE: string, ASSIGNED_AT: int|null}> $sharedSignatures
-	 * @param array{exact: array, email: array, general: array} $ownerGroups
+	 * @param array{exact: array, mailboxNamed: array, mailboxAddress: array, email: array, general: array} $ownerGroups
 	 */
 	private function resolveSelectedSignatureId(
 		mixed $rawChoice,
@@ -488,7 +539,7 @@ class SignatureResolver
 			return (int)$sharedSignatures[0]['ID'];
 		}
 
-		foreach (['exact', 'email', 'general'] as $group)
+		foreach (['exact', 'mailboxNamed', 'mailboxAddress', 'email', 'general'] as $group)
 		{
 			if (!empty($ownerGroups[$group]))
 			{

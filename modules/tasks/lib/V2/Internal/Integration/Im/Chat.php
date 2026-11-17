@@ -106,9 +106,11 @@ class Chat
 			;
 		}
 
+		// The module itself brings task participants in, so an unset value keeps the history visible
+		// instead of the portal-wide start_chat_message default. An explicit choice passes through.
 		$config = $config
 			->setWithMessage(false)
-			->setHideHistory(false)
+			->setHideHistory($config->hideHistory ?? false)
 		;
 
 		return new EventResult(EventResult::SUCCESS, ['config' => $config]);
@@ -134,6 +136,17 @@ class Chat
 			return $result->addError(new Error('IM module is not installed'));
 		}
 
+		$authorId = $task->creator?->id ?? $task->responsible?->id;
+		if ($authorId === null)
+		{
+			Container::getInstance()->getLogger()->logWarning([
+				'message' => 'Task chat was not created: no living creator or responsible',
+				'taskId' => $task->getId(),
+			]);
+
+			return $result;
+		}
+
 		$chatAvatar = $this->getChatAvatar();
 		$avatarType = $chatAvatar->getTypeByTask($task);
 		$avatarId = $chatAvatar->ensureFileId($avatarType);
@@ -151,7 +164,7 @@ class Chat
 			'ENTITY_TYPE' => self::ENTITY_TYPE,
 			'ENTITY_ID' => $task->getId(),
 			'USERS' => $task->getMemberIds(),
-			'AUTHOR_ID' => $task->creator->id,
+			'AUTHOR_ID' => $authorId,
 			'AVATAR' => $avatarId > 0 ? $avatarId : null,
 			'PARENT_ID' => $this->getProjectChatResolver()->getParentChatIdForGroup($task->group),
 		]);

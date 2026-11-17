@@ -18,3 +18,4 @@ final class MassMailboxActionsAccess extends MassAccessBase
 		return MailAccess::getMassMailboxActionsDenial();
 	}
 }
+

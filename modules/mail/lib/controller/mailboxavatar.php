@@ -104,3 +104,4 @@ final class MailboxAvatar extends Base
 		}
 	}
 }
+

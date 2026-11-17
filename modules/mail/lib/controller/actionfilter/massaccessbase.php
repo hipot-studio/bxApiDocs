@@ -32,3 +32,4 @@ abstract class MassAccessBase extends Base
 		return new EventResult(EventResult::ERROR, null, null, $this);
 	}
 }
+

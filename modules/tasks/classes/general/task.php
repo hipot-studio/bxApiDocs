@@ -182,6 +182,16 @@ class CTasks
 			$handler->fromAgent();
 		}
 
+		if (array_key_exists('DEADLINE_MANUALLY_SET', $arParams))
+		{
+			$deadlineManuallySet = $arParams['DEADLINE_MANUALLY_SET'];
+			$handler->withManualDeadline(
+				$deadlineManuallySet === null
+					? null
+					: $deadlineManuallySet === 'Y' || $deadlineManuallySet === true,
+			);
+		}
+
 		$spawnedByWorkFlow = ($arParams['SPAWNED_BY_WORKFLOW'] ?? false);
 		if ($spawnedByWorkFlow === 'Y' || $spawnedByWorkFlow === true)
 		{
@@ -370,6 +380,15 @@ class CTasks
 		{
 			$handler->update($taskId, $arFields);
 			$this->lastOperationResultData = $handler->getLegacyOperationResultData();
+		}
+		catch (\Bitrix\Tasks\Control\Exception\TaskStageValidationException $e)
+		{
+			$this->_errors[] = [
+				"text" => $e->getMessage(),
+				"id" => $e->getErrorCode(),
+			];
+
+			return false;
 		}
 		catch (\Bitrix\Tasks\Control\Exception\TaskUpdateException $e)
 		{
@@ -3954,6 +3973,24 @@ class CTasks
 
 				if ($newKey && ($fields[$newKey] ?? null))
 				{
+					if (is_array($value))
+					{
+						foreach (array_keys($value) as $valueKey)
+						{
+							if (mb_strpos((string)$valueKey, 'META:') === 0)
+							{
+								unset($value[$valueKey]);
+							}
+						}
+
+						// An emptied subfilter must not go further: the branches below read the first
+						// value of the array and would build the filter from false.
+						if (empty($value))
+						{
+							continue;
+						}
+					}
+
 					$fieldRuntimeOptions = static::getFieldRuntimeOptions($newKey, $value, $parameters);
 
 					$runtimeOptions['FIELDS'] = array_merge($runtimeOptions['FIELDS'], $fieldRuntimeOptions['FIELDS']);

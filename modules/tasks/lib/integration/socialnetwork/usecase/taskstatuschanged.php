@@ -75,16 +75,19 @@ class TaskStatusChanged extends BaseCase
 			false,
 			['ID', 'ENTITY_TYPE', 'ENTITY_ID']
 		);
+
+		// zombie task loaded from recyclebin has no CREATED_BY
+		$authorId = (int)$task->getCreatedBy();
+
 		while ($log = $dbRes->Fetch())
 		{
 			$logId = $log['ID'];
-			$authorId = $task->getCreatedBy();
 
 			\CSocNetLog::Update($logId, $arSoFields);
 
 			// Add author to list of users that view log about task in livefeed
 			// But only when some other person change task
-			if ($authorId !== $loggedInUserId)
+			if ($authorId > 0 && $authorId !== $loggedInUserId)
 			{
 				$authorGroupCode = 'U' . $authorId;
 

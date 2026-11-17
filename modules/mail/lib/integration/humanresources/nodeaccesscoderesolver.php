@@ -41,3 +41,4 @@ class NodeAccessCodeResolver
 		return $nodeIds;
 	}
 }
+

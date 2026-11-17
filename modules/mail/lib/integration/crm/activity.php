@@ -112,3 +112,4 @@ class Activity
 		return is_array($row) ? (int)($row['UF_MAIL_MESSAGE'] ?? 0) : 0;
 	}
 }
+

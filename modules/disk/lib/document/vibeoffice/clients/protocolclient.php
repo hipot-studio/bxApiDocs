@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\Vibeoffice\Clients;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Bitrix\Disk\Document\Vibeoffice\Logging\LoggerProvider;
+use Psr\Log\LoggerInterface;
 
 /**
  * Default ProtocolClient implementation over Bitrix\Main\Web\HttpClient.
@@ -22,10 +25,19 @@ use Bitrix\Main\Web\Json;
  */
 final class ProtocolClient implements ProtocolClientInterface
 {
+	private const OPEN_CAPABILITIES = ['X-VO-Accept-Open' => 'save-refused-v1, filetype-not-editable-v1'];
+	private const LOGGABLE_PLATFORM_CODES = [
+		'save_refused', 'doc_full', 'file_too_large', 'filetype_not_editable',
+		'unsupported_filetype', 'no_capacity', 'saving_in_progress',
+		'session_closing', 'open_in_progress', 'failover_in_progress', 'open_session_closed',
+	];
+
 	private string $baseUrl;
 	private Signer $signer;
 	/** @var (\Closure(): HttpClient)|null */
 	private ?\Closure $httpClientFactory;
+	private ProtocolCallContext $callContext;
+	private LoggerInterface $logger;
 	/**
 	 * @param (\Closure(): HttpClient)|null $httpClientFactory test seam; without it
 	 *        the client is built by {@see buildHttpClient()} with the production timeouts.
@@ -34,67 +46,130 @@ final class ProtocolClient implements ProtocolClientInterface
 		string $baseUrl,
 		Signer $signer,
 		?AvatarSourceResolver $avatarSourceResolver = null,
-		?\Closure $httpClientFactory = null
+		?\Closure $httpClientFactory = null,
+		?ProtocolCallContext $callContext = null,
+		?LoggerInterface $logger = null,
 	)
 	{
 		$this->baseUrl = rtrim($baseUrl, '/');
 		$this->signer = $signer;
 		$this->httpClientFactory = $httpClientFactory;
+		$this->callContext = $callContext ?? new ProtocolCallContext();
+		$this->logger = $logger ?? LoggerProvider::get('disk.vibeoffice.protocol');
 	}
 
 	public function open(string $docKey, array $body, ?float $deadline = null): Result
 	{
-		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/open';
-
 		unset($body['user']['image']);
 
 		return $this->send(
 			HttpClient::HTTP_POST,
-			$path,
+			self::buildOpenPath($docKey),
 			$body,
 			$deadline,
-			['X-VO-Accept-Open' => 'save-refused-v1, filetype-not-editable-v1'],
+			self::OPEN_CAPABILITIES,
+			'/v1/documents/{docKey}/open',
+			'open',
 		);
+	}
+
+	/**
+	 * Only an HTTPS endpoint vouches for the answer of a send, and only while the certificate check of the
+	 * HTTP client is left on: the global http_client_options may switch the peer and name verification off
+	 * for every client, and such a transport keeps its success but proves no outcome, as HTTP does.
+	 * Redirects are never followed by {@see self::send()}.
+	 */
+	public function isTrustedTransport(): bool
+	{
+		$scheme = parse_url($this->baseUrl, PHP_URL_SCHEME);
+		$host = parse_url($this->baseUrl, PHP_URL_HOST);
+		$defaults = Configuration::getValue('http_client_options');
+		$verificationDisabled = is_array($defaults) && ($defaults['disableSslVerification'] ?? null) === true;
+
+		return !$verificationDisabled
+			&& is_string($scheme)
+			&& strtolower($scheme) === 'https'
+			&& is_string($host)
+			&& $host !== ''
+		;
+	}
+
+	/**
+	 * Fingerprint of the open request exactly as {@see self::open()} sends it, with the egress
+	 * authorization values masked. Null when the body cannot be masked unambiguously.
+	 */
+	public function fingerprintOpen(string $docKey, array $body, string $sourceBinding): ?string
+	{
+		unset($body['user']['image']);
+		$rawBody = OpenFingerprint::encodeBody($body);
+		$maskedBody = $rawBody === null ? null : OpenFingerprint::maskRawBody($rawBody, $body);
+		if ($maskedBody === null)
+		{
+			return null;
+		}
+		$capabilities = '';
+		foreach (self::OPEN_CAPABILITIES as $name => $value)
+		{
+			$capabilities .= OpenFingerprint::lengthPrefixed($name) . OpenFingerprint::lengthPrefixed($value);
+		}
+
+		// An untrusted endpoint proves no outcome whatever its address, so only the path binds its sends.
+		$trusted = $this->isTrustedTransport();
+
+		return OpenFingerprint::digest([
+			HttpClient::HTTP_POST,
+			($trusted ? $this->baseUrl : 'untrusted-transport') . self::buildOpenPath($docKey),
+			$trusted ? strtolower((string)parse_url($this->baseUrl, PHP_URL_HOST)) : '',
+			$this->signer->getKeyIdentity(),
+			$capabilities,
+			$sourceBinding,
+			$maskedBody,
+		]);
+	}
+
+	private static function buildOpenPath(string $docKey): string
+	{
+		return '/v1/documents/' . self::encodeSegment($docKey) . '/open';
 	}
 
 	public function upsertGrants(string $docKey, array $grants): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/grants';
 
-		return $this->send(HttpClient::HTTP_POST, $path, $grants);
+		return $this->send(HttpClient::HTTP_POST, $path, $grants, route: '/v1/documents/{docKey}/grants', operation: 'upsertGrants');
 	}
 
 	public function revokeGrant(string $docKey, string $userId): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/grants/' . self::encodeSegment($userId);
 
-		return $this->send(HttpClient::HTTP_DELETE, $path, null);
+		return $this->send(HttpClient::HTTP_DELETE, $path, null, route: '/v1/documents/{docKey}/grants/{userId}', operation: 'revokeGrant');
 	}
 
 	public function forcesave(string $docKey, ?array $userdata): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/forcesave';
 
-		return $this->send(HttpClient::HTTP_POST, $path, $userdata);
+		return $this->send(HttpClient::HTTP_POST, $path, $userdata, route: '/v1/documents/{docKey}/forcesave', operation: 'forcesave');
 	}
 
 	public function updateMeta(string $docKey, string $title): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/meta';
 
-		return $this->send(HttpClient::HTTP_POST, $path, ['title' => $title]);
+		return $this->send(HttpClient::HTTP_POST, $path, ['title' => $title], route: '/v1/documents/{docKey}/meta', operation: 'updateMeta');
 	}
 
 	public function convert(array $body): Result
 	{
-		return $this->send(HttpClient::HTTP_POST, '/v1/convert', $body);
+		return $this->send(HttpClient::HTTP_POST, '/v1/convert', $body, route: '/v1/convert', operation: 'convert');
 	}
 
 	public function signVersionUrls(string $docKey, array $body): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/versions/sign-urls';
 
-		return $this->send(HttpClient::HTTP_POST, $path, $body);
+		return $this->send(HttpClient::HTTP_POST, $path, $body, route: '/v1/documents/{docKey}/versions/sign-urls', operation: 'signVersionUrls');
 	}
 
 	/**
@@ -119,80 +194,177 @@ final class ProtocolClient implements ProtocolClientInterface
 		?array $body,
 		?float $deadline = null,
 		array $extraHeaders = [],
+		string $route = '',
+		string $operation = '',
 	): Result
 	{
-		$result = new Result();
-		if ($deadline !== null && (!is_finite($deadline) || $deadline - hrtime(true) / 1e9 < 0.001))
+		$startedAt = hrtime(true);
+		$attempt = $operation === 'open'
+			? $this->callContext->currentOpenAttempt()
+			: $this->callContext->nextAttempt($operation);
+		$requestSent = false;
+		$httpStatus = null;
+		$platformCode = null;
+		$diagnosticResult = 'not_sent';
+		$diagnosticCode = 'protocol_exception';
+		$thrown = false;
+		try
 		{
-			return $result->addError(new Error(
-				'Vibeoffice opening deadline exceeded.',
-				'vibeoffice_open_deadline',
-				['requestSent' => false, 'responseVerified' => false],
-			));
-		}
-		if ($deadline !== null && !function_exists('curl_init'))
-		{
-			return $result->addError(new Error(
-				'Opening deadline requires cURL transport.',
-				'vibeoffice_deadline_transport',
-				['requestSent' => false, 'responseVerified' => false],
-			));
-		}
+			$result = new Result();
+			if ($deadline !== null && (!is_finite($deadline) || $deadline - hrtime(true) / 1e9 < 0.001))
+			{
+				$diagnosticCode = 'vibeoffice_open_deadline';
+				return $result->addError(new Error(
+					'Vibeoffice opening deadline exceeded.',
+					'vibeoffice_open_deadline',
+					['requestSent' => false, 'responseVerified' => false],
+				));
+			}
+			if ($deadline !== null && !function_exists('curl_init'))
+			{
+				$diagnosticCode = 'vibeoffice_deadline_transport';
+				return $result->addError(new Error(
+					'Opening deadline requires cURL transport.',
+					'vibeoffice_deadline_transport',
+					['requestSent' => false, 'responseVerified' => false],
+				));
+			}
 
+			if ($body === null)
+			{
+				$rawBody = '';
+			}
+			else
+			{
+				try
+				{
+					$rawBody = Json::encode($body);
+				}
+				catch (ArgumentException $e)
+				{
+					$diagnosticCode = 'request_encode_failed';
+					return $result->addError(new Error($e->getMessage()));
+				}
+			}
 
-		if ($body === null)
-		{
-			$rawBody = '';
+			$ts = time();
+			$nonce = Signer::generateNonce();
+			$headers = $this->signer->buildHeaders($method, $escapedPath, '', $rawBody, $ts, $nonce);
+			$http = $this->httpClientFactory === null ? $this->buildHttpClient($deadline) : ($this->httpClientFactory)($deadline);
+			$http->setRedirect(false);
+			foreach ($headers as $name => $value)
+			{
+				$http->setHeader($name, $value);
+			}
+			foreach ($extraHeaders as $name => $value)
+			{
+				$http->setHeader($name, $value);
+			}
+
+			$url = $this->baseUrl . $escapedPath;
+			$entityBody = $rawBody === '' ? null : $rawBody;
+			$requestSent = null;
+			if ($http->query($method, $url, $entityBody) === false)
+			{
+				$diagnosticResult = 'error';
+				$diagnosticCode = 'vibeoffice_transport_unknown';
+				return $result->addError(new Error(
+					'Vibeoffice server is not available.',
+					'vibeoffice_transport_unknown',
+					['responseVerified' => false],
+				));
+			}
+			$requestSent = true;
+			$httpStatus = (int)$http->getStatus();
+			if ($deadline !== null && hrtime(true) / 1e9 >= $deadline)
+			{
+				$diagnosticResult = 'error';
+				$diagnosticCode = 'vibeoffice_open_deadline';
+				return $result->addError(new Error(
+					'Vibeoffice opening deadline exceeded.',
+					'vibeoffice_open_deadline',
+					['responseVerified' => false],
+				));
+			}
+
+			if ($httpStatus >= 200 && $httpStatus < 300)
+			{
+				if ($this->isValidDiagnosticResponse($operation, (string)$http->getResult()))
+				{
+					$diagnosticResult = 'ok';
+					$diagnosticCode = null;
+				}
+				else
+				{
+					$diagnosticResult = 'error';
+					$diagnosticCode = 'response_invalid';
+				}
+			}
+			else
+			{
+				$diagnosticResult = 'refused';
+				$diagnosticCode = 'platform_refused';
+				$parsedCode = $this->extractPlatformCode((string)$http->getResult());
+				$platformCode = in_array($parsedCode, self::LOGGABLE_PLATFORM_CODES, true) ? $parsedCode : null;
+			}
+
+			return $this->handleResponse($result, $http);
 		}
-		else
+		catch (\Throwable $e)
 		{
+			$thrown = true;
+			$diagnosticResult = $requestSent === false ? 'not_sent' : 'error';
+			$diagnosticCode = 'protocol_exception';
+			throw $e;
+		}
+		finally
+		{
+			$level = $thrown || $diagnosticResult === 'error' ? 'error'
+				: ($diagnosticResult === 'ok' ? 'info' : 'warning');
 			try
 			{
-				$rawBody = Json::encode($body);
+				$this->logger->log($level, 'vibeoffice platform request', [
+					'method' => $method,
+					'path' => $route,
+					'httpStatus' => $httpStatus,
+					'platformCode' => $platformCode,
+					'duration_ms' => max(0, (int)floor((hrtime(true) - $startedAt) / 1e6)),
+					'attempt' => $attempt,
+					'result' => $diagnosticResult,
+					'code' => $diagnosticCode,
+					'request_sent' => $requestSent,
+					'trace_id' => null,
+				]);
 			}
-			catch (ArgumentException $e)
+			catch (\Throwable)
 			{
-				return $result->addError(new Error($e->getMessage()));
+				// Diagnostic failures do not change the platform result.
 			}
 		}
+	}
 
-		$ts = time();
-		$nonce = Signer::generateNonce();
-
-		$headers = $this->signer->buildHeaders($method, $escapedPath, '', $rawBody, $ts, $nonce);
-
-		$http = $this->httpClientFactory === null ? $this->buildHttpClient($deadline) : ($this->httpClientFactory)($deadline);
-		foreach ($headers as $name => $value)
+	private function isValidDiagnosticResponse(string $operation, string $rawResponse): bool
+	{
+		if ($rawResponse === '')
 		{
-			$http->setHeader($name, $value);
+			return $operation !== 'open';
 		}
-		foreach ($extraHeaders as $name => $value)
+		try
 		{
-			$http->setHeader($name, $value);
+			$decoded = json_decode($rawResponse, flags: JSON_THROW_ON_ERROR);
 		}
-
-		$url = $this->baseUrl . $escapedPath;
-
-		$entityBody = $rawBody === '' ? null : $rawBody;
-		if ($http->query($method, $url, $entityBody) === false)
+		catch (\JsonException)
 		{
-			return $result->addError(new Error(
-				'Vibeoffice server is not available.',
-				'vibeoffice_transport_unknown',
-				['responseVerified' => false],
-			));
+			return false;
 		}
-
-		if ($deadline !== null && hrtime(true) / 1e9 >= $deadline)
+		if ($operation === 'open')
 		{
-			return $result->addError(new Error(
-				'Vibeoffice opening deadline exceeded.',
-				'vibeoffice_open_deadline',
-				['responseVerified' => false],
-			));
+			return $decoded instanceof \stdClass
+				&& isset($decoded->config)
+				&& $decoded->config instanceof \stdClass
+				&& get_object_vars($decoded->config) !== [];
 		}
-
-		return $this->handleResponse($result, $http);
+		return $decoded instanceof \stdClass || is_array($decoded);
 	}
 
 	private function handleResponse(Result $result, HttpClient $http): Result

@@ -1,14 +1,14 @@
 <?php
 namespace Bitrix\Tasks\Grid\Task\Row\Content\UserField;
 
-use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
+use Bitrix\Tasks\Grid\Task\Grid;
 use Bitrix\Tasks\Grid\Task\Row\Content\UserField;
 use Bitrix\Tasks\Integration\CRM\CrmInTasksFeature;
-use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\Mapper\CrmIdMapper;
+use Bitrix\Tasks\Integration\CRM\Grid\CrmItemGridDataInterface;
+use Bitrix\Tasks\Integration\CRM\Grid\CrmItemGridDataProvider;
 use CCrmOwnerType;
-use CCrmOwnerTypeAbbr;
 
 /**
  * Class Crm
@@ -53,54 +53,51 @@ class Crm extends UserField
 		$collection = [];
 		foreach ($row['UF_CRM_TASK'] as $value)
 		{
-			[$type, $id] = explode('_', $value);
-			$typeId = CCrmOwnerType::ResolveID(CCrmOwnerTypeAbbr::ResolveName($type));
-			$title = CCrmOwnerType::GetCaption($typeId, $id);
-			$url = CCrmOwnerType::GetEntityShowPath($typeId, $id);
-
-			if (!isset($collection[$typeId]))
+			$data = $this->resolveRenderableGridData($value);
+			if ($data === null)
 			{
-				$collection[$typeId] = [];
+				continue;
 			}
 
-			if ($title)
-			{
-				$safeTitle = htmlspecialcharsbx($title);
-				$safeUrl = htmlspecialcharsbx($url);
-				$collection[$typeId][] = "<a href=\"{$safeUrl}\">{$safeTitle}</a>";
-			}
+			$collection[$data->getTypeId()][] = $this->renderLegacyItem($data);
 		}
 
-		$html = [];
-		if ($collection)
+		if ($collection === [])
 		{
-			$html[] = '<div class="tasks-list-crm-div">';
-			$previousTypeId = null;
+			return '';
+		}
 
-			foreach ($collection as $typeId => $items)
-			{
-				if (empty($items))
-				{
-					continue;
-				}
+		$gridDataProvider = new CrmItemGridDataProvider();
 
-				$html[] = '<div class="tasks-list-crm-div-wrapper">';
-				if ($typeId !== $previousTypeId)
-				{
-					$factory = Container::getInstance()->getFactory($typeId);
-					$typeTitle = htmlspecialcharsbx($factory ? $factory->getEntityDescription() : '');
-					$html[] = "<span class='tasks-list-crm-div-type'>{$typeTitle}:</span>";
-				}
-				$html[] = implode(', ', $items);
-				$html[] = '</div>';
+		$html = ['<div class="tasks-list-crm-div">'];
+		foreach ($collection as $typeId => $items)
+		{
+			$typeTitle = htmlspecialcharsbx($gridDataProvider->resolveEntityTypeTitle($typeId));
 
-				$previousTypeId = $typeId;
-			}
-
+			$html[] = '<div class="tasks-list-crm-div-wrapper">';
+			$html[] = "<span class='tasks-list-crm-div-type'>{$typeTitle}:</span>";
+			$html[] = implode(', ', $items);
 			$html[] = '</div>';
 		}
+		$html[] = '</div>';
 
 		return implode('', $html);
+	}
+
+	/**
+	 * Legacy list item: a link for a readable element, the depersonalized title as plain text otherwise.
+	 */
+	private function renderLegacyItem(CrmItemGridDataInterface $data): string
+	{
+		$safeTitle = htmlspecialcharsbx($data->getDisplayTitle());
+		if (!$data->isReadable())
+		{
+			return $safeTitle;
+		}
+
+		$safeUrl = htmlspecialcharsbx((string)$data->getUrl());
+
+		return "<a href=\"{$safeUrl}\">{$safeTitle}</a>";
 	}
 
 	private function renderChips(array $row): string
@@ -116,27 +113,15 @@ class Crm extends UserField
 		$chips = [];
 		foreach ($row['UF_CRM_TASK'] as $value)
 		{
-			[$type, $id] = array_pad(explode('_', (string)$value), 2, null);
-			if ($type === null || $id === null)
+			$data = $this->resolveRenderableGridData($value);
+			if ($data === null)
 			{
 				continue;
 			}
 
-			$typeId = CCrmOwnerType::ResolveID(CCrmOwnerTypeAbbr::ResolveName($type));
-
-			// GetCaption with checkRights=false yields the name even for a user without CRM read access;
-			// an empty name here means the element is deleted, so the chip is dropped entirely.
-			$title = CCrmOwnerType::GetCaption($typeId, $id, false);
-			if (!$title)
-			{
-				continue;
-			}
-
-			$hasAccess = (bool)CCrmOwnerType::GetCaption($typeId, $id, true);
-
-			$chip = $hasAccess
-				? $this->renderAccessibleChip($typeId, (int)$id, (string)$type, (string)$value, $title, $activeSlugs)
-				: $this->renderInaccessibleChip((string)$type, $title);
+			$chip = $data->isReadable()
+				? $this->renderAccessibleChip($data, $activeSlugs)
+				: $this->renderInaccessibleChip($data);
 
 			if ($chip !== '')
 			{
@@ -148,33 +133,49 @@ class Crm extends UserField
 	}
 
 	/**
+	 * The safe view of one stored UF_CRM_TASK value, taken from the page-wide map the grid built before
+	 * rendering. Null means the cell shows nothing at all: the element is deleted, or CRM does not support
+	 * the value. A supported value the map does not carry -- a cell built outside Grid::prepareRows() --
+	 * degrades to hidden, because a missing record is no permission to show the real title.
+	 */
+	private function resolveRenderableGridData(mixed $value): ?CrmItemGridDataInterface
+	{
+		$map = (array)$this->getParameter(Grid::CRM_ITEM_GRID_DATA_BY_VALUE);
+		$data = is_string($value) ? ($map[$value] ?? null) : null;
+
+		if ($data instanceof CrmItemGridDataInterface)
+		{
+			return $data->isNotFound() ? null : $data;
+		}
+
+		return (new CrmItemGridDataProvider())->makeHiddenData($value);
+	}
+
+	/**
 	 * Chip for an element the current user can read: the element name is plain text, hovering the chip
 	 * shows the CRM mini-card, and the chip body toggles this element in the CRM_ITEM filter (click or
 	 * Enter/Space on the focusable chip). A keyboard-focusable remove button (shown only while the chip
 	 * is the active filter) removes it. The filter value mirrors the entity-selector field value so a chip
 	 * added by click and a chip picked in the filter dialog remove symmetrically.
 	 */
-	private function renderAccessibleChip(
-		int $typeId,
-		int $id,
-		string $type,
-		string $value,
-		string $title,
-		array $activeSlugs,
-	): string
+	private function renderAccessibleChip(CrmItemGridDataInterface $data, array $activeSlugs): string
 	{
+		$typeId = $data->getTypeId();
+		$id = $data->getEntityId();
+
 		$filterValue = $this->mapSlugToSelectorValue($typeId, $id);
 		if ($filterValue === null)
 		{
 			return '';
 		}
 
+		$title = $data->getDisplayTitle();
 		$safeTitle = htmlspecialcharsbx($title);
 		$safeFilterValue = htmlspecialcharsbx($filterValue);
-		$isActive = in_array($value, $activeSlugs, true);
+		$isActive = in_array($data->getValue(), $activeSlugs, true);
 		$activeClass = $isActive ? ' tasks-grid-filter-active' : '';
 
-		$icon = $this->renderIcon($type);
+		$icon = $this->renderIcon($data->getAbbreviation());
 
 		$filterLabel = htmlspecialcharsbx((string)Loc::getMessage(
 			'TASKS_GRID_TASK_ROW_CONTENT_USER_FIELD_CRM_FILTER_ADD',
@@ -203,15 +204,17 @@ class Crm extends UserField
 	}
 
 	/**
-	 * Chip for an element the current user cannot read: the name is shown but the chip is inert -- no card
-	 * link, no filter click-zone, no remove control -- and visually muted.
+	 * Chip for an element the current user cannot read: only the depersonalized title, and the chip is
+	 * inert -- no card link, no filter click-zone, no remove control -- and visually muted.
 	 */
-	private function renderInaccessibleChip(string $type, string $title): string
+	private function renderInaccessibleChip(CrmItemGridDataInterface $data): string
 	{
 		return
 			'<span class="tasks-grid-username tasks-list-crm-item--locked">'
-			. $this->renderIcon($type)
-			. '<span class="tasks-list-crm-item__name">' . htmlspecialcharsbx($title) . '</span>'
+			. $this->renderIcon($data->getAbbreviation())
+			. '<span class="tasks-list-crm-item__name">'
+			. htmlspecialcharsbx($data->getDisplayTitle())
+			. '</span>'
 			. '</span>'
 		;
 	}
@@ -366,19 +369,19 @@ class Crm extends UserField
 
 	private function mapSelectorValueToSlug(string $entityId, string $token): ?string
 	{
-		$mapper = new CrmIdMapper();
+		$gridDataProvider = new CrmItemGridDataProvider();
 
 		$typeId = CCrmOwnerType::ResolveID(mb_strtoupper($entityId));
 		if ($typeId !== CCrmOwnerType::Undefined)
 		{
-			return $mapper->mapToId($typeId, (int)$token);
+			return $gridDataProvider->mapToSlug($typeId, (int)$token);
 		}
 
 		if (str_contains($token, ':'))
 		{
 			[$dynamicTypeId, $itemId] = explode(':', $token, 2);
 
-			return $mapper->mapToId((int)$dynamicTypeId, (int)$itemId);
+			return $gridDataProvider->mapToSlug((int)$dynamicTypeId, (int)$itemId);
 		}
 
 		return null;

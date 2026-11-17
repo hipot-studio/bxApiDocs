@@ -19,11 +19,9 @@ final class NoticeDecision
 	 * belongs to which message is decided by {@see NoticeDecisionService}.
 	 */
 	public const TRANSFER_MAIL = 'transfer_mail';
-	public const REMIND_LATER = 'remind_later';
 	public const DETAILS = 'details';
 	public const CREATE_COMPANY_MAIL = 'create_company_mail';
 	public const CONNECT_EXTERNAL = 'connect_external';
-	public const CONNECT_B24_MAIL = 'connect_b24_mail';
 
 	/**
 	 * @param array<int, array{id: string, label: string, url: string}> $buttons Ordered as rendered.
@@ -38,6 +36,7 @@ final class NoticeDecision
 		public readonly array $buttons = [],
 		public readonly string $dismissHint = '',
 		public readonly string $reactionToken = '',
+		public readonly string $migrationToken = '',
 	)
 	{
 	}
@@ -58,6 +57,7 @@ final class NoticeDecision
 			'buttons' => $this->buttons,
 			'dismissHint' => $this->dismissHint,
 			'reactionToken' => $this->reactionToken,
+			'migrationToken' => $this->migrationToken,
 		];
 	}
 }

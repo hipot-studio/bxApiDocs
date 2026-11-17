@@ -286,17 +286,18 @@ final class AccessRights extends Engine\Controller
 		];
 	}
 
-	public function setPublicLinkRightsAction(BaseObject $object): ?array
+	// The parameter name is the request contract of the sharing popup: the object is bound by fileId.
+	public function setPublicLinkRightsAction(BaseObject $file): ?array
 	{
-		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
-		if (!$securityContext || !$object->canRead($securityContext))
+		$securityContext = $file->getStorage()?->getCurrentUserSecurityContext();
+		if (!$securityContext || !$file->canRead($securityContext))
 		{
 			return null;
 		}
 
-		$canUpdate = $object->canUpdate($securityContext);
+		$canUpdate = $file->canUpdate($securityContext);
 
-		return $this->setPublicLinkRights($object, $canUpdate, $securityContext);
+		return $this->setPublicLinkRights($file, $canUpdate, $securityContext);
 	}
 
 	public function setUnifiedPublicLinkRightsAction(?BaseObject $object): ?array
@@ -861,20 +862,21 @@ final class AccessRights extends Engine\Controller
 		return [
 			'members' => [],
 			'canChangeRights' => false,
-			'unifiedLink' => $this->getUnifiedLinkData($realObject, $accessLevel),
+			'unifiedLink' => $this->getUnifiedLinkData($realObject, $accessLevel, $parentFoldersAccessLevel),
 		];
 	}
 
 	private function getUnifiedLinkData(
 		BaseObject $baseObject,
 		?UnifiedLinkAccessLevel $accessLevel = null,
+		?UnifiedLinkAccessLevel $parentFoldersAccessLevel = null,
 	): array
 	{
 		$link = Driver::getInstance()->getUrlManager()->getUnifiedLink($baseObject, [
 			'absolute' => true,
 		]);
 
-		$parentFoldersAccessLevel = $this->getUnifiedLinkParentFoldersAccessLevel($baseObject);
+		$parentFoldersAccessLevel ??= $this->getUnifiedLinkParentFoldersAccessLevel($baseObject);
 
 		return [
 			'link' => $link,

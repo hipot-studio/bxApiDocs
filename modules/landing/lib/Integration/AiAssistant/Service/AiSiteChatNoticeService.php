@@ -202,14 +202,14 @@ class AiSiteChatNoticeService
 	 *
 	 * «Site created» and «Could not create the site» come from the markup generation only: its chat is the
 	 * markup one, or the bare one of a tab that still held the bare key. The rule of the editor does not fit
-	 * them, as a failed work is no longer accepted on the row. «Site deleted» goes where the editor of the
-	 * site opens the chat of the row.
+	 * them, as a failed work is no longer accepted on the row. «Site deleted» and the message about refused
+	 * images go where the editor of the site opens the chat of the row.
 	 *
 	 * @return list<string>
 	 */
 	private function getChatEntityIdCandidates(int $bindingId, int $userId, AiSiteChatNotice $notice): array
 	{
-		if ($notice->type === AiSiteChatNotice::TYPE_DELETED)
+		if (in_array($notice->type, [AiSiteChatNotice::TYPE_DELETED, AiSiteChatNotice::TYPE_IMAGES_REFUSED], true))
 		{
 			return [$this->bindingService->getAcceptedWorkChatEntityId($bindingId, $userId)];
 		}

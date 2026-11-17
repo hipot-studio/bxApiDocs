@@ -124,7 +124,7 @@ class ReplicateParamsDto extends Dto
 		}
 		if (empty($select) || in_array('repeatTill', $select, true))
 		{
-			$dto->repeatTill = $params->repeatTill;
+			$dto->repeatTill = $params->repeatTill?->value;
 		}
 		if (empty($select) || in_array('endDate', $select, true))
 		{

@@ -12,7 +12,6 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\MailService\Internal\Service\Sso\AdminEntryScenario;
 use Bitrix\MailService\Public\Service\Sso\MailhostAdminEntryService;
 
 Loc::loadMessages(__FILE__);
@@ -92,7 +91,7 @@ final class ControlPanel extends Controller
 			return null;
 		}
 
-		return ['url' => (string)$issued->getData()[AdminEntryScenario::URL_DATA_KEY]];
+		return ['url' => (string)$issued->getData()[MailhostAdminEntryService::URL_DATA_KEY]];
 	}
 
 	/** The service of the entry, or nothing at all on a portal this module is not deployed with. */
@@ -148,3 +147,4 @@ final class ControlPanel extends Controller
 		return (string)Loc::getMessage('MAIL_CONTROL_PANEL_ERROR_' . mb_strtoupper($code));
 	}
 }
+

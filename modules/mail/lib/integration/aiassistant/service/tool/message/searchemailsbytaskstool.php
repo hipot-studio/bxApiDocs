@@ -143,3 +143,4 @@ class SearchEmailsByTasksTool extends ToolContract
 		return max(1, min(self::MAX_LIMIT, $value));
 	}
 }
+

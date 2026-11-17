@@ -131,6 +131,7 @@ class Http
 			'BX_TYPE' => Client::getPortalType(),
 			'BX_VERSION' => self::VERSION,
 			'BX_REGION' => \Bitrix\Main\Application::getInstance()->getLicense()->getRegion(),
+			'capabilities' => Json::encode(['resultExpectationCheck' => true]),
 		];
 
 		if (!empty($params['queue']))
@@ -138,7 +139,12 @@ class Http
 			$post['QUEUE'] = $params['queue'];
 		}
 
-		$post['BX_HASH'] = Client::signRequest($post);
+		$post['BX_HASH'] = Client::signRequest(
+			array_map(
+				static fn($value) => is_array($value) ? 'Array' : $value,
+				$post,
+			),
+		);
 
 		$socketTimeout = Option::get(self::MODULE_ID, 'connection_time');
 		$streamTimeout = Option::get(self::MODULE_ID, 'stream_time');

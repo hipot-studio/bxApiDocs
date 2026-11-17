@@ -521,6 +521,11 @@ class CTasksReportHelper extends CReportHelper
 
 		// concat permissions with common filter
 		$filter[] = $permFilter;
+
+		if (isset($select['ID']) && !isset($order['ID']))
+		{
+			$order['ID'] = 'ASC';
+		}
 	}
 
 	public static function getAlternatePhrasesOfColumns(): array

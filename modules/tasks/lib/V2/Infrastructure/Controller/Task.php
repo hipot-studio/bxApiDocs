@@ -29,55 +29,27 @@ class Task extends BaseController
 {
 	/**
 	 * @ajaxAction tasks.V2.Task.get
-	 * @param mixed $task
-	 * @param mixed $taskId
 	 */
 	#[CloseSession]
 	public function getAction(
 		TaskProvider $taskProvider,
 		TaskParams $taskSelect,
 		#[Permission\Read(returnTrueIfNotExist: true)]
-		$task = null,
-		#[Permission\Read(returnTrueIfNotExist: true)]
-		$taskId = null,
+		?Entity\Task $task = null,
 		bool $view = true,
 	): ?Entity\Task
 	{
-		$requestData = array_merge(
-			$this->getRequest()->toArray(),
-			$this->getRequest()->getJsonList()->toArray(),
-		);
-		$taskProvided = array_key_exists('task', $requestData);
-		$accessParameterName = 'taskId';
-		if ($taskProvided)
+		if ($this->requestHasNonArrayTask())
 		{
-			$taskId = is_array($task) && array_key_exists('id', $task)
-				? $task['id']
-				: null
-			;
-			$accessParameterName = 'task';
-		}
-
-		$taskId = $this->normalizeTaskId($taskId);
-		if ($taskId === null)
-		{
-			$this->addError(
-				new Error(
-					'Task ID must be a positive integer',
-					'INVALID_TASK_ID',
-				),
-			);
+			$this->addInvalidTaskIdError();
 
 			return null;
 		}
 
-		$task = $this->getWithAccess(
-			$this,
-			$accessParameterName,
-			new Entity\Task(id: $taskId),
-		);
 		if (!$task instanceof Entity\Task)
 		{
+			$this->addInvalidTaskIdError();
+
 			return null;
 		}
 
@@ -107,37 +79,6 @@ class Task extends BaseController
 				templateReplication: $taskSelect->templateReplication,
 			),
 		);
-	}
-
-
-	private function normalizeTaskId(mixed $taskId): ?int
-	{
-		if (is_int($taskId))
-		{
-			return $taskId > 0 ? $taskId : null;
-		}
-
-		if (!is_string($taskId) || $taskId === '' || preg_match('/^[0-9]+$/D', $taskId) !== 1)
-		{
-			return null;
-		}
-
-		$taskId = ltrim($taskId, '0');
-		if ($taskId === '')
-		{
-			return null;
-		}
-
-		$maxTaskId = (string)PHP_INT_MAX;
-		if (
-			strlen($taskId) > strlen($maxTaskId)
-			|| (strlen($taskId) === strlen($maxTaskId) && strcmp($taskId, $maxTaskId) > 0)
-		)
-		{
-			return null;
-		}
-
-		return (int)$taskId;
 	}
 
 	/**
@@ -177,7 +118,7 @@ class Task extends BaseController
 				taskId: $result->getId(),
 				userId: $this->userId,
 				view: $view,
-			)
+			),
 		);
 	}
 
@@ -185,11 +126,26 @@ class Task extends BaseController
 	 * @ajaxAction tasks.V2.Task.update
 	 */
 	public function updateAction(
-		#[Permission\Update]
-		Entity\Task $task,
 		TaskProvider $taskProvider,
+		#[Permission\Update]
+		?Entity\Task $task = null,
 	): ?Arrayable
 	{
+		if (!$task instanceof Entity\Task)
+		{
+			if ($this->getErrors() === [])
+			{
+				$this->addError(
+					new Error(
+						'Task ID must be a positive integer',
+						'INVALID_TASK_ID',
+					),
+				);
+			}
+
+			return null;
+		}
+
 		$config = new UpdateConfig(
 			userId: $this->userId,
 			useConsistency: true,
@@ -198,7 +154,7 @@ class Task extends BaseController
 
 		$result = (new UpdateTaskCommand(
 			task: $task,
-			config: $config
+			config: $config,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -216,7 +172,7 @@ class Task extends BaseController
 	 */
 	public function deleteAction(
 		#[Permission\Delete]
-		Entity\Task $task
+		Entity\Task $task,
 	): ?bool
 	{
 		$config = new DeleteConfig(
@@ -269,5 +225,31 @@ class Task extends BaseController
 				),
 			),
 		))->toArray();
+	}
+
+	private function requestHasNonArrayTask(): bool
+	{
+		$request = $this->getRequest();
+		$payload = array_merge(
+			$request->toArray(),
+			$request->getJsonList()->toArray(),
+		);
+
+		return array_key_exists('task', $payload) && !is_array($payload['task']);
+	}
+
+	private function addInvalidTaskIdError(): void
+	{
+		if ($this->getErrors() !== [])
+		{
+			return;
+		}
+
+		$this->addError(
+			new Error(
+				'Task ID must be a positive integer',
+				'INVALID_TASK_ID',
+			),
+		);
 	}
 }

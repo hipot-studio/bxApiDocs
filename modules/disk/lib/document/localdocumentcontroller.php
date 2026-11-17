@@ -9,6 +9,7 @@ use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Integration\Collab\CollabDocumentCreationService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals;
@@ -263,26 +264,40 @@ class LocalDocumentController extends Internals\Controller
 	protected function processActionPublishBlank($type)
 	{
 		$fileData = null;
+		$targetFolderId = (int)$this->request->getPost('targetFolderId');
+		$collabId = (int)$this->request->getPost('collabId');
+		$user = User::loadById($this->getUser()->getId());
+		$collabDocumentCreationService = ServiceLocator::getInstance()->get(CollabDocumentCreationService::class);
+
 		if($type !== 'board')
 		{
 			$fileData = new BlankFileData($type);
 		}
 
 		$calledFromDisk = false;
-		if($this->request->getPost('targetFolderId'))
+		if ($targetFolderId > 0)
 		{
-			$folder = Folder::loadById((int)$this->request->getPost('targetFolderId'), array('STORAGE'));
-			if(!$folder)
+			$folder = Folder::loadById($targetFolderId, array('STORAGE'));
+			if (!$folder)
 			{
 				$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_FIND_FOLDER'), self::ERROR_COULD_NOT_FIND_FOLDER)));
 				$this->sendJsonErrorResponse();
 			}
 			$calledFromDisk = true;
 		}
+		elseif ($collabId > 0)
+		{
+			$folder = $collabDocumentCreationService->getCreatedFilesFolderByCollabId($collabId, $user->getId());
+			if ($folder === null)
+			{
+				$this->errorCollection->add(array(new Error('There is no such collab or user has no access to it', self::ERROR_COULD_NOT_CREATE_FILE)));
+				$this->sendJsonErrorResponse();
+			}
+		}
 		else
 		{
-			$userStorage = Driver::getInstance()->getStorageByUserId($this->getUser()->getId());
-			if(!$userStorage)
+			$userStorage = Driver::getInstance()->getStorageByUserId($user->getId());
+			if (!$userStorage)
 			{
 				$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_FIND_STORAGE'), self::ERROR_COULD_NOT_FIND_STORAGE)));
 				$this->sendJsonErrorResponse();
@@ -296,6 +311,23 @@ class LocalDocumentController extends Internals\Controller
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_COULD_NOT_FIND_FOLDER_FOR_CREATED_FILES'), self::ERROR_COULD_NOT_FIND_FOLDER_FOR_CREATED_FILES)));
 			$this->sendJsonErrorResponse();
 		}
+
+		// TODO: remove false when frontend sends $collabId
+		if (false && $user->isCollaber())
+		{
+			if ($calledFromDisk && !$collabDocumentCreationService->isFolderInCollabStorage($folder))
+			{
+				$this->errorCollection->add(array(new Error('Wrong target folder for collab user', self::ERROR_COULD_NOT_FIND_STORAGE)));
+				$this->sendJsonErrorResponse();
+			}
+
+			if (!$calledFromDisk && $collabId < 1)
+			{
+				$this->errorCollection->add(array(new Error('No collab ID for collab user', self::ERROR_COULD_NOT_FIND_STORAGE)));
+				$this->sendJsonErrorResponse();
+			}
+		}
+
 		$storage = $folder->getStorage();
 		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
 
@@ -315,7 +347,7 @@ class LocalDocumentController extends Internals\Controller
 
 		if ($type === 'board')
 		{
-			$createBoardResult = BoardService::createNewDocument(User::loadById($this->getUser()->getId()), $folder);
+			$createBoardResult = BoardService::createNewDocument($user, $folder);
 			$newFile = null;
 			if ($createBoardResult->isSuccess())
 			{

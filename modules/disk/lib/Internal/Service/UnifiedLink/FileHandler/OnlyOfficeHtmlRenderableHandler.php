@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\Analytics\Enum\DocumentTypeEnum;
+use Bitrix\Disk\Controller\ShortLink;
 use Bitrix\Disk\Analytics\Enum\OpenTypeEnum;
 use Bitrix\Disk\Document\DocumentSessionResult;
 use Bitrix\Disk\Document\DocumentSource;
@@ -13,6 +14,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TrackedObjectManager;
 use Bitrix\Disk\Internal\Service\SessionCommandFactory;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
@@ -25,6 +27,7 @@ class OnlyOfficeHtmlRenderableHandler implements HtmlRenderableHandler
 	private TrackedObjectManager $trackedObjectManager;
 	private SessionCommandFactory $sessionCommandFactory;
 	private ExceptionHandler $exceptionHandler;
+	private ?ShortLinkOpening $shortLinkOpening = null;
 
 	public function __construct(
 		private readonly File $file,
@@ -35,6 +38,17 @@ class OnlyOfficeHtmlRenderableHandler implements HtmlRenderableHandler
 
 		$this->sessionCommandFactory = new SessionCommandFactory($documentSource, new DocumentSessionManager());
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
+	}
+
+	/** @see VibeofficeHtmlRenderableHandler::setShortLinkOpening() */
+	public function setShortLinkOpening(ShortLinkOpening $shortLinkOpening): void
+	{
+		$this->shortLinkOpening = $shortLinkOpening;
+	}
+
+	public function getShortLinkOpening(): ?ShortLinkOpening
+	{
+		return $this->shortLinkOpening;
 	}
 
 	public function view(): HandlerOperationResult
@@ -114,7 +128,7 @@ class OnlyOfficeHtmlRenderableHandler implements HtmlRenderableHandler
 			});
 		}
 
-		return $this->showEditor($documentSession);
+		return $this->showEditor($documentSession, $type);
 	}
 
 	private function trackObject(): void
@@ -130,7 +144,7 @@ class OnlyOfficeHtmlRenderableHandler implements HtmlRenderableHandler
 		}
 	}
 
-	private function showEditor(DocumentSession $documentSession): HandlerOperationResult
+	private function showEditor(DocumentSession $documentSession, int $type): HandlerOperationResult
 	{
 		$content = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:ui.sidepanel.wrapper',
@@ -144,6 +158,11 @@ class OnlyOfficeHtmlRenderableHandler implements HtmlRenderableHandler
 					'UNIFIED_LINK_MODE' => true,
 					'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
 					'ANALYTICS' => $this->analytics,
+					'SHORT_LINK_OPENING' => $this->shortLinkOpening,
+					'SHORT_LINK_MODE' => $type === DocumentSession::TYPE_EDIT
+						? ShortLink::MODE_EDIT
+						: ShortLink::MODE_VIEW
+					,
 				],
 				'PLAIN_VIEW' => true,
 				'IFRAME_MODE' => true,

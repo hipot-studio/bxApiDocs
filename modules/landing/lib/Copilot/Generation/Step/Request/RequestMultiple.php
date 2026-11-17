@@ -38,6 +38,15 @@ abstract class RequestMultiple extends AIStep
 	 */
 	private array $handledSendFailureEntityKeys = [];
 
+	/**
+	 * The handled failures that stay out of the limit of a pass.
+	 *
+	 * @var array<string, true>
+	 */
+	private array $uncountedSendFailureEntityKeys = [];
+
+	private ?GenerationException $lastSendFailure = null;
+
 	abstract public static function getConnectorClass(): string;
 
 	/**
@@ -268,6 +277,23 @@ abstract class RequestMultiple extends AIStep
 	}
 
 	/**
+	 * The exception of the last final send failure, available inside handleEntitySendFailure().
+	 */
+	protected function getLastSendFailure(): ?GenerationException
+	{
+		return $this->lastSendFailure;
+	}
+
+	/**
+	 * Keeps the failure handled in handleEntitySendFailure() out of the limit of a pass. It stays handled
+	 * all the same: its entity does not keep the step from finishing.
+	 */
+	protected function excludeFromSendFailureLimit(RequestEntityDto $entity): void
+	{
+		$this->uncountedSendFailureEntityKeys[$this->buildEntitySendFailureKey($entity)] = true;
+	}
+
+	/**
 	 * Whether too many send failures of one pass stop the step. A step that records every send
 	 * failure as the outcome of its entity turns the limit off.
 	 */
@@ -339,6 +365,8 @@ abstract class RequestMultiple extends AIStep
 		GenerationException $exception,
 	): ?Request
 	{
+		$this->lastSendFailure = $exception;
+
 		if (!$this->handleEntitySendFailure($entity, $exception->getMessage()))
 		{
 			throw $exception;
@@ -384,7 +412,12 @@ abstract class RequestMultiple extends AIStep
 			return false;
 		}
 
-		return count($this->handledSendFailureEntityKeys) >= (int)ceil($total / 2);
+		return $this->countSendFailuresForLimit() >= (int)ceil($total / 2);
+	}
+
+	private function countSendFailuresForLimit(): int
+	{
+		return count(array_diff_key($this->handledSendFailureEntityKeys, $this->uncountedSendFailureEntityKeys));
 	}
 
 	private function buildSendFailureLimitMessage(): string
@@ -392,7 +425,7 @@ abstract class RequestMultiple extends AIStep
 		return sprintf(
 			'Too many AI request send failures in step %d (%d/%d)',
 			(int)$this->stepId,
-			count($this->handledSendFailureEntityKeys),
+			$this->countSendFailuresForLimit(),
 			count($this->getEntitiesToRequest()),
 		);
 	}

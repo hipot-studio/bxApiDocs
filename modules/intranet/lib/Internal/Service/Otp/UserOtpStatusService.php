@@ -19,6 +19,7 @@ class UserOtpStatusService
 	private OtpSettings $otpSettings;
 	private OtpUserProvider $otpUserProvider;
 	private UserRepository $userRepository;
+	private OtpGraceDeadlineResolver $graceDeadlineResolver;
 	private bool $isMandatory;
 	private bool $isMandatoryPush;
 	private PromoteMode $promoteMode;
@@ -36,7 +37,9 @@ class UserOtpStatusService
 
 		$this->isMandatory = $this->otpSettings->isMandatoryUsing();
 		$this->isMandatoryPush = $this->isMandatory && $this->otpSettings->isDefaultTypePush();
-		$this->promoteMode = ($mobilePush ?? MobilePush::createByDefault())->getPromoteMode();
+		$mobilePush ??= MobilePush::createByDefault();
+		$this->promoteMode = $mobilePush->getPromoteMode();
+		$this->graceDeadlineResolver = new OtpGraceDeadlineResolver($mobilePush);
 	}
 
 	public function getStatus(UserOtp $otpInfo, bool $isActiveUser = true, bool $isMandatoryForUser = false): UserOtpStatus
@@ -119,7 +122,7 @@ class UserOtpStatusService
 			$isMandatory = isset($mandatoryUserIds[$userId]);
 
 			$status = $this->getStatus($otpInfo, $isActive, $isMandatory);
-			$graceDate = $this->resolveEffectiveGraceDate($status, $globalGraceDate, $otpInfo->dateDeactivate);
+			$graceDate = $this->resolveEffectiveGraceDate($status, $globalGraceDate, $otpInfo);
 
 			$result[$userId] = new UserOtpStatusInfo($status, $graceDate);
 		}
@@ -138,13 +141,20 @@ class UserOtpStatusService
 	private function resolveEffectiveGraceDate(
 		UserOtpStatus $status,
 		?DateTime $globalGraceDate,
-		?DateTime $personalGraceDate,
+		UserOtp $otpInfo,
 	): ?DateTime
 	{
 		if (!in_array($status, [UserOtpStatus::UpdateRequired, UserOtpStatus::EnableRequired], true))
 		{
 			return null;
 		}
+
+		if ($status === UserOtpStatus::EnableRequired && !$otpInfo->isInitialized)
+		{
+			return $this->graceDeadlineResolver->resolve($otpInfo);
+		}
+
+		$personalGraceDate = $otpInfo->dateDeactivate;
 
 		if ($status === UserOtpStatus::EnableRequired && $personalGraceDate === null)
 		{

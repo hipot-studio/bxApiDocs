@@ -11,7 +11,7 @@ namespace Bitrix\Main;
 
 class EventManager
 {
-	protected const CACHE_ID = 'b_module_to_module_v1';
+	protected const CACHE_ID = 'b_module_to_module_v2';
 	protected const CACHE_DIR = 'b_module_to_module';
 
 	/**
@@ -256,11 +256,6 @@ class EventManager
 			$dbHandlers = [];
 			while ($handler = $result->fetch())
 			{
-				$toName = $this->formatEventName([
-					'TO_MODULE_ID' => $handler['TO_MODULE_ID'],
-					'TO_CLASS' => $handler['TO_CLASS'],
-					'TO_METHOD' => $handler['TO_METHOD'],
-				]);
 				$fromModuleId = strtoupper($handler['FROM_MODULE_ID']);
 				$messageId = strtoupper($handler['MESSAGE_ID']);
 				$toMethodArg = $handler['TO_METHOD_ARG'] != '' ? unserialize($handler['TO_METHOD_ARG'], ['allowed_classes' => false]) : [];
@@ -273,8 +268,6 @@ class EventManager
 					'TO_METHOD' => $handler['TO_METHOD'],
 					'TO_METHOD_ARG' => $toMethodArg,
 					'VERSION' => $handler['VERSION'],
-					'TO_NAME' => $toName,
-					'FROM_DB' => true,
 				];
 			}
 
@@ -320,7 +313,8 @@ class EventManager
 			{
 				foreach ($events as $i => $event)
 				{
-					if (isset($event['FROM_DB']) && $event['FROM_DB'])
+					// only for loaded from DB/cache
+					if (!isset($event['CALLBACK']))
 					{
 						unset($this->handlers[$module][$type][$i]);
 					}
@@ -328,6 +322,24 @@ class EventManager
 			}
 		}
 		$this->isHandlersLoaded = false;
+	}
+
+	/**
+	 * Fields derived from the database row are not stored in the cache and are added on the first delivery.
+	 */
+	protected function completeDatabaseHandlers(string $eventModuleId, string $eventType): void
+	{
+		foreach ($this->handlers[$eventModuleId][$eventType] as $key => $handler)
+		{
+			// only for loaded from DB/cache
+			if (!isset($handler['FROM_DB']) && !isset($handler['CALLBACK']))
+			{
+				$handler['TO_NAME'] = $this->formatEventName($handler);
+				$handler['FROM_DB'] = true;
+
+				$this->handlers[$eventModuleId][$eventType][$key] = $handler;
+			}
+		}
 	}
 
 	public function findEventHandlers($eventModuleId, $eventType, ?array $filter = null)
@@ -345,11 +357,14 @@ class EventManager
 			return [];
 		}
 
-		$handlers = $this->handlers[$eventModuleId][$eventType];
-		if (!is_array($handlers))
+		if (!is_array($this->handlers[$eventModuleId][$eventType]))
 		{
 			return [];
 		}
+
+		$this->completeDatabaseHandlers($eventModuleId, $eventType);
+
+		$handlers = $this->handlers[$eventModuleId][$eventType];
 
 		if (is_array($filter) && !empty($filter))
 		{

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Integration\AiAssistant\UseCase;
 
 use Bitrix\Landing\Integration\AiAssistant\Dto\UpdateCrmFormFieldsDto;
+use Bitrix\Landing\Integration\AiAssistant\Service\MarkupEditorReloadNotifier;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Realtime\Event;
 use Bitrix\Landing\Realtime\EventAction;
@@ -54,10 +55,21 @@ class UpdateCrmFormFieldsHandler extends AbstractCrmFormFieldsHandler
 		$savedOptions = $this->saveOptions($updatedOptions);
 		$response = $this->buildFieldsResponse((int)$dto->formId, $savedOptions, $this->buildSource($dto));
 
-		// a reloaded markup block loses its frame: the change is seen after the page reload
-		if ($dto->pageId !== null && $dto->blockId !== null && $markupFormIds === null)
+		if ($dto->pageId !== null && $dto->blockId !== null)
 		{
-			$this->notifyBlockChanged($dto, $initiatorUserId);
+			if ($markupFormIds === null)
+			{
+				$this->notifyBlockChanged($dto, $initiatorUserId);
+			}
+			else
+			{
+				$this->notifyMarkupPageChanged(
+					$dto->pageId,
+					$dto->blockId,
+					$initiatorUserId,
+					MarkupEditorReloadNotifier::REASON_CRM_FORM_FIELDS_UPDATE,
+				);
+			}
 		}
 
 		return [

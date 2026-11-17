@@ -3,12 +3,17 @@
 namespace Bitrix\Disk\Controller\Integration;
 
 use Bitrix\Disk;
+use Bitrix\Disk\Config\Feature\VibeofficeAdministrationFlag;
 use Bitrix\Disk\Document;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Result;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Security\Sign\Signer;
@@ -69,7 +74,7 @@ final class B24Documents extends Engine\Controller
 		}
 
 		$configuration = new Document\OnlyOffice\Configuration();
-		if ($configuration->getCloudRegistrationData())
+		if ($configuration->getStoredCloudRegistrationData())
 		{
 			return;
 		}
@@ -94,6 +99,232 @@ final class B24Documents extends Engine\Controller
 		{
 			$this->addErrors($result->getErrors());
 		}
+	}
+
+	public function getVibeofficeStateAction(Document\Vibeoffice\Box\ConnectionService $service): ?array
+	{
+		if (!$this->checkVibeofficeAdmin())
+		{
+			return null;
+		}
+
+		return $service->getState();
+	}
+
+	#[ActionFilter\Attribute\Rule\HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	public function connectVibeofficeAction(
+		Document\Vibeoffice\Box\ConnectionService $service,
+		string $serviceUrl,
+		string $languageId,
+	): ?array
+	{
+		if (!$this->checkVibeofficeAdmin())
+		{
+			return null;
+		}
+
+		return $this->vibeofficeResult($service->connect($serviceUrl, $languageId));
+	}
+
+	#[ActionFilter\Attribute\Rule\HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	public function restoreVibeofficeAction(
+		Document\Vibeoffice\Box\ConnectionService $service,
+		string $serviceUrl,
+		string $languageId,
+		string $compromised = 'N',
+		string $confirmedDomain = '',
+	): ?array
+	{
+		if (!$this->checkVibeofficeAdmin())
+		{
+			return null;
+		}
+
+		return $this->vibeofficeResult($service->restore(
+			$serviceUrl, $languageId, $compromised === 'Y', $confirmedDomain,
+		));
+	}
+
+	#[ActionFilter\Attribute\Rule\HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	public function checkVibeofficeAction(
+		Document\Vibeoffice\Box\ConfirmationService $confirmation,
+		Document\Vibeoffice\Box\ConnectionService $connection,
+	): ?array
+	{
+		if (!$this->checkVibeofficeAdmin())
+		{
+			return null;
+		}
+		$data = $this->vibeofficeResult($confirmation->check());
+		if ($data === null)
+		{
+			return null;
+		}
+
+		return ['state' => $connection->getState(), 'probe' => $data['probe']];
+	}
+
+	#[ActionFilter\Attribute\Rule\HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	public function rotateVibeofficeKeyAction(Document\Vibeoffice\Box\ConnectionService $service): ?array
+	{
+		if (!$this->checkVibeofficeAdmin())
+		{
+			return null;
+		}
+
+		return $this->vibeofficeResult($service->rotate());
+	}
+
+	#[ActionFilter\Attribute\Rule\HttpMethod([ActionFilter\HttpMethod::METHOD_POST])]
+	public function setVibeofficeEnabledAction(
+		Document\Vibeoffice\Configuration $configuration,
+		Document\Vibeoffice\Box\ConnectionService $service,
+		Document\Vibeoffice\Box\ConnectionGuard $guard,
+		string $enabled,
+	): ?array
+	{
+		if (!$this->checkVibeofficeAdmin())
+		{
+			return null;
+		}
+		if (!in_array($enabled, ['Y', 'N'], true))
+		{
+			$this->addError(new Error('', 'vibeoffice_invalid_enabled', []));
+
+			return null;
+		}
+
+		return $this->vibeofficeResult($guard->withLock(function () use (
+			$configuration, $service, $guard, $enabled,
+		): Result {
+			$box = $guard->checkBoxPortal();
+			if (!$box->isSuccess())
+			{
+				return $box;
+			}
+			if ($enabled === 'Y')
+			{
+				$managed = $configuration->getManagedState();
+				if ($managed !== null && !($managed['activated'] ?? false))
+				{
+					return (new Result())->addError(new Error('', 'vibeoffice_not_activated'));
+				}
+				if (!$configuration->hasReadableCredentials())
+				{
+					return (new Result())->addError(new Error('', 'vibeoffice_not_connected'));
+				}
+				$configuration->enableOnPortal();
+			}
+			else
+			{
+				$configuration->disableOnPortal();
+			}
+
+			return (new Result())->setData(['state' => $service->getState()]);
+		}));
+	}
+
+	private function checkVibeofficeAdmin(): bool
+	{
+		if (
+			!$this->getCurrentUser()->isAdmin()
+			|| !class_exists(Feature::class)
+			|| !Feature::isEnabled(VibeofficeAdministrationFlag::class)
+		)
+		{
+			$this->addError(new Error('', 'access_denied'));
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function vibeofficeResult(Result $result): ?array
+	{
+		if ($result->isSuccess())
+		{
+			return $result->getData();
+		}
+		$allowed = [
+			'tariff_restriction', 'demo_restriction', 'domain_verification',
+			'vibeoffice_restore_required', 'vibeoffice_unknown_key', 'vibeoffice_confirm_incomplete',
+			'vibeoffice_operation_in_progress', 'vibeoffice_platform_unavailable',
+			'vibeoffice_http_not_allowed', 'vibeoffice_protocol_unsupported',
+			'vibeoffice_service_outdated', 'vibeoffice_documentproxy_unavailable',
+			'vibeoffice_box_only', 'vibeoffice_local_override', 'vibeoffice_quiet_required',
+			'vibeoffice_custom_server_selected', 'vibeoffice_domain_confirmation_required',
+			'vibeoffice_not_connected', 'vibeoffice_not_activated', 'vibeoffice_activation_failed',
+		];
+		foreach ($result->getErrors() as $error)
+		{
+			$code = in_array($error->getCode(), $allowed, true)
+				? $error->getCode() : 'vibeoffice_documentproxy_unavailable';
+			$data = is_array($error->getCustomData()) ? $error->getCustomData() : [];
+			$this->addError(new Error('', $code, $this->vibeofficeErrorData($code, $data)));
+		}
+
+		return null;
+	}
+
+	private function vibeofficeErrorData(string $code, array $data): array
+	{
+		$safe = [];
+		$counts = match ($code)
+		{
+			'vibeoffice_quiet_required' => ['activeSessions', 'pendingDeliveries'],
+			'vibeoffice_confirm_incomplete' => ['revokePending'],
+			default => [],
+		};
+		if ($code === 'vibeoffice_quiet_required' && is_bool($data['enabled'] ?? null))
+		{
+			$safe['enabled'] = $data['enabled'];
+		}
+		foreach ($counts as $field)
+		{
+			if (is_int($data[$field] ?? null) && $data[$field] >= 0)
+			{
+				$safe[$field] = $data[$field];
+			}
+		}
+		if (in_array($code, ['vibeoffice_domain_confirmation_required', 'domain_verification'], true))
+		{
+			foreach (['requestDomain', 'domain'] as $field)
+			{
+				if (!is_string($data[$field] ?? null) || strlen($data[$field]) > 2048
+					|| preg_match('/[\x00-\x20\x7f]/', $data[$field]) === 1)
+				{
+					continue;
+				}
+				$uri = new Uri($data[$field]);
+				if (in_array($uri->getScheme(), ['http', 'https'], true) && $uri->getHost() !== ''
+					&& $uri->getUserInfo() === '' && in_array($uri->getPath(), ['', '/'], true)
+					&& $uri->getQuery() === '' && $uri->getFragment() === '')
+				{
+					$safe[$field] = $data[$field];
+				}
+			}
+		}
+		if ($code === 'vibeoffice_platform_unavailable')
+		{
+			if (is_int($data['httpStatus'] ?? null) && $data['httpStatus'] >= 100 && $data['httpStatus'] <= 599)
+			{
+				$safe['httpStatus'] = $data['httpStatus'];
+			}
+			if (in_array($data['platformCode'] ?? null, [
+				'unauthorized', 'rate_limited', 'internal', 'validation',
+				'unknown_host', 'unknown_key', 'host_exists', 'no_webhook_url',
+			], true))
+			{
+				$safe['platformCode'] = $data['platformCode'];
+			}
+		}
+		if ($code === 'vibeoffice_protocol_unsupported' && ($data['supported'] ?? null) === [1])
+		{
+			$safe['supported'] = [1];
+		}
+
+		return $safe;
 	}
 
 	public function verifyDomainAction(): ?array

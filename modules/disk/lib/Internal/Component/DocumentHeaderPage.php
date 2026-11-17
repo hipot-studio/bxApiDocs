@@ -9,6 +9,7 @@ use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionService;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContext;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
 use Bitrix\Disk\Internal\Service\DocumentPresence\PresenceAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Main\Context;
@@ -41,8 +42,17 @@ trait DocumentHeaderPage
 				userId: $this->getHeaderUserId(),
 				downloadUrl: $downloadUrl,
 				hasUnifiedLinkProof: $this->hasUnifiedLinkProof($documentSession),
+				shortLinkOpening: $this->getHeaderShortLinkOpening(),
 			)
 		;
+	}
+
+	/** The short opening the shell is shown for, as the page handed it over. */
+	protected function getHeaderShortLinkOpening(): ?ShortLinkOpening
+	{
+		$opening = $this->arParams['SHORT_LINK_OPENING'] ?? null;
+
+		return $opening instanceof ShortLinkOpening ? $opening : null;
 	}
 
 	/**

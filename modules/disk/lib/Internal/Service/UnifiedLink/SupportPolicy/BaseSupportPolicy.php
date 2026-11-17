@@ -45,6 +45,7 @@ class BaseSupportPolicy implements SupportPolicy
 			return true;
 		}
 
-		return $this->uniqueCodeBackfiller->backfillUniqueCode((int)$baseObject->getId());
+		// Read-only: an object without a code does not support the unified link until a stepper assigns it one.
+		return (string)$this->uniqueCodeBackfiller->getBackfilledUniqueCode((int)$baseObject->getId()) !== '';
 	}
 }

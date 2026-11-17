@@ -6,7 +6,9 @@ namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Validation\Rule\NotEmpty;
+use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Duration;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ElapsedTime;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Gantt\LinkType;
@@ -31,13 +33,16 @@ class Task extends AbstractEntity
 {
 	use MapTypeTrait;
 
+	#[PositiveNumber]
+	public readonly ?int $creatorId;
+
 	public function __construct(
 		public readonly ?int $id = null,
 		#[NotEmpty(allowZero: true)]
 		public readonly ?string $title = null,
 		public readonly ?string $description = null,
 		public readonly ?string $descriptionChecksum = null,
-		#[NotEmpty]
+		?int $creatorId = null,
 		#[Validatable]
 		public readonly ?User $creator = null,
 		public readonly ?int $createdTs = null,
@@ -85,8 +90,11 @@ class Task extends AbstractEntity
 		public readonly ?int $estimatedTime = null,
 		public readonly ?bool $replicate = null,
 		public readonly ?ReplicateParams $replicateParams = null,
+		public readonly ?RegularityType $regularityType = null,
+		public readonly ?bool $replicateTemplateDeleted = null,
 		public readonly ?Template $replicateTemplate = null,
 		public readonly ?int $changedTs = null,
+		public readonly ?int $changedById = null,
 		#[Validatable]
 		public readonly ?User $changedBy = null,
 		#[Validatable]
@@ -162,11 +170,22 @@ class Task extends AbstractEntity
 		public ?bool $isPinnedInGroup = null,
 		public ?GanttLinkCollection $links = null,
 	) {
+		$this->creatorId = $creatorId ?? $creator?->getId();
 	}
 
 	public function getId(): ?int
 	{
 		return $this->id;
+	}
+
+	public function getCreatorId(): ?int
+	{
+		return $this->creatorId ?? $this->creator?->getId();
+	}
+
+	public function getChangedById(): ?int
+	{
+		return $this->changedById ?? $this->changedBy?->getId();
 	}
 
 	public function getMembers(
@@ -215,7 +234,9 @@ class Task extends AbstractEntity
 			title: static::mapString($props, 'title'),
 			description: static::mapString($props, 'description'),
 			descriptionChecksum: static::mapString($props, 'descriptionChecksum'),
-			creator: static::mapEntity($props, 'creator', User::class),
+			creatorId: static::mapEntityId($props, 'creator'),
+			// Without isset, mapEntity() would rebuild a User stub from creatorId and hide a missing profile.
+			creator: isset($props['creator']) ? static::mapEntity($props, 'creator', User::class) : null,
 			createdTs: static::mapInteger($props, 'createdTs'),
 			responsible: static::mapEntity($props, 'responsible', User::class),
 			deadlineTs: static::mapInteger($props, 'deadlineTs'),
@@ -255,9 +276,12 @@ class Task extends AbstractEntity
 			estimatedTime: static::mapInteger($props, 'estimatedTime'),
 			replicate: static::mapBool($props, 'replicate'),
 			replicateParams: static::mapValueObject($props, 'replicateParams', ReplicateParams::class),
+			regularityType: static::mapBackedEnum($props, 'regularityType', RegularityType::class),
+			replicateTemplateDeleted: static::mapBool($props, 'replicateTemplateDeleted'),
 			replicateTemplate: static::mapEntity($props, 'replicateTemplate', Template::class),
 			changedTs: static::mapInteger($props, 'changedTs'),
-			changedBy: static::mapEntity($props, 'changedBy', User::class),
+			changedById: static::mapEntityId($props, 'changedBy'),
+			changedBy: isset($props['changedBy']) ? static::mapEntity($props, 'changedBy', User::class) : null,
 			statusChangedBy: static::mapEntity($props, 'statusChangedBy', User::class),
 			closedBy: static::mapEntity($props, 'closedBy', User::class),
 			closedTs: static::mapInteger($props, 'closedTs'),
@@ -319,6 +343,7 @@ class Task extends AbstractEntity
 			'title' => $this->title,
 			'description' => $this->description,
 			'descriptionChecksum' => $this->descriptionChecksum,
+			'creatorId' => $this->creatorId,
 			'creator' => $this->creator?->toArray(),
 			'createdTs' => $this->createdTs,
 			'responsible' => $this->responsible?->toArray(),
@@ -357,8 +382,11 @@ class Task extends AbstractEntity
 			'estimatedTime' => $this->estimatedTime,
 			'replicate' => $this->replicate,
 			'replicateParams' => $this->replicateParams,
+			'regularityType' => $this->regularityType?->value,
+			'replicateTemplateDeleted' => $this->replicateTemplateDeleted,
 			'replicateTemplate' => $this->replicateTemplate?->toArray(),
 			'changedTs' => $this->changedTs,
+			'changedById' => $this->changedById,
 			'statusChangedBy' => $this->statusChangedBy?->toArray(),
 			'changedBy' => $this->changedBy?->toArray(),
 			'closedBy' => $this->closedBy?->toArray(),

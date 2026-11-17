@@ -16,6 +16,7 @@ enum OptionDictionary: string
 	case AhaResultFromMessage = 'aha_result_from_message';
 	case AhaStartTimeTracking = 'aha_start_time_tracking';
 	case AhaTasksAiPromo = 'aha_tasks_ai_promo';
+	case AhaRegularTaskTypes = 'aha_regular_task_types';
 	case AhaFilesView = 'aha_files_view';
 
 	case StateFlags = 'state.flags';

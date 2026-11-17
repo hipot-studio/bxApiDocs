@@ -41,6 +41,7 @@ class Sync extends PresetAbstract
 				'menu_all_spaces',
 				'menu_tasks',
 				'menu_crm_favorite',
+				'menu_stafftrack_deliveries',
 				'menu_crm_store',
 				'menu_marketing',
 				'menu_sites',

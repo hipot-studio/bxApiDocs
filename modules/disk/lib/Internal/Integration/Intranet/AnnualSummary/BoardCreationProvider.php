@@ -26,11 +26,11 @@ if (!Loader::includeModule('intranet'))
  * the event, read from the monthly counters. The period is half-open, [from, to), as the agent of
  * intranet defines it, and its bounds fall on the first days of months, as the counters are stored.
  *
- * A batch is held - an empty collection, the cursor left where it was - while the backfill of the
- * counters is not complete and when the read fails: a partial number saved once would stay in the
+ * A batch is released - an empty collection, the cursor left where it was - while the backfill of the
+ * counters is not complete and when a read fails: a partial number saved once would stay in the
  * summary. The agent of intranet moves to the next provider as soon as a batch is shorter than the
- * limit, whatever the cursor says, so a held batch also becomes the limit: the agent then repeats the
- * very same batch on its next step instead of leaving the last users of the portal without the number.
+ * limit, whatever the cursor says, so a released batch raises the limit above its size and the current
+ * pass goes on without the number; batches answered before stay saved.
  *
  * The agent asks the limit before it reads the batch and builds the provider anew on every step, so the
  * state of the backfill is read once per instance: until it is complete the agent is asked for one user
@@ -85,8 +85,15 @@ final class BoardCreationProvider implements SummaryProviderInterface
 	{
 		$collection = new EntityCollection();
 		$ids = $this->normalizeUserIds($userIds);
-		if ($ids === [] || !$this->isBackfillCompleted())
+		if ($ids === [])
 		{
+			return $collection;
+		}
+
+		if (!$this->isBackfillCompleted())
+		{
+			$this->releaseBatch($userIds);
+
 			return $collection;
 		}
 
@@ -104,7 +111,7 @@ final class BoardCreationProvider implements SummaryProviderInterface
 				'lastUserId' => max($ids),
 				'exception' => $exception,
 			]);
-			$this->holdBatch($userIds);
+			$this->releaseBatch($userIds);
 
 			return $collection;
 		}
@@ -142,13 +149,12 @@ final class BoardCreationProvider implements SummaryProviderInterface
 	}
 
 	/**
-	 * The batch as the agent counts it, so the check "shorter than the limit" fails and the batch is
-	 * asked again. The limit stays after a successful repeat: the moved cursor then yields the next
-	 * batch, and an empty or shorter one finishes the provider in the usual way.
+	 * Above the batch as the agent counts it, so the check "shorter than the limit" holds and the agent
+	 * leaves the provider for the current pass.
 	 */
-	private function holdBatch(array $userIds): void
+	private function releaseBatch(array $userIds): void
 	{
-		$this->userIdLimit = max(1, min(self::USER_ID_LIMIT, count($userIds)));
+		$this->userIdLimit = count($userIds) + 1;
 	}
 
 	/**

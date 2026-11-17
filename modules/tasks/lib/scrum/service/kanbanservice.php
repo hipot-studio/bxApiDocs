@@ -6,13 +6,18 @@ use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\Control\Exception\TaskStageValidationException;
 use Bitrix\Tasks\Integration\Recyclebin;
 use Bitrix\Tasks\Internals\Task\UpdateEventSuppression;
+use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Kanban\ProjectsTable;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
+use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class KanbanService implements Errorable
@@ -21,6 +26,9 @@ class KanbanService implements Errorable
 	const ERROR_COULD_NOT_REMOVE_TASK = 'TASKS_KS_02';
 	const ERROR_COULD_NOT_GET_LAST_STAGES = 'TASKS_KS_03';
 	const ERROR_COULD_NOT_ADD_ONE_TASK = 'TASKS_KS_05';
+	const ERROR_COULD_NOT_ROLLBACK_TASK = 'TASKS_KS_06';
+
+	private const TASK_STAGE_BATCH_SIZE = 300;
 
 	private $errorCollection;
 
@@ -30,7 +38,7 @@ class KanbanService implements Errorable
 	private static $sprintStageIds = [];
 	private bool $skipTaskUpdateEvent;
 	private bool $deferTaskStageUpdate;
-	/** @var array<int, int> */
+	/** @var array<int, array{stageId: int, userId: int}> */
 	private array $deferredTaskStageUpdates = [];
 
 	public function __construct(bool $skipTaskUpdateEvent = false, bool $deferTaskStageUpdate = false)
@@ -40,15 +48,20 @@ class KanbanService implements Errorable
 		$this->deferTaskStageUpdate = $deferTaskStageUpdate;
 	}
 
+	/**
+	 * Applies task stage updates deferred during placement changes.
+	 *
+	 * @return bool
+	 */
 	public function flushTaskStageUpdates(): bool
 	{
 		$updates = $this->deferredTaskStageUpdates;
 		$this->deferredTaskStageUpdates = [];
 
 		$success = true;
-		foreach ($updates as $taskId => $stageId)
+		foreach ($updates as $taskId => $update)
 		{
-			if (!$this->updateTaskStageId($taskId, $stageId))
+			if (!$this->updateTaskStageId($taskId, $update['stageId'], $update['userId']))
 			{
 				$success = false;
 			}
@@ -212,6 +225,8 @@ class KanbanService implements Errorable
 	 */
 	public function addTasksToKanban(int $sprintId, array $taskIds, int $lastSprintId = 0): bool
 	{
+		$userId = $this->getTaskUpdateUserId();
+
 		Collection::normalizeArrayValuesByInt($taskIds, false);
 		if (empty($taskIds))
 		{
@@ -220,61 +235,30 @@ class KanbanService implements Errorable
 
 		try
 		{
-			$defaultStageId = $this->getDefaultStageId($sprintId);
-			if (!$defaultStageId)
-			{
-				$this->errorCollection->setError(
-					new Error('Failed to get the default stage', self::ERROR_COULD_NOT_ADD_TASK)
-				);
-
-				return false;
-			}
-
-			$taskStageIdsMap = [];
-			if ($lastSprintId)
-			{
-				$stageIdsMap = $this->getStageIdsMapBetweenTwoSprints($sprintId, $lastSprintId);
-				if ($stageIdsMap)
-				{
-					$lastStages = $this->getStagesCompletedSprint($lastSprintId);
-					foreach ($lastStages as $lastStage)
+			return Container::getInstance()
+				->getStageCompatibilityService()
+				->runWithValidationCache(function () use ($sprintId, $taskIds, $lastSprintId, $userId): bool {
+					$taskStageIds = $this->getTaskStageIdsForKanban($sprintId, $taskIds, $lastSprintId);
+					if ($taskStageIds === [])
 					{
-						$taskIdsInLastSprint = $this->getTaskIds([
-							'=STAGE.ENTITY_TYPE' => StagesTable::WORK_MODE_ACTIVE_SPRINT,
-							'TASK_ID' => $taskIds,
-							'STAGE_ID' => $lastStage['ID']
-						]);
-						if ($taskIdsInLastSprint)
-						{
-							foreach ($taskIdsInLastSprint as $taskIdInLastSprint)
-							{
-								$taskStageIdsMap[$taskIdInLastSprint] = $stageIdsMap[$lastStage['ID']];
-							}
-						}
+						return false;
 					}
-				}
-			}
 
-			if (!$this->removeTasksFromKanban($sprintId, $taskIds))
-			{
-				return false;
-			}
+					$sprintStageIds = $this->getSprintStageIds($sprintId);
+					if ($lastSprintId > 0)
+					{
+						$sprintStageIds = array_values(array_unique(array_merge(
+							$sprintStageIds,
+							$this->getSprintStageIds($lastSprintId),
+						)));
+					}
 
-			$stageService = Container::getInstance()->getTaskStageService();
-
-			foreach ($taskIds as $taskId)
-			{
-				$stageId = ($taskStageIdsMap[$taskId] ?? $defaultStageId);
-
-				$stageService->upsert($taskId, $stageId);
-
-				if (!$this->applyTaskStageUpdate($taskId, $stageId))
-				{
-					return false;
-				}
-			}
-
-			return true;
+					return $this->updateTaskStagesWithRelations(
+						$taskStageIds,
+						$sprintStageIds,
+						$userId,
+					);
+				});
 		}
 		catch (\Throwable $exception)
 		{
@@ -304,15 +288,11 @@ class KanbanService implements Errorable
 
 			if ($finishStageId)
 			{
-				if (!$this->removeTasksFromKanban($sprintId, [$taskId]))
-				{
-					return;
-				}
-
-				$stageService = Container::getInstance()->getTaskStageService();
-				$stageService->upsert($taskId, $finishStageId);
-
-				$this->applyTaskStageUpdate($taskId, $finishStageId);
+				$this->assignKanbanStage(
+					$taskId,
+					$finishStageId,
+					$this->getSprintStageIds($sprintId),
+				);
 			}
 			else
 			{
@@ -390,15 +370,11 @@ class KanbanService implements Errorable
 
 			if ($newStageId)
 			{
-				if (!$this->removeTasksFromKanban($sprintId, [$taskId]))
-				{
-					return;
-				}
-
-				$stageService = Container::getInstance()->getTaskStageService();
-				$stageService->upsert($taskId, $newStageId);
-
-				$this->applyTaskStageUpdate($taskId, $newStageId);
+				$this->assignKanbanStage(
+					$taskId,
+					$newStageId,
+					$this->getSprintStageIds($sprintId),
+				);
 			}
 			else
 			{
@@ -431,35 +407,38 @@ class KanbanService implements Errorable
 			return true;
 		}
 
+		$userId = $this->getTaskUpdateUserId();
+
 		try
 		{
-			$stageIds = $this->getSprintStageIds($sprintId);
-
-			$stageService = Container::getInstance()->getTaskStageService();
-
-			foreach ($taskIds as $taskId)
-			{
-				$rows = TaskStageTable::getList([
-					'filter' => [
-						'TASK_ID' => $taskId,
-						'STAGE_ID' => $stageIds
-					]
-				])->fetchAll();
-
-				$ids = array_column($rows, 'ID');
-				Collection::normalizeArrayValuesByInt($ids, false);
-
-				if (!empty($ids))
-				{
-					$stageService->clearRelations($ids);
-					if ($updateTaskStage && !$this->applyTaskStageUpdate($taskId, 0))
+			return Container::getInstance()
+				->getStageCompatibilityService()
+				->runWithValidationCache(function () use ($sprintId, $taskIds, $userId, $updateTaskStage): bool {
+					$stageIds = $this->getSprintStageIds($sprintId);
+					$relationsByTaskId = $this->getTaskStageRelationsByTaskIds($taskIds, $stageIds);
+					$taskStageIds = [];
+					foreach ($relationsByTaskId as $taskId => $relations)
 					{
-						return false;
+						if ($relations !== [])
+						{
+							$taskStageIds[$taskId] = 0;
+						}
 					}
-				}
-			}
 
-			return true;
+					if ($taskStageIds === [])
+					{
+						return true;
+					}
+
+					return $this->updateTaskStagesWithRelations(
+						$taskStageIds,
+						$stageIds,
+						$userId,
+						$relationsByTaskId,
+						$updateTaskStage,
+					);
+				})
+			;
 		}
 		catch (\Throwable $exception)
 		{
@@ -673,15 +652,7 @@ class KanbanService implements Errorable
 			return false;
 		}
 
-		$stageService = Container::getInstance()->getTaskStageService();
-		$stageService->move((int)$taskStage['ID'], $stageId);
-
-		if (!$this->applyTaskStageUpdate($taskId, $stageId))
-		{
-			return false;
-		}
-
-		return true;
+		return $this->updateTaskStageWithRelations($taskId, $stageId, [(int)$taskStage['ID']]);
 	}
 
 	public function getLastCompletedSprintIdSameGroup(int $sprintId): int
@@ -979,24 +950,451 @@ class KanbanService implements Errorable
 		return $stageId;
 	}
 
-	private function applyTaskStageUpdate(int $taskId, int $stageId): bool
+	private function assignKanbanStage(int $taskId, int $stageId, array $sprintStageIds): bool
 	{
+		$relationIds = $this->getTaskStageRelationIds($taskId, $sprintStageIds);
+
+		return $this->updateTaskStageWithRelations($taskId, $stageId, $relationIds);
+	}
+
+	public function canAddTasksToKanban(int $sprintId, array $taskIds, int $lastSprintId = 0): bool
+	{
+		$taskStageIds = $this->getTaskStageIdsForKanban($sprintId, $taskIds, $lastSprintId);
+
+		return $taskStageIds !== []
+			&& $this->validateTaskStageUpdates($taskStageIds, $this->getTaskUpdateUserId())
+		;
+	}
+
+	public function updateTaskStageWithRelations(int $taskId, int $stageId, array $relationIds): bool
+	{
+		$userId = $this->getTaskUpdateUserId();
+
+		return Container::getInstance()
+			->getStageCompatibilityService()
+			->runWithValidationCache(function () use ($taskId, $stageId, $relationIds, $userId): bool {
+				if (!$this->validateTaskStageUpdates([$taskId => $stageId], $userId))
+				{
+					return false;
+				}
+
+				return $this->applyTaskStageWithRelations($taskId, $stageId, $relationIds, $userId);
+			})
+		;
+	}
+
+	private function applyTaskStageWithRelations(
+		int $taskId,
+		int $stageId,
+		array $relationIds,
+		int $userId,
+	): bool
+	{
+		$relations = $this->getTaskStageRelations($relationIds);
+		$targetRelationExists = $stageId > 0
+			&& $this->getTaskStageRelationIds($taskId, [$stageId]) !== []
+		;
+
+		return $this->applyPreparedTaskStageWithRelations(
+			$taskId,
+			$stageId,
+			$relations,
+			$targetRelationExists,
+			$userId,
+		);
+	}
+
+	private function applyPreparedTaskStageWithRelations(
+		int $taskId,
+		int $stageId,
+		array $relations,
+		bool $targetRelationExists,
+		int $userId,
+	): bool
+	{
+		$stageService = Container::getInstance()->getTaskStageService();
+		$stageService->clearRelations(array_keys($relations));
+		$createdRelationId = null;
+		if ($stageId > 0)
+		{
+			$relationId = $stageService->upsert($taskId, $stageId);
+			if (!$targetRelationExists)
+			{
+				$createdRelationId = $relationId;
+			}
+		}
+
 		if ($this->deferTaskStageUpdate)
 		{
-			$this->deferredTaskStageUpdates[$taskId] = $stageId;
+			$this->deferredTaskStageUpdates[$taskId] = [
+				'stageId' => $stageId,
+				'userId' => $userId,
+			];
 
 			return true;
 		}
 
-		return $this->updateTaskStageId($taskId, $stageId);
+		try
+		{
+			if ($this->updateTaskStageId($taskId, $stageId, $userId))
+			{
+				return true;
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			$this->errorCollection->setError(
+				new Error($exception->getMessage(), self::ERROR_COULD_NOT_ADD_ONE_TASK)
+			);
+		}
+
+		$this->restoreTaskStageRelations($taskId, $relations, $createdRelationId);
+
+		return false;
 	}
 
-	private function updateTaskStageId(int $taskId, int $stageId): bool
+	private function updateTaskStagesWithRelations(
+		array $taskStageIds,
+		array $relationStageIds,
+		int $userId,
+		?array $relationsByTaskId = null,
+		bool $updateTaskStage = true,
+	): bool
 	{
-		$parameters = $this->skipTaskUpdateEvent
-			? UpdateEventSuppression::getParameters()
-			: []
-		;
+		// Detaching the relations alone writes no stage into the task, so it needs neither the
+		// compatibility check of a stage nor a rollback, and the relations go out in batches.
+		if (!$updateTaskStage)
+		{
+			return $this->applyTaskStageRelationsOnly(
+				$taskStageIds,
+				$relationsByTaskId ?? $this->getTaskStageRelationsByTaskIds(
+					array_keys($taskStageIds),
+					$relationStageIds,
+				),
+			);
+		}
+
+		$taskRows = $this->getTaskStageUpdateRows(array_keys($taskStageIds));
+		if (!$this->validateTaskStageUpdates($taskStageIds, $userId, $taskRows))
+		{
+			return false;
+		}
+
+		$relationsByTaskId ??= $this->getTaskStageRelationsByTaskIds(
+			array_keys($taskStageIds),
+			$relationStageIds,
+		);
+		$previousTaskStageIds = [];
+		foreach ($taskStageIds as $taskId => $stageId)
+		{
+			$previousTaskStageIds[$taskId] = $taskRows[$taskId]['STAGE_ID'];
+		}
+
+		$appliedTaskIds = [];
+		foreach ($taskStageIds as $taskId => $stageId)
+		{
+			$relations = $relationsByTaskId[$taskId] ?? [];
+			if (!$this->applyPreparedTaskStageWithRelations(
+				$taskId,
+				$stageId,
+				$relations,
+				in_array($stageId, $relations, true),
+				$userId,
+			))
+			{
+				$this->rollbackTaskStageUpdates(
+					$appliedTaskIds,
+					$previousTaskStageIds,
+					$relationsByTaskId,
+					$relationStageIds,
+				);
+
+				return false;
+			}
+
+			$appliedTaskIds[] = $taskId;
+		}
+
+		return true;
+	}
+
+	private function applyTaskStageRelationsOnly(array $taskStageIds, array $relationsByTaskId): bool
+	{
+		$stageService = Container::getInstance()->getTaskStageService();
+
+		$relationIds = [];
+		foreach (array_keys($taskStageIds) as $taskId)
+		{
+			foreach (array_keys($relationsByTaskId[$taskId] ?? []) as $relationId)
+			{
+				$relationIds[] = $relationId;
+			}
+		}
+
+		foreach (array_chunk($relationIds, self::TASK_STAGE_BATCH_SIZE) as $relationIdsChunk)
+		{
+			$stageService->clearRelations($relationIdsChunk);
+		}
+
+		foreach ($taskStageIds as $taskId => $stageId)
+		{
+			if ($stageId > 0)
+			{
+				$stageService->upsert($taskId, $stageId);
+			}
+		}
+
+		return true;
+	}
+
+	private function rollbackTaskStageUpdates(
+		array $taskIds,
+		array $previousTaskStageIds,
+		array $relationsByTaskId,
+		array $relationStageIds,
+	): void
+	{
+		$stageService = Container::getInstance()->getTaskStageService();
+		foreach (array_reverse($taskIds) as $taskId)
+		{
+			unset($this->deferredTaskStageUpdates[$taskId]);
+
+			try
+			{
+				$currentRelationIds = $this->getTaskStageRelationIds($taskId, $relationStageIds);
+				$stageService->clearRelations($currentRelationIds);
+				foreach ($relationsByTaskId[$taskId] ?? [] as $previousStageId)
+				{
+					$stageService->upsert($taskId, $previousStageId);
+				}
+			}
+			catch (\Throwable $exception)
+			{
+				$this->errorCollection->setError(new Error(
+					$exception->getMessage(),
+					self::ERROR_COULD_NOT_ROLLBACK_TASK,
+				));
+			}
+
+			if ($this->deferTaskStageUpdate)
+			{
+				continue;
+			}
+
+			try
+			{
+				$result = TaskTable::update($taskId, [
+					'STAGE_ID' => $previousTaskStageIds[$taskId],
+				]);
+				if (!$result->isSuccess())
+				{
+					$this->errorCollection->setError(new Error(
+						implode('; ', $result->getErrorMessages()),
+						self::ERROR_COULD_NOT_ROLLBACK_TASK,
+					));
+				}
+			}
+			catch (\Throwable $exception)
+			{
+				$this->errorCollection->setError(new Error(
+					$exception->getMessage(),
+					self::ERROR_COULD_NOT_ROLLBACK_TASK,
+				));
+			}
+		}
+	}
+
+	private function getTaskStageIdsForKanban(int $sprintId, array $taskIds, int $lastSprintId): array
+	{
+		$defaultStageId = $this->getDefaultStageId($sprintId);
+		if (!$defaultStageId)
+		{
+			$this->errorCollection->setError(
+				new Error('Failed to get the default stage', self::ERROR_COULD_NOT_ADD_TASK)
+			);
+
+			return [];
+		}
+
+		$taskStageIdsMap = [];
+		if ($lastSprintId)
+		{
+			$stageIdsMap = $this->getStageIdsMapBetweenTwoSprints($sprintId, $lastSprintId);
+			if ($stageIdsMap)
+			{
+				$lastStages = $this->getStagesCompletedSprint($lastSprintId);
+				foreach ($lastStages as $lastStage)
+				{
+					$taskIdsInLastSprint = $this->getTaskIds([
+						'=STAGE.ENTITY_TYPE' => StagesTable::WORK_MODE_ACTIVE_SPRINT,
+						'TASK_ID' => $taskIds,
+						'STAGE_ID' => $lastStage['ID'],
+					]);
+					foreach ($taskIdsInLastSprint as $taskIdInLastSprint)
+					{
+						$taskStageIdsMap[(int)$taskIdInLastSprint] = (int)(
+							$stageIdsMap[$lastStage['ID']] ?? $defaultStageId
+						);
+					}
+				}
+			}
+		}
+
+		$taskStageIds = [];
+		foreach ($taskIds as $taskId)
+		{
+			$taskId = (int)$taskId;
+			$taskStageIds[$taskId] = $taskStageIdsMap[$taskId] ?? (int)$defaultStageId;
+		}
+
+		return $taskStageIds;
+	}
+
+	private function validateTaskStageUpdates(array $taskStageIds, int $userId, ?array $taskRows = null): bool
+	{
+		$taskRows ??= $this->getTaskStageUpdateRows(array_keys($taskStageIds));
+		$stageCompatibilityService = Container::getInstance()->getStageCompatibilityService();
+
+		foreach ($taskStageIds as $taskId => $stageId)
+		{
+			if (!isset($taskRows[$taskId]))
+			{
+				$this->errorCollection->setError(
+					new Error('Task was not found', self::ERROR_COULD_NOT_ADD_ONE_TASK)
+				);
+
+				return false;
+			}
+
+			if (!TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_EDIT, (int)$taskId))
+			{
+				$this->errorCollection->setError(new Error(
+					Loc::getMessage('TASKS_SCRUM_ACCESS_DENIED') ?? 'Access denied to update task',
+					'TASKS_SCRUM_TASK_UPDATE_ACCESS_DENIED',
+				));
+
+				return false;
+			}
+
+			try
+			{
+				$stageCompatibilityService->validateStageId((int)$stageId, $taskRows[$taskId]['GROUP_ID']);
+			}
+			catch (TaskStageValidationException $exception)
+			{
+				$this->errorCollection->setError(new Error($exception->getMessage(), $exception->getErrorCode()));
+
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function getTaskStageUpdateRows(array $taskIds): array
+	{
+		$taskRows = [];
+		foreach (array_chunk(array_values(array_unique($taskIds)), self::TASK_STAGE_BATCH_SIZE) as $taskIdChunk)
+		{
+			$rows = TaskTable::query()
+				->setSelect(['ID', 'GROUP_ID', 'STAGE_ID'])
+				->whereIn('ID', $taskIdChunk)
+				->fetchAll();
+			foreach ($rows as $row)
+			{
+				$taskRows[(int)$row['ID']] = [
+					'GROUP_ID' => (int)$row['GROUP_ID'],
+					'STAGE_ID' => (int)$row['STAGE_ID'],
+				];
+			}
+		}
+
+		return $taskRows;
+	}
+
+	private function getTaskStageRelationsByTaskIds(array $taskIds, array $stageIds): array
+	{
+		$taskIds = array_values(array_unique(array_map('intval', $taskIds)));
+		$relationsByTaskId = array_fill_keys($taskIds, []);
+		if ($taskIds === [] || $stageIds === [])
+		{
+			return $relationsByTaskId;
+		}
+
+		foreach (array_chunk($taskIds, self::TASK_STAGE_BATCH_SIZE) as $taskIdChunk)
+		{
+			$rows = TaskStageTable::query()
+				->setSelect(['ID', 'TASK_ID', 'STAGE_ID'])
+				->whereIn('TASK_ID', $taskIdChunk)
+				->whereIn('STAGE_ID', $stageIds)
+				->fetchAll();
+			foreach ($rows as $row)
+			{
+				$relationsByTaskId[(int)$row['TASK_ID']][(int)$row['ID']] = (int)$row['STAGE_ID'];
+			}
+		}
+
+		return $relationsByTaskId;
+	}
+
+	private function getTaskStageRelations(array $relationIds): array
+	{
+		if ($relationIds === [])
+		{
+			return [];
+		}
+
+		$rows = TaskStageTable::query()
+			->setSelect(['ID', 'STAGE_ID'])
+			->whereIn('ID', $relationIds)
+			->fetchAll();
+
+		return array_column($rows, 'STAGE_ID', 'ID');
+	}
+
+	private function restoreTaskStageRelations(int $taskId, array $relations, ?int $createdRelationId): void
+	{
+		if ($createdRelationId !== null)
+		{
+			Container::getInstance()->getTaskStageService()->clearRelations([$createdRelationId]);
+		}
+
+		foreach ($relations as $previousStageId)
+		{
+			Container::getInstance()->getTaskStageService()->upsert($taskId, (int)$previousStageId);
+		}
+	}
+
+	private function getTaskStageRelationIds(int $taskId, array $stageIds): array
+	{
+		$rows = TaskStageTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=TASK_ID' => $taskId,
+				'@STAGE_ID' => $stageIds,
+			],
+		])->fetchAll();
+
+		$relationIds = array_column($rows, 'ID');
+		Collection::normalizeArrayValuesByInt($relationIds, false);
+
+		return $relationIds;
+	}
+
+	private function getTaskUpdateUserId(): int
+	{
+		$userId = User::getId();
+
+		return $userId > 0 ? $userId : 1;
+	}
+
+	protected function updateTaskStageId(int $taskId, int $stageId, int $userId): bool
+	{
+		$parameters = ['USER_ID' => $userId];
+		if ($this->skipTaskUpdateEvent)
+		{
+			$parameters += UpdateEventSuppression::getParameters();
+		}
 
 		$taskObject = new \CTasks();
 		if ($taskObject->update($taskId, ['STAGE_ID' => $stageId], $parameters) !== false)

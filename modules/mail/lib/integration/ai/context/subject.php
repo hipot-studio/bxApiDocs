@@ -200,3 +200,4 @@ final class Subject
 			: $content;
 	}
 }
+

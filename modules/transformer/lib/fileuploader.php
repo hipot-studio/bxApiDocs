@@ -5,74 +5,85 @@ namespace Bitrix\Transformer;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Result;
+use Bitrix\Transformer\Command\UploadArea;
 
 class FileUploader
 {
-	const MODULE_PATH = "transformer";
-	const MODULE_ID = "transformer";
+	const MODULE_PATH = 'transformer';
+	const MODULE_ID = 'transformer';
 
-	/**
-	 * Generates filename from command ID and file extension/type.
-	 *
-	 * @param int $commandId Id of the command to make filename.
-	 * @param string $fileKey Extension or name.
-	 * @return string
-	 */
-	private static function getUploadedName($commandId, $fileKey)
+	private static function getUploadedName(string $guid, string $format): string
 	{
-		$fileName = '/'.self::MODULE_PATH.'/'.$commandId.'.'.$fileKey;
-		return $fileName;
+		return '/' . self::MODULE_PATH . '/' . $guid . '.' . $format;
 	}
 
-	/**
-	 * Get information about uploading of the particular file.
-	 * If it can be uploaded to a cloud - get bucket id and chunk.
-	 *
-	 * @param int $commandId ID of the command.
-	 * @param string $fileKey Extension of the file.
-	 * @param int $fileSize Full size of the file.
-	 * @return array
-	 */
-	public static function getUploadInfo($commandId, $fileKey, $fileSize)
+	public static function getUploadInfo(Command $command, mixed $format, int $fileSize): Result
 	{
-		$fileName = self::getUploadedName($commandId, $fileKey);
-		$bucketId = $maxUploadSizeCloud = $maxUploadSize = 0;
-		if(\Bitrix\Main\Loader::includeModule('clouds'))
+		$result = new Result();
+		$area = new UploadArea($command);
+		if (!$area->isRequestedFormat($format))
 		{
-			$bucket = \CCloudStorage::FindBucketForFile(array('size' => $fileSize, 'MODULE_ID' => self::MODULE_ID), $fileName);
-			if($bucket != null)
+			return $result->addError(new Error('Wrong file format'));
+		}
+
+		try
+		{
+			$fileName = self::getUploadedName($command->getGuid(), $format);
+			$bucketId = $maxUploadSizeCloud = $maxUploadSize = 0;
+			if (\Bitrix\Main\Loader::includeModule('clouds'))
 			{
-				if($bucket->init())
+				$bucket = \CCloudStorage::FindBucketForFile(
+					['size' => $fileSize, 'MODULE_ID' => self::MODULE_ID],
+					$fileName,
+				);
+				if ($bucket !== null && $bucket->init())
 				{
-					$bucketId = $bucket->ID;
+					$bucketId = (int)$bucket->ID;
 					$maxUploadSizeCloud = $bucket->getService()->getMinUploadPartSize();
 					$fileName = Path::combine(\CCloudTempFile::GetDirectoryName($bucket, 1), $fileName);
 				}
 			}
-		}
 
-		if(!$bucketId)
+			if (!$bucketId)
+			{
+				$fileName = Path::combine(\CTempFile::GetDirectoryName(1), $fileName);
+			}
+
+			$maxUploadSizeLocal = min(
+				self::parseSize(ini_get('post_max_size')),
+				self::parseSize(ini_get('upload_max_filesize')),
+			);
+
+			if ($maxUploadSizeCloud > 0 && $maxUploadSizeCloud < $maxUploadSizeLocal)
+			{
+				$maxUploadSize = $maxUploadSizeCloud;
+			}
+			else
+			{
+				$maxUploadSize = $maxUploadSizeLocal - 1024;
+			}
+
+			if ($maxUploadSize <= 0)
+			{
+				$maxUploadSize = 5 * 1024 * 1024;
+			}
+
+			if ($bucketId > 0 ? !$area->ownsCloudName($fileName, $format) : !$area->ownsLocalName($fileName, $format))
+			{
+				return $result->addError(new Error('Wrong upload name'));
+			}
+
+			return $result->setData([
+				'name' => $fileName,
+				'bucket' => $bucketId,
+				'chunk_size' => $maxUploadSize,
+				'upload_type' => 'file',
+			]);
+		}
+		catch (\Throwable)
 		{
-			$fileName = Path::combine(\CTempFile::GetDirectoryName(1), $fileName);
+			return $result->addError(new Error('Wrong upload name'));
 		}
-
-		$maxUploadSizeLocal = min(self::parseSize(ini_get('post_max_size')), self::parseSize(ini_get('upload_max_filesize')));
-
-		if($maxUploadSizeCloud > 0 && $maxUploadSizeCloud < $maxUploadSizeLocal)
-		{
-			$maxUploadSize = $maxUploadSizeCloud;
-		}
-		else
-		{
-			$maxUploadSize = $maxUploadSizeLocal - 1024;
-		}
-
-		if($maxUploadSize <= 0)
-		{
- 			$maxUploadSize = 5*1024*1024;
-		}
-
-		return array('name' => $fileName, 'bucket' => $bucketId, 'chunk_size' => $maxUploadSize, 'upload_type' => 'file');
 	}
 
 	/**

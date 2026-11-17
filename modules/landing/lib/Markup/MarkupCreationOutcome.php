@@ -15,6 +15,7 @@ use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatNotice;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatNoticeService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteFailedGenerationReaction;
+use Bitrix\Landing\Integration\AiAssistant\Service\ImageRefusalNoticePublisher;
 use Bitrix\Landing\Internals\SiteTable;
 use Bitrix\Main\Loader;
 
@@ -36,7 +37,8 @@ use Bitrix\Main\Loader;
  *
  * The chat of the creation is told how it ended (ADR § 3.2): «Site created» by the finish step that pinned
  * the chat, «Could not create the site» by the terminal reaction that released it. A cancel and a start that
- * threw stay silent - the agent learns about them from the answer of its tool in the same turn.
+ * threw stay silent - the agent learns about them from the answer of its tool in the same turn. Pictures
+ * refused by the image provider are told by the same finish step, whatever became of «Site created».
  */
 class MarkupCreationOutcome
 {
@@ -48,6 +50,7 @@ class MarkupCreationOutcome
 	private MarkupLifecycleLog $log;
 	private AiSiteChatNoticeService $noticeService;
 	private AiPromptHandoffService $handoffService;
+	private ImageRefusalNoticePublisher $imageRefusalPublisher;
 
 	public function __construct(
 		?AiSiteBindingService $bindingService = null,
@@ -56,6 +59,7 @@ class MarkupCreationOutcome
 		?MarkupLifecycleLog $log = null,
 		?AiSiteChatNoticeService $noticeService = null,
 		?AiPromptHandoffService $handoffService = null,
+		?ImageRefusalNoticePublisher $imageRefusalPublisher = null,
 	)
 	{
 		$this->bindingService = $bindingService ?? new AiSiteBindingService();
@@ -64,6 +68,7 @@ class MarkupCreationOutcome
 		$this->log = $log ?? new MarkupLifecycleLog();
 		$this->noticeService = $noticeService ?? new AiSiteChatNoticeService();
 		$this->handoffService = $handoffService ?? new AiPromptHandoffService();
+		$this->imageRefusalPublisher = $imageRefusalPublisher ?? new ImageRefusalNoticePublisher($this->noticeService);
 	}
 
 	/**
@@ -152,12 +157,17 @@ class MarkupCreationOutcome
 	 * waits for a finished generation, so the same conditional write is made here directly.
 	 *
 	 * «Site created» is posted only by the call whose write has pinned the chat: a repeated finish step or
-	 * a finalizer that came second finds the site already there and posts nothing.
+	 * a finalizer that came second finds the site already there and posts nothing. The hint about the
+	 * refused pictures follows it under the same rule, as an attempt of its own; a generation without
+	 * a chat records the hint as skipped.
 	 */
 	public function finalize(Generation $generation): bool
 	{
 		if (CreateAiSiteState::getAiSiteBindingId($generation) <= 0)
 		{
+			// no chat to tell: the outcome is recorded, or the answer would keep waiting for the message
+			$this->imageRefusalPublisher->publish($generation, null);
+
 			return true;
 		}
 
@@ -200,6 +210,7 @@ class MarkupCreationOutcome
 		if ($isPinnedNow)
 		{
 			$this->notifyCreated($generation, $binding, $siteId, $pageId);
+			$this->imageRefusalPublisher->publish($generation, $binding);
 		}
 
 		return true;

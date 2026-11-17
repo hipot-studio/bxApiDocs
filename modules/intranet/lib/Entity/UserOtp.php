@@ -9,6 +9,9 @@ use Bitrix\Security\Mfa\OtpType;
 
 class UserOtp
 {
+	private const SECONDS_IN_HOUR = 3600;
+	private const SECONDS_IN_DAY = 86400;
+
 	public function __construct(
 		public int $userId,
 		public bool $isActive,
@@ -34,34 +37,33 @@ class UserOtp
 		);
 	}
 
-	public function getDeactivateRemainder(): ?string
+	public function getDeactivateRemainder(?DateTime $now = null): ?string
 	{
 		if (!$this->dateDeactivate)
 		{
 			return null;
 		}
 
-		$deactivateRemainder = '';
-		$remainerInterval = (new DateTime())->getDiff($this->dateDeactivate);
-		$now = new DateTime();
+		$nowTs = ($now ?? new DateTime())->getTimestamp();
+		$deactivateTs = $this->dateDeactivate->getTimestamp();
+		$secondsLeft = $deactivateTs - $nowTs;
 
-		if ($remainerInterval->d < 1)
+		if ($secondsLeft <= -self::SECONDS_IN_DAY)
 		{
-			if ($remainerInterval->h < 1)
-			{
-				$deactivateRemainder = FormatDate('idiff', $now->getTimestamp(), $this->dateDeactivate->getTimestamp());
-			}
-			else
-			{
-				$deactivateRemainder = FormatDate('Hdiff', $now->getTimestamp(), $this->dateDeactivate->getTimestamp());
-			}
-		}
-		elseif ($this->dateDeactivate->getTimestamp() > $now->getTimestamp())
-		{
-			$deactivateRemainder = FormatDate('ddiff', $now->getTimestamp(), $this->dateDeactivate->getTimestamp());
+			return '';
 		}
 
-		return $deactivateRemainder;
+		if ($secondsLeft >= self::SECONDS_IN_DAY)
+		{
+			return FormatDate('ddiff', $nowTs, $deactivateTs);
+		}
+
+		if (abs($secondsLeft) < self::SECONDS_IN_HOUR)
+		{
+			return FormatDate('idiff', $nowTs, $deactivateTs);
+		}
+
+		return FormatDate('Hdiff', $nowTs, $deactivateTs);
 	}
 
 	public function toArray(): array

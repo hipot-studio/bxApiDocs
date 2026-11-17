@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
+use Bitrix\Tasks\Control\Exception\TaskStageValidationException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -45,6 +46,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Task\Prepare\Update\EntityFieldService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Stage\StageCompatibilityService;
 use CTaskLog;
 
 class UpdateService
@@ -55,6 +57,7 @@ class UpdateService
 		private readonly EgressInterface $egressController,
 		private readonly ValidationService $validationService,
 		private readonly Counter\Service $counterService,
+		private readonly StageCompatibilityService $stageCompatibilityService,
 	)
 	{
 
@@ -79,6 +82,18 @@ class UpdateService
 		if ($entityBefore === null)
 		{
 			throw new TaskNotExistsException();
+		}
+
+		if ($task->stage !== null)
+		{
+			$stageId = $task->stage->id;
+			if ($stageId === null)
+			{
+				$this->stageCompatibilityService->throwNotFound();
+			}
+
+			$targetGroupId = $task->group?->id ?? $entityBefore->group?->id ?? 0;
+			$this->stageCompatibilityService->validateStageId($stageId, $targetGroupId);
 		}
 
 		// we do validation here, because we need merge states and get new entity to check
@@ -221,7 +236,7 @@ class UpdateService
 
 		(new RunInternalEvent())($entityBefore, $taskAfterUpdate);
 
-		if ($task->responsible || $entityBefore->responsible->id !== $taskAfterUpdate->responsible->id)
+		if ($task->responsible || $entityBefore->responsible?->id !== $taskAfterUpdate->responsible?->id)
 		{
 			$context = \Bitrix\Main\Context::getCurrent();
 			Container::getInstance()
@@ -232,8 +247,8 @@ class UpdateService
 						'taskId' => $task->id,
 						'requestStartTime' => $context?->getServer()->get('REQUEST_TIME_FLOAT'),
 						'action' => $context?->getRequest()->get('action'),
-						'responsibleBefore' => $entityBefore->responsible->id,
-						'responsibleAfter' => $taskAfterUpdate->responsible->id,
+						'responsibleBefore' => $entityBefore->responsible?->id,
+						'responsibleAfter' => $taskAfterUpdate->responsible?->id,
 						'members' => $updateMemberInfo,
 						'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS),
 					],

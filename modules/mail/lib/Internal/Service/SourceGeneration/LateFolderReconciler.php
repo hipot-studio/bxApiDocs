@@ -49,7 +49,8 @@ class LateFolderReconciler
 	 * @param (callable(array<int, array{generation: int, hash: string}>): bool)|null $hasNewLetters Whether
 	 *        these folders the operation failed to create got letters the tail has not walked yet
 	 *        {@see TailAppendService::hasLettersBeyondItsWalks()}.
-	 * @return Result Data: pairs [{source, target, created}], notCreated [{source, reason, directoryId}],
+	 * @return Result Data: pairs [{source, target, created}] - the folders of the user found in the registry
+	 *         with "created" false and the ones this pass brought in, notCreated [{source, reason, directoryId}],
 	 *         returned - whether the operation has to go back to the tail, reopen [{generation, hash}] -
 	 *         the folders of the old server the tail has to walk again, partial - whether the time
 	 *         ran out before every folder was taken up. A failure carries "missingRole" in the custom
@@ -92,6 +93,7 @@ class LateFolderReconciler
 		$nameCollisions = [];
 		$notCreatedIds = [];
 		$roleDirectories = [];
+		$foundPairs = [];
 		foreach ($knownDirectories as $known)
 		{
 			$id = (int)($known['ID'] ?? 0);
@@ -156,6 +158,14 @@ class LateFolderReconciler
 			$pair = reset($candidates);
 			$taken[$pair['name']] = true;
 			$resolved[$id] = $pair;
+			if ($role === null)
+			{
+				$foundPairs[] = [
+					'source' => (string)($known['PATH'] ?? ''),
+					'target' => $pair['name'],
+					'created' => false,
+				];
+			}
 		}
 
 		if ($roleDirectories !== [])
@@ -185,7 +195,7 @@ class LateFolderReconciler
 		if ($unpaired === [])
 		{
 			return $result->setData([
-				'pairs' => [],
+				'pairs' => $foundPairs,
 				'notCreated' => [],
 				'returned' => $stale !== [],
 				'reopen' => $stale,
@@ -199,7 +209,7 @@ class LateFolderReconciler
 			$lastWalk = $returns === self::MAX_FOLDER_RETURNS;
 
 			return $result->setData([
-				'pairs' => [],
+				'pairs' => $foundPairs,
 				'notCreated' => array_map(
 					static fn (array $known): array => self::notCreatedFolder($known, self::REASON_RETURN_LIMIT),
 					$unpaired,
@@ -243,7 +253,7 @@ class LateFolderReconciler
 		$reopenIds = array_merge($data['pairedIds'], array_column($data['notCreated'], 'directoryId'));
 
 		return $result->setData([
-			'pairs' => $data['pairs'],
+			'pairs' => [...$foundPairs, ...$data['pairs']],
 			'notCreated' => $data['notCreated'],
 			'returned' => true,
 			'reopen' => self::mergeKeys($this->folderKeysOf($mailboxId, $reopenIds), $stale),

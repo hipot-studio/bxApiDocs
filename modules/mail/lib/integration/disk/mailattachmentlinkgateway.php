@@ -47,3 +47,4 @@ interface MailAttachmentLinkGateway
 	 */
 	public function createsServiceLink(): bool;
 }
+

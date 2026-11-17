@@ -30,3 +30,4 @@ final class ConnectionRequestResponsibleAdminAccess extends Base
 		return null;
 	}
 }
+

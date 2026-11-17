@@ -11,6 +11,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\HtmlEditor\SourceResolver;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Version;
@@ -46,6 +47,7 @@ class OpeningContextFactory
 		int $userId,
 		bool $hasUnifiedLinkProof = false,
 		string $downloadUrl = '',
+		?ShortLinkOpening $shortLinkOpening = null,
 	): ?OpeningContext
 	{
 		$file = $documentSession->getObject();
@@ -62,6 +64,7 @@ class OpeningContextFactory
 				$userId,
 				$downloadUrl,
 				$hasUnifiedLinkProof,
+				$shortLinkOpening,
 			),
 		);
 	}
@@ -133,12 +136,16 @@ class OpeningContextFactory
 	 * The opening of a concrete revision: it carries the name it was saved under and offers nothing of
 	 * the object - a revision has no access of its own. A revision whose object is gone is an opening
 	 * all the same {@see describeOrphanedRevision()}.
+	 *
+	 * @param bool $offersRevisionLink whether the page copies the address of this very revision; the html
+	 *     viewer and the editors never ask for it
 	 */
 	public function fromVersion(
 		Version $version,
 		int $userId,
 		string $downloadUrl,
 		?UnifiedLinkAccessLevel $accessLevel = null,
+		bool $offersRevisionLink = false,
 	): OpeningContext
 	{
 		$file = $version->getObject();
@@ -156,6 +163,7 @@ class OpeningContextFactory
 			offersObjectSharing: false,
 			name: (string)$version->getName(),
 			versionId: (int)$version->getId(),
+			offersRevisionLink: $offersRevisionLink,
 		));
 	}
 
@@ -203,6 +211,7 @@ class OpeningContextFactory
 		?Version $pinnedVersion,
 		int $userId,
 		string $downloadUrl,
+		?ShortLinkOpening $shortLinkOpening = null,
 	): OpeningContext
 	{
 		return $this->describeOrRefuse($file, function () use (
@@ -211,6 +220,7 @@ class OpeningContextFactory
 			$pinnedVersion,
 			$userId,
 			$downloadUrl,
+			$shortLinkOpening,
 		): OpeningContext {
 			$accessLevel = $this->getUnifiedLinkAccessService()->check(
 				$file,
@@ -230,6 +240,7 @@ class OpeningContextFactory
 				versionId: $pinnedVersion === null ? null : (int)$pinnedVersion->getId(),
 				externalLink: $externalLink,
 				hasPublicLinkAccess: $accessLevel->canRead(),
+				shortLinkOpening: $shortLinkOpening,
 			);
 		});
 	}
@@ -272,6 +283,8 @@ class OpeningContextFactory
 		?ExternalLink $externalLink = null,
 		bool $hasPublicLinkAccess = false,
 		bool $allowsEditing = false,
+		?ShortLinkOpening $shortLinkOpening = null,
+		bool $offersRevisionLink = false,
 		bool $isViewMode = true,
 	): OpeningContext
 	{
@@ -306,6 +319,8 @@ class OpeningContextFactory
 			name: $name,
 			downloadUrl: $downloadUrl,
 			hasPublicLinkAccess: $hasPublicLinkAccess,
+			shortLinkOpening: $shortLinkOpening,
+			offersRevisionLink: $offersRevisionLink,
 		);
 	}
 
@@ -377,6 +392,7 @@ class OpeningContextFactory
 		int $userId,
 		string $downloadUrl,
 		bool $hasUnifiedLinkProof,
+		?ShortLinkOpening $shortLinkOpening = null,
 	): OpeningContext
 	{
 		$sessionContext = $this->getSessionContext($documentSession);
@@ -384,14 +400,18 @@ class OpeningContextFactory
 		$attachedObject = $this->getAttachedObject($sessionContext);
 		$externalLink = $this->getExternalLink($sessionContext);
 		$securityContext = $this->getSecurityContext($file, $userId);
-		$rights = $this->resolveRights(
-			$file,
-			$userId,
-			$accessType,
-			$securityContext,
-			$attachedObject,
-			$hasUnifiedLinkProof,
-		);
+		$isStaffShortOpening = $this->isStaffShortOpening($shortLinkOpening, $userId, $accessType);
+		$rights = $isStaffShortOpening
+			? $shortLinkOpening->getEffectiveAccessLevel($userId) ?? UnifiedLinkAccessLevel::Denied
+			: $this->resolveRights(
+				$file,
+				$userId,
+				$accessType,
+				$securityContext,
+				$attachedObject,
+				$hasUnifiedLinkProof,
+			)
+		;
 		$hasPublicLinkAccess = $this->hasPublicLinkAccess(
 			$documentSession,
 			$file,
@@ -407,14 +427,17 @@ class OpeningContextFactory
 			isViewMode: $documentSession->isView(),
 			isBoard: $editorService === Models\DocumentService::FlipChart,
 			canRead: $rights->canRead() || $hasPublicLinkAccess,
-			canEdit: fn(): bool => $this->canOpenForEditing(
-				$userId,
-				$securityContext,
-				$rights,
-				$accessType,
-				$attachedObject,
-				$externalLink,
-			),
+			canEdit: fn(): bool => $isStaffShortOpening
+				? $rights->canEdit()
+				: $this->canOpenForEditing(
+					$userId,
+					$securityContext,
+					$rights,
+					$accessType,
+					$attachedObject,
+					$externalLink,
+				)
+			,
 			canRename: $securityContext !== null && $documentSession->canRename($securityContext),
 			canShare: $securityContext !== null && $documentSession->canShare($securityContext),
 			canChangeRights: $securityContext !== null && $documentSession->canChangeRights($securityContext),
@@ -427,7 +450,25 @@ class OpeningContextFactory
 			// The verdict of the session is kept per reader and reused by the shell, so the description
 			// pays for it at most once more - and only when the header asks about the transition.
 			editRefusal: static fn(): ?Error => $documentSession->findEditingRefusal(),
+			shortLinkOpening: $shortLinkOpening,
 		);
+	}
+
+	/**
+	 * An employee in the editor of a short opening reads and edits in the header by his effective right, the own
+	 * right and the checked source {@see ShortLinkOpening::getEffectiveAccessLevel()}: no other public link of the
+	 * file takes part. A guest and the page of the source keep the rules of the link.
+	 */
+	private function isStaffShortOpening(
+		?ShortLinkOpening $shortLinkOpening,
+		int $userId,
+		string $accessType,
+	): bool
+	{
+		return $shortLinkOpening !== null
+			&& $userId > 0
+			&& $accessType === OpeningContext::ACCESS_TYPE_INTERNAL
+		;
 	}
 
 	private function hasPublicLinkAccess(

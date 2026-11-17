@@ -40,6 +40,10 @@ class ReplicateParams implements ValueObjectInterface
 		public readonly ?int $times = null,
 		public readonly ?string $nextExecutionTime = null,
 		public readonly ?int $deadlineOffset = null,
+		public readonly ?int $createOffset = null,
+		public readonly ?int $completionDelay = null,
+		public readonly ?string $offsetDayType = null,
+		public readonly ?string $deadlineType = null,
 	)
 	{
 	}
@@ -73,11 +77,21 @@ class ReplicateParams implements ValueObjectInterface
 			'times' => $this->times,
 			'nextExecutionTime' => $this->nextExecutionTime,
 			'deadlineOffset' => $this->deadlineOffset,
+			'createOffset' => $this->createOffset,
+			'completionDelay' => $this->completionDelay,
+			'offsetDayType' => $this->offsetDayType,
+			'deadlineType' => $this->deadlineType,
 		];
 	}
 
 	public static function mapFromArray(array $props): static
 	{
+		$deadlineType = null;
+		if (array_key_exists('deadlineType', $props) && $props['deadlineType'] !== null)
+		{
+			$deadlineType = is_scalar($props['deadlineType']) ? (string)$props['deadlineType'] : '';
+		}
+
 		return new self(
 			period: static::mapBackedEnum($props, 'period', Period::class),
 			everyDay: static::mapInteger($props, 'everyDay'),
@@ -105,6 +119,10 @@ class ReplicateParams implements ValueObjectInterface
 			times: static::mapInteger($props, 'times'),
 			nextExecutionTime: static::mapString($props, 'nextExecutionTime'),
 			deadlineOffset: static::mapInteger($props, 'deadlineOffset'),
+			createOffset: static::mapInteger($props, 'createOffset'),
+			completionDelay: static::mapInteger($props, 'completionDelay'),
+			offsetDayType: static::mapString($props, 'offsetDayType'),
+			deadlineType: $deadlineType,
 		);
 	}
 }

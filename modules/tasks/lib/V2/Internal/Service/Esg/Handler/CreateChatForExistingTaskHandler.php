@@ -32,10 +32,15 @@ class CreateChatForExistingTaskHandler
 		$result = $this->chatIntegration->addChatByTaskId($task->getId());
 
 		$chatId = $result->getId();
-		if (!$result->isSuccess() || $chatId <= 0)
+		if (!$result->isSuccess())
 		{
 			Logger::logErrors($result->getErrorCollection());
 			throw new RuntimeException('There was an error while creating new task chat');
+		}
+
+		if ($chatId <= 0)
+		{
+			return $task;
 		}
 
 		$this->chatRepository->save($chatId, $task->getId());

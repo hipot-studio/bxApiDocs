@@ -5,15 +5,19 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die;
 }
 
+use Bitrix\Mail\Access\Model\UserModel;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\MailboxGrid;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Settings\MailboxSettings;
 use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Config\Guide;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\MailAccess;
+use Bitrix\Mail\Helper\Mailbox\MailboxGridButtonCounterRefreshService;
 use Bitrix\Mail\Helper\Mailbox\PasswordlessConnectHelper;
 use Bitrix\Mail\Helper\MailboxSettingsGridHelper;
 use Bitrix\Mail\Service\SharedSignature\SharedSignatureService;
+use Bitrix\Mail\Public\Service\MigrationNotice\MigrationNoticeService;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 
 class CMailMailboxListComponent extends CBitrixComponent
@@ -50,8 +54,23 @@ class CMailMailboxListComponent extends CBitrixComponent
 			&& !Guide::wasMailboxListGearHighlightShown();
 		$this->arResult['HIGHLIGHT_GEAR_BUTTON_OPTION_NAME'] = Guide::getMailboxListGearHighlightOptionName();
 		$this->arResult['HAS_ACCESS_TO_SHARED_SIGNATURES'] = $this->hasAccessToSharedSignatures();
+		$this->arResult['MIGRATION_NOTICE_DECISION'] = $this->getMigrationNoticeDecision();
+		$this->arResult['MAILBOX_GRID_COUNTER_WATCH_TAG'] = Feature::isMigrationNoticeAvailable()
+			? (new MailboxGridButtonCounterRefreshService())->watchForCurrentUser()
+			: null;
 
 		$this->includeComponentTemplate();
+	}
+
+	/** @return array<string, mixed> */
+	private function getMigrationNoticeDecision(): array
+	{
+		$result = (new MigrationNoticeService())->decideFor(
+			(int)CurrentUser::get()->getId(),
+			'mailbox_settings',
+		);
+
+		return $result->isSuccess() ? $result->getData() : MigrationNoticeService::nothingToShow();
 	}
 
 	protected function prepareData(): array
@@ -142,6 +161,8 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$accessValues['HAS_ACCESS_TO_MASS_CONNECT'] = MailAccess::hasCurrentUserAccessToMassConnect();
 		$accessValues['HAS_ACCESS_TO_BULK_ACTIONS'] = MailAccess::hasCurrentUserAccessToMassMailboxActions();
 		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailAccess::hasCurrentUserAccessToPermission();
+		// The same check the control panel of the company mail admits by
+		$accessValues['IS_PORTAL_ADMIN'] = UserModel::createFromId((int)CurrentUser::get()->getId())->isAdmin();
 
 		return $accessValues;
 	}

@@ -81,8 +81,6 @@ class Calendar extends Controller
 			return null;
 		}
 
-		$userId = User::getId();
-
 		$backlogService = new BacklogService();
 
 		$backlog = $backlogService->getBacklogByGroupId($groupId);
@@ -93,7 +91,8 @@ class Calendar extends Controller
 
 		$listEvents = $this->getUpcomingEventsForThisProject($groupId);
 
-		$chats = $this->getEventChats($userId, $listEvents);
+		$chats = $this->getEventChats($groupId, $listEvents);
+		$listEvents = $this->removeInternalEventData($listEvents);
 
 		[$listEvents, $todayEvent] = $this->getEventForToday($listEvents);
 
@@ -260,7 +259,7 @@ class Calendar extends Controller
 
 		$defaultSprintDuration = $this->getDefaultSprintDuration($groupId) + 86400;
 
-		$eventSelect = array_merge(\CCalendarEvent::$defaultSelectEvent, ['COLOR']);
+		$eventSelect = array_merge(\CCalendarEvent::$defaultSelectEvent, ['COLOR', 'MEETING']);
 
 		$sections = \CCalendarSect::getList([
 			'arFilter' => [
@@ -314,6 +313,7 @@ class Calendar extends Controller
 							'to' => $toTs,
 							'color' => $event['COLOR'],
 							'repeatable' => $event['RRULE'] !== '',
+							'meetingChatId' => (int)($event['MEETING']['CHAT_ID'] ?? 0),
 						];
 					}
 				}
@@ -489,21 +489,45 @@ class Calendar extends Controller
 		return $chatId;
 	}
 
-	private function getEventChats(int $userId, array $listEvents): array
+	protected function getEventChats(int $groupId, array $listEvents): array
 	{
-		$userService = new UserService();
-
 		$chats = [];
+		$addedChatIds = [];
 
 		foreach ($listEvents as $event)
 		{
-			$chatId = \CIMChat::getEntityChat('CALENDAR', $event['id']);
-			if ($chatId === false)
+			$chatId = (int)($event['meetingChatId'] ?? 0);
+			$chatData = [];
+
+			if ($chatId > 0 && isset($addedChatIds[$chatId]))
 			{
 				continue;
 			}
 
-			$chatData = \CIMChat::getChatData(['ID' => $chatId, 'PHOTO_SIZE' => 32]);
+			if ($chatId > 0)
+			{
+				$chatData = $this->getChatData($chatId);
+				if (!$this->isSavedEventChatValid($groupId, $chatId, $chatData))
+				{
+					$chatId = 0;
+					$chatData = [];
+				}
+			}
+
+			if ($chatId <= 0)
+			{
+				$chatId = $this->findCalendarChatId((int)$event['id']);
+			}
+
+			if ($chatId === false || isset($addedChatIds[$chatId]))
+			{
+				continue;
+			}
+
+			if (empty($chatData))
+			{
+				$chatData = $this->getChatData($chatId);
+			}
 
 			if (($chatData['chat'][$chatId]['avatar'] ?? null) === '/bitrix/js/im/images/blank.gif')
 			{
@@ -513,7 +537,7 @@ class Calendar extends Controller
 			$userIds = $chatData['userInChat'][$chatId] ?? null;
 			if (is_array($userIds))
 			{
-				$usersInfo = $userService->getInfoAboutUsers($userIds);
+				$usersInfo = $this->getUsersInfo($userIds);
 				$users = (count($userIds) > 1 ? array_values($usersInfo) : [$usersInfo]);
 
 				$chats[] = [
@@ -523,10 +547,60 @@ class Calendar extends Controller
 					'name' => $chatData['chat'][$chatId]['name'],
 					'users' => $users,
 				];
+				$addedChatIds[$chatId] = true;
 			}
 		}
 
 		return $chats;
+	}
+
+	private function isSavedEventChatValid(int $groupId, int $chatId, array $chatData): bool
+	{
+		$chat = $chatData['chat'][$chatId] ?? null;
+		if (
+			!is_array($chat)
+			|| ($chat['entity_type'] ?? null) !== \CCalendar::CALENDAR_CHAT_ENTITY_TYPE
+		)
+		{
+			return false;
+		}
+
+		return $this->isGroupEventChat(
+			$chat['entity_type'],
+			(string)($chat['entity_id'] ?? ''),
+			$groupId,
+		);
+	}
+
+	protected function isGroupEventChat(string $entityType, string $entityId, int $groupId): bool
+	{
+		return Integration\Calendar::isGroupEventChat($entityType, $entityId, $groupId);
+	}
+
+	protected function findCalendarChatId(int $eventId): int|false
+	{
+		return \CIMChat::getEntityChat('CALENDAR', $eventId);
+	}
+
+	protected function getChatData(int $chatId): array
+	{
+		return \CIMChat::getChatData(['ID' => $chatId, 'PHOTO_SIZE' => 32]);
+	}
+
+	protected function getUsersInfo(array $userIds): array
+	{
+		return (new UserService())->getInfoAboutUsers($userIds);
+	}
+
+	private function removeInternalEventData(array $listEvents): array
+	{
+		foreach ($listEvents as &$event)
+		{
+			unset($event['meetingChatId']);
+		}
+		unset($event);
+
+		return $listEvents;
 	}
 
 	private function getDefaultSprintDuration(int $groupId): int

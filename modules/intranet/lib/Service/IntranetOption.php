@@ -19,6 +19,13 @@ class IntranetOption implements OptionContract
 		return Option::get($this->moduleName, $key, $default);
 	}
 
+	public function getPositive(string $key, int $default): int
+	{
+		$value = (int)$this->get($key, (string)$default);
+
+		return $value > 0 ? $value : $default;
+	}
+
 	public function set(string $key, mixed $value): void
 	{
 		Option::set($this->moduleName, $key, $value);

@@ -29,6 +29,16 @@ class Logger implements LoggerInterface
 
 	public function logWarning(mixed $data, string $marker = self::DEFAULT_MARKER): void
 	{
+		if ($data instanceof Throwable)
+		{
+			// The generic branch renders a non-scalar with var_export(), and for a throwable that
+			// means the whole object graph its trace holds - an ORM exception drags the query,
+			// the connection and the application along and eats hundreds of megabytes.
+			LogFacade::logThrowable($data, $marker);
+
+			return;
+		}
+
 		LogFacade::log($data, $marker);
 	}
 }

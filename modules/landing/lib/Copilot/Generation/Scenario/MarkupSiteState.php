@@ -27,12 +27,20 @@ class MarkupSiteState
 	public const MODERATION_KEY = 'markup_moderation';
 	public const IMAGE_PROGRESS_KEY = 'markup_image_progress';
 	public const IMAGE_SUMMARY_KEY = 'markup_image_summary';
+	public const IMAGE_NOTICE_KEY = 'markup_image_notice';
+	/** Apart from the binding of a creation: the reactions of a creation and the sweeper do not see this one. */
+	public const EDIT_BINDING_KEY = 'markup_edit_binding';
 	public const WARNINGS_KEY = 'markup_warnings';
 	/**
 	 * Most warnings an answer carries: up to five declared forms give a few warnings each, more come
 	 * only from an entry with many markers, and they repeat the kinds of the first ones.
 	 */
 	public const WARNINGS_LIMIT = 50;
+
+	public const NOTICE_SENT = 'sent';
+	public const NOTICE_SKIPPED = 'skipped';
+	/** No outcome recorded yet: the absence of a record, it is never stored. */
+	public const NOTICE_PENDING = 'pending';
 
 	/** The last error of a job cancelled by the user, whoever records the cancel: the handler or the run. */
 	public const CANCELLED_MESSAGE = 'Cancelled by the user.';
@@ -384,6 +392,53 @@ class MarkupSiteState
 		$state = $this->generation->getData(self::IMAGE_SUMMARY_KEY);
 
 		return is_array($state) && $state ? $state : null;
+	}
+
+	/**
+	 * The last refusal of the provider in this generation, null when there were none.
+	 * @return array{provider: string, streak: int}|null
+	 */
+	public function getImageRefusal(): ?array
+	{
+		return GenerationProgress::fromState($this->getImageProgress())->getRefusal();
+	}
+
+	/**
+	 * Records the outcome of the attempt to tell the chat about the refused pictures.
+	 * @param string $status NOTICE_SENT or NOTICE_SKIPPED.
+	 * @throws \InvalidArgumentException For any other status.
+	 */
+	public function setImageNoticeStatus(string $status): void
+	{
+		if (!in_array($status, [self::NOTICE_SENT, self::NOTICE_SKIPPED], true))
+		{
+			throw new \InvalidArgumentException('Unknown image notice status "' . $status . '".');
+		}
+
+		$this->generation->setData(self::IMAGE_NOTICE_KEY, ['status' => $status]);
+	}
+
+	public function getImageNoticeStatus(): string
+	{
+		$state = $this->generation->getData(self::IMAGE_NOTICE_KEY);
+		$status = is_array($state) ? ($state['status'] ?? null) : null;
+
+		return in_array($status, [self::NOTICE_SENT, self::NOTICE_SKIPPED], true) ? $status : self::NOTICE_PENDING;
+	}
+
+	/**
+	 * The binding of the site whose chat an edit of a markup page reports to.
+	 */
+	public function setEditBindingId(int $id): void
+	{
+		$this->generation->setData(self::EDIT_BINDING_KEY, ['bindingId' => $id]);
+	}
+
+	public function getEditBindingId(): int
+	{
+		$state = $this->generation->getData(self::EDIT_BINDING_KEY);
+
+		return (int)(is_array($state) ? ($state['bindingId'] ?? 0) : 0);
 	}
 
 	/**

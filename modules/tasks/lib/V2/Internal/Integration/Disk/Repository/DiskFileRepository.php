@@ -59,6 +59,44 @@ class DiskFileRepository implements DiskFileRepositoryInterface
 		return $attachmentMap;
 	}
 
+	public function getUniqueAttachmentIdsByObjectIds(array $attachmentIds): array
+	{
+		if (!Loader::includeModule('disk'))
+		{
+			return [];
+		}
+
+		$attachments = $this->getAttachments($attachmentIds);
+
+		if ($attachments === null)
+		{
+			return [];
+		}
+
+		$attachmentIdsByObjectId = [];
+		$ambiguousObjectIds = [];
+		foreach ($attachments as $attachment)
+		{
+			$objectId = (int)$attachment->getObjectId();
+			if (isset($ambiguousObjectIds[$objectId]))
+			{
+				continue;
+			}
+
+			if (isset($attachmentIdsByObjectId[$objectId]))
+			{
+				unset($attachmentIdsByObjectId[$objectId]);
+				$ambiguousObjectIds[$objectId] = true;
+
+				continue;
+			}
+
+			$attachmentIdsByObjectId[$objectId] = (int)$attachment->getId();
+		}
+
+		return $attachmentIdsByObjectId;
+	}
+
 	public function getOwnerIdsByFileIds(array $fileIds, int $taskId): array
 	{
 		if (!Loader::includeModule('disk'))
@@ -71,30 +109,16 @@ class DiskFileRepository implements DiskFileRepositoryInterface
 			return [];
 		}
 
-		$currentAttachments = $this->getCurrentTaskAttachments($taskId);
+		$currentAttachmentIds = $this->taskReadRepository->getAttachmentIds($taskId);
+		Collection::normalizeArrayValuesByInt($currentAttachmentIds, false);
 
-		$currentAttachmentIds = array_column($currentAttachments->toArray(), 'id', 'objectId');
-
-		$attachmentIds = [];
-
-		foreach ($fileIds as $fileId)
+		if (empty($currentAttachmentIds))
 		{
-			[$type, $realValue] = FileUserType::detectType($fileId);
-			if ($type === FileUserType::TYPE_NEW_OBJECT)
-			{
-				$realValue = (int)$realValue;
-				if (isset($currentAttachmentIds[$realValue]))
-				{
-					$attachmentIds[$currentAttachmentIds[$realValue]] = $fileId;
-
-					break;
-				}
-			}
-			else
-			{
-				$attachmentIds[$fileId] = $fileId;
-			}
+			return [];
 		}
+
+		$currentAttachmentIdsMap = array_fill_keys($currentAttachmentIds, true);
+		$attachmentIds = $this->resolveAttachmentIds($fileIds, $currentAttachmentIds, $currentAttachmentIdsMap);
 
 		$attachments = $this->getAttachments(array_keys($attachmentIds));
 
@@ -110,14 +134,48 @@ class DiskFileRepository implements DiskFileRepositoryInterface
 
 			if ($fileId !== null)
 			{
-				$attachmentMap[$fileId] = (int)$attachment->getCreateUser()?->getId();
+				$attachmentMap[$fileId] = (int)$attachment->getCreatedBy();
 			}
 		}
 
 		return $attachmentMap;
 	}
 
-	private function getAttachments(array $attachmentIds): ?AttachedObjectCollection
+	private function resolveAttachmentIds(
+		array $fileIds,
+		array $currentAttachmentIds,
+		array $currentAttachmentIdsMap,
+	): array
+	{
+		$objectIdsByAttachmentId = null;
+		$attachmentIds = [];
+
+		foreach ($fileIds as $fileId)
+		{
+			[$type, $realValue] = FileUserType::detectType($fileId);
+			if ($type === FileUserType::TYPE_NEW_OBJECT)
+			{
+				if ($objectIdsByAttachmentId === null)
+				{
+					$objectIdsByAttachmentId = $this->getUniqueAttachmentIdsByObjectIds($currentAttachmentIds);
+				}
+
+				$realValue = (int)$realValue;
+				if (isset($objectIdsByAttachmentId[$realValue]))
+				{
+					$attachmentIds[$objectIdsByAttachmentId[$realValue]] = $fileId;
+				}
+			}
+			elseif (isset($currentAttachmentIdsMap[(int)$realValue]))
+			{
+				$attachmentIds[(int)$realValue] = $fileId;
+			}
+		}
+
+		return $attachmentIds;
+	}
+
+	protected function getAttachments(array $attachmentIds): ?AttachedObjectCollection
 	{
 		Collection::normalizeArrayValuesByInt($attachmentIds, false);
 
@@ -132,10 +190,4 @@ class DiskFileRepository implements DiskFileRepositoryInterface
 		return $attachments;
 	}
 
-	private function getCurrentTaskAttachments(int $taskId): DiskFileCollection
-	{
-		$current = $this->taskReadRepository->getAttachmentIds($taskId);
-
-		return $this->getByIds($current);
-	}
 }

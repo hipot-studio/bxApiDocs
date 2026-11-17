@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Internal\Service\DocumentHeader;
 
 use Bitrix\Disk\Document\Vibeoffice\Feature;
 use Bitrix\Disk\Configuration;
+use Bitrix\Disk\Config\Feature\BitrixGptHtmlEditorFlag;
 use Bitrix\Disk\document\SharingControlType;
 use Bitrix\Disk\Document\BoardsHandler;
 use Bitrix\Disk\Document\DocumentHandler;
@@ -17,11 +18,14 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Enum\DocumentHeaderElement;
+use Bitrix\Disk\Internal\Integration\AiAssistant\FileChatAvailability;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\User;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config;
+use Bitrix\Main\Config\Feature\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -109,9 +113,28 @@ class HeaderCompositionService
 			hasSharingControl: $sharingControlType !== null,
 			supportsUnifiedLink: static fn(): bool => $resolveUniqueCode() !== '',
 		);
+		$fileChatFileId = $this->getAvailableFileChatFileId($openingContext, $userId, $elements);
+		if ($fileChatFileId !== null)
+		{
+			$presentationIndex = array_search(DocumentHeaderElement::Presentation, $elements, true);
+			if ($presentationIndex !== false)
+			{
+				array_splice($elements, $presentationIndex, 0, [DocumentHeaderElement::BitrixGpt]);
+			}
+			else
+			{
+				$fileChatFileId = null;
+			}
+		}
 
 		return $result->setData([
-			'composition' => $this->buildDto($elements, $openingContext, $sharingControlType, $resolveUniqueCode),
+			'composition' => $this->buildDto(
+				$elements,
+				$openingContext,
+				$sharingControlType,
+				$resolveUniqueCode,
+				$fileChatFileId,
+			),
 		]);
 	}
 
@@ -306,11 +329,20 @@ class HeaderCompositionService
 				DocumentHeaderElement::Access => $hasSharingControl,
 
 				// A page entered by a public link copies that link and nothing else - the only address
-				// its reader can open (D-1).
+				// its reader can open (D-1). A revision offering its own address copies it without
+				// offering anything else of the object (TPL-03).
 				DocumentHeaderElement::CopyLink => $isExternalAccess
-					|| ($isPortalEmployee && $openingContext->offersObjectSharing() && $supportsUnifiedLink()),
+					|| (
+						$isPortalEmployee
+						&& (
+							$openingContext->offersObjectSharing()
+							|| ($isVersion && $openingContext->offersRevisionLink())
+						)
+						&& $supportsUnifiedLink()
+					),
 
 				DocumentHeaderElement::Download => $openingContext->downloadUrl() !== '',
+				DocumentHeaderElement::BitrixGpt => false,
 
 				// Only the surface drawing the document itself adapts to the mode: an editor and a board
 				// hand the page over to their own canvas (D-2).
@@ -334,6 +366,7 @@ class HeaderCompositionService
 		OpeningContext $openingContext,
 		?SharingControlType $sharingControlType,
 		\Closure $resolveUniqueCode,
+		?int $fileChatFileId,
 	): HeaderCompositionDto
 	{
 		$hasElement = static fn(DocumentHeaderElement $element): bool => in_array($element, $elements, true);
@@ -386,7 +419,64 @@ class HeaderCompositionService
 			presenceEnabled: $hasElement(DocumentHeaderElement::Presence),
 			boostContainerRequired: $hasElement(DocumentHeaderElement::Boost),
 			editRefusal: $this->describeEditRefusal($openingContext),
+			fileChat: $fileChatFileId === null ? null : ['fileId' => $fileChatFileId],
 		);
+	}
+
+	private function getAvailableFileChatFileId(
+		OpeningContext $openingContext,
+		int $userId,
+		array $elements,
+	): ?int
+	{
+		if (
+			$userId <= 0
+			|| !$openingContext->servesContentItself()
+			|| $openingContext->editorService() !== null
+			|| $openingContext->versionId() !== null
+			|| $openingContext->accessType() === OpeningContext::ACCESS_TYPE_EXTERNAL
+			|| ($openingContext->isViewMode() && !in_array(DocumentHeaderElement::Edit, $elements, true))
+		)
+		{
+			return null;
+		}
+
+		$file = $openingContext->file()?->getRealObject();
+		if (!$file instanceof File || !HtmlViewerPolicy::isViewableFile($file))
+		{
+			return null;
+		}
+
+		try
+		{
+			if (
+				!$openingContext->isViewMode()
+				&& !Config\Feature::isEnabled(BitrixGptHtmlEditorFlag::class, new Context($userId))
+			)
+			{
+				return null;
+			}
+
+			if (!Loader::includeModule('aiassistant'))
+			{
+				return null;
+			}
+
+			$availableFile = ServiceLocator::getInstance()
+				->get(FileChatAvailability::class)
+				->getAvailableMenuFile($file, $userId)
+			;
+		}
+		catch (\Throwable $e)
+		{
+			$this->logUnforeseenFailure($e);
+
+			return null;
+		}
+
+		$fileId = (int)$availableFile?->getId();
+
+		return $fileId > 0 ? $fileId : null;
 	}
 
 	/**
@@ -560,6 +650,14 @@ class HeaderCompositionService
 			return '';
 		}
 
+		// A short opening is copied as its own address for a guest and an employee alike, and never as the
+		// address of the object it opens.
+		$shortLinkOpening = $openingContext->shortLinkOpening();
+		if ($shortLinkOpening !== null)
+		{
+			return $shortLinkOpening->getAbsoluteCanonicalUrl();
+		}
+
 		if ($openingContext->accessType() === OpeningContext::ACCESS_TYPE_EXTERNAL)
 		{
 			// A public page holds no address inside the portal, an unforeseen opening without a link
@@ -568,7 +666,11 @@ class HeaderCompositionService
 
 			return $externalLink === null
 				? ''
-				: $this->urlManager->getPublicExternalLink($file, (string)$externalLink->getHash())
+				: $this->urlManager->getCopyablePublicExternalLinkForConsumer(
+					$externalLink,
+					UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+					$file,
+				)
 			;
 		}
 
@@ -583,6 +685,12 @@ class HeaderCompositionService
 		if ($attachedObjectId > 0)
 		{
 			$options['attachedId'] = $attachedObjectId;
+		}
+
+		$versionId = $openingContext->versionId();
+		if ($versionId !== null && $openingContext->offersRevisionLink())
+		{
+			$options['versionId'] = $versionId;
 		}
 
 		return $this->urlManager->getUnifiedLink($file, $options);

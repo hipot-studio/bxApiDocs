@@ -25,6 +25,7 @@ use Bitrix\Main\Type\DateTime;
  * <li> CAN_DOWNLOAD_WITH_READ_ACCESS int mandatory
  * <li> CAN_EDIT_SETTINGS bool mandatory
  * <li> SCENARIO string(50) optional
+ * <li> CODE string(32) optional
  * </ul>
  *
  * @package Bitrix\Disk
@@ -146,6 +147,10 @@ final class ExternalLinkTable extends DataManager
 			'SCENARIO' => array(
 				'data_type' => 'string',
 			),
+			'CODE' => array(
+				'data_type' => 'string',
+				'validation' => array(__CLASS__, 'validateCode'),
+			),
 			'CREATE_USER' => array(
 				'data_type' => 'Bitrix\Main\UserTable',
 				'reference' => array(
@@ -170,6 +175,13 @@ final class ExternalLinkTable extends DataManager
 	}
 
 	public static function validateSalt()
+	{
+		return array(
+			new Entity\Validator\Length(null, 32),
+		);
+	}
+
+	public static function validateCode()
 	{
 		return array(
 			new Entity\Validator\Length(null, 32),

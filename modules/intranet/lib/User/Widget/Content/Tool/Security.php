@@ -24,6 +24,8 @@ class Security extends BaseTool
 			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_SECURITY_TITLE'),
 			'url' => $this->getUrl(),
 			'hasCounter' => self::hasCounter(),
+			'hasPhoneConfirmationCounter' => self::hasPhoneConfirmationCounter(),
+			'hasLostDevice' => self::hasLostDevice(),
 			'counterEventName' => self::getPullEventName(),
 		];
 	}
@@ -34,6 +36,25 @@ class Security extends BaseTool
 	}
 
 	public static function hasCounter(): bool
+	{
+		return self::hasPhoneConfirmationCounter() || self::hasLostDevice();
+	}
+
+	public static function hasLostDevice(): bool
+	{
+		if (!self::isOtpEnabled())
+		{
+			return false;
+		}
+
+		$user = new Intranet\Entity\User((int)CurrentUser::get()->getId());
+
+		return (new Integration\Security\PersonalOtp($user))->hasConnectedPushDevice()
+			&& (new Intranet\Internal\Service\Otp\DeviceReconnect())->isDeviceLost((int)$user->getId())
+		;
+	}
+
+	public static function hasPhoneConfirmationCounter(): bool
 	{
 		if (
 			!self::isOtpEnabled()

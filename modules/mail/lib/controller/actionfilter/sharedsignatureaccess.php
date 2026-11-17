@@ -28,3 +28,4 @@ final class SharedSignatureAccess extends Base
 		return null;
 	}
 }
+

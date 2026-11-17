@@ -12,10 +12,13 @@ class ExternalLinkAccessService
 	/**
 	 * Tells whether the current user is allowed to manage the external link of the object.
 	 *
+	 * The unified link of the object is taken into account only on request and only when the object supports it.
+	 *
 	 * @param BaseObject $object
+	 * @param bool $shouldCheckUnifiedLink
 	 * @return bool
 	 */
-	public function canManageExternalLink(BaseObject $object): bool
+	public function canManageExternalLink(BaseObject $object, bool $shouldCheckUnifiedLink = false): bool
 	{
 		$realObject = $object->getRealObject();
 		if (!$realObject)
@@ -23,7 +26,8 @@ class ExternalLinkAccessService
 			return false;
 		}
 
-		$securityContext = $realObject->getStorage()?->getCurrentUserSecurityContext();
+		$shouldCheckUnifiedLink = $shouldCheckUnifiedLink && $realObject->supportsUnifiedLink();
+		$securityContext = $realObject->getStorage()?->getCurrentUserSecurityContext($shouldCheckUnifiedLink);
 
 		return $securityContext && $realObject->canManageExternalLink($securityContext);
 	}

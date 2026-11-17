@@ -9,6 +9,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\CheckUserFields;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\PrepareFields;
@@ -29,8 +30,17 @@ class EntityFieldService
 		$mapper = Container::getInstance()->getOrmTemplateMapper();
 
 		$fields = $mapper->mapFromEntity($template);
+		if (
+			(int)($fields['TPARAM_TYPE'] ?? 0) === TypeDictionary::NEW_USERS
+			&& ($template->creator?->id === 0 || $config->hasExplicitNullCreator())
+		)
+		{
+			$fields['CREATED_BY'] = 0;
+		}
 
-		$fields = (new PrepareFields())($fields);
+		$fields = (new PrepareFields(
+			authorSubject: $config->getAuthorSubject(),
+		))($fields);
 
 		(new CheckUserFields($config))($fields);
 

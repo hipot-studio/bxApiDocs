@@ -536,7 +536,7 @@ class Kanban extends Base
 		$kanbanService->removeTasksFromKanban($sprint->getId(), [$taskId]);
 		if ($kanbanService->getErrors())
 		{
-			$this->errorCollection->add($this->getErrors());
+			$this->errorCollection->add($kanbanService->getErrors());
 
 			return false;
 		}

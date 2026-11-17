@@ -12,8 +12,10 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
 
 final class DocumentSessionManager extends SessionManager
@@ -51,11 +53,38 @@ final class DocumentSessionManager extends SessionManager
 	 */
 	public const CONTEXT_VO_EDITOR_MODE_KEY = 'editorMode';
 
+	/**
+	 * Sub-key (inside {@see self::CONTEXT_VO_KEY}) carrying the map openToken => origin|null declared by
+	 * that open attempt. A null value is an explicit omission; a missing token is a legacy attempt.
+	 */
+	public const CONTEXT_VO_CLIENT_ORIGINS_KEY = 'clientOrigins';
+
+	/** Sub-key carrying the map openToken => {@see OpenAttemptState} of attempts reserved with a state. */
+	public const CONTEXT_VO_OPEN_ATTEMPTS_KEY = 'openAttempts';
+
+	/** Sub-key carrying the token of the latest attempt reserved with a state. */
+	public const CONTEXT_VO_LAST_OPEN_TOKEN_KEY = 'lastOpenToken';
+
+	/**
+	 * Sub-key carrying the map participant => token of the latest attempt of that participant. Visitors of
+	 * one public link share the local session, yet each of them opens with an identity of its own.
+	 */
+	public const CONTEXT_VO_PARTICIPANT_OPEN_TOKENS_KEY = 'participantOpenTokens';
+
+	/**
+	 * Sub-key carrying the registry ID of the first attempt reserved with a state: a pending row below it
+	 * without a state is a legacy attempt, one above it was given up by the bound of the attempt states.
+	 */
+	public const CONTEXT_VO_OPEN_ATTEMPT_FLOOR_KEY = 'openAttemptFloor';
+
 	protected DocumentService|null $service = DocumentService::Vibeoffice;
 	private ?EditSessionAdmission $editSessionAdmission = null;
 	private DocumentStateRepository $stateRepository;
 	private ?string $preparedExternalHash = null;
 	private ?string $restrictionOutcome = null;
+	private array $ownedRows = [];
+	private array $selectionErrors = [];
+	private bool $sessionCreated = false;
 
 	public function __construct(
 		?EditSessionAdmission $editSessionAdmission = null,
@@ -77,8 +106,45 @@ final class DocumentSessionManager extends SessionManager
 		return $externalHash;
 	}
 
+	/** Internal selection receipt; ownership belongs only to a successfully created VIEW. */
+	public function findOrCreateSessionWithOwnership(bool $exactUser = false): Result
+	{
+		$session = $this->findOrCreateSession($exactUser);
+		$result = (new Result())->setData([
+			'session' => $session,
+			'selection' => $session === null ? 'none' : ($this->sessionCreated ? 'new' : 'reused'),
+			'ownedRows' => $session === null ? [] : $this->ownedRows,
+		]);
+		if ($session === null)
+		{
+			$result->addErrors($this->selectionErrors);
+		}
+
+		return $result;
+	}
+
+	/** Snapshot shared by ownership receipts and the exact source EDIT of a refused attempt. */
+	public static function snapshotSession(DocumentSession $session): array
+	{
+		return [
+			'sessionId' => (int)$session->getId(),
+			'externalHash' => $session->getExternalHash(),
+			'hostDocKey' => HostDocumentKey::resolve($session),
+			'objectId' => (int)$session->getObjectId(),
+			'versionId' => $session->getVersionId(),
+			'attachedObjectId' => $session->getContext()?->getAttachedObjectId(),
+			'userId' => $session->getUserId(),
+			'externalLinkId' => $session->getExternalLinkId(),
+			'type' => $session->getType(),
+			'service' => $session->getService()?->value,
+		];
+	}
+
 	public function findOrCreateSession($exactUser = false): ?DocumentSession
 	{
+		$this->ownedRows = [];
+		$this->sessionCreated = false;
+		$this->selectionErrors = [];
 		$this->refreshLiveFile();
 		$this->restrictionOutcome = null;
 
@@ -126,7 +192,10 @@ final class DocumentSessionManager extends SessionManager
 
 		if ($session->isNonActive())
 		{
-			return $this->createPinnedSession(fn() => $session->cloneWithNewHash($this->getUserId(), $this->sessionContext));
+			return $this->createPinnedSession(
+				fn() => $session->cloneWithNewHash($this->getUserId(), $this->sessionContext),
+				errorSource: $session,
+			);
 		}
 
 		if (!$session->belongsToUser($this->getUserId()))
@@ -140,17 +209,43 @@ final class DocumentSessionManager extends SessionManager
 		return $session;
 	}
 
-	private function createPinnedSession(callable $factory, ?DocumentSession $source = null): ?DocumentSession
+	private function createPinnedSession(
+		callable $factory,
+		?DocumentSession $source = null,
+		?DocumentSession $errorSource = null,
+	): ?DocumentSession
 	{
+		$errorSource ??= $source;
+		$previousErrors = $this->getErrors();
+		$previousSourceErrors = $errorSource?->getErrors() ?? [];
 		$result = $this->stateRepository->createSession($factory, $source);
 		if (!$result->isSuccess())
 		{
+			$this->errorCollection->add(array_filter(
+				$errorSource?->getErrors() ?? [],
+				static fn(Error $error): bool => !in_array($error, $previousSourceErrors, true),
+			));
+			$this->selectionErrors = $result->getErrors();
+			foreach ($this->getErrors() as $error)
+			{
+				if (!in_array($error, $previousErrors, true))
+				{
+					$this->selectionErrors[] = $error;
+				}
+			}
 			$this->errorCollection->add($result->getErrors());
 
 			return null;
 		}
 
-		return $result->getData()['session'];
+		$session = $result->getData()['session'];
+		$this->sessionCreated = true;
+		if ($session->isView())
+		{
+			$this->ownedRows[] = self::snapshotSession($session);
+		}
+
+		return $session;
 	}
 
 	public function getRestrictionOutcome(): ?string
@@ -248,7 +343,8 @@ final class DocumentSessionManager extends SessionManager
 			->registerRuntimeField(new ExpressionField('SAVED_VERSION_ID', 'MAX(%s)', ['SAVED_VERSION.ID']))
 			->where('ID', $objectId)
 			->setGroup(['ID', 'GLOBAL_CONTENT_VERSION'])
-			->fetch();
+			->fetch()
+		;
 		if (!$snapshot || $snapshot['GLOBAL_CONTENT_VERSION'] === null)
 		{
 			return false;
@@ -268,7 +364,8 @@ final class DocumentSessionManager extends SessionManager
 			->where('OBJECT_ID', $objectId)
 			->setOrder(['ID' => 'DESC'])
 			->setLimit(1)
-			->fetch();
+			->fetch()
+		;
 
 		return $row ? (int)$row['ID'] : 0;
 	}
@@ -293,7 +390,7 @@ final class DocumentSessionManager extends SessionManager
 			}
 
 			return $fork;
-		});
+		}, errorSource: $documentSession);
 	}
 
 	/**
@@ -366,14 +463,79 @@ final class DocumentSessionManager extends SessionManager
 	public function persistSessionMetadata(DocumentSession $documentSession, array $metadata): bool
 	{
 		$metadata = array_filter($metadata, static fn($value) => $value !== null);
+		if (empty($metadata))
+		{
+			return false;
+		}
+
+		return $this->mergeVoMetadata($documentSession, static function (array $existingVo) use ($metadata): ?array {
+			if (
+				isset($existingVo[HostDocumentKey::CONTEXT_KEY], $metadata[HostDocumentKey::CONTEXT_KEY])
+				&& $existingVo[HostDocumentKey::CONTEXT_KEY] !== $metadata[HostDocumentKey::CONTEXT_KEY]
+			)
+			{
+				return null;
+			}
+
+			return array_merge($existingVo, $metadata);
+		});
+	}
+
+	/**
+	 * Records the origin (or its omission) an open attempt declares. The snapshot of a token is
+	 * immutable: a repeated call for a known token keeps the stored value.
+	 */
+	public function persistClientOriginSnapshot(DocumentSession $session, string $openToken, ?string $origin): bool
+	{
+		if ($openToken === '')
+		{
+			return false;
+		}
+
+		return $this->mergeVoMetadata($session, static function (array $existingVo) use ($openToken, $origin): ?array {
+			$origins = $existingVo[self::CONTEXT_VO_CLIENT_ORIGINS_KEY] ?? [];
+			if (!is_array($origins))
+			{
+				return null;
+			}
+			if (array_key_exists($openToken, $origins))
+			{
+				return $existingVo;
+			}
+			$origins[$openToken] = $origin;
+			$existingVo[self::CONTEXT_VO_CLIENT_ORIGINS_KEY] = $origins;
+
+			return $existingVo;
+		});
+	}
+
+	/**
+	 * Applies a transition of the open attempt states on the freshest vo metadata. The transition gets the
+	 * whole fresh vo array and returns it changed, or null to refuse the write.
+	 *
+	 * @param callable(array): ?array $transition
+	 */
+	public function persistOpenAttemptTransition(DocumentSession $session, callable $transition): bool
+	{
+		return $this->mergeVoMetadata($session, $transition);
+	}
+
+	/**
+	 * Read-modify-write of the vo sub-key on the freshest CONTEXT, under the per-session lock and
+	 * inside the caller's transaction when there is one. The merge returns null to refuse the write.
+	 *
+	 * @param callable(array): ?array $merge
+	 */
+	private function mergeVoMetadata(DocumentSession $documentSession, callable $merge): bool
+	{
 		$sessionId = (int)$documentSession->getId();
-		if (!$sessionId || empty($metadata))
+		if (!$sessionId)
 		{
 			return false;
 		}
 
 		$connection = Application::getConnection();
-		$lockName = self::CONTEXT_LOCK_PREFIX . $sessionId;
+		$lockName = self::getSessionContextLockName($sessionId);
 		$locked = $connection->lock($lockName, self::CONTEXT_LOCK_TIMEOUT);
 		if (!$locked)
 		{
@@ -396,14 +558,12 @@ final class DocumentSessionManager extends SessionManager
 			$context = $this->decodeContext($rawContext);
 
 			$existingVo = is_array($context[self::CONTEXT_VO_KEY] ?? null) ? $context[self::CONTEXT_VO_KEY] : [];
-			if (
-				isset($existingVo[HostDocumentKey::CONTEXT_KEY], $metadata[HostDocumentKey::CONTEXT_KEY])
-				&& $existingVo[HostDocumentKey::CONTEXT_KEY] !== $metadata[HostDocumentKey::CONTEXT_KEY]
-			)
+			$vo = $merge($existingVo);
+			if ($vo === null)
 			{
 				return false;
 			}
-			$context[self::CONTEXT_VO_KEY] = array_merge($existingVo, $metadata);
+			$context[self::CONTEXT_VO_KEY] = $vo;
 
 			$result = DocumentSessionTable::update($sessionId, [
 				'CONTEXT' => Json::encode($context),
@@ -442,6 +602,11 @@ final class DocumentSessionManager extends SessionManager
 		$context = DocumentStateRepository::fetchForUpdate($query)['CONTEXT'] ?? null;
 
 		return is_string($context) ? $context : null;
+	}
+
+	public static function getSessionContextLockName(int $sessionId): string
+	{
+		return self::CONTEXT_LOCK_PREFIX . $sessionId;
 	}
 
 	private function hasTransaction(): bool

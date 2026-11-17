@@ -63,6 +63,7 @@ class SendPushNotification
 		$payload = new Push\CommentsViewed(
 			userId: (int) $event->getReaderId(),
 			groupId: $task->group?->getId(),
+			taskId: (int)$task->getId(),
 		);
 
 		if ($member !== null)

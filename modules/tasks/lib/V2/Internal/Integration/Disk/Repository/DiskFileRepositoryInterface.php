@@ -10,5 +10,6 @@ interface DiskFileRepositoryInterface
 {
 	public function getByIds(array $ids): DiskFileCollection;
 	public function getObjectIdsByAttachmentIds(array $attachmentIds): array;
+	public function getUniqueAttachmentIdsByObjectIds(array $attachmentIds): array;
 	public function getOwnerIdsByFileIds(array $fileIds, int $taskId): array;
 }

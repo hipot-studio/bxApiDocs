@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Template;
 
+use Bitrix\Main\Application;
 use Bitrix\Tasks\Control\Exception\TemplateAddException;
 use Bitrix\Tasks\Control\Exception\TemplateDeleteException;
 use Bitrix\Tasks\Control\Exception\TemplateUpdateException;
@@ -38,6 +39,37 @@ class TemplateRepository implements TemplateRepositoryInterface
 		return $this->mapper->mapFromTemplateObject($template);
 	}
 
+	public function filterExistingIds(array $ids): array
+	{
+		$ids = array_values(
+			array_filter(
+				array_unique(array_map('intval', $ids)),
+				static fn (int $id): bool => $id > 0,
+			),
+		);
+		if ($ids === [])
+		{
+			return [];
+		}
+
+		$rows = TemplateTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $ids)
+			->fetchAll()
+		;
+		$existingIds = array_fill_keys(
+			array_map(static fn (array $row): int => (int)$row['ID'], $rows),
+			true,
+		);
+
+		return array_values(
+			array_filter(
+				$ids,
+				static fn (int $id): bool => isset($existingIds[$id]),
+			),
+		);
+	}
+
 	public function getByTaskId(int $taskId): Template|null
 	{
 		$template =
@@ -53,6 +85,8 @@ class TemplateRepository implements TemplateRepositoryInterface
 					'START_DATE_PLAN_AFTER',
 					'END_DATE_PLAN_AFTER',
 					'REPLICATE',
+					'REPLICATE_PARAMS',
+					'REPLICATE_TYPE',
 					'CHECKLIST_DATA',
 					'GROUP_ID',
 					'PRIORITY',
@@ -159,6 +193,32 @@ class TemplateRepository implements TemplateRepositoryInterface
 	public function invalidate(int $id): void
 	{
 
+	}
+
+	public function lockById(int $id): void
+	{
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = $sqlHelper->quote(TemplateTable::getTableName());
+		$idColumn = $sqlHelper->quote('ID');
+		$replicateColumn = $sqlHelper->quote('REPLICATE');
+
+		// A no-op update of a non-identity column provides a row lock across all supported database engines.
+		$connection->queryExecute(
+			"UPDATE {$tableName} SET {$replicateColumn} = {$replicateColumn} WHERE {$idColumn} = {$id}",
+		);
+	}
+
+	public function isReplicable(int $id): bool
+	{
+		return (bool)TemplateTable::query()
+			->setSelect(['ID'])
+			->where('ID', $id)
+			->where('REPLICATE', 'Y')
+			->whereNot('ZOMBIE', 'Y')
+			->setLimit(1)
+			->fetch()
+		;
 	}
 
 	public function getReplicateParams(int $templateId): ?array

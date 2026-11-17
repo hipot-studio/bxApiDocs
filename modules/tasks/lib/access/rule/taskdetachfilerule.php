@@ -31,7 +31,13 @@ class TaskDetachFileRule extends AbstractRule
 			return true;
 		}
 
-		if (!is_array($params) || !isset($params['attachments']) || !is_array($params['attachments']))
+		if (
+			!is_array($params)
+			|| !isset($params['attachments'])
+			|| !is_array($params['attachments'])
+			|| !isset($params['attachmentsCreatedByMap'])
+			|| !is_array($params['attachmentsCreatedByMap'])
+		)
 		{
 			$this->controller->addError(static::class, 'Incorrect parameters');
 
@@ -40,24 +46,56 @@ class TaskDetachFileRule extends AbstractRule
 
 		if (!$item->isMember($this->user->getUserId()))
 		{
-			$this->controller->addError(static::class, 'Incorrect attachment data');
-
-			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_DETACH_FILE_RULE_NO_PERMISSIONS')));
-
-			return false;
+			return $this->denyIncorrectAttachmentData();
 		}
 
 		$attachments = $params['attachments'];
+		$attachmentsCreatedByMap = $params['attachmentsCreatedByMap'];
+		$attachmentIds = [];
+
 		foreach ($attachments as $attachment)
 		{
-			$attachmentId = is_array($attachment) && isset($attachment['id'])
-				? $attachment['id']
-				: 0
-			;
+			if (!is_array($attachment) || !isset($attachment['id']))
+			{
+				return $this->denyIncorrectAttachmentData();
+			}
+
+			$attachmentId = $attachment['id'];
+			if (
+				(!is_int($attachmentId) && !is_string($attachmentId))
+				|| $attachmentId === ''
+				|| (string)$attachmentId === '0'
+			)
+			{
+				return $this->denyIncorrectAttachmentData();
+			}
+
+			$attachmentIds[(string)$attachmentId] = true;
+		}
+
+		$attachmentCreatedByIds = [];
+		foreach (array_keys($attachmentsCreatedByMap) as $attachmentId)
+		{
+			$attachmentCreatedByIds[(string)$attachmentId] = true;
+		}
+
+		if (
+			$attachmentIds === []
+			|| count($attachmentIds) !== count($attachments)
+			|| array_diff_key($attachmentIds, $attachmentCreatedByIds) !== []
+			|| array_diff_key($attachmentCreatedByIds, $attachmentIds) !== []
+		)
+		{
+			return $this->denyIncorrectAttachmentData();
+		}
+
+		foreach ($attachments as $attachment)
+		{
+			$attachmentId = $attachment['id'];
 
 			$isAttachmentCreator = $attachmentId
-				&& isset($params['attachmentsCreatedByMap'][$attachmentId])
-				&& (int)$params['attachmentsCreatedByMap'][$attachmentId] === $this->user->getUserId()
+				&& isset($attachmentsCreatedByMap[$attachmentId])
+				&& (int)$attachmentsCreatedByMap[$attachmentId] === $this->user->getUserId()
 			;
 
 			$isFileOwner = is_array($attachment)
@@ -67,14 +105,19 @@ class TaskDetachFileRule extends AbstractRule
 
 			if (!$isAttachmentCreator && !$isFileOwner)
 			{
-				$this->controller->addError(static::class, 'Incorrect attachment data');
-
-				$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_DETACH_FILE_RULE_NO_PERMISSIONS')));
-
-				return false;
+				return $this->denyIncorrectAttachmentData();
 			}
 		}
 
 		return true;
+	}
+
+	private function denyIncorrectAttachmentData(): bool
+	{
+		$this->controller->addError(static::class, 'Incorrect attachment data');
+
+		$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_DETACH_FILE_RULE_NO_PERMISSIONS')));
+
+		return false;
 	}
 }

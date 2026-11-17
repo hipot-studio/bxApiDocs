@@ -22,7 +22,9 @@ abstract class RouteDictionary
 	public const PATH_TO_RECYCLEBIN = SITE_DIR . 'company/personal/user/#user_id#/tasks/recyclebin/';
 
 	public const PATH_TO_FLOWS = SITE_DIR . 'company/personal/user/#user_id#/tasks/flow/';
+	public const PATH_TO_REGULAR_TASKS = SITE_DIR . 'company/personal/user/#user_id#/tasks/regular/';
 	public const PATH_TO_FORUM_COMMENTS = SITE_DIR . 'task/comments/#task_id#';
 
 	public const RECYCLEBIN_SUFFIX = 'recyclebin/';
+	public const REGULAR_TASKS_SUFFIX = 'regular/';
 }

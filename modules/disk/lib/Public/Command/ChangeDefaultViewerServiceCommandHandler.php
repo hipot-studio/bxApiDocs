@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Public\Command;
 
 use Bitrix\Disk\Configuration;
+use Bitrix\Disk\Document\Models\DocumentService;
+use Bitrix\Disk\Document\Models\DocumentSessionTable;
+use Bitrix\Disk\Document\Vibeoffice;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Internal\Enum\CustomServerTypes;
 use Bitrix\Disk\Internal\Interface\CustomServerInterface;
@@ -76,7 +79,14 @@ readonly class ChangeDefaultViewerServiceCommandHandler
 
 		if ($shouldUnregisterCloudClient)
 		{
-			(new UnregisterCloudClientCommand())->run();
+			if ((new Vibeoffice\Configuration())->getManagedState() !== null)
+			{
+				DocumentSessionTable::deleteByService(DocumentService::OnlyOffice);
+			}
+			else
+			{
+				(new UnregisterCloudClientCommand())->run();
+			}
 		}
 
 		$connection = Application::getConnection();

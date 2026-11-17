@@ -471,3 +471,4 @@ class UserSignature extends Base
 		));
 	}
 }
+

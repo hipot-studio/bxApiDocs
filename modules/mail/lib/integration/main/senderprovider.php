@@ -241,3 +241,4 @@ class SenderProvider
 			|| ((Configuration::getValue('smtp')['enabled'] ?? false) === true);
 	}
 }
+

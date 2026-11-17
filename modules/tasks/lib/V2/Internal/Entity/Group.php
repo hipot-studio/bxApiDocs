@@ -31,7 +31,7 @@ class Group extends AbstractEntity
 
 	public function isScrum(): bool
 	{
-		return $this->type === 'scrum';
+		return $this->type === GroupTypes::Scrum->value;
 	}
 
 	public function toArray(): array

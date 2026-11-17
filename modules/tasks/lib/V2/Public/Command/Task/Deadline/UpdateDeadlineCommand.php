@@ -50,7 +50,7 @@ class UpdateDeadlineCommand extends AbstractCommand
 		}
 
 		$userId = $this->updateConfig->getUserId();
-		$isCreator = $task->creator->getId() === $userId;
+		$isCreator = $task->getCreatorId() === $userId;
 		$user = UserModel::createFromId($userId);
 		$canEdit = TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_EDIT, $task->getId());
 

@@ -4,21 +4,24 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\CRM\Repository;
 
-use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmItemVisibilityService;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Dto\CrmItemPreviewResult;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemReference;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\Mapper\CrmIdMapper;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\Mapper\CrmItemMapper;
-use CCrmOwnerType;
 
 class CrmItemRepository implements CrmItemRepositoryInterface
 {
 	public function __construct(
 		private readonly CrmItemMapper $crmItemMapper,
 		private readonly CrmIdMapper $crmIdMapper,
+		private readonly CrmItemVisibilityService $crmItemVisibilityService,
+		private readonly CrmItemDataReader $crmItemDataReader,
 	)
 	{
 
@@ -99,42 +102,30 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 		return $items;
 	}
 
-	public function getByIds(array $ids): CrmItemCollection
+	public function getReadableByIds(array $ids, int $userId): CrmItemCollection
 	{
-		if (!Loader::includeModule('crm'))
+		$readableIds = $this->crmItemVisibilityService->filterReadable($ids, $userId);
+		if (empty($readableIds))
 		{
 			return new CrmItemCollection();
 		}
 
-		$items = [];
-		foreach ($ids as $id)
+		return $this->getByReadableIdsBatch($readableIds);
+	}
+
+	public function getPreviewByIds(array $ids, int $userId, int $limit): CrmItemPreviewResult
+	{
+		$readableIds = $this->crmItemVisibilityService->filterReadable($ids, $userId);
+		if (empty($readableIds))
 		{
-			[$typeId, $entityId] = $this->crmIdMapper->mapFromId($id);
-			if ($entityId === null)
-			{
-				continue;
-			}
-
-			$title = $this->getItemTitle($entityId, $typeId);
-			if ($title === '')
-			{
-				continue;
-			}
-
-			$typeName = $this->getTypeName($typeId);
-			$url = $this->getItemUrl($entityId, $typeId);
-
-			$items[] = [
-				'id' => $id,
-				'entityId' => $entityId,
-				'typeId' => $typeId,
-				'typeName' => $typeName,
-				'title' => $title,
-				'link' => $url,
-			];
+			return new CrmItemPreviewResult(new CrmItemCollection(), 0);
 		}
 
-		return $this->crmItemMapper->mapToCollection($items);
+		// CRM permissions are authoritative; missing items are skipped without backfilling the preview slice.
+		$total = count($readableIds);
+		$items = $this->getByReadableIdsBatch(array_slice($readableIds, 0, max(0, $limit)));
+
+		return new CrmItemPreviewResult($items, $total);
 	}
 
 	public function invalidate(int $taskId): void
@@ -142,20 +133,49 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 
 	}
 
-	private function getTypeName(int $typeId): ?string
+	private function getByReadableIdsBatch(array $ids): CrmItemCollection
 	{
-		return Container::getInstance()->getFactory($typeId)?->getEntityDescription();
-	}
+		$idsByType = [];
+		foreach ($ids as $id)
+		{
+			$parsedId = $this->crmIdMapper->mapFromId($id);
+			if ($parsedId === null)
+			{
+				continue;
+			}
 
-	private function getItemTitle(int $entityId, int $typeId): string
-	{
-		$title = CCrmOwnerType::GetCaption($typeId, $entityId, false);
+			[$typeId, $entityId] = $parsedId;
+			$idsByType[$typeId][$entityId] = $entityId;
+		}
 
-		return is_string($title) ? $title : '';
-	}
+		$details = $this->crmItemDataReader->readDetails(array_map('array_values', $idsByType));
 
-	private function getItemUrl(int $entityId, int $typeId): string
-	{
-		return CCrmOwnerType::GetEntityShowPath($typeId, $entityId);
+		$items = [];
+		foreach ($ids as $id)
+		{
+			$parsedId = $this->crmIdMapper->mapFromId($id);
+			if ($parsedId === null)
+			{
+				continue;
+			}
+
+			[$typeId, $entityId] = $parsedId;
+			$detail = $details[CrmItemReference::makeKey($typeId, $entityId)] ?? null;
+			if ($detail === null)
+			{
+				continue;
+			}
+
+			$items[] = $this->crmItemMapper->mapToEntity([
+				'id' => $id,
+				'entityId' => $entityId,
+				'typeId' => $typeId,
+				'typeName' => $detail['typeName'],
+				'title' => $detail['title'],
+				'link' => $detail['url'],
+			]);
+		}
+
+		return new CrmItemCollection(...$items);
 	}
 }

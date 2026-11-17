@@ -34,6 +34,11 @@ class RegularTemplateTaskReplicationChecker implements CheckerInterface
 			return true;
 		}
 
+		if ($template->getZombie() === 'Y')
+		{
+			return true;
+		}
+
 		if (!User::isActive($template->getCreatedBy()))
 		{
 			return true;

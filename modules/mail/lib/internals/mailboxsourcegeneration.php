@@ -68,8 +68,9 @@ class MailboxSourceGenerationTable extends Entity\DataManager
 	 * letter, and a letter that gained a placement came back as a second letter.
 	 *
 	 * Two renderings of one condition, and both live here because neither can be had from the
-	 * other: {@see preparedGenerationSqlCondition()} serves a reader that must not touch the ORM
-	 * map of another release. Editing one means editing the other.
+	 * other: {@see preparedGenerationsSqlCondition()} serves a reader that must not touch the ORM
+	 * map of another release, and {@see preparedGenerationSqlCondition()} is its case of one mailbox.
+	 * Editing the filter means editing the SQL.
 	 */
 	public static function preparedGenerationFilter(int $mailboxId): array
 	{
@@ -81,27 +82,46 @@ class MailboxSourceGenerationTable extends Entity\DataManager
 	}
 
 	/**
-	 * The same condition as a piece of SQL, for a query built without the ORM.
-	 *
-	 * Two of the three values it names are constants of this class; the third is the mailbox of
-	 * the caller, and what makes it safe is its own type - an int placed by %u, which renders
-	 * digits and nothing else. Escaping is therefore not what this condition rests on, and adding
-	 * a value of any other kind here would need a way of its own.
-	 *
-	 * Returned parenthesized: a chain of AND handed out as a string is a piece a caller may join
-	 * with an OR, and AND binds tighter - the condition on the mailbox would end up in one branch
-	 * of that OR alone.
-	 *
-	 * {@see preparedGenerationFilter()} tells why the two renderings exist and what keeps them one
-	 * answer.
+	 * The same condition as a piece of SQL, for a query built without the ORM: one mailbox, the
+	 * case of {@see preparedGenerationsSqlCondition()}.
 	 *
 	 * @internal Public for {@see \Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope} only.
 	 */
 	public static function preparedGenerationSqlCondition(int $mailboxId): string
 	{
+		return self::preparedGenerationsSqlCondition([$mailboxId]);
+	}
+
+	/**
+	 * The same condition as a piece of SQL for several mailboxes at once: one IN over the mailboxes,
+	 * so the query does not grow by a whole condition per mailbox.
+	 *
+	 * Two of the values it names are constants of this class; the rest are the mailboxes of the
+	 * caller, and what makes them safe is their own type - ints placed by %u, which renders digits
+	 * and nothing else. Escaping is therefore not what this condition rests on, and adding a value
+	 * of any other kind here would need a way of its own.
+	 *
+	 * Returned parenthesized: a chain of AND handed out as a string is a piece a caller may join
+	 * with an OR, and AND binds tighter - the condition on the mailbox would end up in one branch
+	 * of that OR alone. An empty list names no rows.
+	 *
+	 * {@see preparedGenerationFilter()} tells why the two renderings exist and what keeps them one
+	 * answer.
+	 *
+	 * @internal Public for {@see \Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope} only.
+	 *
+	 * @param int[] $mailboxIds
+	 */
+	public static function preparedGenerationsSqlCondition(array $mailboxIds): string
+	{
+		if ($mailboxIds === [])
+		{
+			return '(1 = 0)';
+		}
+
 		return sprintf(
-			"(MAILBOX_ID = %u AND STATUS = '%s' AND OPERATION_ID <> '%s')",
-			$mailboxId,
+			"(MAILBOX_ID IN (%s) AND STATUS = '%s' AND OPERATION_ID <> '%s')",
+			implode(', ', array_map(static fn (int $mailboxId): string => sprintf('%u', $mailboxId), $mailboxIds)),
 			self::STATUS_PREPARING,
 			self::OPERATION_G1_BACKFILL,
 		);

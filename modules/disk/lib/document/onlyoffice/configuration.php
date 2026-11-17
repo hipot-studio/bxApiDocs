@@ -133,6 +133,22 @@ final class Configuration
 	 */
 	public function getCloudRegistrationData(): ?array
 	{
+		if (
+			(new \Bitrix\Disk\Document\Vibeoffice\Configuration())->getManagedState() !== null
+			&& \Bitrix\Disk\Configuration::isCustomServerSaved()
+		)
+		{
+			return null;
+		}
+
+		return $this->getStoredCloudRegistrationData();
+	}
+
+	/**
+	 * @return null|array{clientId: string, secretKey: string, serverHost: string}
+	 */
+	public function getStoredCloudRegistrationData(): ?array
+	{
 		$data = array_filter([
 			'clientId' => Option::get(Driver::INTERNAL_MODULE_ID, 'disk_onlyoffice_b24_clientId'),
 			'secretKey' => Option::get(Driver::INTERNAL_MODULE_ID, 'disk_onlyoffice_b24_secretKey'),

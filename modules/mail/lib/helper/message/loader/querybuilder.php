@@ -77,6 +77,9 @@ class QueryBuilder
 	private const DEFAULT_LIMIT = 26;
 	private const DEFAULT_OFFSET = 0;
 
+	/** Paths to the placements the filter of the letters scopes {@see generationScopeFilter()} */
+	private const MESSAGE_PLACEMENT_PATHS = ['', 'MESSAGE_UID.', 'UID.'];
+
 	/**
 	 * @param array $filter Standard Bitrix-ORM filter. Special pseudo-key
 	 *                      {@see self::FILTER_KEY_INCLUDE_BINDINGS} (array of ENTITY_TYPE values)
@@ -249,48 +252,159 @@ class QueryBuilder
 	 * assistant tools, the chain of the mobile client - states the same condition in the
 	 * same words instead of a copy of it.
 	 *
+	 * The shape of the placements only: a folder joined to the query has a shape of its own, and
+	 * a filter given no query cannot tell the tables apart, so it takes the paths to the
+	 * placements alone. Any other entity is scoped by {@see addGenerationScope()}.
+	 *
 	 * @param int[] $mailboxIds Mailboxes the filter is limited to.
-	 * @param string $fieldPrefix Path to the uid entity, '' when it drives the query itself.
+	 * @param string $fieldPrefix Path to the uid entity: '', 'MESSAGE_UID.' or 'UID.'.
 	 * @return array Conditions to merge into the filter. Empty for a mailbox whose pointer
 	 *               names no generation yet, so its read keeps the shape it had before.
+	 * @throws ArgumentException For a path that does not lead to the placements.
 	 */
 	public static function generationScopeFilter(array $mailboxIds, string $fieldPrefix): array
 	{
+		if (!in_array($fieldPrefix, self::MESSAGE_PLACEMENT_PATHS, true))
+		{
+			throw new ArgumentException(
+				sprintf(
+					'The filter of the letters scopes the placements only, "%s" is not a path to them;'
+					. ' state the scope of another entity through addGenerationScope()',
+					$fieldPrefix,
+				),
+				'fieldPrefix',
+			);
+		}
+
 		if ($mailboxIds === [])
 		{
 			return [];
 		}
 
-		$scoped = [];
-		foreach (GenerationScope::forMailboxes($mailboxIds) as $mailboxId => $scope)
+		return self::scopeConditions(GenerationScope::forMailboxes($mailboxIds), $fieldPrefix, 'MAILBOX_ID');
+	}
+
+	/**
+	 * Adds the generation scope of the mailboxes to the query, in the shape of the table the
+	 * path leads to: the placements are scoped by the pointer of every mailbox, the folders by
+	 * the generation serving it - a mailbox without a pointer does not see the folders of the
+	 * generation it prepares. The caller names the entity, the layer picks the shape.
+	 *
+	 * The conditions follow the ones already added, so placeholders bound by position keep
+	 * their order.
+	 *
+	 * @param int[] $mailboxIds Mailboxes the query is limited to.
+	 * @param string $entityPath Path to the scoped entity, '' for the entity of the query itself.
+	 * @throws ArgumentException When the path is not a chain of references, or leads to a table
+	 *                           that has no generation scope.
+	 */
+	public static function addGenerationScope(Query $query, array $mailboxIds, string $entityPath = ''): Query
+	{
+		$dataClass = self::resolveScopedDataClass($query, $entityPath);
+
+		if ($mailboxIds === [])
 		{
-			if ($scope->getGenerationIds() !== null)
-			{
-				$scoped[$mailboxId] = $scope;
-			}
+			return $query;
 		}
 
-		if ($scoped === [])
+		$scopes = $dataClass === MailboxDirectoryTable::class
+			? GenerationScope::servingMailboxes($mailboxIds)
+			: GenerationScope::forMailboxes($mailboxIds)
+		;
+
+		foreach (self::scopeConditions($scopes, $entityPath, $entityPath . 'MAILBOX_ID') as $key => $condition)
+		{
+			$query->addFilter(is_int($key) ? null : $key, $condition);
+		}
+
+		return $query;
+	}
+
+	/**
+	 * @return string Data class of the entity the path leads to, one of the scoped tables.
+	 * @throws ArgumentException
+	 */
+	private static function resolveScopedDataClass(Query $query, string $entityPath): string
+	{
+		if ($entityPath !== '' && !str_ends_with($entityPath, '.'))
+		{
+			throw new ArgumentException(
+				sprintf('"%s" does not end with a dot, a non-empty path to an entity must', $entityPath),
+				'entityPath',
+			);
+		}
+
+		// The entity of the query carries its runtime references, so a joined alias resolves too
+		$entity = $query->getEntity();
+
+		foreach (array_filter(explode('.', $entityPath), 'strlen') as $fieldName)
+		{
+			$field = $entity->hasField($fieldName) ? $entity->getField($fieldName) : null;
+			if (!$field instanceof Reference)
+			{
+				throw new ArgumentException(
+					sprintf(
+						'"%s" of the path "%s" is not a reference of %s',
+						$fieldName,
+						$entityPath,
+						$entity->getName(),
+					),
+					'entityPath',
+				);
+			}
+
+			$entity = $field->getRefEntity();
+		}
+
+		$dataClass = ltrim($entity->getDataClass(), '\\');
+		if ($dataClass !== MailMessageUidTable::class && $dataClass !== MailboxDirectoryTable::class)
+		{
+			throw new ArgumentException(
+				sprintf('%s has no generation scope', $dataClass),
+				'entityPath',
+			);
+		}
+
+		return $dataClass;
+	}
+
+	/**
+	 * Lays the scopes of the mailboxes out as a filter. One mailbox gets its condition flat; several
+	 * get a branch each, and a branch for the mailboxes the scope does not narrow only when there
+	 * are such mailboxes.
+	 *
+	 * @param array<int, GenerationScope> $scopes Normalized: one scope per distinct positive mailbox.
+	 * @param string $fieldPrefix Path to the entity the generation column belongs to.
+	 * @param string $mailboxField Field the branch of a mailbox is selected by.
+	 */
+	private static function scopeConditions(array $scopes, string $fieldPrefix, string $mailboxField): array
+	{
+		$narrowed = array_filter(
+			$scopes,
+			static fn (GenerationScope $scope): bool => !$scope->isUnfiltered(),
+		);
+
+		if ($narrowed === [])
 		{
 			return [];
 		}
 
-		if (count($mailboxIds) === 1)
+		if (count($scopes) === 1)
 		{
-			return reset($scoped)->apply([], $fieldPrefix);
+			return reset($narrowed)->apply([], $fieldPrefix);
 		}
 
 		$branches = ['LOGIC' => 'OR'];
 
-		foreach ($scoped as $mailboxId => $scope)
+		foreach ($narrowed as $mailboxId => $scope)
 		{
-			$branches[] = $scope->apply(['=MAILBOX_ID' => $mailboxId], $fieldPrefix);
+			$branches[] = $scope->apply(['=' . $mailboxField => $mailboxId], $fieldPrefix);
 		}
 
-		if (count($scoped) < count($mailboxIds))
+		if (count($narrowed) < count($scopes))
 		{
 			// A mailbox that has never been switched keeps every row it has
-			$branches[] = ['!@MAILBOX_ID' => array_keys($scoped)];
+			$branches[] = ['!@' . $mailboxField => array_keys($narrowed)];
 		}
 
 		return [$branches];
@@ -698,13 +812,9 @@ class QueryBuilder
 				folder of the same path, and the roles are picked for the prepared one, so an
 				unscoped join would read IS_OUTCOME from the folder of the retained generation.
 			*/
-			foreach (['', 'DIR.'] as $scopedEntity)
-			{
-				foreach (self::generationScopeFilter(self::extractMailboxIds($filter), $scopedEntity) as $key => $condition)
-				{
-					$outgoingReplySubquery->addFilter(is_int($key) ? null : $key, $condition);
-				}
-			}
+			$subqueryMailboxIds = self::extractMailboxIds($filter);
+			self::addGenerationScope($outgoingReplySubquery, $subqueryMailboxIds, '');
+			self::addGenerationScope($outgoingReplySubquery, $subqueryMailboxIds, 'DIR.');
 
 			$query->registerRuntimeField(
 				'HAS_OUTGOING_REPLY',

@@ -20,6 +20,7 @@ use Bitrix\Intranet\Public\Facade\Invitation\ReInvitationFacade;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
 use Bitrix\Intranet\Public\Type\EmailInvitation;
 use Bitrix\Intranet\Public\Type\PhoneInvitation;
+use Bitrix\Intranet\User\Access\Model\TargetUserModel;
 use Bitrix\Intranet\User\Access\UserAccessController;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Intranet\User\Command\DeleteOrFireUserCommand;
@@ -107,12 +108,22 @@ class UserList extends Controller
 			return AjaxJson::createError(($this->errorCollection));
 		}
 
+		$allowedUserIds = $this->getAllowedUserIds($userCollection, $access, [UserActionDictionary::FIRE]);
+		$skippedFiredUsers = [];
+		$failedIntegrationUsers = [];
 		$integrationService = $this->getSystemUserIntegrationService();
 
 		foreach ($userCollection as $user)
 		{
 			if ($user->isCurrent())
 			{
+				continue;
+			}
+
+			if (!isset($allowedUserIds[$user->getId()]))
+			{
+				$skippedFiredUsers[$user->getId()] = $user->getFormattedName();
+
 				continue;
 			}
 
@@ -135,8 +146,8 @@ class UserList extends Controller
 		}
 
 		return AjaxJson::createSuccess([
-			'skippedFiredUsers' => $skippedFiredUsers ?? [],
-			'failedIntegrationUsers' => $failedIntegrationUsers ?? [],
+			'skippedFiredUsers' => $skippedFiredUsers,
+			'failedIntegrationUsers' => $failedIntegrationUsers,
 		]);
 	}
 
@@ -162,12 +173,26 @@ class UserList extends Controller
 			return AjaxJson::createError(($this->errorCollection));
 		}
 
+		$allowedUserIds = $this->getAllowedUserIds(
+			$userCollection,
+			$access,
+			[UserActionDictionary::DELETE, UserActionDictionary::FIRE],
+		);
+		$skippedFiredUsers = [];
+		$failedIntegrationUsers = [];
 		$integrationService = $this->getSystemUserIntegrationService();
 
 		foreach ($userCollection as $user)
 		{
 			if ($user->isCurrent())
 			{
+				continue;
+			}
+
+			if (!isset($allowedUserIds[$user->getId()]))
+			{
+				$skippedFiredUsers[$user->getId()] = $user->getFormattedName();
+
 				continue;
 			}
 
@@ -190,9 +215,45 @@ class UserList extends Controller
 		}
 
 		return AjaxJson::createSuccess([
-			'skippedFiredUsers' => $skippedFiredUsers ?? [],
-			'failedIntegrationUsers' => $failedIntegrationUsers ?? [],
+			'skippedFiredUsers' => $skippedFiredUsers,
+			'failedIntegrationUsers' => $failedIntegrationUsers,
 		]);
+	}
+
+	private function getAllowedUserIds(
+		UserCollection $userCollection,
+		UserAccessController $access,
+		array $actions,
+	): array
+	{
+		$allowedUserIds = [];
+
+		foreach ($userCollection as $user)
+		{
+			if ($user->isCurrent())
+			{
+				continue;
+			}
+
+			$targetUserModel = TargetUserModel::createFromUserEntity($user);
+			$isAllowed = true;
+
+			foreach ($actions as $action)
+			{
+				if (!$access->check($action, $targetUserModel))
+				{
+					$isAllowed = false;
+					break;
+				}
+			}
+
+			if ($isAllowed)
+			{
+				$allowedUserIds[$user->getId()] = true;
+			}
+		}
+
+		return $allowedUserIds;
 	}
 
 	/**

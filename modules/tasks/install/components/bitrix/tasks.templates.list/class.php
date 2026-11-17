@@ -4,11 +4,17 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Grid;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Security\Sign\TimeSigner;
 use Bitrix\Main\UI\Filter;
+use Bitrix\Main\Web\Json;
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\TemplateModel;
+use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Internals\Task\Template\TemplateTagTable;
 use Bitrix\Tasks\Item\Task\Template;
@@ -25,6 +31,10 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 {
 	private const FILTER_ID = 'TASKS_TEMPLATES_FILTER_ID';
 	private const DEFAULT_LIMIT = 10;
+	private const LIST_CONTEXT_SCHEMA_VERSION = 1;
+	private const LIST_CONTEXT_COMPONENT = 'bitrix:tasks.templates.list';
+	private const LIST_CONTEXT_ACTION = 'batchDelete';
+	private const LIST_CONTEXT_SALT = 'tasks.templates.batch-delete';
 
 	protected $errorCollection;
 
@@ -44,6 +54,7 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 			'batchDelete' => [
 				'+prefilters' => [
 					new \Bitrix\Tasks\Action\Filter\BooleanFilter(),
+					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
 				],
 			],
 		];
@@ -85,58 +96,72 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 		return $this->errorCollection->toArray();
 	}
 
-	public function batchDeleteAction($ids, $isAllSelected = false)
+	public function batchDeleteAction(array $ids = [], bool $isAllSelected = false, string $signedListContext = '')
 	{
 		if (!Loader::includeModule('tasks'))
 		{
 			return null;
 		}
 
-		$filter = [
-			'ID' => $ids,
-		];
-
 		if ($isAllSelected)
 		{
-			$filter = [];
+			$context = $this->getValidatedListContext($signedListContext);
+			if ($context === null)
+			{
+				return null;
+			}
+
+			$filter = $context['filter'];
+			$requestedIds = [];
+		}
+		else
+		{
+			$requestedIds = $this->normalizeTemplateIds($ids);
+			if (empty($requestedIds))
+			{
+				$this->addBatchDeleteError('EMPTY_SELECTION');
+
+				return null;
+			}
+
+			$filter = [
+				'ID' => $requestedIds,
+			];
 		}
 
 		$mgrResult = Manager\Task\Template::getList($this->userId, ['select' => ['ID'], 'filter' => $filter]);
 		$templates = $mgrResult['DATA'];
-		$actionAllowed = true;
-
-		$nonAccessTemplates = [];
 		$templateService = new Bitrix\Tasks\Control\Template($this->userId);
-
-		$result = [];
+		$accessController = new TemplateAccessController($this->userId);
+		$result = [
+			'deleted' => 0,
+			'accessDenied' => 0,
+			'failed' => $isAllSelected ? 0 : count($requestedIds) - count($templates),
+		];
 		foreach ($templates as $template)
 		{
-			foreach ($template['ALLOWED_ACTIONS'] as $action => $allowed)
+			$id = (int)$template['ID'];
+			$templateModel = TemplateModel::createFromId($id);
+			if (!$accessController->check(ActionDictionary::ACTION_TEMPLATE_REMOVE, $templateModel))
 			{
-				$id = (int)$template['ID'];
-				if ($action === 'template_remove' && !$allowed)
-				{
-					$actionAllowed = false;
-					$nonAccessTemplates[] = $id;
-				}
-				elseif ($action === 'template_remove' && $allowed)
-				{
-					$result[] = $templateService->delete($id);
-				}
+				$result['accessDenied']++;
+
+				continue;
+			}
+
+			if ($templateService->delete($id))
+			{
+				$result['deleted']++;
+			}
+			else
+			{
+				$result['failed']++;
 			}
 		}
-		if (!$actionAllowed)
-		{
-			return [
-				'success' => false,
-				'message' => Loc::getMessage('TASKS_TEMPLATES_LIST_BATCH_DELETE_ERROR_MESSAGE', [
-					'#TEMPLATE_IDS#' => implode(',', $nonAccessTemplates),
-				]),
-				'needReload' => !empty($result)
-			];
-		}
 
-		return ['success' => true];
+		$result['status'] = $this->getBatchDeleteStatus($result);
+
+		return $result;
 	}
 
 	protected static function checkIfToolAvailable(array &$arParams, array &$arResult, \Bitrix\Tasks\Util\Error\Collection $errors, array $auxParams): void
@@ -580,57 +605,8 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 
 	private function getGridData()
 	{
-		//get template's subtasks
-		if (
-			array_key_exists('ID', $this->arParams)
-			&& $this->arParams['ID'] > 0
-		)
-		{
-			$filter = [];
-		}
-		else
-		{
-			$filter = $this->processFilter();
-		}
-
-		if (!$this->arResult['IS_SEARCH_MODE'])
-		{
-			$filter['BASE_TEMPLATE_ID'] = 0;
-		}
-
-		if (isset($this->arParams['BASE_TEMPLATE_ID']) && ($filter['BASE_TEMPLATE_ID'] ?? null) <= 0)
-		{
-			$filter['BASE_TEMPLATE_ID'] = $this->arParams['BASE_TEMPLATE_ID'];
-		}
-
-		if (isset($this->arParams['SCENARIO']))
-		{
-			$filter['SCENARIO'] = $this->arParams['SCENARIO'];
-		}
-
-		$request = \Bitrix\Main\Context::getCurrent()?->getRequest();
-
-		$relationToId = (int)$this->request->get('relationToId');
-		$this->arParams['relationToId'] = $relationToId;
-		if ($relationToId)
-		{
-			$filter['BASE_TEMPLATE_ID'] = $relationToId;
-		}
-
-		if (\Bitrix\Main\Grid\Context::isInternalRequest() && check_bitrix_sessid())
-		{
-			if (
-				!empty($request?->get('parent_id'))
-				&& $request?->get('action') === \Bitrix\Main\Grid\Actions::GRID_GET_CHILD_ROWS
-			)
-			{
-				$filter['BASE_TEMPLATE_ID'] = (int)$request?->get('parent_id');
-			}
-			elseif (!empty($request?->get('BASE_TEMPLATE_ID')))
-			{
-				$filter['BASE_TEMPLATE_ID'] = (int)$request?->get('BASE_TEMPLATE_ID');
-			}
-		}
+		[$filter, $screenContext] = $this->getListFilter();
+		$this->arResult['SIGNED_LIST_CONTEXT'] = $this->signListContext($filter, $screenContext);
 
 		$parameters = array('ERRORS' => $this->errors);
 
@@ -676,6 +652,157 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 		//endregion
 
 		return $mgrResult['DATA'];
+	}
+
+	private function getListFilter(): array
+	{
+		if (
+			array_key_exists('ID', $this->arParams)
+			&& $this->arParams['ID'] > 0
+		)
+		{
+			$filter = [];
+		}
+		else
+		{
+			$filter = $this->processFilter();
+		}
+
+		if (!$this->arResult['IS_SEARCH_MODE'])
+		{
+			$filter['BASE_TEMPLATE_ID'] = 0;
+		}
+
+		if (isset($this->arParams['BASE_TEMPLATE_ID']) && ($filter['BASE_TEMPLATE_ID'] ?? null) <= 0)
+		{
+			$filter['BASE_TEMPLATE_ID'] = (int)$this->arParams['BASE_TEMPLATE_ID'];
+		}
+
+		if (isset($this->arParams['SCENARIO']))
+		{
+			$filter['SCENARIO'] = $this->arParams['SCENARIO'];
+		}
+
+		$relationToId = (int)$this->request->get('relationToId');
+		$this->arParams['relationToId'] = $relationToId;
+		if ($relationToId)
+		{
+			$filter['BASE_TEMPLATE_ID'] = $relationToId;
+		}
+
+		$request = \Bitrix\Main\Context::getCurrent()?->getRequest();
+		if (\Bitrix\Main\Grid\Context::isInternalRequest() && check_bitrix_sessid())
+		{
+			if (
+				!empty($request?->get('parent_id'))
+				&& $request?->get('action') === \Bitrix\Main\Grid\Actions::GRID_GET_CHILD_ROWS
+			)
+			{
+				$filter['BASE_TEMPLATE_ID'] = (int)$request?->get('parent_id');
+			}
+			elseif (!empty($request?->get('BASE_TEMPLATE_ID')))
+			{
+				$filter['BASE_TEMPLATE_ID'] = (int)$request?->get('BASE_TEMPLATE_ID');
+			}
+		}
+
+		return [$filter, [
+			'BASE_TEMPLATE_ID' => (int)($filter['BASE_TEMPLATE_ID'] ?? 0),
+			'SCENARIO' => $this->arParams['SCENARIO'] ?? null,
+			'relationToId' => $relationToId,
+		]];
+	}
+
+	private function signListContext(array $filter, array $screenContext): string
+	{
+		$context = [
+			'schemaVersion' => self::LIST_CONTEXT_SCHEMA_VERSION,
+			'userId' => $this->userId,
+			'component' => self::LIST_CONTEXT_COMPONENT,
+			'action' => self::LIST_CONTEXT_ACTION,
+			'filterId' => self::FILTER_ID,
+			'screenContext' => $screenContext,
+			'filter' => $filter,
+		];
+
+		return (new TimeSigner())->sign(
+			Json::encode($context),
+			'+24 hours',
+			self::LIST_CONTEXT_SALT,
+		);
+	}
+
+	private function getValidatedListContext(string $signedListContext): ?array
+	{
+		try
+		{
+			$context = Json::decode((new TimeSigner())->unsign($signedListContext, self::LIST_CONTEXT_SALT));
+		}
+		catch (\Throwable)
+		{
+			$this->addBatchDeleteError('LIST_CONTEXT_INVALID');
+
+			return null;
+		}
+
+		if (
+			!is_array($context)
+			|| ($context['schemaVersion'] ?? null) !== self::LIST_CONTEXT_SCHEMA_VERSION
+			|| ($context['userId'] ?? null) !== $this->userId
+			|| ($context['component'] ?? null) !== self::LIST_CONTEXT_COMPONENT
+			|| ($context['action'] ?? null) !== self::LIST_CONTEXT_ACTION
+			|| ($context['filterId'] ?? null) !== self::FILTER_ID
+			|| !$this->isValidScreenContext($context['screenContext'] ?? null)
+			|| !is_array($context['filter'] ?? null)
+		)
+		{
+			$this->addBatchDeleteError('LIST_CONTEXT_INVALID');
+
+			return null;
+		}
+
+		return $context;
+	}
+
+	private function isValidScreenContext($screenContext): bool
+	{
+		return is_array($screenContext)
+			&& is_int($screenContext['BASE_TEMPLATE_ID'] ?? null)
+			&& (is_null($screenContext['SCENARIO'] ?? null) || is_string($screenContext['SCENARIO']))
+			&& is_int($screenContext['relationToId'] ?? null)
+		;
+	}
+
+	private function normalizeTemplateIds(array $ids): array
+	{
+		$normalizedIds = [];
+		foreach ($ids as $id)
+		{
+			$id = (int)$id;
+			if ($id > 0)
+			{
+				$normalizedIds[$id] = $id;
+			}
+		}
+
+		return array_values($normalizedIds);
+	}
+
+	private function getBatchDeleteStatus(array $result): string
+	{
+		if ($result['deleted'] > 0 && ($result['accessDenied'] > 0 || $result['failed'] > 0))
+		{
+			return 'partial';
+		}
+
+		return $result['deleted'] > 0 || ($result['accessDenied'] === 0 && $result['failed'] === 0)
+			? 'success'
+			: 'failed';
+	}
+
+	private function addBatchDeleteError(string $code): void
+	{
+		$this->errorCollection->add($code, Loc::getMessage('TASKS_TEMPLATES_LIST_' . $code));
 	}
 
 	private function mergeWithTags(array $items): array
@@ -727,8 +854,9 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
 		if ($request->get('by') != null)
 		{
-			$sortResult[$request->get('by')] = $request->get('order') ? $request->get('order') : 'asc';
-			$this->getGridOptions()->setSorting($request->get('by'), $sortResult[$request->get('order')] ?? null);
+			$by = $request->get('by');
+			$sortResult[$by] = $request->get('order') ? $request->get('order') : 'asc';
+			$this->getGridOptions()->setSorting($by, $sortResult[$by]);
 			$this->getGridOptions()->save();
 		}
 		else

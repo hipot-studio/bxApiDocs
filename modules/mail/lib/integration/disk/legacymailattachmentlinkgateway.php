@@ -111,3 +111,4 @@ final class LegacyMailAttachmentLinkGateway implements MailAttachmentLinkGateway
 		return $result->addError(new Error($message, $code));
 	}
 }
+

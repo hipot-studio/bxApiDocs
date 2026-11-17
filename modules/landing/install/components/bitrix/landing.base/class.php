@@ -732,7 +732,7 @@ class LandingBaseComponent extends \CBitrixComponent
 		$googleImagesKey = \CUtil::jsEscape(
 			(string) $googleImagesKey
 		);
-		$allowKeyChange = true;
+		$allowKeyChange = \Bitrix\Landing\Rights::canChangePortalOptions();
 
 		Asset::getInstance()->addString("
 			<script>

@@ -4,8 +4,10 @@ use Bitrix\Disk;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Component\DocumentHeaderPage;
 use Bitrix\Disk\Internal\Service\Bitrix24SiteUrlResolver;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\BaseComponent;
@@ -36,6 +38,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 	public const ERROR_CODE_EXCEEDED_LIMIT = 'exceeded_limit';
 	public const ERROR_CODE_COULD_NOT_LOCK = 'could_not_lock';
+	public const ERROR_CODE_DOCUMENT_SERVICE_REFUSED = 'document_service_refused';
 	protected const SESSION_SHOW_IMMEDIATELY_KEY = 'disk.promoShowImmediately';
 	protected const AUTO_FORCE_RELOAD_AFTER = 300_000; // 5 minutes in ms
 
@@ -50,6 +53,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	protected UnifiedLinkUrl $unifiedLinkUrl;
 	private bool $unifiedLinkAccessOnly = false;
 	private bool $unifiedLinkMode = false;
+	/** The short opening the editor is shown for, resolved again right before the config is built. */
+	private ?ShortLinkOpening $shortLinkOpening = null;
 
 	protected function processBeforeAction($actionName)
 	{
@@ -125,16 +130,25 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			return;
 		}
 
-		$bitrix24Scenario = new OnlyOffice\Bitrix24Scenario();
+		// A short opening is checked before anything leaves it, the move to viewing on the limit included.
+		$this->arResult['EXTERNAL_LINK_MODE'] = (bool)($this->arParams['EXTERNAL_LINK_MODE'] ?? false);
+		if (!$this->guardShortLinkOpening($documentSession))
+		{
+			$this->includeComponentTemplate('not-found');
+
+			return;
+		}
+
 		if ($documentSession->isEdit())
 		{
-			if (!$bitrix24Scenario->canUseEdit())
+			if (!$this->canUseEditByScenario())
 			{
-				LocalRedirect($this->processExceededLimit($documentSession));
+				$this->leaveForViewOnExceededLimit($documentSession);
+
+				return;
 			}
 		}
 
-		$this->arResult['EXTERNAL_LINK_MODE'] = (bool)($this->arParams['EXTERNAL_LINK_MODE'] ?? false);
 		$documentInfo = $documentSession->getInfo();
 		if (!$documentInfo)
 		{
@@ -212,9 +226,23 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$this->arResult['ATTACHED_OBJECT'] = [
 			'ID' => $documentSession->getContext()->getAttachedObjectId(),
 		];
-		$this->arResult['LINK_OPEN_NEW_WINDOW'] = $this->getLinkToView($documentSession);
-
-		$this->arResult['LINK_TO_EDIT'] = $this->getLinkToEdit($documentSession);
+		// A short opening stays on its own address: viewing is the address itself, and editing is the
+		// transition posted to it.
+		$this->arResult['LINK_OPEN_NEW_WINDOW'] = $this->shortLinkOpening?->getCanonicalUrl()
+			?? $this->getLinkToView($documentSession)
+		;
+		$this->arResult['LINK_TO_EDIT'] = $this->shortLinkOpening?->getCanonicalUrl()
+			?? $this->getLinkToEdit($documentSession)
+		;
+		// The entry moves only an employee by his own right; a guest of the link goes on in the mode of the link.
+		$this->arResult['SHORT_LINK'] = $this->shortLinkOpening === null ? null : [
+			'URL' => $this->shortLinkOpening->getCanonicalUrl(),
+			'CODE' => $this->shortLinkOpening->getCode(),
+			'EDIT_OPERATION' => $this->arResult['EXTERNAL_LINK_MODE']
+				? Disk\Controller\ShortLink::OPERATION_CONTINUE
+				: Disk\Controller\ShortLink::OPERATION_MODE_TRANSITION
+			,
+		];
 		$this->arResult['LINK_TO_DOWNLOAD'] = $this->getLinkToDownload($documentSession);
 		$this->arResult['CAN_DOWNLOAD'] = $this->canDownloadDocument($documentSession);
 
@@ -274,40 +302,67 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		$this->arResult['SESSION_BOOST_OPTIONS'] = $this->getSessionBoostOptions($documentSession);
+		$restrictionLocked = false;
 
-		if ($allowEdit && $configBuilder->isEditMode() && $this->shouldUseRestriction())
+		try
 		{
-			if ($this->lockForRestriction())
+			if ($allowEdit && $configBuilder->isEditMode() && $this->shouldUseRestriction())
 			{
-				if (
-					!$this->isAllowedEditByRestriction($documentSession->getExternalHash(), $this->currentUser->getId())
-				)
+				if ($this->lockForRestriction())
 				{
-					$this->errorCollection[] = new Disk\Internals\Error\Error('Exceeded limit.', self::ERROR_CODE_EXCEEDED_LIMIT, [
-						'limit' => $this->restrictionManager->getLimit(),
-					]);
+					$restrictionLocked = true;
+					if (
+						!$this->isAllowedEditByRestriction($documentSession->getExternalHash(), $this->currentUser->getId())
+					)
+					{
+						$this->errorCollection[] = new Disk\Internals\Error\Error('Exceeded limit.', self::ERROR_CODE_EXCEEDED_LIMIT, [
+							'limit' => $this->restrictionManager->getLimit(),
+						]);
 
-					AddEventToStatFile(
-						'disk',
-						'disk_oo_limit_edit',
-						$documentSession->getExternalHash(),
-						ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getServer(),
-						'',
-						$this->currentUser->getId()
-					);
+						AddEventToStatFile(
+							'disk',
+							'disk_oo_limit_edit',
+							$documentSession->getExternalHash(),
+							ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getServer(),
+							'',
+							$this->currentUser->getId()
+						);
+					}
+					else
+					{
+						$this->registerRestrictionUsage($documentSession->getExternalHash(), $this->currentUser->getId());
+					}
 				}
-				else
+
+				if ($this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT) || $this->getErrorByCode(self::ERROR_CODE_COULD_NOT_LOCK))
 				{
-					$this->registerRestrictionUsage($documentSession->getExternalHash(), $this->currentUser->getId());
+					$this->processRestrictionError($documentSession);
+
+					return;
 				}
 			}
-
-			if ($this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT) || $this->getErrorByCode(self::ERROR_CODE_COULD_NOT_LOCK))
+		}
+		catch (\RuntimeException $exception)
+		{
+			if (ServiceLocator::getInstance()->get(Disk\Internal\Service\Environment::class)->isCloudPortal())
 			{
-				$this->processRestrictionError($documentSession);
-
-				return;
+				throw $exception;
 			}
+
+			if ($restrictionLocked)
+			{
+				$this->unlockForRestriction();
+			}
+
+			$error = new Disk\Internals\Error\Error(
+				'Document service is unavailable.',
+				self::ERROR_CODE_DOCUMENT_SERVICE_REFUSED,
+			);
+			$this->errorCollection[] = $error;
+			$this->arResult['SESSION_BOOST_OPTIONS'] = null;
+			$this->processCloudError((new Result())->addError($error), $documentSession);
+
+			return;
 		}
 
 		$editorJsonConfigResult = $this->getEditorJsonConfig($configBuilder);
@@ -429,6 +484,24 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$this->restrictionManager->unlock();
 	}
 
+	/** @see CDiskFileEditorVibeofficeComponent::guardShortLinkOpening() */
+	private function guardShortLinkOpening(Disk\Document\Models\DocumentSession $documentSession): bool
+	{
+		$opening = $this->arParams['SHORT_LINK_OPENING'] ?? null;
+		if (!$opening instanceof ShortLinkOpening)
+		{
+			return true;
+		}
+
+		$this->shortLinkOpening = $opening->revalidateForEditor(
+			$documentSession,
+			$this->arParams['SHORT_LINK_MODE'] ?? null,
+			(bool)$this->arResult['EXTERNAL_LINK_MODE'],
+		);
+
+		return $this->shortLinkOpening !== null;
+	}
+
 	/**
 	 * Generate link for view document.
 	 *
@@ -456,6 +529,18 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			}
 
 			return $this->getUrlManager()->getUnifiedLink($documentSession->getFile(), $unifiedLinkOptions);
+		}
+
+		// A guest of a public link has no authentication for viewDocument, so the link page itself is reopened.
+		$externalLink = ($this->arParams['EXTERNAL_LINK_MODE'] ?? false)
+			? $documentSession->getContext()?->getExternalLink()
+			: null;
+		if ($externalLink && (int)$externalLink->getObjectId() === (int)$documentSession->getObjectId())
+		{
+			return $this->getUrlManager()->getUrlExternalLink([
+				'hash' => $externalLink->getHash(),
+				'action' => 'default',
+			]);
 		}
 
 		/** @see \Bitrix\Disk\Controller\DocumentService::viewDocumentAction */
@@ -567,6 +652,10 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			'NAME' => $documentSession->getObject()->getName(),
 			'SIZE' => $documentSession->getObject()->getSize(),
 		];
+		// The editing a short opening was allowed is chosen again by its address, never inherited.
+		$this->arResult['SHORT_LINK_CONTINUATION'] = $this->getShortLinkContinuation(
+			$documentSession->isEdit() ? Disk\Controller\ShortLink::MODE_EDIT : Disk\Controller\ShortLink::MODE_VIEW,
+		);
 
 		$this->includeComponentTemplate('saving');
 	}
@@ -610,7 +699,9 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 			if (!Disk\Internal\Service\OnlyOffice\Promo\PromoBlocker::shouldBlockPromoForUser())
 			{
-				LocalRedirect($this->processExceededLimit($documentSession));
+				$this->leaveForViewOnExceededLimit($documentSession);
+
+				return;
 			}
 		}
 
@@ -618,6 +709,59 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$this->arResult['CLOUD_ERROR'] = $cloudErrorResult;
 
 		$this->includeComponentTemplate('cloud-error');
+	}
+
+	protected function canUseEditByScenario(): bool
+	{
+		return (new OnlyOffice\Bitrix24Scenario())->canUseEdit();
+	}
+
+	/**
+	 * Leaves the editing refused by the limit for viewing. A short opening stays on its address: viewing there is
+	 * a continuation posted to it, since a GET would choose the mode of the source again, the very edit refused.
+	 */
+	protected function leaveForViewOnExceededLimit(Disk\Document\Models\DocumentSession $documentSession): void
+	{
+		$linkToView = $this->processExceededLimit($documentSession);
+		if ($this->shortLinkOpening === null)
+		{
+			$this->redirectTo($linkToView);
+
+			return;
+		}
+
+		$this->arResult['SHORT_LINK_CONTINUATION'] = $this->getShortLinkContinuation(
+			Disk\Controller\ShortLink::MODE_VIEW,
+		);
+		$this->includeComponentTemplate('short-link-continuation');
+	}
+
+	protected function redirectTo(string|Uri $url): void
+	{
+		LocalRedirect($url);
+	}
+
+	/**
+	 * The continuation of a short opening posted to its address in the given mode: the entry resolves the link
+	 * again and lowers the mode of the source to the one asked, never raises it. Null without a short opening.
+	 *
+	 * @return array{url: string, fields: array<string, string>}|null
+	 */
+	private function getShortLinkContinuation(string $requestedMode): ?array
+	{
+		if ($this->shortLinkOpening === null)
+		{
+			return null;
+		}
+
+		return [
+			'url' => $this->shortLinkOpening->getCanonicalUrl(),
+			'fields' => [
+				Disk\Controller\ShortLink::PARAM_CODE => $this->shortLinkOpening->getCode(),
+				Disk\Controller\ShortLink::PARAM_OPERATION => Disk\Controller\ShortLink::OPERATION_CONTINUE,
+				Disk\Controller\ShortLink::PARAM_REQUESTED_MODE => $requestedMode,
+			],
+		];
 	}
 
 	/**
@@ -673,7 +817,9 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		/** @see \Bitrix\DocumentProxy\Controller\SignDocumentConfiguration::ERROR_CODE_EXCEEDED_LIMIT */
 		if ($errorCollection->getErrorByCode('exceeded_limit') && !Disk\Internal\Service\OnlyOffice\Promo\PromoBlocker::shouldBlockPromoForUser())
 		{
-			LocalRedirect($this->processExceededLimit($documentSession));
+			$this->leaveForViewOnExceededLimit($documentSession);
+
+			return;
 		}
 		/** @see \Bitrix\DocumentProxy\Engine\Filter\DemoRestriction::ERROR_DEMO_RESTRICTION */
 		if ($errorCollection->getErrorByCode('demo_restriction'))
@@ -713,6 +859,14 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			&& OnlyOffice\OnlyOfficeHandler::isEditable($documentSession->getObject()->getExtension())
 		)
 		{
+			// An employee of a short opening edits by his effective right: no other public link of the file counts.
+			if ($this->unifiedLinkMode && $this->shortLinkOpening !== null)
+			{
+				return $this->shortLinkOpening->getEffectiveAccessLevel((int)CurrentUser::get()->getId())
+					=== UnifiedLinkAccessLevel::Edit
+				;
+			}
+
 			if ($this->unifiedLinkMode)
 			{
 				$unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);

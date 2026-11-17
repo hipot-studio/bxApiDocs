@@ -9,6 +9,7 @@ use Bitrix\Tasks\CheckList\Node\Nodes;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Exception\CheckList\CheckListMergeException;
 use Bitrix\Tasks\V2\Internal\Repository\CheckListUserOptionRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListTreeService;
@@ -67,12 +68,9 @@ class CheckListProvider
 		$dataClass = $this->resolveDataClass($type);
 
 		$result = $dataClass::merge($entityId, $userId, $checkLists);
-		if (
-			!$result
-			|| !$result->isSuccess()
-		)
+		if (!$result->isSuccess())
 		{
-			return null;
+			throw new CheckListMergeException($result->getErrors());
 		}
 
 		$traversedItems = $result->getData()['TRAVERSED_ITEMS'] ?? [];

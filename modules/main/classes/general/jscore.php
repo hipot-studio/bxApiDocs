@@ -100,6 +100,7 @@ class CJSCore
 		}
 
 		$ret = '';
+		$registered = [];
 
 		if ($bNeedCore && !self::isBaselineLoaded())
 		{
@@ -152,7 +153,8 @@ class CJSCore
 			$coreLang = self::_loadLang($config['lang'], true);
 			$coreSettings = self::loadSettings('main.core', $config['settings'], true);
             $coreJs = self::_loadJS($config['js'], true);
-            $registerExtension = self::registerExtensionAsLoaded('main.core', true);
+			// A block of its own, the same every time: Asset drops a repeated core load (GetHTML) as a duplicate.
+			$coreRegistration = self::getRegistrationBlock(['main.core']);
 
 			if ($bReturn)
 			{
@@ -160,7 +162,7 @@ class CJSCore
 			    $ret .= $coreSettings;
 				$ret .= $relativities;
 			    $ret .= $coreJs;
-			    $ret .= $registerExtension;
+				$ret .= $coreRegistration;
 			    $ret .= $includes;
             }
 
@@ -169,13 +171,23 @@ class CJSCore
 			$asset->addString($coreSettings, true, AssetLocation::AFTER_CSS);
             $asset->addString($relativities, true, AssetLocation::AFTER_CSS);
             $asset->addString($coreJs, true, AssetLocation::AFTER_CSS);
-            $asset->addString($registerExtension, true, AssetLocation::AFTER_CSS);
+			$asset->addString($coreRegistration, true, AssetLocation::AFTER_CSS);
             $asset->addString($includes, true, AssetLocation::AFTER_CSS);
 		}
 
 		for ($i = 0, $len = count($arExt); $i < $len; $i++)
 		{
-			$ret .= self::_loadExt($arExt[$i], $bReturn);
+			$ret .= self::_loadExt($arExt[$i], $bReturn, $registered);
+		}
+
+		$registration = self::getRegistrationBlock($registered);
+		if ($bReturn)
+		{
+			$ret .= $registration;
+		}
+		else
+		{
+			Asset::getInstance()->addString($registration, true, AssetLocation::AFTER_CSS);
 		}
 
 		if (!defined('PUBLIC_MODE') && defined('BX_PUBLIC_MODE') && BX_PUBLIC_MODE == 1)
@@ -400,7 +412,7 @@ JS;
 		return Extension::getConfig('main.core');
 	}
 
-	private static function _loadExt($ext, $bReturn)
+	private static function _loadExt($ext, $bReturn, array &$registered)
 	{
 		$ret = '';
 
@@ -456,7 +468,7 @@ JS;
 		{
 			foreach (self::$arRegisteredExt[$ext]['rel'] as $rel_ext)
 			{
-				$ret .= self::_loadExt($rel_ext, $bReturn);
+				$ret .= self::_loadExt($rel_ext, $bReturn, $registered);
 			}
 		}
 
@@ -504,47 +516,64 @@ JS;
 		{
 			foreach (self::$arRegisteredExt[$ext]['post_rel'] as $rel_ext)
 			{
-				$ret .= self::_loadExt($rel_ext, $bReturn);
+				$ret .= self::_loadExt($rel_ext, $bReturn, $registered);
 			}
 		}
 
-        $ret .= self::registerExtensionAsLoaded($ext, $bReturn);
+		if (self::isCoreLoaded())
+		{
+			$registered[] = $ext;
+		}
 
 		return $ret;
 	}
 
-    public static function registerExtensionAsLoaded($extension, $bReturn = false): string
-    {
-        if (self::isCoreLoaded())
-        {
-            $options = [
-                'name' => $extension,
-                'namespace' => 'window',
-                'loaded' => true,
-            ];
+	/**
+	 * Marks the extension as loaded for BX.Runtime.loadExtension.
+	 */
+	public static function registerExtensionAsLoaded($extension, $bReturn = false): string
+	{
+		$result = self::getRegistrationBlock([$extension]);
+		if ($bReturn)
+		{
+			return $result;
+		}
 
-            $bundleConfig = Extension::getBundleConfig($extension);
-            if (is_array($bundleConfig))
-            {
-                if (isset($bundleConfig['namespace']) && is_string($bundleConfig['namespace']))
-                {
-                    $options['namespace'] = $bundleConfig['namespace'];
-                }
-            }
+		Asset::getInstance()->addString($result, true, AssetLocation::AFTER_CSS);
 
-            $jsOptions = Json::encode($options);
-            $result = '<script>BX.Runtime.registerExtension(' . $jsOptions . ');</script>';
+		return '';
+	}
 
-            if ($bReturn)
-            {
-                return $result;
-            }
+	/**
+	 * Returns one inert data block for the batch instead of an inline call per extension. BX.Runtime reads the blocks
+	 * of the page markup; Runtime.extractAssets hands the block of a fragment back as data (`registrations`).
+	 */
+	private static function getRegistrationBlock(array $extensions): string
+	{
+		if (empty($extensions) || !self::isCoreLoaded())
+		{
+			return '';
+		}
 
-            Asset::getInstance()->addString($result, true, AssetLocation::AFTER_CSS);
-        }
+		$namespaces = [];
+		foreach ($extensions as $extension)
+		{
+			$namespaces[$extension] = self::getExtensionNamespace($extension);
+		}
 
-        return '';
-    }
+		return '<script type="extension/registered">' . Json::encode($namespaces) . '</script>';
+	}
+
+	private static function getExtensionNamespace($extension): string
+	{
+		$bundleConfig = Extension::getBundleConfig($extension);
+		if (is_array($bundleConfig) && isset($bundleConfig['namespace']) && is_string($bundleConfig['namespace']))
+		{
+			return $bundleConfig['namespace'];
+		}
+
+		return 'window';
+	}
 
 	public static function ShowTimer($params)
 	{

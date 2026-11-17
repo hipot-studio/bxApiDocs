@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Internal\Integration\Humanresources;
 
 use Bitrix\HumanResources\Enum\DepthLevel;
+use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
@@ -38,6 +39,11 @@ class DepartmentRepository
 	{
 		$this->isAvailable = Loader::includeModule('humanresources');
 		$this->departmentMapper = new DepartmentMapper();
+	}
+
+	public function isAvailable(): bool
+	{
+		return $this->isAvailable;
 	}
 
 	public function getDepartmentHeadsByDepartmentCollection(DepartmentCollection $departmentCollection): UserCollection
@@ -145,6 +151,16 @@ class DepartmentRepository
 		);
 
 		return $allowedDepartments->getIds();
+	}
+
+	public function allDepartmentsExist(array $departmentIds): bool
+	{
+		$nodes = PublicContainer::getNodeService()->findAllByIds(
+			nodeIds: $departmentIds,
+			activeFilter: NodeActiveFilter::ALL,
+		);
+
+		return !array_diff($departmentIds, $nodes->getIds());
 	}
 
 	public function areValidDepartmentIds(array $departmentIds): bool

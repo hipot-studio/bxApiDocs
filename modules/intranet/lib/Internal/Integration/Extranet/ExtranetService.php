@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Integration\Extranet;
 
+use Bitrix\Extranet\Enum\User\ExtranetRole;
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -12,6 +13,11 @@ use Psr\Container\NotFoundExceptionInterface;
 
 class ExtranetService
 {
+	public function isAvailable(): bool
+	{
+		return Loader::includeModule('extranet');
+	}
+
 	public function getExtranetUserGroupId(): ?int
 	{
 		if (!Loader::includeModule('extranet'))
@@ -22,6 +28,19 @@ class ExtranetService
 		$groupId = \CExtranet::GetExtranetUserGroupID();
 
 		return is_int($groupId) && $groupId > 0 ? $groupId : null;
+	}
+
+	public function getExtranetSiteId(): string|false
+	{
+		return \CExtranet::GetExtranetSiteID();
+	}
+
+	public function isTransferToIntranetAllowedByRegistryRole(int $userId): bool
+	{
+		$registry = ServiceContainer::getInstance()->getExtranetUserRepository()->getByUserId($userId);
+
+		return $registry === null
+			|| in_array($registry->getRole(), [ExtranetRole::Extranet, ExtranetRole::Collaber], true);
 	}
 
 	public function isExtranet(): bool

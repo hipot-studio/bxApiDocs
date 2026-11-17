@@ -227,7 +227,7 @@ class ViewerAttributesFactory
 
 		try
 		{
-			if (TypeFile::isDocument($file->getName()))
+			if ($this->usesEmbeddedDocumentViewer($file, $fileData))
 			{
 				if ($this->isDocumentRestrictedByTransformationSize($fileData))
 				{
@@ -243,6 +243,23 @@ class ViewerAttributesFactory
 		{
 			return null;
 		}
+	}
+
+	private function usesEmbeddedDocumentViewer(File $file, array $fileData): bool
+	{
+		if (TypeFile::isDocument($file->getName()))
+		{
+			return true;
+		}
+
+		if (GetFileExtension($file->getName()) !== '')
+		{
+			return false;
+		}
+
+		$extension = TypeFile::getExtensionByMimeType((string)($fileData['CONTENT_TYPE'] ?? ''));
+
+		return $extension !== null && TypeFile::isDocument('file.' . $extension);
 	}
 
 	private function isDocumentRestrictedByTransformationSize(array $fileData): bool

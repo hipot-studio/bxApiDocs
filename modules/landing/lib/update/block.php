@@ -2,6 +2,8 @@
 namespace Bitrix\Landing\Update;
 
 use \Bitrix\Landing\Block as BlockCore;
+use \Bitrix\Main\Web\DOM;
+use \Bitrix\Landing\Block\ContentRenderer;
 use \Bitrix\Landing\UpdateBlock;
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Internals\BlockTable;
@@ -14,13 +16,29 @@ class Block extends \Bitrix\Main\Update\Stepper
 	const STEPPER_COUNT = 1;
 
 	/**
+	 * PARAMS key a migration sets to move more than STEPPER_COUNT instances of its code in one step;
+	 * a row without the key, or with a value that is not a positive int, keeps STEPPER_COUNT.
+	 */
+	public const PARAM_STEP_COUNT = 'stepCount';
+
+	/**
+	 * Upper bound of PARAM_STEP_COUNT: a step this size still has to land well inside the threshold
+	 * of Stepper, whatever a migration asks for.
+	 */
+	private const STEP_COUNT_MAX = 50;
+
+	/** Text of the comment the php of an old content is replaced with while the owner's data is exported. */
+	private const PHP_MARK = 'landing-update-php';
+
+	/**
 	 * Target module for stepper.
 	 * @var string
 	 */
 	protected static $moduleId = 'landing';
 
 	/**
-	 * Register new block for stepper update.
+	 * Register new block for stepper update. A code already in the queue keeps the PARAMS of its
+	 * earlier registration: the new PARAMS are merged in, overriding only the keys they share.
 	 * @param string|string[] $codes Block codes.
 	 * @param array $params Additional params.
 	 * @return void
@@ -34,7 +52,7 @@ class Block extends \Bitrix\Main\Update\Stepper
 
 		$res = UpdateBlock::getList([
 			'select' => [
-				'ID', 'CODE'
+				'ID', 'CODE', 'PARAMS'
 			],
 			'filter' => [
 				'=CODE' => $codes
@@ -44,7 +62,10 @@ class Block extends \Bitrix\Main\Update\Stepper
 		{
 			UpdateBlock::update($row['ID'], [
 				'LAST_BLOCK_ID' => 0,
-				'PARAMS' => $params
+				'PARAMS' => array_merge(
+					is_array($row['PARAMS']) ? $row['PARAMS'] : [],
+					$params
+				)
 			]);
 			$codes = array_diff($codes, [$row['CODE']]);
 		}
@@ -204,9 +225,7 @@ class Block extends \Bitrix\Main\Update\Stepper
 			// gets content from exist block
 			$block = new BlockCore($row['ID']);
 			$block->setAccess(BlockCore::ACCESS_X);
-			$export = $block->export([
-				'clear_form' => false
-			]);
+			$export = self::exportOwnerData($block);
 
 			// and apply to the new layout
 			$newContent = BlockCore::getContentFromRepository(
@@ -327,6 +346,90 @@ class Block extends \Bitrix\Main\Update\Stepper
 	}
 
 	/**
+	 * Exports what the owner of the page put into the instance, and nothing of the php of the old
+	 * template: a node or an attribute the php took part in (the php inside it, or right before it,
+	 * as in a branch of a condition) keeps the value of the fresh template instead.
+	 * @param BlockCore $block Instance to export.
+	 * @return array
+	 */
+	private static function exportOwnerData(BlockCore $block): array
+	{
+		$params = [
+			'clear_form' => false,
+		];
+		$content = (string)$block->getContent();
+		$mark = '<!--' . self::PHP_MARK . '-->';
+		$markup = ContentRenderer::withoutPhp($content, $mark);
+		if ($markup === $content)
+		{
+			return $block->export($params);
+		}
+
+		$export = $block->exportContent($markup, $params);
+		$doc = new DOM\Document();
+		try
+		{
+			$doc->loadHTML($markup);
+		}
+		catch (\Exception)
+		{
+			return $export;
+		}
+
+		foreach (['nodes', 'attrs'] as $key)
+		{
+			foreach ($export[$key] ?? [] as $selector => $positions)
+			{
+				if (!is_array($positions) || $selector === '#wrapper')
+				{
+					continue;
+				}
+				foreach ($doc->querySelectorAll($selector) as $position => $element)
+				{
+					if (isset($positions[$position]) && self::isOfThePhp($element))
+					{
+						unset($export[$key][$selector][$position]);
+					}
+				}
+				if (!$export[$key][$selector])
+				{
+					unset($export[$key][$selector]);
+				}
+			}
+		}
+
+		return $export;
+	}
+
+	/**
+	 * Tells whether the php of the old template took part in the element: inside it, or right before
+	 * it, the way a condition opens a branch.
+	 * @param DOM\Node $element Element of the markup without php.
+	 * @return bool
+	 */
+	private static function isOfThePhp(DOM\Node $element): bool
+	{
+		if (str_contains((string)$element->getOuterHTML(), self::PHP_MARK))
+		{
+			return true;
+		}
+
+		$sibling = $element->getPreviousSibling();
+		while (
+			$sibling
+			&& $sibling->getNodeType() === DOM\Node::TEXT_NODE
+			&& trim((string)$sibling->getNodeValue()) === ''
+		)
+		{
+			$sibling = $sibling->getPreviousSibling();
+		}
+
+		return $sibling
+			&& $sibling->getNodeType() === DOM\Node::COMMENT_NODE
+			&& str_contains((string)$sibling->getNodeValue(), self::PHP_MARK);
+	}
+
+	/**
 	 * One step of stepper.
 	 * @param array &$result Result array.
 	 * @return bool
@@ -400,7 +503,7 @@ class Block extends \Bitrix\Main\Update\Stepper
 				'!=DESIGNED' => 'Y',
 			],
 		 	$count,
-		 	$this::STEPPER_COUNT,
+		 	self::resolveStepCount($rowUpdate['PARAMS']),
 		 	$rowUpdate['PARAMS']
 		);
 		if ($lastId > 0)
@@ -421,6 +524,25 @@ class Block extends \Bitrix\Main\Update\Stepper
 			UpdateBlock::delete($rowUpdate['ID']);
 			return true;//for check next item in UpdateBlock
 		}
+	}
+
+	/**
+	 * A row of the queue may ask for more than STEPPER_COUNT instances of its code per step, through
+	 * PARAM_STEP_COUNT of its own PARAMS: the constant is shared by every code ever queued, past and
+	 * future, including repo blocks, while one migration may know its rows are cheap enough, or its
+	 * codes urgent enough, to move faster.
+	 * @param mixed $params PARAMS of the row of the queue.
+	 * @return int
+	 */
+	private static function resolveStepCount(mixed $params): int
+	{
+		$stepCount = is_array($params) ? ($params[self::PARAM_STEP_COUNT] ?? null) : null;
+		if (!is_int($stepCount) || $stepCount <= 0)
+		{
+			return static::STEPPER_COUNT;
+		}
+
+		return min($stepCount, self::STEP_COUNT_MAX);
 	}
 
 	protected static function updateVideoToLazyload($nodes)

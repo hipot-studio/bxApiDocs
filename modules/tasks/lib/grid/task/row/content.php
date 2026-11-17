@@ -76,6 +76,22 @@ class Content
 			$prepareMap['STAGE_ID'] = Content\StageId::class;
 		}
 
+		// Member cells are built only for the fields whose profiles were hydrated page-wide (MEMBER_CELL_FIELDS).
+		// Both columns are hidden by default, and rendering them without the bulk load would send every member
+		// of every row through the per-member fallback in MemberList::resolveMember().
+		$memberFields = array_flip((array)$this->getParameter('MEMBER_CELL_FIELDS'));
+		$memberCells = [
+			'A' => ['ACCOMPLICES', Content\MemberList\Accomplice::class],
+			'U' => ['AUDITORS', Content\MemberList\Auditor::class],
+		];
+		foreach ($memberCells as $column => [$field, $class])
+		{
+			if (isset($memberFields[$field]))
+			{
+				$prepareMap[$column] = $class;
+			}
+		}
+
 		foreach ($this->rowData as $key => $value)
 		{
 			if (array_key_exists($key, $prepareMap))
@@ -117,6 +133,11 @@ class Content
 				$resultRow[$key] = (new Content\CrmField($this->rowData, $this->parameters, $key))->prepare();
 			}
 		}
+
+		// MEMBERS carries the profiles hydrated page-wide (e-mail, position, department, CRM binding). It is an
+		// input of the cells above, not a part of the row: prepared rows leave the server as they are through
+		// the ajax and rest getGridRows, so the profiles must not outlive the rendering.
+		unset($resultRow['MEMBERS']);
 
 		return $resultRow;
 	}

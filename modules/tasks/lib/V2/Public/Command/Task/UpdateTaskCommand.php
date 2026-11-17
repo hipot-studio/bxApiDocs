@@ -8,6 +8,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
+use Bitrix\Tasks\Control\Exception\TaskStageValidationException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Result\Result;
@@ -47,6 +48,11 @@ class UpdateTaskCommand extends AbstractCommand
 		}
 		catch (Exception $e)
 		{
+			if ($e instanceof TaskStageValidationException)
+			{
+				return $result->addError(new Error($e->getMessage(), $e->getErrorCode()));
+			}
+
 			if (!$e instanceof TaskUpdateException)
 			{
 				Container::getInstance()->getLogger()->logError($e);

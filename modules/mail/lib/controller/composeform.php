@@ -7,6 +7,7 @@ namespace Bitrix\Mail\Controller;
 use Bitrix\Calendar;
 use Bitrix\Intranet;
 use Bitrix\Mail\Integration\AI\SubjectGenerator;
+use Bitrix\Mail\Service\Compose\ComposeFormDataProvider;
 use Bitrix\Mail\Service\Compose\SignatureListProvider;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\HttpMethod;
@@ -18,9 +19,10 @@ use Bitrix\Main\Loader;
  * Scope: api, available as mail.api.composeform.*
  *
  * Every action works in the context of the current user and takes no user identifier: there is no
- * way to reach somebody else's signatures, sharing link or AI quota through them.
+ * way to reach somebody else's senders, signatures, sharing link or AI quota through them.
  *
  * Contract:
+ *   getSenders             -> {senders: item[]}
  *   getSignatures          -> {bySender: object<string, item[]>, choices: object<string, string>}
  *   getCalendarSharingLink -> {isSharingFeatureEnabled: bool, sharingUrl?: string}
  *   generateSubject        -> {queueHash: string} | {subject: string}
@@ -30,6 +32,18 @@ use Bitrix\Main\Loader;
  */
 class ComposeForm extends Base
 {
+	/**
+	 * Senders of the current user, the very list the form starts with (DTO-01, key 'senders'): the same
+	 * order, shadowing and deduplication, a mailbox with its avatar. Called after a sender has been added
+	 * or edited from the sender selector of the form.
+	 *
+	 * @return array{senders: array[]}
+	 */
+	public function getSendersAction(): array
+	{
+		return ['senders' => $this->createComposeFormDataProvider()->getSenders()];
+	}
+
 	/**
 	 * Signatures of the current user, in the very shape the form starts with (DTO-01, key
 	 * 'signatures', minus the settings path the initial data carries). Called after the signature
@@ -144,6 +158,15 @@ class ComposeForm extends Base
 	}
 
 	/**
+	 * The provider owns the sender list of the form and is built per call; this factory is the seam the
+	 * tests replace.
+	 */
+	protected function createComposeFormDataProvider(): ComposeFormDataProvider
+	{
+		return new ComposeFormDataProvider();
+	}
+
+	/**
 	 * A missing calendar module and a user outside the intranet both mean the feature is off, not that
 	 * the request has failed.
 	 */
@@ -166,3 +189,4 @@ class ComposeForm extends Base
 		return !Loader::includeModule('intranet') || Intranet\Util::isIntranetUser();
 	}
 }
+

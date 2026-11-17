@@ -37,4 +37,32 @@ final class SessionManager extends BaseSessionManager
 			'order' => ['ID' => 'DESC'],
 		]);
 	}
+
+	/**
+	 * The registered user editing under the hash: the preferred one when that user has an active editing
+	 * session of the hash, otherwise the one with the latest such session; null when no registered user does.
+	 *
+	 * @throws ArgumentException
+	 */
+	public function findEditingParticipantId(int $preferredUserId = 0): ?int
+	{
+		$participantId = null;
+		foreach ($this->findAllSessions() as $session)
+		{
+			$userId = $session->getUserId();
+			if ($userId <= 0 || $session->getType() !== DocumentSession::TYPE_EDIT)
+			{
+				continue;
+			}
+
+			if ($userId === $preferredUserId)
+			{
+				return $userId;
+			}
+
+			$participantId ??= $userId;
+		}
+
+		return $participantId;
+	}
 }

@@ -76,6 +76,7 @@ class CMailClientComponent extends CBitrixComponent
 		{
 			$defaultUrlTemplates = array(
 				'home'             => '',
+				'invitation'       => 'invitation/',
 				'config'           => 'config/#act#',
 				'msg_new'          => 'message/new',
 				'blacklist'        => 'blacklist',
@@ -150,6 +151,13 @@ class CMailClientComponent extends CBitrixComponent
 
 		if (empty($componentPage) || !array_key_exists($componentPage, $defaultUrlTemplates))
 			$componentPage = 'home';
+
+		if ($componentPage === 'invitation')
+		{
+			$this->includeComponentTemplate('invitation');
+
+			return;
+		}
 
 		if ($componentPage === 'sentrequests' && !Feature::isPasswordlessConnectAvailable())
 		{

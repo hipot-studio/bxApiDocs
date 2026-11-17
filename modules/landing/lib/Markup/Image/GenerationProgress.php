@@ -22,6 +22,7 @@ class GenerationProgress
 	public const REASON_TIMEOUT = 'timeout';
 	public const REASON_UNAVAILABLE = 'unavailable';
 	public const REASON_LIMIT = 'limit';
+	public const REASON_PROVIDER_REFUSED = 'provider_refused';
 
 	public const DEFAULT_BATCH = 4;
 	public const DEFAULT_TIMEOUT = 900;
@@ -30,6 +31,9 @@ class GenerationProgress
 
 	/** @var array{sliderCode: ?string, text: ?string}|null */
 	private ?array $limit = null;
+
+	/** @var array{provider: string, streak: int}|null The raw name of the provider and the refusals in a row. */
+	private ?array $refusal = null;
 
 	/** @var array<string, array{status: string, requestId?: int, aiFileId?: int, reason?: string}> By token. */
 	private array $items = [];
@@ -58,6 +62,13 @@ class GenerationProgress
 		{
 			$progress->limit = $state['limit'];
 		}
+		if (is_array($state['refusal'] ?? null))
+		{
+			$progress->refusal = [
+				'provider' => (string)($state['refusal']['provider'] ?? ''),
+				'streak' => max(0, (int)($state['refusal']['streak'] ?? 0)),
+			];
+		}
 		foreach ((array)($state['items'] ?? []) as $token => $item)
 		{
 			if (!is_array($item) || (string)$token === '')
@@ -71,12 +82,13 @@ class GenerationProgress
 	}
 
 	/**
-	 * @return array{startedAt: int, limit?: array, items: array<string, array>}
+	 * @return array{startedAt: int, limit?: array, refusal?: array, items: array<string, array>}
 	 */
 	public function toState(): array
 	{
 		return ['startedAt' => $this->startedAt]
 			+ ($this->limit !== null ? ['limit' => $this->limit] : [])
+			+ ($this->refusal !== null ? ['refusal' => $this->refusal] : [])
 			+ ['items' => $this->items];
 	}
 
@@ -192,6 +204,57 @@ class GenerationProgress
 		{
 			$this->limit = $limit;
 		}
+	}
+
+	/**
+	 * Fails the pictures not sent yet; the sent ones wait for their answers.
+	 */
+	public function failPending(string $reason): void
+	{
+		foreach ($this->items as $token => $item)
+		{
+			if ($item['status'] === self::STATUS_PENDING)
+			{
+				$this->markFailed((string)$token, $reason);
+			}
+		}
+	}
+
+	/**
+	 * The provider refused a request.
+	 * @param string $provider The raw name, it may be empty.
+	 * @return int Refusals in a row.
+	 */
+	public function registerRefusal(string $provider): int
+	{
+		$this->refusal = ['provider' => $provider, 'streak' => $this->getRefusalStreak() + 1];
+
+		return $this->refusal['streak'];
+	}
+
+	/**
+	 * The provider accepted a request. The record of the refusal stays: this generation had one.
+	 */
+	public function resetRefusalStreak(): void
+	{
+		if ($this->refusal !== null)
+		{
+			$this->refusal['streak'] = 0;
+		}
+	}
+
+	public function getRefusalStreak(): int
+	{
+		return $this->refusal['streak'] ?? 0;
+	}
+
+	/**
+	 * The last refusal of this generation, null when there were none.
+	 * @return array{provider: string, streak: int}|null
+	 */
+	public function getRefusal(): ?array
+	{
+		return $this->refusal;
 	}
 
 	/**

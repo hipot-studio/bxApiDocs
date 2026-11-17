@@ -13,6 +13,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Closure;
@@ -35,8 +36,13 @@ final class DrainService
 	private const AGENT_NAME = self::class . '::drainAgent();';
 	private const CURSOR_OPTION = 'vibeoffice_drain_last_session_id';
 	private const PARTICIPANT_PROGRESS_OPTION = 'vibeoffice_drain_participant_progress';
-	private const SESSION_BATCH_SIZE = 10;
+	/** No active vibeoffice session has an ID at or below this bound; rows above it are not checked yet. */
+	private const FLOOR_OPTION = 'vibeoffice_drain_floor_session_id';
+	private const CONFIGURATION_FAILURES_OPTION = 'vibeoffice_drain_config_failures';
+	private const MAX_CONFIGURATION_FAILURES = 24;
+	private const FLOOR_PAGE_SIZE = 1000;
 	private const RUN_TIME_BUDGET_SECONDS = 30.0;
+	private const LOGGER_ID = 'disk.vibeoffice.drain';
 
 	private ProtocolClientInterface $protocolClient;
 	private Configuration $configuration;
@@ -106,6 +112,11 @@ final class DrainService
 	 * While the flag is on the probe is skipped entirely (early return BEFORE any table scan or
 	 * protocol client build).
 	 *
+	 * The probe for active sessions pages the shared table by the primary key from a stored lower bound
+	 * ({@see self::probeActiveSessions()}). An unconfigured platform integration fails every run with
+	 * {@see ConfigurationException}; after {@see self::MAX_CONFIGURATION_FAILURES} such runs in a row the
+	 * remaining sessions are abandoned ({@see self::abandonActiveSessions()}) so the agent can go away.
+	 *
 	 * @return string the agent re-registration call, or '' to self-unregister when idle.
 	 */
 	public static function drainAgent(): string
@@ -119,12 +130,28 @@ final class DrainService
 			return self::AGENT_NAME;
 		}
 
+		$hasActiveSessions = self::probeActiveSessions(microtime(true), static fn(): float => microtime(true));
+		// The run budget ended before the table end: the next run resumes from the stored floor.
+		if ($hasActiveSessions === null)
+		{
+			return self::AGENT_NAME;
+		}
+
 		// Flag already off and nothing left to drain: the portal is idle. Self-unregister before
 		// constructing a protocol client, which can fail on an unconfigured portal.
-		if (!self::hasActiveSessions())
+		if (!$hasActiveSessions)
 		{
-			Option::delete(Driver::INTERNAL_MODULE_ID, ['name' => self::CURSOR_OPTION]);
-			Option::delete(Driver::INTERNAL_MODULE_ID, ['name' => self::PARTICIPANT_PROGRESS_OPTION]);
+			foreach (
+				[
+					self::CURSOR_OPTION,
+					self::PARTICIPANT_PROGRESS_OPTION,
+					self::FLOOR_OPTION,
+					self::CONFIGURATION_FAILURES_OPTION,
+				] as $name
+			)
+			{
+				Option::delete(Driver::INTERNAL_MODULE_ID, ['name' => $name]);
+			}
 
 			return '';
 		}
@@ -132,32 +159,156 @@ final class DrainService
 		try
 		{
 			(new self(null, $configuration))->drain();
+			if (Option::get(Driver::INTERNAL_MODULE_ID, self::CONFIGURATION_FAILURES_OPTION, '') !== '')
+			{
+				Option::delete(Driver::INTERNAL_MODULE_ID, ['name' => self::CONFIGURATION_FAILURES_OPTION]);
+			}
 		}
 		catch (ConfigurationException)
 		{
 			// Platform integration is not configured, so the in-flight edits cannot be
-			// persisted from here; leave the sessions in place and retry on the next run.
+			// persisted from here; leave the sessions in place and retry on the next run
+			// until the bounded number of failures in a row is reached.
+			$failures = (int)Option::get(Driver::INTERNAL_MODULE_ID, self::CONFIGURATION_FAILURES_OPTION, 0) + 1;
+			Option::set(Driver::INTERNAL_MODULE_ID, self::CONFIGURATION_FAILURES_OPTION, (string)$failures);
+			if ($failures >= self::MAX_CONFIGURATION_FAILURES)
+			{
+				self::abandonActiveSessions();
+			}
 		}
 
 		return self::AGENT_NAME;
 	}
 
 	/**
-	 * Whether any vibeoffice session is still active.
-	 * to avoid building a protocol client (and re-running the drain) when there is nothing to do.
+	 * Closes the remaining active vibeoffice sessions without saving: the platform integration stayed
+	 * unconfigured for {@see self::MAX_CONFIGURATION_FAILURES} runs in a row, so their edits cannot be
+	 * persisted from this portal at all. Rows are kept; MaintenanceAgent cleans them up later.
+	 *
+	 * @return int the number of closed sessions.
 	 */
-	private static function hasActiveSessions(): bool
+	public static function abandonActiveSessions(
+		?TerminalSessionFinalizerInterface $finalizer = null,
+		?Closure $clock = null,
+	): int
 	{
-		$row = DocumentSessionTable::getList([
-			'select' => ['ID'],
-			'filter' => [
-				'=SERVICE' => DocumentService::Vibeoffice->value,
-				'=STATUS' => DocumentSessionTable::STATUS_ACTIVE,
-			],
-			'limit' => 1,
-		])->fetch();
+		$finalizer ??= new TerminalSessionFinalizer();
+		$clock ??= static fn(): float => microtime(true);
+		$startedAt = $clock();
+		$lastSessionId = self::getFloor();
+		$visitedHashes = [];
+		$closed = 0;
+		$failed = 0;
 
-		return $row !== false;
+		while ($clock() - $startedAt < self::RUN_TIME_BUDGET_SECONDS)
+		{
+			$sessions = self::getActiveSessions($lastSessionId, self::FLOOR_PAGE_SIZE, $lastScannedId);
+			if ($lastScannedId === null)
+			{
+				break;
+			}
+			$lastSessionId = $lastScannedId;
+
+			foreach ($sessions as $session)
+			{
+				$documentHash = (string)$session->getExternalHash();
+				if (isset($visitedHashes[$documentHash]))
+				{
+					continue;
+				}
+				if ($clock() - $startedAt >= self::RUN_TIME_BUDGET_SECONDS)
+				{
+					break 2;
+				}
+
+				$visitedHashes[$documentHash] = true;
+				$result = $finalizer->abandonDocument($documentHash);
+				if ($result->isSuccess())
+				{
+					$closed += count($result->getData()['sessionIds'] ?? []);
+				}
+				else
+				{
+					$failed++;
+				}
+			}
+		}
+
+		(new LoggerFactory())
+			->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false)
+			?->error(
+				'Vibeoffice drain: platform integration is not configured, {closed} active sessions closed'
+				. ' without saving, {failed} documents failed.',
+				[
+					'closed' => $closed,
+					'failed' => $failed,
+				],
+			)
+		;
+
+		return $closed;
+	}
+
+	/**
+	 * Whether any vibeoffice session is still active, to avoid building a protocol client (and
+	 * re-running the drain) when there is nothing to do.
+	 *
+	 * The shared table has no index by SERVICE/STATUS, so it is read by primary-key pages above the
+	 * stored floor and the service and status are checked here. The floor moves right below the first
+	 * active session (which stays in the next `ID > floor` probe) or to the last row looked at.
+	 *
+	 * @return bool|null null when the run budget ended before an answer; the next run resumes from the floor.
+	 */
+	private static function probeActiveSessions(float $startedAt, Closure $clock): ?bool
+	{
+		$storedFloor = self::getFloor();
+		$floor = $storedFloor;
+		$hasActiveSessions = null;
+
+		while ($hasActiveSessions === null && $clock() - $startedAt < self::RUN_TIME_BUDGET_SECONDS)
+		{
+			$rows = DocumentSessionTable::getList([
+				'select' => ['ID', 'SERVICE', 'STATUS'],
+				'filter' => ['>ID' => $floor],
+				'order' => ['ID' => 'ASC'],
+				'limit' => self::FLOOR_PAGE_SIZE,
+			]);
+			$count = 0;
+			while ($row = $rows->fetch())
+			{
+				$count++;
+				$id = (int)$row['ID'];
+				if (
+					$row['SERVICE'] === DocumentService::Vibeoffice->value
+					&& (int)$row['STATUS'] === DocumentSessionTable::STATUS_ACTIVE
+				)
+				{
+					$floor = $id - 1;
+					$hasActiveSessions = true;
+
+					break;
+				}
+
+				$floor = $id;
+			}
+
+			if ($hasActiveSessions === null && $count < self::FLOOR_PAGE_SIZE)
+			{
+				$hasActiveSessions = false;
+			}
+		}
+
+		if ($floor !== $storedFloor)
+		{
+			Option::set(Driver::INTERNAL_MODULE_ID, self::FLOOR_OPTION, (string)$floor);
+		}
+
+		return $hasActiveSessions;
+	}
+
+	private static function getFloor(): int
+	{
+		return max(0, (int)Option::get(Driver::INTERNAL_MODULE_ID, self::FLOOR_OPTION, 0));
 	}
 
 	/**
@@ -174,46 +325,65 @@ final class DrainService
 		$this->configuration->disableOnPortal();
 		$this->pruneParticipantProgress();
 
-		// Step 2: drain a bounded keyset page without starting new work past the run budget.
-		$lastSessionId = $this->getCursor();
-		$cursorAdvanced = false;
+		// Step 2: drain primary-key pages within the run budget without starting new work past it.
+		// No active session lies at or below the floor, so the cursor never goes under it.
+		$floor = self::getFloor();
+		$storedCursor = $this->getCursor();
+		$lastSessionId = max($storedCursor, $floor);
+		$rewound = false;
 		$cursorBlocked = false;
 		$drainedDocumentHashes = [];
-		$sessions = $this->getActiveSessions($lastSessionId, self::SESSION_BATCH_SIZE);
-		if ($sessions === [] && $lastSessionId > 0)
+		while (!$cursorBlocked && $this->hasTimeBudget($startedAt))
 		{
-			$lastSessionId = 0;
-			$this->saveCursor($lastSessionId);
-			$sessions = $this->getActiveSessions($lastSessionId, self::SESSION_BATCH_SIZE);
-		}
-
-		foreach ($sessions as $session)
-		{
-			if (!$this->hasTimeBudget($startedAt))
+			$sessions = self::getActiveSessions($lastSessionId, self::FLOOR_PAGE_SIZE, $lastScannedId);
+			if ($lastScannedId === null)
 			{
-				break;
-			}
+				// The table end: the rows between the floor and the cursor are looked at once more per run.
+				if ($rewound || $lastSessionId <= $floor)
+				{
+					break;
+				}
+				$lastSessionId = $floor;
+				$rewound = true;
 
-			$documentHash = $session->getExternalHash();
-			if (!isset($drainedDocumentHashes[$documentHash]))
-			{
-				$drainedDocumentHashes[$documentHash] = $this->drainSession($session, $result, $startedAt);
-			}
-
-			// The rest of the page is still attempted, but the cursor stops at the first session
-			// whose edits are not persisted yet: the next run has to retry it instead of meeting
-			// it again only after a full pass of the table.
-			$cursorBlocked = $cursorBlocked || !$drainedDocumentHashes[$documentHash];
-			if ($cursorBlocked)
-			{
 				continue;
 			}
 
-			$lastSessionId = (int)$session->getId();
-			$cursorAdvanced = true;
+			foreach ($sessions as $session)
+			{
+				if (!$this->hasTimeBudget($startedAt))
+				{
+					$cursorBlocked = true;
+
+					break;
+				}
+
+				$documentHash = $session->getExternalHash();
+				if (!isset($drainedDocumentHashes[$documentHash]))
+				{
+					$drainedDocumentHashes[$documentHash] = $this->drainSession($session, $result, $startedAt);
+				}
+
+				// The rest of the page is still attempted, but the cursor stops at the first session
+				// whose edits are not persisted yet and no further page is read: the next run has to
+				// retry it instead of meeting it again only after a full pass of the table.
+				$cursorBlocked = $cursorBlocked || !$drainedDocumentHashes[$documentHash];
+				if ($cursorBlocked)
+				{
+					continue;
+				}
+
+				$lastSessionId = (int)$session->getId();
+			}
+
+			// A page without active sessions after the filter is not the table end: go on past it.
+			if (!$cursorBlocked)
+			{
+				$lastSessionId = $lastScannedId;
+			}
 		}
 
-		if ($cursorAdvanced)
+		if ($lastSessionId !== $storedCursor)
 		{
 			$this->saveCursor($lastSessionId);
 		}
@@ -458,25 +628,36 @@ final class DrainService
 	}
 
 	/**
-	 * The next bounded keyset page of active vibeoffice sessions. SERVICE/STATUS are not indexed on
-	 * Only EXTERNAL_HASH and OBJECT_ID,USER_ID are indexed in b_disk_document_session, so this
-	 * is a table scan accepted for a rare, manual rollback path; the select is kept to the two
-	 * columns needed for local grouping. CONTEXT is read only for the group being drained.
+	 * The active vibeoffice sessions of the next primary-key page of b_disk_document_session.
 	 *
-	 * @return DocumentSession[]
+	 * SERVICE/STATUS are not indexed in the shared table, and a filter by them in SQL lets the planner sort a full
+	 * scan, so the page is the bare range `ID > last ORDER BY ID LIMIT N` and the service and status are checked
+	 * here. CONTEXT is read only for the group being drained.
+	 *
+	 * @param int|null $lastScannedId the ID of the last row of the page, null when no row lies above $lastSessionId.
+	 *
+	 * @return DocumentSession[] in the order of ID; an empty list does not mean the table end.
 	 */
-	private function getActiveSessions(int $lastSessionId, int $limit): array
+	private static function getActiveSessions(int $lastSessionId, int $limit, ?int &$lastScannedId = null): array
 	{
-		return DocumentSession::getModelList([
-			'select' => ['ID', 'EXTERNAL_HASH'],
-			'filter' => [
-				'=SERVICE' => DocumentService::Vibeoffice->value,
-				'=STATUS' => DocumentSession::STATUS_ACTIVE,
-				'>ID' => $lastSessionId,
-			],
+		$lastScannedId = null;
+		$sessions = [];
+		$rows = DocumentSession::getModelList([
+			'select' => ['ID', 'EXTERNAL_HASH', 'SERVICE', 'STATUS'],
+			'filter' => ['>ID' => $lastSessionId],
 			'order' => ['ID' => 'ASC'],
 			'limit' => $limit,
 		]);
+		foreach ($rows as $session)
+		{
+			$lastScannedId = (int)$session->getId();
+			if ($session->getService() === DocumentService::Vibeoffice && $session->isActive())
+			{
+				$sessions[] = $session;
+			}
+		}
+
+		return $sessions;
 	}
 
 	private function getCursor(): int

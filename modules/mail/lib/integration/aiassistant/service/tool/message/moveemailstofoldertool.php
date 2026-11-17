@@ -121,3 +121,4 @@ class MoveEmailsToFolderTool extends ToolContract
 		];
 	}
 }
+

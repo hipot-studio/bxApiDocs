@@ -77,6 +77,23 @@ use TasksTaskListComponent;
  */
 final class Task extends Base
 {
+	/**
+	 * Legacy params that switch off access control. They are meant for trusted in-process callers
+	 * ({@see CTaskItem::add()}, {@see CTaskItem::checkAccessIfRequired()},
+	 * {@see \Bitrix\Tasks\Provider\Query\TaskQuery::needAccessCheck()}) and must never be honored
+	 * when they come from a client request.
+	 */
+	private const ACCESS_CONTROL_PARAMS = ['CHECK_ACCESS', 'SKIP_ACCESS_CONTROL', 'MAKE_ACCESS_FILTER'];
+
+	/**
+	 * Legacy param naming the user the rights are checked for ({@see CTasks::GetByID()}). A client must
+	 * not pick that user: the value it sent is dropped in every case, and the request user is written in
+	 * its place whenever the request carries one. Without a request user the key is left out, and the
+	 * legacy default reads the very same global $USER ({@see \Bitrix\Tasks\Util\User::getId()}) — so the
+	 * subject never comes from the request body either way.
+	 */
+	private const PERMISSION_SUBJECT_PARAM = 'USER_ID';
+
 	private ?TaskDurationPresenter $taskDurationPresenter = null;
 
 	public function configureActions(): array
@@ -156,6 +173,8 @@ final class Task extends Base
 	 */
 	public function getAction(CTaskItem $task, array $select = [], array $params = []): array
 	{
+		$params = $this->sanitizeParams($params);
+
 		$requestedSelect = $select;
 		if (!empty($select))
 		{
@@ -303,6 +322,8 @@ final class Task extends Base
 	 */
 	public function addAction(array $fields, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		$fields = $this->filterFields($fields);
 		$fields = $this->formatDateFieldsForInput($fields);
 		$fields = $this->processFiles(0, $fields);
@@ -348,6 +369,8 @@ final class Task extends Base
 	 */
 	public function updateAction(CTaskItem $task, array $fields, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		$fields = $this->filterFields($fields);
 		$fields = $this->formatDateFieldsForInput($fields);
 		$fields = $this->processFiles($task->getId(), $fields);
@@ -407,6 +430,8 @@ final class Task extends Base
 	 */
 	public function deleteAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$params = $this->addAnalyticsDataToParams($params, Analytics\Event::TaskDelete);
@@ -437,6 +462,8 @@ final class Task extends Base
 		bool $__calculateTotalCount = true
 	): ?Engine\Response\DataType\Page
 	{
+		$params = $this->sanitizeParams($params);
+
 		if (!$this->checkOrderKeys($order))
 		{
 			$this->addError(new Error(Main\Localization\Loc::getMessage('TASKS_FAILED_WRONG_ORDER_FIELD')));
@@ -686,6 +713,8 @@ final class Task extends Base
 	 */
 	public function delegateAction(CTaskItem $task, $userId, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->delegate((int)$userId, $params);
@@ -710,6 +739,8 @@ final class Task extends Base
 	 */
 	public function startAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->startExecution($params);
@@ -730,6 +761,8 @@ final class Task extends Base
 	 */
 	public function takeAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->takeExecution($params);
@@ -790,6 +823,8 @@ final class Task extends Base
 	 */
 	public function pauseAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->pauseExecution($params);
@@ -836,6 +871,8 @@ final class Task extends Base
 	 */
 	public function completeAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$taskId = $task->getId();
@@ -875,6 +912,8 @@ final class Task extends Base
 	 */
 	public function deferAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->defer($params);
@@ -894,6 +933,8 @@ final class Task extends Base
 	 */
 	public function renewAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->renew($params);
@@ -914,6 +955,8 @@ final class Task extends Base
 	 */
 	public function approveAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->approve($params);
@@ -933,6 +976,8 @@ final class Task extends Base
 	 */
 	public function disapproveAction(CTaskItem $task, array $params = []): ?array
 	{
+		$params = $this->sanitizeParams($params);
+
 		try
 		{
 			$task->disapprove($params);
@@ -1144,6 +1189,11 @@ final class Task extends Base
 	 */
 	public function getGridRowsAction(array $taskIds = [], array $navigation = [], array $arParams = []): ?array
 	{
+		// USER_ID of the component params names the owner of the requested list, not the subject of a
+		// rights check: the list of another user is a regular view, and the component checks the rights
+		// of the caller anyway. So the switches go and the owner stays.
+		$arParams = $this->dropAccessControlParams($arParams);
+
 		try
 		{
 			/** @var TasksTaskListComponent $componentClassName */
@@ -1162,6 +1212,8 @@ final class Task extends Base
 	 */
 	public function getNearTasksAction(array $taskIds, array $navigation, array $arParams = []): ?array
 	{
+		$arParams = $this->dropAccessControlParams($arParams);
+
 		try
 		{
 			/** @var TasksTaskListComponent $componentClassName */
@@ -1196,6 +1248,54 @@ final class Task extends Base
 		}
 
 		return $fields;
+	}
+
+	/**
+	 * Normalizes client-supplied params before they reach the legacy layer: the access-control switches
+	 * go out through {@see self::dropAccessControlParams()}, and the user the rights are checked for is
+	 * taken from the request context instead of the request body — see
+	 * {@see self::PERMISSION_SUBJECT_PARAM} on what the subject is when the request carries no user.
+	 * Call it on the raw request params, before the controller adds its own service keys.
+	 */
+	private function sanitizeParams(array $params): array
+	{
+		$params = $this->dropAccessControlParams($params);
+
+		foreach (array_keys($params) as $key)
+		{
+			if (mb_strtoupper((string)$key) === self::PERMISSION_SUBJECT_PARAM)
+			{
+				unset($params[$key]);
+			}
+		}
+
+		// A zero names nobody yet still counts as a named subject for the legacy layer, so it is not
+		// written: with the key absent the legacy default reads the same empty $USER.
+		$currentUserId = (int)$this->getCurrentUser()?->getId();
+		if ($currentUserId > 0)
+		{
+			$params[self::PERMISSION_SUBJECT_PARAM] = $currentUserId;
+		}
+
+		return $params;
+	}
+
+	/**
+	 * The narrow half of {@see self::sanitizeParams()}: drops the switches and leaves the rest of the
+	 * params as the client sent them, the subject included. Use it where the params carry the owner of
+	 * the requested view rather than the subject of a rights check.
+	 */
+	private function dropAccessControlParams(array $params): array
+	{
+		foreach (array_keys($params) as $key)
+		{
+			if (in_array(mb_strtoupper((string)$key), self::ACCESS_CONTROL_PARAMS, true))
+			{
+				unset($params[$key]);
+			}
+		}
+
+		return $params;
 	}
 
 	private function addAnalyticsDataToParams(array $params, Analytics\Event $event): array

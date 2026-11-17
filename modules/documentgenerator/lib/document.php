@@ -5,12 +5,14 @@ namespace Bitrix\DocumentGenerator;
 use Bitrix\DocumentGenerator\Body\Docx;
 use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\Feature\DocumentTitlePattern as DocumentTitlePatternFeature;
+use Bitrix\DocumentGenerator\Feature\LazyCollections;
 use Bitrix\DocumentGenerator\Integration\TransformerManager;
 use Bitrix\DocumentGenerator\Model\DocumentTable;
 use Bitrix\DocumentGenerator\Model\ExternalLinkTable;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\DocumentGenerator\Storage\Disk;
 use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Engine\Response\DataType\ContentUri;
 use Bitrix\Main\Engine\UrlManager;
@@ -24,6 +26,7 @@ use Bitrix\Main\Numerator\Numerator;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class Document
@@ -66,6 +69,13 @@ class Document
 	protected $userId;
 	protected ?string $placeholderForFieldEmptyValue = null;
 	protected bool $isCheckFields = true;
+	private bool $isLazyCollections = false;
+	private array $multiplyingBlockNames = [];
+	private array $deferredCollections = [];
+	private array $lazyCollectionRanks = [];
+	private array $registeredLazyCollections = [];
+	private array $inventoriedProviderPaths = [];
+	private int $nextProviderFieldRank = 0;
 
 	/**
 	 * Document constructor.
@@ -295,6 +305,16 @@ class Document
 			return [];
 		}
 
+		return $this->withEagerCollections(fn() => $this->checkFieldsInternal($requiredOnly));
+	}
+
+	private function checkFieldsInternal(bool $requiredOnly): array
+	{
+		if (!$this->isCheckFields)
+		{
+			return [];
+		}
+
 		$emptyFields = [];
 
 		if($this->result->isSuccess())
@@ -306,7 +326,26 @@ class Document
 
 		if($this->result->isSuccess())
 		{
-			$values = $this->getValues($fieldNames);
+			$values = $this->isLazyCollections
+				? $this->getValuesToFixedPoint($fieldNames)
+				: $this->getValues($fieldNames);
+			if ($this->isLazyCollections)
+			{
+				$fieldsChanged = false;
+				foreach ($this->externalFields as $placeholder => $field)
+				{
+					if (($this->fields[$placeholder] ?? null) !== $field)
+					{
+						$fieldsChanged = true;
+					}
+					$this->fields[$placeholder] = $field;
+				}
+				if ($fieldsChanged)
+				{
+					$fieldNames = $this->getFieldNames();
+					$values = $this->getValuesToFixedPoint($fieldNames);
+				}
+			}
 			foreach($fieldNames as $placeholder)
 			{
 				$value = $values[$placeholder];
@@ -671,83 +710,95 @@ class Document
 		bool $groupsAsArrays = false
 	): array
 	{
+		$wasLazyCollections = $this->isLazyCollections;
+		$this->isLazyCollections = false;
 		DataProviderManager::getInstance()->setContext(Context::createFromDocument($this));
-		Loc::loadLanguageFile(__FILE__);
-		$this->resolveProviders();
-		$fields = [];
+		try
+		{
+			Loc::loadLanguageFile(__FILE__);
+			$this->resolveProviders();
+			$fields = [];
 
-		$default = !($this->ID > 0);
-		if(empty($fieldNames))
-		{
-			$fieldNames = $this->getFieldNames();
-		}
-		$externalValues = $this->getExternalValues(true);
-		foreach($fieldNames as $placeholder)
-		{
-			$this->getValue($placeholder);
-			$defaultValue = $value = $this->values[$placeholder];
-			if(!$default)
+			$default = !($this->ID > 0);
+			if(empty($fieldNames))
 			{
-				if(isset($externalValues[$placeholder]))
+				$fieldNames = $this->getFieldNames();
+			}
+			$externalValues = $this->getExternalValues(true);
+			foreach($fieldNames as $placeholder)
+			{
+				$this->getValue($placeholder);
+				$defaultValue = $value = $this->values[$placeholder];
+				if(!$default)
 				{
-					$value = $externalValues[$placeholder];
+					if(isset($externalValues[$placeholder]))
+					{
+						$value = $externalValues[$placeholder];
+					}
+				}
+				if($value instanceof ArrayDataProvider)
+				{
+					continue;
+				}
+				if(is_array($value))
+				{
+					$value = '';
+				}
+				$valueParts = explode('.', $value);
+				if(
+					isset($fields[$placeholder])
+					|| ($valueParts[0] && in_array($valueParts[0], $this->fieldNames, true))
+				)
+				{
+					continue;
+				}
+				$field = [
+					'VALUE' => '',
+				];
+				if(isset($this->fields[$placeholder]))
+				{
+					$field = $this->fields[$placeholder];
+					$field['CHAIN'] = $field['VALUE'];
+				}
+				$field['VALUE'] = $this->normalizeValue($value, $isConvertValuesToString);
+				$field['DEFAULT'] = $this->normalizeValue($defaultValue, $isConvertValuesToString);
+				$fields[$placeholder] = $field;
+			}
+			foreach($this->selectFields as $placeholder => $field)
+			{
+				if(is_array($field['VALUE']) && empty($field['VALUE']))
+				{
+					continue;
+				}
+				if(empty($field['GROUP']))
+				{
+					$field['GROUP'] = $this->getFieldGroup('this.SOURCE.'.$placeholder.'.popMe');
+				}
+				$fields[$placeholder] = $field;
+			}
+			foreach($fields as &$field)
+			{
+				if(is_array($field['GROUP']))
+				{
+					array_pop($field['GROUP']);
+				}
+				if(!$groupsAsArrays && is_array($field['GROUP']))
+				{
+					$field['GROUP'] = array_pop($field['GROUP']);
 				}
 			}
-			if($value instanceof ArrayDataProvider)
-			{
-				continue;
-			}
-			if(is_array($value))
-			{
-				$value = '';
-			}
-			$valueParts = explode('.', $value);
-			if(
-				isset($fields[$placeholder])
-				|| ($valueParts[0] && in_array($valueParts[0], $this->fieldNames, true))
-			)
-			{
-				continue;
-			}
-			$field = [
-				'VALUE' => '',
-			];
-			if(isset($this->fields[$placeholder]))
-			{
-				$field = $this->fields[$placeholder];
-				$field['CHAIN'] = $field['VALUE'];
-			}
-			$field['VALUE'] = $this->normalizeValue($value, $isConvertValuesToString);
-			$field['DEFAULT'] = $this->normalizeValue($defaultValue, $isConvertValuesToString);
-			$fields[$placeholder] = $field;
-		}
-		foreach($this->selectFields as $placeholder => $field)
-		{
-			if(is_array($field['VALUE']) && empty($field['VALUE']))
-			{
-				continue;
-			}
-			if(empty($field['GROUP']))
-			{
-				$field['GROUP'] = $this->getFieldGroup('this.SOURCE.'.$placeholder.'.popMe');
-			}
-			$fields[$placeholder] = $field;
-		}
-		foreach($fields as &$field)
-		{
-			if(is_array($field['GROUP']))
-			{
-				array_pop($field['GROUP']);
-			}
-			if(!$groupsAsArrays && is_array($field['GROUP']))
-			{
-				$field['GROUP'] = array_pop($field['GROUP']);
-			}
-		}
 
-		DataProviderManager::getInstance()->resetContext();
-
-		return $fields;
+			return $fields;
+		}
+		finally
+		{
+			DataProviderManager::getInstance()->resetContext();
+			$this->isLazyCollections = $wasLazyCollections;
+			if ($wasLazyCollections)
+			{
+				$this->reconcileDeferredCollections();
+			}
+		}
 	}
 
 	/**
@@ -867,33 +918,395 @@ class Document
 		DataProviderManager::getInstance()->setContext(Context::createFromDocument($this));
 		try
 		{
+			$this->clearLazyCollectionsState();
+			$this->isLazyCollections = $this->isLazyCollectionsApplicable();
 			$this->processInContext();
 		}
 		finally
 		{
+			$this->clearLazyCollectionsState();
 			DataProviderManager::getInstance()->resetContext();
 		}
 
 		return $this;
 	}
 
+	private function isLazyCollectionsApplicable(): bool
+	{
+		if (!Feature::isEnabled(LazyCollections::class))
+		{
+			return false;
+		}
+
+		if (!$this->body)
+		{
+			return false;
+		}
+
+		$names = $this->body->getMultiplyingBlockNames();
+		if ($names === null)
+		{
+			return false;
+		}
+
+		$this->multiplyingBlockNames = $names;
+
+		return true;
+	}
+
+	private function clearLazyCollectionsState(): void
+	{
+		$this->isLazyCollections = false;
+		$this->multiplyingBlockNames = [];
+		$this->deferredCollections = [];
+		$this->lazyCollectionRanks = [];
+		$this->registeredLazyCollections = [];
+		$this->inventoriedProviderPaths = [];
+		$this->nextProviderFieldRank = 0;
+	}
+
+	private function withEagerCollections(callable $callback): mixed
+	{
+		$wasLazyCollections = $this->isLazyCollections;
+		$this->isLazyCollections = false;
+		try
+		{
+			return $callback();
+		}
+		finally
+		{
+			$this->isLazyCollections = $wasLazyCollections;
+			if ($wasLazyCollections)
+			{
+				$this->reconcileDeferredCollections();
+			}
+		}
+	}
+
+	private function reconcileDeferredCollections(): void
+	{
+		foreach ($this->deferredCollections as $name => $branch)
+		{
+			$fullName = $branch['owner'] . '.' . $name;
+			if (array_key_exists('VALUE', $this->fields[$fullName] ?? []))
+			{
+				unset($this->deferredCollections[$name]);
+				$this->registeredLazyCollections[$name] = true;
+			}
+		}
+	}
+
+	private function getValuesToFixedPoint(
+		array &$fieldNames,
+		?array &$rawValueKinds = null,
+		array $extraNames = []
+	): array
+	{
+		while (true)
+		{
+			$fieldNames = array_values(array_unique(array_merge($this->getFieldNames(), $extraNames)));
+			$before = $this->getLazyCollectionsSignature();
+			$values = $this->getValues($fieldNames, $rawValueKinds);
+			$nextFieldNames = array_values(array_unique(array_merge($this->getFieldNames(), $extraNames)));
+			$after = $this->getLazyCollectionsSignature();
+			if ($fieldNames === $nextFieldNames && $before === $after)
+			{
+				$fieldNames = $nextFieldNames;
+				break;
+			}
+		}
+
+		return $this->reorderLazyValues($values);
+	}
+
+	private function getLazyCollectionsSignature(): array
+	{
+		return [
+			array_keys($this->fieldNames),
+			array_keys($this->deferredCollections),
+			$this->multiplyingBlockNames,
+		];
+	}
+
+	private function reorderLazyValues(array $values): array
+	{
+		$orderedNames = $this->orderLazyNames(array_keys($values));
+		$orderedValues = [];
+		foreach ($orderedNames as $name)
+		{
+			if (array_key_exists($name, $values))
+			{
+				$orderedValues[$name] = $values[$name];
+			}
+		}
+
+		return $orderedValues;
+	}
+
+	private function orderLazyNames(array $names): array
+	{
+		$ranked = [];
+		foreach ($names as $position => $name)
+		{
+			if (isset($this->lazyCollectionRanks[$name]))
+			{
+				$ranked[] = ['position' => $position, 'name' => $name, 'rank' => $this->lazyCollectionRanks[$name]];
+			}
+		}
+		if (count($ranked) < 2)
+		{
+			return $names;
+		}
+
+		$sorted = $ranked;
+		usort($sorted, static fn(array $left, array $right): int => $left['rank'] <=> $right['rank']);
+		foreach ($ranked as $index => $item)
+		{
+			$names[$item['position']] = $sorted[$index]['name'];
+		}
+
+		return $names;
+	}
+
+	private function refreshMultiplyingBlockNames(): void
+	{
+		if (!$this->isLazyCollections || !$this->body)
+		{
+			return;
+		}
+
+		$names = $this->body->getMultiplyingBlockNames();
+		if ($names === null)
+		{
+			return;
+		}
+
+		$this->multiplyingBlockNames = $names;
+		foreach ($names as $key => $value)
+		{
+			$name = is_string($key) ? $key : (string)$value;
+			$this->registerDeferredForRawName($name, 'marker');
+		}
+	}
+
+	private function registerDeferredForRawName(string $requestedName, string $point): void
+	{
+		foreach (array_keys($this->deferredCollections) as $name)
+		{
+			if ($requestedName === $name || str_starts_with($requestedName, $name . '.'))
+			{
+				$this->registerDeferredCollection($name, $point);
+			}
+		}
+	}
+
+	private function registerDeferredForFullChain(string $fullChain, mixed $value): void
+	{
+		foreach ($this->deferredCollections as $name => $branch)
+		{
+			$fullName = $branch['owner'] . '.' . $name;
+			if ($fullChain === $fullName || str_starts_with($fullChain, $fullName . '.'))
+			{
+				$this->registerResolvedCollection($name, $fullChain, $value);
+			}
+		}
+	}
+
+	private function registerDeferredCollection(string $name, string $point = 'raw_name'): void
+	{
+		if (!isset($this->deferredCollections[$name]))
+		{
+			return;
+		}
+
+		$branch = $this->deferredCollections[$name];
+		unset($this->deferredCollections[$name]);
+		$fullName = $branch['owner'] . '.' . $name;
+		$value = $this->getValue($fullName);
+		$this->fields[$fullName] = array_merge($this->fields[$fullName] ?? [], ['VALUE' => $value]);
+		$this->registerCollection($name, $branch['owner'], $value);
+		$this->registeredLazyCollections[$name] = true;
+		$this->logLazyCollectionRegistration($point, $point, $name, $branch['providerClass'] ?? '', 0);
+	}
+
+	private function registerResolvedCollection(string $name, string $fullChain, mixed $value): void
+	{
+		if (!isset($this->deferredCollections[$name]))
+		{
+			return;
+		}
+
+		$branch = $this->deferredCollections[$name];
+		if (str_contains($branch['owner'], '.')
+			&& $value instanceof DataProvider && !$this->hasAccessToDataProvider($value))
+		{
+			return;
+		}
+		$fullName = $branch['owner'] . '.' . $name;
+		if ($fullChain !== $fullName && !str_starts_with($fullChain, $fullName . '.'))
+		{
+			return;
+		}
+
+		unset($this->deferredCollections[$name]);
+		$this->fields[$fullName] = array_merge($this->fields[$fullName] ?? [], ['VALUE' => $value]);
+		$this->registerCollection($name, $branch['owner'], $value);
+		$this->registeredLazyCollections[$name] = true;
+		$this->logLazyCollectionRegistration('provider_chain', 'full_chain', $name, $branch['providerClass'] ?? '', 0);
+	}
+
+	private function registerCollection(string $name, string $provider, mixed $value): void
+	{
+		if (!$value instanceof ArrayDataProvider)
+		{
+			return;
+		}
+
+		$this->fields[$name] = ['VALUE' => static::THIS_PLACEHOLDER . '.' . $provider . '.' . $name];
+		$this->fields[$provider . '.' . $name] = array_merge(
+			$this->fields[$provider . '.' . $name] ?? [],
+			['VALUE' => $value]
+		);
+		$this->fieldNames[$name] = $name;
+	}
+
+	private function isProviderBranch(array $providerFields, array $providerField): bool
+	{
+		if (!empty($providerField['PROVIDER']))
+		{
+			return true;
+		}
+
+		$value = $providerField['VALUE'] ?? null;
+		return is_string($value) && !empty($providerFields[$value]['PROVIDER']);
+	}
+
+	private function deferProviderBranches(DataProvider $dataProvider, string $owner): void
+	{
+		if (isset($this->inventoriedProviderPaths[$owner]))
+		{
+			return;
+		}
+		$this->inventoriedProviderPaths[$owner] = true;
+		$this->deferProviderFields($dataProvider->getFields(), $owner, $dataProvider);
+	}
+
+	private function deferProviderFields(array $providerFields, string $owner, DataProvider $dataProvider): void
+	{
+		foreach ($providerFields as $name => $field)
+		{
+			if (!$this->isProviderBranch($providerFields, $field))
+			{
+				continue;
+			}
+
+			$rank = $this->nextProviderFieldRank++;
+			if (isset($this->deferredCollections[$name]) || isset($this->registeredLazyCollections[$name]))
+			{
+				$this->registerDeferredCollection($name, 'collision');
+				$value = $dataProvider->getValue($name);
+				if ($value instanceof DataProvider && !$this->hasAccessToDataProvider($value))
+				{
+					continue;
+				}
+				$this->fields[$owner . '.' . $name] = array_merge(
+					$this->fields[$owner . '.' . $name] ?? [],
+					['VALUE' => $value]
+				);
+				// Keep the existing short alias owner; the nested collection uses its full path.
+				$this->registeredLazyCollections[$name] = true;
+				continue;
+			}
+
+			$this->fields[$owner . '.' . $name] ??= [];
+			$this->deferredCollections[$name] = [
+				'owner' => $owner,
+				'providerClass' => $field['PROVIDER'] ?? '',
+				'rank' => $rank,
+			];
+			$this->lazyCollectionRanks[$name] ??= $rank;
+		}
+	}
+
+	private function getLazyCollectionsLogger(): ?LoggerInterface
+	{
+		$loggerId = 'documentgenerator.LazyCollections';
+		$loggers = (array)Configuration::getValue('loggers');
+		if (!isset($loggers[$loggerId]['className']))
+		{
+			return null;
+		}
+
+		return (new LoggerFactory(false))->createById($loggerId, [], false, false);
+	}
+
+	private function logLazyCollectionRegistration(
+		string $point,
+		string $reason,
+		string $branch,
+		string $providerClass,
+		int $lateNameCount = 0
+	): void
+	{
+		$logger = $this->getLazyCollectionsLogger();
+		if (!$logger)
+		{
+			return;
+		}
+
+		$logger->debug('lazy_collection_registered {point} {reason} {rawBranch} {providerClass} {lateNameCount}', [
+			'point' => $point,
+			'reason' => $reason,
+			'rawBranch' => $branch,
+			'providerClass' => $providerClass,
+			'lateNameCount' => $lateNameCount,
+		]);
+	}
+
 	private function processInContext(): void
 	{
 		$titlePattern = $this->getApplicableTitlePattern();
-		$requiredFields = $this->checkFields();
+		$requiredFields = $this->checkFieldsInternal(true);
 		foreach($requiredFields as $placeholder => $field)
 		{
 			$this->result->addError(new Error('No value for required placeholder '.$placeholder));
 		}
 		if($this->result->isSuccess())
 		{
+			if ($this->isLazyCollections && !$this->isCheckFields)
+			{
+				$this->resolveProviders();
+			}
+
 			$rawValueKinds = [];
 			$fieldNames = $this->getFieldNames();
+			$checkedFieldNames = $fieldNames;
+			$systemFieldNames = [];
 			if ($titlePattern)
 			{
-				$fieldNames = array_merge($fieldNames, $titlePattern->getSystemFieldNames());
+				$systemFieldNames = $titlePattern->getSystemFieldNames();
 			}
-			$values = $this->getValues($fieldNames, $rawValueKinds);
+			$values = $this->isLazyCollections
+				? $this->getValuesToFixedPoint($fieldNames, $rawValueKinds, $systemFieldNames)
+				: $this->getValues(array_merge($fieldNames, $systemFieldNames), $rawValueKinds);
+			if ($this->isLazyCollections && $this->isCheckFields)
+			{
+				foreach (array_diff($fieldNames, $checkedFieldNames) as $placeholder)
+				{
+					if (
+						isset($this->fields[$placeholder]['REQUIRED'])
+						&& $this->fields[$placeholder]['REQUIRED'] === 'Y'
+						&& empty($values[$placeholder])
+					)
+					{
+						$this->result->addError(new Error('No value for required placeholder ' . $placeholder));
+					}
+				}
+			}
+			if (!$this->result->isSuccess())
+			{
+				return;
+			}
 			if ($titlePattern)
 			{
 				$values = $this->applyTitlePattern($titlePattern, $values, $rawValueKinds);
@@ -1111,12 +1524,37 @@ class Document
 				$this->fieldNames[$name] = $name;
 			}
 			$providerFields = $dataProvider->getFields();
+			if ($this->isLazyCollections)
+			{
+				$this->inventoriedProviderPaths[$name] = true;
+			}
 			foreach($providerFields as $placeholder => $providerField)
 			{
 				$fullName = $name.'.'.$placeholder;
 				if(!isset($this->fields[$fullName]))
 				{
 					$this->fields[$fullName] = [];
+				}
+				$rank = $this->nextProviderFieldRank++;
+				if ($this->isLazyCollections && $this->isProviderBranch($providerFields, $providerField))
+				{
+					$keyWasClaimed = isset($this->deferredCollections[$placeholder])
+						|| isset($this->registeredLazyCollections[$placeholder])
+						|| isset($this->fieldNames[$placeholder]);
+					if (!$keyWasClaimed)
+					{
+						$providerClass = $providerField['PROVIDER']
+							?? ($providerFields[$providerField['VALUE'] ?? '']['PROVIDER'] ?? '');
+						$this->deferredCollections[$placeholder] = [
+							'owner' => $name,
+							'providerClass' => $providerClass,
+							'rank' => $rank,
+						];
+						$this->lazyCollectionRanks[$placeholder] ??= $rank;
+						continue;
+					}
+
+					$this->registerDeferredCollection($placeholder, 'collision');
 				}
 
 				$providerValue = $dataProvider->getValue($placeholder);
@@ -1130,6 +1568,11 @@ class Document
 				}
 
 				$this->fields[$fullName] = array_merge($this->fields[$fullName], ['VALUE' => $providerValue]);
+				if ($this->isLazyCollections && $this->isProviderBranch($providerFields, $providerField))
+				{
+					$this->registeredLazyCollections[$placeholder] = true;
+					$this->lazyCollectionRanks[$placeholder] ??= $rank;
+				}
 			}
 			if(isset($this->externalValues[$name]))
 			{
@@ -1173,6 +1616,16 @@ class Document
 	 */
 	public function getValue($name)
 	{
+		if (
+			$this->isLazyCollections
+			&& is_string($name)
+			&& !isset($this->values[$name])
+			&& !isset($this->fields[$name]['VALUE'])
+		)
+		{
+			$this->registerDeferredForRawName($name, 'raw_name');
+		}
+
 		if(isset($this->values[$name]))
 		{
 			$value = $this->values[$name];
@@ -1271,6 +1724,7 @@ class Document
 	protected function getProviderValue($name, DataProvider $dataProvider = null, $fullChain = '')
 	{
 		$value = '';
+		$originalChain = $fullChain !== '' ? $fullChain : (is_string($name) ? $name : '');
 
 		// if not a string - there is no provider chain.
 		if(!is_string($name))
@@ -1290,6 +1744,15 @@ class Document
 			else
 			{
 				$value = $dataProvider->getValue($providerName);
+			}
+			$currentChain = '';
+			if ($this->isLazyCollections && $originalChain !== '')
+			{
+				$chainParts = explode('.', $originalChain);
+				$remainingParts = explode('.', $name);
+				$prefixLength = count($chainParts) - count($remainingParts) + 1;
+				$currentChain = implode('.', array_slice($chainParts, 0, max(1, $prefixLength)));
+				$this->registerDeferredForFullChain($currentChain, $value);
 			}
 			// here we handle multiple values for inner providers
 			if(is_array($value) && $dataProvider)
@@ -1323,6 +1786,11 @@ class Document
 				// we need to return $name as it is.
 				// In Body there will be a cycle with this $name as placeholder.
 				$providerFields = $value->getFields();
+				if ($this->isLazyCollections && $currentChain !== '')
+				{
+					$this->inventoriedProviderPaths[$currentChain] = true;
+					$this->deferProviderFields($providerFields, $currentChain, $value);
+				}
 				if(
 					$valueName !== ArrayDataProvider::NUMBER_PLACEHOLDER
 					&& !in_array($valueName, $providerFields, true)
@@ -1349,7 +1817,11 @@ class Document
 				}
 				else
 				{
-					$value = $this->getProviderValue($valueName, $value, $name);
+					if ($this->isLazyCollections && $currentChain !== '')
+					{
+						$this->deferProviderBranches($value, $currentChain);
+					}
+					$value = $this->getProviderValue($valueName, $value, $originalChain);
 				}
 			}
 		}
@@ -1357,6 +1829,19 @@ class Document
 		elseif($dataProvider)
 		{
 			$value = $dataProvider->getValue($name);
+			if ($this->isLazyCollections && $originalChain !== '')
+			{
+				if (substr_count($originalChain, '.') > 1
+					&& $value instanceof DataProvider && !$this->hasAccessToDataProvider($value))
+				{
+					return null;
+				}
+				$this->registerDeferredForFullChain($originalChain, $value);
+				if ($value instanceof DataProvider)
+				{
+					$this->deferProviderBranches($value, $originalChain);
+				}
+			}
 		}
 
 		return $value;
@@ -1681,6 +2166,7 @@ class Document
 	 */
 	protected function getFieldNames(): array
 	{
+		$this->refreshMultiplyingBlockNames();
 		$fieldNames = [];
 		foreach($this->getDefaultFields() as $placeholder => $field)
 		{
@@ -1703,7 +2189,7 @@ class Document
 			$fieldNames = array_merge($this->body->getFieldNames(), $this->fieldNames, $fieldNames);
 		}
 
-		return $fieldNames;
+		return $this->isLazyCollections ? $this->orderLazyNames($fieldNames) : $fieldNames;
 	}
 
 	/**

@@ -112,3 +112,4 @@ class RemoveEmailClassificationTool extends ToolContract
 		return array_map(static fn (ClassificationLabel $case): string => $case->value, ClassificationLabel::cases());
 	}
 }
+

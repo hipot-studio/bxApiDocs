@@ -23,6 +23,7 @@ enum DocumentHeaderElement: string
 	case Access = 'access';
 	case CopyLink = 'copyLink';
 	case Download = 'download';
+	case BitrixGpt = 'bitrixGpt';
 	case Presentation = 'presentation';
 
 	/**

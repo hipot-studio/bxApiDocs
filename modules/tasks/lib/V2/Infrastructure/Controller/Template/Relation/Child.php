@@ -92,7 +92,7 @@ class Child extends BaseController
 	): array
 	{
 		return [
-			'templates' => $subTemplateProvider->getTemplatesWithSubTemplateIds($templateIds),
+			'templates' => $subTemplateProvider->getTemplatesWithSubTemplateIds($templateIds, $this->userId),
 		];
 	}
 
@@ -121,7 +121,7 @@ class Child extends BaseController
 		foreach ($templates as $subTemplate)
 		{
 			$subTemplateId = (int)$subTemplate->id;
-			if (!$permissions[$subTemplateId]['edit'])
+			if ($subTemplateId <= 0 || !($permissions[$subTemplateId]['edit'] ?? false))
 			{
 				$response[$subTemplateId] = false;
 				$this->addError($this->buildForbiddenError());
@@ -129,7 +129,9 @@ class Child extends BaseController
 				continue;
 			}
 
-			$canOverride = !$noOverride || (int)$parentMap[$subTemplateId] === 0;
+			$canOverride = !$noOverride
+				|| (array_key_exists($subTemplateId, $parentMap) && (int)$parentMap[$subTemplateId] === 0)
+			;
 			if (!$canOverride)
 			{
 				$response[$subTemplateId] = false;

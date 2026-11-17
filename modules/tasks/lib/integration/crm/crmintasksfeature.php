@@ -7,8 +7,12 @@ namespace Bitrix\Tasks\Integration\CRM;
 use Bitrix\Main\Config\Option;
 
 /**
- * Feature toggle for the "CRM in tasks" list additions: the CRM_ITEM filter field, inline and mass CRM
- * binding and the filter onboarding hint. Disabled by default; enable per portal with
+ * Feature toggle for the task list additions shipped together with "CRM in tasks":
+ * - CRM scenarios: the CRM_ITEM filter field, inline and mass CRM binding, the filter onboarding hint;
+ * - filter field modes: the "includes / does not include / not set" conditions and the tag AND/OR union;
+ * - the "Accomplice" and "Auditor" grid columns.
+ *
+ * Disabled by default; enable per portal with
  * \Bitrix\Main\Config\Option::set('tasks', CrmInTasksFeature::OPTION_NAME, 'Y').
  */
 final class CrmInTasksFeature

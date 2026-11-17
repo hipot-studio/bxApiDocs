@@ -12,6 +12,7 @@ use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
+use Bitrix\Intranet\Internal\Service\Otp\DeviceReconnect;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\OtpScenarioResolver;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
@@ -92,6 +93,12 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 			$this->arResult["OTP"]["CAN_EDIT_OTP"] = $otpPermission->canEdit() ? 'Y' : 'N';
 			$this->arResult["OTP"]["CAN_DEACTIVATE_OTP"] = $otpPermission->canDeactivate() ? 'Y' : 'N';
 			$this->arResult["OTP"]["2FA_SECTION_SHOW"] = 'Y';
+			$this->arResult["OTP"]["IS_DEVICE_LOST"] = $otpPermission->canView()
+				&& $otpSettings->isEnabled()
+				&& $personalOtp->hasConnectedPushDevice()
+				&& (new DeviceReconnect())->isDeviceLost((int)$user->getId())
+				? 'Y' : 'N'
+			;
 			$this->arResult["OTP"]["IS_INITIALIZED"] = $personalOtp->isInitialized() ? 'Y' : 'N';
 
 			if (
@@ -112,6 +119,10 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 				$this->arResult["OTP"]["IS_PUSH_OTP_AVAILABLE"] = 'N';
 			}
 
+			$this->arResult['OTP']['HAS_WARNING'] =
+				($this->arResult['OTP']['IS_PHONE_CONFIRMATION_REQUIRED'] ?? 'N') === 'Y'
+				|| $this->arResult['OTP']['IS_DEVICE_LOST'] === 'Y'
+			;
 			$this->arResult['OTP_PARAMS'] = $this->getOtpParameters();
 		}
 

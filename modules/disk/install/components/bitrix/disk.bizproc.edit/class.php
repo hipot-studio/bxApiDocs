@@ -83,6 +83,7 @@ class CDiskBizprocEditComponent extends BaseComponent implements SidePanelWrappa
 				$this->arResult['TEMPLATE_NAME'] = $template['NAME'];
 				$this->arResult['TEMPLATE_DESC'] = $template['DESCRIPTION'];
 				$this->arResult['TEMPLATE_AUTOSTART'] = $template['AUTO_EXECUTE'];
+				$this->arResult['TEMPLATE_IS_SYSTEM'] = CBPHelper::getBool($template['IS_SYSTEM']) ? 'Y' : 'N';
 				$this->arResult['TEMPLATE'] = $template['TEMPLATE'];
 				$this->arResult['PARAMETERS'] = $template['PARAMETERS'];
 				$this->arResult['VARIABLES'] = $template['VARIABLES'];
@@ -121,6 +122,7 @@ class CDiskBizprocEditComponent extends BaseComponent implements SidePanelWrappa
 			$this->arResult['TEMPLATE_NAME'] = Loc::getMessage("BIZPROC_WFEDIT_DEFAULT_TITLE");
 			$this->arResult['TEMPLATE_DESC'] = '';
 			$this->arResult['TEMPLATE_AUTOSTART'] = 1;
+			$this->arResult['TEMPLATE_IS_SYSTEM'] = 'N';
 			$this->arResult['PARAMETERS'] = array();
 			$this->arResult['VARIABLES'] = array();
 			$this->arResult['CONSTANTS'] = array();
@@ -273,6 +275,7 @@ class CDiskBizprocEditComponent extends BaseComponent implements SidePanelWrappa
 			'AUTO_EXECUTE' => $_POST['workflowTemplateAutostart'],
 			'NAME' => $_POST['workflowTemplateName'],
 			'DESCRIPTION' => $_POST['workflowTemplateDescription'],
+			'IS_SYSTEM' => ($_POST['workflowTemplateIsSystem'] ?? 'N') === 'Y' ? 'Y' : 'N',
 			'TEMPLATE' => $_POST['arWorkflowTemplate'],
 			'PARAMETERS' => $_POST['arWorkflowParameters'],
 			'VARIABLES' => $_POST['arWorkflowVariables'],

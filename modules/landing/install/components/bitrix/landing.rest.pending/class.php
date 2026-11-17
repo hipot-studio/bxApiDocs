@@ -9,6 +9,7 @@ use \Bitrix\Landing\Block;
 use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Site;
 use \Bitrix\Landing\Rights;
+use \Bitrix\Landing\Transfer\AppConfiguration;
 use \Bitrix\Landing\Transfer\Import;
 use \Bitrix\Landing\Internals\BlockTable;
 use \Bitrix\Main\ModuleManager;
@@ -189,6 +190,31 @@ class LandingRestPendingComponent extends \CBitrixComponent
 	}
 
 	/**
+	 * Tells whether the block is a stub holding this very call. The params come from the content of
+	 * a page and may be written by anyone who edits that page, while the rewrite runs for any visitor,
+	 * so the rights of the visitor say nothing here: the stored block itself has to confirm the call.
+	 * @param int $blockId Block id.
+	 * @param string $data Encoded param of the call.
+	 * @return bool
+	 */
+	protected function isPendingBlockOfCall(int $blockId, string $data): bool
+	{
+		$row = BlockTable::getList([
+			'select' => [
+				'CODE', 'CONTENT',
+			],
+			'filter' => [
+				'ID' => $blockId,
+			],
+		])->fetch();
+
+		return $row
+			&& $row['CODE'] === AppConfiguration::SYSTEM_BLOCK_REST_PENDING
+			&& str_contains((string)$row['CONTENT'], $data)
+		;
+	}
+
+	/**
 	 * Base executable method.
 	 * @return void
 	 */
@@ -218,7 +244,10 @@ class LandingRestPendingComponent extends \CBitrixComponent
 			$replace = [];
 			$blockId = intval($this->arParams['~BLOCK_ID']);
 			$data = unserialize(base64_decode($this->arParams['~DATA']), ['allowed_classes' => false]);
-			if (isset($this->arParams['~REPLACE']))
+			if (
+				isset($this->arParams['~REPLACE'])
+				&& $this->isPendingBlockOfCall($blockId, (string)$this->arParams['~REPLACE'])
+			)
 			{
 				$replace = unserialize(
 					base64_decode($this->arParams['~REPLACE']),
@@ -245,7 +274,7 @@ class LandingRestPendingComponent extends \CBitrixComponent
 					$data['repo_block']['app_code'],
 					$data['repo_block']['xml_id'],
 				);
-				if ($repoRow)
+				if ($repoRow && $this->isPendingBlockOfCall($blockId, (string)$this->arParams['~DATA']))
 				{
 					$data['replace'] = $replace;
 					$this->updateBlock($blockId, $repoRow['ID'], $data);

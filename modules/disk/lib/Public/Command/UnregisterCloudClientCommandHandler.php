@@ -19,7 +19,7 @@ class UnregisterCloudClientCommandHandler
 	public function __invoke(UnregisterCloudClientCommand $command): array
 	{
 		$configuration = new Configuration();
-		$cloudRegistrationData = $configuration->getCloudRegistrationData();
+		$cloudRegistrationData = $configuration->getStoredCloudRegistrationData();
 
 		if (!is_array($cloudRegistrationData))
 		{

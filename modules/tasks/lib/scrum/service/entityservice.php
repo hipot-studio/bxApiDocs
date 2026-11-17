@@ -199,6 +199,35 @@ class EntityService implements Errorable
 	}
 
 	/**
+	 * @return array{GROUP_ID: int, ENTITY_TYPE: string}|null
+	 */
+	public function getEntityGroupAndType(int $entityId): ?array
+	{
+		if ($entityId <= 0)
+		{
+			return null;
+		}
+
+		$row = EntityTable::getList([
+			'select' => ['GROUP_ID', 'ENTITY_TYPE'],
+			'filter' => [
+				'=ID' => $entityId,
+			],
+			'limit' => 1,
+		])->fetch();
+
+		if (!is_array($row))
+		{
+			return null;
+		}
+
+		return [
+			'GROUP_ID' => (int)$row['GROUP_ID'],
+			'ENTITY_TYPE' => (string)$row['ENTITY_TYPE'],
+		];
+	}
+
+	/**
 	 * Removes entity by id.
 	 *
 	 * @param int $id

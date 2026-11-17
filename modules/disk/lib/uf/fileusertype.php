@@ -90,11 +90,24 @@ final class FileUserType
 
 	public static function getEditFormHTML($userField, $htmlControl)
 	{
+		return self::renderAttachedFilesForEditForm($userField['VALUE'], (string)($htmlControl['NAME'] ?? ''));
+	}
+
+	/**
+	 * Uploading a file is not supported in the admin form, so the field shows the attached files only.
+	 * Their ids are kept in hidden inputs so that saving the form does not detach them.
+	 */
+	public static function getEditFormHTMLMulty($userField, $htmlControl)
+	{
+		return self::renderAttachedFilesForEditForm($userField['VALUE'], (string)($htmlControl['NAME'] ?? ''));
+	}
+
+	private static function renderAttachedFilesForEditForm($values, string $inputName): string
+	{
 		$html = '';
-		$values = $userField['VALUE'];
 		if (!is_array($values))
 		{
-			$values = [$userField['VALUE']];
+			$values = [$values];
 		}
 
 		$urlManager = Driver::getInstance()->getUrlManager();
@@ -109,8 +122,8 @@ final class FileUserType
 			if ($type === self::TYPE_ALREADY_ATTACHED)
 			{
 				$attachedObject = AttachedObject::loadById($realValue, ['OBJECT']);
-				$file = $attachedObject->getObject();
-				if (!$attachedObject || !$file)
+				$file = $attachedObject?->getObject();
+				if (!$file)
 				{
 					continue;
 				}
@@ -121,6 +134,12 @@ final class FileUserType
 				$html .= '<br/><a href="' .
 					$urlManager->getUrlUfController('download', ['attachedId' => $realValue])
 				. '">' . $name . ' (' . $size .  ')</a>';
+
+				if ($inputName !== '')
+				{
+					$html .= '<input type="hidden" name="' . htmlspecialcharsbx($inputName) . '" value="'
+						. $realValue . '">';
+				}
 			}
 		}
 
@@ -134,7 +153,38 @@ final class FileUserType
 
 	public static function getAdminListViewHTML($userField, $htmlControl)
 	{
-		return "&nbsp;";
+		$values = $htmlControl['VALUE'] ?? $userField['VALUE'] ?? null;
+		if (!is_array($values))
+		{
+			$values = [$values];
+		}
+
+		$links = [];
+		$urlManager = Driver::getInstance()->getUrlManager();
+		foreach ($values as $value)
+		{
+			if (!$value)
+			{
+				continue;
+			}
+
+			[$type, $realValue] = self::detectType($value);
+			if ($type !== self::TYPE_ALREADY_ATTACHED || $realValue <= 0)
+			{
+				continue;
+			}
+
+			$file = AttachedObject::loadById($realValue, ['OBJECT'])?->getObject();
+			if (!$file)
+			{
+				continue;
+			}
+
+			$links[] = '<a href="' . $urlManager->getUrlUfController('download', ['attachedId' => $realValue]) . '">'
+				. htmlspecialcharsbx($file->getName()) . '</a>';
+		}
+
+		return $links ? implode('<br/>', $links) : '&nbsp;';
 	}
 
 	public static function getAdminListEditHTML($userField, $htmlControl)

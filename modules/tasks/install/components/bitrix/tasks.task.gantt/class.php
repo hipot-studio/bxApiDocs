@@ -260,14 +260,16 @@ class TasksTaskGanttComponent extends TasksTaskListComponent
 			$this->arResult['LIST'][$key] = $this->prepareRow($task);
 		}
 
-		$res = ProjectDependenceTable::getListByLegacyTaskFilter($this->listParameters['filter']);
-		while ($item = $res->fetch())
+		// keep the guard: whereIn() with an empty array adds no condition and would select all direct links
+		if (empty($taskIds))
 		{
-			$taskId = (int)$item['TASK_ID'];
-			if (in_array($taskId, $taskIds, true))
-			{
-				$this->arResult['TASKS_LINKS'][$taskId][] = $item;
-			}
+			return;
+		}
+
+		// TASKS_LINKS rows are public component output: keep every field the legacy selection returned
+		foreach (ProjectDependenceTable::getDirectLinksByTaskIds($taskIds) as $link)
+		{
+			$this->arResult['TASKS_LINKS'][(int)$link['TASK_ID']][] = $link;
 		}
 	}
 

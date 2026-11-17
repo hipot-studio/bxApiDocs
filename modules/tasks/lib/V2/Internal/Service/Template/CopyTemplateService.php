@@ -13,6 +13,8 @@ use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\Task\CopyFileService;
 use Bitrix\Tasks\V2\Internal\Service\AddTemplateService;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Copy\Config\CopyConfig;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentException;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentPolicy;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\TemplateParams;
 use Bitrix\Tasks\V2\Public\Provider\Template\TemplateProvider;
 
@@ -31,14 +33,31 @@ class CopyTemplateService
 	/**
 	 * @throws TemplateAddException
 	 * @throws TemplateNotFoundException
+	 * @throws AuthorAssignmentException
 	 */
 	public function copy(Entity\Template $templateData, CopyConfig $config): ?Entity\Template
 	{
 		$templateData = $this->clearId($templateData);
+		if ($templateData->type === Entity\Template\Type::NewUsers)
+		{
+			$subject = $config->authorSubject;
+			$authorCheck = (new AuthorAssignmentPolicy())->check($subject, $subject?->getUserId() ?? 0);
+			if (!$authorCheck->isSuccess())
+			{
+				$error = $authorCheck->getErrors()[0];
+
+				throw AuthorAssignmentException::fromError($error);
+			}
+
+			$templateData = $templateData->cloneWith([
+				'creator' => new Entity\User(id: $subject->getUserId()),
+			]);
+		}
+
 		if (!$this->templateAccessService->canSave($config->userId, $templateData))
 		{
 			throw new TemplateAddException(
-				Loc::getMessage('TASKS_COPY_TEMPLATE_SERVICE_ACCESS_DENIED')
+				Loc::getMessage('TASKS_COPY_TEMPLATE_SERVICE_ACCESS_DENIED'),
 			);
 		}
 
@@ -46,7 +65,10 @@ class CopyTemplateService
 
 		$template = $this->addTemplateService->add(
 			template: $preparedTemplateData,
-			config: new AddConfig(userId: $config->userId),
+			config: new AddConfig(
+				userId: $config->userId,
+				authorSubject: $config->authorSubject,
+			),
 		);
 
 		$template = $this->templateProvider->get(new TemplateParams(
@@ -57,7 +79,7 @@ class CopyTemplateService
 		if ($template === null)
 		{
 			throw new TemplateNotFoundException(
-				Loc::getMessage('TASKS_COPY_TEMPLATE_SERVICE_TEMPLATE_NOT_FOUND')
+				Loc::getMessage('TASKS_COPY_TEMPLATE_SERVICE_TEMPLATE_NOT_FOUND'),
 			);
 		}
 

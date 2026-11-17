@@ -9,26 +9,29 @@ use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
 use Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable;
-use Bitrix\Tasks\Provider\UserProviderTrait;
 use Bitrix\Tasks\V2\Internal\Repository\Template\List\AccessChecker;
 use Bitrix\Tasks\V2\Internal\Repository\Template\List\Field;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 
 class AccessFilterModifier extends BaseFilterModifier
 {
-	use UserProviderTrait;
-
-	private AccessChecker $accessChecker;
-
-	public function __construct(Field $field, string $operator, mixed $value)
+	public function __construct(
+		Field $field,
+		string $operator,
+		mixed $value,
+		private readonly AccessChecker $accessChecker,
+	)
 	{
 		parent::__construct($field, $operator, $value);
-		$this->accessChecker = new AccessChecker((int)$this->value);
-		$this->executorId = (int)$this->value;
 	}
 
 	public function modify(Query $query): Query
 	{
+		if ($this->accessChecker->isAdmin())
+		{
+			return $query;
+		}
+
 		$accessFilter = Query::filter()
 			->logic(ConditionTree::LOGIC_OR);
 
@@ -66,19 +69,19 @@ class AccessFilterModifier extends BaseFilterModifier
 
 	protected function filterDepartmentTemplates(ConditionTree $filter): ConditionTree
 	{
-		$departmentMembers = $this->getDepartmentMembers();
+		$departmentMembers = $this->accessChecker->getDepartmentMemberIds();
 		return $filter->whereIn(Field::CreatedBy->value, $departmentMembers);
 	}
 
 	protected function filterNonDepartmentTemplates(ConditionTree $filter): ConditionTree
 	{
-		$departmentMembers = $this->getDepartmentMembers();
+		$departmentMembers = $this->accessChecker->getDepartmentMemberIds();
 		return $filter->whereNotIn(Field::CreatedBy->value, empty($departmentMembers) ? [0] : $departmentMembers);
 	}
 
 	protected function filterByIndividualRights(ConditionTree $filter): ConditionTree
 	{
-		$accessCodes = $this->getUserModel()->getAccessCodes();
+		$accessCodes = $this->accessChecker->getAccessCodes();
 
 		$individualRightsFilter = Query::filter()
 			->whereIn('PERMISSIONS.ACCESS_CODE', $accessCodes)
@@ -86,6 +89,8 @@ class AccessFilterModifier extends BaseFilterModifier
 				PermissionDictionary::TEMPLATE_VIEW,
 				PermissionDictionary::TEMPLATE_FULL,
 			])
+			// a forbidding row is not a grant; TemplateReadRule reads any non-zero value as allowed
+			->where('PERMISSIONS.VALUE', '!=', PermissionDictionary::VALUE_NO)
 		;
 
 		return $filter->where($individualRightsFilter);

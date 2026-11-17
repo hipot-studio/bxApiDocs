@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\Render;
 
+use Bitrix\Disk\Controller\ShortLink;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 
@@ -14,11 +17,24 @@ final class DeferredDocumentLoaderRenderer
 	public const CONTENT_TYPE = 'text/html; charset=UTF-8';
 	public const CACHE_CONTROL = 'no-store';
 
+	/**
+	 * @param ShortLinkOpening|null $shortLinkOpening A short opening loads the document by a continuation
+	 * posted to its own address, so the address bar keeps the short address and the mode is chosen again.
+	 * @param UnifiedLinkAccessLevel $accessLevel The mode the opening was checked in: the continuation keeps it.
+	 */
+	public function __construct(
+		private readonly ?ShortLinkOpening $shortLinkOpening = null,
+		private readonly UnifiedLinkAccessLevel $accessLevel = UnifiedLinkAccessLevel::Read,
+	)
+	{
+	}
+
 	public function render(): string
 	{
 		$languageId = htmlspecialcharsbx(Loc::getCurrentLang());
 		$title = htmlspecialcharsbx(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_TITLE') ?? '');
 		$hint = $this->renderHint();
+		$shortLink = $this->getShortLinkContinuation();
 		$openNow = htmlspecialcharsbx(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_OPEN_NOW') ?? '');
 		$cancel = htmlspecialcharsbx(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_CANCEL') ?? '');
 		$countdownText = Json::encode(Loc::getMessage('DISK_DEFERRED_DOCUMENT_LOADER_COUNTDOWN') ?? '');
@@ -72,10 +88,27 @@ final class DeferredDocumentLoaderRenderer
 			// delay, which leaves the slow hand-off with a loading state instead of a bare page.
 			const REVEAL_DELAY = 300;
 
+			const shortLink = {$shortLink};
+
 			let isLoaded = false;
 			let isCancelled = false;
 			let loadTimeoutId = null;
 			let revealTimeoutId = null;
+
+			const postShortLinkContinuation = () => {
+				const form = document.createElement('form');
+				form.method = 'post';
+				form.action = shortLink.url;
+				Object.entries(shortLink.fields).forEach(([name, value]) => {
+					const input = document.createElement('input');
+					input.type = 'hidden';
+					input.name = name;
+					input.value = value;
+					form.append(input);
+				});
+				document.body.append(form);
+				form.submit();
+			};
 
 			const getImmediateLoadUrl = () => {
 				const url = new URL(window.location.href);
@@ -111,6 +144,13 @@ final class DeferredDocumentLoaderRenderer
 
 				isLoaded = true;
 				cancelLoad();
+				if (shortLink !== null)
+				{
+					postShortLinkContinuation();
+
+					return;
+				}
+
 				window.location.replace(getImmediateLoadUrl().toString());
 			};
 
@@ -166,7 +206,14 @@ final class DeferredDocumentLoaderRenderer
 			const link = document.getElementById('deferred-document-loader-link');
 			if (link instanceof HTMLAnchorElement)
 			{
-				link.href = getImmediateLoadUrl().toString();
+				link.href = shortLink === null ? getImmediateLoadUrl().toString() : shortLink.url;
+				if (shortLink !== null)
+				{
+					link.addEventListener('click', (event) => {
+						event.preventDefault();
+						loadDocument();
+					});
+				}
 			}
 
 			// The buttons are live before the visible tab hands off, as the stub may be revealed meanwhile.
@@ -194,6 +241,33 @@ final class DeferredDocumentLoaderRenderer
 </body>
 </html>
 HTML;
+	}
+
+	/**
+	 * What the stub of a short opening posts back to its address: the code, a continuation in the checked mode
+	 * and the mark of the immediate load, all in the body. A view asked of an editable source stays a view, or
+	 * the stub would lead a refused edit back to editing; edit is asked only where the source allows it.
+	 */
+	private function getShortLinkContinuation(): string
+	{
+		if ($this->shortLinkOpening === null)
+		{
+			return 'null';
+		}
+
+		return Json::encode([
+			'url' => $this->shortLinkOpening->getCanonicalUrl(),
+			'fields' => [
+				ShortLink::PARAM_CODE => $this->shortLinkOpening->getCode(),
+				ShortLink::PARAM_OPERATION => ShortLink::OPERATION_CONTINUE,
+				ShortLink::PARAM_REQUESTED_MODE => $this->accessLevel === UnifiedLinkAccessLevel::Edit
+					&& $this->shortLinkOpening->allowsEditBySource()
+					? ShortLink::MODE_EDIT
+					: ShortLink::MODE_VIEW
+				,
+				'immediate_load' => 'Y',
+			],
+		], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
 	}
 
 	private function renderHint(): string

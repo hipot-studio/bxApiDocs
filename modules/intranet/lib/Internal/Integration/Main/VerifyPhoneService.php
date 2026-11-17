@@ -11,6 +11,7 @@ use Bitrix\Intranet\Internal\Exception\SendException;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
@@ -19,6 +20,8 @@ use Bitrix\Security\Mfa\Otp;
 
 class VerifyPhoneService
 {
+	public const ERROR_PHONE_REQUIRED_BY_PORTAL = 'CHANNEL_REMOVAL_PHONE_REQUIRED_BY_PORTAL';
+
 	private PhoneAuthAdapter $phoneAuth;
 
 	public function __construct(
@@ -69,6 +72,43 @@ class VerifyPhoneService
 		}
 
 		$this->user->setPhoneNumber($phone->defaultFormat());
+		(new UserRepository())->update($this->user);
+	}
+
+	public function canRemoveAuthPhone(): bool
+	{
+		return Option::get('main', 'new_user_phone_required', 'N') !== 'Y';
+	}
+
+	public function getAuthPhoneRemovalUnavailableReason(): ?string
+	{
+		if ($this->canRemoveAuthPhone())
+		{
+			return null;
+		}
+
+		Loc::loadMessages(__FILE__);
+
+		return Loc::getMessage('INTRANET_INTERNAL_INTEGRATION_MAIN_VERIFY_PHONE_SERVICE_PHONE_REQUIRED_BY_PORTAL');
+	}
+
+	/**
+	 * @throws UpdateFailedException
+	 */
+	public function removeAuthPhone(): void
+	{
+		if (!$this->canRemoveAuthPhone())
+		{
+			$error = new Error(
+				$this->getAuthPhoneRemovalUnavailableReason(),
+				self::ERROR_PHONE_REQUIRED_BY_PORTAL,
+			);
+
+			throw new UpdateFailedException(new ErrorCollection([$error]));
+		}
+
+		// an empty string, not null: the core drops the phone auth row by isset() on the field
+		$this->user->setPhoneNumber('');
 		(new UserRepository())->update($this->user);
 	}
 

@@ -54,3 +54,4 @@ final class LargeAttachmentStorageFactory
 		return new LegacyMailAttachmentLinkGateway();
 	}
 }
+

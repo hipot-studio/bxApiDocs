@@ -12,6 +12,7 @@ use Bitrix\Intranet\Internal\Integration\Vibecodeconnector\PermissionSource as V
 use Bitrix\Intranet\Internal\Repository\MandatoryOtpAuditRepository;
 use Bitrix\Intranet\Internal\Service\Otp\MandatoryOtpPolicy;
 use Bitrix\Intranet\Internal\Service\Otp\MandatoryPeriodProvider;
+use Bitrix\Intranet\Internal\Service\Otp\MessengerConfirmationAvailabilityPolicy;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\OtpEmailFromService;
 use Bitrix\Intranet\Repository\UserRepository;
@@ -304,6 +305,13 @@ class SecuritySettings extends AbstractSettings
 				'ALLOW_SKIP_DEVICE_CONNECT',
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_SKIP_DEVICE_CONNECT'),
 				Option::get('intranet', 'allow_skip_device_connect', 'Y'),
+			);
+
+			$data['fieldMessengerConfirmation'] = new Switcher(
+				'settings-security-field-messenger-confirmation',
+				'SECURITY_MESSENGER_CONFIRMATION_ENABLED',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MESSENGER_CONFIRMATION'),
+				(new MessengerConfirmationAvailabilityPolicy())->isEnabled() ? 'Y' : 'N',
 			);
 
 			if ($this->isOtpEmailFromSettingAvailable())
@@ -608,6 +616,15 @@ class SecuritySettings extends AbstractSettings
 
 	protected function saveOtpSettings(): void
 	{
+		if (array_key_exists('SECURITY_MESSENGER_CONFIRMATION_ENABLED', $this->data))
+		{
+			Option::set(
+				'intranet',
+				MessengerConfirmationAvailabilityPolicy::OPTION_ENABLED,
+				$this->data['SECURITY_MESSENGER_CONFIRMATION_ENABLED'] === 'Y' ? 'Y' : 'N',
+			);
+		}
+
 		if (isset($this->data['ALLOW_SKIP_DEVICE_CONNECT']))
 		{
 			Option::set(
@@ -837,6 +854,8 @@ class SecuritySettings extends AbstractSettings
 		if ($otpData['SECURITY_OTP_ENABLED'] ?? false)
 		{
 			$searchIndex['settings-security-section-otp'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_OTP');
+			$searchIndex['SECURITY_MESSENGER_CONFIRMATION_ENABLED']
+				= Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MESSENGER_CONFIRMATION');
 		}
 
 		if ($this->isCloud)

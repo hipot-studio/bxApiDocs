@@ -6,10 +6,22 @@ use Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker;
 use Bitrix\Intranet\Internal\Integration;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Page\Asset;
+use Bitrix\Main\Page\AssetLocation;
+use Bitrix\Main\Page\AssetMode;
+use Bitrix\Main\UI\Extension;
 use Bitrix\UI\Buttons;
 
 final class AirTemplate
 {
+	private const HIGH_CONTRAST_CONTEXT_SCRIPT = '/dist/high-contrast-context.bundle.js';
+	private const HIGH_CONTRAST_API_SCRIPT = '/dist/high-contrast-api.bundle.js';
+	private const HIGH_CONTRAST_BODY_CLASSES_TO_REMOVE = [
+		'--ui-context-edge-dark',
+		'--ui-context-edge-light',
+		'--ui-context-content-dark',
+		'bitrix24-light-theme',
+	];
 
 	static private ?bool $enabled = null;
 	static private bool $applied = false;
@@ -154,6 +166,63 @@ final class AirTemplate
 		}
 	}
 
+	public static function registerHighContrastAssets(Asset $asset, string $templatePath): void
+	{
+		Extension::load(HighContrast::getExtensionName());
+		$asset->addCss(self::getHighContrastNeutralizerUrl($templatePath), true);
+	}
+
+	public static function applyHighContrastContext(Asset $asset, string $templatePath): void
+	{
+		// The slider wrapper prints <html>, so its hook must run before the palette CSS.
+		$src = htmlspecialchars(self::getHighContrastContextUrl($templatePath), ENT_QUOTES);
+		$asset->addString(
+			'<script src="' . $src . '" data-hc-server-enabled="true" data-skip-moving="true"></script>',
+			true,
+			AssetLocation::BEFORE_CSS,
+			AssetMode::ALL,
+		);
+	}
+
+	public static function getHighContrastContextUrl(string $templatePath): string
+	{
+		return \CUtil::GetAdditionalFileURL($templatePath . self::HIGH_CONTRAST_CONTEXT_SCRIPT);
+	}
+
+	public static function getHighContrastNeutralizerUrl(string $templatePath): string
+	{
+		return \CUtil::GetAdditionalFileURL($templatePath . HighContrast::getBundlePath());
+	}
+
+	public static function registerHighContrastApi(Asset $asset, string $templatePath): void
+	{
+		$src = htmlspecialchars(
+			\CUtil::GetAdditionalFileURL($templatePath . self::HIGH_CONTRAST_API_SCRIPT),
+			ENT_QUOTES,
+		);
+		$neutralizer = htmlspecialchars(self::getHighContrastNeutralizerUrl($templatePath), ENT_QUOTES);
+		$context = htmlspecialchars(self::getHighContrastContextUrl($templatePath), ENT_QUOTES);
+		$paletteAssets = [];
+		$paletteConfig = Extension::getConfig(HighContrast::getExtensionName());
+		foreach (['css', 'js'] as $type)
+		{
+			foreach ($paletteConfig[$type] ?? [] as $path)
+			{
+				$url = $asset->getFullAssetPath($path);
+				$paletteAssets[] = ['url' => $url, 'ext' => $type];
+			}
+		}
+		$palette = htmlspecialchars(json_encode($paletteAssets, JSON_THROW_ON_ERROR), ENT_QUOTES);
+		$asset->addString(
+			'<script src="' . $src . '" data-hc-neutralizer-url="' . $neutralizer
+			. '" data-hc-context-url="' . $context . '" data-hc-palette-assets="' . $palette
+			. '" data-skip-moving="true"></script>',
+			true,
+			AssetLocation::AFTER_JS_KERNEL,
+			AssetMode::ALL,
+		);
+	}
+
 	public static function showBodyAssets(): void
 	{
 		ThemePicker::getInstance()?->showBodyAssets();
@@ -211,7 +280,7 @@ final class AirTemplate
 		return defined('BX_IM_FULLSCREEN') && BX_IM_FULLSCREEN;
 	}
 
-	public static function getBodyClasses(): string
+	public static function getBodyClasses(bool $highContrast = false): string
 	{
 		$bodyClasses = 'template-bitrix24 template-air';
 		$bodyClasses .= ' ' . ThemePicker::getInstance()->getBodyClasses();
@@ -221,16 +290,32 @@ final class AirTemplate
 			$bodyClasses .= ' im-bar-mode-off';
 		}
 
+		if ($highContrast)
+		{
+			$classList = preg_split('/\s+/', trim($bodyClasses)) ?: [];
+			$classList = array_diff($classList, self::HIGH_CONTRAST_BODY_CLASSES_TO_REMOVE);
+			$classList[] = '--ui-context-content-light';
+			$bodyClasses = implode(' ', array_unique($classList));
+		}
+
 		return $bodyClasses;
 	}
 
-	public static function getBodyAttributes(): string
+	public static function getBodyAttributes(bool $highContrast = false): string
 	{
 		$attributes = [];
 
 		$savedWidth = (int)\CUserOptions::GetOption('intranet', 'right_panel_width', '360');
 
 		$attributes[] = 'style="--air-right-panel-width: ' . $savedWidth . 'px"';
+		if ($highContrast)
+		{
+			$themeClasses = preg_split('/\s+/', ThemePicker::getInstance()->getBodyClasses()) ?: [];
+			$displacedClasses = array_intersect($themeClasses, self::HIGH_CONTRAST_BODY_CLASSES_TO_REMOVE);
+			$attributes[] = 'data-hc-base-classes="'
+				. htmlspecialchars(implode(' ', $displacedClasses), ENT_QUOTES)
+				. '"';
+		}
 
 		return implode(' ', $attributes);
 	}

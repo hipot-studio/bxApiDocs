@@ -29,4 +29,10 @@ interface TerminalSessionFinalizerInterface
 	 * Deletes all drained sessions of one document and releases their restrictions atomically.
 	 */
 	public function finalizeDrainDocument(string $externalHash): Result;
+
+	/**
+	 * Deactivates every active local session of an abandoned document, stable keys included, and keeps
+	 * the rows. The data carries the deactivated `sessionIds`.
+	 */
+	public function abandonDocument(string $externalHash): Result;
 }

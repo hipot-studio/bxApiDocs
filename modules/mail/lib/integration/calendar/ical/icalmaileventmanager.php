@@ -180,3 +180,4 @@ class ICalMailEventManager
 		return [];
 	}
 }
+

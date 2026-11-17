@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Internal\Service\Draft;
 
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -185,16 +186,12 @@ class AttachmentStorage
 		?UploaderController $uploaderController,
 	): ?array
 	{
-		$objectId = $this->resolveDiskObjectId($source);
-		if ($objectId !== null)
+		$sourceFile = $source->source === 'attached'
+			? $this->loadAttachedFile($userId, $source)
+			: $this->loadDiskFile($userId, $source)
+		;
+		if ($sourceFile !== null)
 		{
-			$file = File::loadById($objectId, ['STORAGE']);
-			if ($file === null || !$file->canRead($file->getStorage()->getSecurityContext($userId)))
-			{
-				return null;
-			}
-
-			$sourceFile = $file->getRealObject();
 			$copy = $sourceFile->copyTo($targetFolder, $userId, true);
 
 			return $copy instanceof File
@@ -204,6 +201,10 @@ class AttachmentStorage
 					'sourceFileId' => (int)$sourceFile->getFileId(),
 				]
 				: null;
+		}
+		if ($source->source === 'attached')
+		{
+			return null;
 		}
 
 		if (
@@ -243,9 +244,61 @@ class AttachmentStorage
 		return null;
 	}
 
+	private function loadDiskFile(int $userId, DraftAttachmentSource $source): ?File
+	{
+		$objectId = $this->resolveDiskObjectId($source);
+		if ($objectId === null)
+		{
+			return null;
+		}
+
+		$file = File::loadById($objectId, ['STORAGE']);
+		if ($file === null || !$file->canRead($file->getStorage()->getSecurityContext($userId)))
+		{
+			return null;
+		}
+
+		return $file->getRealObject();
+	}
+
+	/**
+	 * A file attached through a Disk user field (a CRM mail template, for one) is read by the right of
+	 * the entity it is attached to, which its connector decides: the Disk storage of the author of the
+	 * file knows nothing about the users the template is shared with.
+	 */
+	private function loadAttachedFile(int $userId, DraftAttachmentSource $source): ?File
+	{
+		if (preg_match('/^[1-9][0-9]*$/D', $source->id) !== 1)
+		{
+			return null;
+		}
+
+		$attachedObject = AttachedObject::loadById((int)$source->id, ['OBJECT']);
+		if (
+			$attachedObject === null
+			// An attachment pinned to a version grants access to that version only, while the copy
+			// would be taken from the current file; such attachments stay out of the draft.
+			|| (int)$attachedObject->getVersionId() > 0
+			|| !$attachedObject->canRead($userId)
+			// The copy is an independent file of the draft owner, so a download ban on the attachment
+			// has to be respected before it is made.
+			|| !$attachedObject->canDownload($userId)
+		)
+		{
+			return null;
+		}
+
+		$file = $attachedObject->getFile();
+
+		return $file instanceof File ? $file->getRealObject() : null;
+	}
+
 	private function resolveDiskObjectId(DraftAttachmentSource $source): ?int
 	{
-		if (preg_match('/^n([1-9]\d*)$/', $source->id, $matches) || ctype_digit($source->id))
+		if (
+			preg_match('/^n([1-9]\d*)$/', $source->id, $matches)
+			|| preg_match('/^[0-9]+$/D', $source->id) === 1
+		)
 		{
 			return (int)($matches[1] ?? $source->id);
 		}

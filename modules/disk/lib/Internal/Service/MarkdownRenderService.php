@@ -44,7 +44,8 @@ class MarkdownRenderService
 
 	private const DOCUMENT_STYLE = <<<CSS
 		body {
-			margin: 0;
+			max-width: 960px;
+			margin: 0 auto;
 			padding: 18px 24px;
 			font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 			color: #333;

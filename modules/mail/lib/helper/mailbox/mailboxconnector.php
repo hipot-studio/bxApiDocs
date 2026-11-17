@@ -1806,9 +1806,11 @@ final class MailboxConnector
 	 *
 	 * With a creator, a known folder of the user without a pair on the target server is brought there
 	 * {@see TargetFolderCreator}, and the result reports it under "provisioned": the pairs found or
-	 * created that way and the folders that could not be created. Nothing is created before the whole
-	 * topology has been checked. A folder of the inbox or of a system role is never created; without a
-	 * pair it fails the inspection with its role in "missingRole".
+	 * created that way and the folders that could not be created. A known folder of the user the target
+	 * server already has is reported there as a pair with "created" false, with a creator or without
+	 * it. Nothing is created before the whole topology has been checked. A folder of the inbox or of
+	 * a system role is never created; without a pair it fails the inspection with its role in
+	 * "missingRole".
 	 *
 	 * @param array<int, array<string, mixed>> $knownDirectories
 	 * @param string[] $notCreatedSources Paths of the known folders not to be tried again.
@@ -1871,6 +1873,7 @@ final class MailboxConnector
 		$directories = [];
 		$takenNames = [];
 		$notCreated = [];
+		$pairs = [];
 		foreach ($knownDirectories as $known)
 		{
 			$id = (int)($known['ID'] ?? 0);
@@ -2013,6 +2016,15 @@ final class MailboxConnector
 			$takenNames[(string)$directory['name']] = true;
 			$resolved[$id] = $directory;
 			$directories[] = $directory;
+			if ($folderRole === null)
+			{
+				// A folder of the user found on the target server is paired as well: the tail follows the pair
+				$pairs[] = [
+					'source' => $sourcePath,
+					'target' => (string)$directory['name'],
+					'created' => false,
+				];
+			}
 		}
 
 		$resolvedRoles = array_filter(array_map(
@@ -2052,16 +2064,15 @@ final class MailboxConnector
 		if ($creator === null || !$createMissing)
 		{
 			$data = ['directories' => $directories];
-			if ($notCreated !== [])
+			if ($pairs !== [] || $notCreated !== [])
 			{
 				ksort($notCreated);
-				$data['provisioned'] = ['pairs' => [], 'notCreated' => array_values($notCreated)];
+				$data['provisioned'] = ['pairs' => $pairs, 'notCreated' => array_values($notCreated)];
 			}
 
 			return $result->setData($data);
 		}
 
-		$pairs = [];
 		$rootDelimiter = self::rootDelimiter($roots);
 		foreach ($planned as $known)
 		{

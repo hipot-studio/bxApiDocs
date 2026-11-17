@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Repository\Template\List;
 
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
 use Bitrix\Tasks\Provider\UserProviderTrait;
+use Bitrix\Tasks\Util\User;
 
 class AccessChecker
 {
@@ -18,9 +19,15 @@ class AccessChecker
 
 	public function hasAccess(): bool
 	{
-		return $this->hasAccessToDepartmentTemplates()
+		return $this->isAdmin()
+			|| $this->hasAccessToDepartmentTemplates()
 			|| $this->hasAccessToNonDepartmentTemplates()
 			|| $this->hasAccessByIndividualRights();
+	}
+
+	public function isAdmin(): bool
+	{
+		return User::isSuper($this->executorId);
 	}
 
 	public function hasAccessToDepartmentTemplates(): bool
@@ -40,7 +47,16 @@ class AccessChecker
 
 	public function hasAccessByIndividualRights(): bool
 	{
-		$accessCodes = $this->getUserModel()->getAccessCodes();
-		return !empty($accessCodes);
+		return !empty($this->getAccessCodes());
+	}
+
+	public function getDepartmentMemberIds(): array
+	{
+		return $this->getDepartmentMembers();
+	}
+
+	public function getAccessCodes(): array
+	{
+		return $this->getUserModel()->getAccessCodes();
 	}
 }

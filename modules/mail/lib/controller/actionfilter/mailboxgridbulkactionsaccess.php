@@ -31,3 +31,4 @@ final class MailboxGridBulkActionsAccess extends Base
 		return null;
 	}
 }
+

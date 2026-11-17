@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Helper\Config;
 
 use Bitrix\Mail\Helper\MailAccess;
+use Bitrix\Mail\Internal\Service\NewMail\NewMailSwitch;
 use Bitrix\Mail\Public\Features\InternalDraftsFeature;
 use Bitrix\Mail\Public\Features\MailboxAvatarFeature;
 use Bitrix\Mail\Public\Features\MessageConversationGridFeature;
@@ -30,7 +31,7 @@ class Feature
 	 * It is public because it is also what an address that may not be followed falls back to: the option
 	 * is set by hand and promises nothing about its value.
 	 */
-	public const MIGRATION_CONTROL_PANEL_URL_STUB = '/mail/';
+	public const MIGRATION_CONTROL_PANEL_URL_STUB = '/mail/mailbox-list';
 
 	/**
 	 * The helpdesk article behind the "Learn more" link (Q-2, answered). The number alone is kept: the
@@ -222,7 +223,7 @@ class Feature
 
 	public static function isMessageDeletePermissionAvailable(): bool
 	{
-		return Option::get('mail', 'message_delete_permission_enabled', 'N') === 'Y';
+		return Option::get('mail', 'message_delete_permission_enabled', 'Y') === 'Y';
 	}
 
 	public static function isComposeTemplatesAvailable(): bool
@@ -236,7 +237,7 @@ class Feature
 	 */
 	public static function isMobileSignaturesAvailable(): bool
 	{
-		return Option::get('mailmobile', self::MOBILE_SIGNATURES_OPTION, 'N') === 'Y';
+		return Option::get('mailmobile', self::MOBILE_SIGNATURES_OPTION, 'Y') === 'Y';
 	}
 
 	public static function isVacationAutoReplyAvailable(): bool
@@ -245,12 +246,12 @@ class Feature
 	}
 
 	/**
-	 * Messages about the migration of mail to Bitrix24 Mail. The zone of the portal is not asked: the
-	 * mail of Bitrix24 is offered everywhere, so the switch of the module is the whole condition.
+	 * Migration messages and the company mail button require CIS, the New mail flag and the exchange of mailservice.
+	 * The former option MIGRATION_NOTICE_OPTION is not read any more.
 	 */
 	public static function isMigrationNoticeAvailable(): bool
 	{
-		return Option::get('mail', self::MIGRATION_NOTICE_OPTION, 'N') === 'Y';
+		return (new NewMailSwitch())->isShown();
 	}
 
 	/**

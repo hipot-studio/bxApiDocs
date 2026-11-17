@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Node;
 
 use Bitrix\Landing\Block;
+use Bitrix\Landing\Block\ContentRenderer;
 use Bitrix\Landing\History;
 use Bitrix\Landing\Node\Component\SaveParametersNormalizer;
 use \Bitrix\Main\Localization\Loc;
@@ -11,6 +12,37 @@ Loc::loadMessages(__FILE__);
 
 class Component extends \Bitrix\Landing\Node
 {
+	/**
+	 * Value of a param which asks the class of the block for its data: the pattern of the renderer,
+	 * so what the editor writes and reads never drifts from what the grammar accepts.
+	 */
+	private const CLASS_BLOCK_VALUE_PATTERN = ContentRenderer::CLASS_BLOCK_VALUE_PATTERN;
+
+	/**
+	 * Values of an editable param which mean that the owner of the page has picked nothing: an old
+	 * block.php declared a variable of its own, a rewritten one asks the class of the block.
+	 */
+	private const ENTITY_LEGACY_EMPTY_VALUES = [
+		'element' => ['={$elementId}', '={$elementCode}'],
+		'section' => ['={$sectionId}', '={$sectionCode}'],
+	];
+
+	/**
+	 * Keys of the class of the block which say the same as those variables said.
+	 */
+	private const ENTITY_EMPTY_KEYS = [
+		'element' => ['ELEMENT_ID', 'ELEMENT_CODE'],
+		'section' => ['SECTION_ID', 'SECTION_CODE'],
+	];
+
+	/**
+	 * Prefix the edit form reads a picked entity by.
+	 */
+	private const ENTITY_URL_PREFIXES = [
+		'element' => '#catalogElement',
+		'section' => '#catalogSection',
+	];
+
 	/**
 	 * Predefined values for some dynamic props.
 	 * @var array
@@ -233,7 +265,9 @@ class Component extends \Bitrix\Landing\Node
 					!trim($updateProps['SECTION_ID'])
 				)
 				{
-					$updateProps['SECTION_ID'] = '={$sectionId}';
+					// an empty field means the section of the settings of the site, and the class of the
+					// block is what gives it back: a variable of an old block.php is out of the grammar
+					$updateProps['SECTION_ID'] = self::makeClassBlockValue('SECTION_ID');
 				}
 				$doc = $block->getDom();
 				$newContent = self::saveComponent(
@@ -763,30 +797,53 @@ class Component extends \Bitrix\Landing\Node
 			{
 				case 'url':
 					{
-						if ($value && isset($prop['entityType']))
+						$entityType = is_string($prop['entityType'] ?? null) ? $prop['entityType'] : '';
+						if (
+							$value &&
+							isset(self::ENTITY_URL_PREFIXES[$entityType]) &&
+							!self::isEntityValueEmpty($value, $entityType)
+						)
 						{
-							// @todo: make this more universal
-							if (
-								$prop['entityType'] == 'element' &&
-								$value != '={$elementCode}' &&
-								$value != '={$elementId}'
-							)
-							{
-								$value = '#catalogElement' . $value;
-							}
-							else if (
-								$prop['entityType'] == 'section' &&
-								$value != '={$sectionCode}' &&
-								$value != '={$sectionId}'
-							)
-							{
-								$value = '#catalogSection' . $value;
-							}
+							$value = self::ENTITY_URL_PREFIXES[$entityType] . $value;
 						}
 					}
 			}
 		}
 		return $value;
+	}
+
+	/**
+	 * Check if value of an editable param means that nothing is picked. Both spellings are read: the
+	 * variable of an old block.php, which the saved instances of the portals still hold, and the value
+	 * of the class of the block, which the rewritten blocks of the delivery carry.
+	 * @param mixed $value Value of the param.
+	 * @param string $entityType Entity type of the field of the manifest.
+	 * @return bool
+	 */
+	protected static function isEntityValueEmpty($value, string $entityType): bool
+	{
+		if (!is_string($value))
+		{
+			return false;
+		}
+
+		if (in_array($value, self::ENTITY_LEGACY_EMPTY_VALUES[$entityType] ?? [], true))
+		{
+			return true;
+		}
+
+		return preg_match(self::CLASS_BLOCK_VALUE_PATTERN, $value, $matches) === 1
+			&& in_array($matches[2], self::ENTITY_EMPTY_KEYS[$entityType] ?? [], true);
+	}
+
+	/**
+	 * Build value of a param which asks the class of the block for the data by its key.
+	 * @param string $key Key of the data of the class.
+	 * @return string
+	 */
+	protected static function makeClassBlockValue(string $key): string
+	{
+		return '={$classBlock->get("' . $key . '")}';
 	}
 
 	/**

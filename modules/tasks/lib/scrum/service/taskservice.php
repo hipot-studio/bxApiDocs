@@ -345,11 +345,7 @@ class TaskService implements Errorable
 
 		try
 		{
-			$filter['ONLY_ROOT_TASKS'] = ($filter['ONLY_ROOT_TASKS'] === 'N' ? 'N' : 'Y');
-			if ($entityIds)
-			{
-				$filter['SCRUM_ENTITY_IDS'] = $entityIds;
-			}
+			$filter = $this->prepareTaskFilter($filter, $entityIds);
 
 			if ($navigation)
 			{
@@ -415,6 +411,41 @@ class TaskService implements Errorable
 
 			return $taskIds;
 		}
+	}
+
+	public function getTaskCountByFilter(array $filter, array $entityIds = []): int
+	{
+		try
+		{
+			return Manager\Task::getCount(
+				$this->prepareTaskFilter($filter, $entityIds),
+				['USER_ID' => $this->executiveUserId]
+			);
+		}
+		catch (\Exception $exception)
+		{
+			$message = $exception->getMessage();
+
+			$this->errorCollection->setError(
+				new Error(
+					$message,
+					self::ERROR_COULD_NOT_READ_TASK
+				)
+			);
+
+			return 0;
+		}
+	}
+
+	private function prepareTaskFilter(array $filter, array $entityIds): array
+	{
+		$filter['ONLY_ROOT_TASKS'] = (($filter['ONLY_ROOT_TASKS'] ?? null) === 'N' ? 'N' : 'Y');
+		if ($entityIds)
+		{
+			$filter['SCRUM_ENTITY_IDS'] = $entityIds;
+		}
+
+		return $filter;
 	}
 
 	public function getTagsByTaskIds(array $taskIds): array

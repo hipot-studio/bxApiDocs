@@ -1352,6 +1352,24 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 			array_values($stageList)
 		);
 
+		if (
+			StagesTable::getWorkMode() === StagesTable::WORK_MODE_GROUP
+			|| StagesTable::getWorkMode() === StagesTable::WORK_MODE_ACTIVE_SPRINT
+		)
+		{
+			if (!empty($filter['::SUBFILTER-STAGE_ID']) && is_array($filter['::SUBFILTER-STAGE_ID']['STAGE_ID']))
+			{
+				$filteredStages = $this->getFilteredStages(
+					$filter['::SUBFILTER-STAGE_ID']['STAGE_ID'],
+					$stageList
+				);
+
+				// the counter and the cards must be built on the same set of stages
+				$filter['::SUBFILTER-STAGE_ID']['STAGE_ID'] = $filteredStages;
+				$this->filter['::SUBFILTER-STAGE_ID']['STAGE_ID'] = $filteredStages;
+			}
+		}
+
 		// get counts
 		if (!$timeLineMode)
 		{
@@ -1360,25 +1378,6 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 				$filter,
 				$this->arParams['USER_ID'] ?: false
 			);
-		}
-
-		if (
-			StagesTable::getWorkMode() === StagesTable::WORK_MODE_GROUP
-			|| StagesTable::getWorkMode() === StagesTable::WORK_MODE_ACTIVE_SPRINT
-		)
-		{
-			if (!empty($filter['::SUBFILTER-STAGE_ID']) && is_array($filter['::SUBFILTER-STAGE_ID']['STAGE_ID']))
-			{
-				foreach ($filter['::SUBFILTER-STAGE_ID']['STAGE_ID'] as $filteredStage)
-				{
-					if (array_key_exists($filteredStage, $stageList))
-					{
-						$filteredStages[] = $filteredStage;
-					}
-				}
-
-				$this->filter['::SUBFILTER-STAGE_ID']['STAGE_ID'] = $filteredStages;
-			}
 		}
 
 		// get columns
@@ -1453,6 +1452,48 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		$columns = $this->sendEvent('KanbanComponentGetColumns', $columns);
 
 		return $assoc ? $columns : array_values($columns);
+	}
+
+	/**
+	 * Drops stages that don't belong to the current entity, keeping the zero stage
+	 * of the tasks that were stored before the system stage became mandatory.
+	 */
+	private function getFilteredStages(array $stageFilter, array $stageList): array
+	{
+		$filteredStages = [];
+
+		foreach ($stageFilter as $filteredStage)
+		{
+			if (array_key_exists($filteredStage, $stageList))
+			{
+				$filteredStages[] = $filteredStage;
+			}
+		}
+
+		if ($this->isSystemStageFiltered($filteredStages, $stageList))
+		{
+			$filteredStages[] = '0';
+		}
+
+		return $filteredStages;
+	}
+
+	private function isSystemStageFiltered(array $filteredStages, array $stageList): bool
+	{
+		if (StagesTable::getWorkMode() !== StagesTable::WORK_MODE_GROUP)
+		{
+			return false;
+		}
+
+		foreach ($filteredStages as $stageId)
+		{
+			if (($stageList[$stageId]['SYSTEM_TYPE'] ?? null) === StagesTable::SYS_TYPE_NEW)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -1562,7 +1603,10 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 			$data['sort_value'] = static::getSortValue($item, $fieldSort['field'], $data);
 		}
 
-		return array_merge_recursive($data, $this->displayService->fill($item, $this->userId));
+		$displayItem = $item;
+		$displayItem['TITLE'] = $item['~TITLE'];
+
+		return array_merge_recursive($data, $this->displayService->fill($displayItem, $this->userId));
 	}
 
 	/**
@@ -2838,6 +2882,16 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		}
 
 		$stages = StagesTable::getStages($params['STAGES_ENTITY_ID']);
+		if ($scrumProject && !isset($stages[$columnId]))
+		{
+			Loc::loadMessages(
+				$_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/dispatcher/publicaction/task/stages.php',
+			);
+			$this->addError('STAGES_ERROR_NOT_FOUND');
+
+			return [];
+		}
+
 		$fields = [
 			'TITLE' => $taskName,
 			'CREATED_BY' => $this->userId,
@@ -3505,6 +3559,9 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 					return [];
 				}
 			}
+
+			$this->arParams['ITEMS_COUNT'] = count($taskIds);
+			$this->arParams['ITEMS_PAGE'] = 1;
 
 			if ($this->arParams['TIMELINE_MODE'] === 'Y')
 			{

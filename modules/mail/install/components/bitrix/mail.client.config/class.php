@@ -5,6 +5,7 @@ use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
 use Bitrix\Mail\Helper\Enum\MailboxStatus;
 use Bitrix\Mail\Helper\Enum\MailboxConnectionRequestStatus;
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\Mailbox\MailboxGridButtonCounterRefreshService;
 use Bitrix\Mail\Helper\Mailbox\MailboxGridCounterAggregator;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
 use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
@@ -1045,9 +1046,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 	private function prepareToolbarButton(bool $isMainMailPage = true): void
 	{
-		$button = $this->createMailboxGridButton()
+		$mailboxGridButton = $this->createMailboxGridButton();
+		$button = $mailboxGridButton
 			?? $this->createMassConnectButton()
 			?? $this->createConnectionRequestButton();
+		$this->arResult['MAILBOX_GRID_COUNTER_WATCH_TAG'] = null;
 
 		$isConnectionRequest = $this->arParams['IS_CONNECTION_REQUEST_BUTTON'] ?? false;
 
@@ -1075,6 +1078,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		if ($button !== null)
 		{
 			Toolbar::addButton($button);
+		}
+
+		if ($button !== null && $button === $mailboxGridButton)
+		{
+			$this->arResult['MAILBOX_GRID_COUNTER_WATCH_TAG'] = (new MailboxGridButtonCounterRefreshService())
+				->watchForCurrentUser()
+			;
 		}
 	}
 

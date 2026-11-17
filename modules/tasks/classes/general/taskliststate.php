@@ -94,6 +94,8 @@ class CTaskListState
 	private static $instancesOfSelf = array();
 
 	private bool $hasState = true;
+	private bool $hasBaseStoredState = false;
+	private bool $hasPersonalStoredState = false;
 
 	/**
 	 * Get instance of multiton
@@ -149,6 +151,7 @@ class CTaskListState
 		$state = unserialize($rc, ['allowed_classes' => false]);
 		if (is_array($state))
 		{
+			$this->hasBaseStoredState = true;
 			$this->state = array_merge($this->state, $state);
 		}
 
@@ -169,6 +172,7 @@ class CTaskListState
 			$state = unserialize($rc, ['allowed_classes' => false]);
 			if (is_array($state))
 			{
+				$this->hasPersonalStoredState = true;
 				$this->state = array_merge($this->state, $state);
 			}
 			else
@@ -181,6 +185,11 @@ class CTaskListState
 	public function hasState(): bool
 	{
 		return $this->hasState;
+	}
+
+	public function hasStoredState(): bool
+	{
+		return $this->hasBaseStoredState || $this->hasPersonalStoredState;
 	}
 
 	/**
@@ -217,6 +226,7 @@ class CTaskListState
 			);
 
 			$this->state = unserialize($newState, ['allowed_classes' => false]);
+			$this->hasPersonalStoredState = true;
 		}
 	}
 

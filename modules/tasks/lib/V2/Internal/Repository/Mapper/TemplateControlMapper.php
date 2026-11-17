@@ -12,12 +12,20 @@ use Bitrix\Tasks\V2\Internal\Entity;
 
 class TemplateControlMapper
 {
+	private const REPLICATE_PARAM_KEYS = [
+		'MONTHLY_MONTH_NUM1' => 'MONTHLY_MONTH_NUM_1',
+		'MONTHLY_MONTH_NUM2' => 'MONTHLY_MONTH_NUM_2',
+		'YEARLY_MONTH1' => 'YEARLY_MONTH_1',
+		'YEARLY_MONTH2' => 'YEARLY_MONTH_2',
+	];
+
 	public function mapToControl(Entity\Template $template): array
 	{
 		$converter = new Converter(Converter::KEYS | Converter::RECURSIVE | Converter::TO_SNAKE | Converter::TO_UPPER);
 
 		$fields = $converter->process($this->getTemplateFields($template));
 
+		$this->mapReplicateParamsFields($fields);
 		$this->mapTaskFields($fields);
 		$this->mapPriorityFields($fields);
 		$this->mapMembersFields($fields);
@@ -27,6 +35,25 @@ class TemplateControlMapper
 		$this->mapParentField($fields);
 
 		return $fields;
+	}
+
+	private function mapReplicateParamsFields(array &$fields): void
+	{
+		if (!isset($fields['REPLICATE_PARAMS']) || !is_array($fields['REPLICATE_PARAMS']))
+		{
+			return;
+		}
+
+		foreach (self::REPLICATE_PARAM_KEYS as $convertedKey => $controlKey)
+		{
+			if (!array_key_exists($convertedKey, $fields['REPLICATE_PARAMS']))
+			{
+				continue;
+			}
+
+			$fields['REPLICATE_PARAMS'][$controlKey] = $fields['REPLICATE_PARAMS'][$convertedKey];
+			unset($fields['REPLICATE_PARAMS'][$convertedKey]);
+		}
 	}
 
 	private function mapTaskFields(array &$fields): void

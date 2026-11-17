@@ -53,3 +53,4 @@ final class DraftUploader
 		return $controller->isAvailable() ? $controller : null;
 	}
 }
+

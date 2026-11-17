@@ -277,16 +277,17 @@ class CIntranetUserProfileComponent extends UserProfile
 		}
 
 		$otpUser = $personalSettings->getOtpInfo();
+		$deadlineOtpUser = $this->getOtpUserWithGraceDeadline($personalSettings);
 		$otpSigner = new Integration\Main\OtpSigner();
 		$deactivateStatus = null;
 		$deactivateTitle = '';
 
 		if (
-			$otpUser->getDeactivateRemainder()
+			$deadlineOtpUser->getDeactivateRemainder()
 			&& $userEntity->getActive()
 		)
 		{
-			[$deactivateStatus, $deactivateTitle] = $this->getDeactivateOtpStatusText($otpUser);
+			[$deactivateStatus, $deactivateTitle] = $this->getDeactivateOtpStatusText($deadlineOtpUser);
 		}
 		elseif (
 			!$otpUser->isActive
@@ -315,6 +316,21 @@ class CIntranetUserProfileComponent extends UserProfile
 				&& $mobilePush->isDefault(),
 			'isLegacyOtpAllowed' => $mobilePush->isLegacyOtpAllowedByUserId($userEntity->getId()),
 		];
+	}
+
+	private function getOtpUserWithGraceDeadline(Integration\Security\PersonalOtp $personalSettings): UserOtp
+	{
+		$otpUser = $personalSettings->getOtpInfo();
+
+		if (!$personalSettings->isMandatoryUnconfigured())
+		{
+			return $otpUser;
+		}
+
+		$deadlineOtpUser = clone $otpUser;
+		$deadlineOtpUser->dateDeactivate = (new Service\Otp\OtpGraceDeadlineResolver())->resolve($otpUser);
+
+		return $deadlineOtpUser;
 	}
 
 	private function getDeactivateOtpStatusText(UserOtp $otpUser): ?array

@@ -49,7 +49,7 @@ class TaskListResponse
 	{
 		return isset($this->selectedFields[$fieldName]);
 	}
-	
+
 	protected function mapFromEntity(Task $task): array
 	{
 		$result = [];
@@ -75,6 +75,7 @@ class TaskListResponse
 
 		if ($this->shouldBeReturned('creator'))
 		{
+			$result['creatorId'] = $task->getCreatorId();
 			$result['creator'] = $task->creator === null ? null : [
 				'id' => $task->creator->id,
 				'name' => $task->creator->name,

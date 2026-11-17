@@ -5,16 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\EventHandler\OnAfterReadChatsByTypeBatchTasksTask;
 
 use Bitrix\Im\V2\Message\Event\AfterReadChatsByTypeBatchEvent;
-use Bitrix\Main\Config\Option;
 use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Counter;
 
 class UpdateCounters
 {
-	private const DEFAULT_CHUNK_SIZE = 200;
-	private const OPTION_CHUNK_SIZE = 'read_chats_by_type_chunk_size';
-
 	public function __construct(
 		private readonly ChatRepositoryInterface $repository,
 		private readonly Counter\Service $counters,
@@ -32,9 +28,7 @@ class UpdateCounters
 			return;
 		}
 
-		$chunkSize = $this->getChunkSize();
-
-		foreach (array_chunk($chatIds, $chunkSize) as $chunk)
+		foreach (ChatIdsChunker::split($chatIds) as $chunk)
 		{
 			try
 			{
@@ -60,12 +54,5 @@ class UpdateCounters
 				$this->logger->logError($e);
 			}
 		}
-	}
-
-	private function getChunkSize(): int
-	{
-		$chunkSize = (int)Option::get('tasks', self::OPTION_CHUNK_SIZE, self::DEFAULT_CHUNK_SIZE);
-
-		return $chunkSize > 0 ? $chunkSize : self::DEFAULT_CHUNK_SIZE;
 	}
 }

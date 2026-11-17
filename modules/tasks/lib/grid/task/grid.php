@@ -8,6 +8,10 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Flow\FlowFeature;
+use Bitrix\Tasks\Grid\Scope\Scope;
+use Bitrix\Tasks\Integration\CRM\CrmInTasksFeature;
+use Bitrix\Tasks\Integration\CRM\Grid\CrmItemGridDataInterface;
+use Bitrix\Tasks\Integration\CRM\Grid\CrmItemGridDataProvider;
 use Bitrix\Tasks\V2\Internal\Access\Registry\TemplateAccessCacheLoader;
 use Bitrix\Tasks\V2\Internal\Access\Service\TemplateRightService;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -23,6 +27,12 @@ use Bitrix\Tasks\Integration\Extranet\User;
  */
 class Grid extends \Bitrix\Tasks\Grid\Grid
 {
+	/**
+	 * Preparation parameter holding the safe CRM view of the page: raw UF_CRM_TASK value =>
+	 * CrmItemGridDataInterface. A value absent from the map carries no permission to show its real title.
+	 */
+	public const CRM_ITEM_GRID_DATA_BY_VALUE = 'CRM_ITEM_GRID_DATA_BY_VALUE';
+
 	public function prepareHeaders(): array
 	{
 		$this
@@ -43,6 +53,7 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 		$this->setParameters([
 			...$this->getParameters(),
 			'TEMPLATE_REPLICATE_PARAMS_BY_TASK_ID' => $this->fillTemplateReplicateParams($rows),
+			self::CRM_ITEM_GRID_DATA_BY_VALUE => $this->fillCrmItemGridData($rows),
 		]);
 
 		foreach ($rows as $key => $data)
@@ -62,6 +73,21 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 	public function prepareGroupActions(): array
 	{
 		return [];
+	}
+
+	/**
+	 * Member columns exist on the regular task list only. Inside a group (project, scrum, collab) and in
+	 * relation lists the grid keeps its previous column set, mirroring the filter field modes
+	 * (Bitrix\Tasks\Helper\Filter::isDefaultListScope). The CrmInTasksFeature toggle is the second term of
+	 * the registration and is deliberately kept out of this predicate.
+	 */
+	private function isDefaultListScope(): bool
+	{
+		$parameters = $this->getParameters();
+
+		return (int)($parameters['GROUP_ID'] ?? 0) === 0
+			&& (int)($parameters['relationToId'] ?? 0) === 0
+			&& mb_strtolower((string)($parameters['SCOPE'] ?? '')) !== Scope::COLLAB;
 	}
 
 	private function fillWithDefaultHeaders(): static
@@ -136,6 +162,27 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 			'editable' => false,
 			'default' => true,
 		];
+
+		if (CrmInTasksFeature::isOn() && $this->isDefaultListScope())
+		{
+			$this->headers['A'] = [
+				'id' => 'A',
+				'name' => Loc::getMessage('TASKS_GRID_TASK_GRID_HEADER_ACCOMPLICE_NAME'),
+				'sort' => 'ACCOMPLICE_LAST_NAME',
+				'first_order' => 'desc',
+				'editable' => false,
+				'default' => false,
+			];
+
+			$this->headers['U'] = [
+				'id' => 'U',
+				'name' => Loc::getMessage('TASKS_GRID_TASK_GRID_HEADER_AUDITOR_NAME'),
+				'sort' => 'AUDITOR_LAST_NAME',
+				'first_order' => 'desc',
+				'editable' => false,
+				'default' => false,
+			];
+		}
 
 		$this->headers['REAL_STATUS'] = [
 			'id' => 'STATUS',
@@ -471,5 +518,42 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 		;
 
 		$templateAccessCacheLoader->preload(array_keys($templateIdsMap));
+	}
+
+	/**
+	 * @return array<string, CrmItemGridDataInterface>
+	 */
+	private function fillCrmItemGridData(array $rows): array
+	{
+		$values = $this->collectCrmItemValues($rows);
+		if ($values === [])
+		{
+			return [];
+		}
+
+		// The subject of the CRM rights check is the caller, not arParams['USER_ID']: the latter names the
+		// owner of the requested list, and in rest getGridRows that is a regular view of another user.
+		return (new CrmItemGridDataProvider())->getGridDataMap($values, (int)CurrentUser::get()->getId());
+	}
+
+	/**
+	 * @return list<string> every distinct UF_CRM_TASK value of the page, in first-seen order
+	 */
+	private function collectCrmItemValues(array $rows): array
+	{
+		$values = [];
+
+		foreach ($rows as $row)
+		{
+			foreach ((array)($row['UF_CRM_TASK'] ?? []) as $value)
+			{
+				if (is_string($value) && $value !== '')
+				{
+					$values[$value] = $value;
+				}
+			}
+		}
+
+		return array_values($values);
 	}
 }

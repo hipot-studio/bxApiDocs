@@ -235,21 +235,11 @@ abstract class BaseCheckListService
 					continue;
 				}
 
-				if ($stopOnError && !$useBatch && $this->getPersistedStatusIds($facade, [$id], $isComplete) !== [$id])
-				{
-					$result->addError(new Error(
-						self::ERROR_STATUS_UPDATE_FAILED,
-						self::ERROR_STATUS_UPDATE_FAILED_CODE,
-					));
-
-					break;
-				}
-
 				$changedIds[] = $id;
 			}
 		}
 
-		if ($stopOnError && $useBatch && !empty($changedIds))
+		if ($stopOnError && !empty($changedIds))
 		{
 			$persistedIds = $this->getPersistedStatusIds($facade, $changedIds, $isComplete);
 			if (count($persistedIds) !== count($changedIds))

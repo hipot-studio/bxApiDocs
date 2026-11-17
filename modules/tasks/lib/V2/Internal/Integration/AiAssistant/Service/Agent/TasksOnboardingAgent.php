@@ -33,9 +33,17 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\CreateTas
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DeleteTaskTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DetachTaskFromGroupTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskByIdTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\GetProvisioningHistoryTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\GetRecurrenceRuleTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\GetRegularTaskMetricsTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\PauseRecurrenceTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\RemoveRecurrenceTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\ResumeRecurrenceTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetAfterCompletionTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetDailyTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByMonthDaysTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByWeekDaysTaskRecurrenceTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetRecurringInstanceDeadlineTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetWeeklyTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetYearlyByMonthDaysTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetYearlyByWeekDaysTaskRecurrenceTool;
@@ -85,6 +93,14 @@ class TasksOnboardingAgent extends BaseAgent
 			SetWeeklyTaskRecurrenceTool::class,
 			SetYearlyByMonthDaysTaskRecurrenceTool::class,
 			SetYearlyByWeekDaysTaskRecurrenceTool::class,
+			SetAfterCompletionTaskRecurrenceTool::class,
+			GetRecurrenceRuleTool::class,
+			PauseRecurrenceTool::class,
+			ResumeRecurrenceTool::class,
+			RemoveRecurrenceTool::class,
+			SetRecurringInstanceDeadlineTool::class,
+			GetRegularTaskMetricsTool::class,
+			GetProvisioningHistoryTool::class,
 			ClearTaskDeadlineTool::class,
 			CreateTaskTool::class,
 			DeleteTaskTool::class,

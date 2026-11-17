@@ -46,3 +46,4 @@ class MailCrmRecipientProvider extends BaseProvider
 		self::addTemplatesTab($dialog);
 	}
 }
+

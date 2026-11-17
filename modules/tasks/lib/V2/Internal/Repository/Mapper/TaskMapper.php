@@ -64,6 +64,7 @@ class TaskMapper
 			title: static::mapString($taskData, 'TITLE'),
 			description: static::mapString($taskData, 'DESCRIPTION'),
 			descriptionChecksum: isset($taskData['DESCRIPTION']) ? $this->checksumService->calculateChecksum($taskData['DESCRIPTION']) : null,
+			creatorId: static::mapInteger($taskData, 'CREATED_BY'),
 			creator: $mapUser($taskData['CREATED_BY'] ?? null),
 			createdTs: static::mapDateTime($taskData, 'CREATED_DATE')?->getTimestamp(),
 			responsible: $mapUser($taskData['RESPONSIBLE_ID'] ?? null),
@@ -89,6 +90,7 @@ class TaskMapper
 			estimatedTime: static::mapInteger($taskData, 'TIME_ESTIMATE'),
 			replicate: $mapBool($taskData['REPLICATE'] ?? null),
 			changedTs: static::mapDateTime($taskData, 'CHANGED_DATE')?->getTimestamp(),
+			changedById: static::mapInteger($taskData, 'CHANGED_BY'),
 			changedBy: $mapUser($taskData['CHANGED_BY'] ?? null),
 			statusChangedBy: $mapUser($taskData['STATUS_CHANGED_BY'] ?? null),
 			closedBy: $mapUser($taskData['CLOSED_BY'] ?? null),
@@ -159,11 +161,14 @@ class TaskMapper
 		?Entity\Template\TemplateReplicateParams $templateReplication = null,
 	): Entity\Task
 	{
+		$replicateTemplateDeleted = $templateReplication?->templateDeleted;
+
 		return new Entity\Task(
 			id: $taskObject->getId(),
 			title: $taskObject->getTitle(),
 			description: $taskObject->getDescription(),
 			descriptionChecksum: $checksum,
+			creatorId: $taskObject->getCreatedBy(),
 			creator: $members?->findOneById($taskObject->getCreatedBy()),
 			createdTs: $taskObject->getCreatedDate()?->getTimestamp(),
 			responsible: $members?->findOneById($taskObject->getResponsibleId()),
@@ -201,10 +206,15 @@ class TaskMapper
 			estimatedTime: $taskObject->getTimeEstimate(),
 			replicate: $templateReplication?->replicate,
 			replicateParams: $templateReplication?->replicateParams,
-			replicateTemplate: $taskObject->getForkedByTemplateId() <= 0 && $templateReplication?->templateId > 0
+			regularityType: $templateReplication?->regularityType,
+			replicateTemplateDeleted: $replicateTemplateDeleted,
+			replicateTemplate: !$replicateTemplateDeleted
+				&& $taskObject->getForkedByTemplateId() <= 0
+				&& $templateReplication?->templateId > 0
 				? new Entity\Template($templateReplication->templateId)
 				: null,
 			changedTs: $taskObject->getChangedDate()?->getTimestamp(),
+			changedById: $taskObject->getChangedBy(),
 			changedBy: $members?->findOneById($taskObject->getChangedBy()),
 			statusChangedBy: $members?->findOneById($taskObject->getStatusChangedBy()),
 			closedBy: $members?->findOneById($taskObject->getClosedBy()),
@@ -221,7 +231,9 @@ class TaskMapper
 			matchesWorkTime: $taskObject->getMatchWorkTime(),
 			isMultitask: $taskObject->getMultitask(),
 			siteId: $taskObject->getSiteId(),
-			forkedByTemplate: $taskObject->getForkedByTemplateId() > 0 ? new Entity\Template(id: $taskObject->getForkedByTemplateId()) : null,
+			forkedByTemplate: !$replicateTemplateDeleted && $taskObject->getForkedByTemplateId() > 0
+				? new Entity\Template(id: $taskObject->getForkedByTemplateId())
+				: null,
 			forumTopicId: $taskObject->getForumTopicId(),
 			tags: $tags,
 			userFields: $this->userFieldMapper->mapToCollection($taskObject->collectValues()),

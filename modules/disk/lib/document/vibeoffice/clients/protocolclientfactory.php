@@ -17,12 +17,29 @@ use Psr\Container\NotFoundExceptionInterface;
 final class ProtocolClientFactory
 {
 	/**
+	 * Optional service: a callable that gets the call context and returns the client to use instead, or
+	 * null to keep the configured one.
+	 */
+	public const CLIENT_OVERRIDE_SERVICE = 'disk.vibeofficeProtocolClientOverride';
+
+	/**
 	 * @throws ConfigurationException when server / key_id / api-secret is missing
 	 * @throws NotFoundExceptionInterface
 	 * @throws ObjectNotFoundException
 	 */
-	public static function create(): ProtocolClientInterface
+	public static function create(?ProtocolCallContext $context = null): ProtocolClientInterface
 	{
+		$locator = ServiceLocator::getInstance();
+		if ($locator->has(self::CLIENT_OVERRIDE_SERVICE))
+		{
+			$override = $locator->get(self::CLIENT_OVERRIDE_SERVICE);
+			$client = is_callable($override) ? $override($context) : null;
+			if ($client instanceof ProtocolClientInterface)
+			{
+				return $client;
+			}
+		}
+
 		$configuration = self::getConfiguration();
 
 		$server = $configuration->getServer();
@@ -43,7 +60,7 @@ final class ProtocolClientFactory
 			throw new ConfigurationException('Vibeoffice api secret configuration is not configured');
 		}
 
-		return new ProtocolClient($server, new Signer($keyId, $apiSecret));
+		return new ProtocolClient($server, new Signer($keyId, $apiSecret), callContext: $context);
 	}
 
 	/**

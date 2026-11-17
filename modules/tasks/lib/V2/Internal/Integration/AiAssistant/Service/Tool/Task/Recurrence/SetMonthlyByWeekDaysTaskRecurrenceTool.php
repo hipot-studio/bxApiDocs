@@ -16,7 +16,10 @@ class SetMonthlyByWeekDaysTaskRecurrenceTool extends BaseRecurrenceTool
 	{
 		return
 			'Sets up a monthly recurrence for a task based on the day of the week and its order within the month. '
-			. 'Use for complex patterns like "the second Friday of every month" or "the last Monday every 3 months".'
+			. 'Use for complex patterns like "the second Friday of every month" or "the last Monday every 3 months". '
+			. 'Provide exactly one of templateId or taskId. When taskId identifies a generated instance, '
+			. 'this updates the recurrence rule of the source template instead of creating a new '
+			. 'series from the instance. Saving the rule activates recurrence, including for an inactive template.'
 		;
 	}
 

@@ -240,7 +240,17 @@ final class Sharing extends Internals\Model
 				$dataToInsert['STATUS'] = SharingTable::STATUS_IS_APPROVED;
 			}
 
-			$sharingModel = $markerService->runWithConfirmedRevokedMarker(
+			$sharingModel = null;
+			if ($type == SharingTable::TYPE_TO_USER)
+			{
+				$sharingModel = self::detachDepartmentChild($dataToInsert, $errorCollection);
+				if ($sharingModel === false)
+				{
+					continue;
+				}
+			}
+
+			$sharingModel ??= $markerService->runWithConfirmedRevokedMarker(
 				(int)$objectToSharing->getId(),
 				fn() => parent::add($dataToInsert, $errorCollection),
 			);
@@ -345,6 +355,40 @@ final class Sharing extends Internals\Model
 		}
 
 		return $successSharingByEntity;
+	}
+
+	/**
+	 * A department sharing leaves a child row per employee, and the row blocks a personal sharing to the same user.
+	 * Turns such a row into the personal sharing, keeping its status and the already connected link.
+	 * @return Sharing|false|null Detached sharing, false on failure, null when there is no child row.
+	 */
+	private static function detachDepartmentChild(array $data, ErrorCollection $errorCollection): Sharing|false|null
+	{
+		$child = static::load([
+			'=TO_ENTITY' => $data['TO_ENTITY'],
+			'=REAL_OBJECT_ID' => $data['REAL_OBJECT_ID'],
+			'>PARENT_ID' => 0,
+			'!=STATUS' => SharingTable::STATUS_IS_DECLINED,
+		]);
+		if (!$child)
+		{
+			return null;
+		}
+
+		$updated = $child->update([
+			'PARENT_ID' => null,
+			'TASK_NAME' => $data['TASK_NAME'],
+			'FROM_ENTITY' => $data['FROM_ENTITY'],
+			'CREATED_BY' => $data['CREATED_BY'],
+		]);
+		if (!$updated)
+		{
+			$errorCollection->add($child->getErrors());
+
+			return false;
+		}
+
+		return $child;
 	}
 
 	private static function deletePossibleCycleFromEntities(BaseObject $objectToSharing, array $entities)
@@ -754,7 +798,8 @@ final class Sharing extends Internals\Model
 
 			foreach($successSharingByEntity as $entity => $sharingModel)
 			{
-				if(!$sharingModel->isToUser())
+				// a detached department child may be connected already, it must not be invited again
+				if(!$sharingModel->isToUser() || ($sharingModel->isApproved() && $sharingModel->getLinkObjectId()))
 				{
 					continue;
 				}

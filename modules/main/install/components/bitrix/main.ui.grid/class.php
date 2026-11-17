@@ -2521,6 +2521,20 @@ class CMainUIGrid extends CBitrixComponent
 			$this->prepareHeaderSections();
 			$this->arResult['COLUMNS_ALL_WITH_SECTIONS'] = $this->getColumnsAllWithSections($this->arResult['COLUMNS_ALL']);
 		}
+
+		$this->prepareHeaderCategories();
+	}
+
+	/**
+	 * Passes the categories of the settings popup to the template as is. Without them the popup builds
+	 * categories from the sections only.
+	 */
+	protected function prepareHeaderCategories(): void
+	{
+		if (!empty($this->arParams['HEADERS_CATEGORIES']) && is_array($this->arParams['HEADERS_CATEGORIES']))
+		{
+			$this->arResult['HEADERS_CATEGORIES'] = $this->arParams['HEADERS_CATEGORIES'];
+		}
 	}
 
 	/**

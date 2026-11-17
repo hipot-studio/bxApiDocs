@@ -14,23 +14,30 @@ use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\TransactionException;
-use Bitrix\Main\Diag\LoggerFactory;
+use Bitrix\Disk\Document\Vibeoffice\Logging\LoggerProvider;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UuidGenerator;
+use Psr\Log\LoggerInterface;
 
 class DocumentStateRepository
 {
 	private const LOCK_TIMEOUT = 5;
 
-	/** Diagnostic channel of the document state; `.settings.php` redirects it by id. */
 	private const LOGGER_ID = 'disk.vibeoffice.state';
 
 	private static array $heldLocks = [];
 
-	public function __construct(private readonly ?Configuration $configuration = null)
+	private LoggerInterface $diagnosticLogger;
+
+	public function __construct(
+		private readonly ?Configuration $configuration = null,
+		?LoggerInterface $diagnosticLogger = null,
+	)
 	{
+		$this->diagnosticLogger = $diagnosticLogger ?? LoggerProvider::get(self::LOGGER_ID);
 	}
 
 	public function getByKey(string $hostDocKey): ?array
@@ -132,6 +139,21 @@ class DocumentStateRepository
 		throw new \LogicException('Cannot determine the Vibeoffice connection transaction state.');
 	}
 
+	/** True when the connection holds any Vibeoffice named lock, a document or a scope one. */
+	public static function holdsAnyLock(?Connection $connection = null): bool
+	{
+		$prefix = self::lockId($connection ?? Application::getConnection(), '');
+		foreach (array_keys(self::$heldLocks) as $lockId)
+		{
+			if (str_starts_with((string)$lockId, $prefix))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public static function isDocumentLocked(string $hostDocKey): bool
 	{
 		$lockId = self::lockId(Application::getConnection(), self::getDocumentLockName($hostDocKey));
@@ -213,7 +235,7 @@ class DocumentStateRepository
 						return $this->failure('Invalid Vibeoffice document binding.', 'vibeoffice_binding_invalid');
 					}
 
-					return $this->boundResult($session, $state);
+					return $this->refreshBinding($session, $state);
 				}
 
 				$content = $this->readContent($session, $file);
@@ -265,6 +287,7 @@ class DocumentStateRepository
 				{
 					return $this->failure('Invalid Vibeoffice document binding.', 'vibeoffice_binding_invalid');
 				}
+				$reusedState = $state !== null;
 				if ($state === null)
 				{
 					if ($source !== null && $mode === HostDocumentKey::MODE_STABLE)
@@ -298,7 +321,9 @@ class DocumentStateRepository
 					return $this->failure('Could not pin the Vibeoffice document key.', 'vibeoffice_binding_failed');
 				}
 
-				return $this->boundResult(DocumentSession::loadById((int)$session->getId()), $state);
+				$session = DocumentSession::loadById((int)$session->getId());
+
+				return $reusedState ? $this->refreshBinding($session, $state) : $this->boundResult($session, $state);
 			},
 		);
 	}
@@ -317,7 +342,7 @@ class DocumentStateRepository
 
 	public function ensureSessionState(DocumentSession $session): Result
 	{
-		return $this->bindNewGeneration($session, $session);
+		return $this->resolvePinnedState($session) ?? $this->bindNewGeneration($session, $session);
 	}
 
 	public function isCurrentGeneration(DocumentSession $session, File $freshFile): bool
@@ -334,6 +359,42 @@ class DocumentStateRepository
 		}
 
 		return !$session->isView() || !$session->isOutdatedByFileContent();
+	}
+
+	/**
+	 * A pinned key never changes, so a repeated open reads its state without the scope lock.
+	 * Any doubt returns null: the locked path rechecks the binding.
+	 */
+	private function resolvePinnedState(DocumentSession $session): ?Result
+	{
+		$pinnedKey = DocumentSessionManager::extractVoMetadata($session)[HostDocumentKey::CONTEXT_KEY] ?? null;
+		if (!is_string($pinnedKey) || $pinnedKey === '' || !$session->getId())
+		{
+			return null;
+		}
+
+		$file = File::loadById((int)$session->getObjectId());
+		if (!$file)
+		{
+			return null;
+		}
+
+		try
+		{
+			$scope = HostDocumentKey::createScope($session, $file);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		$state = $this->getByKey($pinnedKey);
+		if (!$state || !$this->matchesScope($state, $scope) || !$this->hasValidExternalLink($session, $file))
+		{
+			return null;
+		}
+
+		return $this->boundResult($session, $state);
 	}
 
 	private static function queryForUpdate(Query $query): \Bitrix\Main\DB\Result
@@ -421,10 +482,19 @@ class DocumentStateRepository
 		}
 
 		$link = ExternalLink::loadById($session->getExternalLinkId());
+		if (!$link || (int)$link->getVersionId() !== (int)$session->getVersionId())
+		{
+			return false;
+		}
 
-		return $link
-			&& (int)$link->getObject()?->getRealObjectId() === (int)$file->getRealObjectId()
-			&& (int)$link->getVersionId() === (int)$session->getVersionId();
+		$realObjectId = (int)$file->getRealObjectId();
+		// A link to the real object itself needs no extra load of the linked object.
+		if ((int)$link->getObjectId() === $realObjectId && (int)$file->getId() === $realObjectId)
+		{
+			return true;
+		}
+
+		return (int)$link->getObject()?->getRealObjectId() === $realObjectId;
 	}
 
 	private function loadLockedFile(int $objectId): ?File
@@ -433,6 +503,16 @@ class DocumentStateRepository
 		$row = self::fetchForUpdate($query);
 
 		return $row ? File::buildFromArray($row) : null;
+	}
+
+	private function refreshBinding(DocumentSession $session, array $state): Result
+	{
+		$state['UPDATED_TIME'] = new DateTime();
+		$update = Models\DocumentStateTable::update((int)$state['ID'], ['UPDATED_TIME' => $state['UPDATED_TIME']]);
+
+		return $update->isSuccess()
+			? $this->boundResult($session, $state)
+			: (new Result())->addErrors($update->getErrors());
 	}
 
 	private function boundResult(DocumentSession $session, array $state): Result
@@ -446,22 +526,31 @@ class DocumentStateRepository
 
 	private function runLocked(string $lockName, callable $mutation, bool $auditFileChanges = false): Result
 	{
-		$connection = Application::getConnection();
-		if (!self::acquireLock($connection, $lockName, self::LOCK_TIMEOUT))
-		{
-			return $this->failure('Could not lock the Vibeoffice document.', 'vibeoffice_lock_timeout');
-		}
-
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
 		try
 		{
-			// Update lines shipped without the Disk audit (26.1300.0) have no AuditTransaction class.
-			$auditable = $auditFileChanges && class_exists(AuditTransaction::class);
+			$connection = Application::getConnection();
+			if (!self::acquireLock($connection, $lockName, self::LOCK_TIMEOUT))
+			{
+				return $this->failure('Could not lock the Vibeoffice document.', 'vibeoffice_lock_timeout');
+			}
 
-			return $auditable ? $this->runAuditTransaction($mutation) : $this->runTransaction($mutation);
+			try
+			{
+				// Update lines shipped without the Disk audit (26.1300.0) have no AuditTransaction class.
+				$auditable = $auditFileChanges && class_exists(AuditTransaction::class);
+
+				return $auditable ? $this->runAuditTransaction($mutation) : $this->runTransaction($mutation);
+			}
+			finally
+			{
+				self::releaseLock($connection, $lockName);
+			}
 		}
 		finally
 		{
-			self::releaseLock($connection, $lockName);
+			$pool->useMasterOnly(false);
 		}
 	}
 
@@ -579,13 +668,19 @@ class DocumentStateRepository
 	 */
 	private function logStateException(\Throwable $exception): void
 	{
-		(new LoggerFactory())
-			->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false)
-			?->error('Vibeoffice state: {exception}: {message}.', [
-				'exception' => $exception::class,
-				'message' => $exception->getMessage(),
-			])
-		;
+		try
+		{
+			$this->diagnosticLogger->error('vibeoffice state', [
+				'operation' => 'state',
+				'code' => 'state_exception',
+				'document_session_id' => null,
+				'exception_class' => $exception::class,
+			]);
+		}
+		catch (\Throwable)
+		{
+			// The diagnostic sink must not replace the state mutation result.
+		}
 	}
 
 	private function failure(string $message, string $code): Result

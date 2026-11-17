@@ -13,12 +13,8 @@ class PrepareStage implements PrepareFieldInterface
 
 	public function __invoke(array $fields, array $fullTaskData): array
 	{
-		if (!isset($fields['GROUP_ID']))
-		{
-			return $fields;
-		}
-
-		if ($fields['GROUP_ID'] <= 0)
+		$groupId = (int)($fields['GROUP_ID'] ?? $fullTaskData['GROUP_ID'] ?? 0);
+		if ($groupId <= 0)
 		{
 			return $fields;
 		}
@@ -33,7 +29,7 @@ class PrepareStage implements PrepareFieldInterface
 			return $fields;
 		}
 
-		$systemStage = StagesTable::getSystemStage($fields['GROUP_ID']);
+		$systemStage = StagesTable::getSystemStage($groupId);
 		if ($systemStage === null)
 		{
 			return $fields;

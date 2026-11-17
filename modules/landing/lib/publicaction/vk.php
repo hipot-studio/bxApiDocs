@@ -3,8 +3,10 @@
 namespace Bitrix\Landing\PublicAction;
 
 use Bitrix\Landing\Error;
+use Bitrix\Landing\Manager;
 use Bitrix\Landing\PublicActionResult;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Seo\Retargeting;
 use Bitrix\Seo\Media;
 
@@ -33,6 +35,16 @@ class Vk
 	public static function getAuthUrl(): PublicActionResult
 	{
 		$result = new PublicActionResult();
+		// the url carries the client secret and the license key of the portal
+		if (!Manager::isAdmin())
+		{
+			$error = new Error;
+			$error->addError('ACCESS_DENIED', Loc::getMessage('LANDING_ACCESS_DENIED2'));
+			$result->setError($error);
+
+			return $result;
+		}
+
 		if (!Loader::includeModule('seo'))
 		{
 			$error = new Error;

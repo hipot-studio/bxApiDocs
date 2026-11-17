@@ -395,3 +395,4 @@ class MailTemplate extends Controller
 		];
 	}
 }
+

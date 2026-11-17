@@ -65,3 +65,4 @@ final class VacationAutoReplyAccess extends Base
 		return false;
 	}
 }
+

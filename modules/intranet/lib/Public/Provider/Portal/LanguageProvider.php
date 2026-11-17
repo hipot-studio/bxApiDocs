@@ -8,7 +8,7 @@ use Bitrix\Main\Config\Option;
 
 class LanguageProvider
 {
-	private const BETA_LANGUAGE_LIST = ['kz', 'ar'];
+	private const BETA_LANGUAGE_LIST = ['kz', 'ar', 'uz'];
 
 	public function getPublicArray(): array
 	{

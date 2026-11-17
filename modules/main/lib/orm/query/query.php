@@ -2418,6 +2418,11 @@ class Query
 
 			$connection = $this->entity->getConnection();
 
+			if ($this->isOwnPrimaryChain($chain))
+			{
+				$sort = $this->getSortWithoutNulls($sort, $connection->getSqlHelper());
+			}
+
 			// define value field
 			$valueField = $chain->getLastElement()->getValue();
 			if ($valueField instanceof ExpressionField)
@@ -2455,6 +2460,54 @@ class Query
 		}
 
 		return join(', ', $sql);
+	}
+
+	/**
+	 * Checks if the chain points to a primary field of the query entity without any join.
+	 * Entities over a subquery are skipped: their primary may come from an outer join and be NULL.
+	 *
+	 * @param Chain $chain
+	 *
+	 * @return bool
+	 */
+	protected function isOwnPrimaryChain(Chain $chain): bool
+	{
+		if ($chain->getSize() !== 2 || $chain->getFirstElement()->getValue() !== $this->entity)
+		{
+			return false;
+		}
+
+		if (preg_match('/\s*\(\s*SELECT.*\)\s*/is', $this->entity->getDBTableName()))
+		{
+			return false;
+		}
+
+		$field = $chain->getLastElement()->getValue();
+
+		return $field instanceof ScalarField && $field->isPrimary();
+	}
+
+	/**
+	 * Primary columns are expected to be NOT NULL, while NULLS FIRST / NULLS LAST would prevent index usage for sorting.
+	 *
+	 * @param string $sort
+	 * @param Main\DB\SqlHelper $helper
+	 *
+	 * @return string
+	 */
+	protected function getSortWithoutNulls(string $sort, Main\DB\SqlHelper $helper): string
+	{
+		if ($sort === $helper->getAscendingOrder())
+		{
+			return 'ASC';
+		}
+
+		if ($sort === $helper->getDescendingOrder())
+		{
+			return 'DESC';
+		}
+
+		return $sort;
 	}
 
 	/**

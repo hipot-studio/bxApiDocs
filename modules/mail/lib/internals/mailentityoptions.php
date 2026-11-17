@@ -72,9 +72,6 @@ class MailEntityOptionsTable extends Entity\DataManager
 		CACHEABLE_PROPERTIES on purpose: a person changes them, so the cache would be dropped on every
 		write. Mind that PROPERTY_NAME holds 32 characters - hence the shortened prefix.
 	*/
-	const MIG_NOTICE_POPUP_SHOWN_PROPERTY_NAME = 'MIG_NOTICE_POPUP_SHOWN';
-	const MIG_NOTICE_REMIND_AFTER_PROPERTY_NAME = 'MIG_NOTICE_REMIND_AFTER';
-	const MIG_NOTICE_BANNER_DISMISSED_PROPERTY_NAME = 'MIG_NOTICE_BANNER_DISMISSED';
 	const DELIVERY_BOUNDARY_ENABLED_PROPERTY_NAME = 'DELIVERY_BOUNDARY_ENABLED_V1';
 	const DELIVERY_BOUNDARY_PROPERTY_NAME = 'SYNC_DELIVERY_BOUNDARY_V1';
 

@@ -450,6 +450,18 @@ class LandingTable extends Entity\DataManager
 			$fields['SITE_ID'] = 0;
 		}
 
+		// pass the event fields: local $fields may already carry SITE_ID taken from the stored row above
+		if (!self::checkSiteChangeAllowed($actionType, $primary, $event->getParameter('fields')))
+		{
+			$result->setErrors([
+				new Entity\EntityError(
+					Loc::getMessage('LANDING_TABLE_ERROR_LD_SITE_CHANGE_ACCESS_DENIED'),
+					'ACCESS_DENIED'
+				)
+			]);
+			return $result;
+		}
+
 		// check rights
 		if ($fields['SITE_ID'] && Rights::isOn())
 		{
@@ -480,9 +492,7 @@ class LandingTable extends Entity\DataManager
 			else
 			{
 				$freeAccessFields = [
-					'CREATED_BY_ID',
 					'MODIFIED_BY_ID',
-					'DATE_CREATE',
 					'DATE_MODIFY',
 					'SITE_ID',
 					'PUBLIC'
@@ -603,6 +613,58 @@ class LandingTable extends Entity\DataManager
 		$result->modifyFields($modifyFields);
 
 		return $result;
+	}
+
+	/**
+	 * Taking existing landing away from its site requires rights on both sites,
+	 * the same way as Landing::move() demands them.
+	 * @param string $actionType Action type: add / update.
+	 * @param array|null $primary Primary key of updated row.
+	 * @param array $fields Fields to save.
+	 * @return bool
+	 */
+	private static function checkSiteChangeAllowed(string $actionType, ?array $primary, array $fields): bool
+	{
+		if (
+			$actionType !== self::ACTION_TYPE_UPDATE ||
+			!isset($primary['ID']) ||
+			!array_key_exists('SITE_ID', $fields) ||
+			!Rights::isOn()
+		)
+		{
+			return true;
+		}
+
+		// past self::getList(): the override narrows every read by the scope of the request and by
+		// SITE.DELETED, so a page of a foreign section or of a site in the recycle bin would read
+		// as a page belonging to nothing
+		$row = parent::getList([
+			'select' => [
+				'SITE_ID'
+			],
+			'filter' => [
+				'ID' => $primary['ID']
+			],
+			'limit' => 1
+		])->fetch();
+
+		$currentSiteId = (int)($row['SITE_ID'] ?? 0);
+		$newSiteId = (int)$fields['SITE_ID'];
+
+		if (!$currentSiteId)
+		{
+			// the site the page is taken away from is unknown, so there is nothing to ask rights on
+			return false;
+		}
+
+		if ($currentSiteId === $newSiteId)
+		{
+			return true;
+		}
+
+		return
+			Rights::hasAccessForSite($currentSiteId, Rights::ACCESS_TYPES['delete'])
+			&& Rights::hasAccessForSite($newSiteId, Rights::ACCESS_TYPES['edit']);
 	}
 
 	/**

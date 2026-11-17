@@ -62,3 +62,4 @@ class Permissions
 		$this->isCrmInstalled = Loader::includeModule('crm');
 	}
 }
+

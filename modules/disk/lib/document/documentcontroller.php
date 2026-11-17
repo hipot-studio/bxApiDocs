@@ -441,11 +441,19 @@ class DocumentController extends Internals\Controller
 			$this->sendJsonErrorResponse();
 		}
 
-		$this->sendJsonSuccessResponse(array(
+		$response = [
 			'editSessionId' => $session->getId(),
 			'id' => $fileData->getId(),
 			'link' => $fileData->getLinkInService(),
-		));
+		];
+
+		$targetFolderId = (int)$this->request->getQuery('targetFolderId');
+		if ($targetFolderId > 0)
+		{
+			$response['targetFolderId'] = $targetFolderId;
+		}
+
+		$this->sendJsonSuccessResponse($response);
 	}
 
 	protected function processActionSaveBlank()

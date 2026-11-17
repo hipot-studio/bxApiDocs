@@ -16,7 +16,10 @@ class SetYearlyByMonthDaysTaskRecurrenceTool extends BaseRecurrenceTool
 	{
 		return
 			'Sets up a yearly (annual) recurrence for a task on a specific calendar date. '
-			. 'Use this to make a task repeat on the same day and month each year, such as "every April 25th".'
+			. 'Use this to make a task repeat on the same day and month each year, such as "every April 25th". '
+			. 'Provide exactly one of templateId or taskId. When taskId identifies a generated instance, '
+			. 'this updates the recurrence rule of the source template instead of creating a new '
+			. 'series from the instance. Saving the rule activates recurrence, including for an inactive template.'
 		;
 	}
 

@@ -89,3 +89,4 @@ class GetEmailContentTool extends ToolContract
 		return $result;
 	}
 }
+

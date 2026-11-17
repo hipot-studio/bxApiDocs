@@ -301,9 +301,11 @@ class MainUfListComponent extends ConfigComponent
 	{
 		$isMassDeleteTarget = $this->isMassDeleteTarget();
 		$canDeleteCrmFields = $isMassDeleteTarget ? $this->canDeleteCrmFieldsByEntityType() : null;
-		$hasDeletableRows = false;
+		$showMassDeleteControls = $isMassDeleteTarget && $canDeleteCrmFields === true;
 		$grid = [
 			'GRID_ID' => $this->getGridId(),
+			'ALLOW_HORIZONTAL_SCROLL' => true,
+			'AUTO_HIDE_HORIZONTAL_SCROLL' => $isMassDeleteTarget,
 		];
 
 		if(!empty($fields))
@@ -318,10 +320,6 @@ class MainUfListComponent extends ConfigComponent
 					'editable' => $canDelete,
 				];
 
-				if($isMassDeleteTarget && $canDelete)
-				{
-					$hasDeletableRows = true;
-				}
 			}
 		}
 
@@ -337,12 +335,13 @@ class MainUfListComponent extends ConfigComponent
 		$grid['AJAX_OPTION_HISTORY'] = 'N';
 		$grid['AJAX_ID'] = \CAjax::GetComponentID('bitrix:main.ui.grid', '', '');
 		$grid['SHOW_PAGESIZE'] = true;
+		$grid['DEFAULT_PAGE_SIZE'] = $this->getPageNavigation()->getPageSize();
 		$grid['PAGE_SIZES'] = [['NAME' => '10', 'VALUE' => '10'], ['NAME' => '20', 'VALUE' => '20'], ['NAME' => '50', 'VALUE' => '50']];
-		$grid['SHOW_ROW_CHECKBOXES'] = $isMassDeleteTarget && $hasDeletableRows;
-		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = $isMassDeleteTarget && $hasDeletableRows;
-		$grid['SHOW_SELECTED_COUNTER'] = $isMassDeleteTarget && $hasDeletableRows;
-		$grid['SHOW_ACTION_PANEL'] = $isMassDeleteTarget && $hasDeletableRows;
-		if($isMassDeleteTarget && $hasDeletableRows)
+		$grid['SHOW_ROW_CHECKBOXES'] = $showMassDeleteControls;
+		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = $showMassDeleteControls;
+		$grid['SHOW_SELECTED_COUNTER'] = $showMassDeleteControls;
+		$grid['SHOW_ACTION_PANEL'] = $showMassDeleteControls;
+		if($showMassDeleteControls)
 		{
 			$grid['ACTION_PANEL'] = $this->buildGridActions();
 		}

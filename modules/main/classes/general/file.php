@@ -686,7 +686,7 @@ class CFile
 
 		$cloneId = static::DoInsert($originalFile);
 
-		static::AddDuplicate($fileId, $cloneId);
+		static::AddDuplicate((int)$originalFile['ID'], $cloneId);
 		static::CleanCache($cloneId);
 
 		return $cloneId;
@@ -954,6 +954,8 @@ class CFile
 		while ($version = $versions->fetch())
 		{
 			static::Delete($version['VERSION_ID']);
+			// A clone may retain the version after its original is deleted.
+			Internal\FileVersionTable::delete(['ORIGINAL_ID' => $ID]);
 		}
 	}
 

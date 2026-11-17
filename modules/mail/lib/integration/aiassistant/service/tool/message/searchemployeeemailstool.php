@@ -80,3 +80,4 @@ class SearchEmployeeEmailsTool extends ToolContract
 		];
 	}
 }
+

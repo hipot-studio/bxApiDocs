@@ -16,6 +16,7 @@ use Bitrix\Rest\UserFieldProxy;
 use Bitrix\Main\UserFieldTable;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionNamedType;
 use TasksException;
 
 abstract class UserField extends UserFieldProxy
@@ -152,6 +153,36 @@ abstract class UserField extends UserFieldProxy
 		if (count($args) < $targetMethod->getNumberOfRequiredParameters())
 		{
 			throw new TasksException("Invalid arguments for {$targetClass->getName()}::{$method}");
+		}
+
+		$args = array_values($args);
+
+		foreach ($targetMethod->getParameters() as $position => $parameter)
+		{
+			$type = $parameter->getType();
+			if (!($type instanceof ReflectionNamedType) || $type->getName() !== 'array')
+			{
+				continue;
+			}
+
+			$values =
+				$parameter->isVariadic()
+					? array_slice($args, $position)
+					: array_slice($args, $position, 1)
+			;
+
+			foreach ($values as $value)
+			{
+				if (is_array($value) || ($value === null && $type->allowsNull()))
+				{
+					continue;
+				}
+
+				throw new TasksException(
+					"Invalid arguments for {$targetClass->getName()}::{$method}:"
+					. " parameter \${$parameter->getName()} must be an array"
+				);
+			}
 		}
 	}
 }

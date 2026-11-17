@@ -411,6 +411,11 @@ final class MailboxConnectionRequestService
 			}
 		}
 
+		return $this->getActiveAdminIds();
+	}
+
+	public function getActiveAdminIds(): array
+	{
 		return $this->filterActiveUserIds($this->getAllAdminIds());
 	}
 

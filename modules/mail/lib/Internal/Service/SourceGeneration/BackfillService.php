@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
 use Bitrix\Mail\Helper;
+use Bitrix\Mail\Internal\Service\NewMail\NewMailSwitch;
 use Bitrix\Mail\Internals\MailboxSourceGenerationTable;
 use Bitrix\Mail\Internals\MigrationOperationTable;
 use Bitrix\Mail\MailboxTable;
@@ -53,6 +54,10 @@ class BackfillService
 
 	public const UNLIMITED_ROW_BUDGET = 0;
 
+	/**
+	 * The former switch of the receiving side. Nothing admits by it anymore - the flag of the New mail does
+	 * {@see NewMailSwitch::isAccepting()} - and it is kept for the update that carries its value over to the flag.
+	 */
 	public const FEATURE_OPTION = 'source_generations_enabled';
 
 	/**
@@ -255,11 +260,11 @@ class BackfillService
 	}
 
 	/**
-	 * The feature of the installation, without asking about a mailbox.
+	 * The feature of the installation, without asking about a mailbox: the flag of the New mail.
 	 */
 	public function isFeatureEnabled(): bool
 	{
-		return Option::get('mail', self::FEATURE_OPTION, 'N') === 'Y';
+		return (new NewMailSwitch())->isAccepting();
 	}
 
 	/**
@@ -279,7 +284,7 @@ class BackfillService
 	 * written for an assignment made in advance, which no longer happens, and without it the
 	 * requirement turned the offer of the move into a dead end.
 	 *
-	 * Both conditions are options of the portal, so the admission asks the database nothing at
+	 * Both conditions are switches the core keeps in memory, so the admission asks the database nothing at
 	 * all, not even once per mailbox of a list. The mailbox is still named by the parameter: the
 	 * question is about one mailbox, and the next condition of the rollout - a cohort, a type -
 	 * will depend on it again.

@@ -11,6 +11,7 @@ use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\StandalonePageRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Version;
 
@@ -18,14 +19,34 @@ class ExternalLinkHandler implements HtmlRenderableHandler, AutomaticEditModeCap
 {
 	/**
 	 * @param BaseObject $baseObject
+	 * @param bool $shortLinkViewOnly The page of a short opening is only viewed, whatever the link and the
+	 *     visitor may: an employee sees a type without an office editor on the page of the source in view.
 	 */
 	public function __construct(
 		protected BaseObject $baseObject,
 		protected ?ExternalLink $externalLink = null,
 		protected ?AttachedObject $attachedObject = null,
 		protected ?Version $version = null,
+		protected ?ShortLinkOpening $shortLinkOpening = null,
+		protected bool $shortLinkViewOnly = false,
 	)
 	{
+	}
+
+	/** The link the page is drawn for: the source of a short opening is never swapped for another link. */
+	public function getExternalLink(): ?ExternalLink
+	{
+		return $this->externalLink;
+	}
+
+	public function getShortLinkOpening(): ?ShortLinkOpening
+	{
+		return $this->shortLinkOpening;
+	}
+
+	public function isShortLinkViewOnly(): bool
+	{
+		return $this->shortLinkOpening !== null && $this->shortLinkViewOnly;
 	}
 
 	public function view(): HandlerOperationResult
@@ -55,16 +76,29 @@ class ExternalLinkHandler implements HtmlRenderableHandler, AutomaticEditModeCap
 		$content = StandalonePageRenderer::render(
 			'bitrix:disk.external.link',
 			'',
-			[
-				'action' => $accessLevel === UnifiedLinkAccessLevel::Edit ? 'goToEdit' : 'default',
-				'FROM_UNIFIED_LINK' => true,
-				'BASE_OBJECT' => $this->baseObject,
-				'EXTERNAL_LINK' => $this->externalLink,
-				'ATTACHED_OBJECT' => $this->attachedObject,
-				'VERSION' => $this->version,
-			],
+			$this->getComponentParameters($accessLevel),
 		);
 
 		return HandlerOperationResult::createSuccess($content);
+	}
+
+	/**
+	 * The short opening travels to the page apart from the access context of a document session.
+	 */
+	protected function getComponentParameters(UnifiedLinkAccessLevel $accessLevel): array
+	{
+		return [
+			'action' => $accessLevel === UnifiedLinkAccessLevel::Edit && !$this->isShortLinkViewOnly()
+				? 'goToEdit'
+				: 'default'
+			,
+			'FROM_UNIFIED_LINK' => true,
+			'BASE_OBJECT' => $this->baseObject,
+			'EXTERNAL_LINK' => $this->externalLink,
+			'ATTACHED_OBJECT' => $this->attachedObject,
+			'VERSION' => $this->version,
+			'SHORT_LINK_OPENING' => $this->shortLinkOpening,
+			'SHORT_LINK_VIEW_ONLY' => $this->isShortLinkViewOnly(),
+		];
 	}
 }

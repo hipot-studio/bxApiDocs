@@ -77,7 +77,7 @@ class BoardService
 		return array_pop($documentId);
 	}
 
-	public function saveDocument($isNewBoard = false, int $attempt = 0): Error|bool
+	public function saveDocument($isNewBoard = false, int $attempt = 0, ?int $authorId = null): Error|bool
 	{
 		if (!$this->session->getObject())
 		{
@@ -135,8 +135,10 @@ class BoardService
 			'commentAttachedObjects' => false,
 			WriteOperationContext::OPTION_KEY => WriteOperationContext::EditingSession,
 			WriteOperationContext::OPTION_KEY_EDITING_SESSION_STARTED_AT => $this->session->getCreateTime()->getTimestamp(),
+			WriteOperationContext::OPTION_KEY_EDITING_SESSION_OWNER_ID => $this->session->getUserId(),
 		];
-		if (!$this->session->getObject()->uploadVersion($tmpFileArray, $this->session->getUserId(), $options))
+		$authorId ??= $this->session->getUserId();
+		if (!$this->session->getObject()->uploadVersion($tmpFileArray, $authorId, $options))
 		{
 			return $this->refusalOfTheWriteNode($this->session->getObject());
 		}

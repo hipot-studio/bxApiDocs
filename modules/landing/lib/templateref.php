@@ -27,7 +27,7 @@ class TemplateRef
 	protected static function set($id, $type, array $data = array())
 	{
 		$id = intval($id);
-		$res = TemplateRefTable::getList(array(
+		$rows = TemplateRefTable::getList(array(
 			'select' => array(
 				'ID', 'AREA', 'LANDING_ID'
 			),
@@ -35,8 +35,9 @@ class TemplateRef
 				'ENTITY_ID' => $id,
 				'=ENTITY_TYPE' => $type
 			)
-		));
-		while (($row = $res->fetch()))
+		))->fetchAll();
+		$data = self::removeForbiddenTargets($data, array_column($rows, 'LANDING_ID', 'AREA'));
+		foreach ($rows as $row)
 		{
 			if (isset($data[$row['AREA']]) && $data[$row['AREA']] > 0)
 			{
@@ -68,6 +69,63 @@ class TemplateRef
 				BXClearCache(true, self::CACHE_DIR);
 			}
 		}
+	}
+
+	/**
+	 * Areas are rendered with the rights check off, so a new target must be a page the current user can read.
+	 * Becoming an area also closes the public address of a page and forbids deleting it, so a page that is not
+	 * an area yet needs the settings right. A target already stored for the area is kept: an editor re-saving
+	 * the settings must not break the template.
+	 * @param array $data Ref array (area => landing).
+	 * @param array $stored Stored refs (area => landing).
+	 * @return array
+	 */
+	private static function removeForbiddenTargets(array $data, array $stored): array
+	{
+		$newTargets = [];
+		foreach ($data as $area => $lid)
+		{
+			if ($lid > 0 && (int)$lid !== (int)($stored[$area] ?? 0))
+			{
+				$newTargets[$area] = (int)$lid;
+			}
+		}
+		if (!$newTargets)
+		{
+			return $data;
+		}
+
+		$allowed = [];
+		$res = Landing::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'ID' => array_values(array_unique($newTargets)),
+				'=DELETED' => ['Y', 'N'],
+				'=SITE.DELETED' => ['Y', 'N'],
+			],
+		]);
+		while ($row = $res->fetch())
+		{
+			$lid = (int)$row['ID'];
+			if (
+				!Rights::isOn()
+				|| self::landingIsArea($lid)
+				|| Rights::hasAccessForLanding($lid, Rights::ACCESS_TYPES['sett'])
+			)
+			{
+				$allowed[$lid] = true;
+			}
+		}
+
+		foreach ($newTargets as $area => $lid)
+		{
+			if (!isset($allowed[$lid]))
+			{
+				unset($data[$area]);
+			}
+		}
+
+		return $data;
 	}
 
 	/**

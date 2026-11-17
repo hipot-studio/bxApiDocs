@@ -144,3 +144,4 @@ final class Draft extends Base
 		return (int)CurrentUser::get()->getId();
 	}
 }
+

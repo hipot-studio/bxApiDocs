@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Public\Command\Template\CheckList;
 use Bitrix\Main\Error;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Exception\CheckList\CheckListMergeException;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Result\Result;
@@ -34,6 +35,10 @@ class SaveCheckListCommand extends AbstractCommand
 			$collection = $handler($this);
 
 			return $result->setData($collection->toArray());
+		}
+		catch (CheckListMergeException $e)
+		{
+			return $result->addErrors($e->getErrors());
 		}
 		catch (Exception $e)
 		{

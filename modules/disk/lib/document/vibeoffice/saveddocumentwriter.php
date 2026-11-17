@@ -322,15 +322,16 @@ final class SavedDocumentWriter implements SavedDocumentWriterInterface
 				}
 				$state = $scope->getData()['state'];
 				$sessions = $scope->getData()['sessions'];
-				$original = $state ? File::loadById((int)$state['OBJECT_ID']) : null;
+				$originalObjectId = (int)($state['OBJECT_ID'] ?? 0);
+				$original = $originalObjectId > 0 ? File::loadById($originalObjectId) : null;
 				$file = File::loadById((int)$delivery['RESULT_OBJECT_ID']);
-				if (!$file || !$original)
+				if (!$file || $originalObjectId <= 0)
 				{
 					return $this->failure('The saved notification document is unavailable.');
 				}
-				if ((int)$file->getId() !== (int)$original->getId())
+				if ((int)$file->getId() !== $originalObjectId)
 				{
-					$notify = $this->notifier->notify($original, $file, $sessions);
+					$notify = $this->notifier->notify($original, $file, $sessions, $originalObjectId);
 					if (!$notify->isSuccess())
 					{
 						return $notify;

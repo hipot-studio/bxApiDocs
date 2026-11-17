@@ -700,6 +700,22 @@ abstract class CheckListFacade
 	public static function merge($entityId, $userId, $newItems, $parameters = [])
 	{
 		$mergeResult = new Result();
+
+		static::$oldItemsToMerge = static::getList([], [static::$entityIdName => $entityId]);
+		$oldItemsKeys = array_keys(static::$oldItemsToMerge);
+
+		$newItems = static::getFilteredItemsToMerge($newItems);
+		$newItemsTree = static::getArrayStructuredRoots($newItems, 'PARENT_NODE_ID');
+		$checkedItemsCount = 0;
+
+		if (
+			!static::checkMergeItemIds($newItemsTree, static::$oldItemsToMerge, $checkedItemsCount)
+			|| $checkedItemsCount !== count($newItems)
+		)
+		{
+			return static::addErrorToResult($mergeResult, 'ACTION_NOT_ALLOWED', self::ACTION_MODIFY);
+		}
+
 		$isLimitExceeded = TaskLimit::isLimitExceeded();
 		if ($isLimitExceeded)
 		{
@@ -713,67 +729,124 @@ abstract class CheckListFacade
 
 		static::enableDeferredActionsMode();
 
-		static::$oldItemsToMerge = static::getList([], [static::$entityIdName => $entityId]);
-		$oldItemsKeys = array_keys(static::$oldItemsToMerge);
-
-		if (empty($newItems))
+		try
 		{
-			static::deleteByCheckListsIds($oldItemsKeys);
-			static::doDeletePostActions($entityId, $userId, ['ITEMS' => static::$oldItemsToMerge]);
-
-			static::doMergePostActions($entityId, $userId, ['PARAMETERS' => $parameters]);
-
-			return $mergeResult;
-		}
-
-		$newItems = static::getFilteredItemsToMerge($newItems);
-
-		$traversedItems = [];
-		$newItems = static::normalizeInvalidSortIndexesByPayloadOrder($newItems, 'PARENT_NODE_ID');
-		$newItemsTree = static::getObjectStructuredRoots(
-			$newItems,
-			$entityId,
-			$userId,
-			'PARENT_NODE_ID',
-			shouldRecountSortIndexes: false,
-		);
-
-		foreach ($newItemsTree as $item)
-		{
-			/** @var CheckList $item */
-			$saveResult = $item->save();
-			if (!$saveResult->isSuccess())
+			if (empty($newItems))
 			{
-				$mergeResult->loadErrors($saveResult->getErrors());
+				static::deleteByCheckListsIds($oldItemsKeys);
+				static::doDeletePostActions($entityId, $userId, ['ITEMS' => static::$oldItemsToMerge]);
+
+				static::doMergePostActions($entityId, $userId, ['PARAMETERS' => $parameters]);
+
 				return $mergeResult;
 			}
 
-			/** @var CheckList $savedItem */
-			$savedItem = $saveResult->getData()['ITEM'];
-			$traversedItems[] = $savedItem->toItemsArray();
+			$traversedItems = [];
+			$newItems = static::normalizeInvalidSortIndexesByPayloadOrder($newItems, 'PARENT_NODE_ID');
+			$newItemsTree = static::getObjectStructuredRoots(
+				$newItems,
+				$entityId,
+				$userId,
+				'PARENT_NODE_ID',
+				shouldRecountSortIndexes: false,
+			);
+
+			foreach ($newItemsTree as $item)
+			{
+				/** @var CheckList $item */
+				$saveResult = $item->save();
+				if (!$saveResult->isSuccess())
+				{
+					$mergeResult->loadErrors($saveResult->getErrors());
+
+					return $mergeResult;
+				}
+
+				/** @var CheckList $savedItem */
+				$savedItem = $saveResult->getData()['ITEM'];
+				$traversedItems[] = $savedItem->toItemsArray();
+			}
+
+			$traversedItems = array_merge(...$traversedItems);
+			$mergeResult->setData(['TRAVERSED_ITEMS' => $traversedItems]);
+
+			$itemsToRemoveKeys = array_diff($oldItemsKeys, array_column($traversedItems, 'ID'));
+			$itemsToRemove = array_filter(
+				static::$oldItemsToMerge,
+				static function ($item) use ($itemsToRemoveKeys)
+				{
+					return in_array((int)$item['ID'], $itemsToRemoveKeys, true);
+				},
+			);
+
+			static::deleteByCheckListsIds($itemsToRemoveKeys);
+			static::doDeletePostActions($entityId, $userId, ['ITEMS' => $itemsToRemove]);
+
+			static::doMergePostActions($entityId, $userId, ['ITEMS' => $traversedItems, 'PARAMETERS' => $parameters]);
+		}
+		finally
+		{
+			static::disableDeferredActionsMode();
 		}
 
-		$traversedItems = array_merge(...$traversedItems);
-		$mergeResult->setData(['TRAVERSED_ITEMS' => $traversedItems]);
-
-		$itemsToRemoveKeys = array_diff($oldItemsKeys, array_column($traversedItems, 'ID'));
-		$itemsToRemove = array_filter(
-			static::$oldItemsToMerge,
-			static function ($item) use ($itemsToRemoveKeys)
-			{
-				return in_array((int)$item['ID'], $itemsToRemoveKeys, true);
-			}
-		);
-
-		static::deleteByCheckListsIds($itemsToRemoveKeys);
-		static::doDeletePostActions($entityId, $userId, ['ITEMS' => $itemsToRemove]);
-
-		static::doMergePostActions($entityId, $userId, ['ITEMS' => $traversedItems, 'PARAMETERS' => $parameters]);
-
-		static::disableDeferredActionsMode();
 		static::onAfterMerge($traversedItems, $userId, $entityId, $parameters);
 
 		return $mergeResult;
+	}
+
+	/**
+	 * Deletes the checklist snapshot that was checked for access.
+	 *
+	 * @param int $entityId
+	 * @param int $userId
+	 * @return Result
+	 * @throws ArgumentException
+	 * @throws NotImplementedException
+	 * @throws ObjectException
+	 * @throws SystemException
+	 */
+	public static function deleteAll($entityId, $userId)
+	{
+		$deleteResult = new Result();
+		$items = static::getList(
+			['ID', static::$entityIdName, 'CREATED_BY', 'TITLE'],
+			[static::$entityIdName => $entityId]
+		);
+
+		if (empty($items))
+		{
+			if (!static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_EDIT))
+			{
+				return static::addErrorToResult($deleteResult, 'ACTION_NOT_ALLOWED', self::ACTION_REMOVE);
+			}
+
+			return $deleteResult;
+		}
+
+		foreach ($items as $item)
+		{
+			$accessModel = ChecklistModel::createFromArray($item);
+			if (!static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_EDIT, $accessModel))
+			{
+				return static::addErrorToResult($deleteResult, 'ACTION_NOT_ALLOWED', self::ACTION_REMOVE);
+			}
+		}
+
+		static::doMergePreActions($entityId, $userId);
+		static::enableDeferredActionsMode();
+
+		try
+		{
+			static::deleteByCheckListsIds(array_keys($items));
+			static::doDeletePostActions($entityId, $userId, ['ITEMS' => $items]);
+			static::doMergePostActions($entityId, $userId, ['PARAMETERS' => []]);
+		}
+		finally
+		{
+			static::disableDeferredActionsMode();
+		}
+
+		return $deleteResult;
 	}
 
 	/**
@@ -1321,6 +1394,36 @@ abstract class CheckListFacade
 			},
 			$items
 		);
+	}
+
+	/**
+	 * @param array $items
+	 * @param array $entityItems
+	 * @param int $checkedItemsCount
+	 * @return bool
+	 */
+	private static function checkMergeItemIds(
+		array $items,
+		array $entityItems,
+		int &$checkedItemsCount,
+	): bool
+	{
+		foreach ($items as $item)
+		{
+			$checkedItemsCount++;
+
+			if (isset($item['ID']) && !isset($entityItems[(int)$item['ID']]))
+			{
+				return false;
+			}
+
+			if (!static::checkMergeItemIds($item['SUB_TREE'] ?? [], $entityItems, $checkedItemsCount))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**

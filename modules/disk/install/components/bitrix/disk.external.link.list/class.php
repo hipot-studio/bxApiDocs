@@ -185,7 +185,7 @@ class CDiskExternalLinkListComponent extends DiskComponent
 
 			$actions[] = [
 				'text' => Loc::getMessage('DISK_EXTERNAL_LINK_LIST_ACT_GET_EXTERNAL_LINK'),
-				'onclick' => "BX.Disk['ExternalLinkListClass_{$this->getComponentId()}'].showExternalLink({$externalLink->getId()}, {$externalLink->getObjectId()}, '{$this->getShortUrlExternalLink($file, $externalLink->getHash())}');",
+				'onclick' => "BX.Disk['ExternalLinkListClass_{$this->getComponentId()}'].showExternalLink({$externalLink->getId()}, {$externalLink->getObjectId()});",
 			];
 
 			$actions[] = [
@@ -312,10 +312,5 @@ class CDiskExternalLinkListComponent extends DiskComponent
 				'default' => true,
 			],
 		];
-	}
-
-	protected function getShortUrlExternalLink(File $file, string $hash)
-	{
-		return $this->getUrlManager()->getPublicExternalLink($file, $hash);
 	}
 }

@@ -19,3 +19,4 @@ final class MassConnectAccess extends MassAccessBase
 		return MailAccess::getMassConnectDenial();
 	}
 }
+

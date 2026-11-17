@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Internal\Service\DeleteTemplateService;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Config\UpdateConfig;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTemplateService;
 use Bitrix\Tasks\V2\Public\Command\Template\AddTemplateCommand;
 use Bitrix\Tasks\V2\Public\Command\Template\DeleteTemplateCommand;
@@ -37,6 +38,8 @@ class Template
 	private $deleteSubTemplates = false;
 	private $unsafeDelete = false;
 	private $skipAgent = false;
+	private ?AuthorAssignmentSubject $authorSubject = null;
+	private bool $isAuthorSubjectExplicit = false;
 
 	public function __construct(int $userId)
 	{
@@ -74,6 +77,17 @@ class Template
 	}
 
 	/**
+	 * @return $this
+	 */
+	public function withAuthorAssignmentSubject(?AuthorAssignmentSubject $subject): self
+	{
+		$this->authorSubject = $subject;
+		$this->isAuthorSubjectExplicit = true;
+
+		return $this;
+	}
+
+	/**
 	 * @param array $fields
 	 *
 	 * @return TemplateObject
@@ -83,8 +97,12 @@ class Template
 	 */
 	public function add(array $fields): TemplateObject
 	{
+		unset($fields['ID']);
+
 		$config = new AddConfig(
 			userId: $this->userId,
+			authorSubject: $this->resolveAuthorSubject(),
+			explicitNullCreator: array_key_exists('CREATED_BY', $fields) && $fields['CREATED_BY'] === null,
 		);
 
 		$mapper = Container::getInstance()->getOrmTemplateMapper();
@@ -144,6 +162,8 @@ class Template
 		$config = new UpdateConfig(
 			userId: $this->userId,
 			skipAgent: $this->skipAgent,
+			authorSubject: $this->resolveAuthorSubject(),
+			explicitNullCreator: array_key_exists('CREATED_BY', $fields) && $fields['CREATED_BY'] === null,
 		);
 
 		$mapper = Container::getInstance()->getOrmTemplateMapper();
@@ -159,5 +179,20 @@ class Template
 		);
 
 		return $mapper->mapToObject($entity);
+	}
+
+	/**
+	 * Legacy calls have no parameter for the subject, so the authenticated user stands in for it
+	 * on this boundary only, unless the subject was set explicitly, even to null. The user id of
+	 * the side effects never becomes the subject.
+	 */
+	private function resolveAuthorSubject(): ?AuthorAssignmentSubject
+	{
+		if ($this->isAuthorSubjectExplicit)
+		{
+			return $this->authorSubject;
+		}
+
+		return AuthorAssignmentSubject::fromAuthenticatedUser();
 	}
 }

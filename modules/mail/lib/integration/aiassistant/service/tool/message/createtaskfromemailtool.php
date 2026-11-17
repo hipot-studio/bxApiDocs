@@ -112,3 +112,4 @@ class CreateTaskFromEmailTool extends ToolContract
 		];
 	}
 }
+

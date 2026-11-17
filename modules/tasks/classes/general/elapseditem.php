@@ -42,6 +42,11 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 		{
 			$fields['USER_ID'] = $task->getExecutiveUserId();
 		}
+		if ((int)$fields['USER_ID'] !== (int)$task->getExecutiveUserId())
+		{
+			throw new TasksException('', TasksException::TE_ACTION_NOT_ALLOWED);
+		}
+
 		$fields['TASK_ID'] = $task->getId();
 		$fields['COMMENT_TEXT'] = (string)$fields['COMMENT_TEXT'];
 		$fields['MINUTES'] = (isset($fields['MINUTES']) ? (int)$fields['MINUTES'] : null);

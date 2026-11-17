@@ -71,3 +71,4 @@ class MailTemplateEditor
 		return MailTemplateEditorProvider::class;
 	}
 }
+

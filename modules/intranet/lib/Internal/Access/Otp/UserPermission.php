@@ -45,6 +45,11 @@ class UserPermission
 		return $this->canCurrentUserEdit();
 	}
 
+	public function canRemoveChannel(): bool
+	{
+		return $this->user->isCurrent();
+	}
+
 	public function canSetIndefinitePeriod(): bool
 	{
 		if ($this->user->isIntegrator())

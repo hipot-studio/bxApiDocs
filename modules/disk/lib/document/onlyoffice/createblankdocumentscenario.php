@@ -6,11 +6,13 @@ use Bitrix\Disk\Analytics\Enum\DocumentTypeEnum;
 use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Integration\Collab\CollabDocumentCreationService;
 use Bitrix\Disk\User;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
+use Bitrix\Main\DI\ServiceLocator;
 
 final class CreateBlankDocumentScenario
 {
@@ -46,6 +48,19 @@ final class CreateBlankDocumentScenario
 		$result = new Result();
 
 		$storage = $targetFolder->getStorage();
+		// TODO: remove if (false) when frontend sends $collabId for Bitrix\Disk\Controller\DocumentService->goToCreateAction
+		if (false)
+		{
+			$isCollaber = User::loadById($this->userId)?->isCollaber() ?? false;
+			$collabDocumentCreationService = ServiceLocator::getInstance()->get(CollabDocumentCreationService::class);
+			if ($isCollaber && !$collabDocumentCreationService->isFolderInCollabStorage($targetFolder))
+			{
+				$result->addError(new Error('Wrong target folder for collab user'));
+
+				return $result;
+			}
+		}
+
 		if (!$targetFolder->canAdd($storage->getSecurityContext($this->userId, $shouldCheckUnifiedLink)))
 		{
 			$result->addError(new Error('Bad rights. Could not add file to the folder.'));

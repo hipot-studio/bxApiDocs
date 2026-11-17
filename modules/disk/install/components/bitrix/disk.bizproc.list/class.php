@@ -20,12 +20,34 @@ class CDiskBizprocListComponent extends BaseComponent implements SidePanelWrappa
 	protected function listActions()
 	{
 		return array(
-			'edit' => 'autoload',
-			'create' => 'autoload',
-			'editPresent' => 'autoload',
-			'createPresent' => 'autoload',
-			'createDefault',
-			'delete',
+			'edit' => array(
+				'method' => array('GET'),
+				'name' => 'autoload',
+				'check_csrf_token' => true,
+			),
+			'create' => array(
+				'method' => array('GET'),
+				'name' => 'autoload',
+				'check_csrf_token' => true,
+			),
+			'editPresent' => array(
+				'method' => array('GET'),
+				'name' => 'autoload',
+				'check_csrf_token' => true,
+			),
+			'createPresent' => array(
+				'method' => array('GET'),
+				'name' => 'autoload',
+				'check_csrf_token' => true,
+			),
+			'createDefault' => array(
+				'method' => array('GET'),
+				'check_csrf_token' => true,
+			),
+			'delete' => array(
+				'method' => array('GET'),
+				'check_csrf_token' => true,
+			),
 		);
 	}
 

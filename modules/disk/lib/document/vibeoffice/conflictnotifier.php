@@ -14,8 +14,13 @@ use Bitrix\Main\Result;
 final class ConflictNotifier
 {
 	/** @param DocumentSession[] $sessions */
-	public function notify(File $original, File $copy, array $sessions): Result
+	public function notify(?File $original, File $copy, array $sessions, ?int $originalObjectId = null): Result
 	{
+		$originalObjectId = (int)($original?->getId() ?? $originalObjectId);
+		if ($originalObjectId <= 0)
+		{
+			return (new Result())->addError(new Error('The original document is unavailable.', 'vibeoffice_notify_failed'));
+		}
 		$ownerId = (int)$copy->getCreatedBy();
 		if ($ownerId <= 0)
 		{
@@ -23,11 +28,11 @@ final class ConflictNotifier
 		}
 		$sessionIds = array_map(static fn(DocumentSession $session): int => (int)$session->getId(), $sessions);
 		$publicData = [
-			'object' => ['id' => (int)$original->getId()],
+			'object' => ['id' => $originalObjectId],
 			'event' => 'conflict',
 			'documentSessionIds' => $sessionIds,
 		];
-		$original->makeObjectEvent('vibeoffice', $publicData)->sendToObjectChannel();
+		$original?->makeObjectEvent('vibeoffice', $publicData)->sendToObjectChannel();
 		$driver = Driver::getInstance();
 		$recipientIds = [$ownerId];
 		foreach ($sessions as $session)

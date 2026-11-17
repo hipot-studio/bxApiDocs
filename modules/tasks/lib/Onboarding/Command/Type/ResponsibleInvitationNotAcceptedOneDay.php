@@ -94,7 +94,12 @@ class ResponsibleInvitationNotAcceptedOneDay implements CommandInterface
 		$taskRepository = Container::getInstance()->get(TaskReadRepositoryInterface::class);
 		$task = $taskRepository->getById($this->taskId, new Select(members: true));
 
-		if (!$task || $task->responsible->id === $task->creator->id)
+		if (
+			!$task
+			|| $task->creator === null
+			|| $task->responsible === null
+			|| $task->responsible->id === $task->creator->id
+		)
 		{
 			return;
 		}

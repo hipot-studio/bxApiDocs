@@ -48,9 +48,10 @@ class TaskModelAdapter implements EntityModelAdapterInterface
 
 		$data['GROUP_ID'] = (int)$entity->group?->getId();
 
-		if ($entity->creator !== null)
+		$creatorId = $entity->getCreatorId();
+		if ($creatorId !== null)
 		{
-			$data['CREATED_BY'] = $entity->creator->getId();
+			$data['CREATED_BY'] = $creatorId;
 		}
 
 		if ($entity->responsible !== null)

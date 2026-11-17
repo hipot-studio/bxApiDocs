@@ -108,6 +108,8 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			$securityContext->preloadOperationsForObjects($files);
 		}
 
+		$this->preloadExternalLinkAccess($files, $visibleColumns);
+
 		$this->nowTime = time() + CTimeZone::getOffset();
 		$this->fullFormatWithoutSec = preg_replace('/:s$/', '', CDatabase::dateFormatToPHP(CSite::GetDateFormat("FULL")));
 		$this->openEditInsteadOfPreview = $this->canOpenEditInsteadOfPreview();
@@ -186,6 +188,8 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 					'type' => 'download',
 				])
 				->setUseUnifiedEditLink()
+				// A Markdown file opens on a page of its own; an attachment keeps the viewer (see the setter).
+				->setMarkdownTabAllowed()
 			;
 
 			$documentName = \CUtil::JSEscape($item['NAME']);
@@ -272,6 +276,63 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		}
 
 		return $items;
+	}
+
+	public function getTileSharedObjectIds(array $items): array
+	{
+		$objectStorageIds = [];
+		$storageIds = [];
+		foreach ($items as $item)
+		{
+			$file = $item['object'] ?? null;
+			if (!($file instanceof Disk\File) || $file->isLink())
+			{
+				continue;
+			}
+
+			$objectId = (int)$file->getId();
+			$storageId = (int)$file->getStorageId();
+			if ($objectId <= 0 || $storageId <= 0)
+			{
+				continue;
+			}
+
+			$objectStorageIds[$objectId] = $storageId;
+			$storageIds[$storageId] = true;
+		}
+
+		if (!$objectStorageIds || $this->getUserId() <= 0)
+		{
+			return [];
+		}
+
+		$userCode = Disk\Sharing::CODE_USER . $this->getUserId();
+		$sharingRows = Disk\Sharing::getList([
+			'select' => ['REAL_OBJECT_ID', 'REAL_STORAGE_ID'],
+			'filter' => [
+				'@REAL_OBJECT_ID' => array_keys($objectStorageIds),
+				'@REAL_STORAGE_ID' => array_keys($storageIds),
+				'!=STATUS' => Disk\Sharing::STATUS_IS_DECLINED,
+				[
+					'LOGIC' => 'OR',
+					'=TO_ENTITY' => $userCode,
+					'=FROM_ENTITY' => $userCode,
+				],
+			],
+		]);
+
+		$sharedObjectIds = [];
+		while ($sharing = $sharingRows->fetch())
+		{
+			$objectId = (int)$sharing['REAL_OBJECT_ID'];
+			$storageId = (int)$sharing['REAL_STORAGE_ID'];
+			if (isset($objectStorageIds[$objectId]) && $objectStorageIds[$objectId] === $storageId)
+			{
+				$sharedObjectIds[$objectId] = true;
+			}
+		}
+
+		return $sharedObjectIds;
 	}
 
 	protected function getRelativeTime(int $time): string
@@ -801,6 +862,58 @@ HTML;
 		}
 
 		return '';
+	}
+
+	/**
+	 * Warms up the contexts the cells of the external link read, so that a cell does not load rights
+	 * and access levels of the unified link per row.
+	 *
+	 * @param Disk\File[] $files
+	 */
+	private function preloadExternalLinkAccess(array $files, array $visibleColumns): void
+	{
+		if (!in_array('EXTERNAL_LINK', $visibleColumns, true))
+		{
+			return;
+		}
+
+		if (!Disk\Configuration::isEnabledManualExternalLink() && !Disk\Configuration::isEnabledBoardExternalLink())
+		{
+			return;
+		}
+
+		$realObjectsByStorageId = [];
+		$storagesById = [];
+		foreach ($files as $file)
+		{
+			if (!$file instanceof Disk\BaseObject)
+			{
+				continue;
+			}
+
+			$realObject = $file->getRealObject();
+			$storage = $realObject?->getStorage();
+			if (!$storage)
+			{
+				continue;
+			}
+
+			$storageId = (int)$storage->getId();
+			$storagesById[$storageId] = $storage;
+			$realObjectsByStorageId[$storageId][(int)$realObject->getId()] = $realObject;
+		}
+
+		foreach ($realObjectsByStorageId as $storageId => $realObjects)
+		{
+			$securityContext = $storagesById[$storageId]->getCurrentUserSecurityContext(true);
+			if (!$securityContext instanceof Disk\Security\SecurityContext)
+			{
+				continue;
+			}
+
+			// A context that checks the unified link preloads its access levels together with the operations.
+			$securityContext->preloadOperationsForObjects(array_values($realObjects));
+		}
 	}
 
 	private function shouldShowCellForExternalLink(Disk\File $file): bool

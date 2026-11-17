@@ -25,10 +25,24 @@ class TemplateRightService
 
 	public function getTemplateRightsBatch(int $userId, array $templateIds, array $rules = ActionDictionary::TEMPLATE_ACTIONS, array $params = []): array
 	{
-		$this->accessCacheLoader->preload($templateIds);
+		$normalizedTemplateIds = array_values(
+			array_filter(
+				array_unique(array_map('intval', $templateIds)),
+				static fn (int $templateId): bool => $templateId > 0,
+			),
+		);
+
+		if (count($normalizedTemplateIds) === 1)
+		{
+			$this->accessCacheLoader->preload($normalizedTemplateIds);
+		}
+		else
+		{
+			$this->accessCacheLoader->preloadForAccess($userId, $normalizedTemplateIds);
+		}
 
 		$access = [];
-		foreach ($templateIds as $templateId)
+		foreach ($normalizedTemplateIds as $templateId)
 		{
 			$access[$templateId] = $this->get($rules, $templateId, $userId, $params);
 		}

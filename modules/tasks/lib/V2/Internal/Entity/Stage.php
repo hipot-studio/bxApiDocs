@@ -19,6 +19,7 @@ class Stage extends AbstractEntity
 		public readonly ?string $systemType = null,
 		public readonly ?int $sort = null,
 		public readonly ?int $entityId = null, // only for inner use
+		public readonly ?string $entityType = null, // only for inner use
 	)
 	{
 

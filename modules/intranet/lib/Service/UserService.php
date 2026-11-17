@@ -26,6 +26,11 @@ class UserService
 		$this->cache = Application::getInstance()->getCache();
 	}
 
+	public function getEmployeeGroupIds(string $siteId): array
+	{
+		return \CIntranetInviteDialog::getUserGroups($siteId, false);
+	}
+
 	public function getAdminUserIds(): array
 	{
 		if ($this->cache->initCache(self::CACHE_TTL, 'admin_id_list', self::BASE_CACHE_DIR))

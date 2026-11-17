@@ -23,8 +23,8 @@ use Bitrix\Tasks\Replication\Template\Common\Service\CommentService;
 use Bitrix\Tasks\Replication\Template\Common\Service\DefaultHistoryService;
 use Bitrix\Tasks\Replication\Template\Common\Service\ScenarioService;
 use Bitrix\Tasks\Replication\Template\Common\Service\SubTaskService;
+use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
 use Bitrix\Tasks\Replication\Template\Repetition\Time\Service\ExecutionService;
-use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
@@ -71,36 +71,42 @@ class TemplateTaskProducer implements ProducerInterface
 		$this->accessController = new TaskAccessController($this->userId);
 		$this->fields = (new TemplateParameter($this->repository))->getData();
 		$this->initHistoryService();
-		$this->replacePerHitUserId();
 	}
 
 	public function produceTask(): Result
 	{
-		$this->currentResult = $this->checkCanCreateTask();
-		if (!$this->currentResult->isSuccess())
+		$this->replacePerHitUserId();
+		try
 		{
+			$this->currentResult = $this->checkCanCreateTask();
+			if (!$this->currentResult->isSuccess())
+			{
+				return $this->currentResult;
+			}
+
+			$this->currentResult = $this->createTask();
+			if (!$this->currentResult->isSuccess())
+			{
+				return $this->currentResult;
+			}
+
+			$results[] = $this->updateTemplateReplicationCounter();
+			$results[] = $this->setTaskScenario();
+			$results[] = $this->setCheckListToTask();
+			$results[] = $this->clearTaskComments();
+			$results[] = $this->createSubTasks();
+			$results[] = $this->produceSubTemplates();
+
+			$this->currentResult = $this->getCreationResult($results);
+
+			$this->writeReplicationResultToTemplateHistory();
+
 			return $this->currentResult;
 		}
-
-		$this->currentResult = $this->createTask();
-		if (!$this->currentResult->isSuccess())
+		finally
 		{
-			return $this->currentResult;
+			$this->replacePerHitUserId(true);
 		}
-
-		$results[] = $this->updateTemplateReplicationCounter();
-		$results[] = $this->setTaskScenario();
-		$results[] = $this->setCheckListToTask();
-		$results[] = $this->clearTaskComments();
-		$results[] = $this->createSubTasks();
-		$results[] = $this->produceSubTemplates();
-
-		$this->currentResult = $this->getCreationResult($results);
-
-		$this->writeReplicationResultToTemplateHistory();
-		$this->replacePerHitUserId(true);
-
-		return $this->currentResult;
 	}
 
 	protected function replacePerHitUserId(bool $switchBack = false): static
@@ -191,13 +197,15 @@ class TemplateTaskProducer implements ProducerInterface
 			return $this;
 		}
 
-		$executionService = new ExecutionService($this->repository);
-		$this->fields['CREATED_DATE'] = new DateTime(
-			UI::formatDateTime(
-				MakeTimeStamp($executionService->getTemplateCurrentExecutionTime())
-			// - User::getTimeZoneOffset($this->fields['CREATED_BY'])
-			)
-		);
+		// same priority the replication checker uses, otherwise the stamped CREATED_DATE stops
+		// matching the value the already-produced check looks for and the guard lets duplicates in
+		$priority = RegularTemplateTaskReplicator::isTimePriorityEnabled()
+			? ExecutionService::PRIORITY_AGENT
+			: ExecutionService::PRIORITY_TEMPLATE
+		;
+
+		$executionDate = (new ExecutionService($this->repository))->getTemplateCurrentExecutionDateTime($priority);
+		$this->fields['CREATED_DATE'] = $executionDate ?? new DateTime();
 
 		return $this;
 	}

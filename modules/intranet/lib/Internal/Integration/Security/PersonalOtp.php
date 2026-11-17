@@ -11,6 +11,7 @@ use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\OtpGraceDeadlineResolver;
 use Bitrix\Intranet\Internal\Service\Otp\RecoverAccessRequestService;
 use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
 use Bitrix\Main\Analytics\AnalyticsEvent;
@@ -196,6 +197,15 @@ class PersonalOtp
 
 	public function getGracePeriod(): ?DateTime
 	{
+		if ($this->isMandatoryUnconfigured())
+		{
+			$deadline = (new OtpGraceDeadlineResolver())->resolve($this->otpInfo);
+			if ($deadline !== null)
+			{
+				return $deadline;
+			}
+		}
+
 		$personalDate = $this->getDeactivateUntil();
 		if ($personalDate !== null)
 		{
@@ -255,6 +265,24 @@ class PersonalOtp
 		return $this->getOtpByUser()->getEmail();
 	}
 
+	/**
+	 * @throws OtpException
+	 * @throws ArgumentTypeException
+	 */
+	public function removeBackupEmail(): void
+	{
+		$isSaved = $this->getOtpByUser()
+			->setEmail(null)
+			->setDateSentEmail(null)
+			->save()
+		;
+
+		if (!$isSaved)
+		{
+			throw new OtpException('Unable to clear backup email');
+		}
+	}
+
 	public function getDeeplink(string $intent, int $ttl = 600): string
 	{
 		if (Loader::includeModule('mobile'))
@@ -286,6 +314,17 @@ class PersonalOtp
 	public function isRequired(): bool
 	{
 		return !$this->canSkipMandatoryByRights();
+	}
+
+	/**
+	 * @throws ArgumentTypeException
+	 */
+	public function isMandatoryUnconfigured(): bool
+	{
+		return !$this->otpInfo->isInitialized
+			&& (new OtpSettings())->isMandatoryUsing()
+			&& $this->isRequired()
+		;
 	}
 
 	public function getOtpInfo(): UserOtp

@@ -38,3 +38,4 @@ final class UserService
 		return (new IntranetUserService())->getAdminUserIds();
 	}
 }
+

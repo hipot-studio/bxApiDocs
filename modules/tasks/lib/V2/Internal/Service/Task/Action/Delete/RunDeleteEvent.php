@@ -22,6 +22,7 @@ class RunDeleteEvent
 		$taskId = (int)$fullTaskData['ID'];
 
 		$parameters = array_merge($deleteEventParameters, $this->config->getByPassParameters());
+		$parameters['MOVED_TO_RECYCLEBIN'] = $this->config->getRuntime()->isMovedToRecyclebin();
 
 		foreach (GetModuleEvents('tasks', 'OnTaskDelete', true) as $arEvent)
 		{

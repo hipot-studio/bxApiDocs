@@ -7,6 +7,7 @@ use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Main\Error;
 
 /**
@@ -53,8 +54,19 @@ final class OpeningContext
 		private readonly string $downloadUrl = '',
 		private readonly ?\Closure $editRefusal = null,
 		private readonly bool $hasPublicLinkAccess = false,
+		private readonly ?ShortLinkOpening $shortLinkOpening = null,
+		private readonly bool $offersRevisionLink = false,
 	)
 	{
+	}
+
+	/**
+	 * The short opening the page stays on: its address is the one to copy and to keep in the history, for a
+	 * guest and an employee alike, whatever the issue of new short addresses says.
+	 */
+	public function shortLinkOpening(): ?ShortLinkOpening
+	{
+		return $this->shortLinkOpening;
 	}
 
 	/** Null when the opening names no object any more: an orphaned revision is still served as a page. */
@@ -177,6 +189,15 @@ final class OpeningContext
 	public function offersObjectSharing(): bool
 	{
 		return $this->offersObjectSharing;
+	}
+
+	/**
+	 * Whether the surface offers the address of the revision it was opened on: the page of a Markdown
+	 * revision copies the unified link of that very revision while still offering nothing of the object.
+	 */
+	public function offersRevisionLink(): bool
+	{
+		return $this->offersRevisionLink;
 	}
 
 	/**

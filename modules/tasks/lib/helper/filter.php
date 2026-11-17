@@ -2,9 +2,17 @@
 
 namespace Bitrix\Tasks\Helper;
 
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Context;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Filter\Options;
+use Bitrix\Tasks\Feature\RegularTaskTypesFeature;
+use Bitrix\Tasks\Filter\Field\MemberUnion;
+use Bitrix\Tasks\Filter\Field\Mode;
+use Bitrix\Tasks\Filter\Field\ModeDeclaration;
+use Bitrix\Tasks\Filter\Field\SatelliteValues;
+use Bitrix\Tasks\Filter\Field\TagUnion;
+use Bitrix\Tasks\Filter\MemberUnionFeature;
 use Bitrix\Tasks\Filter\Preset\AccomplicePreset;
 use Bitrix\Tasks\Filter\Preset\AuditorPreset;
 use Bitrix\Tasks\Filter\Preset\OriginatorPreset;
@@ -13,6 +21,7 @@ use Bitrix\Tasks\Filter\PresetProvider;
 use Bitrix\Tasks\Filter\Scope;
 use Bitrix\Tasks\Flow\FlowFeature;
 use Bitrix\Tasks\Integration\CRM\CrmInTasksFeature;
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\Internals\Counter\Deadline;
 use Bitrix\Tasks\Internals\Counter\Role;
 use Bitrix\Tasks\Internals\Counter\Type;
@@ -41,11 +50,26 @@ class Filter extends Common
 	public const REGULAR_PRESET = 'filter_tasks_task_is_regular';
 	public const SCRUM_PRESET = 'filter_tasks_scrum';
 
+	/**
+	 * Fields the member operator joins, in the order their branches enter the OR node. The same four carry
+	 * the member union flag in getFilterModeFieldsMap().
+	 */
+	private const MEMBER_UNION_FIELDS = ['RESPONSIBLE_ID', 'ACCOMPLICE', 'AUDITOR', 'CREATED_BY'];
+
+	private const ROLE_SUBFILTER_KEY = '::SUBFILTER-ROLEID';
+
+	/**
+	 * Branch keys whose condition is read through the member link rather than a column of the task. Both
+	 * forms are here: the plain one of a field and the "=" one a role builds.
+	 */
+	private const MEMBER_LINK_KEYS = ['ACCOMPLICE', '=ACCOMPLICE', 'AUDITOR', '=AUDITOR'];
+
 	protected static ?array $instance = null;
 	protected static array $options = [];
 
 	private bool $isFilterDataSet = false;
 	private array $filterData = [];
+	private ?bool $isDefaultListScope = null;
 
 	private static bool $isRolePresetsEnabledForMobile = false;
 
@@ -404,9 +428,124 @@ class Filter extends Common
 			}
 		}
 
+		$filter = $this->applyMemberUnion($filter);
 		$filter = $this->postProcessMainFilter($filter);
 
 		return $filter;
+	}
+
+	/**
+	 * Positive conditions of the member fields joined into a single OR node.
+	 *
+	 * Only the fields in Mode::EQUAL take part: "does not include" and "not set" are restrictions rather
+	 * than variants of the same match, so they stay outside as subfilters of their own. One branch needs no
+	 * node at all, and a branch without a condition is never emitted - such a node would match anything.
+	 */
+	private function applyMemberUnion(array $filter): array
+	{
+		if (!$this->isMemberUnionAvailable() || !$this->isMemberUnionSelected())
+		{
+			return $filter;
+		}
+
+		$branchKeys = [];
+		foreach (self::MEMBER_UNION_FIELDS as $fieldId)
+		{
+			$key = "::SUBFILTER-{$fieldId}";
+			if (!empty($filter[$key]) && $this->getFieldMode($fieldId) === Mode::EQUAL)
+			{
+				$branchKeys[] = $key;
+			}
+		}
+
+		$filter = $this->dropDefaultRole($filter, $branchKeys !== []);
+
+		// An explicitly picked role is a variant of the same match and enters the group whole: the two
+		// conditions behind "originator" mean the role only as a pair.
+		if (!empty($filter[self::ROLE_SUBFILTER_KEY]))
+		{
+			$branchKeys[] = self::ROLE_SUBFILTER_KEY;
+		}
+
+		if (count($branchKeys) < 2)
+		{
+			return $filter;
+		}
+
+		$group = ['::LOGIC' => 'OR'];
+		foreach ($branchKeys as $index => $key)
+		{
+			$group['::SUBFILTER-' . ($index + 1)] = $this->markMemberLinkBranch($filter[$key]);
+			unset($filter[$key]);
+		}
+
+		$filter['::SUBFILTER-MEMBER_UNION'] = $group;
+
+		return $filter;
+	}
+
+	/**
+	 * Paired key telling TaskFilterBuilder that the condition on the member link in this branch is one of
+	 * the variants of the match. Without it the condition is joined to the task, and a task with several
+	 * members of that type comes back as several rows of the selection.
+	 */
+	private function markMemberLinkBranch(array $branch): array
+	{
+		foreach (self::MEMBER_LINK_KEYS as $key)
+		{
+			if (array_key_exists($key, $branch))
+			{
+				$branch['META:MEMBER_UNION'] = MemberUnion::OR->value;
+
+				break;
+			}
+		}
+
+		return $branch;
+	}
+
+	/**
+	 * The default role adds the current user as a member of the task to any non empty filter outside a
+	 * group. Under the OR operator it is dropped as soon as one member field is filled: the operator is
+	 * there to ask about somebody else, and the restriction would cut out every task without the user.
+	 * An emptied role subfilter is deleted rather than kept as an empty one, so it cannot become a branch.
+	 */
+	private function dropDefaultRole(array $filter, bool $hasFilledEqualField): array
+	{
+		if (!$hasFilledEqualField || !isset($filter[self::ROLE_SUBFILTER_KEY]['MEMBER']))
+		{
+			return $filter;
+		}
+
+		unset($filter[self::ROLE_SUBFILTER_KEY]['MEMBER']);
+		if (empty($filter[self::ROLE_SUBFILTER_KEY]))
+		{
+			unset($filter[self::ROLE_SUBFILTER_KEY]);
+		}
+
+		return $filter;
+	}
+
+	/**
+	 * Whether the user asked for the OR operator. The default AND is an empty or absent satellite value,
+	 * as is anything unknown.
+	 */
+	private function isMemberUnionSelected(): bool
+	{
+		$value = $this->getFilterFieldData(MemberUnion::SATELLITE_KEY, '');
+
+		return is_string($value) && MemberUnion::tryFrom($value) === MemberUnion::OR;
+	}
+
+	/**
+	 * Mode picked for a field of the current scope, Mode::EQUAL for a field that offers none.
+	 */
+	private function getFieldMode(string $fieldId): Mode
+	{
+		return $this->getFieldFilterMode($fieldId)
+			?->resolveMode($this->getFilterFieldData(Mode::satelliteKey($fieldId), ''))
+			?? Mode::EQUAL
+		;
 	}
 
 	/**
@@ -660,6 +799,38 @@ class Filter extends Common
 				'items' => [
 					'Y' => Loc::getMessage('TASKS_ALLOW_TIME_TRACKING_Y'),
 					'N' => Loc::getMessage('TASKS_ALLOW_TIME_TRACKING_N'),
+				],
+			];
+		}
+		if (in_array('REGULARITY', $fields))
+		{
+			$filter['REGULARITY'] = [
+				'id' => 'REGULARITY',
+				'name' => Loc::getMessage('TASKS_FILTER_REGULARITY'),
+				'type' => 'list',
+				'items' => [
+					// FieldAdapter would otherwise prepend its own masculine "not set" item, while the
+					// field name is feminine in Russian - so the empty item carries its own wording.
+					'' => Loc::getMessage('TASKS_FILTER_REGULARITY_NOT_SET'),
+					'active' => Loc::getMessage('TASKS_FILTER_REGULARITY_ACTIVE'),
+					'stopped' => Loc::getMessage('TASKS_FILTER_REGULARITY_STOPPED'),
+					'none' => Loc::getMessage('TASKS_FILTER_REGULARITY_NONE'),
+				],
+			];
+		}
+		if (in_array('REPLICATE_TYPE', $fields))
+		{
+			$filter['REPLICATE_TYPE'] = [
+				'id' => 'REPLICATE_TYPE',
+				'name' => Loc::getMessage('TASKS_FILTER_REPLICATE_TYPE'),
+				'type' => 'list',
+				'items' => [
+					// FieldAdapter prepends its own "not set" item only when the first value is not empty,
+					// and the schedule type is 0. Without this item the field opens already narrowed down.
+					'' => '',
+					RegularityType::Schedule->value => Loc::getMessage('TASKS_FILTER_REPLICATE_TYPE_SCHEDULE'),
+					RegularityType::Deadline->value => Loc::getMessage('TASKS_FILTER_REPLICATE_TYPE_DEADLINE'),
+					RegularityType::AfterCompletion->value => Loc::getMessage('TASKS_FILTER_REPLICATE_TYPE_AFTER_COMPLETION'),
 				],
 			];
 		}
@@ -956,7 +1127,163 @@ class Filter extends Common
 			}
 		}
 
+		foreach (array_keys($this->getFilterModeFieldsMap()) as $modeFieldId)
+		{
+			$declaration = $this->getFieldFilterMode($modeFieldId);
+			if (isset($filter[$modeFieldId]) && $declaration !== null)
+			{
+				$filter[$modeFieldId][ModeDeclaration::FIELD_KEY] = $declaration->toArray();
+			}
+		}
+
 		return $filter;
+	}
+
+	/**
+	 * Available field filter modes per field for the regular task list (Scope::DEFAULT).
+	 * Source of truth for both the field declaration and the mode translation.
+	 *
+	 * @return array<string, ModeDeclaration>
+	 */
+	private function getFilterModeFieldsMap(): array
+	{
+		$optional = [Mode::EQUAL, Mode::EXCLUDE, Mode::EMPTY];
+		$mandatory = [Mode::EQUAL, Mode::EXCLUDE];
+		$memberUnion = $this->isMemberUnionAvailable();
+
+		return [
+			'GROUP_ID' => new ModeDeclaration($optional),
+			'TAG' => new ModeDeclaration($optional, unionAvailable: true),
+			'AUDITOR' => new ModeDeclaration($optional, memberUnionAvailable: $memberUnion),
+			'ACCOMPLICE' => new ModeDeclaration($optional, memberUnionAvailable: $memberUnion),
+			'RESPONSIBLE_ID' => new ModeDeclaration($mandatory, memberUnionAvailable: $memberUnion),
+			'CREATED_BY' => new ModeDeclaration($mandatory, memberUnionAvailable: $memberUnion),
+			// No "empty" mode: the picker already carries a synthetic "no CRM binding" value (NONE).
+			'CRM_ITEM' => new ModeDeclaration($mandatory),
+		];
+	}
+
+	/**
+	 * Field mode declaration or null when the field is not eligible in the current scope.
+	 * Modes are only offered on the regular task list; scrum/group/relation keep the legacy behaviour.
+	 */
+	private function getFieldFilterMode(string $fieldId): ?ModeDeclaration
+	{
+		if (!$this->areFieldFilterModesAvailable())
+		{
+			return null;
+		}
+
+		return $this->getFilterModeFieldsMap()[$fieldId] ?? null;
+	}
+
+	/**
+	 * Field modes are a feature-gated addition of the regular task list: without the toggle the fields carry
+	 * no mode declaration, so both the control and the mode translation fall back to the legacy behaviour.
+	 */
+	private function areFieldFilterModesAvailable(): bool
+	{
+		return CrmInTasksFeature::isOn() && $this->isDefaultListScope();
+	}
+
+	/**
+	 * Whether the operator between the member fields is offered at all: its own toggle on top of the field
+	 * modes, without which the operator has no "equal" condition to join.
+	 */
+	private function isMemberUnionAvailable(): bool
+	{
+		return MemberUnionFeature::isOn() && $this->areFieldFilterModesAvailable();
+	}
+
+	/**
+	 * Fields whose satellite values belong to this filter, whether or not the modes are offered right now.
+	 *
+	 * The values outlive the toggle. A preset saved while the modes were available keeps them, every apply
+	 * re-saves the preset from what the page sends, and Options::setFilterSettings() replaces the stored fields
+	 * with that. So the page has to carry the satellites back even where it builds no control for them -
+	 * otherwise switching the toggle off turns the first apply into a silent reset of the saved modes.
+	 *
+	 * Empty outside the regular task list: no other scope ever offered a mode, so none of its presets holds one.
+	 *
+	 * @return list<string>
+	 */
+	public function getSatelliteFieldIds(): array
+	{
+		return $this->isDefaultListScope() ? array_keys($this->getFilterModeFieldsMap()) : [];
+	}
+
+	/**
+	 * Satellite values of one saved filter, the additional branch included.
+	 *
+	 * Options::fetchFieldValuesFromFilterSettings() reads the fields branch alone, and the mobile path asks
+	 * for no additional fields, so without the second source the satellite of a field added through
+	 * "Add field" never reaches the phone and the operator silently reads as AND.
+	 *
+	 * @return array<string, string>
+	 */
+	public function getPresetSatelliteValues(string $presetId): array
+	{
+		$options = $this->getOptions();
+		$settings = $options->getFilterSettings($presetId);
+		if (!is_array($settings))
+		{
+			return [];
+		}
+
+		$settings['additional'] = array_merge(
+			is_array($settings['additional'] ?? null) ? $settings['additional'] : [],
+			$options->getAdditionalPresetFields($presetId),
+		);
+
+		return SatelliteValues::fromPresetSettings($settings, array_keys($this->getFilterModeFieldsMap()))
+			->toArray()
+		;
+	}
+
+	/**
+	 * Synthetic field the mobile filter box shows the operator as: its id is the satellite key, so the value
+	 * picked in the box travels to the web filter exactly as the satellite of a preset does.
+	 *
+	 * Null while the axis is unavailable - the box then has the row list of today. The web filter has no such
+	 * field on purpose: there the operator is part of the mode of a member field.
+	 */
+	public function getMemberUnionFieldDescriptor(): ?array
+	{
+		if (!$this->isMemberUnionAvailable())
+		{
+			return null;
+		}
+
+		return [
+			'id' => MemberUnion::SATELLITE_KEY,
+			'name' => Loc::getMessage('TASKS_FILTER_MEMBER_UNION'),
+			'type' => 'list',
+			'params' => ['multiple' => 'N'],
+			'items' => [
+				MemberUnion::AND->value => Loc::getMessage('TASKS_FILTER_MEMBER_UNION_AND'),
+				MemberUnion::OR->value => Loc::getMessage('TASKS_FILTER_MEMBER_UNION_OR'),
+			],
+			'default' => true,
+		];
+	}
+
+	/**
+	 * Whether the current filter context is the regular task list: outside a group, not a relation view
+	 * and not a scrum project. These three terms are exhaustive, so the personal task list of a collaber
+	 * (Scope::COLLABER) belongs here on purpose: it is the same task list with the same fields.
+	 * This is the public answer of the filter row, consumed by the filters onboarding display rule; the grid
+	 * keeps its own copy of the predicate private on purpose.
+	 */
+	public function isDefaultListScope(): bool
+	{
+		if ($this->isDefaultListScope === null)
+		{
+			$this->isDefaultListScope = (int)$this->getGroupId() === 0
+				&& !$this->isRelation()
+				&& !$this->isScrumProject();
+		}
+
+		return $this->isDefaultListScope;
 	}
 
 	/**
@@ -990,7 +1317,14 @@ class Filter extends Common
 			'COMMENT',
 			'ACTIVITY_DATE',
 			'FLOW',
+			'REGULARITY',
 		];
+
+		// The regularity type field is only offered while the release flag is on (as FLOW under FlowFeature).
+		if (Feature::isEnabled(RegularTaskTypesFeature::class))
+		{
+			$fields[] = 'REPLICATE_TYPE';
+		}
 
 		if (CrmInTasksFeature::isOn())
 		{
@@ -1369,6 +1703,18 @@ class Filter extends Common
 					$filter[$rowId] = $field;
 				}
 				break;
+			case 'REPLICATE_TYPE':
+				// The schedule type is 0, which is falsy - the generic default below would drop it.
+				// An empty array means "no type selected": it must NOT be forwarded, otherwise it is
+				// cast to (int)0 = schedule downstream and wrongly constrains the list to schedule.
+				if ($field !== null && $field !== '' && $field !== false && $field !== [])
+				{
+					$filter['REPLICATE_TYPE'] = $field;
+				}
+				break;
+			case 'REGULARITY':
+				$filter = array_merge($filter, self::mapRegularityValue(is_string($field) ? $field : null));
+				break;
 			default:
 				if ($field)
 				{
@@ -1381,22 +1727,99 @@ class Filter extends Common
 	}
 
 	/**
+	 * Translates the single-select "Regularity" field value into the internal filter keys that
+	 * TaskFilterBuilder already understands (ALG-M1 / TBL-M1). Pure and static so the only new branch
+	 * of logic is unit-testable in isolation from the main.ui.filter context. REGULAR / REPLICATE are
+	 * internal translation keys here, not standalone UI fields.
+	 */
+	public static function mapRegularityValue(?string $value): array
+	{
+		switch ($value)
+		{
+			case 'active':
+				return ['REGULAR' => 'Y', 'REPLICATE' => 'Y'];
+
+			case 'stopped':
+				return ['REGULAR' => 'Y', 'REPLICATE' => 'N'];
+
+			case 'none':
+				return ['REGULAR' => 'N'];
+
+			default:
+				return [];
+		}
+	}
+
+	/**
 	 * @param $row
 	 * @return array
 	 */
 	private function getSelectorFilterFieldData($row): array
 	{
-		$filter = [];
-
 		$rowId = $row['id'];
 		$value = $this->getFilterFieldData($rowId);
 
-		if (!empty($value))
+		$declaration = ModeDeclaration::fromFieldDefinition($row);
+		$mode = $declaration?->resolveMode($this->getFilterFieldData(Mode::satelliteKey($rowId), ''))
+			?? Mode::EQUAL;
+
+		if ($mode === Mode::EMPTY)
 		{
-			$filter[$rowId] = $value;
+			return $this->getEmptyModeFilter($rowId);
 		}
 
-		return $filter;
+		if (empty($value))
+		{
+			return [];
+		}
+
+		if ($mode === Mode::EXCLUDE)
+		{
+			return ["!{$rowId}" => $value];
+		}
+
+		if ($rowId === 'TAG')
+		{
+			return $this->getTagEqualFilter($declaration, $value);
+		}
+
+		return [$rowId => $value];
+	}
+
+	/**
+	 * "Not set" representation of a selector field. Value is ignored for this mode.
+	 * META keys extend the existing META:GROUP_ID_IS_NULL_OR_ZERO convention; the SQL is built by consumers.
+	 */
+	private function getEmptyModeFilter(string $rowId): array
+	{
+		return match ($rowId)
+		{
+			'GROUP_ID' => ['META:GROUP_ID_IS_NULL_OR_ZERO' => true],
+			'ACCOMPLICE' => ['META:ACCOMPLICE_IS_EMPTY' => true],
+			'AUDITOR' => ['META:AUDITOR_IS_EMPTY' => true],
+			'TAG' => ['META:TAG_IS_EMPTY' => true],
+			default => [],
+		};
+	}
+
+	/**
+	 * Positive tag match. The union marker META:TAG_UNION is a sibling key emitted only for
+	 * the "OR" logic with at least two selected tags; the default "AND" is not emitted.
+	 */
+	private function getTagEqualFilter(?ModeDeclaration $declaration, $value): array
+	{
+		$result = ['TAG' => $value];
+
+		if ($declaration?->isUnionAvailable() && is_array($value) && count($value) >= 2)
+		{
+			$tagLogic = $this->getFilterFieldData(TagUnion::SATELLITE_KEY, '');
+			if (is_string($tagLogic) && TagUnion::tryFrom($tagLogic) === TagUnion::OR)
+			{
+				$result['META:TAG_UNION'] = TagUnion::OR->value;
+			}
+		}
+
+		return $result;
 	}
 
 	/**

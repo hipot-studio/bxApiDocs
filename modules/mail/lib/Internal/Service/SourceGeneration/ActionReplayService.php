@@ -7,6 +7,7 @@ namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 use Bitrix\Mail\Helper;
 use Bitrix\Mail\Internal\Entity\SourceGeneration\Context;
 use Bitrix\Mail\Internal\Service\SourceGeneration\Matching\CandidateProvider;
+use Bitrix\Mail\Internals\MailboxDirectoryTable;
 use Bitrix\Mail\MailMessageUidTable;
 
 /**
@@ -34,9 +35,12 @@ use Bitrix\Mail\MailMessageUidTable;
  *  - it removes nothing. A letter already lying in the target role on the new source keeps
  *    the copy it has and gets no command, so the pass never creates a second one.
  *  - it touches folders of the user on neither side, and no letter of them is moved - except a
- *    letter lying on the portal in a folder the transfer created on the new source, which is
- *    moved into that folder {@see FolderPairMap}, unless its only copies there lie in a role
- *    the portal keeps it in as well {@see copyFreeToMove()}.
+ *    letter lying on the portal in a folder the new source has a folder for {@see FolderDestinationResolver}.
+ *    Into a folder the transfer created there the letter is moved from wherever it lies, unless
+ *    its only copies there lie in a role the portal keeps it in as well {@see copyFreeToMove()}.
+ *    Into a folder found there already, of the same path or of drafts it is moved only out of a
+ *    system role {@see copyInRoleToMove()}: a copy in a folder of the user there may have been
+ *    put by the user.
  *  - it sends no flag of its own. The one flag it does set on the new source is the reading a
  *    letter it is about to move is already waiting to push, which the move would otherwise
  *    strand {@see move()}; every other reading is left to the ordinary synchronization.
@@ -74,10 +78,10 @@ class ActionReplayService
 
 	private int $rolesOf = 0;
 
-	/** The folders the transfer created on the new source, and the generation they were read for */
-	private ?FolderPairMap $pairs = null;
+	/** Where a folder of the portal goes on the new source, and the generation it was read for */
+	private ?FolderDestinationResolver $destinations = null;
 
-	private int $pairsOf = 0;
+	private int $destinationsOf = 0;
 
 	public function __construct(
 		private readonly CandidateProvider $candidates = new CandidateProvider(),
@@ -142,7 +146,7 @@ class ActionReplayService
 		*/
 		$placements = $this->loadPlacements($context->mailboxId, $page);
 		$roles = $this->systemRoles($context->mailboxId);
-		$pairs = $this->folderPairs($context);
+		$resolver = $this->folderDestinations($context);
 		$retainedScope = GenerationScope::withoutPreparedGenerations($context->mailboxId);
 		$activeScope = GenerationScope::forMailbox($context->mailboxId);
 
@@ -166,7 +170,7 @@ class ActionReplayService
 				$context,
 				$metrics,
 				$roles,
-				$pairs,
+				$resolver,
 				$retainedScope,
 				$activeScope,
 				$placements[$messageId] ?? [],
@@ -346,7 +350,7 @@ class ActionReplayService
 		Context $context,
 		MigrationMetrics $metrics,
 		SystemRoleMap $roles,
-		FolderPairMap $pairs,
+		FolderDestinationResolver $resolver,
 		GenerationScope $retainedScope,
 		GenerationScope $activeScope,
 		array $placements,
@@ -416,14 +420,23 @@ class ActionReplayService
 		foreach ($portalSide as $placement)
 		{
 			/*
-				Any placement in a folder the transfer brought into the new source, not only the oldest:
-				a folder renamed on the old server leaves the placement under the old name alive until
-				the scheduled sweep of vanished folders, and that one is older than the placement under
-				the new name.
+				Any placement in a folder the new source has a folder for, not only the oldest: a folder
+				renamed on the old server leaves the placement under the old name alive until the
+				scheduled sweep of vanished folders, and that one is older than the placement under the
+				new name. A folder of a system role is left to the roles below, all but drafts, which
+				are no role of theirs.
 			*/
-			$paired = $pairs->targetOf((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5']);
-			if ($paired !== null)
+			$resolved = $resolver->destinationOf((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5']);
+			if (
+				$resolved !== null
+				&& (
+					$resolved['origin'] !== FolderDestinationResolver::ORIGIN_ROLE
+					|| $resolved['role'] === MailboxDirectoryTable::TYPE_DRAFT
+				)
+			)
 			{
+				$paired = $resolved;
+
 				break;
 			}
 		}
@@ -431,18 +444,35 @@ class ActionReplayService
 
 		if ($paired !== null)
 		{
-			/*
-				The transfer brought that folder into the new source itself, so no copy lying anywhere
-				else there was put by the user: the letter goes where the portal has it.
-			*/
-			$placement = $this->liesInTheFolder($paired['hash'], $prepared)
-				? null
-				: $this->copyFreeToMove($roles, $context->generationId, $portalSide, $prepared)
-			;
+			if ($this->liesInTheFolder($paired['hash'], $prepared))
+			{
+				$placement = null;
+			}
+			elseif ($paired['origin'] === FolderDestinationResolver::ORIGIN_PAIR_CREATED)
+			{
+				/*
+					The transfer brought that folder into the new source itself, so no copy lying anywhere
+					else there was put by the user: the letter goes where the portal has it.
+				*/
+				$placement = $this->copyFreeToMove($roles, $context->generationId, $portalSide, $prepared);
+			}
+			else
+			{
+				/*
+					The folder stood on the new source before the transfer, and so may every other folder
+					of the user there: a copy in one of them may be the work of the user. Only a copy the
+					import of the service left in a system role is taken.
+				*/
+				$placement = $this->copyInRoleToMove($roles, $context->generationId, $portalSide, $prepared);
+			}
 
 			if ($placement !== null)
 			{
-				$move = ['placement' => $placement, 'folder' => $paired, 'pending' => null];
+				$move = [
+					'placement' => $placement,
+					'folder' => ['path' => $paired['path'], 'hash' => $paired['hash']],
+					'pending' => null,
+				];
 			}
 		}
 		else
@@ -543,17 +573,7 @@ class ActionReplayService
 		array $prepared,
 	): ?array
 	{
-		$rolesOfThePortal = [];
-		foreach ($portalSide as $placement)
-		{
-			foreach (SystemRoleMap::ROLES as $role)
-			{
-				if ($roles->holds((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5'], $role))
-				{
-					$rolesOfThePortal[$role] = true;
-				}
-			}
-		}
+		$rolesOfThePortal = $this->rolesOfThePortal($roles, $portalSide);
 
 		foreach ($prepared as $placement)
 		{
@@ -566,6 +586,59 @@ class ActionReplayService
 		}
 
 		return null;
+	}
+
+	/**
+	 * The copy on the new source a move into a folder found there may take: one lying in a system
+	 * role the portal does not keep the letter in, such as the inbox the import of the service put
+	 * it into. A copy in a folder of the user stays where it is, and so does one in a role the
+	 * portal keeps it in as well {@see copyFreeToMove()}.
+	 *
+	 * @param array<int, array> $portalSide
+	 * @param array<int, array> $prepared
+	 * @return array|null The placement to move, null when no copy lies in a role free to leave.
+	 */
+	private function copyInRoleToMove(
+		SystemRoleMap $roles,
+		int $preparedGenerationId,
+		array $portalSide,
+		array $prepared,
+	): ?array
+	{
+		$rolesOfThePortal = $this->rolesOfThePortal($roles, $portalSide);
+
+		foreach ($prepared as $placement)
+		{
+			$role = $roles->roleOf($preparedGenerationId, (string)$placement['DIR_MD5']);
+
+			if ($role !== null && !isset($rolesOfThePortal[$role]))
+			{
+				return $placement;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param array<int, array> $portalSide
+	 * @return array<string, true> The system roles the portal keeps the letter in
+	 */
+	private function rolesOfThePortal(SystemRoleMap $roles, array $portalSide): array
+	{
+		$rolesOfThePortal = [];
+		foreach ($portalSide as $placement)
+		{
+			foreach (SystemRoleMap::ROLES as $role)
+			{
+				if ($roles->holds((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5'], $role))
+				{
+					$rolesOfThePortal[$role] = true;
+				}
+			}
+		}
+
+		return $rolesOfThePortal;
 	}
 
 	/**
@@ -923,15 +996,15 @@ class ActionReplayService
 		return $this->roles;
 	}
 
-	private function folderPairs(Context $context): FolderPairMap
+	private function folderDestinations(Context $context): FolderDestinationResolver
 	{
-		if ($this->pairsOf !== $context->generationId || $this->pairs === null)
+		if ($this->destinationsOf !== $context->generationId || $this->destinations === null)
 		{
-			$this->pairsOf = $context->generationId;
-			$this->pairs = FolderPairMap::ofGeneration($context->mailboxId, $context->generationId);
+			$this->destinationsOf = $context->generationId;
+			$this->destinations = FolderDestinationResolver::ofOperation($context->mailboxId, $context->generationId);
 		}
 
-		return $this->pairs;
+		return $this->destinations;
 	}
 
 	/**

@@ -173,3 +173,4 @@ final class SenderAvatar extends Base
 	}
 
 }
+

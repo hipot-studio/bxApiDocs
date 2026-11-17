@@ -16,7 +16,10 @@ class SetMonthlyByMonthDaysTaskRecurrenceTool extends BaseRecurrenceTool
 	{
 		return
 			'Sets up a monthly recurrence for a task based on a specific day of the month. '
-			. 'Use this to make a task repeat on the same date every month or every few months.'
+			. 'Use this to make a task repeat on the same date every month or every few months. '
+			. 'Provide exactly one of templateId or taskId. When taskId identifies a generated instance, '
+			. 'this updates the recurrence rule of the source template instead of creating a new '
+			. 'series from the instance. Saving the rule activates recurrence, including for an inactive template.'
 		;
 	}
 

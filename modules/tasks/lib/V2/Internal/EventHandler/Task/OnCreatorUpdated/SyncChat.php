@@ -30,7 +30,7 @@ class SyncChat
 
 		try
 		{
-			$this->service->handle($chat->getId(), $event->newCreator->id, $event->previousCreator->id);
+			$this->service->handle($chat->getId(), $event->newCreatorId, $event->previousCreatorId);
 		}
 		catch (\Throwable $e)
 		{

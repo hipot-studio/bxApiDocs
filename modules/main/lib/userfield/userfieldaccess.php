@@ -69,19 +69,12 @@ abstract class UserFieldAccess
 
 	public function getRestrictedTypes(): array
 	{
-		$types = [
+		return [
 			'resourcebooking', // available in crm only
 			'mail_message', // no way to edit
 			'hlblock', // the field is not implemented yet
 			'string_formatted',
 		];
-
-		if (\Bitrix\Main\Config\Feature::isDisabled('Bitrix\\UI\\Config\\Feature\\RichTextUserFieldFlag'))
-		{
-			$types[] = 'rich_text';
-		}
-
-		return $types;
 	}
 
 	public function getDefaultSettings(array $field): array

@@ -34,12 +34,39 @@ class Detach implements AttributeAccessInterface
 		/** @var TaskModel $model */
 		$model = $adapter->create();
 
-		$attachments = Container::getInstance()->getDiskFileRepository()->getByIds($ids);
-
-		$attachmentsCreatedByMap = Container::getInstance()->getDiskFileRepository()->getOwnerIdsByFileIds(
+		$diskFileRepository = Container::getInstance()->getDiskFileRepository();
+		$attachmentsCreatedByMap = $diskFileRepository->getOwnerIdsByFileIds(
 			$ids,
 			$model->getId()
 		);
+
+		$requestedIds = [];
+		foreach ($ids as $id)
+		{
+			if ((!is_int($id) && !is_string($id)) || $id === '')
+			{
+				return false;
+			}
+
+			$requestedIds[(string)$id] = true;
+		}
+
+		$resolvedIds = [];
+		foreach (array_keys($attachmentsCreatedByMap) as $id)
+		{
+			$resolvedIds[(string)$id] = true;
+		}
+
+		if (
+			count($requestedIds) !== count($ids)
+			|| array_diff_key($requestedIds, $resolvedIds) !== []
+			|| array_diff_key($resolvedIds, $requestedIds) !== []
+		)
+		{
+			return false;
+		}
+
+		$attachments = $diskFileRepository->getByIds($ids);
 
 		return $accessController->check(
 			ActionDictionary::ACTION_TASK_DETACH_FILE,

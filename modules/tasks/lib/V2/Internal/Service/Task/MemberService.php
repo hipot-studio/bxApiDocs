@@ -58,7 +58,6 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-
 		return $this->mutate($taskId, function () use ($taskId, $creatorId, $responsibleId, $config): Task {
 			$task = $this->taskRepository->getById($taskId);
 			if ($task === null)
@@ -68,6 +67,7 @@ class MemberService
 
 			return $this->updateService->update(Task::mapFromArray([
 				'id' => $taskId,
+				'creatorId' => $creatorId,
 				'creator' => $this->castMember($creatorId),
 				'responsible' => $this->castMember($responsibleId),
 			]), $config);
@@ -94,10 +94,15 @@ class MemberService
 			];
 
 			$members = $task->getMembers([Role::Creator, Role::Accomplice, Role::Auditor]);
-			if (!$members->findOneById((int)$task->responsible?->id) && !$task->group?->isScrum())
+			$previousResponsibleId = $task->responsible?->id;
+			if (
+				$previousResponsibleId
+				&& !$members->findOneById($previousResponsibleId)
+				&& !$task->group?->isScrum()
+			)
 			{
 				$auditors = $task->auditors ?? new UserCollection();
-				$auditors->add(User::mapFromId((int)$task->responsible->id));
+				$auditors->add(User::mapFromId($previousResponsibleId));
 				$data['auditors'] = $auditors->toArray();
 			}
 

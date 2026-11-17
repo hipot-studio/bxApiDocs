@@ -225,3 +225,4 @@ final class DiskMailAttachmentLinkGateway implements MailAttachmentLinkGateway
 		return $result->addError(new Error($message, $code));
 	}
 }
+

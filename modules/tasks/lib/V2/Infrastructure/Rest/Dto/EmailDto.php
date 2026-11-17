@@ -16,6 +16,8 @@ class EmailDto extends Dto
 	public ?int $id;
 	public ?int $taskId;
 	public ?int $mailboxId;
+	public ?string $sourceType;
+	public ?int $sourceId;
 	public ?string $title;
 	public ?string $body;
 	public ?string $from;
@@ -46,6 +48,16 @@ class EmailDto extends Dto
 		if (empty($select) || in_array('mailboxId', $select, true))
 		{
 			$dto->mailboxId = $email->mailboxId;
+		}
+
+		if (empty($select) || in_array('sourceType', $select, true))
+		{
+			$dto->sourceType = $email->sourceType;
+		}
+
+		if (empty($select) || in_array('sourceId', $select, true))
+		{
+			$dto->sourceId = $email->sourceId;
 		}
 
 		if (empty($select) || in_array('title', $select, true))

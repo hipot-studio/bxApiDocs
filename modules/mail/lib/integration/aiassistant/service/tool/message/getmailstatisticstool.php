@@ -157,3 +157,4 @@ class GetMailStatisticsTool extends ToolContract
 		return in_array($message, self::SAFE_INPUT_ERROR_MESSAGES, true);
 	}
 }
+

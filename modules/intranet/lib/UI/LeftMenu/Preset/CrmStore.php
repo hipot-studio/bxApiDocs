@@ -11,6 +11,7 @@ class CrmStore extends Crm
 		'shown' => [
 			'menu_crm_store',
 			'menu_crm_favorite',
+			'menu_stafftrack_deliveries',
 			'menu_booking',
 			'menu_marketing',
 			'menu_sites',

@@ -68,7 +68,7 @@ trait MemberTrait
 		);
 
 		$changedOriginator = $this->updateRoleMember(
-			$task->creator?->id,
+			$task->getCreatorId(),
 			$memberRoleMap,
 			RoleDictionary::ROLE_DIRECTOR,
 		);

@@ -113,6 +113,15 @@ final class Configurator
 	{
 		foreach ($configurations as $actionName => $configuration)
 		{
+			foreach ([FilterType::Filter, FilterType::EnableFilter] as $type)
+			{
+				if (isset($configuration[$type->value]))
+				{
+					$configurations[$actionName][$type->value] =
+						$this->wrapFiltersClosure($configuration[$type->value]);
+				}
+			}
+
 			if (!empty($configuration[FilterType::Prefilter->value]))
 			{
 				$configurations[$actionName][FilterType::Prefilter->value] =
@@ -153,6 +162,25 @@ final class Configurator
 			if (!is_array($configuration))
 			{
 				throw new ActionConfigurationException('Invalid configuration of actions. Configuration has to be array');
+			}
+
+			if (
+				array_key_exists(FilterType::Filter->value, $configuration)
+				&& (
+					isset($configuration[FilterType::Prefilter->value])
+					|| isset($configuration[FilterType::Postfilter->value])
+				)
+			)
+			{
+				throw new ActionConfigurationException('filters cannot be combined with prefilters or postfilters');
+			}
+
+			foreach ([FilterType::Filter, FilterType::EnableFilter] as $type)
+			{
+				if (array_key_exists($type->value, $configuration))
+				{
+					$this->checkFilters($configuration[$type->value]);
+				}
 			}
 
 			if (!empty($configuration[FilterType::Prefilter->value]))

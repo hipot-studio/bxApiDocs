@@ -51,6 +51,7 @@ class FormProvider
 			['zones' => ['kz'], 'id' => 2, 'lang' => 'ru', 'sec' => 'po3skw'],
 			['zones' => ['kz'], 'id' => 6, 'lang' => 'en', 'sec' => 'gozt5o'],
 			['zones' => ['uz'], 'id' => 7, 'lang' => 'ru', 'sec' => 'xjkuqu'],
+			['zones' => ['md'], 'id' => 624, 'lang' => 'en', 'sec' => 't2mwmf'],
 		];
 	}
 

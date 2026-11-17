@@ -97,3 +97,4 @@ class CreateChatFromEmailTool extends ToolContract
 		];
 	}
 }
+

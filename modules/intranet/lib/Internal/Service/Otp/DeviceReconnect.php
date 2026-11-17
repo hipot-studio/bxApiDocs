@@ -6,9 +6,9 @@ namespace Bitrix\Intranet\Internal\Service\Otp;
 
 class DeviceReconnect
 {
-	public function isDeviceLost(): bool
+	public function isDeviceLost(?int $userId = null): bool
 	{
-		return \CUserOptions::GetOption('intranet', 'push_otp_device_lost', null) === 'Y';
+		return \CUserOptions::GetOption('intranet', 'push_otp_device_lost', null, $userId ?? false) === 'Y';
 	}
 
 	public function shouldShowReconnect(): bool

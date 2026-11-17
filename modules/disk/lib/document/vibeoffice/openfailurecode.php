@@ -19,6 +19,7 @@ enum OpenFailureCode: string
 	case NoCapacity = 'ERR-NO-CAPACITY';
 	case CapacityFull = 'ERR-CAPACITY-FULL';
 	case Auth = 'ERR-AUTH';
+	case Suspended = 'ERR-VO-SUSPENDED';
 	case OpenFailed = 'ERR-OPEN-FAILED';
 
 	public static function fromPlatform(int $httpStatus, ?string $platformCode, bool $responseVerified): self
@@ -38,6 +39,7 @@ enum OpenFailureCode: string
 			$responseVerified && $httpStatus === 503 && $platformCode === 'no_capacity' => self::CapacityFull,
 			$httpStatus === 503 => self::NoCapacity,
 			$httpStatus === 401 => self::Auth,
+			$responseVerified && $httpStatus === 423 && $platformCode === 'new_sessions_disabled' => self::Suspended,
 			default => self::OpenFailed,
 		};
 	}
@@ -47,6 +49,7 @@ enum OpenFailureCode: string
 		return match ($this)
 		{
 			self::InProgress => 'saving',
+			self::Suspended => 'suspended',
 			self::FileTooLarge => 'large-file',
 			self::FiletypeNotEditable => 'filetype-not-editable',
 			self::UnsupportedFiletype => 'unsupported-filetype',
@@ -68,7 +71,7 @@ enum OpenFailureCode: string
 			self::SaveRefused, self::DocumentFull, self::NoGrant, self::FileTooLarge,
 			self::FiletypeNotEditable, self::UnsupportedFiletype, self::Other413,
 			self::Other422, self::PullFailed, self::NoCapacity, self::CapacityFull, self::Auth,
-			self::OpenFailed => true,
+			self::OpenFailed, self::Suspended => true,
 		};
 	}
 }

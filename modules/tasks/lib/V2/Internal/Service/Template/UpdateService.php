@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TemplateAddException;
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\Replication\Template\Option\Options;
 use Bitrix\Tasks\Util\Type;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -59,7 +60,15 @@ class UpdateService
 
 		[$template, $fields] = (new EntityFieldService())->prepare($template, $config, $fullTemplateData);
 
-		$isReplicateParamsChanged = $this->isReplicateParametersChanged($fullTemplateData, $fields);
+		$paramsBefore = $this->normalizeReplicateParams($fullTemplateData['REPLICATE_PARAMS'] ?? null);
+		$paramsAfter = $this->normalizeReplicateParams($fields['REPLICATE_PARAMS'] ?? null);
+		$isReplicateParamsChanged = $this->isReplicationScheduleChanged(
+			$fullTemplateData,
+			$fields,
+			$paramsBefore,
+			$paramsAfter,
+		);
+		$isDeadlineTypeChanged = $this->isDeadlineTypeChanged($fields, $paramsBefore, $paramsAfter);
 		[$taskIdBeforeUpdate, $taskIdAfterUpdate] = $this->getTaskIdsBeforeAndAfterUpdate($fullTemplateData, $fields);
 
 		$id = $this->templateRepository->save($template);
@@ -87,7 +96,10 @@ class UpdateService
 				(new EnableReplication())($fields, $this->isReplicationEnabled($fields, $fullTemplateData));
 				// $this->enableReplication($fields);
 			}
+		}
 
+		if ($isReplicateParamsChanged || $isDeadlineTypeChanged)
+		{
 			$this->templateReplicateParamsRepository->invalidateByTemplateId($id);
 		}
 
@@ -146,6 +158,48 @@ class UpdateService
 		}
 	}
 
+	/**
+	 * DEADLINE_TYPE only affects the deadline of the next replicated task, which the resolver reads at
+	 * replication time. Its change therefore invalidates the cached params but never restarts the agent.
+	 */
+	private function isDeadlineTypeChanged(array $fields, ?array $paramsBefore, ?array $paramsAfter): bool
+	{
+		if (!array_key_exists('REPLICATE_PARAMS', $fields))
+		{
+			return false;
+		}
+
+		return (Options::validate($paramsBefore ?? [])['DEADLINE_TYPE'] ?? null)
+			!== (Options::validate($paramsAfter ?? [])['DEADLINE_TYPE'] ?? null)
+		;
+	}
+
+	/**
+	 * A positive result restarts the replication agent, so only the schedule is compared here:
+	 * DEADLINE_TYPE is dropped from both snapshots, otherwise switching between "creation day" and
+	 * "no deadline" with a zero offset would look like a schedule change (see isDeadlineTypeChanged()).
+	 */
+	private function isReplicationScheduleChanged(
+		array $template,
+		array $fields,
+		?array $before,
+		?array $after,
+	): bool
+	{
+		if ($before !== null)
+		{
+			unset($before['DEADLINE_TYPE']);
+			$template['REPLICATE_PARAMS'] = $before;
+		}
+		if ($after !== null)
+		{
+			unset($after['DEADLINE_TYPE']);
+			$fields['REPLICATE_PARAMS'] = $after;
+		}
+
+		return $this->isReplicateParametersChanged($template, $fields);
+	}
+
 	private function isReplicateParametersChanged(array $template, array $fields): bool
 	{
 		if ((int)($template['BASE_TEMPLATE_ID'] ?? null) > 0)
@@ -153,17 +207,22 @@ class UpdateService
 			return false;
 		}
 
-		if (
-			isset($fields['REPLICATE'])
-			&& ((($template['REPLICATE'] ?? null) === 'Y') !== $fields['REPLICATE'])
-		)
+		// An explicit physical transition between SQL NULL and a stored type must restart the schedule.
+		if (array_key_exists('REPLICATE_TYPE', $fields))
 		{
-			return true;
+			$typeBefore = RegularityType::fromValue($template['REPLICATE_TYPE'] ?? null);
+			$typeAfter = RegularityType::fromValue($fields['REPLICATE_TYPE']);
+			$isNullBefore = ($template['REPLICATE_TYPE'] ?? null) === null;
+			$isNullAfter = $fields['REPLICATE_TYPE'] === null;
+			if ($typeBefore !== $typeAfter || $isNullBefore !== $isNullAfter)
+			{
+				return true;
+			}
 		}
 
 		if (
-			isset($fields['REPLICATE_TYPE'])
-			&& ($template['REPLICATE_TYPE'] ?? null) !== $fields['REPLICATE_TYPE']
+			isset($fields['REPLICATE'])
+			&& ((($template['REPLICATE'] ?? null) === 'Y') !== $fields['REPLICATE'])
 		)
 		{
 			return true;

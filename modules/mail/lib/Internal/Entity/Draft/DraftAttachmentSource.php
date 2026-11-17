@@ -6,7 +6,7 @@ namespace Bitrix\Mail\Internal\Entity\Draft;
 
 final class DraftAttachmentSource
 {
-	private const ALLOWED_SOURCES = ['draft', 'disk', 'upload'];
+	private const ALLOWED_SOURCES = ['draft', 'disk', 'upload', 'attached'];
 
 	public function __construct(
 		public readonly string $source,

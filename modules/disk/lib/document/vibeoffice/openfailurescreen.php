@@ -12,6 +12,7 @@ final class OpenFailureScreen
 	{
 		$screen = match ($kind)
 		{
+			'suspended' => self::screen($kind, 'SUSPENDED', false, false, ['return']),
 			'large-file' => self::screen($kind, 'LARGE_FILE', true, true, ['download']),
 			'filetype-not-editable' => self::screen($kind, 'FILETYPE_NOT_EDITABLE', true, false, ['view']),
 			'unsupported-filetype' => self::screen($kind, 'UNSUPPORTED_FILETYPE', true),

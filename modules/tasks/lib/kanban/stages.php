@@ -574,7 +574,7 @@ class StagesTable extends DataManager
 			{
 				$connection = Application::getConnection();
 				$sql = 'UPDATE '
-					. '`' . Task::getTableName() . '` '
+					. $connection->getSqlHelper()->quote(Task::getTableName()) . ' '
 					. 'SET STAGE_ID=' . ($newStageId) . ' '
 					. 'WHERE STAGE_ID=0 AND GROUP_ID=' . $entityId . ';';
 				$connection->query($sql);
@@ -655,6 +655,12 @@ class StagesTable extends DataManager
 			{
 				$return = $res;
 			}
+		}
+
+		// renumbering above may move SYSTEM_TYPE = NEW to another stage of the group kanban
+		if ($entityType === self::WORK_MODE_GROUP)
+		{
+			unset(static::$systemStages[$entityId]);
 		}
 
 		return $return;

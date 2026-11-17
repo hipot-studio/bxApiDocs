@@ -5123,6 +5123,12 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$previousStageId = $isFinishStage ? $kanbanService->getTaskStageId($taskId) : 0;
 
 		$result = $kanbanService->moveTask($taskId, $stageId);
+		if ($result === false)
+		{
+			$this->copyErrors($kanbanService->getErrors());
+
+			return false;
+		}
 
 		if ($isFinishStage)
 		{

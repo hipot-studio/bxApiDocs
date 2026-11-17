@@ -33,6 +33,7 @@ use Bitrix\Tasks\Internals\Task\FavoriteTable;
 use Bitrix\Tasks\Internals\Task\LabelTable;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
 use Bitrix\Tasks\Internals\Task\RegularParametersTable;
+use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\Internals\Task\ScenarioTable;
 use Bitrix\Tasks\Internals\Task\SortingTable;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -64,6 +65,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	public const ALIAS_TASK_MEMBER = 'TM';
 	public const ALIAS_TASK_MEMBER_AUDITOR = 'TMU';
 	public const ALIAS_TASK_MEMBER_ACCOMPLICE = 'TMA';
+	public const ALIAS_TASK_MEMBER_SORT = 'TMS';
 	public const ALIAS_TASK_ACCESS = 'TMACCESS';
 	public const ALIAS_TASK_COUNTERS = 'TSC';
 	public const ALIAS_SEARCH_FULL = 'TSIF';
@@ -94,6 +96,11 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	private const FIELD_PERSONAL_KANBAN_NULL_SORTING = 'PERSONAL_KANBAN_NULL_SORTING';
 	private const FIELD_PERSONAL_KANBAN_SORTING = 'PERSONAL_KANBAN_SORTING';
 
+	// b_tasks_template joins for the regularity-type filter (ALG-03): the instance link
+	// (FORKED_BY_TEMPLATE_ID → template PK) and the source link (task → its regular template).
+	public const ALIAS_TASK_TEMPLATE_INST = 'TPLI';
+	public const ALIAS_TASK_TEMPLATE_SRC = 'TPLS';
+
 	/**
 	 * Column => "has value" field used to keep rows without a value at the end.
 	 */
@@ -118,6 +125,8 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	private array $scrumEntityItemJoins = [];
 	private ?array $roles;
 	private ?array $permissions = null;
+	private bool $memberLastNameCandidateSqlBuilt = false;
+	private ?string $memberLastNameCandidateSql = null;
 	private ?PersonalKanbanUnplannedFilter $personalKanbanUnplannedFilter = null;
 	private static string $lastBuiltSql;
 
@@ -183,7 +192,9 @@ class TaskQueryBuilder implements QueryBuilderInterface
 			->buildGroupBy()
 			->buildLimit()
 			->addAccessCheck()
-			->getQuery();
+			->buildMemberUnionPage()
+			->getQuery()
+		;
 
 		self::$lastBuiltSql = $query->getQuery();
 
@@ -305,6 +316,28 @@ class TaskQueryBuilder implements QueryBuilderInterface
 			$accessFilter->whereIn('GROUP_ID', $userGroups);
 		}
 
+		if (
+			count($accessFilter->getConditions()) === 1
+			&& ($this->taskQuery->getWhere()['::SUBFILTER-MEMBER_UNION']['::LOGIC'] ?? null) === 'OR'
+			&& $this->taskQuery->getDistinct()
+			&& $this->taskQuery->getLimit() > 0
+			&& $this->taskQuery->getGroupBy() === []
+			&& array_keys($this->query->getOrder()) === ['ID']
+			&& !in_array('COUNT', $this->taskQuery->getSelect(), true)
+			&& array_filter($this->taskQuery->getSelect(), static fn($field): bool => !is_string($field)) === []
+		)
+		{
+			// Disable LooseScan here to retain indexed access by task or user.
+			$accessQuery = self::createQuery(self::ALIAS_TASK_ACCESS, MemberTable::getEntity())
+				->setSelect([new ExpressionField('MEMBER_ACCESS_EXISTS', '/*+ NO_SEMIJOIN(LOOSESCAN) */ 1')])
+				->where('TASK_ID', new SqlExpression('%s'))
+				->where('USER_ID', $this->taskQuery->getUserId())
+			;
+			$this->query->whereExpr("EXISTS({$accessQuery->getQuery()})", ['ID']);
+
+			return $this;
+		}
+
 		$this->query->registerRuntimeField(self::ALIAS_TASK_ACCESS,
 			(new ReferenceField(
 				self::ALIAS_TASK_ACCESS,
@@ -314,6 +347,27 @@ class TaskQueryBuilder implements QueryBuilderInterface
 		);
 
 		$this->query->where($accessFilter);
+
+		return $this;
+	}
+
+	private function buildMemberUnionPage(): self
+	{
+		if (
+			!$this->taskQuery->needAccessCheck()
+			&& $this->taskQuery->getDistinct()
+			&& $this->taskQuery->getLimit() > 0
+			&& $this->taskQuery->getGroupBy() === []
+			&& !in_array('COUNT', $this->taskQuery->getSelect(), true)
+			&& array_filter($this->taskQuery->getSelect(), static fn($field): bool => !is_string($field)) === []
+		)
+		{
+			$filter = $this->filterBuilder->buildMemberUnionPageFilter($this->query);
+			if ($filter !== null)
+			{
+				$this->query->where($filter);
+			}
+		}
 
 		return $this;
 	}
@@ -620,15 +674,27 @@ class TaskQueryBuilder implements QueryBuilderInterface
 			case 'ORIGINATOR_NAME':
 			case 'CREATED_BY':
 			case 'CREATED_BY_LAST_NAME':
+				$this->query->addOrder('CREATOR_NAME_NULL_SORTING', TaskQuery::SORT_ASC);
 				$this->query->addOrder(self::ALIAS_USER_CREATE . '.LAST_NAME', $order);
+				$this->taskQuery->addSelect('CREATOR_NAME_NULL_SORTING');
 				$this->taskQuery->addSelect('CREATED_BY_LAST_NAME');
 				break;
 
 			case 'RESPONSIBLE_NAME':
 			case 'RESPONSIBLE_ID':
 			case 'RESPONSIBLE_LAST_NAME':
+				$this->query->addOrder('RESPONSIBLE_NAME_NULL_SORTING', TaskQuery::SORT_ASC);
 				$this->query->addOrder(self::ALIAS_USER_RESPONSIBLE . '.LAST_NAME', $order);
+				$this->taskQuery->addSelect('RESPONSIBLE_NAME_NULL_SORTING');
 				$this->taskQuery->addSelect('RESPONSIBLE_LAST_NAME');
+				break;
+
+			case 'ACCOMPLICE_LAST_NAME':
+				$this->addMemberLastNameOrder(MemberTable::MEMBER_TYPE_ACCOMPLICE, $order);
+				break;
+
+			case 'AUDITOR_LAST_NAME':
+				$this->addMemberLastNameOrder(MemberTable::MEMBER_TYPE_AUDITOR, $order);
 				break;
 
 			case 'GROUP_ID':
@@ -911,7 +977,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 						$alias,
 						UserTable::getEntity(),
 						Join::on('this.CREATED_BY', 'ref.ID')
-					))->configureJoinType('inner')
+					))->configureJoinType('left')
 				);
 				break;
 
@@ -922,7 +988,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 						$alias,
 						UserTable::getEntity(),
 						Join::on('this.RESPONSIBLE_ID', 'ref.ID')
-					))->configureJoinType('inner')
+					))->configureJoinType('left')
 				);
 				break;
 
@@ -1105,6 +1171,34 @@ class TaskQueryBuilder implements QueryBuilderInterface
 						$alias,
 						RegularParametersTable::getEntity(),
 						Join::on('this.ID', 'ref.TASK_ID')
+					))->configureJoinType('left')
+				);
+				break;
+
+			case self::ALIAS_TASK_TEMPLATE_INST:
+				// instance → its template: FORKED_BY_TEMPLATE_ID points at the template PK
+				$this->query->registerRuntimeField(
+					$alias,
+					(new ReferenceField(
+						$alias,
+						TemplateTable::getEntity(),
+						Join::on('this.FORKED_BY_TEMPLATE_ID', 'ref.ID')
+					))->configureJoinType('left')
+				);
+				break;
+
+			case self::ALIAS_TASK_TEMPLATE_SRC:
+				// source task → its regular template: a non-zombie template row keyed by TASK_ID,
+				// mirroring TemplateRepository::getByTaskId(). REPLICATE is the «активный повтор» axis
+				// (pause flips it to 'N' on both task and template), so it must NOT gate regularity —
+				// a paused source keeps its template and stays regular.
+				$this->query->registerRuntimeField(
+					$alias,
+					(new ReferenceField(
+						$alias,
+						TemplateTable::getEntity(),
+						Join::on('this.ID', 'ref.TASK_ID')
+							->where('ref.ZOMBIE', 'N')
 					))->configureJoinType('left')
 				);
 				break;
@@ -1470,6 +1564,16 @@ class TaskQueryBuilder implements QueryBuilderInterface
 				END',
 				[self::ALIAS_TASK_SORT . ".SORT"]
 			),
+			"CREATOR_NAME_NULL_SORTING" => new ExpressionField(
+				"CREATOR_NAME_NULL_SORTING",
+				'CASE WHEN %s IS NULL THEN 1 ELSE 0 END',
+				[self::ALIAS_USER_CREATE . ".ID"]
+			),
+			"RESPONSIBLE_NAME_NULL_SORTING" => new ExpressionField(
+				"RESPONSIBLE_NAME_NULL_SORTING",
+				'CASE WHEN %s IS NULL THEN 1 ELSE 0 END',
+				[self::ALIAS_USER_RESPONSIBLE . ".ID"]
+			),
 			"LENGTH_DEADLINE" => new ExpressionField(
 				'LENGTH_DEADLINE',
 				"CASE
@@ -1764,6 +1868,129 @@ class TaskQueryBuilder implements QueryBuilderInterface
 			"(" . $query->getQuery() . ")",
 			["ID"]
 		);
+	}
+
+	/**
+	 * Orders the list by the last name of the "first" task member of the given type.
+	 * The sort key is aggregated before it is joined to the task list.
+	 *
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	private function addMemberLastNameOrder(string $memberType, string $order): void
+	{
+		$sortAlias = self::getMemberLastNameSortAlias($memberType);
+		$joinAlias = self::getMemberLastNameSortJoinAlias($memberType);
+
+		$this->addMemberLastNameSortJoin($memberType, $joinAlias);
+		$this->query->addSelect(
+			$this->getMemberLastNameSortField($memberType, $order, $joinAlias),
+			$sortAlias
+		);
+		$this->query->addOrder($sortAlias, $order);
+	}
+
+	private static function getMemberLastNameSortAlias(string $memberType): string
+	{
+		return $memberType === MemberTable::MEMBER_TYPE_ACCOMPLICE
+			? 'ACCOMPLICE_LAST_NAME_SORT'
+			: 'AUDITOR_LAST_NAME_SORT';
+	}
+
+	private static function getMemberLastNameSortJoinAlias(string $memberType): string
+	{
+		return $memberType === MemberTable::MEMBER_TYPE_ACCOMPLICE
+			? self::ALIAS_TASK_MEMBER_SORT . 'A'
+			: self::ALIAS_TASK_MEMBER_SORT . 'U';
+	}
+
+	private function getMemberLastNameSortField(
+		string $memberType,
+		string $order,
+		string $joinAlias
+	): ExpressionField
+	{
+		$helper = Application::getConnection()->getSqlHelper();
+
+		// Keep tasks without members at the end in both sort directions.
+		$hasMemberPrefix = $order === TaskQueryInterface::SORT_DESC ? '1' : '0';
+		$noMemberPrefix = $order === TaskQueryInterface::SORT_DESC ? '0' : '1';
+		$sortKey = $helper->getIsNullFunction(
+			$helper->getConcatFunction("'" . $hasMemberPrefix . "'", '%s'),
+			"'" . $noMemberPrefix . "'"
+		);
+
+		return new ExpressionField(
+			self::getMemberLastNameSortAlias($memberType),
+			$sortKey,
+			[$joinAlias . '.MIN_LAST_NAME']
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	private function addMemberLastNameSortJoin(string $memberType, string $joinAlias): void
+	{
+		$memberQuery = self::createQuery($joinAlias, MemberTable::getEntity());
+		$memberQuery->addSelect('TASK_ID');
+		$memberQuery->addSelect(
+			new ExpressionField(
+				'MIN_LAST_NAME',
+				'MIN(%s)',
+				['USER.LAST_NAME']
+			)
+		);
+		$memberQuery->where('TYPE', $memberType);
+		$candidateSql = $this->getMemberLastNameCandidateSql();
+		if ($candidateSql !== null)
+		{
+			$memberQuery->whereIn('TASK_ID', new SqlExpression($candidateSql));
+		}
+		$memberQuery->addGroup('TASK_ID');
+
+		$this->query->registerRuntimeField(
+			$joinAlias,
+			(new ReferenceField(
+				$joinAlias,
+				Entity::getInstanceByQuery($memberQuery),
+				Join::on('this.ID', 'ref.TASK_ID')
+			))->configureJoinType(Join::TYPE_LEFT)
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	private function getMemberLastNameCandidateSql(): ?string
+	{
+		if ($this->memberLastNameCandidateSqlBuilt)
+		{
+			return $this->memberLastNameCandidateSql;
+		}
+
+		$this->memberLastNameCandidateSqlBuilt = true;
+
+		$candidateTaskQuery = clone $this->taskQuery;
+		$candidateTaskQuery
+			->setSelect(['ID'])
+			->setOrder([])
+			->setGroupBy([])
+			->setLimit(0)
+			->setOffset(0)
+		;
+
+		$candidateQuery = self::build($candidateTaskQuery);
+		if ($candidateQuery->getWhereChains() === [])
+		{
+			return null;
+		}
+
+		$this->memberLastNameCandidateSql = $candidateQuery->getQuery();
+
+		return $this->memberLastNameCandidateSql;
 	}
 
 	/**

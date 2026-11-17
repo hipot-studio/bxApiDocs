@@ -22,6 +22,7 @@ class OrmTemplateMapper
 		private readonly ReplicateParamsMapper $replicateParamsMapper,
 		private readonly UserFieldMapper $userFieldMapper,
 		private readonly TypeMapper $typeMapper,
+		private readonly ReplicateTypeMapper $replicateTypeMapper,
 	)
 	{
 
@@ -120,6 +121,14 @@ class OrmTemplateMapper
 		if ($template->replicateCount !== null)
 		{
 			$fields['TPARAM_REPLICATION_COUNT'] = $template->replicateCount;
+		}
+
+		if ($template->regularityType !== null || $template->regularityTypeSpecified === true)
+		{
+			$fields['REPLICATE_TYPE'] = $template->regularityType === null
+				? null
+				: $this->replicateTypeMapper->mapFromEnum($template->regularityType)
+			;
 		}
 
 		if ($template->group?->id !== null)
@@ -410,6 +419,15 @@ class OrmTemplateMapper
 		if (isset($fields['TPARAM_REPLICATION_COUNT']))
 		{
 			$templateFields['replicateCount'] = (int)$fields['TPARAM_REPLICATION_COUNT'];
+		}
+
+		if (array_key_exists('REPLICATE_TYPE', $fields))
+		{
+			$templateFields['regularityTypeSpecified'] = true;
+			if ($fields['REPLICATE_TYPE'] !== null)
+			{
+				$templateFields['regularityType'] = $this->replicateTypeMapper->mapToEnum($fields['REPLICATE_TYPE']);
+			}
 		}
 
 		$userFields = $this->userFieldMapper->mapToCollection($fields);

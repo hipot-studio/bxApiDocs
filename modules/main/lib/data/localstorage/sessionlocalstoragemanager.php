@@ -15,13 +15,14 @@ final class SessionLocalStorageManager
 	private string $uniqueId;
 	private Storage\StorageInterface $storage;
 	private int $ttl = 86400;
+	private int $regenerateSessionIdHandlerId;
 
 	public function __construct(Storage\StorageInterface $storage)
 	{
 		$this->storage = $storage;
 
 		EventManager::getInstance()->addEventHandler('main', 'OnAfterEpilog', [$this, 'save']);
-		EventManager::getInstance()->addEventHandler(
+		$this->regenerateSessionIdHandlerId = EventManager::getInstance()->addEventHandler(
 			'main',
 			CompositeSessionManager::EVENT_REGENERATE_SESSION_ID,
 			[$this, 'handleRegenerateSessionId']
@@ -40,7 +41,7 @@ final class SessionLocalStorageManager
 	{
 		$oldSessionId = $this->getUniqueId();
 		$newSessionId = $event->getParameter('newSessionId');
-		if (!$newSessionId)
+		if (!$newSessionId || $newSessionId === $oldSessionId)
 		{
 			return;
 		}
@@ -53,6 +54,12 @@ final class SessionLocalStorageManager
 		}
 
 		$oldLocalStorageManager = new self($this->storage);
+		// The old session only needs to be cleared at epilog, not migrated on later regenerations.
+		EventManager::getInstance()->removeEventHandler(
+			'main',
+			CompositeSessionManager::EVENT_REGENERATE_SESSION_ID,
+			$oldLocalStorageManager->regenerateSessionIdHandlerId
+		);
 		$oldLocalStorageManager
 			->setUniqueId($oldSessionId)
 			->clearAll()
@@ -63,6 +70,13 @@ final class SessionLocalStorageManager
 		{
 			$item->setUniqueName($this->buildUniqueKey($item->getName()));
 		}
+	}
+
+	public function reset(): void
+	{
+		$this->clearAll();
+		$this->save();
+		$this->collection = [];
 	}
 
 	public function getUniqueId(): string

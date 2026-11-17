@@ -4,6 +4,8 @@ namespace Bitrix\Landing\PublicAction;
 use Bitrix\Landing\Sanitizer;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Landing\Demos as DemoCore;
+use \Bitrix\Landing\Manager;
+use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\PublicActionResult;
 
 Loc::loadMessages(__FILE__);
@@ -382,6 +384,19 @@ class Demos
 	}
 
 	/**
+	 * Check rights for removing items from the portal-wide demo repository.
+	 * @param array|null $app Current REST application.
+	 * @return bool
+	 */
+	private static function canUnregister(?array $app): bool
+	{
+		return isset($app['CODE'])
+			|| Manager::isAdmin()
+			// without the permissions feature Rights::isAdmin() is true for anyone
+			|| (Manager::checkFeature(Manager::FEATURE_PERMISSIONS_AVAILABLE) && Rights::isAdmin());
+	}
+
+	/**
 	 * Unregister demo template.
 	 * @param string $code Code of item.
 	 * @return PublicActionResult
@@ -398,25 +413,30 @@ class Demos
 			return $result;
 		}
 
+		$app = \Bitrix\Landing\PublicAction::restApplication();
+		if (!self::canUnregister($app))
+		{
+			$error->addError(
+				'ACCESS_DENIED',
+				Loc::getMessage('LANDING_ACCESS_DENIED2')
+			);
+			$result->setError($error);
+
+			return $result;
+		}
+
 		// search and delete
 		if ($code)
 		{
-			// set app code
-			$app = \Bitrix\Landing\PublicAction::restApplication();
-
 			$res = DemoCore::getList(array(
 				'select' => array(
 					'ID'
 				),
-				'filter' =>
-					isset($app['CODE'])
-					? array(
-						'=XML_ID' => $code,
-						'=APP_CODE' => $app['CODE']
-					)
-					: array(
-						'=XML_ID' => $code
-					)
+				'filter' => array(
+					'=XML_ID' => $code,
+					// an application owns only its own items, an item without the application is portal-wide
+					'=APP_CODE' => $app['CODE'] ?? false,
+				)
 			));
 			while ($row = $res->fetch())
 			{

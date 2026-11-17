@@ -17,6 +17,7 @@ use Bitrix\Disk\Internal\Service\HtmlViewer\PublicDomainAccessContext;
 use Bitrix\Disk\Internal\Service\UnifiedLink\BaseObjectResolver;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\AutomaticEditModeCapable;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\EditTransitionAware;
+use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\ExternalLinkHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\FolderListHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HandlerOperationResult;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlFileHandler;
@@ -25,6 +26,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableHandlerFa
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\OnlyOfficeHtmlRenderableHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\OpeningNoticeCodeAware;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\VibeofficeHtmlRenderableHandler;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
@@ -55,6 +57,8 @@ class UnifiedLinkRenderer
 		private readonly ?ExternalLink $externalLink = null,
 		private readonly ModeSelection $modeSelection = ModeSelection::KeepRequested,
 		private readonly ?PublicDomainAccessContext $publicDomainAccessContext = null,
+		private readonly ?ShortLinkOpening $shortLinkOpening = null,
+		private readonly ClientContext $client = ClientContext::Web,
 	) {
 		if ($currentUser instanceof CurrentUser && (int)$currentUser->getId() === 0)
 		{
@@ -175,13 +179,18 @@ class UnifiedLinkRenderer
 			// The answer this render was already given, so a handler drawing a page off the rights of the
 			// opening is not made to walk the chain behind them a second time.
 			accessLevel: $this->getAccessLevel(),
+			shortLinkOpening: $this->shortLinkOpening,
+			client: $this->client,
 		);
 		if ($handler instanceof OpeningNoticeCodeAware)
 		{
 			$handler->setOpeningNoticeCode(null);
 		}
 
-		$renderAccessLevel = $this->accessLevelForRender($baseAccessLevel, $handler);
+		$renderAccessLevel = $this->isSourcePageForEmployee($handler, $baseAccessLevel)
+			? UnifiedLinkAccessLevel::Read
+			: $this->accessLevelForRender($baseAccessLevel, $handler)
+		;
 
 		// The choice may answer lower than the level the gate above saw, so a refusal is answered here too.
 		if ($renderAccessLevel === UnifiedLinkAccessLevel::Denied && !$shouldRenderExternal)
@@ -214,11 +223,7 @@ class UnifiedLinkRenderer
 
 		$this->applyEditTransition($handler, $renderAccessLevel);
 
-		$result = match ($renderAccessLevel)
-		{
-			UnifiedLinkAccessLevel::Edit => $handler->edit(),
-			default => $handler->view(),
-		};
+		$result = $this->runHandler($handler, $renderAccessLevel);
 
 		if (!$result->isSuccess())
 		{
@@ -316,6 +321,39 @@ class UnifiedLinkRenderer
 		return $this->publicDomainAccessContext;
 	}
 
+	public function getShortLinkOpening(): ?ShortLinkOpening
+	{
+		return $this->shortLinkOpening;
+	}
+
+	/**
+	 * An employee is shown a type of no office editor of a short opening on the page of the source, and only
+	 * in view: his own right is not carried onto the public page.
+	 */
+	private function isSourcePageForEmployee(
+		HtmlRenderableHandler $handler,
+		UnifiedLinkAccessLevel $baseAccessLevel,
+	): bool
+	{
+		return $this->shortLinkOpening !== null
+			&& $handler instanceof ExternalLinkHandler
+			&& $this->resolveExternalLinkForHandler() === null
+			&& $baseAccessLevel !== UnifiedLinkAccessLevel::Denied
+		;
+	}
+
+	protected function runHandler(
+		HtmlRenderableHandler $handler,
+		UnifiedLinkAccessLevel $renderAccessLevel,
+	): HandlerOperationResult
+	{
+		return match ($renderAccessLevel)
+		{
+			UnifiedLinkAccessLevel::Edit => $handler->edit(),
+			default => $handler->view(),
+		};
+	}
+
 	public static function renderAccessDeniedPage(array $params = []): string
 	{
 		return StandalonePageRenderer::render('bitrix:disk.error.page', 'standalone', $params);
@@ -370,6 +408,22 @@ class UnifiedLinkRenderer
 	{
 		$baseObject = $this->resolveBaseObject();
 		$fileAccessLevel = $this->getAccessLevel();
+
+		// The entry of a short opening has already chosen the mode, and the access only caps it. Editing above
+		// the right of the link is asked for only by the move of an employee, which his effective right caps.
+		if ($this->shortLinkOpening !== null && $accessLevel !== null)
+		{
+			if (
+				$accessLevel === UnifiedLinkAccessLevel::Edit
+				&& $fileAccessLevel !== UnifiedLinkAccessLevel::Denied
+				&& $this->mayEditWhatIsOpen()
+			)
+			{
+				return UnifiedLinkAccessLevel::Edit;
+			}
+
+			return $accessLevel->value < $fileAccessLevel->value ? $accessLevel : $fileAccessLevel;
+		}
 
 		if ($baseObject instanceof File && (int)$baseObject->getTypeFile() === TypeFile::BOARD)
 		{
@@ -466,6 +520,12 @@ class UnifiedLinkRenderer
 			return null;
 		}
 
+		// A short opening moves to editing on its own address: the mode is posted there, never put in it.
+		if ($this->shortLinkOpening !== null)
+		{
+			return $this->shortLinkOpening->getCanonicalUrl();
+		}
+
 		return Driver::getInstance()->getUrlManager()->getUnifiedEditLink(
 			$this->resolveBaseObject(),
 			[
@@ -484,6 +544,14 @@ class UnifiedLinkRenderer
 		if ($this->currentUser === null || $this->opensHistoricalRevision())
 		{
 			return false;
+		}
+
+		// A short opening is decided by the effective right alone: no other public link of the file takes part.
+		if ($this->shortLinkOpening !== null)
+		{
+			return $this->shortLinkOpening->getEffectiveAccessLevel((int)$this->currentUser->getId())
+				=== UnifiedLinkAccessLevel::Edit
+			;
 		}
 
 		if (!$this->externalLink instanceof ExternalLink)

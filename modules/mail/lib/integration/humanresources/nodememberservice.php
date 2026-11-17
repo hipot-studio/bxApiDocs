@@ -221,3 +221,4 @@ class NodeMemberService
 		return array_unique($nodeMembers->getEntityIds());
 	}
 }
+

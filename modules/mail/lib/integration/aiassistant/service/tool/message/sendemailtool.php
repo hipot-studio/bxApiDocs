@@ -144,3 +144,4 @@ class SendEmailTool extends ToolContract
 		);
 	}
 }
+

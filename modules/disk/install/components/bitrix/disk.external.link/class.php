@@ -31,6 +31,8 @@ use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordProtectionService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
+use Bitrix\Disk\Controller\ShortLink;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -112,6 +114,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 	protected ?AttachedObject $attachedObject = null;
 	protected ?Version $version = null;
 	protected ?string $unifiedLink = null;
+	/** The short opening the page is drawn for: it stays on its address and moves between actions in place. */
+	private ?ShortLinkOpening $shortLinkOpening = null;
+	/** The page of the short opening is only viewed: an employee gets no edit of a board by his own right. */
+	private bool $shortLinkViewOnly = false;
+	private bool $sessionExpired = false;
 	private ?array $unifiedLinkOptions = null;
 	/** @var string */
 	protected $downloadToken;
@@ -171,20 +178,23 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$this->downloadToken = Random::getString(12);
 			$this->storeDownloadToken($this->downloadToken);
 
-			if ($this->externalLink->allowEdit())
+			if ($this->shortLinkViewOnly)
+			{
+				if ($actionName === 'goToEdit')
+				{
+					return $this->moveToAction('default');
+				}
+			}
+			elseif ($this->externalLink->allowEdit())
 			{
 				if ($this->isBoardsHandler() && $this->validatePassword() && $actionName !== 'goToEdit')
 				{
-					$this->redirectToAction('goToEdit');
-
-					return true;
+					return $this->moveToAction('goToEdit');
 				}
 
 				if (!$this->validatePassword() && $actionName !== 'default')
 				{
-					$this->redirectToAction('default');
-
-					return false;
+					return $this->moveToAction('default');
 				}
 			}
 		}
@@ -198,7 +208,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 			)
 			{
 				$this->maybeRefuseHtmlViewerContent();
-				$this->redirectToAction('default', ['session' => 'expired']);
+
+				return $this->moveToAction('default', ['session' => 'expired']);
 			}
 
 			if ($this->validatePassword() !== true)
@@ -219,8 +230,95 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$this->arResult['FROM_UNIFIED_LINK'] = $this->fromUnifiedLink;
 		$this->arResult['UNIFIED_LINK'] = $this->unifiedLink;
+		// The editors of the page are told the opening apart from the access context of their session.
+		$this->arResult['SHORT_LINK_OPENING'] = $this->shortLinkOpening;
+		$this->arResult['SHORT_LINK_MODE'] = $actionName === 'goToEdit' ? ShortLink::MODE_EDIT : ShortLink::MODE_VIEW;
 
 		return true;
+	}
+
+	/**
+	 * Moves the page to another of its actions. A short opening runs that action inside the request and keeps
+	 * its address; any other opening is redirected to the HASH address of the action, as before.
+	 *
+	 * @return bool Whether the action the page has moved to is to be run.
+	 */
+	private function moveToAction(string $action, array $uriParams = []): bool
+	{
+		if ($this->shortLinkOpening === null)
+		{
+			$this->redirectToAction($action, $uriParams);
+		}
+
+		if (($uriParams['session'] ?? null) === 'expired')
+		{
+			$this->sessionExpired = true;
+		}
+
+		$this->setAction($action, [
+			'method' => ['GET', 'POST'],
+			'name' => $action,
+			'check_csrf_token' => false,
+		]);
+
+		return $this->processBeforeAction($action) !== false;
+	}
+
+	/** Runs the action the page has moved to right away, for a move made by an action that already runs. */
+	private function runMovedAction(string $action): void
+	{
+		if ($this->moveToAction($action))
+		{
+			$this->runAction();
+		}
+	}
+
+	/**
+	 * The address of an action of the page. A short opening keeps every action on its own address and names
+	 * the action in the query, so the entry resolves and checks the opening again for it; any other opening
+	 * goes to the HASH address of the action, as before.
+	 */
+	private function getExternalLinkActionUrl(array $params, bool $absolute = false): string
+	{
+		if ($this->shortLinkOpening === null)
+		{
+			return $this->getUrlManager()->getUrlExternalLink($params, $absolute);
+		}
+
+		unset($params['hash']);
+		if (($params['action'] ?? null) === 'default')
+		{
+			unset($params['action']);
+		}
+
+		$url = $absolute
+			? $this->shortLinkOpening->getAbsoluteCanonicalUrl()
+			: $this->shortLinkOpening->getCanonicalUrl()
+		;
+
+		return $params === [] ? $url : $url . '?' . http_build_query($params);
+	}
+
+	/**
+	 * What a continuation of the short opening posts back to its address: the code once more and the mode of
+	 * the source, which the entry chooses again and never raises.
+	 */
+	private function getShortOpeningData(): ?array
+	{
+		if ($this->shortLinkOpening === null)
+		{
+			return null;
+		}
+
+		return [
+			'CANONICAL_URL' => $this->shortLinkOpening->getCanonicalUrl(),
+			'CODE' => $this->shortLinkOpening->getCode(),
+			'OPERATION' => ShortLink::OPERATION_CONTINUE,
+			'REQUESTED_MODE' => $this->shortLinkOpening->allowsEditBySource()
+				? ShortLink::MODE_EDIT
+				: ShortLink::MODE_VIEW
+			,
+		];
 	}
 
 	#[NoReturn]
@@ -293,10 +391,22 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return null;
 	}
 
+	/** The actions are resolved before the parameters are prepared, so the opening is read off the parameters. */
+	private function isShortLinkOpeningRequested(): bool
+	{
+		return ($this->arParams['FROM_UNIFIED_LINK'] ?? false) === true
+			&& ($this->arParams['SHORT_LINK_OPENING'] ?? null) instanceof ShortLinkOpening
+		;
+	}
+
 	protected function listActions()
 	{
 		return [
-			'goToEdit',
+			// A short opening is continued by a POST to its own address, and its entry has already chosen the mode.
+			'goToEdit' => [
+				'method' => $this->isShortLinkOpeningRequested() ? ['GET', 'POST'] : ['GET'],
+				'check_csrf_token' => false,
+			],
 			'download',
 			'downloadFolderArchive',
 			self::ACTION_DOWNLOAD_FILE_UNDER_FOLDER,
@@ -342,6 +452,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$this->fromUnifiedLink = ($this->arParams['FROM_UNIFIED_LINK'] ?? false) === true;
+		$shortLinkOpening = $this->arParams['SHORT_LINK_OPENING'] ?? null;
+		$this->shortLinkOpening = $this->fromUnifiedLink && $shortLinkOpening instanceof ShortLinkOpening
+			? $shortLinkOpening
+			: null
+		;
+		$this->shortLinkViewOnly = $this->shortLinkOpening !== null
+			&& ($this->arParams['SHORT_LINK_VIEW_ONLY'] ?? false) === true
+		;
 		$this->baseObject = $this->arParams['BASE_OBJECT'] ?? $this->arParams['FILE'] ?? null;
 		$this->attachedObject = $this->arParams['ATTACHED_OBJECT'] ?? null;
 		$this->version = $this->arParams['VERSION'] ?? null;
@@ -375,6 +493,15 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $this->externalLink->isSpecificVersion()
 			? $file->getVersion($this->externalLink->getVersionId())
 			: null
+		;
+	}
+
+	/** The address previews name: a short opening is named by its own address, never by the object. */
+	private function getHtmlViewerOpenGraphUrl(File $file): string
+	{
+		return $this->shortLinkOpening === null
+			? $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash())
+			: $this->shortLinkOpening->getAbsoluteCanonicalUrl()
 		;
 	}
 
@@ -418,13 +545,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$file = $this->externalLink->getFile();
 		if ($file instanceof File && $this->isHtmlViewerTarget($file, $this->resolvePinnedVersion($file)))
 		{
-			$this->redirectToAction('default');
+			$this->runMovedAction('default');
 
 			return false;
 		}
 		if ($file instanceof File && $this->externalLink->isSpecificVersion())
 		{
-			$this->redirectToAction('default');
+			$this->runMovedAction('default');
 
 			return false;
 		}
@@ -456,7 +583,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 					'NAME' => GuestUser::create()->getName(),
 				];
 
-				if (DocumentEditorUser::login($fieldsToCreateUser))
+				if ($this->authorizeForEditing($fieldsToCreateUser))
 				{
 					$documentSession->setUserId(CurrentUser::get()->getId());
 				}
@@ -499,10 +626,25 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 			$this->showFileViewer($isBoard ? self::BOARD_FILE_VIEWER : $documentViewer);
 		}
+		elseif ($this->shortLinkOpening !== null)
+		{
+			// A type without an editor is shown by the page of the source, on the same address.
+			$this->runMovedAction('default');
+		}
 		else
 		{
 			$this->showNotFoundPage();
 		}
+	}
+
+	private function authorizeForEditing(array $fieldsToCreateUser): bool
+	{
+		$isAuthorized = DocumentEditorUser::login($fieldsToCreateUser);
+
+		// The visitor may become a document editor only here, after processBeforeAction() has decided on Pull.
+		PullInitializationSuppressor::suppressForDocumentEditor(DocumentEditorUser::isCurrentUserDocumentEditor());
+
+		return $isAuthorized;
 	}
 
 	protected function processActionDefault($path = '/')
@@ -527,11 +669,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$server = Application::getInstance()->getContext()->getServer();
 
 		$this->arResult = array_merge($this->arResult ?? [], [
-			'HASH' => $this->externalLink->getHash(),
+			// A short opening keeps the HASH of its link out of the page.
+			'HASH' => $this->shortLinkOpening === null ? $this->externalLink->getHash() : null,
+			'SHORT_LINK' => $this->getShortOpeningData(),
 			'PROTECTED_BY_PASSWORD' => $this->externalLink->hasPassword(),
 			'VALID_PASSWORD' => $validPassword,
 			'PASSWORD_PROTECTION' => $this->getPasswordProtectionData(),
-			'SESSION_EXPIRED' => $this->request->getQuery('session') === 'expired',
+			'SESSION_EXPIRED' => $this->sessionExpired || $this->request->getQuery('session') === 'expired',
 			'SITE_NAME' => Option::get('main', 'site_name', $server->getServerName()),
 		]);
 
@@ -568,11 +712,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 						$this->externalLink,
 						$this->downloadToken,
 						$pinnedVersion,
+						$this->shortLinkOpening,
 					);
 					// The card this page replaces carried the link preview, so the page carries it too; its
 					// head belongs to the wrapper, hence the values here and the meta in file-viewers/html.php.
 					$this->arResult['OPEN_GRAPH'] = [
-						'URL' => $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
+						'URL' => $this->getHtmlViewerOpenGraphUrl($file),
 						'TITLE' => $file->getName(),
 					];
 
@@ -678,7 +823,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$this->arResult['BREADCRUMBS'] = $this->getBreadcrumbs($path, $relativeItems);
 			$this->arResult['BREADCRUMBS_ROOT'] = [
 				'NAME' => $rootFolder->getName(),
-				'LINK' => $this->getUrlManager()->getUrlExternalLink([
+				'LINK' => $this->getExternalLinkActionUrl([
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'default',
 				], true),
@@ -889,7 +1034,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	private function getSessionType(): int
 	{
-		if ($this->isBoardsHandler())
+		if ($this->isBoardsHandler() && !$this->shortLinkViewOnly)
 		{
 			$file = $this->externalLink->getFile();
 
@@ -1068,7 +1213,6 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$nowTime = time() + CTimeZone::getOffset();
 
-		$urlManager = Driver::getInstance()->getUrlManager();
 		$objectsOnPage = [];
 		$countObjectsOnPage = 0;
 		$hasNextPage = false;
@@ -1131,7 +1275,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			{
 				$downloadUrl = $this->getDownloadUrlForFileUnderFolder($relativePath, $object->getId());
 				$viewerSourceUrl = $this->getViewerSourceUrlForFileUnderFolder($relativePath, $object->getId());
-				$viewUrl = $urlManager->getUrlExternalLink([
+				$viewUrl = $this->getExternalLinkActionUrl([
 					'hash' => $this->externalLink->getHash(),
 					'action' => $this->getViewActionNameForJs($object),
 					'token' => $this->downloadToken,
@@ -1207,7 +1351,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'UPDATE_TIME' => $rootFolder->getUpdateTime(),
 			'SIZE' => $rootFolder->getRealObject()->countSizeOfFiles(),
 			'DOWNLOAD_URL' => $canDownload
-				? $this->getUrlManager()->getUrlExternalLink([
+				? $this->getExternalLinkActionUrl([
 					'fileId' => $this->externalLink->getId(),
 					'folderId' => $this->externalLink->getId(),
 					'hash' => $this->externalLink->getHash(),
@@ -1229,7 +1373,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return null;
 		}
 
-		return $this->getUrlManager()->getUrlExternalLink([
+		return $this->getExternalLinkActionUrl([
 			'hash' => $this->externalLink->getHash(),
 			'action' => 'download',
 			'token' => $this->downloadToken,
@@ -1276,26 +1420,30 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'SIZE' => $file->getSize(),
 			'FORMATTED_SIZE' => CFile::formatSize($file->getSize()),
 			'DOWNLOAD_URL' => $this->getDownloadUrl(),
-			'ABSOLUTE_SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink([
+			'ABSOLUTE_SHOW_FILE_URL' => $this->getExternalLinkActionUrl([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
 			]),
-			'SHOW_PREVIEW_URL' => $this->getUrlManager()->getUrlExternalLink([
+			'SHOW_PREVIEW_URL' => $this->getExternalLinkActionUrl([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showPreview',
 				'token' => $this->downloadToken,
 			]),
-			'SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink([
+			'SHOW_FILE_URL' => $this->getExternalLinkActionUrl([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
 			]),
-			'VIEW_URL' => $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
-			'VIEW_FULL_URL' => $this->getUrlManager()->getUrlExternalLink([
-				'hash' => $this->externalLink->getHash(),
-				'action' => 'default',
-			], true),
+			'VIEW_URL' => $this->shortLinkOpening !== null
+				? $this->shortLinkOpening->getAbsoluteCanonicalUrl()
+				: $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
+			'VIEW_FULL_URL' => $this->shortLinkOpening !== null
+				? $this->shortLinkOpening->getAbsoluteCanonicalUrl()
+				: $this->getExternalLinkActionUrl([
+					'hash' => $this->externalLink->getHash(),
+					'action' => 'default',
+				], true),
 			'CAN_DOWNLOAD' => $canDownload,
 		];
 
@@ -1314,14 +1462,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 		{
 			CJSCore::Init('disk');
 			$viewUrl = [
-				$this->getUrlManager()->getUrlExternalLink([
+				$this->getExternalLinkActionUrl([
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'showView',
 					'token' => $this->downloadToken,
 					'ts' => $viewerSourceTime->getTimestamp(),
 					'ncc' => 1,
 				]),
-				$this->getUrlManager()->getUrlExternalLink([
+				$this->getExternalLinkActionUrl([
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'showFile',
 					'token' => $this->downloadToken,
@@ -1338,7 +1486,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$height = 400;
 				$width = 600;
 			}
-			$sourceUri = $this->getUrlManager()->getUrlExternalLink([
+			$sourceUri = $this->getExternalLinkActionUrl([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
@@ -1366,7 +1514,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				if ($this->isTiffFile($viewerSource))
 				{
 					$attributes->setTiffPreviewUrlOverride(
-						$this->getUrlManager()->getUrlExternalLink([
+						$this->getExternalLinkActionUrl([
 							'hash' => $this->externalLink->getHash(),
 							'action' => 'showTiffPreview',
 							'token' => $this->downloadToken,
@@ -1565,7 +1713,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		if ($canDownload)
 		{
-			$downloadUrl = Driver::getInstance()->getUrlManager()->getUrlExternalLink(
+			$downloadUrl = $this->getExternalLinkActionUrl(
 				[
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'downloadFileUnderFolder',
@@ -1805,13 +1953,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$this->downloadToken = (string)$this->request->getQuery('token');
 
-		$urlManager = $this->getUrlManager();
-		$previewActionUrl = $urlManager->getUrlExternalLink([
+		$previewActionUrl = $this->getExternalLinkActionUrl([
 			'hash' => $this->externalLink->getHash(),
 			'action' => 'showTiffPreview',
 			'token' => $this->downloadToken,
 		]);
-		$showFileUrl = $urlManager->getUrlExternalLink([
+		$showFileUrl = $this->getExternalLinkActionUrl([
 			'hash' => $this->externalLink->getHash(),
 			'action' => 'showFile',
 			'token' => $this->downloadToken,
@@ -2119,7 +2266,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	private function getUrlForFileUnderFolder(string $action, string $relativePath, int $fileId): string
 	{
-		return $this->getUrlManager()->getUrlExternalLink(
+		return $this->getExternalLinkActionUrl(
 			[
 				'hash' => $this->externalLink->getHash(),
 				'action' => $action,
@@ -2284,6 +2431,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	private function buildEditLink(?File $file, UrlManager $urlManager): string
 	{
+		// A short opening goes on editing on its own address, in the mode of its link.
+		if ($this->shortLinkOpening !== null)
+		{
+			return $this->shortLinkOpening->getCanonicalUrl();
+		}
+
 		if ($this->fromUnifiedLink && $file?->supportsUnifiedLink())
 		{
 			return $urlManager->getUnifiedEditLink($file, $this->getUnifiedLinkOptions($file));

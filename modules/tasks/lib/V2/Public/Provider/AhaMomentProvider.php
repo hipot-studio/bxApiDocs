@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Public\Provider;
 
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Feature\RegularTaskTypesFeature;
 use Bitrix\Tasks\Integration\Bitrix24\Portal;
 use Bitrix\Tasks\Promotion\FilesViewPromotion;
 use Bitrix\Tasks\Promotion\TasksAi;
@@ -34,6 +36,8 @@ class AhaMomentProvider
 		$ahaStartTimeTrackingShow = !$this->isShown($userId, OptionDictionary::AhaStartTimeTracking);
 		$ahaTaskChatShow = $isOldPortalUser && !$this->isShown($userId, OptionDictionary::AhaTaskChat);
 		$ahaTasksAiPromoShow = (new TasksAi())->shouldShow($userId);
+		$ahaRegularTaskTypesShow = Feature::isEnabled(RegularTaskTypesFeature::class)
+			&& !$this->isShown($userId, OptionDictionary::AhaRegularTaskTypes);
 		$ahaFilesViewShow = (new FilesViewPromotion())->shouldShow($userId);
 
 		return [
@@ -47,6 +51,7 @@ class AhaMomentProvider
 			OptionDictionary::AhaTaskChat->value => $ahaTaskChatShow,
 			OptionDictionary::AhaTaskImportantMessages->value => false,
 			OptionDictionary::AhaTasksAiPromo->value => $ahaTasksAiPromoShow,
+			OptionDictionary::AhaRegularTaskTypes->value => $ahaRegularTaskTypesShow,
 			OptionDictionary::AhaFilesView->value => $ahaFilesViewShow,
 		];
 	}

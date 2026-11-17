@@ -3,6 +3,7 @@ namespace Bitrix\Tasks\Integration\Bizproc\Automation\Target;
 
 use Bitrix\Main\Loader;
 use Bitrix\Tasks;
+use Bitrix\Tasks\Control\Exception\TaskStageValidationException;
 use Bitrix\Tasks\Integration\Bizproc\Document;
 
 if (!Loader::includeModule('bizproc'))
@@ -16,6 +17,11 @@ class ScrumProjectTask extends Base
 
 	public function getDocumentStatus()
 	{
+		if (array_key_exists('STAGE_ID', $this->fields))
+		{
+			return (int)$this->fields['STAGE_ID'];
+		}
+
 		if ($taskStage = $this->getTaskStage())
 		{
 			$documentStatus = $taskStage['STAGE_ID'];
@@ -49,15 +55,32 @@ class ScrumProjectTask extends Base
 	{
 		if ($taskStage = $this->getTaskStage())
 		{
-			$stageService = Tasks\V2\Internal\DI\Container::getInstance()->getTaskStageService();
-			$stageService->move((int)$taskStage['ID'], (int)$statusId);
-
-			$task = new \CTasks();
-			$result = $task->update($this->getDocumentId(), ['STAGE_ID' => $statusId]);
-			if ($result)
+			try
 			{
-				$this->setField('STAGE_ID', $statusId);
+				$stageId = Tasks\V2\Internal\DI\Container::getInstance()
+					->getStageCompatibilityService()
+					->normalizeStageId($statusId);
 			}
+			catch (TaskStageValidationException)
+			{
+				return;
+			}
+			if ($stageId === null)
+			{
+				return;
+			}
+
+			$kanbanService = new Tasks\Scrum\Service\KanbanService();
+			if (!$kanbanService->updateTaskStageWithRelations(
+				$this->getDocumentId(),
+				$stageId,
+				[(int)$taskStage['ID']],
+			))
+			{
+				return;
+			}
+
+			$this->setField('STAGE_ID', $stageId);
 		}
 	}
 

@@ -476,3 +476,4 @@ class VacationAutoReply extends Base
 		}
 	}
 }
+

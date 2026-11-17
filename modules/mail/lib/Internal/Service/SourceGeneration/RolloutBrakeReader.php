@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
+use Bitrix\Mail\Internal\Service\NewMail\NewMailSwitch;
+use Bitrix\Mail\Public\Features\Bitrix24MailFeature;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Feature\Context;
+use Bitrix\Main\Config\Feature\Factory;
+use Bitrix\Main\Config\Feature\RulePolicy;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Json;
 use Closure;
 use Throwable;
 
 /**
- * The two switches of the rollout - the emergency brake and the feature switch - as they stand
- * right now, read past the option cache of the process.
+ * The switches of the rollout - the emergency brake, the stop of Mailhost and the flag of the New mail - as
+ * they stand right now. The emergency brake and the stored state of the flag are read past the caches of the
+ * process.
  *
  * The cache is why this exists. The core loads the options of a module into memory once per
  * process, and a pass of the agent lives long after that: the value it reads the usual way is the
@@ -29,8 +36,17 @@ use Throwable;
  * server the same pass spends anyway. The point of no return is served by {@see findRefusalNow()}
  * instead, which is not bounded at all: one query against an irreversible hand-over.
  *
+ * The flag of the New mail is asked twice. {@see NewMailSwitch::isAccepting()} gives the answer of the core,
+ * rules included, but the core keeps the values of the flags in memory for the whole process and drops them only
+ * in the process that switched a flag: a pass of the agent would go on seeing the flag it started with. So the
+ * row of the flag and its rules are read in the same query as the brake and decided in the order of the core -
+ * requirements, deny rules, allow rules, the row, the default - and a flag switched off in any other process stops
+ * the pass at the next fresh read. The fresh answer can only close: a flag switched on after the process started
+ * is admitted by the next process, whose core sees it. A portal without the storage of the flags is answered by
+ * the core alone.
+ *
  * The conditions and their order are the ones of {@see BackfillService::findMigrationRefusal()} -
- * this is a second way to read the same two switches, never a second rule about them.
+ * this is a second way to read the same switches, never a second rule about them.
  */
 class RolloutBrakeReader
 {
@@ -54,11 +70,20 @@ class RolloutBrakeReader
 	private ?int $mailhostRevision = null;
 	private string $source = self::SOURCE_UNKNOWN;
 
+	private readonly Closure $featureReader;
+
+	/**
+	 * @param Closure|null $freshFlagReader Answers the flag as the core would decide it on the storage as it is now,
+	 *     rules included, for an injected options reader: true or false, null when it is unknown.
+	 */
 	public function __construct(
 		private readonly ?Closure $optionsReader = null,
 		private readonly ?Closure $mailhostSnapshotReader = null,
+		?Closure $featureReader = null,
+		private readonly ?Closure $freshFlagReader = null,
 	)
 	{
+		$this->featureReader = $featureReader ?? static fn(): bool => (new NewMailSwitch())->isAccepting();
 	}
 
 	/**
@@ -83,7 +108,7 @@ class RolloutBrakeReader
 	 */
 	public function findRefusalNow(): ?string
 	{
-		$values = $this->readStoredOptions();
+		[$values, $freshFlag] = $this->readStoredSwitches();
 		$snapshot = $this->readMailhostSnapshot();
 		$this->mailhostErrorCode = $snapshot['lastErrorCode'];
 		$this->mailhostRevision = $snapshot['revision'];
@@ -101,7 +126,7 @@ class RolloutBrakeReader
 				=> BackfillService::REFUSAL_MIGRATION_STOPPED,
 			$snapshot['known'] && $snapshot['stopped'] === true
 				=> self::REFUSAL_MAILHOST_STOPPED,
-			$this->valueOf($values, BackfillService::FEATURE_OPTION) !== 'Y'
+			$freshFlag === false || ($this->featureReader)() !== true
 				=> BackfillService::REFUSAL_FEATURE_DISABLED,
 			default => null,
 		};
@@ -137,36 +162,127 @@ class RolloutBrakeReader
 	}
 
 	/**
-	 * Both switches in one statement, by the primary key of the option storage.
+	 * The emergency brake by the primary key of the option storage, the flag by the primary key of the storage of the
+	 * flags and the rules of the flag by its code, in one query: a row per rule, or a single row without one.
 	 *
-	 * @return array<string, string> The names the portal has a value for, the stored value of each.
+	 * @return array{0: array<string, string>, 1: ?bool} The names the portal has a value for with the stored value
+	 *     of each, and the flag as the core decides it on the storage as it is now, null when it cannot be read.
 	 */
-	private function readStoredOptions(): array
+	private function readStoredSwitches(): array
 	{
 		if ($this->optionsReader !== null)
 		{
-			return (array)($this->optionsReader)();
+			$flag = $this->freshFlagReader !== null ? ($this->freshFlagReader)() : null;
+
+			return [(array)($this->optionsReader)(), is_bool($flag) ? $flag : null];
 		}
 
 		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
-		$names = array_map(
-			static fn(string $name): string => "'" . $helper->forSql($name) . "'",
-			[BackfillService::MIGRATION_STOP_OPTION, BackfillService::FEATURE_OPTION],
-		);
+		$brakeQuery = 'SELECT VALUE FROM b_option WHERE MODULE_ID = \'mail\''
+			. ' AND NAME = \'' . $helper->forSql(BackfillService::MIGRATION_STOP_OPTION) . '\' AND SITE_ID IS NULL';
+		$flagCode = $helper->forSql(Bitrix24MailFeature::class);
 
-		$rows = $connection->query(
-			'SELECT NAME, VALUE FROM b_option WHERE MODULE_ID = \'mail\''
-			. ' AND NAME IN (' . implode(', ', $names) . ') AND SITE_ID IS NULL',
-		)->fetchAll();
-
-		$values = [];
-		foreach ($rows as $row)
+		try
 		{
-			$values[(string)$row['NAME']] = (string)$row['VALUE'];
+			$rows = $connection->query(
+				'SELECT S.STOP_VALUE, S.FLAG_ENABLED, R.POLICY, R.RULE_CODE, R.RULE_ARGS'
+				. ' FROM (SELECT (' . $brakeQuery . ') AS STOP_VALUE,'
+				. ' (SELECT ENABLED FROM b_feature_flag WHERE CODE = \'' . $flagCode . '\') AS FLAG_ENABLED) S'
+				. ' LEFT JOIN b_feature_flag_rule R ON R.FEATURE_CODE = \'' . $flagCode . '\''
+				. ' ORDER BY R.ID DESC',
+			)->fetchAll();
+		}
+		catch (Throwable)
+		{
+			$rows = null;
 		}
 
-		return $values;
+		if ($rows === null || $rows === [])
+		{
+			$flag = null;
+			$stopValue = $connection->queryScalar($brakeQuery);
+		}
+		else
+		{
+			$flagValue = $rows[0]['FLAG_ENABLED'] ?? null;
+			$flag = $this->decideFlag($flagValue === null ? null : $flagValue === 'Y', $rows);
+			$stopValue = $rows[0]['STOP_VALUE'] ?? null;
+		}
+
+		$values = [];
+		if ($stopValue !== null && $stopValue !== false)
+		{
+			$values[BackfillService::MIGRATION_STOP_OPTION] = (string)$stopValue;
+		}
+
+		return [$values, $flag];
+	}
+
+	/**
+	 * The decision of {@see \Bitrix\Main\Config\Feature\FeatureManager::isEnabled()} over the rows read right now,
+	 * asked for the portal and not for the user of the hit, as {@see NewMailSwitch} asks it. A rule is rebuilt and
+	 * checked by the core itself; a rule the core cannot resolve is skipped, as the core skips it.
+	 *
+	 * @param array<int, array<string, mixed>> $rules
+	 */
+	private function decideFlag(?bool $stored, array $rules): bool
+	{
+		$flag = new Bitrix24MailFeature();
+		$context = new Context();
+
+		foreach ($flag->getRequirements() as $requirement)
+		{
+			if (is_callable($requirement) && !$requirement($context))
+			{
+				return false;
+			}
+		}
+
+		$factory = new Factory();
+		$matched = [];
+
+		foreach ($rules as $rule)
+		{
+			$policy = RulePolicy::tryFrom((string)($rule['POLICY'] ?? ''));
+			$code = (string)($rule['RULE_CODE'] ?? '');
+			if ($policy === null || $code === '' || isset($matched[$policy->value]))
+			{
+				continue;
+			}
+
+			$instance = $factory->resolveRule($code, $this->decodeRuleArgs($rule['RULE_ARGS'] ?? null));
+			if ($instance !== null && $instance->check($context))
+			{
+				$matched[$policy->value] = true;
+			}
+		}
+
+		return match (true)
+		{
+			isset($matched[RulePolicy::DENY->value]) => false,
+			isset($matched[RulePolicy::ALLOW->value]) => true,
+			default => $stored ?? $flag->enabledByDefault(),
+		};
+	}
+
+	private function decodeRuleArgs(mixed $args): array
+	{
+		if (!is_string($args) || $args === '')
+		{
+			return [];
+		}
+
+		try
+		{
+			$decoded = Json::decode($args);
+		}
+		catch (Throwable)
+		{
+			return [];
+		}
+
+		return is_array($decoded) ? $decoded : [];
 	}
 
 	/**

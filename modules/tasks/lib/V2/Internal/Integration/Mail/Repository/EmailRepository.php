@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Mail\Repository;
 
+use Bitrix\Mail\Integration\Tasks\TaskMailSourceService;
 use Bitrix\Mail\Storage\Message;
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Internals\TaskTable;
@@ -28,6 +29,12 @@ class EmailRepository implements EmailRepositoryInterface
 			return null;
 		}
 
+		$email = $this->getByExternalSource($taskId);
+		if ($email !== null)
+		{
+			return $email;
+		}
+
 		$row =
 			TaskTable::query()
 				->setSelect(['ID', UserField::TASK_MAIL])
@@ -43,6 +50,32 @@ class EmailRepository implements EmailRepositoryInterface
 		$mailMessageId = (int)$row[UserField::TASK_MAIL];
 
 		return $this->getById($mailMessageId, $taskId);
+	}
+
+	private function getByExternalSource(int $taskId): ?Email
+	{
+		if (!class_exists(TaskMailSourceService::class))
+		{
+			return null;
+		}
+
+		try
+		{
+			$emailData = TaskMailSourceService::getEmailDataByTaskId($taskId, withBody: false);
+		}
+		catch (Throwable)
+		{
+			return null;
+		}
+
+		if (!is_array($emailData))
+		{
+			return null;
+		}
+
+		$emailData['taskId'] = $emailData['taskId'] ?? $taskId;
+
+		return Email::mapFromArray($emailData);
 	}
 
 	private function getById(int $id, int $taskId): ?Email

@@ -20,6 +20,7 @@ class ConfigConsistencyResolver implements ConsistencyResolverInterface
 
 		$strategy = match ($strategyType)
 		{
+			'task-add-transaction' => new Strategy\TaskAddTransaction(),
 			'transaction' => new Strategy\Transaction(),
 			'lock' => new Strategy\Lock(),
 			default => new Strategy\Base(),

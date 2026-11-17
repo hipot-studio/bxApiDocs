@@ -10,6 +10,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Access\Template\Permission;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Copy\Config\CopyConfig;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 use Bitrix\Tasks\V2\Public\Command\Template\Copy\CopyTemplateCommand;
 
 class Template extends BaseController
@@ -27,7 +28,10 @@ class Template extends BaseController
 		 */
 		$result = (new CopyTemplateCommand(
 			templateData: $template,
-			config: new CopyConfig(userId: $this->userId),
+			config: new CopyConfig(
+				userId: $this->userId,
+				authorSubject: AuthorAssignmentSubject::fromAuthenticatedUser(),
+			),
 		))->run();
 
 		if (!$result->isSuccess())

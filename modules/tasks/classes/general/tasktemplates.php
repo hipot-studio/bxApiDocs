@@ -10,11 +10,13 @@
  */
 global $APPLICATION, $DB;
 
+use Bitrix\Tasks\Control;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Internals\Task\Priority;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Replication\Template\Option\Options;
 use Bitrix\Tasks\Internals\Task\Template\DependenceTable;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 
 Loc::loadMessages(__FILE__);
 
@@ -25,6 +27,11 @@ class CTaskTemplates
 	 * @use \Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary
 	 */
 	const TYPE_FOR_NEW_USER =		0x01;
+
+	/**
+	 * Server-side parameter: only an AuthorAssignmentSubject object is accepted as a value.
+	 */
+	const AUTHOR_ASSIGNMENT_SUBJECT = 'AUTHOR_ASSIGNMENT_SUBJECT';
 
 	const CURRENT_SITE_ID =			'*';
 
@@ -175,6 +182,10 @@ class CTaskTemplates
 			'TPARAM_REPLICATION_COUNT' => [
 				'type'    => 'integer',
 				'default' => 0
+			],
+			'REPLICATE_TYPE' => [
+				'type'    => 'integer',
+				'default' => null
 			],
 			'REPLICATE_PARAMS' => [
 				'type'    => 'string'
@@ -447,6 +458,11 @@ class CTaskTemplates
 	 */
 	function Add($arFields, $arParams = [])
 	{
+		if (!is_array($arParams))
+		{
+			$arParams = [];
+		}
+
 		$userId = 0;
 		if (array_key_exists('USER_ID', $arParams))
 		{
@@ -455,25 +471,21 @@ class CTaskTemplates
 
 		$manager = new Bitrix\Tasks\Control\Template($userId);
 
+		$this->applyAuthorAssignmentSubject($manager, $arParams);
+
 		try
 		{
 			$template = $manager->add($arFields);
 		}
 		catch (\Bitrix\Tasks\Control\Exception\TemplateAddException $e)
 		{
-			$this->_errors[] = [
-				'text' => $e->getMessage(),
-				'id' => 'ERROR_TASKS_BAD_TEMPLATE_SYSTEM_ERROR'
-			];
+			$this->_errors[] = $this->getAuthorAssignmentError($e);
 
 			return false;
 		}
 		catch (\Exception $e)
 		{
-			$this->_errors[] = [
-				'text' => $e->getMessage(),
-				'id' => 'ERROR_TASKS_BAD_TEMPLATE_SYSTEM_ERROR'
-			];
+			$this->_errors[] = $this->getAuthorAssignmentError($e);
 
 			return false;
 		}
@@ -517,30 +529,66 @@ class CTaskTemplates
 			$manager->withSkipAgent();
 		}
 
+		$this->applyAuthorAssignmentSubject($manager, $arParams);
+
 		try
 		{
 			$template = $manager->update($id, $arFields);
 		}
 		catch(\Bitrix\Tasks\Control\Exception\TemplateUpdateException $e)
 		{
-			$this->_errors[] = [
-				'text' => $e->getMessage(),
-				'id' => 'ERROR_TASKS_BAD_TEMPLATE_SYSTEM_ERROR'
-			];
+			$this->_errors[] = $this->getAuthorAssignmentError($e);
 
 			return false;
 		}
 		catch (\Exception $e)
 		{
-			$this->_errors[] = [
-				'text' => $e->getMessage(),
-				'id' => 'ERROR_TASKS_BAD_TEMPLATE_SYSTEM_ERROR'
-			];
+			$this->_errors[] = $this->getAuthorAssignmentError($e);
 
 			return false;
 		}
 
 		return true;
+	}
+
+	private function getAuthorAssignmentError(\Exception $exception): array
+	{
+		$reason = $exception->getPrevious();
+		if ($exception instanceof \Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentException)
+		{
+			$reason = $exception;
+		}
+
+		if ($reason instanceof \Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentException)
+		{
+			return [
+				'text' => $reason->getMessage(),
+				'id' => $reason->getErrorCode(),
+			];
+		}
+
+		return [
+			'text' => $exception->getMessage(),
+			'id' => 'ERROR_TASKS_BAD_TEMPLATE_SYSTEM_ERROR',
+		];
+	}
+
+	/**
+	 * Only a typed object set by server code is a subject: a scalar or a value that came
+	 * from the client means no subject at all.
+	 */
+	private function applyAuthorAssignmentSubject(Control\Template $manager, mixed $arParams): void
+	{
+		if (!is_array($arParams))
+		{
+			return;
+		}
+
+		$subject = $arParams[self::AUTHOR_ASSIGNMENT_SUBJECT] ?? null;
+		if ($subject instanceof AuthorAssignmentSubject)
+		{
+			$manager->withAuthorAssignmentSubject($subject);
+		}
 	}
 
 	/**

@@ -121,7 +121,7 @@ final class Externalizer
 		if($model instanceof Disk\File)
 		{
 			$toArray['DOWNLOAD_URL'] = \CRestUtil::getDownloadUrl(array('id' => $model->getId()), $this->restServer);
-			if(!$this->shouldBuildDetailUrl($model))
+			if(!$this->shouldBuildDetailUrl($model) || !$this->hasDetailPage($model))
 			{
 				$toArray['DETAIL_URL'] = null;
 			}
@@ -146,6 +146,7 @@ final class Externalizer
 		{
 			if(
 				!$this->shouldBuildDetailUrl($model)
+				|| !$this->hasDetailPage($model)
 				|| $model->getStorage()->getProxyType() instanceof Disk\ProxyType\RestApp
 			)
 			{
@@ -172,6 +173,14 @@ final class Externalizer
 	private function shouldBuildDetailUrl(Disk\BaseObject $object): bool
 	{
 		return $this->detailUrlPolicy === null || ($this->detailUrlPolicy)($object);
+	}
+
+	/**
+	 * Storages of other modules (chats, crm, sign) have no listing on the portal: a path to them leads nowhere.
+	 */
+	private function hasDetailPage(Disk\BaseObject $object): bool
+	{
+		return $object->getStorage()?->getProxyType() instanceof Disk\ProxyType\Disk;
 	}
 
 	private function toArray($item)

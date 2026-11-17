@@ -315,6 +315,7 @@ class CopyTaskService
 		return new Entity\Task(
 			title: $sourceTask->title,
 			description: $description,
+			creatorId: $sourceTask->getCreatorId(),
 			creator: $sourceTask->creator,
 			responsible: $sourceTask->responsible,
 			deadlineTs: $sourceTask->deadlineTs,

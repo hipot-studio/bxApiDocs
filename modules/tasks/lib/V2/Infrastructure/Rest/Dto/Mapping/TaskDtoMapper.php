@@ -49,6 +49,14 @@ class TaskDtoMapper
 		{
 			$dto->description = $task->description ?? null;
 		}
+		if (empty($select) || in_array('creatorId', $select, true))
+		{
+			$creatorId = $task->getCreatorId();
+			if ($creatorId !== null)
+			{
+				$dto->creatorId = $creatorId;
+			}
+		}
 		if ($request?->getRelation('creator') !== null)
 		{
 			$dto->creator = UserDto::fromEntity($task->creator ?? null, $request?->getRelation('creator')?->getRequest());
@@ -119,11 +127,11 @@ class TaskDtoMapper
 		}
 		if ($request?->getRelation('accomplices') !== null)
 		{
-			$dto->accomplices = $this->fillCollection(UserFieldDto::class, $task->accomplices?->getIterator(), $request?->getRelation('accomplices')?->getRequest());
+			$dto->accomplices = $this->fillUserCollection($task->accomplices?->getIterator(), $request?->getRelation('accomplices')?->getRequest());
 		}
 		if ($request?->getRelation('auditors') !== null)
 		{
-			$dto->auditors = $this->fillCollection(UserDto::class, $task->auditors?->getIterator(), $request?->getRelation('auditors')?->getRequest());
+			$dto->auditors = $this->fillUserCollection($task->auditors?->getIterator(), $request?->getRelation('auditors')?->getRequest());
 		}
 		if ($request?->getRelation('parent') !== null)
 		{
@@ -192,6 +200,10 @@ class TaskDtoMapper
 		if (empty($select) || in_array('changed', $select, true))
 		{
 			$dto->changed = $task->changedTs ? DateTime::createFromTimestamp($task->changedTs) : null;
+		}
+		if (empty($select) || in_array('changedById', $select, true))
+		{
+			$dto->changedById = $task->getChangedById();
 		}
 		if ($request?->getRelation('changedBy') !== null)
 		{
@@ -426,17 +438,17 @@ class TaskDtoMapper
 	/**
 	 * @throws SystemException
 	 */
-	private function fillCollection(string $dtoClass, \ArrayIterator|array|null $entities, ?Request $request): DtoCollection
+	private function fillUserCollection(\ArrayIterator|array|null $entities, ?Request $request): DtoCollection
 	{
-		$dtoCollection = new DtoCollection($dtoClass);
+		$dtoCollection = new DtoCollection(UserDto::class);
 		if (empty($entities))
 		{
 			return $dtoCollection;
 		}
 		foreach ($entities as $entity)
 		{
-			$entityDto = $this->mapByTaskAndRequest($entity, $request);
-			$dtoCollection->add($entityDto);
+			$userDto = UserDto::fromEntity($entity, $request);
+			$dtoCollection->add($userDto);
 		}
 
 		return $dtoCollection;
@@ -494,7 +506,11 @@ class TaskDtoMapper
 
 			if ($isFieldRequested('creatorId'))
 			{
-				$taskDto->creatorId = $task->creator?->id;
+				$creatorId = $task->getCreatorId();
+				if ($creatorId !== null)
+				{
+					$taskDto->creatorId = $creatorId;
+				}
 			}
 
 			if ($isFieldRequested('responsible'))
@@ -712,7 +728,7 @@ class TaskDtoMapper
 
 			if ($isFieldRequested('changedById'))
 			{
-				$taskDto->changedById = $task->changedBy?->id;
+				$taskDto->changedById = $task->getChangedById();
 			}
 
 			if ($isFieldRequested('statusChangedBy'))

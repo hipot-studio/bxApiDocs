@@ -27,6 +27,7 @@ use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\TypeFile;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
@@ -567,8 +568,12 @@ class CBPDiskGetLinkActivity extends BaseActivity implements IBPConfigurableActi
 
 	private function composePublicLink(ExternalLink $externalLink, bool $isShortened): string
 	{
-		$url = (string)$externalLink->generateUrl();
-		if (!$isShortened)
+		$url = Driver::getInstance()->getUrlManager()->getCopyablePublicExternalLinkForConsumer(
+			$externalLink,
+			UrlManager::PUBLIC_LINK_CONSUMER_BIZPROC,
+		);
+		// The short public address is short already and is never put behind a second shortener.
+		if (!$isShortened || self::isShortPublicAddress($url, $externalLink))
 		{
 			return $url;
 		}
@@ -587,6 +592,13 @@ class CBPDiskGetLinkActivity extends BaseActivity implements IBPConfigurableActi
 
 		// A portal that could not register the short address still gets a working one.
 		return $shortUri === '' ? $url : Driver::getInstance()->getUrlManager()->getHostUrl() . $shortUri;
+	}
+
+	private static function isShortPublicAddress(string $url, ExternalLink $externalLink): bool
+	{
+		$code = $externalLink->getShortCode();
+
+		return $code !== null && str_ends_with((string)parse_url($url, PHP_URL_PATH), "/docs/pub/s/{$code}/");
 	}
 
 	private static function checkPublicSettings(?string $accessRight, mixed $rawExpiresAt, ?DateTime $expiresAt): ?Error

@@ -849,15 +849,57 @@ class CMainInterfaceButtons
 			&& ($this->arParams['EDIT_MODE'] !== self::EDIT_MODE_DISABLE)
 		)
 		{
-			$value = array_merge(
-				CUserOptions::GetOption($this->userOptionsCategory, $this->arParams['ID'], []),
-				$options
-			);
+			$storedValue = CUserOptions::GetOption($this->userOptionsCategory, $this->arParams['ID'], []);
+			$value = array_merge($storedValue, $options);
 			CUserOptions::SetOption(
 				$this->userOptionsCategory,
 				$this->arParams['ID'],
 				$value,
 				$this->arParams['EDIT_MODE'] === self::EDIT_MODE_COMMON);
+
+			if (
+				array_key_exists('firstPageLink', $options)
+				&& is_scalar($options['firstPageLink'])
+				&& (
+					!is_scalar($storedValue['firstPageLink'] ?? '')
+					|| (string)$options['firstPageLink'] !== (string)($storedValue['firstPageLink'] ?? '')
+				)
+			)
+			{
+				$this->cleanUserMenuCache();
+			}
 		}
+	}
+
+	/**
+	 * The left menu takes item links from the first page of top menus and caches them per user.
+	 */
+	private function cleanUserMenuCache(): void
+	{
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		$baseComponent = new CBitrixComponent();
+		if (!$baseComponent->initComponent('bitrix:menu'))
+		{
+			return;
+		}
+
+		$menuClass = CBitrixComponent::includeComponentClass('bitrix:menu');
+		if (!is_string($menuClass) || !is_subclass_of($menuClass, CBitrixComponent::class))
+		{
+			return;
+		}
+
+		$menuComponent = new $menuClass($baseComponent);
+		if (!method_exists($menuComponent, 'getGenerationCachePath'))
+		{
+			return;
+		}
+
+		Main\Data\Cache::createInstance()->cleanDir($menuComponent->getGenerationCachePath($userId));
 	}
 }

@@ -247,6 +247,64 @@ final class Calendar
 		return $hours;
 	}
 
+	/**
+	 * Shifts a timestamp by $count working days, skipping weekends and holidays per the
+	 * portal calendar. The sign of $count sets the direction (positive = forward, negative
+	 * = backward); zero returns the input unchanged. Only the date component matters — the
+	 * time-of-day of $ts is preserved.
+	 *
+	 * "Working day" here means not a weekend and not a holiday; office hours do not affect it.
+	 */
+	public function shiftWorkdays(int $ts, int $count): int
+	{
+		if ($count === 0)
+		{
+			return $ts;
+		}
+
+		$step = $count > 0 ? 1 : -1;
+		$remaining = abs($count);
+
+		$year = (int)date('Y', $ts);
+		$month = (int)date('n', $ts);
+		$day = (int)date('j', $ts);
+		$timeOfDay = $ts - (int)mktime(0, 0, 0, $month, $day, $year);
+
+		$dayTs = (int)mktime(0, 0, 0, $month, $day, $year);
+		while ($remaining > 0)
+		{
+			$dayTs = (int)mktime(
+				0,
+				0,
+				0,
+				(int)date('n', $dayTs),
+				(int)date('j', $dayTs) + $step,
+				(int)date('Y', $dayTs)
+			);
+
+			if ($this->isWorkday($dayTs))
+			{
+				$remaining--;
+			}
+		}
+
+		return $dayTs + $timeOfDay;
+	}
+
+	public function isWorkday(int $ts): bool
+	{
+		$date = DateTime::createFromTimeStructGmt([
+			'hours' => 0,
+			'minutes' => 0,
+			'seconds' => 0,
+			'mon' => (int)date('n', $ts), // 1-based, so monthZeroBase stays default false
+			'day' => (int)date('j', $ts),
+			'year' => (int)date('Y', $ts),
+		]);
+
+		return !$this->isWeekend($date) && !$this->isHoliday($date);
+	}
+
 	public function isWorkTime(DateTime $date)
 	{
 		if ($this->isWeekend($date) || $this->isHoliday($date))
@@ -328,6 +386,7 @@ final class Calendar
 		}
 
 		// holidays
+		$this->holidays = array();
 		if(is_array($settings['HOLIDAYS']))
 		{
 			foreach($settings['HOLIDAYS'] as $day)

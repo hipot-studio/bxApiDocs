@@ -329,7 +329,8 @@ class TaskProvider
 
 	protected function prepareEmail(TaskParams $taskParams, Task $task): array
 	{
-		if (!$taskParams->email || $task->email?->getId() <= 0)
+		$hasSource = ($task->email?->getId() ?? 0) > 0 || ($task->email?->getSourceId() ?? 0) > 0;
+		if (!$taskParams->email || !$hasSource)
 		{
 			return [];
 		}

@@ -16,6 +16,7 @@ class PrepareReplication implements PrepareFieldInterface
 	{
 		$isReplicateParamsProvided = isset($fields['REPLICATE_PARAMS']);
 		$isDeadlineAfterProvided = isset($fields['DEADLINE_AFTER']);
+		$isReplicateTypeProvided = array_key_exists('REPLICATE_TYPE', $fields);
 		$hasCurrentReplicateParams = !empty($fullTemplateData['REPLICATE_PARAMS']);
 		$hasReplicationContext = $this->hasReplicationContext($fields, $hasCurrentReplicateParams);
 
@@ -30,7 +31,12 @@ class PrepareReplication implements PrepareFieldInterface
 			$fields['TPARAM_REPLICATION_COUNT'] = (int)$fields['TPARAM_REPLICATION_COUNT'];
 		}
 
-		if (!isset($fields['REPLICATE']) && !$isReplicateParamsProvided && !$isDeadlineAfterProvided)
+		if (
+			!isset($fields['REPLICATE'])
+			&& !$isReplicateParamsProvided
+			&& !$isDeadlineAfterProvided
+			&& !$isReplicateTypeProvided
+		)
 		{
 			return $fields;
 		}
@@ -45,8 +51,20 @@ class PrepareReplication implements PrepareFieldInterface
 			return $fields;
 		}
 
+		// A params-only change (schedule / type / deadline offset) of an already-configured rule must
+		// carry the current REPLICATE flag forward. Otherwise EnableReplication stops the agent and then
+		// bails on the missing REPLICATE, silently leaving an active template without a running agent.
 		if (
-			(isset($fields['REPLICATE']) || $isDeadlineAfterProvided)
+			!isset($fields['REPLICATE'])
+			&& ($isReplicateParamsProvided || $isDeadlineAfterProvided || $isReplicateTypeProvided)
+			&& $hasCurrentReplicateParams
+		)
+		{
+			$fields['REPLICATE'] = ($fullTemplateData['REPLICATE'] ?? 'N') === 'Y';
+		}
+
+		if (
+			(isset($fields['REPLICATE']) || $isDeadlineAfterProvided || $isReplicateTypeProvided)
 			&& !$isReplicateParamsProvided
 			&& $hasCurrentReplicateParams
 		)
@@ -88,11 +106,16 @@ class PrepareReplication implements PrepareFieldInterface
 			&& !array_key_exists('DEADLINE_OFFSET', $fields['REPLICATE_PARAMS'])
 		)
 		{
-			$fields['REPLICATE_PARAMS']['DEADLINE_OFFSET'] = (int)(
-				$isDeadlineAfterProvided
-					? $fields['DEADLINE_AFTER']
-					: $dbDeadlineAfter
+			$restoredOffset = $this->restoreMissingDeadlineOffset(
+				$isDeadlineAfterProvided ? (int)$fields['DEADLINE_AFTER'] : null,
+				$dbDeadlineAfter,
+				$dbDeadlineOffset,
 			);
+
+			if ($restoredOffset !== null)
+			{
+				$fields['REPLICATE_PARAMS']['DEADLINE_OFFSET'] = $restoredOffset;
+			}
 		}
 
 		$incomingDeadlineAfter = $isDeadlineAfterProvided ? (int)$fields['DEADLINE_AFTER'] : null;
@@ -134,6 +157,10 @@ class PrepareReplication implements PrepareFieldInterface
 		{
 			$fields['DEADLINE_AFTER'] = 0;
 			$fields['REPLICATE_PARAMS']['DEADLINE_OFFSET'] = 0;
+			if ($isCanonicalClear && !$isReplicateParamsProvided)
+			{
+				unset($fields['REPLICATE_PARAMS']['DEADLINE_TYPE']);
+			}
 
 			return $fields;
 		}
@@ -181,6 +208,29 @@ class PrepareReplication implements PrepareFieldInterface
 		}
 
 		return [];
+	}
+
+	/**
+	 * Null when neither the request nor the stored template knows any deadline: such a rule keeps the
+	 * key out of its params, and a fabricated zero would read back as "on the creation day".
+	 */
+	private function restoreMissingDeadlineOffset(
+		?int $incomingDeadlineAfter,
+		int $dbDeadlineAfter,
+		?int $dbDeadlineOffset,
+	): ?int
+	{
+		if ($incomingDeadlineAfter !== null)
+		{
+			return $incomingDeadlineAfter;
+		}
+
+		if ($dbDeadlineAfter > 0)
+		{
+			return $dbDeadlineAfter;
+		}
+
+		return $dbDeadlineOffset;
 	}
 
 	private function hasReplicationContext(array $fields, bool $hasCurrentReplicateParams): bool

@@ -212,8 +212,10 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 		}
 
 		$this->saveFolderSorting($mailboxId, function (array $state) use ($mailboxId, $userId, $order, $activateManualMode): void {
-			$pointer = (int)($state['sourceGenerationId'] ?? 0);
-			$scope = $pointer > 0 ? GenerationScope::active($pointer) : GenerationScope::withoutPreparedGenerations($mailboxId);
+			$scope = GenerationScope::servingMailboxWithPointer(
+				$mailboxId,
+				(int)($state['sourceGenerationId'] ?? 0),
+			);
 			$availableDirIds = $this->getAvailableDirIds($mailboxId, $scope);
 
 			$validatedOrder = [];
@@ -313,3 +315,4 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 		return array_values($result);
 	}
 }
+

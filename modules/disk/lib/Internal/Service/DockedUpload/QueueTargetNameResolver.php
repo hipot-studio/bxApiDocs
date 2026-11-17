@@ -8,7 +8,9 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Entity\DockedUpload\DockedUploadItem;
 use Bitrix\Disk\Internal\Entity\DockedUpload\DockedUploadItemCollection;
 use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\ProxyType;
 use Bitrix\Disk\Storage;
+use Bitrix\Disk\Ui\Avatar;
 
 /**
  * Where a queue is uploading TO, in words: the storage title and the target folder name
@@ -42,6 +44,12 @@ final class QueueTargetNameResolver
 	 * not a pass must not turn the accelerator into an ever-growing map of live entities.
 	 */
 	private const MEMO_LIMIT = 64;
+
+	/**
+	 * Side of the storage image: twice the 20px avatar of the section header, so it stays
+	 * sharp on a high-density screen.
+	 */
+	private const STORAGE_IMAGE_SIZE = 40;
 
 	/** @var array<string, QueueTargetNames> destination key ({@see self::destinationKey()}) => names */
 	private array $memo = [];
@@ -82,8 +90,11 @@ final class QueueTargetNameResolver
 	/**
 	 * Answers the destinations of a WHOLE batch of queues in one pass and leaves the
 	 * verdicts in the memo, so the {@see resolve()} of each queue that follows costs no
-	 * lookup of its own: two queries for the batch - one over its distinct folders, one
-	 * over their storages - instead of a pair per distinct destination. The restore runs
+	 * lookup of its own: one query per table for the batch - its distinct folders, their
+	 * storages and the owners of those storages (users, groups and the files of their
+	 * pictures, {@see QueueTargetOwnerWarmer}) - instead of a set per distinct destination.
+	 * Warming the owners discloses nothing: it only fills caches, while the gate stays in
+	 * {@see buildNames()}, which names a destination only after its access check. The restore runs
 	 * on every load of a Disk folder page, so its whole read path is batched
 	 * ({@see \Bitrix\Disk\Public\Provider\DockedUpload\QueueRestoreProvider}).
 	 *
@@ -120,7 +131,8 @@ final class QueueTargetNameResolver
 		$destinations = array_slice($destinations, 0, self::MEMO_LIMIT - 1, true);
 
 		$folders = self::loadFolders($destinations);
-		self::warmStorageCache($destinations, $folders);
+		$storages = self::warmStorageCache($destinations, $folders);
+		(new QueueTargetOwnerWarmer())->warm($storages, $userId);
 
 		foreach ($destinations as $key => [$folderId, $storageId])
 		{
@@ -215,8 +227,10 @@ final class QueueTargetNameResolver
 	 *
 	 * @param array<string, array{0: int, 1: int}> $destinations
 	 * @param array<int, Folder> $folders
+	 * @return list<Storage> the cached objects themselves, the very ones {@see Folder::getStorage()}
+	 *   answers with, so the owners warmed on them are seen by {@see buildNames()}
 	 */
-	private static function warmStorageCache(array $destinations, array $folders): void
+	private static function warmStorageCache(array $destinations, array $folders): array
 	{
 		$storageIds = [];
 		foreach ($folders as $folder)
@@ -237,10 +251,10 @@ final class QueueTargetNameResolver
 
 		if ($storageIds === [])
 		{
-			return;
+			return [];
 		}
 
-		Storage::loadBatchById(array_values($storageIds), ['ROOT_OBJECT']);
+		return Storage::loadBatchById(array_values($storageIds), ['ROOT_OBJECT']);
 	}
 
 	/**
@@ -318,10 +332,42 @@ final class QueueTargetNameResolver
 			return new QueueTargetNames();
 		}
 
+		$proxyType = $storage->getProxyType();
+
 		return new QueueTargetNames(
-			$storage->getProxyType()->getTitleForCurrentUser(),
+			$proxyType->getTitleForCurrentUser(),
 			self::resolveFolderName($folder, $storage),
+			self::resolveStorageImageSrc($proxyType),
+			self::resolveStorageKind($proxyType),
 		);
+	}
+
+	/**
+	 * The picture of the storage itself: the owner's photo for a personal one, the group
+	 * image for a group. Proxy types fall back to the legacy default pictures of Disk when
+	 * there is none, and those are dropped here - the client draws the placeholder of the
+	 * design system instead (a silhouette or the initials of the title).
+	 */
+	private static function resolveStorageImageSrc(ProxyType\Base $proxyType): ?string
+	{
+		$src = (string)$proxyType->getEntityImageSrc(self::STORAGE_IMAGE_SIZE, self::STORAGE_IMAGE_SIZE);
+		if ($src === '' || in_array($src, [Avatar::getDefaultPerson(), Avatar::getDefaultGroup()], true))
+		{
+			return null;
+		}
+
+		return $src;
+	}
+
+	private static function resolveStorageKind(ProxyType\Base $proxyType): string
+	{
+		return match (true)
+		{
+			$proxyType instanceof ProxyType\User => QueueTargetNames::STORAGE_KIND_USER,
+			$proxyType instanceof ProxyType\Group => QueueTargetNames::STORAGE_KIND_GROUP,
+			$proxyType instanceof ProxyType\Common => QueueTargetNames::STORAGE_KIND_COMMON,
+			default => QueueTargetNames::STORAGE_KIND_OTHER,
+		};
 	}
 
 	/**

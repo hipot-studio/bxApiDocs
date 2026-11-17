@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation;
 
+use Bitrix\Landing\Copilot\Connector\AI\BaseConnector;
 use Bitrix\Landing\Copilot\Connector\AI\IConnector;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
+use Bitrix\Landing\Copilot\Connector\AI\ProviderRefusal;
 use Bitrix\Landing\Copilot\Connector\AI\RequestLimiter;
 use Bitrix\Landing\Copilot\Converter;
 use Bitrix\Landing\Copilot\Generation;
@@ -92,7 +94,7 @@ class Request
 		$result = $connector->request($prompt);
 		if (!$result->isSuccess())
 		{
-			$this->processError($result->getError());
+			$this->processError($result->getError(), $connector);
 		}
 
 		$this->status = Type\RequestStatus::Sent;
@@ -183,19 +185,21 @@ class Request
 	 * Processes an error from the AI provider and throws a GenerationException.
 	 *
 	 * @param Main\Error|null $error The error object from the provider.
+	 * @param IConnector $connector The connector that sent the request: it names the refused engine.
 	 *
 	 * @return void
 	 *
 	 * @throws GenerationException Always throws; either for quota exceeded or generic request error.
 	 */
-	private function processError(?Main\Error $error): void
+	private function processError(?Main\Error $error, IConnector $connector): void
 	{
 		if ($error === null)
 		{
 			throw new GenerationException(GenerationErrors::notSendRequest);
 		}
 
-		if ($this->getRequestLimiter()->checkError($error))
+		$isLimit = $this->getRequestLimiter()->checkError($error);
+		if ($isLimit)
 		{
 			$message = $this->getRequestLimiter()->getCheckResultMessage();
 			if (is_string($message))
@@ -211,7 +215,16 @@ class Request
 			}
 		}
 
-		throw new GenerationException(GenerationErrors::errorInRequest, $error->getMessage());
+		$params = [];
+		if (!$isLimit && ProviderRefusal::isRefusal($error))
+		{
+			$params = [
+				ProviderRefusal::PARAM_REFUSED => true,
+				ProviderRefusal::PARAM_PROVIDER => $connector instanceof BaseConnector ? $connector->getEngineName() : '',
+			];
+		}
+
+		throw new GenerationException(GenerationErrors::errorInRequest, $error->getMessage(), $params);
 	}
 
 	/**

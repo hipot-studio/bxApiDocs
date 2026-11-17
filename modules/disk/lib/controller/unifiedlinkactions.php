@@ -11,6 +11,7 @@ use Bitrix\Disk\Internal\Command\BaseObject\AddSubFolderCommand;
 use Bitrix\Disk\Internal\Command\BaseObject\CreateByContentCommand;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\BaseObjectResolver;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkArchiveService;
 use Bitrix\Disk\Internals\Engine\ActionFilter\CheckUnifiedArchiveSignature;
@@ -30,6 +31,7 @@ use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\DI\Exception\CircularDependencyException;
 use Bitrix\Main\DI\Exception\ServiceNotFoundException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -329,6 +331,65 @@ class UnifiedLinkActions extends BaseObject
 	/**
 	 * @throws BinderArgumentException
 	 */
+	protected function processBeforeAction(Action $action)
+	{
+		if (!$this->keepsShortLinkSource())
+		{
+			$this->addError(new Error('Access denied.', 'ACCESS_DENIED'));
+
+			return false;
+		}
+
+		return parent::processBeforeAction($action);
+	}
+
+	/**
+	 * A request of a short opening names its code, and the opening is resolved and checked again before the
+	 * action: the object, the revision and the attachment of the request must be those of its source. The
+	 * operation it names is a closed set, a mode transition belongs to an employee, and a continuation carries
+	 * no mode of its own to raise. Nothing of the opening is kept between requests, so tabs stay apart.
+	 */
+	private function keepsShortLinkSource(): bool
+	{
+		$code = $this->request->get(ShortLink::PARAM_CODE);
+		if ($code === null)
+		{
+			return true;
+		}
+
+		$opening = is_string($code) ? ShortLinkOpening::resolve($code) : null;
+		if ($opening === null)
+		{
+			return false;
+		}
+
+		$operation = $this->request->get(ShortLink::PARAM_OPERATION);
+		$requestedMode = $this->request->get(ShortLink::PARAM_REQUESTED_MODE);
+		if (
+			($operation !== null && !in_array($operation, [
+				ShortLink::OPERATION_CONTINUE,
+				ShortLink::OPERATION_MODE_TRANSITION,
+			], true))
+			|| (
+				$requestedMode !== null
+				&& !in_array($requestedMode, [ShortLink::MODE_VIEW, ShortLink::MODE_EDIT], true)
+			)
+			|| ($operation === ShortLink::OPERATION_MODE_TRANSITION && (int)$this->getCurrentUser()?->getId() <= 0)
+		)
+		{
+			return false;
+		}
+
+		$uniqueCode = $this->request->get('uniqueCode');
+		$baseObject = is_string($uniqueCode) ? Disk\BaseObject::loadByUniqueCode($uniqueCode) : null;
+
+		return $baseObject instanceof Disk\BaseObject
+			&& (int)$baseObject->getRealObjectId() === (int)$opening->getFile()->getRealObjectId()
+			&& (int)$this->request->get('versionId') === (int)$opening->getVersion()?->getId()
+			&& (int)$this->request->get('attachedObjectId') <= 0
+		;
+	}
+
 	public function getAutoWiredParameters(): array
 	{
 		return [

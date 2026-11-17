@@ -236,6 +236,13 @@ class TemplateModel implements AccessibleTask
 		return $this;
 	}
 
+	public function preloadMembers(array $members): self
+	{
+		$this->members ??= $members;
+
+		return $this;
+	}
+
 	/**
 	 * @param int $userId
 	 * @param string|null $role
@@ -472,6 +479,13 @@ class TemplateModel implements AccessibleTask
 
 		}
 		return $this->permissions;
+	}
+
+	public function preloadPermissions(array $permissions): self
+	{
+		$this->permissions ??= $permissions;
+
+		return $this;
 	}
 
 	private function loadTemplate(): ?array

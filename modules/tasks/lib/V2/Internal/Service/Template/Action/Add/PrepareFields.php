@@ -9,6 +9,7 @@ use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
 use Bitrix\Tasks\V2\Internal\Service\Trait\ApplicationErrorTrait;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareBaseTemplate;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareBBCodes;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareCreator;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareDependencies;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareDescription;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareMembers;
@@ -22,10 +23,17 @@ use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareSiteId;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareTags;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareTitle;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Prepare\PrepareType;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 
 class PrepareFields
 {
 	use ApplicationErrorTrait;
+
+	public function __construct(
+		private readonly ?AuthorAssignmentSubject $authorSubject = null,
+	)
+	{
+	}
 
 	public function __invoke(array $fields): array
 	{
@@ -39,7 +47,7 @@ class PrepareFields
 
 			$this->setApplicationError($message);
 
-			throw new TemplateAddException($e->getMessage());
+			throw new TemplateAddException($e->getMessage(), previous: $e);
 		}
 
 		return $fields;
@@ -48,10 +56,11 @@ class PrepareFields
 	private function prepareFields(array $fields): array
 	{
 		$pipeline = new PreparePipeline([
+			PrepareType::class,
+			new PrepareCreator($this->authorSubject),
 			PrepareResponsible::class,
 			PrepareMultitask::class,
 			PrepareBBCodes::class,
-			PrepareType::class,
 			PrepareMembers::class,
 			PrepareTitle::class,
 			PrepareReplication::class,

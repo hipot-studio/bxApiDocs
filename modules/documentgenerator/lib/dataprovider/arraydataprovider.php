@@ -15,6 +15,56 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 	protected $itemProvider;
 	protected $itemKey;
 	protected $itemTitle;
+	private bool $itemsModified = false;
+	private ?array $itemIdPositions = null;
+	private ?DataProviderManager $itemIdManager = null;
+	private ?DataProvider $iterationItem = null;
+	private ?DataProvider $indexedItem = null;
+
+	/** @internal */
+	public function enableItemIds(DataProviderManager $manager): void
+	{
+		$this->itemIdPositions = array_fill_keys(array_keys($this->data), true);
+		$this->itemIdManager = $manager;
+	}
+
+	/** @internal */
+	public function getPinnedItems(): array
+	{
+		return array_filter([$this->iterationItem, $this->indexedItem]);
+	}
+
+	private function materializeItem($index)
+	{
+		if (isset($this->itemIdPositions[$index]))
+		{
+			$item = $this->itemIdManager->getCollectionItem($this, $this->data[$index]);
+			if (!$this->itemIdManager->isCollectionItemRetained($item))
+			{
+				$this->data[$index] = $item;
+				unset($this->itemIdPositions[$index]);
+			}
+
+			return $item;
+		}
+
+		return $this->data[$index] ?? null;
+	}
+
+	public function getSource()
+	{
+		if ($this->itemIdPositions === null)
+		{
+			return parent::getSource();
+		}
+		$result = [];
+		foreach ($this->source as $id)
+		{
+			$result[] = $this->itemIdManager->getCollectionItem($this, $id);
+		}
+
+		return $result;
+	}
 
 	/**
 	 * @param array $source
@@ -71,8 +121,9 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 		// has access to this provider if the user has access to least one of its items
 		if (is_array($this->data))
 		{
-			foreach ($this->data as $item)
+			foreach (array_keys($this->data) as $index)
 			{
+				$item = $this->materializeItem($index);
 				if ($item instanceof DataProvider)
 				{
 					$hasAccess = DataProviderManager::getInstance()->checkDataProviderAccess($item, $userId);
@@ -139,7 +190,11 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 			}
 			elseif(isset($this->data[$name]))
 			{
-				$value = $this->data[$name];
+				$value = $this->materializeItem($name);
+				if ($this->itemIdPositions !== null)
+				{
+					$this->indexedItem = $value instanceof DataProvider ? $value : null;
+				}
 			}
 		}
 
@@ -159,6 +214,8 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 			throw new \OutOfRangeException('There is no item with index ' . $index);
 		}
 		$this->data[$index] = $item;
+		unset($this->itemIdPositions[$index]);
+		$this->itemsModified = true;
 
 		return $this;
 	}
@@ -166,6 +223,7 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 	public function addItem($item): int
 	{
 		$this->data[] = $item;
+		$this->itemsModified = true;
 
 		return count($this->data);
 	}
@@ -173,9 +231,37 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 	public function deleteItemByIndex(int $index): ArrayDataProvider
 	{
 		unset($this->data[$index]);
+		if ($this->itemIdPositions !== null)
+		{
+			$positions = [];
+			foreach (array_keys($this->data) as $newIndex => $oldIndex)
+			{
+				if (isset($this->itemIdPositions[$oldIndex]))
+				{
+					$positions[$newIndex] = true;
+				}
+			}
+			$this->itemIdPositions = $positions;
+		}
 		$this->data = array_values($this->data);
+		$this->itemsModified = true;
 
 		return $this;
+	}
+
+	public function getModifiedItems(): ?array
+	{
+		if (!$this->itemsModified)
+		{
+			return null;
+		}
+		$result = [];
+		foreach (array_keys($this->data) as $index)
+		{
+			$result[$index] = $this->materializeItem($index);
+		}
+
+		return $result;
 	}
 
 	/**
@@ -190,6 +276,14 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 	{
 		if(is_array($this->data))
 		{
+			if ($this->itemIdPositions !== null && $this->key() !== null)
+			{
+				$item = $this->materializeItem($this->key());
+				$this->iterationItem = $item instanceof DataProvider ? $item : null;
+
+				return $item;
+			}
+
 			return current($this->data);
 		}
 
@@ -201,6 +295,8 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 		if(is_array($this->data))
 		{
 			next($this->data);
+			$this->iterationItem = null;
+			$this->itemIdManager?->onCollectionStep();
 		}
 	}
 
@@ -224,6 +320,7 @@ class ArrayDataProvider extends DataProvider implements \Iterator, \Countable
 		if(is_array($this->data))
 		{
 			reset($this->data);
+			$this->iterationItem = null;
 		}
 	}
 

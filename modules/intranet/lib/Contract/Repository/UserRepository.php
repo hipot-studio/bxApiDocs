@@ -11,6 +11,12 @@ interface UserRepository
 {
 	public function getUserById(int $id): ?User;
 
+	public function getGroupMemberships(int $userId): array;
+
+	public function updateGroupMemberships(int $userId, array $groups): bool;
+
+	public function allGroupsExist(array $groupIds): bool;
+
 	public function findUsersByLogins(array $logins): UserCollection;
 
 	public function findUsersByPhoneNumbers(array $phoneNumbers): UserCollection;

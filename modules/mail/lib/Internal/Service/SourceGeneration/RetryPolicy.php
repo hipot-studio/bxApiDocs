@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
+use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Integration\MailService\MailboxMigrationCancelReceiver;
 use Bitrix\Mail\Integration\MailService\MailboxSwitchAuthorizationReceiver;
 use Bitrix\Mail\Integration\MailService\ReadyMailboxReceiver;
@@ -196,6 +197,28 @@ final class RetryPolicy
 			);
 		}
 
+		if ($errorCode === Mailbox::SYNC_REFUSAL_TIME_QUOTA)
+		{
+			/*
+				The time of the process ran out in the middle of a long synchronization: the work
+				was going on, not stalling, so the refusal spends neither an attempt nor the budget
+				of time, and is simply tried again a little later. The budget is kept unspent by
+				moving the last progress to now: otherwise a series of such refusals longer than a
+				day would hand the operation to a human on the first pass of another kind. The
+				price is that the admin page shows this moment as the time of the last progress.
+			*/
+			return $this->decision(
+				MigrationOperationTable::STATE_SCHEDULED,
+				$stage,
+				true,
+				$stalledAttempts,
+				$this->after($now, self::BUSY_RETRY_SECONDS),
+				clone $now,
+				$errorCode,
+				$owner,
+			);
+		}
+
 		if (!$progressed)
 		{
 			$stalledAttempts++;
@@ -336,6 +359,14 @@ final class RetryPolicy
 			Switcher::ERROR_POINTER_CONFLICT,
 			Switcher::ERROR_G1_NOT_READY,
 			TailAppendService::ERROR_TAIL_FAILED,
+			/*
+				A final synchronization refused because the time of the process ran out, another
+				synchronization held the mailbox or the database lock was lost: each of them passes
+				by itself, and the next run of the operation simply tries again.
+			*/
+			Mailbox::SYNC_REFUSAL_TIME_QUOTA,
+			Mailbox::SYNC_REFUSAL_SYNC_LOCKED,
+			Mailbox::SYNC_REFUSAL_DB_LOCK_LOST,
 			self::ERROR_AGENT_EXCEPTION,
 		], true))
 		{
@@ -475,7 +506,12 @@ final class RetryPolicy
 
 	private function backoff(string $errorCode, MigrationStage $stage, int $stalledAttempts): int
 	{
-		if (in_array($errorCode, [MigrationService::ERROR_OPERATION_BUSY, Switcher::ERROR_MAILBOX_LOCKED], true))
+		if (in_array($errorCode, [
+			MigrationService::ERROR_OPERATION_BUSY,
+			Switcher::ERROR_MAILBOX_LOCKED,
+			Mailbox::SYNC_REFUSAL_SYNC_LOCKED,
+			Mailbox::SYNC_REFUSAL_DB_LOCK_LOST,
+		], true))
 		{
 			return self::BUSY_RETRY_SECONDS;
 		}

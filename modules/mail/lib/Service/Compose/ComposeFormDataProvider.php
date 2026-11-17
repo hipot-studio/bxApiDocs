@@ -10,6 +10,7 @@ use Bitrix\Mail\Integration\AI;
 use Bitrix\Mail\Integration\Crm;
 use Bitrix\Mail\Internal\Service\Mailbox\Avatar\AvatarService;
 use Bitrix\Mail\Message;
+use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\FileTable;
@@ -125,7 +126,7 @@ class ComposeFormDataProvider
 	 */
 	public function getInitialData(array $message, array $params = []): array
 	{
-		$senders = $this->applyMailboxAvatars($this->loadSenders());
+		$senders = $this->getSenders();
 		$senderEmail = (string)($message['__email'] ?? '');
 		$mailboxId = (int)($message['MAILBOX_ID'] ?? 0);
 		$mailboxId = $mailboxId > 0 ? $mailboxId : null;
@@ -176,6 +177,7 @@ class ComposeFormDataProvider
 				'saveTemplate' => Helper\Config\Feature::isComposeTemplatesAvailable()
 					&& $this->crmTemplateProvider->canCreatePersonal($userId),
 				'subjectGeneration' => $this->isSubjectGenerationAvailable(),
+				'smtpSender' => $this->isSmtpSenderAvailable(),
 			],
 			'authorTimezoneId' => $this->resolveAuthorTimezoneId(),
 			'draft' => [
@@ -191,6 +193,17 @@ class ComposeFormDataProvider
 		return is_array($scheduledMessage)
 			? $this->applyScheduledMessage($data, $scheduledMessage, $senders)
 			: $data;
+	}
+
+	/**
+	 * Senders of the current user the form offers: the 'senders' of the initial data, in the order of the
+	 * list, a mailbox with the avatar of its own.
+	 *
+	 * @return array[]
+	 */
+	public function getSenders(): array
+	{
+		return $this->applyMailboxAvatars($this->loadSenders());
 	}
 
 	/** @param array<string, mixed> $scheduledMessage */
@@ -653,6 +666,15 @@ class ComposeFormDataProvider
 	protected function isSubjectGenerationAvailable(): bool
 	{
 		return (new AI\SubjectAvailability())->isAvailable();
+	}
+
+	/**
+	 * Whether a sender of one's own SMTP server may be added. The rule is the one of the old form
+	 * (main.mail.form), so the showcase of providers offers the same from either form.
+	 */
+	protected function isSmtpSenderAvailable(): bool
+	{
+		return Loader::includeModule('bitrix24') || (bool)Configuration::getValue('smtp');
 	}
 
 	protected function loadSenders(): array

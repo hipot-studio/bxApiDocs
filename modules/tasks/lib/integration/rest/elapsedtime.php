@@ -96,11 +96,17 @@ final class ElapsedTimeTable extends \Bitrix\Tasks\Internals\Task\ElapsedTimeTab
 
 		foreach($list as $key)
 		{
-			$key = (string) trim(mb_strtoupper($key));
+			// ORM allows objects here, e.g. ExpressionField: they are never aggregation shortcuts
+			if(!is_string($key))
+			{
+				continue;
+			}
+
+			$key = trim(mb_strtoupper($key));
 			if($key != '')
 			{
 				$found = array();
-				if(preg_match('#^([A-Z0-9_]+)_((MAX|MIN|SUM|COUNT|AVG){1})$#', $key, $found) !== false)
+				if(preg_match('#^([A-Z0-9_]+)_((MAX|MIN|SUM|COUNT|AVG){1})$#', $key, $found) === 1)
 				{
 					$field = (string)($found[1] ?? null);
 					$func = (string)($found[3] ?? null);

@@ -26,7 +26,7 @@ final class Registration extends BaseSender
 
 	public function unregisterPortal(): Result
 	{
-		$cloudRegistrationData = (new Configuration())->getCloudRegistrationData();
+		$cloudRegistrationData = (new Configuration())->getStoredCloudRegistrationData();
 		if (!$cloudRegistrationData)
 		{
 			$result = new Result();

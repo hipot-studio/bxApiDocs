@@ -252,3 +252,4 @@ final class SignatureImage extends Base
 		) === 1;
 	}
 }
+

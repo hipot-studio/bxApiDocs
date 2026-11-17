@@ -12,4 +12,10 @@ interface DeadlineUserOptionRepositoryInterface
 	public function getByUserId(int $userId): DeadlineUserOption;
 
 	public function save(DeadlineUserOption $deadlineUserOption): void;
+
+	public function saveDefaultDeadlineValue(
+		int $userId,
+		int $defaultDeadlineInSeconds,
+		bool $isExactDeadlineTime,
+	): DeadlineUserOption;
 }

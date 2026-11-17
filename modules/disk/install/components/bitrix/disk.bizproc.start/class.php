@@ -2,7 +2,6 @@
 
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\PrepareStartParametersRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
-use Bitrix\Bizproc\Internal\Service\Pilot\StartFormParameters;
 use Bitrix\Bizproc\Public\Provider\PilotVisibilityProvider;
 use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
 use Bitrix\Bizproc\Public\Dto\ManualStartContext;
@@ -12,11 +11,14 @@ use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Enum\Face;
 use Bitrix\Bizproc\Starter\Enum\ManualStartSurface;
 use Bitrix\Bizproc\Starter\Starter;
+use Bitrix\Disk\Internal\Integration\Bizproc\ManualStartCapabilities;
+use Bitrix\Disk\Internal\Integration\Bizproc\PilotStartFormParameters;
 use Bitrix\Disk\Internals\Engine\Contract\SidePanelWrappable;
 use Bitrix\Disk\Driver;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\ArgumentException;
 
@@ -140,8 +142,11 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 		// manual start point of a file: the templates a pilot of bizproc acts on are narrowed to the ones
 		// this employee may see; the condition has a key of its own and is simply added to the ones below
 		$currentUserId = (int)$this->getUser()->getID();
-		$visibilityFilter = (new PilotVisibilityProvider())->getVisibilityFilter($currentUserId);
-		$startFormParameters = new StartFormParameters();
+		$visibilityFilter = $this->getCapabilities()->hasPilot()
+			? (new PilotVisibilityProvider())->getVisibilityFilter($currentUserId)
+			: array()
+		;
+		$startFormParameters = ServiceLocator::getInstance()->get(PilotStartFormParameters::class);
 		$manualStartAccess = $this->createManualStartAccess();
 
 		foreach($this->arResult['DOCUMENT_DATA'] as $nameModule => $data)
@@ -218,7 +223,7 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 				$workflowTemplate['PARAMETERS'] = $startFormParameters->forInitiator(
 					(int)$workflowTemplate['ID'],
 					$currentUserId,
-					$manualStartSurface,
+					$manualStartSurface?->value,
 					is_array($workflowTemplate['PARAMETERS'] ?? null) ? $workflowTemplate['PARAMETERS'] : [],
 				);
 				if($nameModule == 'DISK')
@@ -272,17 +277,19 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 			)
 			{
 				$prepareResponse = (new WorkflowTemplateService())->prepareStartParameters(
-					new PrepareStartParametersRequest(
-						templateId: $this->arParams['TEMPLATE_ID'],
-						complexDocumentType: $documentParameters['DOCUMENT_TYPE'],
-						requestParameters: array_merge(
-							$this->request->toArray(),
-							$this->request->getFileList()->toArray(),
-						),
-						targetUserId: $currentUserId,
-						eventType: CBPDocumentEventType::Manual,
-						manualStartSurface: $manualStartSurface,
-					),
+					new PrepareStartParametersRequest(...array_merge(
+						[
+							'templateId' => $this->arParams['TEMPLATE_ID'],
+							'complexDocumentType' => $documentParameters['DOCUMENT_TYPE'],
+							'requestParameters' => array_merge(
+								$this->request->toArray(),
+								$this->request->getFileList()->toArray(),
+							),
+							'targetUserId' => $currentUserId,
+							'eventType' => CBPDocumentEventType::Manual,
+						],
+						$this->getManualStartSurfaceArgument($manualStartSurface),
+					)),
 				);
 
 				if (!$prepareResponse->isSuccess())
@@ -326,7 +333,10 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 				{
 					$starter = (new StarterService())->getStarterForManualDocumentScenario(
 						templateIds: [$this->arParams['TEMPLATE_ID']],
-						context: new ContextDto(Driver::INTERNAL_MODULE_ID, Face::WEB, manualStartSurface: $manualStartSurface),
+						context: new ContextDto(...array_merge(
+							['moduleId' => Driver::INTERNAL_MODULE_ID, 'face' => Face::WEB],
+							$this->getManualStartSurfaceArgument($manualStartSurface),
+						)),
 						document: new DocumentDto(
 							complexDocumentId: $documentParameters['DOCUMENT_ID'],
 							complexDocumentType: $documentParameters['DOCUMENT_TYPE'],
@@ -354,7 +364,10 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 				else
 				{
 					$startErrors = [];
-					$arWorkflowParameters[CBPDocument::PARAM_MANUAL_START_SURFACE] = $manualStartSurface->value;
+					if ($manualStartSurface !== null)
+					{
+						$arWorkflowParameters[CBPDocument::PARAM_MANUAL_START_SURFACE] = $manualStartSurface->value;
+					}
 					$workflowId = CBPDocument::startWorkflow(
 						$this->arParams['TEMPLATE_ID'],
 						$documentParameters['DOCUMENT_ID'],
@@ -422,14 +435,36 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 	 */
 	private function createManualStartAccess(): ?ManualStartPolicyService
 	{
-		return class_exists(ManualStartPolicyService::class) ? new ManualStartPolicyService() : null;
+		return $this->getCapabilities()->hasManualStartPolicy() ? new ManualStartPolicyService() : null;
 	}
 
-	private function getManualStartSurface(string $nameModule): ManualStartSurface
+	/**
+	 * The mark of the surface ships with bizproc 26.1400.0; an older bizproc starts without it.
+	 */
+	private function getManualStartSurface(string $nameModule): ?ManualStartSurface
 	{
+		if (!$this->getCapabilities()->hasManualStartSurface())
+		{
+			return null;
+		}
+
 		return $nameModule === 'WEBDAV'
 			? ManualStartSurface::WebdavElement
 			: ManualStartSurface::DiskFile
 		;
+	}
+
+	/**
+	 * The named argument manualStartSurface for the DTOs of bizproc: an older bizproc does not know the parameter,
+	 * so it is passed only when there is a surface.
+	 */
+	private function getManualStartSurfaceArgument(?ManualStartSurface $manualStartSurface): array
+	{
+		return $manualStartSurface !== null ? ['manualStartSurface' => $manualStartSurface] : [];
+	}
+
+	private function getCapabilities(): ManualStartCapabilities
+	{
+		return ServiceLocator::getInstance()->get(ManualStartCapabilities::class);
 	}
 }

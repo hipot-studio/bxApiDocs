@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Entity;
 
+use Bitrix\Tasks\Replication\Template\Enum\RegularityType;
 use Bitrix\Tasks\V2\Internal\Entity\Template\PermissionCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
 use Bitrix\Tasks\V2\Internal\Entity\Template\SubTemplateCollection;
@@ -32,6 +33,7 @@ class Template extends AbstractEntity
 		public readonly ?bool $replicate = null,
 		public readonly ?ReplicateParams $replicateParams = null,
 		public readonly ?int $replicateCount = null,
+		public readonly ?RegularityType $regularityType = null,
 		public readonly ?Group $group = null,
 		public readonly ?int $estimatedTime = null,
 		public readonly ?array $dependsOn = null,
@@ -70,6 +72,7 @@ class Template extends AbstractEntity
 		public readonly ?int $parentId = null,
 		public readonly ?bool $descriptionInBbcode = null,
 		public readonly ?int $stageId = null,
+		public readonly ?bool $regularityTypeSpecified = null,
 	)
 	{
 
@@ -99,6 +102,8 @@ class Template extends AbstractEntity
 			'replicate' => $this->replicate,
 			'replicateParams' => $this->replicateParams?->toArray(),
 			'replicateCount' => $this->replicateCount,
+			'regularityType' => $this->regularityType?->value,
+			'regularityTypeSpecified' => $this->regularityTypeSpecified,
 			'group' => $this->group?->toArray(),
 			'estimatedTime' => $this->estimatedTime,
 			'dependsOn' => $this->dependsOn,
@@ -159,6 +164,8 @@ class Template extends AbstractEntity
 			replicate: static::mapBool($props, 'replicate'),
 			replicateParams: static::mapValueObject($props, 'replicateParams', ReplicateParams::class),
 			replicateCount: static::mapInteger($props, 'replicateCount'),
+			regularityType: static::mapBackedEnum($props, 'regularityType', RegularityType::class),
+			regularityTypeSpecified: static::mapBool($props, 'regularityTypeSpecified'),
 			group: static::mapEntity($props, 'group', Group::class),
 			estimatedTime: static::mapInteger($props, 'estimatedTime'),
 			dependsOn: static::mapArray($props, 'dependsOn'),

@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Integration\AiAssistant\UseCase;
 
 use Bitrix\Landing\Block;
 use Bitrix\Landing\Integration\AiAssistant\Dto\SetLandingCrmFormDto;
+use Bitrix\Landing\Integration\AiAssistant\Service\MarkupEditorReloadNotifier;
 use Bitrix\Landing\Internals\LandingTable;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Manager;
@@ -31,7 +32,7 @@ class SetLandingCrmFormHandler extends AbstractCrmFormHandler
 		$manifest = $this->findMarkupBlockManifest($dto->pageId, $dto->blockId);
 		if ($manifest !== null)
 		{
-			return $this->handleMarkupBlock($dto, $manifest, $formsById);
+			return $this->handleMarkupBlock($dto, $manifest, $formsById, $initiatorUserId);
 		}
 
 		$selectedForm = $formsById[$dto->formId] ?? null;
@@ -114,10 +115,14 @@ class SetLandingCrmFormHandler extends AbstractCrmFormHandler
 
 	/**
 	 * A new version of the markup block with the token bound to the form. The page is not published
-	 * (a markup page is published with the editor button) and the block is not reloaded in the editor:
-	 * a reloaded markup block loses its frame, the change is seen after the page reload.
+	 * (a markup page is published with the editor button), and the open editor reloads the page to show it.
 	 */
-	private function handleMarkupBlock(SetLandingCrmFormDto $dto, Manifest $manifest, array $formsById): array
+	private function handleMarkupBlock(
+		SetLandingCrmFormDto $dto,
+		Manifest $manifest,
+		array $formsById,
+		?int $initiatorUserId,
+	): array
 	{
 		$token = $this->resolveFormToken($manifest, $dto->formToken);
 
@@ -142,6 +147,12 @@ class SetLandingCrmFormHandler extends AbstractCrmFormHandler
 		if ($changed)
 		{
 			$this->rebindMarkupForm($dto->pageId, $dto->blockId, $token, $dto->formId);
+			$this->notifyMarkupPageChanged(
+				$dto->pageId,
+				$dto->blockId,
+				$initiatorUserId,
+				MarkupEditorReloadNotifier::REASON_CRM_FORM_SWITCH,
+			);
 		}
 
 		$previousForm = $formsById[$previousFormId] ?? null;
@@ -160,7 +171,7 @@ class SetLandingCrmFormHandler extends AbstractCrmFormHandler
 			'formId' => $dto->formId,
 			'formName' => is_array($selectedForm) ? (string)($selectedForm['NAME'] ?? '') : '',
 			'message' => $changed
-				? 'CRM form has been switched in the page draft. It is shown after the editor page is reloaded;'
+				? 'CRM form has been switched in the page draft. The open editor page reloads on its own to show it;'
 					. ' the page is published with the editor Publish button.'
 				: 'CRM form is already set.',
 		];

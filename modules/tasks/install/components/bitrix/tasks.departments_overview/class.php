@@ -60,10 +60,14 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 
 	protected static function checkPermissions(array &$arParams, array &$arResult, Collection $errors, array $auxParams = [])
 	{
-		$currentUser = User::getId();
-		$viewedUser = $arParams['USER_ID'];
+		$currentUserId = User::getId();
+		$viewedUserId = (int)($arParams['USER_ID'] ?? 0);
 
-		$isAccessible = $currentUser == $viewedUser;
+		$isAccessible =
+			$currentUserId > 0
+			&& $viewedUserId > 0
+			&& $currentUserId === $viewedUserId
+		;
 
 		if (!$isAccessible)
 		{

@@ -153,6 +153,10 @@ class TemplateTable extends FileModel
 			new Main\Entity\EnumField('PRODUCTS_TABLE_VARIANT', [
 				'values' => self::getProductsTableVariantList(),
 				'default_value' => self::PRODUCTS_TABLE_VARIANT_ALL,
+				// PostgreSQL returns the char(7) column padded with spaces: 'goods' comes back as 'goods  '
+				'fetch_data_modification' => static fn() => [
+					static fn($value) => is_string($value) ? rtrim($value, ' ') : $value,
+				],
 			]),
 			new Main\Entity\BooleanField('IS_DELETED', [
 				'values' => ['N', 'Y'],

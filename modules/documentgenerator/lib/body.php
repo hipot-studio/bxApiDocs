@@ -214,6 +214,14 @@ abstract class Body
 	}
 
 	/**
+	 * @return array<string, string>|null Null when block names cannot be enumerated.
+	 */
+	public function getMultiplyingBlockNames(): ?array
+	{
+		return null;
+	}
+
+	/**
 	 * Set placeholders list that will not be filled with values.
 	 *
 	 * @param array $placeholders

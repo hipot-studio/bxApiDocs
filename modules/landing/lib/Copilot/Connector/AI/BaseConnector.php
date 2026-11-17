@@ -91,6 +91,14 @@ abstract class BaseConnector implements IConnector, UserAwareConnectorInterface
 		return $this->canRequest();
 	}
 
+	/**
+	 * Name of the engine of the connector, an empty string without an engine.
+	 */
+	public function getEngineName(): string
+	{
+		return isset($this->engine) ? $this->engine->getIEngine()->getName() : '';
+	}
+
 	public function setTemperature(float $temperature): self
 	{
 		$this->temperature = $temperature;

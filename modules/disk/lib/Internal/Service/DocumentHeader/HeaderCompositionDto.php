@@ -45,6 +45,7 @@ final class HeaderCompositionDto
 		public readonly bool $presenceEnabled,
 		public readonly bool $boostContainerRequired,
 		public readonly ?array $editRefusal = null,
+		public readonly ?array $fileChat = null,
 	)
 	{
 	}
@@ -76,6 +77,7 @@ final class HeaderCompositionDto
 				'containerRequired' => $this->boostContainerRequired,
 			],
 			'editRefusal' => $this->editRefusal,
+			'fileChat' => $this->fileChat,
 		];
 	}
 }

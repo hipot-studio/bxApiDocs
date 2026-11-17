@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Public\Service\UnifiedLink\Render;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\ClientContext;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\RenderResult;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\Version;
@@ -34,6 +35,7 @@ class MobileUnifiedLinkRenderer
 			attachedObject: $attachedObject,
 			version: $version,
 			currentUser: $currentUser,
+			client: ClientContext::Mobile,
 		);
 
 		return $renderer->render();
@@ -65,6 +67,7 @@ class MobileUnifiedLinkRenderer
 			attachedObject: null,
 			version: null,
 			currentUser: $currentUser,
+			client: ClientContext::Mobile,
 		);
 
 		return $renderer->render();

@@ -6,19 +6,34 @@ namespace Bitrix\Mail\Helper\Mailbox;
 
 use Bitrix\Mail\Access\MailAccessController;
 use Bitrix\Mail\Access\MailActionDictionary;
-use Bitrix\Mail\Access\MailboxAccessController;
 use Bitrix\Mail\Helper\Enum\MailboxStatus;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\MailboxTable;
-use Bitrix\Main\UserTable;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 
 class MailboxGridButtonCounterRefreshService
 {
 	public const PULL_COMMAND = 'mailbox_grid_button_counter_refresh';
+	public const PULL_TAG = 'mail_mailbox_grid_counter';
 
 	public function sendForMailbox(int $mailboxId): void
 	{
-		$this->sendToUsers($this->getRefreshRecipientUserIds($mailboxId));
+		$ownerId = $this->getActiveMailboxOwnerId($mailboxId);
+		if ($ownerId === null || !$this->isPullAvailable())
+		{
+			return;
+		}
+
+		$message = $this->getPullMessage();
+
+		// Owner tabs that do not watch the tag still have to hear about their own mailbox.
+		if ($ownerId > 0 && $this->hasMailboxGridAccess($ownerId))
+		{
+			$this->addUsersEvent([$ownerId], $message);
+		}
+
+		$this->addTagEvent(self::PULL_TAG, $message);
 	}
 
 	/**
@@ -27,41 +42,43 @@ class MailboxGridButtonCounterRefreshService
 	public function sendToUsers(array $userIds): void
 	{
 		$userIds = $this->normalizeIds($userIds);
-		if (empty($userIds) || !Loader::includeModule('pull'))
+		if (empty($userIds) || !$this->isPullAvailable())
 		{
 			return;
 		}
 
-		\Bitrix\Pull\Event::add($userIds, [
-			'module_id' => 'mail',
-			'command' => self::PULL_COMMAND,
-			'params' => [],
-		]);
+		$this->addUsersEvent($userIds, $this->getPullMessage());
 	}
 
 	/**
-	 * @return int[]
+	 * Subscribes the current user to the tag of the mailbox grid button counter.
+	 *
+	 * @return string|null the tag when the subscription is set, null otherwise
 	 */
-	protected function getRefreshRecipientUserIds(int $mailboxId): array
+	public function watchForCurrentUser(): ?string
 	{
-		if (!$this->isActiveMailbox($mailboxId))
+		$userId = $this->getCurrentUserId();
+		if ($userId <= 0 || !$this->canCurrentUserWatch() || !$this->isPullAvailable())
 		{
-			return [];
+			return null;
 		}
 
-		$recipientUserIds = [];
-		foreach ($this->getActiveUserIds() as $userId)
-		{
-			if (
-				$this->hasMailboxGridAccess($userId)
-				&& $this->canEditMailbox($userId, $mailboxId)
-			)
-			{
-				$recipientUserIds[] = $userId;
-			}
-		}
+		$this->addWatch($userId, self::PULL_TAG);
 
-		return $recipientUserIds;
+		return self::PULL_TAG;
+	}
+
+	protected function getActiveMailboxOwnerId(int $mailboxId): ?int
+	{
+		$mailbox = MailboxTable::getRow([
+			'select' => ['USER_ID'],
+			'filter' => [
+				'=ID' => $mailboxId,
+				'=ACTIVE' => MailboxStatus::Active->value,
+			],
+		]);
+
+		return is_array($mailbox) ? (int)$mailbox['USER_ID'] : null;
 	}
 
 	protected function hasMailboxGridAccess(int $userId): bool
@@ -69,46 +86,46 @@ class MailboxGridButtonCounterRefreshService
 		return MailAccessController::can($userId, MailActionDictionary::ACTION_MAILBOX_LIST_VIEW);
 	}
 
-	protected function canEditMailbox(int $userId, int $mailboxId): bool
+	protected function canCurrentUserWatch(): bool
 	{
-		return MailboxAccessController::can(
-			$userId,
-			MailActionDictionary::ACTION_MAILBOX_LIST_ITEM_EDIT,
-			$mailboxId,
-		);
+		return MailAccess::hasCurrentUserAccessToMailboxGrid();
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return (int)CurrentUser::get()->getId();
+	}
+
+	protected function addWatch(int $userId, string $tag): void
+	{
+		\CPullWatch::Add($userId, $tag);
+	}
+
+	protected function isPullAvailable(): bool
+	{
+		return Loader::includeModule('pull');
 	}
 
 	/**
-	 * @return int[]
+	 * @param int[] $userIds
 	 */
-	protected function getActiveUserIds(): array
+	protected function addUsersEvent(array $userIds, array $message): void
 	{
-		$userIds = [];
-		$users = UserTable::query()
-			->setSelect(['ID'])
-			->where('ACTIVE', 'Y')
-			->exec()
-		;
-
-		while ($user = $users->fetch())
-		{
-			$userIds[] = (int)($user['ID'] ?? 0);
-		}
-
-		return $this->normalizeIds($userIds);
+		\Bitrix\Pull\Event::add($userIds, $message);
 	}
 
-	protected function isActiveMailbox(int $mailboxId): bool
+	protected function addTagEvent(string $tag, array $message): void
 	{
-		$mailbox = MailboxTable::getRow([
-			'select' => ['ID'],
-			'filter' => [
-				'=ID' => $mailboxId,
-				'=ACTIVE' => MailboxStatus::Active->value,
-			],
-		]);
+		\CPullWatch::AddToStack($tag, $message);
+	}
 
-		return is_array($mailbox);
+	private function getPullMessage(): array
+	{
+		return [
+			'module_id' => 'mail',
+			'command' => self::PULL_COMMAND,
+			'params' => [],
+		];
 	}
 
 	/**

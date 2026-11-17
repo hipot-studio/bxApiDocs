@@ -297,3 +297,4 @@ class SharedSignature extends Base
 		$this->addErrors($errors);
 	}
 }
+

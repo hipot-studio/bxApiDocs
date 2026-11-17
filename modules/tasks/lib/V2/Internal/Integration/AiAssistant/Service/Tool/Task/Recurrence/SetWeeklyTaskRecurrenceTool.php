@@ -16,7 +16,10 @@ class SetWeeklyTaskRecurrenceTool extends BaseRecurrenceTool
 		return
 			'Sets up a weekly recurrence for a task. '
 			. 'Allows selecting specific days of the week (e.g., Monday, Wednesday) '
-			. 'and setting a weekly interval (e.g., every 2 weeks).'
+			. 'and setting a weekly interval (e.g., every 2 weeks). '
+			. 'Provide exactly one of templateId or taskId. When taskId identifies a generated instance, '
+			. 'this updates the recurrence rule of the source template instead of creating a new '
+			. 'series from the instance. Saving the rule activates recurrence, including for an inactive template.'
 		;
 	}
 

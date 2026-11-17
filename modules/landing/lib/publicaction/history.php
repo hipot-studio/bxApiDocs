@@ -7,9 +7,11 @@ use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeEligibilityService;
 use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeStateService;
 use Bitrix\Landing;
 use Bitrix\Landing\PublicActionResult;
+use Bitrix\Landing\Rights;
 use Bitrix\Landing\Template;
 use Bitrix\Landing\TemplateRef;
 use Bitrix\Main\Diag\ExceptionHandlerFormatter;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * Work with history
@@ -21,8 +23,20 @@ class History
 	 */
 	private const LOG_TYPE_TAILWIND_RUNTIME_ERROR = 'LANDING_TAILWIND_RUNTIME_ERROR';
 
+	/**
+	 * The only actions the designer pushes. The others carry a block id in their params and would be
+	 * executed by undo on that block, whichever block the step was pushed for.
+	 */
+	private const DESIGNER_BLOCK_PUSH_ACTIONS = ['ADD_NODE', 'REMOVE_NODE'];
+
 	public static function getForLanding(int $lid): PublicActionResult
 	{
+		$denied = self::getDeniedResult(Landing\History::ENTITY_TYPE_LANDING, $lid, Rights::ACCESS_TYPES['read']);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$histories = [];
 
@@ -118,6 +132,16 @@ class History
 
 	public static function getForDesignerBlock(int $blockId): PublicActionResult
 	{
+		$denied = self::getDeniedResult(
+			Landing\History::ENTITY_TYPE_DESIGNER_BLOCK,
+			$blockId,
+			Rights::ACCESS_TYPES['read']
+		);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$history = new Landing\History($blockId, Landing\History::ENTITY_TYPE_DESIGNER_BLOCK);
 
@@ -151,6 +175,11 @@ class History
 
 	public static function pushDesignerBlock(int $blockId, string $action, array $data): PublicActionResult
 	{
+		if (!in_array(strtoupper($action), self::DESIGNER_BLOCK_PUSH_ACTIONS, true))
+		{
+			return self::createDeniedResult();
+		}
+
 		return self::pushForEntity(Landing\History::ENTITY_TYPE_DESIGNER_BLOCK, $blockId, $action, $data);
 	}
 
@@ -166,6 +195,12 @@ class History
 
 	protected static function undoForEntity(string $entityType, int $entityId): PublicActionResult
 	{
+		$denied = self::getDeniedResult($entityType, $entityId, Rights::ACCESS_TYPES['edit']);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 
@@ -202,6 +237,12 @@ class History
 
 	protected static function redoForEntity(string $entityType, int $entityId): PublicActionResult
 	{
+		$denied = self::getDeniedResult($entityType, $entityId, Rights::ACCESS_TYPES['edit']);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 
@@ -232,6 +273,38 @@ class History
 			);
 			$result->setError($error);
 		}
+
+		return $result;
+	}
+
+	/**
+	 * The gateway checks only the access to the module, the object is up to the action. Runs before
+	 * the edit mode is on, so a denied call does not reach the object at all.
+	 * @param string $entityType History entity type.
+	 * @param int $entityId Landing or designer block id.
+	 * @param string $accessType One of Rights::ACCESS_TYPES.
+	 * @return PublicActionResult|null Null if access is allowed.
+	 */
+	private static function getDeniedResult(string $entityType, int $entityId, string $accessType): ?PublicActionResult
+	{
+		$landingId = $entityType === Landing\History::ENTITY_TYPE_DESIGNER_BLOCK
+			? (int)Landing\Block::getLandingIdByBlockId($entityId)
+			: $entityId
+		;
+
+		return Rights::hasAccessForLanding($landingId, $accessType) ? null : self::createDeniedResult();
+	}
+
+	private static function createDeniedResult(): PublicActionResult
+	{
+		$error = new \Bitrix\Landing\Error;
+		$error->addError(
+			'ACCESS_DENIED',
+			Loc::getMessage('LANDING_ACCESS_DENIED2')
+		);
+
+		$result = new PublicActionResult();
+		$result->setError($error);
 
 		return $result;
 	}
@@ -310,6 +383,12 @@ class History
 		array $data
 	): PublicActionResult
 	{
+		$denied = self::getDeniedResult($entityType, $entityId, Rights::ACCESS_TYPES['edit']);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 
@@ -345,6 +424,12 @@ class History
 
 	protected static function clearForEntity(string $entityType, int $entityId): PublicActionResult
 	{
+		$denied = self::getDeniedResult($entityType, $entityId, Rights::ACCESS_TYPES['edit']);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 
@@ -380,6 +465,12 @@ class History
 
 	protected static function clearFutureForEntity(string $entityType, int $entityId): PublicActionResult
 	{
+		$denied = self::getDeniedResult($entityType, $entityId, Rights::ACCESS_TYPES['edit']);
+		if ($denied)
+		{
+			return $denied;
+		}
+
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 

@@ -287,8 +287,8 @@ class TailAppendService
 	/** The system roles of the folders of the mailbox, read once for the whole pass */
 	private ?SystemRoleMap $systemRoles = null;
 
-	/** The folders the transfer brought into the new server, read once for the whole pass */
-	private ?FolderPairMap $folderPairs = null;
+	/** Where a folder of the old server goes on the new one, read once for the whole pass */
+	private ?FolderDestinationResolver $folderDestinations = null;
 
 	/** @var array<string, true> The folders of the prepared generation its import reads */
 	private array $preparedSyncPaths = [];
@@ -321,7 +321,7 @@ class TailAppendService
 		$this->activeGenerationEngine = null;
 		$this->activeGenerationEngineAsked = false;
 		$this->systemRoles = null;
-		$this->folderPairs = null;
+		$this->folderDestinations = null;
 		$this->preparedSyncPaths = [];
 
 		$progress = $this->readProgress($context->generationId);
@@ -459,7 +459,7 @@ class TailAppendService
 			$letterRows = $this->loadLetters($context, $pending);
 			$attachmentRows = $this->loadAttachmentsOfLetters($pending);
 			$roles = $this->systemRoles($context->mailboxId);
-			$pairs = $this->folderPairs($context);
+			$resolver = $this->folderDestinations($context);
 
 			/*
 				And the attempts the letters of the page have spent, in one statement of their own:
@@ -479,7 +479,7 @@ class TailAppendService
 			{
 				$messageId = (int)$messageId;
 				$letter = $letterRows[$messageId] ?? null;
-				$dirPath = $this->destinationOf($letter, $roles, $pairs, $destinations);
+				$dirPath = $this->destinationOf($letter, $resolver, $roles, $destinations);
 
 				if ($dirPath === null)
 				{
@@ -1602,9 +1602,10 @@ class TailAppendService
 	}
 
 	/**
-	 * The folder of the prepared generation this letter of the remainder goes into: the folder
-	 * the transfer brought into the new server for the folder the letter lies in, then the sent
-	 * one when its archived placement lies in a sent folder, the incoming one otherwise.
+	 * The folder of the prepared generation this letter of the remainder goes into: the one the
+	 * resolver gives for the folder the letter lies in - of the same role, its pair or of the same
+	 * path - while the import of the new server reads it; otherwise the sent one when its archived
+	 * placement lies in a sent folder, the incoming one for the rest.
 	 *
 	 * The placement is addressed by both its generation and its path hash: retained generations
 	 * stay in the same physical table and may contain equal paths.
@@ -1614,8 +1615,8 @@ class TailAppendService
 	 */
 	private function destinationOf(
 		?array $letter,
+		FolderDestinationResolver $resolver,
 		SystemRoleMap $roles,
-		FolderPairMap $pairs,
 		array $destinations,
 	): ?string
 	{
@@ -1627,12 +1628,13 @@ class TailAppendService
 		}
 
 		$placement = $letter['__placement'];
-		$paired = $pairs->targetOf((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5']);
+		$resolved = $resolver->destinationOf((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5']);
 
-		if ($paired !== null && isset($this->preparedSyncPaths[$paired['path']]))
+		if ($resolved !== null && isset($this->preparedSyncPaths[$resolved['path']]))
 		{
-			return $paired['path'];
+			return $resolved['path'];
 		}
+
 		$sent = $roles->holds(
 			(int)$placement['GENERATION_ID'],
 			(string)$placement['DIR_MD5'],
@@ -1651,9 +1653,12 @@ class TailAppendService
 		return $this->systemRoles ??= SystemRoleMap::ofMailbox($mailboxId);
 	}
 
-	private function folderPairs(Context $context): FolderPairMap
+	private function folderDestinations(Context $context): FolderDestinationResolver
 	{
-		return $this->folderPairs ??= FolderPairMap::ofGeneration($context->mailboxId, $context->generationId);
+		return $this->folderDestinations ??= FolderDestinationResolver::ofOperation(
+			$context->mailboxId,
+			$context->generationId,
+		);
 	}
 
 	/**

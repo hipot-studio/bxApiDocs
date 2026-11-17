@@ -1173,6 +1173,17 @@ class Block
 
 		if ($landing->exist())
 		{
+			if (!$landing->canEdit())
+			{
+				$error->addError(
+					'ACCESS_DENIED',
+					Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
+				);
+				$result->setError($error);
+
+				return $result;
+			}
+
 			$file = Manager::savePicture($picture, $ext, $params);
 			if ($file)
 			{

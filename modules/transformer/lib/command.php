@@ -49,6 +49,8 @@ class Command
 	public const ERROR_CONTROLLER_BACK_URL_HOST_MISMATCH = 156;
 	public const ERROR_CONTROLLER_DOMAIN_IS_PRIVATE = 157;
 	public const ERROR_CONTROLLER_URL_INVALID = 158;
+	public const ERROR_CONTROLLER_RESULT_NO_LONGER_EXPECTED = 160;
+	public const ERROR_CONTROLLER_RESULT_EXPECTATION_CHECK_FAILED = 161;
 	public const ERROR_CONTROLLER_STATUS_AFTER_DOWNLOAD = 200;
 	public const ERROR_CONTROLLER_DOWNLOAD = 201;
 	public const ERROR_CONTROLLER_AFTER_DOWNLOAD_SIZE = 202;
@@ -725,6 +727,18 @@ class Command
 		return $this->deadline;
 	}
 
+	final public function isResultExpected(): bool
+	{
+		if ($this->status === self::STATUS_SEND)
+		{
+			$deadline = $this->getDeadline();
+
+			return $deadline !== null && $deadline->getTimestamp() > time();
+		}
+
+		return $this->status === self::STATUS_CREATE;
+	}
+
 	private function constructError($errorCode = 0, $message = ''): Error
 	{
 		$errorMessages = $this->getErrorMessages();
@@ -777,6 +791,8 @@ class Command
 				static::ERROR_CONTROLLER_BACK_URL_HOST_MISMATCH => Loc::getMessage('TRANSFORMER_COMMAND_ASK_SUPPORT'),
 				static::ERROR_CONTROLLER_DOMAIN_IS_PRIVATE => Loc::getMessage('TRANSFORMER_COMMAND_DOMAIN_IS_PRIVATE'),
 				static::ERROR_CONTROLLER_URL_INVALID => Loc::getMessage('TRANSFORMER_COMMAND_DOMAIN_IS_PRIVATE'),
+				static::ERROR_CONTROLLER_RESULT_NO_LONGER_EXPECTED => $tryLater,
+				static::ERROR_CONTROLLER_RESULT_EXPECTATION_CHECK_FAILED => $tryLater,
 				static::ERROR_CONTROLLER_STATUS_AFTER_DOWNLOAD => Loc::getMessage('TRANSFORMER_COMMAND_CANT_DOWNLOAD_FILE'),
 				static::ERROR_CONTROLLER_DOWNLOAD => Loc::getMessage('TRANSFORMER_COMMAND_CANT_DOWNLOAD_FILE'),
 				static::ERROR_CONTROLLER_AFTER_DOWNLOAD_SIZE => Loc::getMessage('TRANSFORMER_COMMAND_FILE_TOO_BIG'),

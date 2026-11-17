@@ -211,7 +211,9 @@ abstract class SessionManager implements IErrorable
 			}
 		}
 
-		if (!$session->belongsToUser($this->getUserId()))
+		// Opening a document by a public link and from inside the portal share the document key but must not
+		// share the session: its context defines the access ceiling, e.g. the edit button in the header.
+		if (!$session->belongsToUser($this->getUserId()) || !$this->isSameOpeningChannel($session))
 		{
 			$fork = $session->forkForUser($this->getUserId(), $this->sessionContext);
 			if (!$fork)
@@ -282,6 +284,25 @@ abstract class SessionManager implements IErrorable
 	private function getExternalLinkId(): ?int
 	{
 		return $this->sessionContext?->getExternalLinkId();
+	}
+
+	private function isSameOpeningChannel(DocumentSession $session): bool
+	{
+		try
+		{
+			$sessionContext = $session->getContext();
+		}
+		catch (\Throwable)
+		{
+			$sessionContext = null;
+		}
+
+		$sessionExternalLinkId = $sessionContext === null
+			? $session->getExternalLinkId()
+			: $sessionContext->getExternalLinkId()
+		;
+
+		return (int)$sessionExternalLinkId === (int)$this->getExternalLinkId();
 	}
 
 	/**

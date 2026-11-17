@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Template\List\QueryBuilder;
 
+use Bitrix\Tasks\V2\Internal\Repository\Template\List\AccessCheckerFactory;
 use Bitrix\Tasks\V2\Internal\Repository\Template\List\Field;
 
 class ModifierFactory
 {
+	public function __construct(private readonly AccessCheckerFactory $accessCheckerFactory)
+	{
+	}
+
 	public function createSelectModifier(Field $field): QueryModifierInterface
 	{
 		$builderClass = match ($field)
@@ -24,6 +29,16 @@ class ModifierFactory
 
 	public function createFilterModifier(Field $field, string $operator, mixed $value): QueryModifierInterface
 	{
+		if ($field === Field::AccessUserId)
+		{
+			return new AccessFilterModifier(
+				$field,
+				$operator,
+				$value,
+				$this->accessCheckerFactory->getChecker((int)$value),
+			);
+		}
+
 		$builderClass = match ($field)
 		{
 			Field::TemplateChildrenCount => TemplateChildrenCountFilterModifier::class,
@@ -31,7 +46,8 @@ class ModifierFactory
 			Field::TagList => TagListFilterModifier::class,
 			Field::SearchIndex => SearchIndexFilterModifier::class,
 			Field::Zombie => ZombieFilterModifier::class,
-			Field::AccessUserId => AccessFilterModifier::class,
+			Field::ViewerId => MembershipVisibilityModifier::class,
+			Field::RoleId => RoleFilterModifier::class,
 			default => BaseFilterModifier::class,
 		};
 
@@ -44,6 +60,13 @@ class ModifierFactory
 		{
 			Field::TemplateChildrenCount => TemplateChildrenCountOrderModifier::class,
 			Field::BaseTemplateId => BaseTemplateIdOrderModifier::class,
+			Field::SectionProjectOrder,
+			Field::SectionAssigneeOrder,
+			Field::SectionTypeOrder,
+			Field::SectionNameOrder,
+			Field::SectionDeadlineOrder,
+			Field::SectionOriginatorOrder,
+			Field::SectionPriorityOrder => SectionSettingsOrderModifier::class,
 			default => BaseOrderModifier::class,
 		};
 

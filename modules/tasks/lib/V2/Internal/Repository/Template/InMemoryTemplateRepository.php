@@ -38,6 +38,11 @@ class InMemoryTemplateRepository implements TemplateRepositoryInterface
 		return $template;
 	}
 
+	public function filterExistingIds(array $ids): array
+	{
+		return $this->templateRepository->filterExistingIds($ids);
+	}
+
 	public function getByTaskId(int $taskId): ?Entity\Template
 	{
 		// Check if the template is already in the cache
@@ -111,6 +116,17 @@ class InMemoryTemplateRepository implements TemplateRepositoryInterface
 	{
 		unset($this->cache[$id]);
 		unset($this->taskByTemplateIdCache[$id]);
+	}
+
+	public function lockById(int $id): void
+	{
+		$this->templateRepository->lockById($id);
+		$this->invalidate($id);
+	}
+
+	public function isReplicable(int $id): bool
+	{
+		return $this->templateRepository->isReplicable($id);
 	}
 
 	public function getReplicateParams(int $templateId): ?array

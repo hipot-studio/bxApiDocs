@@ -127,13 +127,16 @@ class TasksTaskCalendarComponent extends TasksTaskListComponent implements  \Bit
 				$taskIds[] = $taskId;
 			}
 
-			$res = ProjectDependenceTable::getListByLegacyTaskFilter($this->listParameters['filter']);
-			while($item = $res->fetch())
+			// keep the guard: whereIn() with an empty array adds no condition and would select all direct links
+			if (empty($taskIds))
 			{
-				if(in_array($item['TASK_ID'], $taskIds))
-				{
-					$this->arResult['TASKS_LINKS'][$item['TASK_ID']][] = $item;
-				}
+				return;
+			}
+
+			// TASKS_LINKS rows are public component output: keep every field the legacy selection returned
+			foreach (ProjectDependenceTable::getDirectLinksByTaskIds($taskIds) as $link)
+			{
+				$this->arResult['TASKS_LINKS'][(int)$link['TASK_ID']][] = $link;
 			}
 		}
 	}

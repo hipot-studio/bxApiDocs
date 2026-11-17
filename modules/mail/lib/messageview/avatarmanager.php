@@ -205,17 +205,8 @@ class AvatarManager
 		{
 			$directions = [];
 			$mailboxIds = array_values($mailboxIds);
-			$filter = array_merge(
-				[
-					'@MAILBOX_ID' => $mailboxIds,
-					'@MESSAGE_ID' => array_values($messageIds),
-					'=DELETE_TIME' => 0,
-				],
-				QueryBuilder::generationScopeFilter($mailboxIds, ''),
-				QueryBuilder::generationScopeFilter($mailboxIds, 'DIRECTORY.'),
-			);
-			$rows = MailMessageUidTable::getList([
-				'runtime' => [
+			$query = MailMessageUidTable::query()
+				->registerRuntimeField(
 					new Reference(
 						'DIRECTORY',
 						MailboxDirectoryTable::class,
@@ -223,10 +214,15 @@ class AvatarManager
 							->whereColumn('this.DIR_MD5', 'ref.DIR_MD5'),
 						['join_type' => Join::TYPE_INNER],
 					),
-				],
-				'select' => ['MESSAGE_ID', 'IS_OUTCOME' => 'DIRECTORY.IS_OUTCOME'],
-				'filter' => $filter,
-			]);
+				)
+				->setSelect(['MESSAGE_ID', 'IS_OUTCOME' => 'DIRECTORY.IS_OUTCOME'])
+				->addFilter('@MAILBOX_ID', $mailboxIds)
+				->addFilter('@MESSAGE_ID', array_values($messageIds))
+				->addFilter('=DELETE_TIME', 0)
+			;
+			QueryBuilder::addGenerationScope($query, $mailboxIds, '');
+			QueryBuilder::addGenerationScope($query, $mailboxIds, 'DIRECTORY.');
+			$rows = $query->exec();
 			while ($row = $rows->fetch())
 			{
 				$messageId = (int)$row['MESSAGE_ID'];

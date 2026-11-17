@@ -11,6 +11,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 class DocumentsPlaceholderComponent extends CBitrixComponent
 {
 	private const TITLE_CHAIN_SEPARATOR = ' -> ';
+	private const PAGE_SIZE = 100;
 
 	/** @var Template */
 	protected $template;
@@ -20,6 +21,7 @@ class DocumentsPlaceholderComponent extends CBitrixComponent
 	protected $gridId = 'documentgenerator-placeholders-grid';
 	protected $filterId = 'documentgenerator-placeholders-filter';
 	protected $navParamName = 'page';
+	private ?array $streamPage = null;
 
 	/**
 	 * @return mixed|void
@@ -141,43 +143,67 @@ class DocumentsPlaceholderComponent extends CBitrixComponent
 
 		$pageNavigation = new \Bitrix\Main\UI\PageNavigation($this->navParamName);
 		$pageNavigation->allowAllRecords(false)->setPageSize(100)->initFromUri();
-		$fullCount = count($placeholders);
 
-		if(!empty($placeholders))
+		if ($this->streamPage !== null)
 		{
-			$offset = $pageNavigation->getOffset();
-			$limit = $pageNavigation->getLimit();
-
-			$number = 0;
-			foreach($placeholders as $placeholder => $field)
+			foreach (array_slice($placeholders, 0, self::PAGE_SIZE, true) as $placeholder => $field)
 			{
-				$number++;
-				if($number <= $offset)
-				{
-					continue;
-				}
-				if($number > $limit + $offset)
-				{
-					break;
-				}
-				$grid['ROWS'][] = [
-					'id' => $placeholder,
-					'data' => $field,
-					'columns' => [
-						'PLACEHOLDER' => '{'.htmlspecialcharsbx($placeholder).'}',
-						//'TITLE' => htmlspecialcharsbx($field['TITLE']),
-						'COPY' => '<a class="docgen-placeholder-copy" onclick="BX.DocumentGenerator.Placeholders.Copy(this, \''.htmlspecialcharsbx(CUtil::JSEscape($placeholder)).'\');">'.Loc::getMessage('DOCGEN_PLACEHOLDERS_COPY_ACTION_TITLE').'</a>',
-						'TITLE' => implode(self::TITLE_CHAIN_SEPARATOR, array_map('htmlspecialcharsbx', $field['GROUP'])),
-						'VALUE' => htmlspecialcharsbx($field['VALUE']),
-						'TYPE' => $this->getTypeName($field['TYPE']),
-					],
-				];
+				$grid['ROWS'][] = $this->prepareRow((string)$placeholder, $field);
 			}
-		}
 
-		$pageNavigation->setRecordCount($fullCount);
-		$grid['TOTAL_ROWS_COUNT'] = $fullCount;
+			$count = $this->streamPage['exhausted']
+				? (int)$this->streamPage['matchedCount']
+				: $this->streamPage['offset'] + self::PAGE_SIZE + 1;
+			$pageNavigation->setRecordCount($count);
+			$pageNavigation->setCurrentPage(
+				min(
+					$this->streamPage['requestedPage'],
+					max(1, (int)ceil($count / self::PAGE_SIZE))
+				)
+			);
+			unset($grid['TOTAL_ROWS_COUNT']);
+		}
+		else
+		{
+			$fullCount = count($placeholders);
+			if(!empty($placeholders))
+			{
+				$offset = $pageNavigation->getOffset();
+				$limit = $pageNavigation->getLimit();
+
+				$number = 0;
+				foreach($placeholders as $placeholder => $field)
+				{
+					$number++;
+					if($number <= $offset)
+					{
+						continue;
+					}
+					if($number > $limit + $offset)
+					{
+						break;
+					}
+					$grid['ROWS'][] = [
+						'id' => $placeholder,
+						'data' => $field,
+						'columns' => [
+							'PLACEHOLDER' => '{'.htmlspecialcharsbx($placeholder).'}',
+							//'TITLE' => htmlspecialcharsbx($field['TITLE']),
+							'COPY' => '<a class="docgen-placeholder-copy" onclick="BX.DocumentGenerator.Placeholders.Copy(this, \''.htmlspecialcharsbx(CUtil::JSEscape($placeholder)).'\');">'.Loc::getMessage('DOCGEN_PLACEHOLDERS_COPY_ACTION_TITLE').'</a>',
+							'TITLE' => implode(self::TITLE_CHAIN_SEPARATOR, array_map('htmlspecialcharsbx', $field['GROUP'])),
+							'VALUE' => htmlspecialcharsbx($field['VALUE']),
+							'TYPE' => $this->getTypeName($field['TYPE']),
+						],
+					];
+				}
+			}
+
+			$pageNavigation->setRecordCount($fullCount);
+			$grid['TOTAL_ROWS_COUNT'] = $fullCount;
+		}
 		$grid['NAV_OBJECT'] = $pageNavigation;
+		// The grid keeps the total counter cell across AJAX reloads, so it must not depend on the filter state.
+		$grid['SHOW_TOTAL_COUNTER'] = false;
 		$grid['AJAX_MODE'] = 'Y';
 		$grid['ALLOW_ROWS_SORT'] = false;
 		$grid['AJAX_OPTION_JUMP'] = "N";
@@ -246,13 +272,72 @@ class DocumentsPlaceholderComponent extends CBitrixComponent
 		}
 		elseif($this->dataProvider)
 		{
-			$placeholders = DataProviderManager::getInstance()->getDefaultTemplateFields($this->dataProvider, [], [], false);
+			return $this->getStreamingPlaceholders();
 		}
 
 		$filterOptions = new Bitrix\Main\UI\Filter\Options($this->filterId);
 		$requestFilter = $filterOptions->getFilter($this->getDefaultFilterFields());
 
 		return (new PlaceholderFilter(self::TITLE_CHAIN_SEPARATOR))->filter($placeholders, $requestFilter);
+	}
+
+	private function getStreamingPlaceholders(): array
+	{
+		$filterOptions = new Bitrix\Main\UI\Filter\Options($this->filterId);
+		$requestFilter = $filterOptions->getFilter($this->getDefaultFilterFields());
+		$filter = new PlaceholderFilter(self::TITLE_CHAIN_SEPARATOR);
+		$navigation = $this->createNavigation();
+		$requestedPage = max(1, $navigation->getCurrentPage());
+		$offset = ($requestedPage - 1) * self::PAGE_SIZE;
+		$stream = DataProviderManager::getInstance()->iterateDefaultTemplateFields(
+			$this->dataProvider,
+			[],
+			false,
+			false,
+			$filter->getPredicate($requestFilter),
+			$offset,
+			self::PAGE_SIZE + 1
+		);
+
+		$placeholders = [];
+		foreach ($stream as $placeholder => $field)
+		{
+			$placeholders[$placeholder] = $field;
+		}
+		$result = $stream->getReturn();
+		$this->streamPage = [
+			'requestedPage' => $requestedPage,
+			'offset' => $offset,
+			'exhausted' => $result['exhausted'],
+			'matchedCount' => $result['matchedCount'],
+		];
+
+		return $placeholders;
+	}
+
+	private function createNavigation(): \Bitrix\Main\UI\PageNavigation
+	{
+		$navigation = new \Bitrix\Main\UI\PageNavigation($this->navParamName);
+		$navigation->allowAllRecords(false)->setPageSize(self::PAGE_SIZE)->initFromUri();
+
+		return $navigation;
+	}
+
+	private function prepareRow(string $placeholder, array $field): array
+	{
+		return [
+			'id' => $placeholder,
+			'data' => $field,
+			'columns' => [
+				'PLACEHOLDER' => '{' . htmlspecialcharsbx($placeholder) . '}',
+				'COPY' => "<a class=\"docgen-placeholder-copy\" onclick=\"BX.DocumentGenerator.Placeholders.Copy(this, '"
+					. htmlspecialcharsbx(CUtil::JSEscape($placeholder)) . "');\">"
+					. Loc::getMessage('DOCGEN_PLACEHOLDERS_COPY_ACTION_TITLE') . '</a>',
+				'TITLE' => implode(self::TITLE_CHAIN_SEPARATOR, array_map('htmlspecialcharsbx', $field['GROUP'])),
+				'VALUE' => htmlspecialcharsbx($field['VALUE']),
+				'TYPE' => $this->getTypeName($field['TYPE']),
+			],
+		];
 	}
 
 	/**

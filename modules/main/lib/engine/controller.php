@@ -55,6 +55,7 @@ class Controller implements Errorable, Controllerable
 	/** @var Configurator */
 	protected Configurator $configurator;
 	private Action $currentAction;
+	private bool $isActionAllowed = false;
 	private array $eventHandlersIds = [
 		'prefilters' => [],
 		'postfilters' => [],
@@ -416,6 +417,7 @@ class Controller implements Errorable, Controllerable
 		$this->collectDebugInfo();
 
 		$result = null;
+		$this->isActionAllowed = false;
 
 		try
 		{
@@ -564,7 +566,8 @@ class Controller implements Errorable, Controllerable
 	 * Triggers the event {{static::EVENT_ON_BEFORE_ACTION}}
 	 * @see \Bitrix\Main\Engine\Controller::getFullEventName.
 	 * This method is invoked right before an action is executed.
-	 * In case the action should not run, event handler have to return EvenResult with type EventResult::ERROR.
+	 * In case the action should not run, event handler have to return EventResult with type EventResult::ERROR.
+	 * Return ActionEventResult::skipAction() to skip the action without rejection.
 	 *
 	 * @param Action $action Action name.
 	 * @return bool
@@ -581,10 +584,16 @@ class Controller implements Errorable, Controllerable
 		);
 		$event->send($this);
 
-		$allow = true;
+		$this->isActionAllowed = true;
+		$isSkipAction = false;
+
 		foreach ($event->getResults() as $eventResult)
 		{
-			if ($eventResult->getType() != EventResult::SUCCESS)
+			if ($eventResult->getType() === ActionEventResult::SKIP_ACTION)
+			{
+				$isSkipAction = true;
+			}
+			elseif ($eventResult->getType() != EventResult::SUCCESS)
 			{
 				$handler = $eventResult->getHandler();
 				if ($handler instanceof Errorable)
@@ -592,13 +601,13 @@ class Controller implements Errorable, Controllerable
 					$this->errorCollection->add($handler->getErrors());
 				}
 
-				$allow = false;
+				$this->isActionAllowed = false;
 			}
 		}
 
 		$this->detachPreFilters($action);
 
-		return $allow;
+		return $this->isActionAllowed && !$isSkipAction;
 	}
 
 	/**
@@ -633,6 +642,7 @@ class Controller implements Errorable, Controllerable
 				'result' => $result,
 				'action' => $action,
 				'controller' => $this,
+				'isActionAllowed' => $this->isActionAllowed,
 			]
 		);
 		$event->send($this);
@@ -764,6 +774,13 @@ class Controller implements Errorable, Controllerable
 			$config = [];
 		}
 
+		if (array_key_exists(FilterType::Filter->value, $config))
+		{
+			$filters = $config[FilterType::Filter->value];
+			$config[FilterType::Prefilter->value] = $filters;
+			$config[FilterType::Postfilter->value] = $filters;
+		}
+
 		if (!isset($config[FilterType::Prefilter->value]))
 		{
 			$config[FilterType::Prefilter->value] = $this->configurator->wrapFiltersClosure(
@@ -778,7 +795,11 @@ class Controller implements Errorable, Controllerable
 		}
 
 		$hasPostMethod = $hasCsrfCheck = false;
-		foreach ($config[FilterType::Prefilter->value] as $filter)
+		$preFilters = [
+			...$config[FilterType::Prefilter->value],
+			...($config[FilterType::EnableFilter->value] ?? []),
+		];
+		foreach ($preFilters as $filter)
 		{
 			if ($filter instanceof ActionFilter\HttpMethod && $filter->containsPostMethod())
 			{
@@ -793,6 +814,16 @@ class Controller implements Errorable, Controllerable
 		if ($hasPostMethod && !$hasCsrfCheck && $this->request->isPost())
 		{
 			$config[FilterType::Prefilter->value][] = new ActionFilter\Csrf;
+		}
+
+		if (!empty($config[FilterType::DisableFilter->value]))
+		{
+			foreach ([FilterType::Prefilter, FilterType::Postfilter] as $type)
+			{
+				$config[$type->value] = $this->removeFilters(
+					$config[$type->value], $config[FilterType::DisableFilter->value],
+				);
+			}
 		}
 
 		if (!empty($config[FilterType::DisablePrefilter->value]))
@@ -817,6 +848,17 @@ class Controller implements Errorable, Controllerable
 		{
 			$config[FilterType::Postfilter->value] =
 				$this->appendFilters($config[FilterType::Postfilter->value], $config[FilterType::EnablePostfilter->value]);
+		}
+
+		if (!empty($config[FilterType::EnableFilter->value]))
+		{
+			foreach ([FilterType::Prefilter, FilterType::Postfilter] as $type)
+			{
+				$config[$type->value] = $this->appendFilters(
+					$config[$type->value],
+					$config[FilterType::EnableFilter->value],
+				);
+			}
 		}
 
 		return $config;

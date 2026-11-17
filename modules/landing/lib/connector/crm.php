@@ -5,6 +5,7 @@ use Bitrix\Crm\CompanyTable;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Settings\CompanySettings;
 use Bitrix\Landing\Manager;
+use Bitrix\Landing\Sanitizer;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Text\Encoding;
 use Bitrix\SalesCenter\Integration\CrmManager;
@@ -288,12 +289,11 @@ class Crm
 		{
 			$companyTitle = 'Company24';
 		}
-		// block content is executed through eval() in Block::view(), so the title must be escaped (Mantis #253063)
-		// default ENT_COMPAT is enough: the marker lands in a text node, attributes are serialized in double quotes
+		// the title is escaped here, Block::view() puts it into the output of the block through Security\ContentMarkers
 		// guarded by CrmRequisiteCompanyTitleEscapeTest
 		$replace['#requisiteCompanyTitle'] = \htmlspecialcharsbx($companyTitle);
 
-		return $replace;
+		return array_map(Sanitizer::encodeContentMarkerValue(...), $replace);
 	}
 
 	/**

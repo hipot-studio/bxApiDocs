@@ -23,11 +23,16 @@ class CopyCheckListService
 		int $fromTaskId,
 		int $toTaskId,
 		int $userId,
-		?array $checkLists = [],
+		?array $checkLists = null,
 	): void
 	{
-		if (!empty($checkLists))
+		if ($checkLists !== null)
 		{
+			if ($checkLists === [])
+			{
+				return;
+			}
+
 			$this->checkListService->save(
 				checklists: $checkLists,
 				taskId: $toTaskId,

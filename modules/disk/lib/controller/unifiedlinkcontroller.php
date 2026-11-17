@@ -10,6 +10,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\BaseObjectResolver;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\ModeSelection;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\{FileTypeControl, RedirectToCorrectPrefix};
@@ -318,6 +319,31 @@ class UnifiedLinkController extends Controller
 	}
 
 	/**
+	 * Draws a checked short opening the way view and edit draw an object, on the short address itself: the
+	 * filters of the object address (prefix, restricted format, access level) are not run, the verdict of
+	 * the renderer is, and no answer leads away from the canonical address of the opening. An immediate
+	 * render draws the editor at once instead of the stub of the deferred load.
+	 */
+	public function renderShortLinkOpening(
+		ShortLinkOpening $opening,
+		UnifiedLinkAccessLevel $accessLevel,
+		bool $immediate = false,
+	): HttpResponse
+	{
+		$renderer = new UnifiedLinkRenderer(
+			baseObject: $opening->getFile(),
+			version: $opening->getVersion(),
+			currentUser: $this->getCurrentUser(),
+			deferred: !$immediate && $this->request->get('immediate_load') !== 'Y',
+			externalLink: $opening->getExternalLink(),
+			modeSelection: ModeSelection::KeepRequested,
+			shortLinkOpening: $opening,
+		);
+
+		return $this->createResponse($renderer, $accessLevel);
+	}
+
+	/**
 	 * @param UnifiedLinkRenderer|null $service
 	 * @param UnifiedLinkAccessLevel $accessLevel
 	 * @return HttpResponse
@@ -353,7 +379,8 @@ class UnifiedLinkController extends Controller
 			;
 		}
 
-		$publicDomainRedirect = $accessLevel === UnifiedLinkAccessLevel::Read
+		$opening = $service->getShortLinkOpening();
+		$publicDomainRedirect = $accessLevel === UnifiedLinkAccessLevel::Read && $opening === null
 			? $this->createCanonicalToPublicRedirect($service)
 			: null
 		;
@@ -367,6 +394,14 @@ class UnifiedLinkController extends Controller
 
 		if(is_string($redirectUrl))
 		{
+			if ($opening !== null && !self::leadsToOpening($redirectUrl, $opening))
+			{
+				return (new HttpResponse())
+					->setStatus(404)
+					->setContent(UnifiedLinkRenderer::renderAccessDeniedPage())
+				;
+			}
+
 			return $this->redirectTo($redirectUrl);
 		}
 
@@ -387,6 +422,13 @@ class UnifiedLinkController extends Controller
 		}
 
 		return $response;
+	}
+
+	private static function leadsToOpening(string $url, ShortLinkOpening $opening): bool
+	{
+		return parse_url($url, PHP_URL_HOST) === null
+			&& parse_url($url, PHP_URL_PATH) === $opening->getCanonicalUrl()
+		;
 	}
 
 	private function createPublicDomainRenderer(
