@@ -5,17 +5,26 @@ namespace Bitrix\Disk;
 
 
 use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\HtmlEditor\AiLockService;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\View\VersionViewManager;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Application;
 use Bitrix\Main\Event;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+
+Loc::loadMessages(__FILE__);
 
 final class Version extends Internals\Model
 {
 	public const ERROR_COULD_NOT_CREATE_NEW_FILE = 'DISK_VERSION_22002';
+	public const ERROR_COULD_NOT_DELETE_ONLY_VERSION = 'DISK_VERSION_22003';
 
 	/** @var int */
 	protected $objectId;
@@ -440,6 +449,43 @@ final class Version extends Internals\Model
 	public function delete($deletedBy)
 	{
 		$this->errorCollection->clear();
+		$file = $this->getObject();
+		if (
+			!$file
+			|| !HtmlViewerPolicy::isViewableFile($file)
+			|| $file->getCurrentState() === $file::STATE_DELETE_PROCESS
+		)
+		{
+			return $this->deleteInsideTransaction($deletedBy);
+		}
+
+		return (bool)AuditTransaction::run(function (AuditTransaction $transaction) use ($deletedBy): bool {
+			$objectId = (int)$this->objectId;
+			$table = ObjectTable::getTableName();
+			Application::getConnection()->queryExecute("SELECT ID FROM {$table} WHERE ID = {$objectId} FOR UPDATE");
+			try
+			{
+				$aiLock = (new AiLockService())->getSnapshot($objectId);
+			}
+			catch (\Throwable $exception)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+				$this->errorCollection[] = new Error(AiLockService::ERROR_UNAVAILABLE, AiLockService::ERROR_UNAVAILABLE);
+
+				return false;
+			}
+			$this->object = File::loadById($objectId);
+
+			return $this->deleteInsideTransaction($deletedBy, $transaction, $aiLock !== null);
+		});
+	}
+
+	private function deleteInsideTransaction(
+		int $deletedBy,
+		?AuditTransaction $transaction = null,
+		bool $aiLocked = false,
+	): bool
+	{
 		$size = (int)$this->size;
 
 		// The file is switched onto the previous version before anything of this one is removed:
@@ -447,20 +493,34 @@ final class Version extends Internals\Model
 		$file = $this->getObject();
 		if($file && $file->getCurrentState() !== $file::STATE_DELETE_PROCESS && $this->isHead())
 		{
-			$previous = $this->getPrevious();
-			if($previous)
+			if ($aiLocked)
 			{
-				if(!$file->switchToContentOfVersion($previous, $deletedBy))
-				{
-					$this->errorCollection->add($file->getErrors());
+				$this->errorCollection[] = new Error(AiLockService::ERROR_LOCKED, AiLockService::ERROR_LOCKED);
 
-					return false;
-				}
-
-				$previous->update(array(
-					'GLOBAL_CONTENT_VERSION' => $file->getGlobalContentVersion()
-				));
+				return false;
 			}
+			$previous = $this->getPrevious();
+			if (!$previous)
+			{
+				// There is no content to switch the file onto: the file would keep FILE_ID of the removed content.
+				$this->errorCollection[] = new Error(
+					Loc::getMessage('DISK_VERSION_MODEL_ERROR_COULD_NOT_DELETE_ONLY_VERSION'),
+					self::ERROR_COULD_NOT_DELETE_ONLY_VERSION,
+				);
+
+				return false;
+			}
+
+			if(!$file->switchToContentOfVersion($previous, $deletedBy))
+			{
+				$this->errorCollection->add($file->getErrors());
+
+				return false;
+			}
+
+			$previous->update(array(
+				'GLOBAL_CONTENT_VERSION' => $file->getGlobalContentVersion()
+			));
 		}
 
 		$success = parent::deleteInternal();
@@ -472,10 +532,22 @@ final class Version extends Internals\Model
 		// The row has left the table, so SUM(b_disk_version.SIZE) is already lower by its size.
 		$this->applyUsageDelta(-$size);
 
-		\CFile::delete($this->fileId);
-		if ($this->viewId)
+		$fileId = $this->fileId;
+		$viewId = $this->viewId;
+		$deleteContent = static function () use ($fileId, $viewId): void {
+			\CFile::delete($fileId);
+			if ($viewId)
+			{
+				\CFile::delete($viewId);
+			}
+		};
+		if ($transaction !== null)
 		{
-			\CFile::delete($this->viewId);
+			$transaction->addAfterConfirmedCommit($deleteContent);
+		}
+		else
+		{
+			$deleteContent();
 		}
 
 		return true;

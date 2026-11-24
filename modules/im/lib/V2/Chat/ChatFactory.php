@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Analytics\CopilotAnalytics;
+use Bitrix\Im\V2\Analytics\VoiceWidgetLabels;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Cache\CacheLevel;
 use Bitrix\Im\V2\Cache\NullEntity;
@@ -529,6 +530,12 @@ class ChatFactory
 	 */
 	public function addChat(array $params): AddResult
 	{
+		$validateThreadRights = $this->validateThreadManageRights($params);
+		if (!$validateThreadRights->isSuccess())
+		{
+			return (new AddResult())->addErrors($validateThreadRights->getErrors());
+		}
+
 		$params['ENTITY_TYPE'] ??= '';
 		$params['TYPE'] ??= Chat::IM_TYPE_CHAT;
 
@@ -586,13 +593,38 @@ class ChatFactory
 			&& ($params['SKIP_ANALYTICS'] ?? 'N') !== 'Y'
 		)
 		{
+			$labels = $params['COPILOT_ANALYTICS'] ?? null;
 			(new CopilotAnalytics($resultChat))
 				->withContextUser($this->getContext()->getUserId())
-				->addCreateNewChat()
+				->addCreateNewChat($labels instanceof VoiceWidgetLabels ? $labels : null)
 			;
 		}
 
 		return $addResult;
+	}
+
+	/**
+	 * Values the chat setters would drop in silence have to be refused here, where there is somewhere
+	 * to return the error: creation must not answer success with the rule unapplied. Every creation
+	 * path goes through addChat(), so one point covers the REST method and the callers inside.
+	 */
+	private function validateThreadManageRights(array $params): Result
+	{
+		$result = new Result();
+
+		foreach (['MANAGE_THREAD_CREATE', 'MANAGE_THREAD_POST'] as $field)
+		{
+			$rights = $params[$field] ?? null;
+			if ($rights !== null && (!is_string($rights) || !Chat::isThreadManageRightsValid($rights)))
+			{
+				return $result->addError(new ChatError(
+					ChatError::WRONG_PARAMETER,
+					"The value of {$field} is not a thread manage rights threshold."
+				));
+			}
+		}
+
+		return $result;
 	}
 
 	/**

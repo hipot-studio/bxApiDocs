@@ -8,6 +8,7 @@ use Bitrix\Extranet\Model\ExtranetUserTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
+use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Im\V2\Relation;
@@ -55,11 +56,8 @@ class RelationProvider
 			return $this->getMembersGrouped($limit, $cursor);
 		}
 
-		$query = RelationTable::query()
+		$query = $this->getMembersQuery()
 			->setSelect(RelationCollection::COMMON_FIELDS)
-			->where('CHAT_ID', (int)$this->chat->getId())
-			->where('IS_HIDDEN', false)
-			->where('USER.ACTIVE', true)
 			->setOrder(['ROLE_PRIORITY', 'ID'])
 			->setLimit($limit)
 		;
@@ -71,11 +69,8 @@ class RelationProvider
 
 	protected function getMembersGrouped(?int $limit, ?RelationCursor $cursor): RelationCollection
 	{
-		$query = RelationTable::query()
+		$query = $this->getMembersQuery()
 			->setSelect(RelationCollection::COMMON_FIELDS)
-			->where('CHAT_ID', (int)$this->chat->getId())
-			->where('IS_HIDDEN', false)
-			->where('USER.ACTIVE', true)
 			->setOrder(['GROUP_RANK' => 'ASC', 'ID' => 'DESC'])
 			->setLimit($limit)
 		;
@@ -83,6 +78,29 @@ class RelationProvider
 		$this->prepareGroupedQuery($query, $cursor);
 
 		return new RelationCollection($query->fetchAll());
+	}
+
+	public function getMembersCount(): int
+	{
+		return (int)$this->getMembersQuery()->setSelect(['ID'])->queryCountTotal();
+	}
+
+	protected function getMembersQuery(): Query
+	{
+		$query = RelationTable::query()
+			->where('CHAT_ID', (int)$this->chat->getId())
+			->where('IS_HIDDEN', false)
+			->where('USER.ACTIVE', true)
+		;
+		if ($this->chat instanceof CommentChat)
+		{
+			$query->where('NOTIFY_BLOCK', false);
+		}
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			->forChat((int)$this->chat->getId())
+			->apply($query);
+
+		return $query;
 	}
 
 	public function getAllMemberIds(): array
@@ -165,9 +183,6 @@ class RelationProvider
 	protected function prepareQuery(Query $query, ?RelationCursor $cursor): void
 	{
 		$this->defineRoles($query);
-		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
-			->forChat((int)$this->chat->getId())
-			->apply($query);
 		if ($cursor)
 		{
 			$this->applyCursor($query, $cursor);
@@ -177,9 +192,6 @@ class RelationProvider
 	protected function prepareGroupedQuery(Query $query, ?RelationCursor $cursor): void
 	{
 		$this->defineGroupRank($query);
-		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
-			->forChat((int)$this->chat->getId())
-			->apply($query);
 		if ($cursor)
 		{
 			$this->applyGroupedCursor($query, $cursor);

@@ -6,6 +6,16 @@ namespace Bitrix\Intranet\Infrastructure\Controller;
 
 use Bitrix\Intranet\ActionFilter\AdminUser;
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Public\Command\Otp\StartSetupConfirmationCallCommand;
+use Bitrix\Intranet\Public\Command\Otp\StartLoginConfirmationCallCommand;
+use Bitrix\Intranet\Public\Command\Otp\CompleteSetupConfirmationCallCommand;
+use Bitrix\Intranet\Public\Command\Otp\CompleteLoginConfirmationCallCommand;
+use Bitrix\Intranet\Public\Service\Otp\ConfirmationCallService;
+use Bitrix\Intranet\Public\Provider\Otp\ConfirmationCallProvider;
+use Bitrix\Intranet\Public\Dto\Otp\ConfirmationCall\Attempt;
+use Bitrix\Intranet\Public\Dto\Otp\ConfirmationCall\ResponseResult;
+use Bitrix\Intranet\Public\Dto\Otp\ConfirmationCall\Status;
+use Bitrix\Intranet\Internal\Enum\Otp\PhoneConfirmationTerminalStatus;
 use Bitrix\Intranet\Entity\Type\Email;
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Exception\UpdateFailedException;
@@ -32,12 +42,16 @@ use Bitrix\Intranet\Public\Command\Otp\Notification\SendRequestRecoverAccessComm
 use Bitrix\Intranet\Public\Command\Otp\SetLegacyOtpAllowedCommand;
 use Bitrix\Intranet\Public\Enum\Otp\MessengerConfirmationTransport;
 use Bitrix\Intranet\Public\Provider\Otp\DayListProvider;
+use Bitrix\Intranet\Public\Provider\Otp\CurrentProvisioningProvider;
+use Bitrix\Main\Engine\Action;
+use Bitrix\Main\Engine\ActionFilter\Csrf;
+use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Intranet\Public\Service\Otp\MessengerConfirmationEndpoint;
 use Bitrix\Intranet\Public\Type\Otp\OtpChannel;
 use Bitrix\Intranet\Repository\UserRepository;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Main\Application;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
@@ -65,6 +79,11 @@ use Bitrix\Intranet\Entity\User;
 
 class Otp extends Controller
 {
+	private const ERROR_FORBIDDEN = 'forbidden';
+
+	private const ERROR_CAPTCHA_REQUIRED = 'captcha_required';
+
+	private const ERROR_SMS_UNAVAILABLE = 'sms_unavailable';
 	private const CHANNEL_REMOVAL_ERROR_PHRASES = [
 		ChannelRemovalService::ERROR_NO_RIGHTS => 'INTRANET_CONTROLLER_OTP_ERROR_CHANNEL_REMOVAL_NO_RIGHTS',
 		ChannelRemovalService::ERROR_NO_TRUSTED_DEVICE => 'INTRANET_CONTROLLER_OTP_ERROR_CHANNEL_REMOVAL_NO_TRUSTED_DEVICE',
@@ -86,6 +105,14 @@ class Otp extends Controller
 
 		return [
 			...parent::configureActions(),
+			'getCurrentProvisioningUri' => [
+				'prefilters' => [
+					new Scope(Scope::AJAX),
+					new Authentication(),
+					new Csrf(),
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			],
 			'activePushOtp' => [
 				'+prefilters' => [
 					new AdminUser(),
@@ -141,6 +168,45 @@ class Otp extends Controller
 					new HttpMethod([HttpMethod::METHOD_POST]),
 				],
 			],
+			'startSetupConfirmationCall' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			],
+			'getSetupConfirmationCallStatus' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			],
+			'completeSetupConfirmationCall' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			],
+			'startLoginConfirmationCall' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+				'-prefilters' => [
+					'\Bitrix\Main\Engine\ActionFilter\Authentication',
+				],
+			],
+			'getLoginConfirmationCallStatus' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+				'-prefilters' => [
+					'\Bitrix\Main\Engine\ActionFilter\Authentication',
+				],
+			],
+			'completeLoginConfirmationCall' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+				'-prefilters' => [
+					'\Bitrix\Main\Engine\ActionFilter\Authentication',
+				],
+			],
 			'startSkipDeviceConnect' => [
 				'-prefilters' => [
 					'\\Bitrix\\Main\\Engine\\ActionFilter\\Authentication',
@@ -185,6 +251,51 @@ class Otp extends Controller
 				],
 			],
 		];
+	}
+
+	protected function processBeforeAction(Action $action)
+	{
+		if (strtolower($action->getName()) === 'getcurrentprovisioninguri')
+		{
+			Application::getInstance()
+				->getContext()
+				->getResponse()
+				->addHeader('Cache-Control', 'no-store, private, max-age=0')
+				->addHeader('Pragma', 'no-cache')
+			;
+		}
+
+		return parent::processBeforeAction($action);
+	}
+
+	public function getCurrentProvisioningUriAction(): ?array
+	{
+		try
+		{
+			$user = $this->getCurrentIntranetUser();
+			if ($user === null || !$user->isCurrent() || !$this->canCurrentUserEditOtp($user))
+			{
+				$this->addError(new Error('Access denied.', 'OTP_EXPORT_ACCESS_DENIED'));
+
+				return null;
+			}
+
+			$result = (new CurrentProvisioningProvider())->get($user);
+			if (!$result->isSuccess())
+			{
+				$this->addError(new Error('Current OTP is unavailable.', 'OTP_EXPORT_UNAVAILABLE'));
+
+				return null;
+			}
+
+			return ['provisioningUri' => $result->getData()['provisioningUri']];
+		}
+		catch (\Throwable)
+		{
+			$this->addError(new Error('Unable to export current OTP.', 'OTP_EXPORT_FAILED'));
+
+			return null;
+		}
 	}
 
 	private function getDeferredContactActionConfig(): array
@@ -617,9 +728,16 @@ class Otp extends Controller
 		(new AnalyticsEvent($event, 'skip_device_connect', 'security'))->send();
 	}
 
-	protected function isPhoneChannelAvailable(User $user): bool
+	protected function isSmsChannelAvailable(User $user): bool
 	{
 		return (new VerifyPhoneService($user))->canSendSms();
+	}
+
+	protected function isPhoneChannelAvailable(User $user): bool
+	{
+		return $this->isSmsChannelAvailable($user)
+			|| $this->createConfirmationCallProvider()->isSetupAvailable((int)$user->getId())
+		;
 	}
 
 	protected function isEmailChannelAvailable(User $user): bool
@@ -631,10 +749,20 @@ class Otp extends Controller
 	{
 		return match ($channel)
 		{
-			SkipDeviceConnect::CHANNEL_PHONE => (new VerifyPhoneService($user))->canLoginBySms(),
+			SkipDeviceConnect::CHANNEL_PHONE => $this->hasConfirmedAuthPhone($user)
+				&& $this->isPhoneChannelAvailable($user),
 			SkipDeviceConnect::CHANNEL_EMAIL => (new VerifyEmailService($user))->canLoginByEmail(),
 			default => false,
 		};
+	}
+
+	private function hasConfirmedAuthPhone(User $user): bool
+	{
+		$phoneNumber = (string)$user->getAuthPhoneNumber();
+
+		return $phoneNumber !== ''
+			&& (new VerifyPhoneService($user))->isConfirmed(new Phone($phoneNumber))
+		;
 	}
 
 	public function setupPushOtpAction(User $user, string $secret, string $sync1, array $initParams = []): bool
@@ -939,9 +1067,20 @@ class Otp extends Controller
 			return [];
 		}
 
+		if (!$this->isSmsChannelAvailable($user))
+		{
+			$this->addError(new Error('Sms confirmation is unavailable.', self::ERROR_SMS_UNAVAILABLE));
+
+			return null;
+		}
+
+		$this->createConfirmationCallService()->noticeSmsUse();
+
 		try
 		{
-			return $this->createVerifyPhoneService($user)->sendCodeByTemplate($smsTemplate);
+			$sent = $this->createVerifyPhoneService($user)->sendCodeByTemplate($smsTemplate);
+
+			return $this->withSmsResendAt($sent, 'DATE_SEND');
 		}
 		catch (SendException $exception)
 		{
@@ -949,7 +1088,10 @@ class Otp extends Controller
 			$ts = (new UserRepository())->getTsSentConfirmationCode($user->getId()) ?? 0;
 			$passed = time() - $ts;
 
-			return ['DATE_SEND' => max(0, \CUser::PHONE_CODE_RESEND_INTERVAL - $passed)];
+			return $this->withSmsResendAt(
+				['DATE_SEND' => max(0, \CUser::PHONE_CODE_RESEND_INTERVAL - $passed)],
+				'DATE_SEND',
+			);
 		}
 	}
 
@@ -985,6 +1127,7 @@ class Otp extends Controller
 				if ($confirmed)
 				{
 					$this->clearPhoneConfirmationRequirement($user);
+					$this->createConfirmationCallService()->closeAfterSmsConfirmation($user);
 				}
 
 				return $confirmed;
@@ -1006,6 +1149,210 @@ class Otp extends Controller
 
 			return false;
 		}
+	}
+
+	public function startSetupConfirmationCallAction(User $user, Phone $phoneNumber, int $phoneRevision): ?array
+	{
+		if (!$this->canSetupConfirmationCall($user))
+		{
+			return null;
+		}
+
+		return $this->respondWithConfirmationCall(
+			(new StartSetupConfirmationCallCommand($user, $phoneNumber, $this->createConfirmationCallService()))->run(),
+		);
+	}
+
+	public function getSetupConfirmationCallStatusAction(
+		User $user,
+		string $confirmationCallId,
+		int $phoneRevision,
+	): ?array
+	{
+		if (!$this->canSetupConfirmationCall($user))
+		{
+			return null;
+		}
+
+		return $this->respondWithConfirmationCall(
+			$this->createConfirmationCallProvider()->getSetupStatus($user, $confirmationCallId),
+		);
+	}
+
+	public function completeSetupConfirmationCallAction(
+		User $user,
+		string $confirmationCallId,
+		int $phoneRevision,
+		?string $flowId = null,
+	): ?array
+	{
+		if (!$this->canSetupConfirmationCall($user))
+		{
+			return null;
+		}
+
+		$response = null;
+		$confirmation = function () use ($user, $confirmationCallId, &$response): bool
+		{
+			$response = $this->respondWithConfirmationCall(
+				(new CompleteSetupConfirmationCallCommand(
+					$user,
+					$confirmationCallId,
+					$this->createConfirmationCallService(),
+				))->run(),
+			);
+
+			return ($response['terminalStatus'] ?? null) === ConfirmationCallService::TERMINAL_STATUS_CONFIRMED_BY_CALL;
+		};
+
+		if ($flowId === null)
+		{
+			$confirmation();
+		}
+		else
+		{
+			$this->runSkipDeviceConnectConfirmation(
+				$user,
+				$flowId,
+				SkipDeviceConnect::CHANNEL_PHONE,
+				$confirmation,
+			);
+		}
+
+		return $response;
+	}
+
+	private function canSetupConfirmationCall(User $user): bool
+	{
+		if ((new UserPermission($user))->canEdit())
+		{
+			return true;
+		}
+
+		$this->addError(new Error('No rights', self::ERROR_FORBIDDEN));
+		$this->createConfirmationCallService()->noticeForbiddenSetup();
+
+		return false;
+	}
+
+	public function startLoginConfirmationCallAction(): ?array
+	{
+		return $this->respondWithConfirmationCall(
+			(new StartLoginConfirmationCallCommand($this->createConfirmationCallService()))->run(),
+		);
+	}
+
+	public function getLoginConfirmationCallStatusAction(string $confirmationCallId): ?array
+	{
+		return $this->respondWithConfirmationCall(
+			$this->createConfirmationCallProvider()->getLoginStatus($confirmationCallId),
+		);
+	}
+
+	public function completeLoginConfirmationCallAction(
+		string $confirmationCallId,
+		string $rememberDevice = 'N',
+		string $captchaWord = '',
+		string $captchaSid = '',
+	): ?array
+	{
+		$response = $this->respondWithConfirmationCall(
+			(new CompleteLoginConfirmationCallCommand(
+				$confirmationCallId,
+				$rememberDevice,
+				$captchaWord,
+				$captchaSid,
+				$this->createConfirmationCallService(),
+			))->run(),
+		);
+		if ($response === null)
+		{
+			$this->demandCaptchaOfRejectedCompletion();
+		}
+
+		return $response;
+	}
+
+	private function demandCaptchaOfRejectedCompletion(): void
+	{
+		if ($this->getErrorByCode(ConfirmationCallService::ERROR_COMPLETION_FAILED) === null)
+		{
+			return;
+		}
+
+		if (!Loader::includeModule('security') || !\Bitrix\Security\Mfa\Otp::isCaptchaRequired())
+		{
+			return;
+		}
+
+		global $APPLICATION;
+
+		$this->addError(new Error(
+			'Confirmation call completion requires a captcha.',
+			self::ERROR_CAPTCHA_REQUIRED,
+			['captchaSid' => (string)$APPLICATION->CaptchaGetCode()],
+		));
+	}
+
+	private function withSmsResendAt(mixed $response, string $intervalKey): mixed
+	{
+		if (!is_array($response) || !isset($response[$intervalKey]) || !is_numeric($response[$intervalKey]))
+		{
+			return $response;
+		}
+
+		return $response + ['smsResendAt' => time() + (int)$response[$intervalKey]];
+	}
+
+	protected function createConfirmationCallService(): ConfirmationCallService
+	{
+		return new ConfirmationCallService();
+	}
+
+	protected function createConfirmationCallProvider(): ConfirmationCallProvider
+	{
+		return new ConfirmationCallProvider($this->createConfirmationCallService());
+	}
+
+	private function respondWithConfirmationCall(Result $result): ?array
+	{
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$data = $result instanceof ResponseResult ? $result->getPayload() : null;
+		if ($data instanceof Attempt)
+		{
+			return [
+				'confirmationCallId' => $data->confirmationCallId,
+				'providerPhoneNumber' => $data->providerPhoneNumber,
+				'expiresAt' => $data->expiresAt,
+				'pullConfig' => $data->pullConfig,
+			];
+		}
+
+		if ($data instanceof Status)
+		{
+			return [
+				'status' => $data->status->value,
+				'reason' => $data->reason,
+			];
+		}
+
+		if ($data instanceof PhoneConfirmationTerminalStatus)
+		{
+			return ['terminalStatus' => $data->value];
+		}
+
+		$this->addError(new Error(
+			'Confirmation call is unavailable.',
+			ConfirmationCallService::ERROR_UNAVAILABLE,
+		));
+
+		return null;
 	}
 
 	public function changeAuthEmailAction(Email $email, ?string $flowId = null, ?string $signedUserId = null)
@@ -1204,7 +1551,13 @@ class Otp extends Controller
 			return [];
 		}
 
-		return $this->forward(PushOtp::class, 'sendSms');
+		$response = $this->forward(PushOtp::class, 'sendSms');
+		if ($this->getErrors() === [])
+		{
+			$this->createConfirmationCallService()->noticeSmsUse(true);
+		}
+
+		return $this->withSmsResendAt($response, 'timeLeft');
 	}
 
 	/**

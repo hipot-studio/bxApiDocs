@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ChartAuthorAccess;
 use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
@@ -53,7 +54,8 @@ final class ContentAccessPreflight
 				return $loaded;
 			}
 
-			$consumers = $loaded->getData()['entity']['dashboards'] ?? null;
+			$entity = $loaded->getData()['entity'];
+			$consumers = $entity['dashboards'] ?? null;
 			if (!is_array($consumers))
 			{
 				return Refusal::unavailableBi([], ['stage' => 'content_preflight.consumers', 'chart_id' => $chartId]);
@@ -73,7 +75,11 @@ final class ContentAccessPreflight
 				$ids[(int)$id] = (int)$id;
 				$externalIds[(int)$id] = (int)$id;
 			}
-			$charts[$chartId] = ['ids' => $ids, 'broken' => $broken];
+			$charts[$chartId] = [
+				'ids' => $ids,
+				'broken' => $broken,
+				'owners' => is_array($entity['owners'] ?? null) ? $entity['owners'] : [],
+			];
 		}
 
 		$dashboards = [];
@@ -91,11 +97,18 @@ final class ContentAccessPreflight
 		}
 
 		$controller = new AccessController($actor->userId);
+		$authorAccess = new ChartAuthorAccess();
 		$editable = [];
 		foreach ($charts as $chartId => $chart)
 		{
 			if ($chart['ids'] === [] && !$chart['broken'])
 			{
+				$author = $authorAccess->check($chart['owners'], $actor);
+				if (!$author->isSuccess())
+				{
+					return $author;
+				}
+
 				continue;
 			}
 

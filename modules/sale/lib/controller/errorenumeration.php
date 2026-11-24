@@ -81,6 +81,7 @@ class ErrorEnumeration
 	// \Bitrix\Sale\Controller\Action\Entity\GetBasketAction
 	public const GET_BASKET_ACTION_SITE_ID_NOT_FOUND = 202340400001;
 	public const GET_BASKET_ACTION_FUSER_ID_NOT_FOUND = 202340400002;
+	public const GET_BASKET_ACTION_ACCESS_DENIED = 202340300001;
 
 	// \Bitrix\Sale\Controller\Action\Entity\UserConsentRequestAction
 	public const USER_CONSENT_REQUEST_ACTION_ID_NOT_FOUND = 202440400001;

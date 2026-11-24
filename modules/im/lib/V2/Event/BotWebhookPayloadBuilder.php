@@ -80,6 +80,14 @@ class BotWebhookPayloadBuilder
 		});
 	}
 
+	public function buildBlockButtonClick(array $arParams, array $arHandler): array
+	{
+		return $this->buildForSingleBot($arParams, $arHandler, static function (array $p): array {
+			// Unlike the neighbours, there is no V1 shape to fall back to: the payload is built by the sender.
+			return $p[3] ?? throw new BotWebhookException('Event payload is missing', 0);
+		});
+	}
+
 	public function buildCommandAdd(array $arParams, array $arHandler): array
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);

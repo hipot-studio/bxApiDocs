@@ -53,6 +53,11 @@ class DownloadAccess
 		return $this->canDownloadByObjectOption($object);
 	}
 
+	public function invalidateObjectOption(int $realObjectId): void
+	{
+		unset($this->objectsOptionsCache[$realObjectId]);
+	}
+
 	public function checkObjectOptionByObjectId(int $objectId): bool
 	{
 		$realObjectId = $this->getRealObjectIdByObjectId($objectId);

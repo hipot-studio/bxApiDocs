@@ -7,10 +7,9 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Mobile\Internal\Onboarding\Activation\ActivationPath;
 use Bitrix\Mobile\Internal\Onboarding\Activation\ActivationStep;
 use Bitrix\Mobile\Internal\Onboarding\Activation\PushRule;
-use Bitrix\Mobile\Internal\Onboarding\Checkers\Gate\GateCondition;
 use Bitrix\Mobile\Internal\Onboarding\PushType;
-use Bitrix\Mobile\Internal\Onboarding\Schedule\SendWindow;
 use Bitrix\Mobile\Internal\Onboarding\Schedule\SeriesRhythm;
+use Bitrix\Mobile\Internal\Service\Marketing\Time\TimeWindow;
 
 /**
  * Reads the campaign document from the Option cache filled by
@@ -87,37 +86,6 @@ class JsonCampaignConfigProvider implements CampaignConfigProvider
 	 * @var array<string, StepConfig|null>
 	 */
 	private array $stepsByPushType = [];
-
-	public function resolvePath(array $toolCodes): ActivationPath
-	{
-		$paths = $this->getPaths();
-		$winner = null;
-
-		foreach ($paths as $path)
-		{
-			if (array_intersect($path->getToolCodes(), $toolCodes) === [])
-			{
-				continue;
-			}
-
-			if ($winner === null || $path->getPriority() > $winner->getPriority())
-			{
-				$winner = $path;
-			}
-		}
-
-		return $winner ?? $paths[self::DEFAULT_PATH_CODE] ?? self::createEmptyPath();
-	}
-
-	/**
-	 * Reachable only when even the bundled document is unusable (its file is missing or
-	 * malformed): a path without steps makes the activation engine send nothing, whereas
-	 * a missing default path used to break the reader itself.
-	 */
-	private static function createEmptyPath(): ActivationPath
-	{
-		return new ActivationPath(self::DEFAULT_PATH_CODE, [], []);
-	}
 
 	public function getPaths(): array
 	{
@@ -729,10 +697,10 @@ class JsonCampaignConfigProvider implements CampaignConfigProvider
 		{
 			$flaws[] = 'schedule declares no send window';
 		}
-		elseif (SendWindow::tryFrom($schedule->sendWindowStart, $schedule->sendWindowHours) === null)
+		elseif (TimeWindow::tryFrom($schedule->sendWindowStart, $schedule->sendWindowHours) === null)
 		{
 			// a positive length says nothing about the rest: a start nobody can read, or a window
-			// running past midnight, closes the window for good - SendWindow declines both, and
+			// running past midnight, closes the window for good - TimeWindow declines both, and
 			// the send condition then refuses every pass of the campaign
 			$flaws[] = "schedule declares an unusable send window: "
 				. "'{$schedule->sendWindowStart}' for {$schedule->sendWindowHours} h"
@@ -1047,7 +1015,7 @@ class JsonCampaignConfigProvider implements CampaignConfigProvider
 
 	/**
 	 * A gate the pipeline can act on. Only the check of the message step takes one, and
-	 * StepCheckerRegistry asks the document for the condition of that step alone - so a gate
+	 * the rules of the campaign ask the document for the gate of that step alone - so a gate
 	 * written on any other step is a condition the campaign reads and never applies, and the
 	 * step it guards is credited by its bare fact instead.
 	 *

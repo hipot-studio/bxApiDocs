@@ -1234,14 +1234,12 @@ class CIntranetInviteDialog
 
 		try
 		{
-			$sendable->sendImmediatelyWithResult();
+			return $sendable->sendImmediatelyWithResult();
 		}
 		catch (InvitationFailedException $exception)
 		{
 			return false;
 		}
-
-		return true;
 	}
 
 	public static function InviteUser($arUser, $messageText, $params = array())

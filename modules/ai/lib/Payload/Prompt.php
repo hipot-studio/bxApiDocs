@@ -179,10 +179,9 @@ class Prompt extends Text implements IPayload
 	}
 
 	/**
-	 * Set prompt category.
+	 * Returns prompt category.
 	 *
-	 * @param string $promptCategory
-	 * @return $this
+	 * @return string
 	 */
 	public function getPromptCategory():string
 	{

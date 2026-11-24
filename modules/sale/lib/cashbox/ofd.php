@@ -134,7 +134,7 @@ abstract class Ofd
 		foreach ($map as $queryKey => $checkKey)
 		{
 			if ($data[$checkKey])
-				$queryParams[] = $queryKey.'='.$data[$checkKey];
+				$queryParams[] = $queryKey.'='.rawurlencode((string)$data[$checkKey]);
 		}
 
 		if (empty($queryParams))

@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Analytics\CopilotAnalytics;
+use Bitrix\Im\V2\Analytics\VoiceWidgetLabels;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Copilot\FileUploadPolicy;
@@ -306,7 +307,11 @@ class CopilotChat extends GroupChat
 		return $this->getChatParams()->get(ChatParams::IS_COPILOT_DRAFT) !== null;
 	}
 
-	public function activateDraftChat(string $section = ChatAnalytics::ACTIVATE_SECTION_OTHER, ?int $initiatorId = null): void
+	public function activateDraftChat(
+		string $section = ChatAnalytics::ACTIVATE_SECTION_OTHER,
+		?int $initiatorId = null,
+		?VoiceWidgetLabels $voiceWidgetLabels = null,
+	): void
 	{
 		if (!$this->isDraftChat())
 		{
@@ -336,9 +341,15 @@ class CopilotChat extends GroupChat
 			// the draft→active transition, not to draft creation: a draft is minted when the
 			// copilot widget opens and may never receive a message. Chats created outside the
 			// draft path keep emitting it from ChatFactory::addChat.
+			// The first question of the mobile voice widget turns its draft into a chat of the widget.
+			if ($voiceWidgetLabels !== null)
+			{
+				$this->getChatParams()->addParamByName(ChatParams::COPILOT_ORIGIN, VoiceWidgetLabels::ORIGIN);
+			}
+
 			(new CopilotAnalytics($this))
 				->withContextUser($actingUserId)
-				->addCreateNewChat()
+				->addCreateNewChat($voiceWidgetLabels)
 			;
 		}
 	}
@@ -360,6 +371,7 @@ class CopilotChat extends GroupChat
 					? ChatAnalytics::ACTIVATE_SECTION_OTHER
 					: ChatAnalytics::ACTIVATE_SECTION_FROM_TEXT_REQUEST,
 				$isSystemMessage ? null : ($message->getAuthorId() ?: null),
+				$isSystemMessage ? null : VoiceWidgetLabels::fromMessage($message),
 			);
 		}
 

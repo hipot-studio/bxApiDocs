@@ -2,8 +2,12 @@
 
 namespace Bitrix\Im\V2\Chat\Update;
 
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatUpdateFieldsDto;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
+use Bitrix\Im\V2\Result;
 
 class UpdateFields
 {
@@ -28,6 +32,9 @@ class UpdateFields
 		protected ?string $manageMessagesAutoDelete = null,
 		protected ?int $parentChatId = null,
 		protected ?string $manageGuestInvites = null,
+		protected ?bool $threadsEnabled = null,
+		protected ?string $manageThreadCreate = null,
+		protected ?string $manageThreadPost = null,
 	){}
 
 	public static function create(array $fields): self
@@ -56,6 +63,9 @@ class UpdateFields
 			$fields['MANAGE_MESSAGES_AUTO_DELETE'] ?? null,
 			null,
 			$fields['MANAGE_GUEST_INVITES'] ?? null,
+			threadsEnabled: Normalizer::toNullableBool($fields['THREADS_ENABLED'] ?? null),
+			manageThreadCreate: $fields['MANAGE_THREAD_CREATE'] ?? null,
+			manageThreadPost: $fields['MANAGE_THREAD_POST'] ?? null,
 		);
 	}
 
@@ -79,6 +89,9 @@ class UpdateFields
 			'ADDED_MANAGERS' => $dto->addedManagers ?? [],
 			'DELETED_MANAGERS' => $dto->deletedManagers ?? [],
 			'MANAGE_GUEST_INVITES' => $dto->manageGuestInvites,
+			'THREADS_ENABLED' => $dto->threadsEnabled,
+			'MANAGE_THREAD_CREATE' => $dto->manageThreadCreate,
+			'MANAGE_THREAD_POST' => $dto->manageThreadPost,
 		]);
 	}
 
@@ -147,6 +160,21 @@ class UpdateFields
 		return $this->parentChatId;
 	}
 
+	public function getThreadsEnabled(): ?bool
+	{
+		return $this->threadsEnabled;
+	}
+
+	public function getManageThreadCreate(): ?string
+	{
+		return $this->manageThreadCreate;
+	}
+
+	public function getManageThreadPost(): ?string
+	{
+		return $this->manageThreadPost;
+	}
+
 	protected static function prepareArrayField(array $array): array
 	{
 		$result = [];
@@ -189,9 +217,39 @@ class UpdateFields
 			'MANAGE_MESSAGES_AUTO_DELETE' => $this->manageMessagesAutoDelete,
 			'PARENT_ID' => $this->parentChatId,
 			'MANAGE_GUEST_INVITES' => $this->manageGuestInvites,
+			'THREADS_ENABLED' => $this->threadsEnabled,
+			'MANAGE_THREAD_CREATE' => $this->manageThreadCreate,
+			'MANAGE_THREAD_POST' => $this->manageThreadPost,
 		];
 		return array_filter($array, function ($value) {
 			return $value !== null;
 		});
+	}
+
+	/**
+	 * Values the chat setters would drop in silence have to be refused here, where there is somewhere
+	 * to return the error: the request must not answer success with the setting unapplied.
+	 */
+	public function validate(): Result
+	{
+		$result = new Result();
+
+		$threadManageRights = [
+			'manageThreadCreate' => $this->manageThreadCreate,
+			'manageThreadPost' => $this->manageThreadPost,
+		];
+
+		foreach ($threadManageRights as $name => $rights)
+		{
+			if ($rights !== null && !Chat::isThreadManageRightsValid($rights))
+			{
+				return $result->addError(new ChatError(
+					ChatError::WRONG_PARAMETER,
+					"The value of {$name} is not a thread manage rights threshold."
+				));
+			}
+		}
+
+		return $result;
 	}
 }

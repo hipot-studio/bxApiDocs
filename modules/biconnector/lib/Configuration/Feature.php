@@ -4,7 +4,9 @@ namespace Bitrix\BIConnector\Configuration;
 use Bitrix\Bitrix24;
 use Bitrix\BIConnector\Configuration\Feature\ChartAnalysisFlag;
 use Bitrix\BIConnector\Configuration\Feature\DemoReportsFlag;
+use Bitrix\BIConnector\Configuration\Feature\RowRulesFlag;
 use Bitrix\BIConnector\Configuration\Feature\TablePermissionsFlag;
+use Bitrix\BIConnector\Public\Features;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -142,6 +144,19 @@ final class Feature
 		return Main\Config\Feature::isEnabled(TablePermissionsFlag::class);
 	}
 
+	/**
+	 * Row rules work only on top of table permissions.
+	 *
+	 * @return bool
+	 */
+	public static function isRowRulesEnabled(): bool
+	{
+		return
+			self::isTablePermissionsEnabled()
+			&& Main\Config\Feature::isEnabled(RowRulesFlag::class)
+		;
+	}
+
 	public static function isChartAnalysisEnabled(): bool
 	{
 		return Main\Config\Feature::isEnabled(ChartAnalysisFlag::class);
@@ -154,12 +169,12 @@ final class Feature
 
 	public static function isAiAgentsSectionEnabled(): bool
 	{
-		return self::checkFeatureOption(self::BI_AI_AGENTS_SECTION);
+		return Main\Config\Feature::isEnabled(Features\AiAgentsSection::class);
 	}
 
 	public static function isAiAgentsCardsEnabled(): bool
 	{
-		return self::checkFeatureOption(self::BI_AI_AGENTS_CARDS);
+		return Main\Config\Feature::isEnabled(Features\AiAgentsCards::class);
 	}
 
 	/**
@@ -190,7 +205,7 @@ final class Feature
 
 	public static function isMcpBiConnectionEnabled(): bool
 	{
-		return self::checkFeatureOption(self::MCP_BI_CONNECTION);
+		return Main\Config\Feature::isEnabled(Features\McpBiConnection::class);
 	}
 
 	/**

@@ -28,24 +28,20 @@ final class VibePlusUpsellService
 	private const TECHNICAL_LIMIT_PROMOTER = 'limit_copilot';
 	private const VIBE_PLUS_TARIFF_PROMOTER = 'limit_why_pay_tariff_vibe';
 
-	private readonly Closure $vibePlusModelProvider;
-	private readonly Closure $launchDateReachedProvider;
+	private readonly Closure $vibePlusPolicyActiveProvider;
 	private readonly Closure $onVibePlusProvider;
 	private readonly Closure $currentEditionActiveProvider;
 	private readonly Closure $demoAvailableProvider;
 
 	public function __construct(
-		?Closure $vibePlusModelProvider = null,
-		?Closure $launchDateReachedProvider = null,
+		?Closure $vibePlusPolicyActiveProvider = null,
 		?Closure $onVibePlusProvider = null,
 		?Closure $currentEditionActiveProvider = null,
 		?Closure $demoAvailableProvider = null,
 	)
 	{
-		$this->vibePlusModelProvider = $vibePlusModelProvider
-			?? static fn(): bool => Portal::hasVibePlusMonetizationModel();
-		$this->launchDateReachedProvider = $launchDateReachedProvider
-			?? static fn(): bool => Portal::isVibePlusLaunchDateReached();
+		$this->vibePlusPolicyActiveProvider = $vibePlusPolicyActiveProvider
+			?? static fn(): bool => Portal::isVibePlusPolicyActive();
 		$this->onVibePlusProvider = $onVibePlusProvider ?? static fn(): bool => Portal::isOnVibePlus();
 		$this->currentEditionActiveProvider = $currentEditionActiveProvider
 			?? static fn(): bool => Portal::isCurrentEditionActive();
@@ -53,7 +49,7 @@ final class VibePlusUpsellService
 	}
 
 	/**
-	 * Vibe+ state of the portal. Gate is the monetization model plus the reached launch date;
+	 * Vibe+ state of the portal. Gate is the active Vibe+ policy;
 	 * everything outside it keeps the pre-Vibe+ behaviour.
 	 *
 	 * The west zone is NOT part of this gate: it is checked by the calling embedding points, and a
@@ -61,7 +57,7 @@ final class VibePlusUpsellService
 	 */
 	public function resolveState(): VibePlusLimitState
 	{
-		if (!($this->vibePlusModelProvider)() || !($this->launchDateReachedProvider)())
+		if (!($this->vibePlusPolicyActiveProvider)())
 		{
 			return VibePlusLimitState::NotApplicable;
 		}

@@ -9,5 +9,6 @@ enum DocumentService: string
 	case FlipChart = 'flipchart';
 	case Vibeoffice = 'vibeoffice';
 	case HtmlEditor = 'html';
+	case MarkdownEditor = 'markdown';
 
 }

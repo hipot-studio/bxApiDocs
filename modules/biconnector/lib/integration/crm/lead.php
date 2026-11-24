@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Crm;
 
+use Bitrix\BIConnector\DataSource\FieldKind;
 use Bitrix\Main\Localization\Loc;
 
 class Lead
@@ -81,6 +82,7 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'L.CREATED_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'CREATED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -95,6 +97,7 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'L.MODIFY_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'MODIFIED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -117,6 +120,7 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'L.ASSIGNED_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -138,6 +142,8 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'DA.VALUE_STR',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DEPARTMENT,
+					FieldKind::KEY_OWNER => 'ASSIGNED_BY_ID',
 					'TABLE_ALIAS' => 'DA',
 					'JOIN' => 'INNER JOIN b_biconnector_dictionary_data DA ON DA.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_DEPARTMENT . ' AND DA.VALUE_ID = L.ASSIGNED_BY_ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_biconnector_dictionary_data DA ON DA.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_DEPARTMENT . ' AND DA.VALUE_ID = L.ASSIGNED_BY_ID',
@@ -197,6 +203,7 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'L.STATUS_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				'STATUS_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -300,6 +307,7 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'L.CURRENCY_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				//TODO:OPPORTUNITY_ACCOUNT DECIMAL(18,2) DEFAULT NULL,
 				//TODO:ACCOUNT_CURRENCY_ID VARCHAR (50) DEFAULT NULL,
@@ -309,6 +317,7 @@ class Lead
 					'AGGREGATION_TYPE' => 'NO_AGGREGATION',
 					'FIELD_NAME' => 'L.SOURCE_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				'SOURCE_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -499,6 +508,7 @@ class Lead
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'L.MOVED_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				//MOVED_TIME DATETIME NULL,
 				'MOVED_TIME' => [

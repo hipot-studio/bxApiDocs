@@ -8,7 +8,7 @@ use Bitrix\AI\Context;
 
 /**
  * Feature label of an outbound AI request: the owning module together with the scenario
- * behind the call, as `ai.{moduleId}.{contextId}`.
+ * behind the call, as `ai.{moduleId}.{featureCode|contextId}`.
  *
  * The single place where the shape of the label is born. A send point that assembled the
  * value itself would also decide which characters are allowed and where the value is cut;
@@ -41,16 +41,25 @@ final class FeatureTag
 	 * room for, and two scenarios that differ only past that cut would reach the receiver as one.
 	 * The remainder is never smaller than the module budget, so the substitution for an empty
 	 * part fits under any module id.
+	 *
+	 * A feature code names the scenario without the ids a context id carries: once set, it is the
+	 * scenario part under the same rules and the context id is not read.
 	 */
 	public static function fromContext(Context $context): self
 	{
 		$module = self::normalizePart($context->getModuleId(), self::modulePartMax());
 		$contextMax = ContextHeaders::FEATURE_MAX_LENGTH - strlen(self::PREFIX) - self::SEPARATORS - strlen($module);
 
+		$scenario = $context->getFeatureCode();
+		if ($scenario === '')
+		{
+			$scenario = $context->getContextId();
+		}
+
 		return new self(
 			self::PREFIX
 			. '.' . $module
-			. '.' . self::normalizePart($context->getContextId(), $contextMax)
+			. '.' . self::normalizePart($scenario, $contextMax)
 		);
 	}
 

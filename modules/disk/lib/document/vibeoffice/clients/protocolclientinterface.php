@@ -36,10 +36,24 @@ interface ProtocolClientInterface
 	public function revokeGrant(string $docKey, string $userId): Result;
 
 	/**
+	 * Returns the versioned acknowledgement of the exact document and subject in Result data.
+	 *
+	 * @param float|null $deadline absolute monotonic seconds, hrtime(true) / 1e9
+	 */
+	public function revokeGrantConfirmed(string $docKey, string $subject, ?float $deadline = null): Result;
+
+	/**
 	 * Forces the platform to persist the current document state.
 	 * POST /v1/documents/{docKey}/forcesave
 	 */
 	public function forcesave(string $docKey, ?array $userdata): Result;
+
+	/**
+	 * Sends the same save request within the remaining opening budget.
+	 *
+	 * @param float $deadline absolute monotonic seconds, hrtime(true) / 1e9
+	 */
+	public function forcesaveWithinDeadline(string $docKey, ?array $userdata, float $deadline): Result;
 
 	/**
 	 * Updates the metadata the document server keeps for the document. The document server carries

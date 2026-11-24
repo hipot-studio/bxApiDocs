@@ -7,15 +7,14 @@ namespace Bitrix\Mobile\Internal\Onboarding\Activation;
  * (see PATH-MAP). Immutable: adding a step/rule/path never mutates an existing
  * path (path isolation invariant).
  *
- * Rules are ordered and evaluated first-match-wins (see ActivationResolver); for
- * the starter paths the rule set degenerates to "first uncompleted step -> its
- * push".
+ * Rules are ordered: the push of the first step not closed is the one the series sends,
+ * as the rules of the push channel choose it (CampaignRuleSet).
  */
 final class ActivationPath
 {
 	/**
 	 * @param ActivationStep[] $steps ordered
-	 * @param PushRule[] $rules ordered, first-match-wins
+	 * @param PushRule[] $rules ordered as the steps
 	 * @param string[] $toolCodes qualification tool codes selecting this path
 	 * @param int $priority wins over a lower one when several paths match
 	 */
@@ -56,7 +55,7 @@ final class ActivationPath
 	}
 
 	/**
-	 * @return PushRule[] ordered, first-match-wins
+	 * @return PushRule[] ordered as the steps
 	 */
 	public function getRules(): array
 	{

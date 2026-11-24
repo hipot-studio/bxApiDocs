@@ -28,7 +28,6 @@ use Bitrix\Mobile\Provider\CommonUserDto;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Mobile\Provider\ThemeProvider;
 use Bitrix\Mobile\Config\Feature;
-use Bitrix\Mobile\Feature\QrLoginFeature;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 use Bitrix\StaffTrack\Public\Provider\CheckInProvider;
 use Bitrix\Mobile\Menu\ToolUsage\ToolUsage;
@@ -136,7 +135,7 @@ class Menu extends Controller
 				// Read in either state of the section: while it is off the menu draws the card of the news
 				// itself, and while it is on the counter of the entry plate sums the news up.
 				'shouldShowWhatsNew' => Feature::isEnabled(WhatsNewFeature::class),
-				'canLoginOnOtherDevice' => !$user->isGuest && Feature::isEnabled(QrLoginFeature::class),
+				'canLoginOnOtherDevice' => !$user->isGuest,
 			],
 		];
 

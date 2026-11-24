@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Controller\Chat\Dto;
 
+use Bitrix\Im\V2\Common\Normalizer;
+
 final class ChatUpdateFieldsDto
 {
 	private function __construct(
@@ -23,6 +25,9 @@ final class ChatUpdateFieldsDto
 		public readonly ?array $addedManagers,
 		public readonly ?array $deletedManagers,
 		public readonly ?string $manageGuestInvites,
+		public readonly ?bool $threadsEnabled,
+		public readonly ?string $manageThreadCreate,
+		public readonly ?string $manageThreadPost,
 	)
 	{
 	}
@@ -47,6 +52,9 @@ final class ChatUpdateFieldsDto
 			addedManagers: $fields['addedManagers'] ?? null,
 			deletedManagers: $fields['deletedManagers'] ?? null,
 			manageGuestInvites: $fields['manageGuestInvites'] ?? null,
+			threadsEnabled: Normalizer::toNullableBool($fields['threadsEnabled'] ?? null),
+			manageThreadCreate: $fields['manageThreadCreate'] ?? null,
+			manageThreadPost: $fields['manageThreadPost'] ?? null,
 		);
 	}
 }

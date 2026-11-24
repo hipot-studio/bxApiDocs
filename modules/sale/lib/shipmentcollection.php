@@ -1071,7 +1071,7 @@ class ShipmentCollection
 		$result = new Result();
 
 		$basketItemQuantity = $this->getBasketItemDistributedQuantity($basketItem);
-		if ($basketItemQuantity > $value)
+		if ($basketItemQuantity - $value > 1e-10)
 		{
 			$result->addError(new ResultError(
 				Loc::getMessage('SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY',

@@ -5,7 +5,59 @@ namespace Bitrix\Im\V2\Application;
 use Bitrix\AiAssistant\Config\Restriction as AiAssistantRestriction;
 use Bitrix\Im\Common;
 use Bitrix\Im\Integration\Socialservices\Zoom;
+use Bitrix\Im\Integration\Vibecodeconnector\Catalog;
 use Bitrix\Im\Integration\Disk\Documents;
+use Bitrix\Im\Public\Features\MentionAddToChatPopup;
+use Bitrix\Im\Public\Features\AddingUserByMention;
+use Bitrix\Im\Public\Features\AiAssistantMcpSelectionRestore;
+use Bitrix\Im\Public\Features\AiAssistantRegenerate;
+use Bitrix\Im\Public\Features\AirDesign;
+use Bitrix\Im\Public\Features\AiTaskCreationFromMessages;
+use Bitrix\Im\Public\Features\AttachChatToProject;
+use Bitrix\Im\Public\Features\BackgroundAudioPlayback;
+use Bitrix\Im\Public\Features\BitrixGptScrollPin;
+use Bitrix\Im\Public\Features\ChatBotCommands;
+use Bitrix\Im\Public\Features\ChatFolderAll;
+use Bitrix\Im\Public\Features\ChatFoldersWeb;
+use Bitrix\Im\Public\Features\ChatSharingLink;
+use Bitrix\Im\Public\Features\ChatShellNavigationWeb;
+use Bitrix\Im\Public\Features\ChatThreads;
+use Bitrix\Im\Public\Features\CollabPreviewSource;
+use Bitrix\Im\Public\Features\ContactCard;
+use Bitrix\Im\Public\Features\CounterV3;
+use Bitrix\Im\Public\Features\DesktopRedirect;
+use Bitrix\Im\Public\Features\DiskImHeadIndexing;
+use Bitrix\Im\Public\Features\EditMessageFiles;
+use Bitrix\Im\Public\Features\EmojiSearch;
+use Bitrix\Im\Public\Features\ExternalChatMessageForwarding;
+use Bitrix\Im\Public\Features\ForwardMultipleRecipients;
+use Bitrix\Im\Public\Features\FolderMute;
+use Bitrix\Im\Public\Features\FolderScopedPins;
+use Bitrix\Im\Public\Features\Markdown;
+use Bitrix\Im\Public\Features\MeetingsFolder;
+use Bitrix\Im\Public\Features\MessageBlockFooter;
+use Bitrix\Im\Public\Features\MessageDateNavigation;
+use Bitrix\Im\Public\Features\MessageFileAudioBlock;
+use Bitrix\Im\Public\Features\MessageFormBlock;
+use Bitrix\Im\Public\Features\MessageSearch;
+use Bitrix\Im\Public\Features\MessageSearchIndexing;
+use Bitrix\Im\Public\Features\MentionInstantSearch;
+use Bitrix\Im\Public\Features\MountedTasksCard;
+use Bitrix\Im\Public\Features\PersonalPin;
+use Bitrix\Im\Public\Features\ReplyWithMedia;
+use Bitrix\Im\Public\Features\QuickActions;
+use Bitrix\Im\Public\Features\ReadAllButton;
+use Bitrix\Im\Public\Features\ScheduledMessages;
+use Bitrix\Im\Public\Features\TaskResultButton;
+use Bitrix\Im\Public\Features\TextFormatToolbar;
+use Bitrix\Im\Public\Features\UploadCaptionMentionsFormat;
+use Bitrix\Im\Public\Features\VibecodeAppChatBanner;
+use Bitrix\Im\Public\Features\VibecodeAppOpenButton;
+use Bitrix\Im\Public\Features\VibecodeAppsFolder;
+use Bitrix\Im\Public\Features\VideoNoteCaption;
+use Bitrix\Im\Public\Features\VideoNotePlaybackRate;
+use Bitrix\Im\Public\Features\VoiceMessageRecording;
+use Bitrix\Im\Public\Features\VoiceMessageServerConversion;
 use Bitrix\Im\Settings;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Entity\User\User;
@@ -21,6 +73,7 @@ use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Link\Pin\PinLimits;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\ImBot\Bot\Giphy;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -71,8 +124,10 @@ class Features
 		public readonly bool $isCounterV3Available,
 		public readonly bool $isCopilotFileUploadAvailable,
 		public readonly bool $isBitrixGptUploadPolicyAvailable,
+		public readonly bool $isAiRequestTemplatesAvailable,
 		public readonly bool $isMountedTasksCardAvailable,
 		public readonly bool $isBitrixGptV2Available,
+		public readonly bool $isBitrixGptResearchAvailable,
 		public readonly bool $isMessageBuilderAvailable,
 		public readonly bool $isAddingUserByMentionAvailable,
 		public readonly bool $isAddToChatPopupAvailable,
@@ -98,6 +153,7 @@ class Features
 		public readonly bool $isReplyWithMediaAvailable,
 		public readonly bool $isTaskResultButtonAvailable,
 		public readonly bool $isMessageFormBlockAvailable,
+		public readonly bool $isMessageBlockFooterAvailable,
 		public readonly bool $isBitrixGptScrollPinAvailable,
 		public readonly bool $isBitrixGptStopGenerationAvailable,
 		public readonly bool $isMessageFileAudioBlockAvailable,
@@ -111,15 +167,20 @@ class Features
 		public readonly bool $isVoiceMessageRecordingAvailable,
 		public readonly bool $isEditMessageFilesAvailable,
 		public readonly bool $isVibecodeAppOpenButtonAvailable,
+		public readonly bool $isScheduledMessagesAvailable,
+		public readonly bool $isVibecodeAppChatBannerAvailable,
 		public readonly bool $isForwardMultipleRecipientsAvailable,
 		public readonly bool $isContactCardAvailable,
 		public readonly bool $messageSearchAvailable,
 		public readonly bool $isChatThreadsAvailable,
+		public readonly bool $isFolderMuteAvailable,
 		public readonly bool $isCheckInAvailable,
 		public readonly bool $isFolderScopedPinsAvailable,
 		public readonly bool $isPersonalPinAvailable,
 		public readonly bool $isVideoNoteDownloadAvailable,
 		public readonly bool $bitrixGptVoiceWidgetActive,
+		public readonly bool $isQuickActionsAvailable,
+		public readonly bool $isReadAllButtonAvailable,
 		/**
 		 * The only member of the set that is not a flag. The mobile application reads the whole set
 		 * through one proxy of its own module, so this is the way the pin limits reach it; the web
@@ -182,8 +243,10 @@ class Features
 			isCounterV3Available: self::isCounterV3Available(),
 			isCopilotFileUploadAvailable: self::isCopilotFileUploadAvailable(),
 			isBitrixGptUploadPolicyAvailable: self::isBitrixGptUploadPolicyAvailable(),
+			isAiRequestTemplatesAvailable: self::isAiRequestTemplatesAvailableForUser(),
 			isMountedTasksCardAvailable: self::isMountedTasksCardAvailable(),
 			isBitrixGptV2Available: self::isBitrixGptV2Available(),
+			isBitrixGptResearchAvailable: self::isBitrixGptResearchAvailable(),
 			isMessageBuilderAvailable: self::isMessageBuilderAvailable(),
 			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
 			isAddToChatPopupAvailable: self::isAddToChatPopupAvailable(),
@@ -209,6 +272,7 @@ class Features
 			isReplyWithMediaAvailable: self::isReplyWithMediaAvailable(),
 			isTaskResultButtonAvailable: self::isTaskResultButtonAvailable(),
 			isMessageFormBlockAvailable: self::isMessageFormBlockAvailable(),
+			isMessageBlockFooterAvailable: self::isMessageBlockFooterAvailable(),
 			isBitrixGptScrollPinAvailable: self::isBitrixGptScrollPinAvailable(),
 			isBitrixGptStopGenerationAvailable: self::isBitrixGptStopGenerationAvailable(),
 			isMessageFileAudioBlockAvailable: self::isMessageFileAudioBlockAvailable(),
@@ -222,15 +286,20 @@ class Features
 			isVoiceMessageRecordingAvailable: self::isVoiceMessageRecordingAvailable(),
 			isEditMessageFilesAvailable: self::isEditMessageFilesAvailable(),
 			isVibecodeAppOpenButtonAvailable: self::isVibecodeAppOpenButtonAvailable(),
+			isScheduledMessagesAvailable: self::isScheduledMessagesAvailable(),
+			isVibecodeAppChatBannerAvailable: self::isVibecodeAppChatBannerAvailableForUser(),
 			isForwardMultipleRecipientsAvailable: self::isForwardMultipleRecipientsAvailable(),
 			isContactCardAvailable: self::isContactCardAvailable(),
 			messageSearchAvailable: self::isMessageSearchAvailableForUser(),
 			isChatThreadsAvailable: self::isChatThreadsAvailable(),
+			isFolderMuteAvailable: self::isFolderMuteAvailable(),
 			isCheckInAvailable: self::isCheckInAvailable(),
 			isFolderScopedPinsAvailable: self::isFolderScopedPinsAvailable(),
 			isPersonalPinAvailable: self::isPersonalPinAvailable(),
 			isVideoNoteDownloadAvailable: self::isVideoNoteDownloadAvailable(),
 			bitrixGptVoiceWidgetActive: self::isBitrixGptVoiceWidgetActive(),
+			isQuickActionsAvailable: self::isQuickActionsAvailable(),
+			isReadAllButtonAvailable: self::isReadAllButtonAvailable(),
 			pinLimits: PinLimits::getClientLimits(),
 			isAiAssistantRegenerateSignalsReady: self::isAiAssistantRegenerateSignalsReady(),
 			isGuestOutgoingCallAvailable: self::isGuestOutgoingCallAvailable(),
@@ -312,6 +381,16 @@ class Features
 		;
 	}
 
+	private static function isQuickActionsAvailable(): bool
+	{
+		return Feature::isEnabled(QuickActions::class);
+	}
+
+	private static function isReadAllButtonAvailable(): bool
+	{
+		return Feature::isEnabled(ReadAllButton::class);
+	}
+
 	public static function isMessagesAutoDeleteEnabled(): bool
 	{
 		return Option::get('im', 'isAutoDeleteMessagesEnabled', 'Y') === 'Y';
@@ -319,7 +398,7 @@ class Features
 
 	public static function isDesktopRedirectAvailable(): bool
 	{
-		return Option::get('im', 'desktop_redirect_available', 'N') === 'Y';
+		return Feature::isEnabled(DesktopRedirect::class);
 	}
 
 	public static function isAiAssistantAvailable(): bool
@@ -354,7 +433,7 @@ class Features
 			return true;
 		}
 
-		return Option::get('im', 'chat_sharing_link_available', 'N') === 'Y';
+		return Feature::isEnabled(ChatSharingLink::class);
 	}
 
 	public static function isVideoNoteTranscriptionAvailable(): bool
@@ -384,17 +463,17 @@ class Features
 			return false;
 		}
 
-		return Option::get('im', 'ai_assistant_mcp_selection_restore_available', 'N') === 'Y';
+		return Feature::isEnabled(AiAssistantMcpSelectionRestore::class);
 	}
 
 	public static function isTextFormatToolbarAvailable(): bool
 	{
-		return Option::get('im', 'text_format_toolbar_available', 'N') === 'Y';
+		return Feature::isEnabled(TextFormatToolbar::class);
 	}
 
 	public static function isCounterV3Available(): bool
 	{
-		return Option::get('im', 'counter_v3_available', 'N') === 'Y';
+		return Feature::isEnabled(CounterV3::class);
 	}
 
 	public static function isCopilotFileUploadAvailable(): bool
@@ -413,9 +492,39 @@ class Features
 		;
 	}
 
+	/**
+	 * The value of the key itself, with no user taken into account.
+	 * To tell whether the library is offered to someone, use {@see self::isAiRequestTemplatesAvailableForUser()}.
+	 */
+	public static function isAiRequestTemplatesAvailable(): bool
+	{
+		return ServiceLocator::getInstance()
+			->get(AiAssistantService::class)
+			->isAiRequestTemplatesAvailable()
+		;
+	}
+
+	/**
+	 * An extranet user is a legitimate member of the assistant chat - the chat is an ordinary group chat,
+	 * and nothing in it is forbidden to them. The scenario library is simply not offered to them, so the
+	 * rule belongs to the feature set and not to the permissions of the chat.
+	 *
+	 * The portal half of the answer always speaks about the current user, so the argument narrows
+	 * the user type check only and is meant for the current user.
+	 *
+	 * @param int|null $userId the current user by default
+	 */
+	public static function isAiRequestTemplatesAvailableForUser(?int $userId = null): bool
+	{
+		// no authorized user at all comes back as `false` from Common, hence the cast
+		$userId ??= (int)Common::getUserId();
+
+		return self::isAiRequestTemplatesAvailable() && !($userId > 0 && User::getInstance($userId)->isExtranet());
+	}
+
 	public static function isMountedTasksCardAvailable(): bool
 	{
-		return Option::get('im', 'mounted_tasks_card_available', 'N') === 'Y';
+		return Feature::isEnabled(MountedTasksCard::class);
 	}
 
 	public static function isBitrixGptV2Available(): bool
@@ -423,6 +532,21 @@ class Features
 		return ServiceLocator::getInstance()
 			->get(AiAssistantService::class)
 			->isBitrixGptV2Available('bitrixgpt_v2_available')
+		;
+	}
+
+	/**
+	 * The single switch of Research mode is `im.bitrixgpt_research_available` (portal or user, behind
+	 * the BitrixGPT V2 gate). Only APIs that already exist in released modules are called, so this
+	 * module can ship before or after ai and aiassistant.
+	 */
+	public static function isBitrixGptResearchAvailable(): bool
+	{
+		return ServiceLocator::getInstance()
+				->get(AiAssistantService::class)
+				->isBitrixGptV2Available('bitrixgpt_research_available')
+			&& self::isCopilotWebSearchEnabledByAdmin()
+			&& self::isCopilotWebSearchAllowedByTariff()
 		;
 	}
 
@@ -441,27 +565,27 @@ class Features
 
 	public static function isAddingUserByMentionAvailable(): bool
 	{
-		return Option::get('im', 'adding_user_by_mention_available', 'N') === 'Y';
+		return Feature::isEnabled(AddingUserByMention::class);
 	}
 
 	public static function isAddToChatPopupAvailable(): bool
 	{
-		return Option::get('im', 'mention_add_to_chat_popup_available', 'N') === 'Y';
+		return Feature::isEnabled(MentionAddToChatPopup::class);
 	}
 
 	public static function isMessageDateNavigationAvailable(): bool
 	{
-		return Option::get('im', 'message_date_navigation_available', 'N') === 'Y';
+		return Feature::isEnabled(MessageDateNavigation::class);
 	}
 
 	public static function isExternalChatMessageForwardingAvailable(): bool
 	{
-		return Option::get('im', 'external_chat_message_forwarding_available', 'N') === 'Y';
+		return Feature::isEnabled(ExternalChatMessageForwarding::class);
 	}
 
 	public static function isForwardMultipleRecipientsAvailable(): bool
 	{
-		return Option::get('im', 'forward_multiple_recipients_available') === 'Y';
+		return Feature::isEnabled(ForwardMultipleRecipients::class);
 	}
 
 	public static function isChatWithGuestsAvailable(?int $inviterId = null): bool
@@ -506,7 +630,7 @@ class Features
 
 	public static function isChatFoldersWebAvailable(): bool
 	{
-		return Option::get('im', 'chat_folders_web_available', 'N') === 'Y';
+		return Feature::isEnabled(ChatFoldersWeb::class);
 	}
 
 	/**
@@ -528,7 +652,18 @@ class Features
 
 	public static function isChatFolderAllAvailable(): bool
 	{
-		return Option::get('im', 'chat_folder_all_available', 'N') === 'Y';
+		return Feature::isEnabled(ChatFolderAll::class);
+	}
+
+	/**
+	 * Muting a folder, the rule stored on the folder of the user
+	 * ({@see \Bitrix\Im\V2\Folder\Mute\MuteService}). One option for the server and both
+	 * clients; the folders themselves stay the condition above it - the rule has nowhere to live
+	 * without them.
+	 */
+	public static function isFolderMuteAvailable(): bool
+	{
+		return Feature::isEnabled(FolderMute::class);
 	}
 
 	/**
@@ -543,7 +678,7 @@ class Features
 	 */
 	public static function isFolderScopedPinsAvailable(?int $userId = null): bool
 	{
-		if (Option::get('im', 'folder_scoped_pins_available', 'N') === 'Y')
+		if (Feature::isEnabled(FolderScopedPins::class))
 		{
 			return true;
 		}
@@ -561,14 +696,14 @@ class Features
 	 */
 	public static function isChatShellNavigationWebAvailableForUser(?int $userId = null): bool
 	{
-		return Option::get('im', 'chat_shell_navigation_web_available', 'N') === 'Y'
+		return Feature::isEnabled(ChatShellNavigationWeb::class)
 			&& self::isChatFoldersWebAvailableForUser($userId)
 		;
 	}
 
 	public static function isVibecodeAppsFolderAvailable(): bool
 	{
-		return Option::get('im', 'vibecode_apps_folder_available', 'N') === 'Y';
+		return Feature::isEnabled(VibecodeAppsFolder::class);
 	}
 
 	/**
@@ -578,7 +713,7 @@ class Features
 	 */
 	public static function isMeetingsFolderAvailable(): bool
 	{
-		if (Option::get('im', 'meetings_folder_available', 'N') !== 'Y')
+		if (!Feature::isEnabled(MeetingsFolder::class))
 		{
 			return false;
 		}
@@ -588,7 +723,24 @@ class Features
 
 	public static function isVibecodeAppOpenButtonAvailable(): bool
 	{
-		return Option::get('im', 'vibecode_app_open_button_available', 'N') === 'Y';
+		return Feature::isEnabled(VibecodeAppOpenButton::class);
+	}
+
+	/**
+	 * The option goes first, so the vibecodeconnector bridge is not called until the banner is rolled out.
+	 *
+	 * @param int|null $userId the current user by default
+	 */
+	public static function isVibecodeAppChatBannerAvailableForUser(?int $userId = null): bool
+	{
+		return self::resolveVibecodeAppChatBanner(static fn (): bool => Catalog::isAvailableForUser($userId));
+	}
+
+	private static function resolveVibecodeAppChatBanner(\Closure $hasCatalogAccess): bool
+	{
+		return Feature::isEnabled(VibecodeAppChatBanner::class)
+			&& $hasCatalogAccess() === true
+		;
 	}
 
 	public static function isCopilotWebSearchEnabledByAdmin(): bool
@@ -603,7 +755,7 @@ class Features
 
 	public static function isAiAssistantRegenerateAvailable(): bool
 	{
-		return Option::get('im', 'ai_assistant_regenerate_available', 'N') === 'Y';
+		return Feature::isEnabled(AiAssistantRegenerate::class);
 	}
 
 	/**
@@ -627,42 +779,47 @@ class Features
 
 	public static function isReplyWithMediaAvailable(): bool
 	{
-		return Option::get('im', 'reply_with_media_available', 'N') === 'Y';
+		return Feature::isEnabled(ReplyWithMedia::class);
 	}
 
 	public static function isTaskResultButtonAvailable(): bool
 	{
-		return Option::get('im', 'task_result_button_available', 'N') === 'Y';
+		return Feature::isEnabled(TaskResultButton::class);
 	}
 
 	public static function isMessageFormBlockAvailable(): bool
 	{
-		return Option::get('im', 'message_form_block_available', 'N') === 'Y';
+		return Feature::isEnabled(MessageFormBlock::class);
+	}
+
+	public static function isMessageBlockFooterAvailable(): bool
+	{
+		return Feature::isEnabled(MessageBlockFooter::class);
 	}
 
 	public static function isMessageFileAudioBlockAvailable(): bool
 	{
-		return Option::get('im', 'message_file_audio_block_available', 'N') === 'Y';
+		return Feature::isEnabled(MessageFileAudioBlock::class);
 	}
 
 	public static function isBitrixGptScrollPinAvailable(): bool
 	{
-		return Option::get('im', 'bitrixgpt_scroll_pin_available', 'N') === 'Y';
+		return Feature::isEnabled(BitrixGptScrollPin::class);
 	}
 
 	public static function isCollabPreviewSourceEnabled(): bool
 	{
-		return Option::get('im', 'collab_preview_source_enabled', 'Y') === 'Y';
+		return Feature::isEnabled(CollabPreviewSource::class);
 	}
 
 	public static function isDiskImHeadIndexingEnabled(): bool
 	{
-		return Option::get('im', 'disk_im_head_indexing_enabled', 'N') === 'Y';
+		return Feature::isEnabled(DiskImHeadIndexing::class);
 	}
 
 	public static function isMarkdownAvailable(): bool
 	{
-		return Option::get('im', 'markdown_available', 'N') === 'Y';
+		return Feature::isEnabled(Markdown::class);
 	}
 
 	public static function isCopilotDraftChatAvailable(): bool
@@ -677,7 +834,7 @@ class Features
 			return false;
 		}
 
-		return Option::get('im', 'attach_chat_to_project_available', 'Y') === 'Y';
+		return Feature::isEnabled(AttachChatToProject::class);
 	}
 
 	public static function isCopilotSimpleReasoningAvailable(): bool
@@ -687,7 +844,12 @@ class Features
 
 	public static function isAiTaskCreationFromMessagesAvailable(): bool
 	{
-		if (Option::get('im', 'ai_task_creation_from_messages_available', 'N') !== 'Y')
+		if (!CopilotChat::isActive())
+		{
+			return false;
+		}
+
+		if (!Feature::isEnabled(AiTaskCreationFromMessages::class))
 		{
 			return false;
 		}
@@ -697,57 +859,67 @@ class Features
 
 	public static function isAirDesignEnabled(): bool
 	{
-		return Option::get('im', 'air_design_enabled', 'N') === 'Y';
+		return Feature::isEnabled(AirDesign::class);
 	}
 
 	public static function isChatBotCommandsAvailable(): bool
 	{
-		return Option::get('im', 'chat_bot_commands_available', 'N') === 'Y';
+		return Feature::isEnabled(ChatBotCommands::class);
 	}
 
 	public static function isUploadCaptionMentionsFormatAvailable(): bool
 	{
-		return Option::get('im', 'upload_caption_mentions_format_available', 'N') === 'Y';
+		return Feature::isEnabled(UploadCaptionMentionsFormat::class);
 	}
 
 	public static function isEmojiSearchAvailable(): bool
 	{
-		return Option::get('im', 'emoji_search_available', 'N') === 'Y';
+		return Feature::isEnabled(EmojiSearch::class);
 	}
 
 	public static function isBackgroundAudioPlaybackAvailable(): bool
 	{
-		return Option::get('im', 'background_audio_playback_available', 'N') === 'Y';
+		return Feature::isEnabled(BackgroundAudioPlayback::class);
 	}
 
 	public static function isVideoNotePlaybackRateAvailable(): bool
 	{
-		return Option::get('im', 'video_note_playback_rate_available', 'N') === 'Y';
+		return Feature::isEnabled(VideoNotePlaybackRate::class);
 	}
 
 	public static function isMentionInstantSearchAvailable(): bool
 	{
-		return Option::get('im', 'mention_instant_search_available', 'N') === 'Y';
+		return Feature::isEnabled(MentionInstantSearch::class);
 	}
 
 	public static function isVideoNoteCaptionAvailable(): bool
 	{
-		return Option::get('im', 'video_note_caption_available', 'N') === 'Y';
+		return Feature::isEnabled(VideoNoteCaption::class);
 	}
 
 	public static function isContactCardAvailable(): bool
 	{
-		return Option::get('im', 'contact_card_available', 'N') === 'Y';
+		return Feature::isEnabled(ContactCard::class);
 	}
 
 	public static function isVoiceMessageRecordingAvailable(): bool
 	{
+		if (!Feature::isEnabled(VoiceMessageRecording::class))
+		{
+			return false;
+		}
+
+		if (IsModuleInstalled('bitrix24'))
+		{
+			return true;
+		}
+
 		return Option::get('im', 'voice_message_recording_available', 'N') === 'Y';
 	}
 
 	public static function isVoiceMessageServerConversionAvailable(): bool
 	{
-		if (Option::get('im', 'voice_message_server_conversion_available', 'N') !== 'Y')
+		if (!Feature::isEnabled(VoiceMessageServerConversion::class))
 		{
 			return false;
 		}
@@ -757,12 +929,17 @@ class Features
 
 	public static function isEditMessageFilesAvailable(): bool
 	{
-		return Option::get('im', 'edit_message_files_available', 'N') === 'Y';
+		return Feature::isEnabled(EditMessageFiles::class);
+	}
+
+	public static function isScheduledMessagesAvailable(): bool
+	{
+		return Feature::isEnabled(ScheduledMessages::class);
 	}
 
 	public static function isMessageSearchAvailable(): bool
 	{
-		return Option::get('im', 'message_search_available', 'N') === 'Y';
+		return Feature::isEnabled(MessageSearch::class);
 	}
 
 	/**
@@ -784,12 +961,12 @@ class Features
 	// server-only flag: kept out of the constructor so it never leaks into featureOptions
 	public static function isMessageSearchIndexingEnabled(): bool
 	{
-		return Option::get('im', 'message_search_indexing_enabled', 'N') === 'Y';
+		return Feature::isEnabled(MessageSearchIndexing::class);
 	}
 
 	public static function isChatThreadsAvailable(): bool
 	{
-		return Option::get('im', 'chat_threads_available', 'N') === 'Y';
+		return Feature::isEnabled(ChatThreads::class);
 	}
 
 	/**
@@ -798,7 +975,7 @@ class Features
 	 */
 	public static function isPersonalPinAvailable(): bool
 	{
-		return Option::get('im', 'personal_pin_available', 'N') === 'Y';
+		return Feature::isEnabled(PersonalPin::class);
 	}
 
 	/**

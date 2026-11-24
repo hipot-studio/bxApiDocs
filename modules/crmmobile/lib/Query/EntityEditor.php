@@ -35,7 +35,7 @@ final class EntityEditor extends Query
 
 		if ($requiredFields !== null)
 		{
-			return $formWrapper->getRequiredFields($requiredFields);
+			return $formWrapper->getRequiredFields($mobileDecoratedProvider->prepareRequiredFieldNames($requiredFields));
 		}
 
 		return $formWrapper->getResult();

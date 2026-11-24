@@ -6,6 +6,8 @@ use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Pull\DTO\Message;
+use Bitrix\Pull\Push\DeliveryContext;
+use Bitrix\Pull\Push\DeliveryContextFactory;
 
 class Event
 {
@@ -354,6 +356,8 @@ class Event
 		$data['message'] = str_replace("\n", " ", trim($data['message'] ?? ''));
 		$data['params'] = $data['params'] ?? [];
 		$data['advanced_params'] = $data['advanced_params'] ?? [];
+		unset($data['advanced_params'][DeliveryContext::STORAGE_KEY]);
+		$data['advanced_params'][DeliveryContext::STORAGE_KEY] = $parameters['push'][DeliveryContext::STORAGE_KEY];
 		$data['advanced_params']['extra'] = $parameters['extra'] ?? [];
 		$data['badge'] = isset($data['badge']) ? (int)$data['badge'] : '';
 		$data['sound'] = $data['sound'] ?? '';
@@ -389,6 +393,7 @@ class Event
 			'APP_ID' => $data['app_id'],
 			'SEND_IMMEDIATELY' => $data['send_immediately'],
 			'IMPORTANT' => $data['important'],
+			'DELIVERY_CONTEXT' => $data['advanced_params'][DeliveryContext::STORAGE_KEY],
 		]);
 
 		return true;
@@ -744,6 +749,13 @@ class Event
 			$parameters['extra']['server_time_unix'] = microtime(true);
 		}
 
+		$eventType = (string)($parameters['event_type'] ?? $parameters['command'] ?? $parameters['push']['type'] ?? 'notify');
+		$push = is_array($parameters['push'] ?? null) ? $parameters['push'] : [];
+		unset($push['advanced_params'][DeliveryContext::STORAGE_KEY]);
+		$parameters['push'][DeliveryContext::STORAGE_KEY] = (new DeliveryContextFactory())
+			->create($parameters['module_id'], $eventType, $push)
+			->toArray();
+
 		return $parameters;
 	}
 
@@ -751,7 +763,10 @@ class Event
 	{
 		if (isset($params['groupId']) && !empty($params['groupId']))
 		{
-			return md5($params['groupId']);
+			return md5(serialize([
+				'groupId' => $params['groupId'],
+				'deliveryContext' => $params[DeliveryContext::STORAGE_KEY] ?? null,
+			]));
 		}
 		else
 		{

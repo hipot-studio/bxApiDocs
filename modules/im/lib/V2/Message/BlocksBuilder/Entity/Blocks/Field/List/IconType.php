@@ -40,4 +40,14 @@ enum IconType: string
 	case Gift = 'gift';
 	case Cloud = 'cloud';
 	case Notification = 'notification';
+	case Stop = 'stop';
+	case Refresh = 'refresh';
+	case Copy = 'copy';
+	case Like = 'like';
+	case Dislike = 'dislike';
+	case Link = 'link';
+	case Share = 'share';
+	case Edit = 'edit';
+	case AiStars = 'ai_stars';
+	case Play = 'play';
 }

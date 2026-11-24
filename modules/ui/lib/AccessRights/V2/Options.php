@@ -27,6 +27,8 @@ class Options implements JsonSerializable, Arrayable
 
 	protected ?bool $isSaveAccessRightsList = null;
 
+	protected ?bool $isUserGroupManagementDisabled = null;
+
 	protected ?int $maxVisibleUserGroups = null;
 
 	protected ?string $searchContainerSelector = null;
@@ -191,6 +193,18 @@ class Options implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function isUserGroupManagementDisabled(): ?bool
+	{
+		return $this->isUserGroupManagementDisabled;
+	}
+
+	public function setIsUserGroupManagementDisabled(?bool $isUserGroupManagementDisabled): static
+	{
+		$this->isUserGroupManagementDisabled = $isUserGroupManagementDisabled;
+
+		return $this;
+	}
+
 	public function getMaxVisibleUserGroups(): ?int
 	{
 		return $this->maxVisibleUserGroups;
@@ -290,6 +304,7 @@ class Options implements JsonSerializable, Arrayable
 			'analytics' => $this->getAnalytics(),
 			'isSaveOnlyChangedRights' => $this->isSaveOnlyChangedRights(),
 			'isSaveAccessRightsList' => $this->isSaveAccessRightsList(),
+			'isUserGroupManagementDisabled' => $this->isUserGroupManagementDisabled(),
 			'maxVisibleUserGroups' => $this->getMaxVisibleUserGroups(),
 			'searchContainerSelector' => $this->getSearchContainerSelector(),
 			'additionalMembersParams' => $this->getAdditionalMembersParams()->toArray(),
@@ -364,6 +379,11 @@ class Options implements JsonSerializable, Arrayable
 		if (isset($data['isSaveAccessRightsList']))
 		{
 			$options->setIsSaveAccessRightsList((bool)$data['isSaveAccessRightsList']);
+		}
+
+		if (isset($data['isUserGroupManagementDisabled']))
+		{
+			$options->setIsUserGroupManagementDisabled((bool)$data['isUserGroupManagementDisabled']);
 		}
 
 		if (isset($data['maxVisibleUserGroups']))

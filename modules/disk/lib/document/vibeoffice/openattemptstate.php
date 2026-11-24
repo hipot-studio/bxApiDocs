@@ -48,6 +48,8 @@ final class OpenAttemptState
 		}
 
 		return ($state['version'] ?? null) === self::VERSION
+			&& array_key_exists('fingerprint', $state)
+			&& array_key_exists('owner', $state)
 			&& (
 				($state['fingerprint'] ?? null) === null
 				|| (is_string($state['fingerprint']) && preg_match('/^[a-f0-9]{64}$/D', $state['fingerprint']) === 1)
@@ -56,7 +58,8 @@ final class OpenAttemptState
 			&& $state['outstanding'] >= 0
 			&& $state['outstanding'] <= self::MAX_OUTSTANDING
 			&& is_bool($state['stop'] ?? null)
-			&& isset(self::CANDIDATE_RANK[$state['candidate'] ?? ''])
+			&& is_string($state['candidate'] ?? null)
+			&& isset(self::CANDIDATE_RANK[$state['candidate']])
 			&& is_bool($state['finalized'] ?? null)
 			&& (($state['owner'] ?? null) === null || is_string($state['owner']))
 			&& is_bool($state['consumed'] ?? null)

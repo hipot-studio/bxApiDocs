@@ -3084,7 +3084,7 @@ class CDiskVolumeComponent extends BaseComponent
 			if ($row = $res->fetch())
 			{
 				$params = array(
-					'action' => self::ACTION_FILES,
+					'action' => self::ACTION_FOLDER_FILES,
 					'storageId' => $this->storageId,
 					'folderId' => $folderId,
 					'filterId' => $row['ID'],

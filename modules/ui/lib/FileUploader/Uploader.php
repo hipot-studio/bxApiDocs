@@ -1424,6 +1424,7 @@ class Uploader
 	public function getPendingFiles(array $tempFileIds): PendingFileCollection
 	{
 		$pendingFiles = new PendingFileCollection();
+		$guids = [];
 		foreach ($tempFileIds as $tempFileId)
 		{
 			if (!is_string($tempFileId) || empty($tempFileId))
@@ -1442,24 +1443,56 @@ class Uploader
 				continue;
 			}
 
-			$tempFile = TempFileTable::getList([
-				'filter' => [
-					'=GUID' => $guid,
-					'=UPLOADED' => true,
-				],
-			])->fetchObject();
+			$guids[$tempFileId] = $guid;
+		}
 
-			if (!$tempFile)
+		// the temp files of the whole request are read in one query: a request may name dozens of tokens
+		$tempFiles = $this->getUploadedTempFilesByGuid(array_values($guids));
+		foreach ($guids as $tempFileId => $guid)
+		{
+			$pendingFile = $pendingFiles->get($tempFileId);
+			if (!isset($tempFiles[$guid]))
 			{
 				$pendingFile->addError(new UploaderError(UploaderError::UNKNOWN_TOKEN));
 
 				continue;
 			}
 
-			$pendingFile->setTempFile($tempFile);
+			$pendingFile->setTempFile($tempFiles[$guid]);
 		}
 
 		return $pendingFiles;
+	}
+
+	/**
+	 * @param string[] $guids
+	 * @return array<string, TempFile>
+	 */
+	private function getUploadedTempFilesByGuid(array $guids): array
+	{
+		$guids = array_values(array_unique($guids));
+		if (empty($guids))
+		{
+			return [];
+		}
+
+		$tempFiles = [];
+		foreach (array_chunk($guids, 500) as $chunk)
+		{
+			$result = TempFileTable::getList([
+				'filter' => [
+					'@GUID' => $chunk,
+					'=UPLOADED' => true,
+				],
+			]);
+
+			while ($tempFile = $result->fetchObject())
+			{
+				$tempFiles[$tempFile->getGuid()] = $tempFile;
+			}
+		}
+
+		return $tempFiles;
 	}
 
 	public function getStatus(string $token): StatusResult

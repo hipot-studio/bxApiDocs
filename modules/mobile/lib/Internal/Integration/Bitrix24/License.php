@@ -8,9 +8,11 @@ use Bitrix\Bitrix24;
 use Bitrix\Bitrix24\License\Market;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\License as MainLicense;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Mobile\Internal\Integration\ServiceFactory;
 use CBitrix24;
 
 /**
@@ -18,8 +20,17 @@ use CBitrix24;
  * All other classes in the mobile module must use this class
  * instead of calling CBitrix24, License, License\Market directly.
  */
-final class License
+class License
 {
+	private ?MainLicense $mainLicense;
+	private readonly ServiceFactory $services;
+
+	public function __construct(?MainLicense $mainLicense = null, ?ServiceFactory $services = null)
+	{
+		$this->mainLicense = $mainLicense;
+		$this->services = $services ?? new ServiceFactory();
+	}
+
 	public function isCloud(): bool
 	{
 		if (!Loader::includeModule('bitrix24'))
@@ -98,6 +109,65 @@ final class License
 		}
 
 		return Bitrix24\License::getCurrent()->getExpireDate();
+	}
+
+	/**
+	 * The moment the portal was created, to the second; null outside the cloud and when the portal
+	 * states none.
+	 */
+	public function getCreatedAt(): ?DateTime
+	{
+		if (!$this->isCloud())
+		{
+			return null;
+		}
+
+		$timestamp = (int)CBitrix24::getCreateTime();
+
+		return $timestamp > 0 ? DateTime::createFromTimestamp($timestamp) : null;
+	}
+
+	/**
+	 * The edition of the current license, such as "team"; null outside the cloud and when the license
+	 * names none.
+	 */
+	public function getTariffCode(): ?string
+	{
+		if (!$this->isCloud())
+		{
+			return null;
+		}
+
+		$code = (string)CBitrix24::getLicenseType();
+
+		return $code === '' ? null : $code;
+	}
+
+	/**
+	 * The partner of the portal, 0 for none: the one of the cloud license, or of the license of the
+	 * installation outside the cloud.
+	 */
+	public function getPartnerId(): int
+	{
+		if ($this->isCloud())
+		{
+			return Bitrix24\License::getCurrent()->getPartnerId();
+		}
+
+		return $this->getMainLicense()->getPartnerId();
+	}
+
+	/**
+	 * The region of the license in both contours.
+	 */
+	public function getRegion(): ?string
+	{
+		return $this->getMainLicense()->getRegion();
+	}
+
+	private function getMainLicense(): MainLicense
+	{
+		return $this->mainLicense ??= $this->services->mainLicense();
 	}
 
 	public function getType(): string

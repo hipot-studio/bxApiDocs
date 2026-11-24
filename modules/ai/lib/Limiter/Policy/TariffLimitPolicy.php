@@ -7,7 +7,7 @@ namespace Bitrix\AI\Limiter\Policy;
 use Bitrix\AI\Config;
 use Bitrix\AI\Limiter\Plan;
 use Bitrix\Bitrix24\Feature;
-use Bitrix\Bitrix24\Public\Service\VibePlus\RuntimeStateProvider;
+use Bitrix\Bitrix24\Public\Provider\License\VibePlusPolicyProvider;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Loader;
@@ -21,7 +21,7 @@ final class TariffLimitPolicy
 	private const MODULE_ID = 'ai';
 	private const POLICY_ENABLED_OPTION = 'tariff_limit_policy_enabled';
 	private const UNLIMITED_FEATURE = 'ai_unlimited_by_version';
-	private const TRANSITION_FEATURE = 'ai_limits_transition_period';
+	private const AI_LIMITS_FEATURE = 'ai_limits';
 	private const MONTHLY_POOL_FEATURE = 'ai_monthly_pool_by_version';
 	private const AI_DAILY_LIMIT_VARIABLE = 'ai_query_limit_day';
 	private const AGENT_DAILY_LIMIT_VARIABLE = 'ai_agent_query_limit_day';
@@ -31,7 +31,6 @@ final class TariffLimitPolicy
 	private readonly Closure $moduleAvailableProvider;
 	private readonly Closure $vibePlusTariffLineAvailableProvider;
 	private readonly Closure $checkLimitsProvider;
-	private readonly Closure $transitionPeriodActiveProvider;
 	private readonly Closure $featureChargeableProvider;
 	private readonly Closure $featureEnabledProvider;
 	private readonly Closure $variableProvider;
@@ -44,7 +43,6 @@ final class TariffLimitPolicy
 		?Closure $moduleAvailableProvider = null,
 		?Closure $vibePlusTariffLineAvailableProvider = null,
 		?Closure $checkLimitsProvider = null,
-		?Closure $transitionPeriodActiveProvider = null,
 		?Closure $featureChargeableProvider = null,
 		?Closure $featureEnabledProvider = null,
 		?Closure $variableProvider = null,
@@ -57,13 +55,10 @@ final class TariffLimitPolicy
 		$this->moduleAvailableProvider = $moduleAvailableProvider
 			?? static fn(): bool => Loader::includeModule('bitrix24');
 		$this->vibePlusTariffLineAvailableProvider = $vibePlusTariffLineAvailableProvider
-			?? static fn(): bool => class_exists(RuntimeStateProvider::class)
-				&& (new RuntimeStateProvider())->isVibePlusTariffLineAvailable();
+			?? static fn(): bool => class_exists(VibePlusPolicyProvider::class)
+				&& (new VibePlusPolicyProvider())->isActive();
 		$this->checkLimitsProvider = $checkLimitsProvider
 			?? static fn(): mixed => Config::getValue('check_limits');
-		$this->transitionPeriodActiveProvider = $transitionPeriodActiveProvider
-			?? static fn(): bool => class_exists(RuntimeStateProvider::class)
-				&& (new RuntimeStateProvider())->isTransitionPeriodActive();
 		$this->featureChargeableProvider = $featureChargeableProvider
 			?? static fn(string $feature): bool => Feature::isFeatureChargeable($feature);
 		$this->featureEnabledProvider = $featureEnabledProvider
@@ -144,9 +139,7 @@ final class TariffLimitPolicy
 				return LimitPolicyMode::Unlimited;
 			}
 
-			$transitionPeriodActive
-				= ($this->transitionPeriodActiveProvider)()
-				&& $this->isFeatureAvailable(self::TRANSITION_FEATURE);
+			$transitionPeriodActive = $this->isFeatureAvailable(self::AI_LIMITS_FEATURE);
 			$monthlyPoolActive = $this->isFeatureAvailable(self::MONTHLY_POOL_FEATURE);
 
 			if ($transitionPeriodActive && $monthlyPoolActive)

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\Vibeoffice\Box;
 
 use Bitrix\Disk\Document\OnlyOffice;
+use Bitrix\Disk\Document\Vibeoffice\Webhook\SignatureStatus;
+use Bitrix\Disk\Document\Vibeoffice\Webhook\SignatureV2;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\ModuleManager;
@@ -61,6 +63,32 @@ final class RegistrationClient extends OnlyOffice\Cloud\BaseSender
 	public function rotate(string $clientId, string $keyId): Result
 	{
 		return $this->request('rotate', 'rotateVibeofficeKey', ['clientId' => $clientId, 'keyId' => $keyId]);
+	}
+
+	public function webhookSignatureStatus(string $clientId, string $keyId): Result
+	{
+		return $this->request('webhookSignatureStatus', 'webhookSignatureStatus', [
+			'clientId' => $clientId, 'keyId' => $keyId,
+		]);
+	}
+
+	public function prepareWebhookSignatureV2(
+		string $clientId, string $keyId, string $transitionId, int $expectedEpoch,
+	): Result
+	{
+		return $this->request('prepareWebhookSignatureV2', 'prepareWebhookSignatureV2', [
+			'clientId' => $clientId, 'keyId' => $keyId, 'transitionId' => $transitionId,
+			'expectedEpoch' => $expectedEpoch,
+		]);
+	}
+
+	public function finalizeWebhookSignatureV2(
+		string $clientId, string $keyId, string $transitionId, int $epoch,
+	): Result
+	{
+		return $this->request('finalizeWebhookSignatureV2', 'finalizeWebhookSignatureV2', [
+			'clientId' => $clientId, 'keyId' => $keyId, 'transitionId' => $transitionId, 'epoch' => $epoch,
+		]);
 	}
 
 	public function getHttpClientParameters(): array
@@ -128,6 +156,14 @@ final class RegistrationClient extends OnlyOffice\Cloud\BaseSender
 			return $this->unavailable();
 		}
 		$data = $payload['data'];
+		if (in_array($this->operation, ['webhookSignatureStatus', 'prepareWebhookSignatureV2',
+			'finalizeWebhookSignatureV2'], true))
+		{
+			$status = SignatureStatus::validate($data['webhookSignature'] ?? null);
+
+			return $status === null ? $this->unavailable()
+				: (new Result())->setData(['webhookSignature' => $status]);
+		}
 		if (!array_key_exists('vibeoffice', $data))
 		{
 			return (new Result())->addError(new Error(
@@ -174,6 +210,8 @@ final class RegistrationClient extends OnlyOffice\Cloud\BaseSender
 			'vibeofficeMode' => $mode,
 			'keyId' => $keyId,
 			'diskVersion' => ModuleManager::getVersion('disk'),
+			'webhookSignatureContract' => SignatureV2::CONTRACT_ID,
+			'webhookSignatureSupported' => [1, 2],
 		]);
 	}
 
@@ -236,6 +274,16 @@ final class RegistrationClient extends OnlyOffice\Cloud\BaseSender
 			}
 			$result['probe'] = $probe;
 		}
+		if (array_key_exists('webhookSignature', $value))
+		{
+			$status = SignatureStatus::validate($value['webhookSignature']);
+			if ($status === null || $status['host_id'] !== $value['hostId'])
+			{
+				return null;
+			}
+			$result['webhookSignature'] = $status;
+		}
+
 		if ($this->operation === 'confirm' && ($value['state'] !== 'confirmed' || !isset($result['probe'])))
 		{
 			return null;

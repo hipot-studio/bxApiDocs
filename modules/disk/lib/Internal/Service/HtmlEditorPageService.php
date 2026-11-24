@@ -4,20 +4,24 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service;
 
+use Bitrix\AiAssistant\Trigger\Repository\ChatMapRepository;
+use Bitrix\AiAssistant\Trigger\Repository\TriggerRepository;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Integration\AiAssistant\Trigger\Action\FileChatTrigger;
 use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionDto;
 use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionService;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
-use Bitrix\Disk\Internal\Service\HtmlEditor\SdkPackageProvider;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSignature;
+use Bitrix\Disk\Realtime\Tags\ObjectTag;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Render;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
 
@@ -28,7 +32,6 @@ class HtmlEditorPageService
 	public const ERROR_UNSUPPORTED_FORMAT = 'unsupported_format';
 
 	public function __construct(
-		private readonly SdkPackageProvider $sdkPackageProvider = new SdkPackageProvider(),
 		private readonly UnifiedLinkSignature $signature = new UnifiedLinkSignature(),
 		private ?OpeningContextFactory $openingContextFactory = null,
 		private ?HeaderCompositionService $compositionService = null,
@@ -59,6 +62,13 @@ class HtmlEditorPageService
 
 	public function renderPage(array $componentParams): string
 	{
+		$fileId = (int)($componentParams['SOURCE']['fileId'] ?? 0);
+		$userId = (int)CurrentUser::get()->getId();
+		if ($fileId > 0 && $userId > 0 && Loader::includeModule('pull'))
+		{
+			\CPullWatch::Add($userId, (new ObjectTag($fileId))->getName(), true);
+		}
+
 		if (Application::getInstance()->getContext()->getRequest()->get('IFRAME') !== 'Y')
 		{
 			return $this->renderStandalonePage($componentParams);
@@ -78,6 +88,11 @@ class HtmlEditorPageService
 
 	protected function renderStandalonePage(array $componentParams): string
 	{
+		if (Loader::includeModule('pull'))
+		{
+			\CPullOptions::OnEpilog();
+		}
+
 		return (new Render\Component(
 			'bitrix:disk.file.editor-html',
 			'',
@@ -97,12 +112,6 @@ class HtmlEditorPageService
 		if (!HtmlViewerPolicy::isViewableFile($realFile))
 		{
 			return $this->error('HTML editor source format is unsupported.', self::ERROR_UNSUPPORTED_FORMAT);
-		}
-
-		$packageResult = $this->sdkPackageProvider->getLocalPackage();
-		if (!$packageResult->isSuccess())
-		{
-			return $packageResult;
 		}
 
 		$urlManager = Driver::getInstance()->getUrlManager();
@@ -157,8 +166,34 @@ class HtmlEditorPageService
 				'attachedObjectId' => $attachedObjectId,
 				'uniqueCode' => (string)$realFile->getUniqueCode(),
 			],
-			'SDK_PACKAGE' => $packageResult->getData(),
+			'FILE_CHAT_ID' => ($composition['fileChat']['fileId'] ?? null) === (int)$realFile->getId()
+				? $this->getExistingFileChatId($userId, (int)$realFile->getId())
+				: null,
 		]);
+	}
+
+	private function getExistingFileChatId(int $userId, int $fileId): ?int
+	{
+		if ($userId <= 0 || !Loader::includeModule('aiassistant'))
+		{
+			return null;
+		}
+
+		try
+		{
+			$triggerId = ServiceLocator::getInstance()->get(TriggerRepository::class)
+				->getByCode(FileChatTrigger::getCode());
+			if ($triggerId === null)
+			{
+				return null;
+			}
+
+			return (new ChatMapRepository())->findChatId($userId, $triggerId, (string)$fileId);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
 	}
 
 	private function getCompositionService(): HeaderCompositionService

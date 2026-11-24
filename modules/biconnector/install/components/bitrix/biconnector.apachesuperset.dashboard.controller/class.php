@@ -2,6 +2,7 @@
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ServiceLocation;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Stepper\DashboardOwner;
 use Bitrix\BIConnector\Superset;
@@ -82,6 +83,15 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
 			$this->includeComponentTemplate($template);
+
+			return;
+		}
+
+		// Must stay above the synchronous instance startup: the constructor button already starts it in the background.
+		if ($this->request->get('wait') === 'constructor')
+		{
+			$this->arResult['SERVICE_LOCATION'] = ServiceLocation::getCurrentDatacenterLocationRegion();
+			$this->includeComponentTemplate('constructor_wait');
 
 			return;
 		}

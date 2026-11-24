@@ -12,6 +12,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Integration\Collab\CollabDocumentCreationService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\Engine;
@@ -135,23 +136,61 @@ final class DocumentService extends Engine\Controller
 			->setSessionContext($documentSession->getContext())
 			->setFile($file)
 			->setVersion($version)
+			->setAttachedObject($documentSession->getContext()?->getAttachedObject())
 		;
+		$restoredSharedOpening = false;
+		$restoredOpenToken = null;
 
-		if (!$sessionManager->lock())
+		if ($sessionManager instanceof Document\Vibeoffice\DocumentSessionManager
+			&& $sessionManager->requiresSharedAdmission())
 		{
-			$this->addError(new Error('Could not getting lock for the session.'));
+			$unifiedLinkService = ServiceLocator::getInstance()->get(
+				\Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService::class,
+			);
+			if (!$sessionManager->configureFromPreviousSession($documentSession, $unifiedLinkService))
+			{
+				$this->addError(new Error('The editing source is unavailable.', 'vibeoffice_access_denied'));
 
-			return null;
+				return null;
+			}
+			$admission = $sessionManager->admitSharedEdit(new Document\Vibeoffice\OpeningBudget(
+				ServiceLocator::getInstance()->get('disk.vibeofficeConfiguration')->getOpenBudgetSeconds() * 1000,
+			));
+			if (!$admission->isSuccess())
+			{
+				$this->addErrors($admission->getErrors());
+
+				return null;
+			}
+			$forkedSession = $admission->getData()['session'];
+			$restoredOpenToken = is_string($admission->getData()['openToken'] ?? null)
+				? $admission->getData()['openToken']
+				: null;
+			$restoredSharedOpening = true;
 		}
-
-		$forkedSession = $sessionManager->findOrCreateSession();
-		if (!$forkedSession)
+		else
 		{
-			$this->addErrors($forkedSession->getErrors());
+			if (!$sessionManager->lock())
+			{
+				$this->addError(new Error('Could not getting lock for the session.'));
 
-			return null;
+				return null;
+			}
+			try
+			{
+				$forkedSession = $sessionManager->findOrCreateSession();
+				if (!$forkedSession)
+				{
+					$this->addErrors($sessionManager->getErrors());
+
+					return null;
+				}
+			}
+			finally
+			{
+				$sessionManager->unlock();
+			}
 		}
-		$sessionManager->unlock();
 		$restrictionOutcome = $sessionManager instanceof Document\Vibeoffice\DocumentSessionManager
 			? $sessionManager->getRestrictionOutcome()
 			: null
@@ -166,6 +205,59 @@ final class DocumentService extends Engine\Controller
 			if ($version)
 			{
 				$unifiedLinkOptions['versionId'] = (int)$version->getId();
+			}
+			if ($restoredSharedOpening)
+			{
+				$context = $forkedSession->getContext();
+				$link = $context?->getExternalLink();
+				if (!$context || ($context->getExternalLinkId() !== null
+					&& (!($link instanceof Disk\ExternalLink)
+						|| (int)$link->getId() !== (int)$context->getExternalLinkId())))
+				{
+					if ($restoredOpenToken !== null)
+					{
+						(new Document\Vibeoffice\SessionRegistry())->cancelDefinitiveOpen($restoredOpenToken);
+					}
+					$forkedSession->setAsNonActive();
+					$this->addError(new Error('The editing source is unavailable.', 'vibeoffice_access_denied'));
+
+					return null;
+				}
+				$shortLinkOpening = $sessionManager instanceof Document\Vibeoffice\DocumentSessionManager
+					? $sessionManager->getShortLinkOpening()
+					: null;
+				if ($shortLinkOpening !== null)
+				{
+					$freshOpening = \Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening::resolve(
+						(string)$link?->getShortCode(),
+					);
+					if ($freshOpening === null
+						|| (int)$freshOpening->getExternalLink()->getId() !== (int)$context->getExternalLinkId())
+					{
+						if ($restoredOpenToken !== null)
+						{
+							(new Document\Vibeoffice\SessionRegistry())->cancelDefinitiveOpen($restoredOpenToken);
+						}
+						$forkedSession->setAsNonActive();
+						$this->addError(new Error('The editing source is unavailable.', 'vibeoffice_access_denied'));
+
+						return null;
+					}
+					$response->setStatus(302);
+					$response->getHeaders()->set('Location', $freshOpening->getCanonicalUrl());
+
+					return $response;
+				}
+				$attachedId = $context->getAttachedObjectId();
+				if ($attachedId !== null)
+				{
+					$unifiedLinkOptions['attachedId'] = $attachedId;
+				}
+				if ($link instanceof Disk\ExternalLink)
+				{
+					$unifiedLinkOptions['additionalQueryParams'][ExternalLinkContext::getParameterName()]
+						= ExternalLinkContext::create($link, $file, $attachedId, $forkedSession->getVersionId());
+				}
 			}
 
 			$unifiedLink = Driver::getInstance()->getUrlManager()->getUnifiedLink($file, $unifiedLinkOptions);
@@ -293,19 +385,34 @@ final class DocumentService extends Engine\Controller
 		$file = $documentSession->getFile();
 		$selectedContent = $this->getSelectedDownloadContent($documentSession);
 
-		$securityContext = $file?->getStorage()?->getSecurityContext(
-			user: $this->getCurrentUser(),
-			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLink($documentSession),
-		);
-
-		if (!$selectedContent || !$securityContext || !$documentSession->canDownload($securityContext))
+		if (!$selectedContent || !$this->canDownloadDocument($documentSession))
 		{
-			$this->addError(new Error('Could not download document.'));
+			return $this->createDownloadErrorResponse('403 Forbidden');
+		}
 
-			$response = new HttpResponse();
-			$response->setStatus('403 Forbidden');
+		if (!$documentSession->isVersion())
+		{
+			$result = (new Document\Vibeoffice\SavedDownloadSynchronizer())->synchronize($file);
+			if (!$result->isSuccess())
+			{
+				return $this->createDownloadErrorResponse('503 Service Unavailable');
+			}
+			if ($result->getData()['synchronized'])
+			{
+				$freshFile = Disk\File::loadById((int)$file->getId(), ['STORAGE']);
+				if (!$freshFile || (int)$freshFile->getRealObjectId() !== (int)$file->getRealObjectId()
+					|| ($freshFile instanceof Disk\FileLink && !$freshFile->getRealObject()))
+				{
+					return $this->createDownloadErrorResponse('403 Forbidden');
+				}
+				$documentSession->setReferenceValue(Document\Models\DocumentSession::REF_OBJECT, $freshFile);
+				if (!$this->canDownloadDocument($documentSession))
+				{
+					return $this->createDownloadErrorResponse('403 Forbidden');
+				}
 
-			return $response;
+				$selectedContent = $this->getSelectedDownloadContent($documentSession);
+			}
 		}
 
 		$response = Response\BFile::createByFileId(
@@ -315,6 +422,23 @@ final class DocumentService extends Engine\Controller
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
+	}
+
+	private function canDownloadDocument(Document\Models\DocumentSession $documentSession): bool
+	{
+		$securityContext = $documentSession->getFile()?->getStorage()?->getSecurityContext(
+			user: $this->getCurrentUser(),
+			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLink($documentSession),
+		);
+
+		return $securityContext && $documentSession->canDownload($securityContext);
+	}
+
+	private function createDownloadErrorResponse(string $status): HttpResponse
+	{
+		$this->addError(new Error('Could not download document.'));
+
+		return (new HttpResponse())->setStatus($status);
 	}
 
 	private function getSelectedDownloadContent(Document\Models\DocumentSession $documentSession): ?array

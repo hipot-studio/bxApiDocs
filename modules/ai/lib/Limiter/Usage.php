@@ -7,6 +7,7 @@ use Bitrix\AI\Context;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Limiter\Period\Daily;
 use Bitrix\AI\Limiter\Period\Monthly;
+use Bitrix\AI\Limiter\Repository\MonthlyPoolRepository;
 use Bitrix\AI\Limiter\Policy\LimitPolicyMode;
 use Bitrix\AI\Model\UsageTable;
 use Bitrix\Main\Diag\LoggerFactory;
@@ -29,6 +30,7 @@ class Usage
 	private const LOGGER_ID = 'ai.limiter.usage';
 
 	private LoggerInterface $logger;
+	private ?MonthlyPoolRepository $monthlyRepository = null;
 
 	public function __construct(
 		private Context $context,
@@ -95,6 +97,31 @@ class Usage
 		return true;
 	}
 
+	protected function getMonthlyMode(): string
+	{
+		return static::getAccountingMode();
+	}
+
+	protected function getMonthlyRepository(): MonthlyPoolRepository
+	{
+		return static::createMonthlyRepository();
+	}
+
+	protected static function getAccountingMode(): string
+	{
+		return (new SharedMonthlyPoolActivation())->getMode();
+	}
+
+	protected static function createMonthlyRepository(): MonthlyPoolRepository
+	{
+		return new MonthlyPoolRepository();
+	}
+
+	protected static function getUsageDataClass(): string
+	{
+		return UsageTable::class;
+	}
+
 	/**
 	 * Updates usage count for specific date and time.
 	 *
@@ -102,7 +129,39 @@ class Usage
 	 * @param DateTime|null $time Datetime for period.
 	 * @return void
 	 */
+
 	private function updateCount(int $value, ?DateTime $time = null): void
+	{
+		if (!$value || $this->getAvailablePeriods() === [])
+		{
+			return;
+		}
+		$mode = $this->getMonthlyMode();
+		if ($mode === 'closed')
+		{
+			throw new RuntimeException('The shared monthly AI accounting is unavailable.');
+		}
+		if ($mode === 'aggregate')
+		{
+			$repository = $this->getMonthlyRepository();
+			$repository->transaction(function () use ($repository, $value, $time) {
+				$this->monthlyRepository = $repository;
+				try
+				{
+					$this->updateCountInsideBoundary($value, $time);
+				}
+				finally
+				{
+					$this->monthlyRepository = null;
+				}
+			});
+
+			return;
+		}
+		$this->updateCountInsideBoundary($value, $time);
+	}
+
+	private function updateCountInsideBoundary(int $value, ?DateTime $time = null): void
 	{
 		if (!$value)
 		{
@@ -119,7 +178,7 @@ class Usage
 
 		if ($availablePeriods !== [])
 		{
-			$useTransaction = count($availablePeriods) > 1;
+			$useTransaction = count($availablePeriods) > 1 && $this->monthlyRepository === null;
 			$transactionStarted = false;
 			try
 			{
@@ -133,6 +192,12 @@ class Usage
 				foreach ($availablePeriods as $periodInstance)
 				{
 					$period = (new $periodInstance($this->context))->getCode();
+
+					$isMonthly = $periodInstance === Monthly::class;
+					if ($isMonthly && $this->monthlyRepository !== null)
+					{
+						$this->monthlyRepository->readyTotal($period);
+					}
 
 					if (empty($periods[$period]))
 					{
@@ -153,6 +218,13 @@ class Usage
 					if (!$result->isSuccess())
 					{
 						$this->throwWriteException($period, $result->getErrorMessages());
+					}
+
+					if ($isMonthly && $this->monthlyRepository !== null)
+					{
+						$previous = (int)($periods[$period]['USAGE_COUNT'] ?? 0);
+						$next = empty($periods[$period]) ? $value : max($previous + $value, 0);
+						$this->monthlyRepository->applyDelta($period, $next - $previous);
 					}
 
 					if (!empty($periods[$period]))
@@ -187,7 +259,22 @@ class Usage
 				continue;
 			}
 
+			$isMonthly = preg_match('/^\d{4}-\d{2}$/D', $period['USAGE_PERIOD']) === 1;
+			if ($isMonthly && $this->monthlyRepository !== null)
+			{
+				$this->monthlyRepository->readyTotal($period['USAGE_PERIOD']);
+			}
 			$result = $this->deleteUsage($period['ID']);
+			if ($isMonthly && $this->monthlyRepository !== null)
+			{
+				if (!$result->isSuccess())
+				{
+					$this->throwWriteException($period['USAGE_PERIOD'], $result->getErrorMessages());
+				}
+				$this->monthlyRepository->applyDelta($period['USAGE_PERIOD'], -(int)$period['USAGE_COUNT']);
+				$this->monthlyRepository->retireRow((int)$period['ID']);
+			}
+
 			if (!$result->isSuccess())
 			{
 				$this->logger->warning('Unable to delete stale AI usage.', [
@@ -285,17 +372,23 @@ class Usage
 
 	protected function addUsage(array $data): AddResult
 	{
-		return UsageTable::add($data);
+		$class = static::getUsageDataClass();
+
+		return $class::add($data);
 	}
 
 	protected function updateUsage(int $id, array $data): UpdateResult
 	{
-		return UsageTable::update($id, $data);
+		$class = static::getUsageDataClass();
+
+		return $class::update($id, $data);
 	}
 
 	protected function deleteUsage(int $id): DeleteResult
 	{
-		return UsageTable::delete($id);
+		$class = static::getUsageDataClass();
+
+		return $class::delete($id);
 	}
 
 	protected function startTransaction(): void
@@ -337,7 +430,8 @@ class Usage
 	{
 		$periods = [];
 
-		$res = UsageTable::query()
+		$class = static::getUsageDataClass();
+		$res = $class::query()
 			->setSelect(['ID', 'USAGE_PERIOD', 'USAGE_COUNT'])
 			->where('USER_ID', $this->context->getUserId())
 			->exec()
@@ -365,6 +459,38 @@ class Usage
 			$filter['!=USAGE_PERIOD'] = $currentMonth;
 		}
 
-		UsageTable::deleteByFilter($filter);
+		$mode = static::getAccountingMode();
+		$class = static::getUsageDataClass();
+		if ($mode === 'legacy')
+		{
+			$class::deleteByFilter($filter);
+
+			return;
+		}
+		if ($mode !== 'aggregate')
+		{
+			throw new RuntimeException('The shared monthly AI accounting is unavailable.');
+		}
+		$repository = static::createMonthlyRepository();
+		$repository->transaction(static function () use ($repository, $filter, $class) {
+			$rows = $class::getList(['filter' => $filter]);
+			while ($row = $rows->fetch())
+			{
+				$isMonthly = preg_match('/^\d{4}-\d{2}$/D', $row['USAGE_PERIOD']) === 1;
+				if ($isMonthly)
+				{
+					$repository->readyTotal($row['USAGE_PERIOD']);
+				}
+				if (!$class::delete((int)$row['ID'])->isSuccess())
+				{
+					throw new RuntimeException('Unable to delete AI usage.');
+				}
+				if ($isMonthly)
+				{
+					$repository->applyDelta($row['USAGE_PERIOD'], -(int)$row['USAGE_COUNT']);
+					$repository->retireRow((int)$row['ID']);
+				}
+			}
+		});
 	}
 }

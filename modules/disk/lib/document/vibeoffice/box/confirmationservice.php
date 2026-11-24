@@ -8,6 +8,7 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\OnlyOffice;
 use Bitrix\Disk\Document\Vibeoffice;
 use Bitrix\Disk\Public\Command\ChangeDefaultViewerServiceCommand;
+use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -73,6 +74,14 @@ final class ConfirmationService
 			));
 		}
 
+		$policy = (new Vibeoffice\Webhook\SignaturePolicyRepository())->getCurrent();
+		if ($policy !== null && (int)$policy['RECEIVE_MIN'] === 2 && $policy['HOST_ID'] !== $managed['hostId'])
+		{
+			return (new Result())->addError(new Error(
+				'Restore the Vibeoffice connection before checking it.', 'vibeoffice_restore_required',
+			));
+		}
+
 		$keyId = $configuration->getKeyId();
 		$confirmation = (new RegistrationClient($registration['serverHost'], $this->httpClientFactory))
 			->confirm($registration['clientId'], $keyId);
@@ -100,7 +109,14 @@ final class ConfirmationService
 			Option::set('disk', 'documents_enabled', 'Y');
 			Configuration::resetEnabledDocuments();
 			Option::set('disk', 'disk_onlyoffice_server', $managed['documentServerHost']);
-			$configuration->enableOnPortal();
+			try
+			{
+				$configuration->enableOnPortal();
+			}
+			catch (ConfigurationException)
+			{
+				return $this->activationFailed();
+			}
 			// Persist the completion marker last so an interrupted activation can be repeated.
 			$configuration->saveManagedState(['activated' => true]);
 		}

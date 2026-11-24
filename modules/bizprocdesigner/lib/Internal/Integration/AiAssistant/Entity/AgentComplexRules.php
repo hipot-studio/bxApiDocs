@@ -47,15 +47,15 @@ final class AgentComplexRules implements Arrayable
 				foreach ($rule->constructions as $construction)
 				{
 					$portId = $construction->getOutputPortId();
-					if ($portId !== null && !in_array($portId, $portIds, true))
+					if ($portId !== null)
 					{
-						$portIds[] = $portId;
+						$portIds[$portId] = $portId;
 					}
 				}
 			}
 		}
 
-		return $portIds;
+		return array_values($portIds);
 	}
 
 	/**
@@ -75,15 +75,15 @@ final class AgentComplexRules implements Arrayable
 				foreach ($rule->constructions as $construction)
 				{
 					$portId = $construction->getAuxPortId();
-					if ($portId !== null && !in_array($portId, $portIds, true))
+					if ($portId !== null)
 					{
-						$portIds[] = $portId;
+						$portIds[$portId] = $portId;
 					}
 				}
 			}
 		}
 
-		return $portIds;
+		return array_values($portIds);
 	}
 
 	public function toArray(): array

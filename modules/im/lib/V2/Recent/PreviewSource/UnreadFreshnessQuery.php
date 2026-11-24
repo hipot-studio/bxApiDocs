@@ -21,9 +21,10 @@ use Bitrix\Main\ORM\Query\Query;
  * freshest unread MESSAGE_ID (MAX(MESSAGE_ID) as a monotone-in-time surrogate) in each candidate's
  * subtree, grouped by the candidate ("root" of its bucket).
  *
- * On MySQL every path (the single-user read path and the member fan-out) goes through the flat
- * per-leaf statement ({@see fetchForMembers}): it is driven by the constant USER_ID equality on
- * unread - an estimate the optimizer resolves by index dive, immune to per-key statistics - and
+ * On MySQL every path goes through the flat per-leaf statement - the member fan-out through
+ * {@see fetchForMembers} and the single-user read path through {@see fetchChains}, which streams the
+ * same statement for one user and folds it into ancestor chains. It is driven by the USER_ID equality
+ * on unread - an estimate the optimizer resolves by index dive, immune to per-key statistics - and
  * every other access is an equality probe along the ancestor chain. Its cost is O(user's unread)
  * regardless of the collab's size, and no plan can multiply two independent cardinalities.
  *
@@ -46,23 +47,59 @@ class UnreadFreshnessQuery
 	) {}
 
 	/**
+	 * Freshness of an already enumerated candidate set - the order of the dialects without the flat
+	 * statement, where {@see fetchChains()} answers null and the caller has to know the candidates
+	 * first ({@see CollabPreviewSourceResolver::resolveCandidatesFirst()}). Where the flat statement
+	 * exists, the read path never comes here: it goes through {@see fetchChains()} instead.
+	 *
+	 * The per-depth form is also the test oracle of the flat one - it shares nothing with it but the
+	 * semantics.
+	 *
+	 * Takes no collab scope: unlike the flat forms, this one needs no scope predicate - the candidate
+	 * ids bound it themselves.
+	 *
 	 * @param int[] $candidateIds accessible candidates of the collab (the collab main chat itself +
 	 *        its direct children, see CollabPreviewSourceResolver)
 	 * @return array<int,int> map candidate chat id => freshest unread MESSAGE_ID of its bucket
 	 */
-	public function fetch(int $collabChatId, array $candidateIds, int $userId): array
+	public function fetch(array $candidateIds, int $userId): array
 	{
 		if (empty($candidateIds))
 		{
 			return [];
 		}
 
-		if ($this->isFlatSingleUserFetchPreferred())
+		return $this->fetchByCandidateIds($candidateIds, $userId);
+	}
+
+	/**
+	 * The user's unread of one collab scope before any candidate is known: the same flat statement
+	 * {@see fetchForMembers} runs, streamed once and folded into distinct ancestor chains. The caller
+	 * narrows its candidate query to {@see UnreadChainBuckets::observedChatIds()} and then applies the
+	 * same nearest-candidate rule through {@see UnreadChainBuckets::assign()}, which is what lets the
+	 * read path ask for freshness before candidates.
+	 *
+	 * Null on the dialects without the flat statement: there freshness is one aggregating query per
+	 * depth carrying the candidate ids in SQL, so the candidates have to be enumerated first and the
+	 * caller keeps the old order.
+	 */
+	public function fetchChains(int $collabChatId, int $userId): ?UnreadChainBuckets
+	{
+		if (!$this->isFlatSingleUserFetchPreferred())
 		{
-			return $this->fetchForMembers([$userId => $candidateIds], [$collabChatId])[$userId] ?? [];
+			return null;
 		}
 
-		return $this->fetchByCandidateIds($candidateIds, $userId);
+		if ($collabChatId <= 0 || $userId <= 0)
+		{
+			return UnreadChainBuckets::fromChainRows([], [], $collabChatId);
+		}
+
+		[$query, $levels] = $this->buildMemberChainQuery([$userId], [$collabChatId]);
+
+		// Streamed like the fan-out loop: the fold only needs a running MAX per chain, so PHP peak
+		// memory stays proportional to the distinct chains instead of the transported rows.
+		return UnreadChainBuckets::fromChainRows($query->exec(), self::depthsOf($levels), $collabChatId);
 	}
 
 	/**
@@ -84,7 +121,8 @@ class UnreadFreshnessQuery
 	 *
 	 * Equivalence to the single-user forms: a leaf counts toward candidate R at depth d iff R is its
 	 * closest candidate ancestor and every level 1..d is accessible - exactly the nearest-bucket rule
-	 * of the per-depth queries and the anchored SQL, evaluated per member in {@see assignNearestCandidate}.
+	 * of the per-depth queries and the anchored SQL, evaluated per member by
+	 * {@see UnreadChainBuckets::nearestCandidate()}.
 	 *
 	 * @param array<int,int[]> $candidatesByUser userId => accessible candidate chat ids of that user
 	 * @param int[] $scopeChatIds parent collab ids the candidates belong to
@@ -124,6 +162,7 @@ class UnreadFreshnessQuery
 		}
 
 		[$query, $levels] = $this->buildMemberChainQuery(array_keys($candidateSet), $scopeChatIds);
+		$depths = self::depthsOf($levels);
 
 		// Stream: the loop only needs a running MAX per (user, candidate), so rows are consumed one at
 		// a time instead of materializing the whole set with fetchAll() - bounds PHP peak memory when a
@@ -139,7 +178,7 @@ class UnreadFreshnessQuery
 				continue;
 			}
 
-			$rootChatId = $this->assignNearestCandidate($row, $levels, $candidateSet[$userId] ?? []);
+			$rootChatId = UnreadChainBuckets::nearestCandidate($row, $depths, $candidateSet[$userId] ?? []);
 			if ($rootChatId === null)
 			{
 				continue;
@@ -156,8 +195,9 @@ class UnreadFreshnessQuery
 
 	/**
 	 * MySQL prefers the flat statement for a single user: driven by the constant USER_ID equality,
-	 * its estimates never depend on per-key averages, so the plan survives any statistics skew.
-	 * The per-depth queries stay as the other dialects' path (and the test oracle).
+	 * its estimates never depend on per-key averages, so the plan survives any statistics skew. The
+	 * per-depth queries of {@see fetch()} stay as the other dialects' path (and the test oracle), so
+	 * this is what decides between the two orders of the caller.
 	 */
 	protected function isFlatSingleUserFetchPreferred(): bool
 	{
@@ -370,42 +410,12 @@ class UnreadFreshnessQuery
 	}
 
 	/**
-	 * Assigns a leaf to its closest candidate ancestor, then keeps it only if every level up to and
-	 * including that ancestor is accessible. Returns the candidate chat id, or null when the leaf has
-	 * no candidate ancestor or a level below the candidate is inaccessible.
-	 *
-	 * @param array<string,mixed> $row
 	 * @param TreeLevel[] $levels
-	 * @param array<int,true> $candidateSet
+	 * @return int[] the levels' depths, ascending
 	 */
-	private function assignNearestCandidate(array $row, array $levels, array $candidateSet): ?int
+	private static function depthsOf(array $levels): array
 	{
-		$rootDepth = null;
-		foreach ($levels as $level)
-		{
-			$chatId = (int)($row["L_{$level->depth}"] ?? 0);
-			if ($chatId > 0 && isset($candidateSet[$chatId]))
-			{
-				$rootDepth = $level->depth;
-
-				break;
-			}
-		}
-
-		if ($rootDepth === null)
-		{
-			return null;
-		}
-
-		for ($depth = 1; $depth <= $rootDepth; $depth++)
-		{
-			if ((int)($row["ACC_{$depth}"] ?? 0) !== 1)
-			{
-				return null;
-			}
-		}
-
-		return (int)$row["L_{$rootDepth}"];
+		return array_map(static fn (TreeLevel $level): int => $level->depth, array_values($levels));
 	}
 
 	/**

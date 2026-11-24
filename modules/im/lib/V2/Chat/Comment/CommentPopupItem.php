@@ -171,23 +171,31 @@ class CommentPopupItem implements PopupDataItem, PopupDataAggregatable, PopupDat
 			: []
 		;
 
+		$discussionRows = [];
+
 		foreach ($rows as $row)
 		{
-			$parentChatId = (int)$row['PARENT_ID'];
-			$messageId = (int)$row['PARENT_MID'];
-
-			if ($this->withThreadCapabilityGate && !($threadCapableParents[$parentChatId] ?? false))
+			if ($this->withThreadCapabilityGate && !($threadCapableParents[(int)$row['PARENT_ID']] ?? false))
 			{
 				continue;
 			}
 
+			$discussionRows[] = $row;
 			$this->childChatIds[] = (int)$row['ID'];
+		}
+
+		$replyCounts = ReplyCounter::getForChats($this->childChatIds);
+
+		foreach ($discussionRows as $row)
+		{
+			$chatId = (int)$row['ID'];
 			$cell = [
-				'chatId' => (int)$row['ID'],
-				'dialogId' => 'chat' . $row['ID'],
-				'messageId' => $messageId,
+				'chatId' => $chatId,
+				'dialogId' => 'chat' . $chatId,
+				'messageId' => (int)$row['PARENT_MID'],
 				'lastUserIds' => [],
 				'messageCount' => (int)$row['MESSAGE_COUNT'],
+				'replyCount' => $replyCounts[$chatId] ?? 0,
 			];
 
 			// TPL-01: in the light set of fields the key is absent, not false. Clients treat a

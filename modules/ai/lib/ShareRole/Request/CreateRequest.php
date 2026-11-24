@@ -5,6 +5,7 @@ namespace Bitrix\AI\ShareRole\Request;
 use Bitrix\AI\BaseRequest;
 use Bitrix\AI\Exception\ValidateException;
 use Bitrix\AI\ShareRole\Dto\CreateDto;
+use Bitrix\AI\ShareRole\RoleTextPolicy;
 use Bitrix\AI\ShareRole\Service\ShareService;
 use Bitrix\AI\Validator\AccessCodeValidator;
 use Bitrix\AI\Validator\BaseValidator;
@@ -42,7 +43,7 @@ class CreateRequest extends BaseRequest
 		$dto->roleTitle = trim($this->getString('roleTitle'));
 		$dto->roleDescription = $this->changeToLF($this->getString('roleDescription'));
 		$dto->roleAvatarFile = $this->getFile('roleAvatar');
-		$dto->roleText = $this->changeToLF($this->getString('roleText'));
+		$dto->roleText = RoleTextPolicy::normalize($this->getString('roleText'));
 
 		return $dto;
 	}
@@ -112,10 +113,10 @@ class CreateRequest extends BaseRequest
 		$this->baseValidator->maxLen($title, 70, $fieldName);
 	}
 
-	public function checkLenText($title, string $fieldName): void
+	public function checkLenText($text, string $fieldName): void
 	{
-		$this->baseValidator->minLen($title, 1, $fieldName);
-		$this->baseValidator->maxLen($title, 2000, $fieldName);
+		$this->baseValidator->minLen($text, 1, $fieldName);
+		RoleTextPolicy::validate($text, $fieldName);
 	}
 
 	public function checkLenDescription($title, string $fieldName): void

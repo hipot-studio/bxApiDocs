@@ -2,7 +2,7 @@
 
 namespace Bitrix\Intranet\Settings\Tools;
 
-use Bitrix\Intranet\Internal\MainTool\TeamWorkRouteProvider;
+use Bitrix\Intranet\Internal\Service\MainTool\TeamWorkRouteProvider;
 use Bitrix\Intranet\Portal\FirstPage;
 use Bitrix\Intranet\UI\LeftMenu\Preset\Manager;
 use Bitrix\Intranet\UI\LeftMenu\Preset\PresetAbstract;
@@ -20,7 +20,7 @@ class FirstPageChanger
 
 	public function changeForAllUsers(string $siteId = SITE_ID): void
 	{
-		$effective = Manager::getEffectiveState($siteId, 0);
+		$effective = Manager::getCommonMenuSettings($siteId);
 		$presetId = $effective !== null
 			? ($effective['presetId'] ?? 'social')
 			: Option::get('intranet', 'left_menu_preset', '', $siteId)
@@ -50,7 +50,7 @@ class FirstPageChanger
 
 	public function changeForCurrentUser($structure): void
 	{
-		$effective = Manager::getEffectiveState(SITE_ID);
+		$effective = Manager::getMenuSettingsForUser(SITE_ID);
 		if ($effective !== null && $effective['source'] === 'forced')
 		{
 			return;
@@ -96,7 +96,7 @@ class FirstPageChanger
 	public function checkNeedChanges(?int $userId = null): bool
 	{
 		$userId ??= (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
-		$effective = Manager::getEffectiveState(SITE_ID, $userId);
+		$effective = Manager::getMenuSettingsForUser(SITE_ID, $userId);
 		if ($effective !== null && $effective['source'] === 'forced')
 		{
 			return false;

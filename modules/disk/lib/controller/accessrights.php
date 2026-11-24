@@ -38,6 +38,7 @@ use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Internals\ObjectOptionsTable;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Public\Provider\ExternalLinkTariffProvider;
 use Bitrix\Disk\Type\AccessRight;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Analytics\AnalyticsEvent;
@@ -62,6 +63,7 @@ final class AccessRights extends Engine\Controller
 	protected RequiredParameter $requiredParameterFilter;
 	protected UnifiedLinkAccessChecker $readAccessChecker;
 	protected ExternalLinkProvider $externalLinkProvider;
+	protected ExternalLinkTariffProvider $externalLinkTariffProvider;
 	private ?AccessContactResolver $accessContactResolver = null;
 
 	public function __construct(?Request $request = null)
@@ -74,6 +76,7 @@ final class AccessRights extends Engine\Controller
 		);
 
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+		$this->externalLinkTariffProvider = ServiceLocator::getInstance()->get(ExternalLinkTariffProvider::class);
 
 		parent::__construct($request);
 	}
@@ -145,7 +148,7 @@ final class AccessRights extends Engine\Controller
 		$object = BaseObject::loadById((int)$objectId, array('STORAGE'));
 		if (!$object || !$object->getRealObject())
 		{
-			$this->errorCollection[] = new \Bitrix\Disk\Internals\Error\Error('DISK_FOLDER_LIST_ERROR_COULD_NOT_FIND_OBJECT', \DiskFolderListAjaxController::ERROR_COULD_NOT_FIND_OBJECT);
+			$this->errorCollection[] = new \Bitrix\Disk\Internals\Error\Error('DISK_FOLDER_LIST_ERROR_COULD_NOT_FIND_OBJECT', self::ERROR_COULD_NOT_FIND_OBJECT);
 			return null;
 		}
 
@@ -281,7 +284,7 @@ final class AccessRights extends Engine\Controller
 			'canEditSettings' => $extLink ? $extLink->canEditSettings() : true,
 			'publicLinkTtl' => $ttl,
 			'password' => $extLink ? $extLink->hasPassword() : null,
-			'disableReason' => $this->checkManageExternalLink($realObject, $securityContext),
+			'disableReason' => $this->checkManageExternalLink($realObject, $securityContext, $extLink),
 			'rightsList' => $rightsList,
 		];
 	}
@@ -405,7 +408,9 @@ final class AccessRights extends Engine\Controller
 	): ?array
 	{
 		$realObject = $baseObject->getRealObject();
-		$checkManageExternalLinkError = $this->checkManageExternalLink($realObject, $securityContext);
+		// The link is read once: the check of the tariff and the save must see the same link.
+		$extLink = $this->externalLinkProvider->getForUse($realObject->getId());
+		$checkManageExternalLinkError = $this->checkManageExternalLink($realObject, $securityContext, $extLink);
 
 		if ($checkManageExternalLinkError instanceof ExternalLinkDisableReason)
 		{
@@ -420,7 +425,6 @@ final class AccessRights extends Engine\Controller
 		}
 
 		$data = $this->getRequest()->getJsonList()->toArray();
-		$extLink = $this->externalLinkProvider->getForUse($realObject->getId());
 		$isObjectEditable = $canEdit && $this->isObjectEditable($realObject);
 
 		return $this->runPublicLinkRightsCommand(
@@ -1592,27 +1596,9 @@ final class AccessRights extends Engine\Controller
 	protected function checkManageExternalLink(
 		BaseObject $baseObject,
 		Disk\Security\SecurityContext $securityContext,
+		?Disk\ExternalLink $extLink,
 	): ?ExternalLinkDisableReason
 	{
-		if ($baseObject instanceof Folder)
-		{
-			$featureName = 'disk_manual_external_folder';
-		}
-		elseif ($baseObject instanceof File)
-		{
-			$isBoardType = (int)$baseObject->getTypeFile() === TypeFile::BOARD;
-			$featureName = $isBoardType ? 'disk_board_external_link' : 'disk_manual_external_link';
-		}
-		else
-		{
-			$featureName = null;
-		}
-
-		if (is_string($featureName) && !Bitrix24Manager::isFeatureEnabled($featureName))
-		{
-			return ExternalLinkDisableReason::Feature;
-		}
-
 		if (!Configuration::isPossibleToShowExternalLinkControl())
 		{
 			return ExternalLinkDisableReason::Option;
@@ -1621,6 +1607,12 @@ final class AccessRights extends Engine\Controller
 		if (!$baseObject->canManageExternalLink($securityContext))
 		{
 			return ExternalLinkDisableReason::ObjectOption;
+		}
+
+		// The tariff limits only the creation of a link: an existing manual link stays manageable.
+		if ($extLink === null && !$this->externalLinkTariffProvider->isManualLinkCreationAllowed($baseObject))
+		{
+			return ExternalLinkDisableReason::Feature;
 		}
 
 		return null;

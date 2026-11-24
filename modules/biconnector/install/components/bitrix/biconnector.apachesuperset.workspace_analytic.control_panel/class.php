@@ -5,6 +5,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\Main\Localization\Loc;
 
 class ApacheSupersetControlPanelWorkspaceAnalytic extends CBitrixComponent
@@ -44,6 +47,19 @@ class ApacheSupersetControlPanelWorkspaceAnalytic extends CBitrixComponent
 				'IS_ACTIVE' => $currentPage === '/bi/unused_elements/',
 			],
 		];
+
+		if (
+			Feature::isRowRulesEnabled()
+			&& AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_ROW_RULES)
+		)
+		{
+			$menuItems[] = [
+				'ID' => 'ROW_RULES',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_ROW_RULES'),
+				'URL' => '/bi/rls/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER',
+				'IS_ACTIVE' => $currentPage === '/bi/rls/',
+			];
+		}
 
 		$this->arResult['MENU_ITEMS'] = $menuItems;
 	}

@@ -64,7 +64,7 @@ class FirstOfd extends Ofd
 				}
 				else
 				{
-					$queryParams[] = $queryKey.'='.$data[$checkKey];
+					$queryParams[] = $queryKey.'='.rawurlencode((string)$data[$checkKey]);
 				}
 			}
 		}

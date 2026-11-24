@@ -69,7 +69,10 @@ class Tags
 	{
 		$result = [];
 
-		if (!Loader::includeModule('socialnetwork'))
+		if (
+			empty($this->getPermissions()['view'])
+			|| !Loader::includeModule('socialnetwork')
+		)
 		{
 			return $result;
 		}

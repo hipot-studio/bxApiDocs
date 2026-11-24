@@ -1365,6 +1365,45 @@ class Controller extends Internals\Controller
 			$this->sendJsonAccessDeniedResponse();
 		}
 
+		if (!$showFile && !$attachedModel->isSpecificVersion())
+		{
+			$objectId = (int)$attachedModel->getObjectId();
+			$realObjectId = (int)$file->getRealObjectId();
+			$result = (new \Bitrix\Disk\Document\Vibeoffice\SavedDownloadSynchronizer())->synchronize($file);
+			if (!$result->isSuccess())
+			{
+				$this->sendDownloadUnavailableResponse();
+
+				return;
+			}
+			if ($result->getData()['synchronized'])
+			{
+				try
+				{
+					$attachedModel = AttachedObject::loadById($attachedModel->getId(), ['OBJECT', 'VERSION']);
+					$freshFile = $attachedModel ? $attachedModel->getFile() : null;
+					$userId = $this->getUser()->getId();
+					$available = $attachedModel && (int)$attachedModel->getObjectId() === $objectId
+						&& !$attachedModel->isSpecificVersion() && $freshFile
+						&& (int)$freshFile->getRealObjectId() === $realObjectId
+						&& !($freshFile instanceof \Bitrix\Disk\FileLink && !$freshFile->getRealObject())
+						&& $attachedModel->canRead($userId) && $attachedModel->canDownload($userId);
+					$available = $available && is_array($freshFile->getFile());
+				}
+				catch (\Throwable)
+				{
+					$available = false;
+				}
+				if (!$available)
+				{
+					$this->sendDownloadUnavailableResponse();
+
+					return;
+				}
+				$file = $freshFile;
+			}
+		}
+
 		$fileName = $file->getName();
 		$fileData = $file->getFile();
 
@@ -1396,6 +1435,12 @@ class Controller extends Internals\Controller
 		}
 
 		\CFile::viewByUser($fileData, array('force_download' => !$showFile, 'cache_time' => $cacheTime, 'attachment_name' => $fileName));
+	}
+
+	private function sendDownloadUnavailableResponse(): void
+	{
+		\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus('503 Service Unavailable');
+		$this->sendJsonErrorResponse();
 	}
 
 	protected function processActionShow()

@@ -19,6 +19,13 @@ class Result
 	{
 	}
 
+	/**
+	 * Returns the result in the requested format: JSON data, or the prettified text converted
+	 * from Markdown to HTML, BBCode or plain text, or as is.
+	 *
+	 * @param ResponseFormat $responseFormat
+	 * @return mixed
+	 */
 	public function getData(ResponseFormat $responseFormat): mixed
 	{
 		return match ($responseFormat)

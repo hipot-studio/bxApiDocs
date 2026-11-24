@@ -2,7 +2,8 @@
 
 namespace Bitrix\Disk;
 
-use Bitrix\Disk\Config\Feature\ShortPublicLinksFlag;
+use Bitrix\Disk\Document\DocumentResolveContext;
+use Bitrix\Disk\Document\Vibeoffice\Feature as VibeofficeFeature;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internals\BaseComponent;
@@ -20,7 +21,6 @@ use Bitrix\Disk\View\Video;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
-use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\CurrentUser;
@@ -310,10 +310,10 @@ class UrlManager implements IErrorable
 
 	/**
 	 * Returns the address the given point of issue hands out for a public link. An eligible link gets its short
-	 * code on the first issue whatever the flags say, so the code stays the same through a rollback and a
-	 * re-enable. The short address goes out only where vibeoffice, the issuance flag, the named route of the
-	 * request and a configured origin all allow it; everywhere else, and when the code cannot be reserved,
-	 * the point keeps exactly the address it issued before.
+	 * code on the first issue whatever the switches say, so the code stays the same through a rollback and a
+	 * re-enable. The short address is a part of vibeoffice: it goes out only where vibeoffice serves the file,
+	 * the named route of the request and a configured origin all allow it; everywhere else, and when the code
+	 * cannot be reserved, the point keeps exactly the address it issued before.
 	 * The name of the method is the capability a consumer of another module, the mobile application among them,
 	 * checks with method_exists() to tell a Disk issuing short addresses from an older one.
 	 *
@@ -365,6 +365,9 @@ class UrlManager implements IErrorable
 	/**
 	 * Reserves the code before any gate is asked, then builds the short address or returns null where it may
 	 * not be issued. A failed reservation is retried by the next issue.
+	 *
+	 * The gate is the one of vibeoffice for the file: document editing is on, the portal switch allows it,
+	 * no ready server of the client takes priority, and the file lies in the projects vibeoffice is limited to.
 	 */
 	private function getShortPublicExternalLink(ExternalLink $externalLink): ?string
 	{
@@ -377,7 +380,12 @@ class UrlManager implements IErrorable
 			return null;
 		}
 
-		if (!VibeofficeHandler::isEnabled() || !Feature::isEnabled(ShortPublicLinksFlag::class))
+		$file = $externalLink->getObject();
+		if (
+			!$file instanceof File
+			|| !VibeofficeFeature::servesPortalEditing()
+			|| !VibeofficeFeature::isEnabledForContext(DocumentResolveContext::forLoadedFile($file))
+		)
 		{
 			return null;
 		}

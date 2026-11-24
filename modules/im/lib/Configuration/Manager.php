@@ -4,6 +4,8 @@ namespace Bitrix\Im\Configuration;
 
 use Bitrix\Im\V2\Pull\Event\SettingsUpdate;
 use Bitrix\Im\V2\Settings\CacheManager;
+use Bitrix\Im\V2\Settings\Entity;
+use Bitrix\Im\V2\Settings\Sound\VolumeLevels;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ObjectPropertyException;
@@ -23,6 +25,12 @@ class Manager
 	private const SYNCED_GENERAL_SETTINGS = [
 		\Bitrix\Im\V2\Settings\Entity\General::OPEN_DESKTOP_FROM_PANEL,
 		\Bitrix\Im\V2\Settings\Entity\General::DEFAULT_REACTION,
+		\Bitrix\Im\V2\Settings\Entity\General::SOUND_VOLUME_GENERAL,
+		\Bitrix\Im\V2\Settings\Entity\General::SOUND_VOLUME_MESSAGES,
+		\Bitrix\Im\V2\Settings\Entity\General::SOUND_VOLUME_NOTIFICATIONS,
+		\Bitrix\Im\V2\Settings\Entity\General::SOUND_VOLUME_CALLS,
+		\Bitrix\Im\V2\Settings\Entity\General::SOUND_VOLUME_SERVICE,
+		\Bitrix\Im\V2\Settings\Entity\General::SOUND_MUTED,
 	];
 
 	public static function getUserSettings(int $userId): Result
@@ -61,6 +69,8 @@ class Manager
 			$result->addError(new Error('Incorrect data when receiving chat settings', 400));
 			return $result;
 		}
+
+		$settings['general'] = self::prepareLegacySoundWrite($userId, $settings['general']);
 
 		self::updateUserStatus($userId, $settings['general']);
 
@@ -133,6 +143,8 @@ class Manager
 
 		if ($type === self::GENERAL)
 		{
+			$settings = self::prepareLegacySoundWrite($userId, $settings);
+
 			self::updateUserStatus($userId, $settings);
 
 			self::sendPullGeneralSettingsUpdate($userId, $settings);
@@ -156,6 +168,20 @@ class Manager
 		CacheManager::getUserCache($userId)->clearCache();
 
 		return $result;
+	}
+
+	/**
+	 * The old chat and the mobile web version write general settings through this manager and know
+	 * the legacy sound flag only, so their write is translated into the sound keys it means.
+	 */
+	private static function prepareLegacySoundWrite(int $userId, array $generalSettings): array
+	{
+		if (!array_key_exists(Entity\General::ENABLE_SOUND, $generalSettings))
+		{
+			return $generalSettings;
+		}
+
+		return VolumeLevels::fromLegacySettingsWrite($generalSettings, General::getUserSettings($userId));
 	}
 
 	public static function isSettingsMigrated(): bool

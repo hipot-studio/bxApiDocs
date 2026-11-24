@@ -10,6 +10,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Rest\PopupDataItem;
+use Bitrix\Im\V2\Rest\PopupDataPrefill;
 
 /**
  * Resolves the title of the parent chat of every discussion a message was forwarded from, and warms
@@ -17,13 +18,15 @@ use Bitrix\Im\V2\Rest\PopupDataItem;
  * reader who has access to the parent, so it is written into the messages themselves and never into
  * shared state.
  *
- * The section of this item carries null on purpose: the payload goes into messages[].forward, and
- * PopupData puts every item into a top level section of its own, out of reach of that block.
+ * The payload goes into messages[].forward and never into a section of its own, so the item is a
+ * PopupDataPrefill: PopupData runs it ahead of every serialization and leaves it out of the answer.
+ * Being an item at all is what gives it the merge of the nested levels - a reply target outside the
+ * loaded window and a pinned message reach it that way, and their titles with them.
  *
  * Deliberately not a PopupDataAggregatable: otherwise PopupData::fillNextLevel() would start
  * collecting popup data of the lifted chats and blow the answer up.
  */
-final class ForwardSourcePopupItem implements PopupDataItem
+final class ForwardSourcePopupItem implements PopupDataItem, PopupDataPrefill
 {
 	use ContextCustomer;
 
@@ -52,15 +55,22 @@ final class ForwardSourcePopupItem implements PopupDataItem
 		return $this;
 	}
 
+	/**
+	 * The key of the item inside PopupData and nothing more: it names no section of the answer, and it
+	 * is the name the POPUP_DATA_EXCLUDE of the shared payloads excludes the resolving by.
+	 */
 	public static function getRestEntityName(): string
 	{
 		return 'forwardSource';
 	}
 
-	public function toRestFormat(array $option = []): ?array
+	public function prefill(): void
 	{
 		$this->fillParentTitles();
+	}
 
+	public function toRestFormat(array $option = []): ?array
+	{
 		return null;
 	}
 

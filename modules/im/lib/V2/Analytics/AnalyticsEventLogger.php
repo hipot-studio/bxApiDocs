@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Analytics;
 
+use Bitrix\Im\V2\Analytics\Event\ChatEvent;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
@@ -35,9 +36,9 @@ class AnalyticsEventLogger
 
 		$tool = $event['tool'] ?? '';
 		$category = $event['category'] ?? '';
-		$p5 = $event['p5'] ?? '';
+		$p5 = (string)($event['p5'] ?? '');
 
-		if ((($tool === 'im') || str_starts_with($category, 'chat')) && ($p5 === ('chatId_' . $chatId)))
+		if ((($tool === 'im') || str_starts_with($category, 'chat')) && ChatEvent::isChatIdSlotOf($p5, $chatId))
 		{
 			return;
 		}

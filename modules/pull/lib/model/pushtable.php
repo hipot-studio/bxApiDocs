@@ -7,6 +7,7 @@ use Bitrix\Main\Entity\FieldError;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Entity;
+use Bitrix\Pull\Service\PushSchedule\SchemaReadiness;
 
 
 /**
@@ -22,6 +23,9 @@ use Bitrix\Main\Entity;
  * <li> DEVICE_ID string(255) optional
  * <li> DEVICE_NAME string(50) optional
  * <li> DEVICE_TOKEN string(255) mandatory
+ * <li> TIME_ZONE_ID string(64) optional
+ * <li> TIME_ZONE_OFFSET_MINUTES int optional
+ * <li> TIME_ZONE_RECEIVED_AT datetime optional
  * <li> DATE_CREATE datetime mandatory
  * <li> DATE_AUTH datetime optional
  * <li> USER reference to {@link \Bitrix\User\UserTable}
@@ -62,7 +66,7 @@ class PushTable extends Main\Entity\DataManager
 	 */
 	public static function getMap()
 	{
-		return array(
+		$map = array(
 			'ID' => array(
 				'data_type' => 'integer',
 				'primary' => true,
@@ -111,6 +115,19 @@ class PushTable extends Main\Entity\DataManager
 			'VOIP_TOKEN' => array(
 				'data_type' => 'string',
 			),
+			'TIME_ZONE_ID' => array(
+				'data_type' => 'string',
+				'nullable' => true,
+				'validation' => array(__CLASS__, 'validateTimeZoneId'),
+			),
+			'TIME_ZONE_OFFSET_MINUTES' => array(
+				'data_type' => 'integer',
+				'nullable' => true,
+			),
+			'TIME_ZONE_RECEIVED_AT' => array(
+				'data_type' => 'datetime',
+				'nullable' => true,
+			),
 			'DATE_CREATE' => array(
 				'data_type' => 'datetime',
 				'required' => true,
@@ -127,7 +144,35 @@ class PushTable extends Main\Entity\DataManager
 				'reference' => array('=this.USER_ID' => 'ref.ID'),
 			),
 		);
+		if (!static::isTimeZoneStorageReady())
+		{
+			unset($map['TIME_ZONE_ID'], $map['TIME_ZONE_OFFSET_MINUTES'], $map['TIME_ZONE_RECEIVED_AT']);
+		}
+
+		return $map;
 	}
+
+	public static function isTimeZoneContextSupported(): bool
+	{
+		return static::isTimeZoneStorageReady()
+			&& static::getEntity()->hasField('TIME_ZONE_ID')
+			&& static::getEntity()->hasField('TIME_ZONE_OFFSET_MINUTES')
+			&& static::getEntity()->hasField('TIME_ZONE_RECEIVED_AT')
+		;
+	}
+
+	protected static function isTimeZoneStorageReady(): bool
+	{
+		try
+		{
+			return (new SchemaReadiness())->isTimeZoneReady();
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
 	/**
 	 * Returns validators for DEVICE_TYPE field.
 	 *
@@ -302,6 +347,99 @@ class PushTable extends Main\Entity\DataManager
 		return array(
 			new Main\Entity\Validator\Length(null, 255),
 		);
+	}
+
+	public static function validateTimeZoneId()
+	{
+		return array(
+			new Main\Entity\Validator\Length(null, 64),
+		);
+	}
+
+	public static function normalizeTimeZoneId($timeZoneId): ?string
+	{
+		if (!is_string($timeZoneId) || $timeZoneId === '' || strlen($timeZoneId) > 64)
+		{
+			return null;
+		}
+
+		try
+		{
+			$timeZoneId = (new \DateTimeZone($timeZoneId))->getName();
+
+			return in_array($timeZoneId, timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)
+				? $timeZoneId
+				: null;
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	public static function normalizeTimeZoneContext(
+		mixed $timeZoneId,
+		mixed $timeZoneOffsetMinutes,
+		?Main\Type\DateTime $receivedAt = null,
+	): array
+	{
+		$timeZoneId = self::normalizeTimeZoneId($timeZoneId);
+		$timeZoneOffsetMinutes = self::normalizeTimeZoneOffsetMinutes($timeZoneOffsetMinutes);
+		$receivedAt ??= new Main\Type\DateTime();
+		if (
+			$timeZoneId === null
+			|| $timeZoneOffsetMinutes === null
+			|| !self::isTimeZoneOffsetConsistent($timeZoneId, $timeZoneOffsetMinutes, $receivedAt->getTimestamp())
+		)
+		{
+			return [
+				'TIME_ZONE_ID' => null,
+				'TIME_ZONE_OFFSET_MINUTES' => null,
+				'TIME_ZONE_RECEIVED_AT' => null,
+			];
+		}
+
+		return [
+			'TIME_ZONE_ID' => $timeZoneId,
+			'TIME_ZONE_OFFSET_MINUTES' => $timeZoneOffsetMinutes,
+			'TIME_ZONE_RECEIVED_AT' => $receivedAt,
+		];
+	}
+
+	public static function normalizeTimeZoneOffsetMinutes(mixed $timeZoneOffsetMinutes): ?int
+	{
+		if (
+			!is_int($timeZoneOffsetMinutes)
+			&& !(is_string($timeZoneOffsetMinutes) && preg_match('/^-?\d+$/D', $timeZoneOffsetMinutes))
+		)
+		{
+			return null;
+		}
+
+		$timeZoneOffsetMinutes = (int)$timeZoneOffsetMinutes;
+
+		return $timeZoneOffsetMinutes >= -840 && $timeZoneOffsetMinutes <= 840
+			? $timeZoneOffsetMinutes
+			: null;
+	}
+
+	public static function isTimeZoneOffsetConsistent(
+		string $timeZoneId,
+		int $timeZoneOffsetMinutes,
+		int $instant,
+	): bool
+	{
+		try
+		{
+			$timeZone = new \DateTimeZone($timeZoneId);
+			$receivedInstant = new \DateTimeImmutable('@' . $instant);
+
+			return (int)($timeZone->getOffset($receivedInstant) / 60) === $timeZoneOffsetMinutes;
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
 	}
 }
 

@@ -133,7 +133,7 @@ final class UpdateChartOperation
 		}
 
 		$chartData = $lookup->getData()['entity'];
-		if (!is_array($chartData['dashboards'] ?? []))
+		if (!is_array($chartData['dashboards'] ?? null))
 		{
 			return Refusal::unavailableBi([], ['stage' => 'update_chart_metadata.load', 'chart_id' => $chartId]);
 		}
@@ -141,6 +141,7 @@ final class UpdateChartOperation
 		$editable = $this->guard->checkEditable(
 			$chartData['dashboards'] ?? [],
 			$actor,
+			is_array($chartData['owners'] ?? null) ? $chartData['owners'] : [],
 		);
 		if (!$editable->isSuccess())
 		{

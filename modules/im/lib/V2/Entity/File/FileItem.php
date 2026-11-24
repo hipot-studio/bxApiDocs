@@ -344,7 +344,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	}
 
 	/**
-	 * Only the portal option is read here, without the type of the user: the payload of a message is built
+	 * Only the portal feature flag is read here, without the type of the user: the payload of a message is built
 	 * once and delivered to every participant of the chat, so a rule depending on the current user would
 	 * either leak a working link or falsely restrict an employee. The refusal itself belongs to the download
 	 * points, this is a narrowing of the surface.

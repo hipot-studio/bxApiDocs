@@ -1,5 +1,5 @@
 <?php
-$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_CHECK_IP"] = "Мәлімдеменің түпнұсқалығын тексеру қатесі. IP мекенжайы рұқсат етілген IP мекенжайларының тізіміне сәйкес келмейді. Мәлімдеме мына мекенжайдан келді: #IP_ADDRESS#";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_CHECK_IP"] = "Хабарландырудың түпнұсқалығын тексеру қатесі. IP мекенжайы рұқсат етілген IP мекенжайларының тізіміне сәйкес келмейді. Хабарландыру мына мекенжайдан келді: #IP_ADDRESS#";
 $MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_EMPTY_RECEIPT"] = "Чекті құрудағы қате";
 $MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_EXTERNAL_PAYMENT"] = "Шот ұсыну кезіндегі қате";
 $MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_PAYMENT_CANCELED"] = "Төлем тоқтатылды";

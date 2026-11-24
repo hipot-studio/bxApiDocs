@@ -6,7 +6,6 @@ use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\ActAsFailure;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -25,10 +24,18 @@ final class Refusal
 		'The BI request could not be completed right now: the BI service may be busy or still syncing. '
 		. 'Try again in a moment.'
 	;
+	public const REQUEST_REJECTED_MESSAGE = 'The BI request was rejected. Check the request arguments and try again.';
 	// Longest refusal the API composes is a couple of sentences plus a value list.
 	private const MAX_REFUSAL_LENGTH = 500;
 	// Integrator\Sender::parseJsonResponse() wraps a body it could not decode into an error of its own.
 	private const UNPARSED_RESPONSE_PREFIX = 'Could not parse server response';
+	// A newer BI service marks a chart refused for its query with the type and the text under extra.query_error.
+	private const QUERY_ERROR_TYPES = [
+		'SYNTAX_ERROR',
+		'COLUMN_DOES_NOT_EXIST_ERROR',
+		'TABLE_DOES_NOT_EXIST_ERROR',
+		'SCHEMA_DOES_NOT_EXIST_ERROR',
+	];
 
 	/**
 	 * The client's arguments are refused by a helper that describes the refusal in the custom data
@@ -51,7 +58,7 @@ final class Refusal
 	}
 
 	/**
-	 * A `400` phrased by the API tells what to change in the request and is passed through;
+	 * A recognized `400` keeps its refusal class and the API message;
 	 * anything else is masked as a temporarily unavailable dashboard.
 	 */
 	public static function integratorFailure(IntegratorResponse $response, array $context): Result
@@ -61,6 +68,11 @@ final class Refusal
 		if ($actAsRefusal !== null)
 		{
 			return $actAsRefusal;
+		}
+		$rejection = self::requestRejected($errors, $context);
+		if ($rejection !== null)
+		{
+			return $rejection;
 		}
 
 		$message = trim(($errors[0] ?? null)?->getMessage() ?? '');
@@ -144,14 +156,7 @@ final class Refusal
 	{
 		AiToolsLogger::logWarning($errors, $context);
 
-		$message = self::UNAVAILABLE_DASHBOARD_MESSAGE;
-		if (self::isDebugLogEnabled())
-		{
-			$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));
-			$message .= ' | bi_debug: ' . $details . ' | ctx: ' . json_encode($context, JSON_UNESCAPED_UNICODE);
-		}
-
-		return self::error(FailureCode::Unavailable, $message);
+		return self::error(FailureCode::Unavailable, self::UNAVAILABLE_DASHBOARD_MESSAGE);
 	}
 
 	/**
@@ -170,24 +175,114 @@ final class Refusal
 
 		AiToolsLogger::logWarning($errors, $context);
 
-		$message = self::UNAVAILABLE_BI_MESSAGE;
-		if (self::isDebugLogEnabled())
-		{
-			$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));
-			$message .= ' | bi_debug: ' . $details . ' | ctx: ' . json_encode($context, JSON_UNESCAPED_UNICODE);
-		}
-
-		return self::error(FailureCode::Unavailable, $message);
+		return self::error(FailureCode::Unavailable, self::UNAVAILABLE_BI_MESSAGE);
 	}
 
-	public static function appendDebugDetail(string $message, string $detail): string
+	/** @param Error[] $errors */
+	public static function requestRejected(array $errors, array $context): ?Result
 	{
-		if (self::isDebugLogEnabled())
+		foreach ($errors as $error)
 		{
-			$message .= ' | bi_debug: ' . $detail;
+			if ($error->getCode() !== 'request_rejected')
+			{
+				continue;
+			}
+
+			AiToolsLogger::logWarning($errors, $context);
+			$message = $error->getMessage();
+			if (trim($message) === '' || mb_strlen($message) > 500 || strpbrk($message, "<\r\n") !== false)
+			{
+				$message = self::REQUEST_REJECTED_MESSAGE;
+			}
+
+			return self::error(FailureCode::InvalidArgument, $message);
 		}
 
-		return $message;
+		return null;
+	}
+
+	/** @return array{code: string, message: string}|null */
+	public static function chartError(array $chart, array $context): ?array
+	{
+		if (!empty($chart['stats_omitted']) || ActAsFailure::isChartAccessDenied($chart))
+		{
+			return null;
+		}
+
+		$failure = false;
+		$rejected = null;
+		$queries = is_array($chart['query_result'] ?? null) ? $chart['query_result'] : [];
+		foreach ([$chart, ...$queries] as $query)
+		{
+			if (!is_array($query))
+			{
+				continue;
+			}
+			if (
+				!empty($query['error'])
+				|| !empty($query['errors'])
+				|| ($query['status'] ?? null) === 'failed'
+				|| ($query['error_code'] ?? null) === 'chart_query_rejected'
+			)
+			{
+				$failure = true;
+			}
+			if ($rejected === null && ($query['error_code'] ?? null) === 'chart_query_rejected')
+			{
+				$rejected = $query;
+			}
+		}
+		$queryError = self::findChartQueryError($chart);
+		if ($queryError !== null)
+		{
+			$failure = true;
+			$rejected = ['error' => $queryError];
+		}
+		if (!$failure)
+		{
+			return null;
+		}
+		$message = $rejected['error'] ?? null;
+		if (
+			!is_string($message)
+			|| trim($message) === ''
+			|| mb_strlen($message) > self::MAX_REFUSAL_LENGTH
+			|| strpbrk($message, "<\r\n") !== false
+		)
+		{
+			$message = 'The chart query was rejected. Check the chart configuration and dataset.';
+		}
+
+		AiToolsLogger::logWarning(
+			[new Error(is_string($chart['error'] ?? null) ? $chart['error'] : 'Chart query failed')],
+			$context,
+		);
+
+		return $rejected !== null
+			? [
+				'code' => 'DOMAIN_RULE',
+				'message' => $message,
+			]
+			: ['code' => 'CHART_ERROR', 'message' => 'The chart data could not be loaded.'];
+	}
+
+	/**
+	 * The text of the query a newer BI service refused the chart for; an earlier one does not send it, and the
+	 * chart is then read by its error and error_code as before.
+	 */
+	private static function findChartQueryError(array $chart): ?string
+	{
+		$queryError = is_array($chart['extra'] ?? null) ? ($chart['extra']['query_error'] ?? null) : null;
+		if (
+			!is_array($queryError)
+			|| !in_array($queryError['type'] ?? null, self::QUERY_ERROR_TYPES, true)
+			|| !is_string($queryError['message'] ?? null)
+		)
+		{
+			return null;
+		}
+
+		return $queryError['message'];
 	}
 
 	private static function isRecognizedRefusal(string $message): bool
@@ -197,16 +292,11 @@ final class Refusal
 			return false;
 		}
 
-		if (str_contains($message, '<'))
+		if (strpbrk($message, "<\r\n") !== false)
 		{
 			return false;
 		}
 
 		return !str_starts_with($message, self::UNPARSED_RESPONSE_PREFIX);
-	}
-
-	private static function isDebugLogEnabled(): bool
-	{
-		return Option::get('biconnector', 'bgpt_bi_expand_log', 'N') === 'Y';
 	}
 }

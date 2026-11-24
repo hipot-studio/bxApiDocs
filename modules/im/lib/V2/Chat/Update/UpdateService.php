@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat\Update;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Chat\Converter;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
 use Bitrix\Im\V2\Chat\CopilotChat;
@@ -35,6 +36,18 @@ class UpdateService
 
 	public function updateChat(): Result
 	{
+		$validateFieldsResult = $this->updateFields->validate();
+		if (!$validateFieldsResult->isSuccess())
+		{
+			return $validateFieldsResult;
+		}
+
+		$validateThreadSettingsResult = $this->validateThreadSettings();
+		if (!$validateThreadSettingsResult->isSuccess())
+		{
+			return $validateThreadSettingsResult;
+		}
+
 		$prevAnalyticsData = $this->getAnalyticsData();
 
 		$validateParentResult = $this->validateParent();
@@ -132,6 +145,59 @@ class UpdateService
 		GuestLinkService::getInstance()
 			->onManageGuestInvitesChanged($this->chat, $oldRights, $newRights)
 		;
+	}
+
+	/**
+	 * The half of UpdateFields::validate() only the chat can answer, and it answers it by the same
+	 * question the setters ask: a chat that keeps no thread settings of its own - the channel family,
+	 * the videoconference, the copilot - drops all three of them in silence, and the request must not
+	 * answer success with the setting unapplied. One question for the three, because one predicate
+	 * gates the three: Chat::storesThreadSettings().
+	 *
+	 * Asked of the type the chat is going to have, because the setters run on it: the same request may
+	 * carry a conversion. The check stays ahead of convertChat() all the same - a refusal after a
+	 * conversion that already went through would leave the update applied by halves.
+	 */
+	protected function validateThreadSettings(): Result
+	{
+		$result = new Result();
+
+		$carriesThreadSettings =
+			$this->updateFields->getThreadsEnabled() !== null
+			|| $this->updateFields->getManageThreadCreate() !== null
+			|| $this->updateFields->getManageThreadPost() !== null
+		;
+
+		if (!$carriesThreadSettings || $this->getChatAfterConvert()->getThreadSettingsChat() !== null)
+		{
+			return $result;
+		}
+
+		return $result->addError(new ChatError(ChatError::WRONG_TYPE));
+	}
+
+	/**
+	 * The chat the setters will see. Without a conversion it is the loaded chat itself; with one it is the
+	 * object convertChat() is about to replace it with, and the conversion rewrites the literal of the type
+	 * and nothing else. Nothing is created or saved here: the mirror carries the fields the class resolver
+	 * and the tree registry answer by, is asked one question and dropped.
+	 */
+	private function getChatAfterConvert(): Chat
+	{
+		$newType = $this->getConvertType();
+		$chatId = $this->chat->getChatId();
+
+		// a chat with no row of its own has no conversion ahead of it either: Converter reads the chat by id
+		if ($newType === null || $newType === $this->chat->getType() || $chatId === null)
+		{
+			return $this->chat;
+		}
+
+		return ChatFactory::getInstance()->initChat([
+			'ID' => $chatId,
+			'TYPE' => $newType,
+			'ENTITY_TYPE' => $this->chat->getEntityType(),
+		]);
 	}
 
 	/**
@@ -608,6 +674,22 @@ class UpdateService
 		{
 			$analytics->addEditPermissions();
 		}
+
+		// the channel family stores no thread setting at all, so none of these can differ for it
+		if ($diff('threadsEnabled'))
+		{
+			$analytics->addThreadsSwitch($this->chat->getThreadsEnabled());
+		}
+
+		if ($diff('manageThreadCreate'))
+		{
+			$analytics->addEditThreadCreatePermission($currentData['manageThreadCreate']);
+		}
+
+		if ($diff('manageThreadPost'))
+		{
+			$analytics->addEditThreadPostPermission($currentData['manageThreadPost']);
+		}
 	}
 
 	protected function getAnalyticsData(): array
@@ -621,6 +703,9 @@ class UpdateService
 			'manageUsersDelete' => $this->chat->getManageUsersDelete(),
 			'manageMessages' => $this->chat->getManageMessages(),
 			'manageGuestInvites' => $this->chat->getManageGuestInvites(),
+			'threadsEnabled' => $this->chat->getThreadsEnabled(),
+			'manageThreadCreate' => $this->chat->getManageThreadCreate(),
+			'manageThreadPost' => $this->chat->getManageThreadPost(),
 		];
 	}
 }

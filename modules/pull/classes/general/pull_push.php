@@ -1,6 +1,8 @@
 <?php
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Config\Feature\Context;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Web;
@@ -8,7 +10,16 @@ use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Pull\Push\DeliveryContext;
+use Bitrix\Pull\Push\DeliveryContextFactory;
 use Bitrix\Pull\Push\Service\PushService;
+use Bitrix\Pull\Feature\PushScheduleFeature;
+use Bitrix\Pull\Feature\PushScheduleObservationFeature;
+use Bitrix\Pull\Service\PushSchedule\BatchStateProvider;
+use Bitrix\Pull\Service\PushSchedule\DeliveryPolicyBatchContext;
+use Bitrix\Pull\Service\PushSchedule\DeliveryPolicyEvaluator;
+use Bitrix\Pull\Service\PushSchedule\PolicyMetrics;
+use Bitrix\Pull\Service\PushSchedule\ReadinessService;
 
 
 /**
@@ -134,18 +145,49 @@ class CPushManager
 
 	// b_pull_push_queue can be utf8mb3, these fields need emoji converted to ascii-safe tokens
 	private const QUEUE_EMOJI_FIELDS = ['MESSAGE', 'PARAMS', 'ADVANCED_PARAMS'];
+	private const DELIVERY_POLICY_MODE_ENFORCEMENT = 'enforcement';
+	private const DELIVERY_POLICY_MODE_OBSERVATION = 'observation';
 
 	public static ?array $pushServices;
 
 	private string $remoteProviderUrl ;
+	private ?BatchStateProvider $batchStateProvider;
+	private ?DeliveryPolicyEvaluator $deliveryPolicyEvaluator;
+	private ?PolicyMetrics $policyMetrics;
+	private bool $deliveryPolicySuppressedMessages = false;
+	private \Closure $productFeatureResolver;
+	private \Closure $observationFeatureResolver;
+	private \Closure $readinessResolver;
 
-	public function __construct()
+	public function __construct(
+		?BatchStateProvider $batchStateProvider = null,
+		?DeliveryPolicyEvaluator $deliveryPolicyEvaluator = null,
+		?PolicyMetrics $policyMetrics = null,
+		?\Closure $productFeatureResolver = null,
+		?\Closure $observationFeatureResolver = null,
+		?\Closure $readinessResolver = null,
+	)
 	{
 		if (!isset(self::$pushServices))
 		{
 			self::$pushServices = \Bitrix\Pull\Push\ServiceList::getServiceList();
 		}
 		$this->remoteProviderUrl = Option::get("pull", "push_service_url");
+		$this->readinessResolver = $readinessResolver
+			?? (new ReadinessService())->isReady(...);
+		$this->batchStateProvider = $batchStateProvider;
+		$this->deliveryPolicyEvaluator = $deliveryPolicyEvaluator;
+		$this->policyMetrics = $policyMetrics;
+		$this->productFeatureResolver = $productFeatureResolver
+			?? static fn (int $userId): bool => Feature::isEnabled(
+				PushScheduleFeature::class,
+				new Context($userId),
+			);
+		$this->observationFeatureResolver = $observationFeatureResolver
+			?? static fn (int $userId): bool => Feature::isEnabled(
+				PushScheduleObservationFeature::class,
+				new Context($userId),
+			);
 	}
 
 	public static function DeleteFromQueueByTag($userId, $tag, $appId = self::DEFAULT_APP_ID)
@@ -264,6 +306,11 @@ class CPushManager
 		{
 			$arFields['ADVANCED_PARAMS'] = $arParams['ADVANCED_PARAMS'];
 		}
+		unset($arFields['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY]);
+		$arFields['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY] = self::normalizeDeliveryContext(
+			$arParams['DELIVERY_CONTEXT'] ?? null,
+			$arParams,
+		);
 		if (!isset($arParams['ADVANCED_PARAMS']['id']) && $arFields['SUB_TAG'] <> '')
 		{
 			$arFields['ADVANCED_PARAMS']['id'] = $arFields['SUB_TAG'];
@@ -457,6 +504,9 @@ class CPushManager
 		if ($type == self::SEND_SKIP)
 		{
 			unset($result['MESSAGE']);
+			unset($result['PARAMS']);
+			unset($result['CATEGORY']);
+			unset($result['SOUND']);
 			unset($result['ADVANCED_PARAMS']['senderName']);
 		}
 
@@ -473,10 +523,63 @@ class CPushManager
 		{
 			$result['BADGE'] = \Bitrix\Pull\MobileCounter::get($result['USER_ID']);
 		}
+		if ($type === self::SEND_SKIP)
+		{
+			self::replaceSkippedDeliveryContext($result);
+		}
 
 		$result['APP_ID'] = $fields['APP_ID'];
 
 		return $result;
+	}
+
+	private static function replaceSkippedDeliveryContext(array &$message): void
+	{
+		$storedContext = $message['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY] ?? null;
+		if (!is_array($storedContext))
+		{
+			return;
+		}
+
+		try
+		{
+			$originalContext = (new DeliveryContextFactory())->restore($storedContext);
+		}
+		catch (\Throwable)
+		{
+			return;
+		}
+
+		$notificationsToCancel = $message['ADVANCED_PARAMS']['notificationsToCancel'] ?? [];
+		if (is_array($notificationsToCancel) && $notificationsToCancel !== [])
+		{
+			$destination = DeliveryContext::DESTINATION_CONTROL;
+			$operation = $originalContext->destination === DeliveryContext::DESTINATION_INCOMING_CALL
+				? DeliveryContext::OPERATION_CALL_END
+				: DeliveryContext::OPERATION_NOTIFICATION_REMOVE
+			;
+		}
+		elseif (array_key_exists('BADGE', $message))
+		{
+			$destination = DeliveryContext::DESTINATION_BADGE;
+			$operation = DeliveryContext::OPERATION_COUNTER_UPDATE;
+		}
+		else
+		{
+			$destination = DeliveryContext::DESTINATION_BACKGROUND;
+			$operation = DeliveryContext::OPERATION_CONTENTLESS_SYNC;
+		}
+
+		$message['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY] = (new DeliveryContext(
+			$originalContext->sourceId,
+			$originalContext->producerModuleId,
+			$originalContext->eventType,
+			$destination,
+			$operation,
+			false,
+			false,
+			false,
+		))->toArray();
 	}
 
 	private static function encodeQueueRow(array $row): array
@@ -503,6 +606,50 @@ class CPushManager
 		}
 
 		return $row;
+	}
+
+	private static function normalizeDeliveryContext(mixed $context, array $params): array
+	{
+		$factory = new DeliveryContextFactory();
+		if (is_array($context))
+		{
+			try
+			{
+				return $factory->restore($context)->toArray();
+			}
+			catch (\Throwable)
+			{
+			}
+		}
+
+		$push = [
+			'message' => $params['MESSAGE'] ?? '',
+			'params' => $params['PARAMS'] ?? [],
+			'sound' => $params['SOUND'] ?? '',
+		];
+		if (isset($params['BADGE']) && $params['BADGE'] !== '')
+		{
+			$push['badge'] = $params['BADGE'];
+		}
+
+		return $factory->create('unknown', 'notify', $push)->toArray();
+	}
+
+	private static function restoreDeliveryContext(mixed $context): ?array
+	{
+		if (!is_array($context) || ($context['version'] ?? null) !== DeliveryContext::VERSION)
+		{
+			return null;
+		}
+
+		try
+		{
+			return (new DeliveryContextFactory())->restore($context)->toArray();
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
 	}
 
 	/**
@@ -586,7 +733,16 @@ class CPushManager
 			->addSelect('push.DEVICE_TYPE', 'DEVICE_TYPE')
 			->addSelect('push.DEVICE_TOKEN', 'DEVICE_TOKEN')
 			->addSelect('push.VOIP_TYPE', 'VOIP_TYPE')
-			->addSelect('push.VOIP_TOKEN', 'VOIP_TOKEN');
+			->addSelect('push.VOIP_TOKEN', 'VOIP_TOKEN')
+		;
+		if (\Bitrix\Pull\Model\PushTable::isTimeZoneContextSupported())
+		{
+			$query
+				->addSelect('push.TIME_ZONE_ID', 'TIME_ZONE_ID')
+				->addSelect('push.TIME_ZONE_OFFSET_MINUTES', 'TIME_ZONE_OFFSET_MINUTES')
+				->addSelect('push.TIME_ZONE_RECEIVED_AT', 'TIME_ZONE_RECEIVED_AT')
+			;
+		}
 
 		$query->addFilter('=ID', array_keys($result));
 		$queryResult = $query->exec();
@@ -604,6 +760,9 @@ class CPushManager
 					'DEVICE_TOKEN' => $user['DEVICE_TOKEN'],
 					'VOIP_TYPE' => $user['VOIP_TYPE'],
 					'VOIP_TOKEN' => $user['VOIP_TOKEN'],
+					'TIME_ZONE_ID' => $user['TIME_ZONE_ID'] ?? null,
+					'TIME_ZONE_OFFSET_MINUTES' => $user['TIME_ZONE_OFFSET_MINUTES'] ?? null,
+					'TIME_ZONE_RECEIVED_AT' => $user['TIME_ZONE_RECEIVED_AT'] ?? null,
 				];
 			}
 			else
@@ -736,12 +895,99 @@ class CPushManager
 	 */
 	public function SendMessage(array $arMessages = [], array $arDevices = []): bool
 	{
+		$this->deliveryPolicySuppressedMessages = false;
+
+		return $this->sendMessageWithBatchContext($arMessages, $arDevices);
+	}
+
+	public function wasMessageSuppressedByDeliveryPolicy(): bool
+	{
+		return $this->deliveryPolicySuppressedMessages;
+	}
+
+	/**
+	 * @param array<int, array<int, array>> $messageGroups
+	 * @param array<int, array> $devices
+	 */
+	protected function sendMessageGroups(array $messageGroups, array $devices = []): bool
+	{
+		$this->deliveryPolicySuppressedMessages = false;
+		$userIds = [];
+		foreach ($messageGroups as $messages)
+		{
+			foreach ($messages as $message)
+			{
+				$userId = (int)($message['USER_ID'] ?? 0);
+				if ($userId > 0)
+				{
+					$userIds[$userId] = $userId;
+				}
+			}
+		}
+
+		$batchContext = $this->prepareDeliveryPolicyBatchContext(array_values($userIds));
+		$sent = false;
+		try
+		{
+			foreach ($messageGroups as $messages)
+			{
+				$sent = $this->sendMessageWithBatchContext($messages, $devices, $batchContext) || $sent;
+			}
+		}
+		finally
+		{
+			$this->flushDeliveryPolicyBatchContext($batchContext);
+		}
+
+		return $sent;
+	}
+
+	private function prepareDeliveryPolicyBatchContext(array $userIds): DeliveryPolicyBatchContext
+	{
+		$serverInstant = time();
+		$metrics = $this->policyMetrics ?? new PolicyMetrics();
+		$evaluator = $this->deliveryPolicyEvaluator ?? new DeliveryPolicyEvaluator(
+			metrics: $metrics,
+			readinessResolver: $this->readinessResolver,
+		);
+		$modes = $this->resolveDeliveryPolicyModes($userIds);
+		$stateProvider = null;
+		if ($modes !== [])
+		{
+			$stateProvider = $this->batchStateProvider ?? new BatchStateProvider(metrics: $metrics);
+			$stateProvider->prepare(array_keys($modes), $serverInstant);
+		}
+
+		return new DeliveryPolicyBatchContext(
+			$serverInstant,
+			$metrics,
+			$evaluator,
+			$modes,
+			$stateProvider,
+		);
+	}
+
+	private function flushDeliveryPolicyBatchContext(DeliveryPolicyBatchContext $batchContext): void
+	{
+		if ($batchContext->hasPolicyUsers())
+		{
+			$batchContext->metrics->flush();
+		}
+	}
+
+	private function sendMessageWithBatchContext(
+		array $arMessages,
+		array $arDevices,
+		?DeliveryPolicyBatchContext $batchContext = null,
+	): bool
+	{
 		if (empty($arMessages))
 		{
 			return false;
 		}
 
 		$uniqueHashes = [];
+		$userIds = [];
 		$arTmpMessages = [];
 		$arVoipMessages = [];
 		foreach ($arMessages as $message)
@@ -750,6 +996,7 @@ class CPushManager
 			{
 				continue;
 			}
+			$userIds[(int)$message["USER_ID"]] = (int)$message["USER_ID"];
 			if (!empty($message["ADVANCED_PARAMS"]["isVoip"]))
 			{
 				if (!array_key_exists("USER_" . $message["USER_ID"], $arVoipMessages))
@@ -774,6 +1021,7 @@ class CPushManager
 				$uniqueHashes[] = $hash;
 			}
 		}
+
 		if (empty($arDevices))
 		{
 			$arDevices = \Bitrix\Pull\Model\PushTable::getList([
@@ -787,6 +1035,9 @@ class CPushManager
 				return false;
 			}
 		}
+
+		$ownsBatchContext = $batchContext === null;
+		$batchContext ??= $this->prepareDeliveryPolicyBatchContext(array_values($userIds));
 
 		$arPushMessages = [];
 
@@ -807,6 +1058,14 @@ class CPushManager
 
 				$deviceType = $arDevice["DEVICE_TYPE"];
 				$deviceToken = $arDevice["DEVICE_TOKEN"];
+				$tmpMessage = $this->filterMessagesByDeliveryPolicy(
+					$tmpMessage,
+					$arDevice,
+					$batchContext->stateProvider,
+					$batchContext->evaluator,
+					$batchContext->modes,
+					$batchContext->serverInstant,
+				);
 				$filteredMessages = static::filterMessagesBeforeSend($tmpMessage, $deviceType, $deviceToken);
 				if(isset(static::$pushServices[$deviceType]) && count($filteredMessages) > 0)
 				{
@@ -824,6 +1083,14 @@ class CPushManager
 				}, $voipMessage);
 				$deviceType = $arDevice["VOIP_TYPE"] && $arDevice["VOIP_TOKEN"] ? $arDevice["VOIP_TYPE"]: $arDevice["DEVICE_TYPE"];
 				$deviceToken = $arDevice["VOIP_TYPE"] && $arDevice["VOIP_TOKEN"] ? $arDevice["VOIP_TOKEN"] : $arDevice["DEVICE_TOKEN"];
+				$voipMessage = $this->filterMessagesByDeliveryPolicy(
+					$voipMessage,
+					$arDevice,
+					$batchContext->stateProvider,
+					$batchContext->evaluator,
+					$batchContext->modes,
+					$batchContext->serverInstant,
+				);
 				$filteredMessages = static::filterMessagesBeforeSend($voipMessage, $deviceType, $deviceToken);
 				if(isset(static::$pushServices[$deviceType]) && count($filteredMessages) > 0)
 				{
@@ -837,6 +1104,11 @@ class CPushManager
 
 		if (empty($arPushMessages))
 		{
+			if ($ownsBatchContext)
+			{
+				$this->flushDeliveryPolicyBatchContext($batchContext);
+			}
+
 			return false;
 		}
 
@@ -886,6 +1158,10 @@ class CPushManager
 		{
 			$this->sendBatch($chunkBatch);
 		}
+		if ($ownsBatchContext)
+		{
+			$this->flushDeliveryPolicyBatchContext($batchContext);
+		}
 
 		return true;
 	}
@@ -910,6 +1186,135 @@ class CPushManager
 		}
 
 		return false;
+	}
+
+	protected function filterMessagesByDeliveryPolicy(
+		array $messages,
+		array $device,
+		?BatchStateProvider $batchStateProvider,
+		DeliveryPolicyEvaluator $deliveryPolicyEvaluator,
+		array $deliveryPolicyModes,
+		int $serverInstant,
+	): array
+	{
+		foreach ($messages as $key => $message)
+		{
+			$context = $message['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY] ?? null;
+			try
+			{
+				$userId = (int)($message['USER_ID'] ?? 0);
+				$mode = $deliveryPolicyModes[$userId] ?? null;
+				if ($mode === null || $batchStateProvider === null)
+				{
+					unset($messages[$key]['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY]);
+
+					continue;
+				}
+				$decision = $deliveryPolicyEvaluator->evaluate(
+					$userId,
+					$context,
+					$batchStateProvider->getForUser($userId),
+					$device['TIME_ZONE_ID'] ?? null,
+					$serverInstant,
+					$mode === self::DELIVERY_POLICY_MODE_ENFORCEMENT,
+					[
+						'offsetMinutes' => $this->normalizeTimeZoneOffsetMinutes(
+							$device['TIME_ZONE_OFFSET_MINUTES'] ?? null,
+						),
+						'receivedAt' => $device['TIME_ZONE_RECEIVED_AT'] ?? null,
+					],
+				);
+			}
+			catch (\Throwable)
+			{
+				$decision = DeliveryPolicyEvaluator::DELIVER;
+			}
+
+			if ($decision === DeliveryPolicyEvaluator::SUPPRESS)
+			{
+				$this->deliveryPolicySuppressedMessages = true;
+				unset($messages[$key]);
+
+				continue;
+			}
+
+			unset($messages[$key]['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY]);
+		}
+
+		return $messages;
+	}
+
+	private function normalizeTimeZoneOffsetMinutes(mixed $value): ?int
+	{
+		if (is_int($value))
+		{
+			return $value;
+		}
+		if (is_string($value) && preg_match('/^-?\d+$/D', $value) === 1)
+		{
+			return (int)$value;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return array<int, string>
+	 */
+	private function resolveDeliveryPolicyModes(array $userIds): array
+	{
+		$modes = [];
+		foreach ($userIds as $userId)
+		{
+			if ($userId <= 0)
+			{
+				continue;
+			}
+			$productEnabled = false;
+			try
+			{
+				$productEnabled = (bool)($this->productFeatureResolver)($userId);
+			}
+			catch (\Throwable)
+			{
+			}
+
+			$observationEnabled = false;
+			try
+			{
+				$observationEnabled = (bool)($this->observationFeatureResolver)($userId);
+			}
+			catch (\Throwable)
+			{
+			}
+
+			if ($productEnabled || $observationEnabled)
+			{
+				try
+				{
+					if (!(bool)($this->readinessResolver)())
+					{
+						return [];
+					}
+				}
+				catch (\Throwable)
+				{
+					return [];
+				}
+			}
+
+			if ($productEnabled)
+			{
+				$modes[$userId] = self::DELIVERY_POLICY_MODE_ENFORCEMENT;
+			}
+			elseif ($observationEnabled)
+			{
+				$modes[$userId] = self::DELIVERY_POLICY_MODE_OBSERVATION;
+			}
+		}
+
+		return $modes;
 	}
 
 	protected static function filterMessagesBeforeSend(array $messages, string $deviceType, string $deviceToken): array
@@ -1029,6 +1434,16 @@ class CPushManager
 			{
 				$arRes['ADVANCED_PARAMS'] = [];
 			}
+			$storedContext = is_array($arRes['ADVANCED_PARAMS'])
+				? ($arRes['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY] ?? null)
+				: null;
+			$arRes['ADVANCED_PARAMS'] = is_array($arRes['ADVANCED_PARAMS']) ? $arRes['ADVANCED_PARAMS'] : [];
+			unset($arRes['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY]);
+			$deliveryContext = self::restoreDeliveryContext($storedContext);
+			if ($deliveryContext !== null)
+			{
+				$arRes['ADVANCED_PARAMS'][DeliveryContext::STORAGE_KEY] = $deliveryContext;
+			}
 
 			$arPush[$count][] = $arRes;
 			if ($pushLimit <= count($arPush[$count]))
@@ -1046,10 +1461,7 @@ class CPushManager
 		}
 
 		$CPushManager = new CPushManager();
-		foreach ($arPush as $arStack)
-		{
-			$CPushManager->SendMessage($arStack);
-		}
+		$CPushManager->sendMessageGroups($arPush);
 
 		$strSql = "SELECT COUNT(ID) CNT FROM b_pull_push_queue";
 		$dbRes = $DB->Query($strSql);

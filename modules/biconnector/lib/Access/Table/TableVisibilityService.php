@@ -33,6 +33,9 @@ final class TableVisibilityService
 	/** @var array<string, true>|null Index of the answer: the section asks about every table of the catalog. */
 	private ?array $allowedTableCodeIndex = null;
 
+	/** @var int[]|null */
+	private ?array $visibleGroupIds = null;
+
 	private bool $isComputed = false;
 
 	private int $computedGeneration = -1;
@@ -80,17 +83,41 @@ final class TableVisibilityService
 			return $this->allowedTableCodes;
 		}
 
-		if ($this->isComputed && $this->computedGeneration === self::$generation)
-		{
-			return $this->allowedTableCodes;
-		}
-
-		$this->allowedTableCodes = $this->resolveAllowedTableCodes();
-		$this->allowedTableCodeIndex = null;
-		$this->isComputed = true;
-		$this->computedGeneration = self::$generation;
+		$this->compute();
 
 		return $this->allowedTableCodes;
+	}
+
+	/**
+	 * Returns the groups the user sees, or null when the axis is not applied.
+	 *
+	 * A group is seen by its own right of view, and by any visible table of it: a table opened by an
+	 * override of a role has to be reachable through every group it is bound to.
+	 *
+	 * @return int[]|null
+	 *
+	 * @throws \LogicException For a service with a fixed answer: it knows the codes only.
+	 */
+	public function getVisibleGroupIds(): ?array
+	{
+		if ($this->isFixed)
+		{
+			throw new \LogicException('A service with a fixed answer knows no visible groups');
+		}
+
+		$this->compute();
+
+		return $this->visibleGroupIds;
+	}
+
+	/**
+	 * @throws \LogicException For a service with a fixed answer: it knows the codes only.
+	 */
+	public function isGroupVisible(int $groupId): bool
+	{
+		$visibleGroupIds = $this->getVisibleGroupIds();
+
+		return $visibleGroupIds === null || in_array($groupId, $visibleGroupIds, true);
 	}
 
 	public function isTableAllowed(string $tableCode): bool
@@ -130,6 +157,20 @@ final class TableVisibilityService
 		self::$generation++;
 	}
 
+	private function compute(): void
+	{
+		if ($this->isComputed && $this->computedGeneration === self::$generation)
+		{
+			return;
+		}
+
+		$this->allowedTableCodes = $this->resolveAllowedTableCodes();
+		$this->visibleGroupIds = $this->resolveVisibleGroupIds($this->allowedTableCodes);
+		$this->allowedTableCodeIndex = null;
+		$this->isComputed = true;
+		$this->computedGeneration = self::$generation;
+	}
+
 	/**
 	 * @return string[]|null
 	 */
@@ -140,13 +181,37 @@ final class TableVisibilityService
 			return null;
 		}
 
-		$allowedGroupIds = $this->getAccessController()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_TABLE_VIEW) ?? [];
-		if (empty($allowedGroupIds))
+		return $this->getAccessController()->getAllowedTableValue(ActionDictionary::ACTION_BIC_TABLE_VIEW) ?? [];
+	}
+
+	/**
+	 * @param string[]|null $allowedTableCodes
+	 *
+	 * @return int[]|null
+	 */
+	private function resolveVisibleGroupIds(?array $allowedTableCodes): ?array
+	{
+		if ($allowedTableCodes === null)
 		{
-			return [];
+			return null;
 		}
 
-		return TableGroupMembershipService::getTableCodesByGroupIds($allowedGroupIds);
+		$groupIds = [];
+		$controller = $this->getAccessController();
+		foreach ($controller->getAllowedGroupValue(ActionDictionary::ACTION_BIC_TABLE_VIEW) ?? [] as $groupId)
+		{
+			$groupIds[(int)$groupId] = (int)$groupId;
+		}
+
+		foreach ($allowedTableCodes as $tableCode)
+		{
+			foreach (TableGroupMembershipService::getGroupIdsByTableCode((string)$tableCode) as $groupId)
+			{
+				$groupIds[(int)$groupId] = (int)$groupId;
+			}
+		}
+
+		return array_values($groupIds);
 	}
 
 	/**

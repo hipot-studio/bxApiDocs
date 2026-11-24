@@ -31,6 +31,10 @@ class User
 		{
 			return false;
 		}
+		if (!self::isInvitationMessageEnabled())
+		{
+			return true;
+		}
 
 		$userId = (int)$event->getParameter('userId');
 
@@ -88,6 +92,10 @@ class User
 		}
 
 		self::sendInviteEvent($userForSend);
+		if (!self::isInvitationMessageEnabled())
+		{
+			return true;
+		}
 
 		$userForSend = array_map(function($user) {
 			return self::getUserBlock($user['ID']);
@@ -101,6 +109,11 @@ class User
 			'SYSTEM' => 'Y',
 			'PUSH' => 'N'
 		]);
+	}
+
+	private static function isInvitationMessageEnabled(): bool
+	{
+		return Option::get('im', 'general_chat_message_invite', 'Y', siteId: '') === 'Y';
 	}
 
 	public static function onUserAdded(\Bitrix\Main\Event $event): bool
@@ -290,14 +303,15 @@ class User
 			'INVITED' => false
 		]]);
 
-		$orm = \Bitrix\Main\UserTable::getList([
-			'select' => ['ID'],
-			'filter' => [
+		$orm = \Bitrix\Main\UserTable::query()
+			->setSelect(['ID'])
+			->setFilter([
 				'=ACTIVE' => 'Y',
-				'=IS_REAL_USER' => 'Y',
-				'!=UF_DEPARTMENT' => false
-			]
-		]);
+				'!=UF_DEPARTMENT' => false,
+			])
+			->where('REAL_USER', 'expr', true)
+			->exec()
+		;
 		while($row = $orm->fetch())
 		{
 			if ($row['ID'] == $userId)
@@ -483,7 +497,6 @@ class User
 		$filter = [
 			'=ACTIVE' => 'Y',
 			'=BIRTHDAY_DATE' => $today,
-			'=IS_REAL_USER' => true,
 		];
 		if ($option === 'department')
 		{
@@ -498,14 +511,16 @@ class User
 		$helper = $connection->getSqlHelper();
 
 		$result = [];
-		$users = UserTable::getList([
-			'filter' => $filter,
-			'select' => ['ID'],
-			'runtime' => [
+		$users = UserTable::query()
+			->registerRuntimeField(
 				new ExpressionField('BIRTHDAY_DATE', str_replace('PERSONAL_BIRTHDAY', '%s', str_replace('%', '%%', $helper->formatDate('MM-DD', 'PERSONAL_BIRTHDAY'))), 'PERSONAL_BIRTHDAY')
-			],
-			'limit' => 100,
-		])->fetchAll();
+			)
+			->setSelect(['ID'])
+			->setFilter($filter)
+			->where('REAL_USER', 'expr', true)
+			->setLimit(100)
+			->fetchAll()
+		;
 
 		foreach ($users as $user)
 		{

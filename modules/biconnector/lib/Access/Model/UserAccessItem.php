@@ -11,7 +11,18 @@ use Bitrix\Main;
 final class UserAccessItem extends Main\Access\User\UserModel
 {
 	private ?array $permissions = null;
+	/** @var array<int, array{groups: array<int, int[]>, cells: array<string, int[]>}>|null */
+	private ?array $tableRightsByRole = null;
 	private ?bool $isAdminResolved = null;
+
+	/**
+	 * Drops the model kept for the rest of the request, so the next access check reads roles and permissions anew.
+	 */
+	public static function forget(int $userId): void
+	{
+		// The key repeats the one of UserModel::createFromId.
+		unset(static::$cache['USER_' . static::class . '_' . $userId]);
+	}
 
 	public function isAdmin(): bool
 	{
@@ -105,6 +116,21 @@ final class UserAccessItem extends Main\Access\User\UserModel
 	}
 
 	/**
+	 * Returns the rights of the table axis split by the roles of the user.
+	 *
+	 * A cell of a role replaces the group rights of that very role only, and the united map has forgotten
+	 * which role gave which value. The split is gathered by the same query as the map.
+	 *
+	 * @return array<int, array{groups: array<int, int[]>, cells: array<string, int[]>}>
+	 */
+	public function getTableRightsByRole(): array
+	{
+		$this->getPermissions();
+
+		return $this->tableRightsByRole ?? [];
+	}
+
+	/**
 	 * Returns permission list in format ['permission_id' => 1 or 0].
 	 *
 	 * @return array
@@ -117,6 +143,7 @@ final class UserAccessItem extends Main\Access\User\UserModel
 		}
 
 		$this->permissions = [];
+		$this->tableRightsByRole = [];
 		$roles = $this->getRoles();
 
 		if (empty($roles))
@@ -127,6 +154,7 @@ final class UserAccessItem extends Main\Access\User\UserModel
 		$query = PermissionTable::query();
 
 		$permissions = $query
+			->addSelect('ROLE_ID')
 			->addSelect('PERMISSION_ID')
 			->addSelect('VALUE')
 			->whereIn('ROLE_ID', $roles)
@@ -136,6 +164,22 @@ final class UserAccessItem extends Main\Access\User\UserModel
 		{
 			$permissionId = $permission['PERMISSION_ID'];
 			$value = (int)$permission['VALUE'];
+
+			// Overrides of a role for a table are answered by the table rule, not through this map.
+			$tableCode = PermissionDictionary::getTableCodeFromCellPermission($permissionId);
+			if ($tableCode !== null)
+			{
+				$this->addTableRight((int)$permission['ROLE_ID'], 'cells', $tableCode, $value);
+
+				continue;
+			}
+
+			if (PermissionDictionary::isTableGroupPermission($permissionId))
+			{
+				$groupId = PermissionDictionary::getTableGroupIdFromPermission($permissionId);
+				$this->addTableRight((int)$permission['ROLE_ID'], 'groups', $groupId, $value);
+			}
+
 			$permissionDescription = PermissionDictionary::getPermission($permissionId);
 
 			if (
@@ -169,6 +213,12 @@ final class UserAccessItem extends Main\Access\User\UserModel
 		}
 
 		return $this->permissions;
+	}
+
+	private function addTableRight(int $roleId, string $kind, int|string $key, int $value): void
+	{
+		$this->tableRightsByRole[$roleId] ??= ['groups' => [], 'cells' => []];
+		$this->tableRightsByRole[$roleId][$kind][$key][] = $value;
 	}
 
 	public function canDeleteRestApp(): bool

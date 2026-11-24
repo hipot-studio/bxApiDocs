@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator;
 
 use Bitrix\BizprocDesigner\Internal\Entity\DocumentDescription;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\AgentBlock;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\RestrictedSettingRegistry;
 
@@ -215,8 +216,9 @@ final class ValidationContext
 	 *        as the baseline. It is one of the readings of this context that do not come from the published version
 	 *        ({@see self::$draftOptionValues} is the first), and it exists for the same reason: what the agent was
 	 *        handed it must be able to hand back. Read by {@see self::carriesBlockValue()},
-	 *        {@see self::carriesBlockIdentity()} and {@see self::carriesBlockUnchanged()} - helps to the agent, none
-	 *        of which authorises a payload of its own. The projection is kept apart from the baseline here as it is
+	 *        {@see self::carriesBlockIdentity()}, {@see self::carriesBlockOutputs()} and
+	 *        {@see self::carriesBlockUnchanged()} - helps to the agent, none of which authorises a payload of its
+	 *        own. The projection is kept apart from the baseline here as it is
 	 *        everywhere else: a barrier that reads the handed graph reads it as its own named set and says so
 	 *        ({@see self::$handedRestrictedSettingFingerprints})
 	 * @param array<string, true> $handedRestrictedSettingFingerprints (name, value) fingerprints of the restricted
@@ -312,6 +314,50 @@ final class ValidationContext
 	{
 		return $this->baseline->match($blockId, $blockType) !== null
 			|| $this->handed->match($blockId, $blockType) !== null
+		;
+	}
+
+	/**
+	 * Whether the graph the server wrote - the published version or the one the agent was HANDED - carries this
+	 * very identity as a complex node declaring THESE VERY outputs. The second step of the exemption a portless
+	 * link out of a complex node rests on ({@see AgentBlocksValidator::collectUnnamedComplexOutputRisks()}, ADR
+	 * § 6 Q4): identity alone let the agent add a way out to a node the server wrote and address a link to the
+	 * default silently, and the rule the default answers for changes with the set.
+	 *
+	 * Compared as a set, without order and without repeats: an output is addressed by the id its own `output`
+	 * construction declares ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\AgentComplexConstruction::getOutputPortId()}),
+	 * so rules rebuilt around the same ways out move no link anywhere. Auxiliary ports take no part - a portless
+	 * link is never addressed to one - which is why the outputs are read off the rules rather than off the port
+	 * map of the node, where the two lie side by side.
+	 *
+	 * A baseline node carrying no rules, and one whose rules declare no output at all, answer false: there is
+	 * nothing to compare against, and the exemption is not something to grant unproven.
+	 *
+	 * @param list<string> $outputPortIds outputs the SUBMITTED node declares, as its rules declare them
+	 */
+	public function carriesBlockOutputs(?string $blockId, ?string $blockType, array $outputPortIds): bool
+	{
+		return self::declaresOutputs($this->baseline->match($blockId, $blockType), $outputPortIds)
+			|| self::declaresOutputs($this->handed->match($blockId, $blockType), $outputPortIds)
+		;
+	}
+
+	/**
+	 * @param list<string> $outputPortIds
+	 */
+	private static function declaresOutputs(?AgentBlock $block, array $outputPortIds): bool
+	{
+		$declared = $block?->rules?->getOutputPortIds() ?? [];
+		if ($declared === [])
+		{
+			return false;
+		}
+
+		$declaredKeys = array_flip($declared);
+		$submittedKeys = array_flip($outputPortIds);
+
+		return count($declaredKeys) === count($submittedKeys)
+			&& array_diff_key($submittedKeys, $declaredKeys) === []
 		;
 	}
 

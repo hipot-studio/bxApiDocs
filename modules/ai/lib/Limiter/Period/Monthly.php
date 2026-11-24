@@ -4,9 +4,7 @@ namespace Bitrix\AI\Limiter\Period;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Limiter\Plan;
-use Bitrix\AI\Model\UsageTable;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Type\DateTime;
 
 class Monthly implements IPeriod
@@ -34,25 +32,18 @@ class Monthly implements IPeriod
 	 */
 	public function getCurrentUsage(): int
 	{
-		$testUsageCount = (int)Option::get('ai', 'test_monthly_usage', -1);
+		$testUsageCount = $this->getTestUsageCount();
 		if ($testUsageCount >= 0)
 		{
 			return $testUsageCount;
 		}
 
-		$result = UsageTable::query()
-			->addSelect(Query::expr()->sum('USAGE_COUNT'), 'SUM')
-			->where('USAGE_PERIOD', $this->getCode())
-			->exec()
-			->fetch()
-		;
+		return (new \Bitrix\AI\Limiter\SharedMonthlyPoolService())->readTotal($this->getCode());
+	}
 
-		if (empty($result))
-		{
-			return 0;
-		}
-
-		return (int)($result['SUM'] ?? 0);
+	protected function getTestUsageCount(): int
+	{
+		return (int)Option::get('ai', 'test_monthly_usage', -1);
 	}
 
 	/**

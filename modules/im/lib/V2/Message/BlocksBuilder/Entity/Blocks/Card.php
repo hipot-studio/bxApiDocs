@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks;
 
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons\ButtonCollection;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons\ButtonsHolder;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Field;
 
-class Card extends AbstractBlock
+class Card extends AbstractBlock implements ButtonsHolder
 {
 	protected string $title;
 	protected ?string $imageUrl;
@@ -74,5 +75,10 @@ class Card extends AbstractBlock
 			Field::Title->value,
 			Field::Type->value,
 		];
+	}
+
+	public function getButtons(): ButtonCollection
+	{
+		return $this->buttons;
 	}
 }

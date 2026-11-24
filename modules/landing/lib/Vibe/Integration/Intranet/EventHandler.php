@@ -3,12 +3,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Vibe\Integration\Intranet;
 
-use Bitrix\Bitrix24\Feature;
 use Bitrix\Landing\Vibe\Facade\Portal;
-use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main;
 use Bitrix\Main\Event;
-use Bitrix\Main\Loader;
 use Bitrix\Main\EventManager;
 
 class EventHandler
@@ -34,26 +31,33 @@ class EventHandler
 		]));
 	}
 
+	/**
+	 * Registered by Vibe::createPageByTemplateAtFreeTariff(). A license without the vibe feature
+	 * ends the free tariff mode of the portal; a license with the feature keeps it untouched.
+	 * @param Event $event
+	 * @return void
+	 */
 	public static function onLicenseHasChanged(Event $event): void
 	{
-		// todo: no need add always
-		$checker = new Portal();
-		if (
-			$event->getParameter('licenseType')
-			&& !$checker->checkFeature(Portal::VIBE_FEATURE, $event->getParameter('licenseType'))
-		)
+		$licenseType = (string)$event->getParameter('licenseType');
+		if ($licenseType === '')
 		{
-			EventManager::getInstance()->unregisterEventHandler(
-				'intranet',
-				'onLicenseHasChanged',
-				'landing',
-				self::class,
-				'onLicenseHasChanged'
-			);
-
-			// todo: del dbg, check free tariff mode
-			// $vibe = Vibe::createMainVibe();
-			// $vibe->setFreeTariffMode(true);
+			return;
 		}
+
+		$portal = new Portal();
+		if ($portal->checkFeature(Portal::VIBE_FEATURE, $licenseType))
+		{
+			return;
+		}
+
+		$portal->setFreeTariffMode(false);
+		EventManager::getInstance()->unregisterEventHandler(
+			'intranet',
+			'onLicenseHasChanged',
+			'landing',
+			self::class,
+			'onLicenseHasChanged'
+		);
 	}
 }

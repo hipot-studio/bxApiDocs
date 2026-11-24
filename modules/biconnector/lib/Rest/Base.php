@@ -4,8 +4,12 @@ namespace Bitrix\BIConnector\Rest;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceDatasetRelationTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
+use Bitrix\BIConnector\Public\Features\ConnectorAgentSkill;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -23,6 +27,16 @@ abstract class Base extends IRestService
 		'error' => 'ACCESS_DENIED',
 		'error_description' => "Access denied.",
 	];
+	protected const ACCESS_DENIED_REASON_EXTERNAL_DATA =
+		'Access denied. External data sources are not available on this portal.';
+	protected const ACCESS_DENIED_REASON_BI_ACCESS =
+		'Access denied. The user lacks the "BI Builder access" permission.';
+	protected const ACCESS_DENIED_REASON_ANALYST_RIGHT =
+		'Access denied. The user lacks the "Analytics hub access" permission.';
+	protected const ACCESS_DENIED_REASON_WEBHOOK =
+		'Access denied. Webhook calls are not permitted: call the method with an application token.';
+	protected const ACCESS_DENIED_REASON_TABLE_GROUP =
+		'Access denied. The user has no permission to edit tables of this table group.';
 
 	abstract protected static function getFields(): array;
 	abstract protected static function addEntity(array $params): Result;
@@ -46,15 +60,16 @@ abstract class Base extends IRestService
 	public static function add(array $params, $n, CRestServer $server): array
 	{
 		Loc::setCurrentLang('en');
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		$checkAppIdResult = self::checkAndPrepareAppId($server);
 		if (!$checkAppIdResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_WEBHOOK);
 		}
 		$params['appId'] = $checkAppIdResult->getData()['appId'];
 		$validateResult = static::validateParamsForAdd($params);
@@ -86,15 +101,16 @@ abstract class Base extends IRestService
 	public static function update(array $params, $n, CRestServer $server): array|bool
 	{
 		Loc::setCurrentLang('en');
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		$checkAppIdResult = self::checkAndPrepareAppId($server);
 		if (!$checkAppIdResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_WEBHOOK);
 		}
 		$params['appId'] = $checkAppIdResult->getData()['appId'];
 		$validateResult = self::validateParamsForUpdate($params);
@@ -126,15 +142,16 @@ abstract class Base extends IRestService
 	public static function delete(array $params, $n, CRestServer $server): array|bool
 	{
 		Loc::setCurrentLang('en');
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		$checkAppIdResult = self::checkAndPrepareAppId($server);
 		if (!$checkAppIdResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_WEBHOOK);
 		}
 		$params['appId'] = $checkAppIdResult->getData()['appId'];
 		$validateResult = self::validateParamsId($params);
@@ -165,9 +182,10 @@ abstract class Base extends IRestService
 
 	public static function fields(array $params, $n, CRestServer $server): array
 	{
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		return ['fields' => static::getFields()];
@@ -176,15 +194,16 @@ abstract class Base extends IRestService
 	public static function get(array $params, $n, CRestServer $server): array
 	{
 		Loc::setCurrentLang('en');
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		$checkAppIdResult = self::checkAndPrepareAppId($server);
 		if (!$checkAppIdResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_WEBHOOK);
 		}
 		$params['appId'] = $checkAppIdResult->getData()['appId'];
 		$validateResult = static::validateParamsId($params);
@@ -216,15 +235,16 @@ abstract class Base extends IRestService
 	public static function list(array $params, $n, CRestServer $server): array
 	{
 		Loc::setCurrentLang('en');
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		$checkAppIdResult = self::checkAndPrepareAppId($server);
 		if (!$checkAppIdResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_WEBHOOK);
 		}
 		$params['appId'] = $checkAppIdResult->getData()['appId'];
 		$validateResult = static::validateParamsForList($params);
@@ -564,17 +584,65 @@ abstract class Base extends IRestService
 
 	protected static function checkPermission(): bool
 	{
+		return self::checkAccess()->isSuccess();
+	}
+
+	protected static function getAccessDeniedReason(): ?string
+	{
+		$result = self::checkAccess();
+
+		return $result->isSuccess() ? null : $result->getErrors()[0]->getMessage();
+	}
+
+	protected static function checkAccess(): Result
+	{
+		$result = new Result();
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
-			return false;
+			return $result->addError(new Error(
+				self::accessErrorDescription(self::ACCESS_DENIED_REASON_BI_ACCESS),
+				self::ACCESS_ERROR['error'],
+			));
+		}
+
+		if (!Feature::isExternalEntitiesEnabled())
+		{
+			return $result->addError(new Error(
+				self::accessErrorDescription(self::ACCESS_DENIED_REASON_EXTERNAL_DATA),
+				self::ACCESS_ERROR['error'],
+			));
 		}
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
 		{
-			return false;
+			return $result->addError(new Error(
+				self::accessErrorDescription(self::ACCESS_DENIED_REASON_ANALYST_RIGHT),
+				self::ACCESS_ERROR['error'],
+			));
 		}
 
-		return true;
+		return $result;
+	}
+
+	/**
+	 * @return array Refusal of the same shape as ['error' => self::ACCESS_ERROR] with the reason as its description.
+	 */
+	protected static function accessError(string $reason): array
+	{
+		return ['error' => [
+			'error' => self::ACCESS_ERROR['error'],
+			'error_description' => self::accessErrorDescription($reason),
+		]];
+	}
+
+	protected static function accessErrorDescription(string $reason): string
+	{
+		$userId = (int)CurrentUser::get()->getId();
+
+		return (new FlagGate())->isEnabled(ConnectorAgentSkill::class, $userId)
+			? $reason
+			: self::ACCESS_ERROR['error_description']
+		;
 	}
 
 	protected static function checkAndPrepareAppId(CRestServer $server): Result

@@ -33,4 +33,12 @@ final class BlockGetRequest extends GetRequest
 	 * @var list<array{name: string, value: string|int|float|bool|array|null}>|null
 	 */
 	public ?array $contextSettings = null;
+
+	/**
+	 * The template whose catalog is being read, not the block: the resource id above is the block type.
+	 *
+	 * Optional under a token of the contour, where the template comes from the binding; the only thing
+	 * that names a template under an application key.
+	 */
+	public ?int $templateId = null;
 }

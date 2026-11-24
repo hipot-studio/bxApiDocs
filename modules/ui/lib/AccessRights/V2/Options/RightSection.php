@@ -13,6 +13,8 @@ class RightSection implements JsonSerializable, Arrayable
 	protected ?string $hint = null;
 	protected ?string $iconCode = null;
 	protected ?string $iconBgColor = null;
+	protected bool $isReadOnly = false;
+	protected ?string $readOnlyHint = null;
 
 	/** @var RightItem[] */
 	protected array $rightItems = [];
@@ -95,6 +97,30 @@ class RightSection implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function isReadOnly(): bool
+	{
+		return $this->isReadOnly;
+	}
+
+	public function setIsReadOnly(bool $isReadOnly): static
+	{
+		$this->isReadOnly = $isReadOnly;
+
+		return $this;
+	}
+
+	public function getReadOnlyHint(): ?string
+	{
+		return $this->readOnlyHint;
+	}
+
+	public function setReadOnlyHint(?string $readOnlyHint): static
+	{
+		$this->readOnlyHint = $readOnlyHint;
+
+		return $this;
+	}
+
 	public function getRightItems(): array
 	{
 		return $this->rightItems;
@@ -135,6 +161,8 @@ class RightSection implements JsonSerializable, Arrayable
 			'sectionCode' => $this->getCode(),
 			'sectionHint' => $this->getHint(),
 			'sectionIcon' => $this->iconArrayOrNull(),
+			'isReadOnly' => $this->isReadOnly(),
+			'readOnlyHint' => $this->getReadOnlyHint(),
 			'rights' => array_map(static fn (RightItem $right) => $right->toArray(), $this->rightItems),
 		];
 	}
@@ -179,6 +207,16 @@ class RightSection implements JsonSerializable, Arrayable
 			{
 				$section->setIconBgColor((string)$data['sectionIcon']['bgColor']);
 			}
+		}
+
+		if (isset($data['isReadOnly']))
+		{
+			$section->setIsReadOnly((bool)$data['isReadOnly']);
+		}
+
+		if (isset($data['readOnlyHint']))
+		{
+			$section->setReadOnlyHint((string)$data['readOnlyHint']);
 		}
 
 		if (isset($data['rights']) && is_array($data['rights']))

@@ -196,7 +196,7 @@ class ChatUserProvider extends ChatProvider
 		);
 
 		$query->whereIn('MESSAGE_TYPE', $chatTypeList);
-		$query->where('USER.IS_REAL_USER', 'Y');
+		$query->where('USER.REAL_USER', 'expr', true);
 
 		$matchFilter = Query::filter();
 		static::addFilterBySearchQuery($matchFilter, $searchQuery);

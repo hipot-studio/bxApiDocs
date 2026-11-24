@@ -9,6 +9,8 @@ use Bitrix\Main\Loader;
 use Bitrix\Rest\APAuth\PasswordTable;
 use Bitrix\Rest\APAuth\PermissionTable;
 use Bitrix\Rest\Enum\APAuth\PasswordType;
+use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
+use Bitrix\Rest\Internal\Entity\IncomingWebhook\WebhookType;
 use Throwable;
 
 /**
@@ -27,6 +29,10 @@ use Throwable;
  * PERM === bizprocdesigner), exactly as the legacy findExisting did. The provider is not applicable
  * here: its scope filter works as an OR and does not distinguish a narrow agent token from a broad
  * user one.
+ *
+ * This class owns the criterion: the batch query {@see self::findLegacyPasswordIds()} and the per-webhook
+ * predicate {@see self::isLegacyToken()} are its two forms and change together. The predicate outlives the
+ * migration: ContourCaller refuses a legacy token the migrator failed to deactivate.
  */
 final class LegacyAgentTokenMigratorAgent
 {
@@ -49,6 +55,18 @@ final class LegacyAgentTokenMigratorAgent
 	public static function getAgentName(): string
 	{
 		return self::class . '::execute();';
+	}
+
+	/**
+	 * Whether $webhook has the shape of a legacy agent token: a User webhook with a scope of exactly
+	 * [bizprocdesigner]. The per-webhook form of {@see self::findLegacyPasswordIds()}; activity is not part
+	 * of the shape, it is what the migrator changes.
+	 */
+	public static function isLegacyToken(IncomingWebhook $webhook): bool
+	{
+		return $webhook->getType() === WebhookType::User
+			&& array_values(array_unique($webhook->getScopes())) === [self::SCOPE]
+		;
 	}
 
 	/**
@@ -94,7 +112,8 @@ final class LegacyAgentTokenMigratorAgent
 	}
 
 	/**
-	 * Ids of active user tokens with a scope of exactly [bizprocdesigner].
+	 * Ids of active user tokens with a scope of exactly [bizprocdesigner]. The per-webhook form of the same
+	 * criterion is {@see self::isLegacyToken()}.
 	 *
 	 * The "exactly one scope" criterion is expressed at the SQL level: ids that HAVE
 	 * PERM=bizprocdesigner MINUS ids that have any OTHER PERM. Filtering in PHP over the first N

@@ -228,9 +228,10 @@ class CIMMessageParam
 
 		$sql = "
 			SELECT 
-				C.ID as CHAT_ID, 
+				C.ID as CHAT_ID,
 				C.PARENT_ID as CHAT_PARENT_ID,
-				C.TYPE as MESSAGE_TYPE, 
+				C.PARENT_MID as CHAT_PARENT_MID,
+				C.TYPE as MESSAGE_TYPE,
 				M.AUTHOR_ID, 
 				C.ENTITY_TYPE as CHAT_ENTITY_TYPE, 
 				C.ENTITY_ID as CHAT_ENTITY_ID,
@@ -306,7 +307,11 @@ class CIMMessageParam
 
 		if ($messageData['MESSAGE_TYPE'] === IM\V2\Chat::IM_TYPE_COMMENT)
 		{
-			IM\V2\Pull\CommentTagPublisher::addToStack((int)$messageData['CHAT_ID'], $pull);
+			IM\V2\Service\Locator::getPullSender()->sendToPostCommentSubscribers(
+				(int)$messageData['CHAT_PARENT_ID'],
+				(int)$messageData['CHAT_PARENT_MID'],
+				$pull
+			);
 		}
 		else
 		{

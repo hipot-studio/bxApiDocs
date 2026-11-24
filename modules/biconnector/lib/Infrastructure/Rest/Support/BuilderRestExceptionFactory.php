@@ -46,7 +46,9 @@ final class BuilderRestExceptionFactory
 
 		return match ($code)
 		{
-			FailureCode::AccessDenied => new BuilderAccessDeniedException(),
+			FailureCode::AccessDenied => new BuilderAccessDeniedException(
+				reason: BuilderAccessDeniedException::isPublicReason($data['reason'] ?? null) ? $data['reason'] : null,
+			),
 			FailureCode::NotFound => match (true)
 			{
 				$entityId !== null => new BuilderEntityNotFoundException($entityId),

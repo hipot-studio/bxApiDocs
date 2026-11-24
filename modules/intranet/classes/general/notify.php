@@ -529,7 +529,7 @@ class CIntranetNotify
 			$rsUser = CUser::GetByID($USER_ID);
 			if (
 				($arUser = $rsUser->fetch())
-				&& (int)$arUser["UF_DEPARTMENT"][0] <= 0
+				&& (int)($arUser['UF_DEPARTMENT'][0] ?? 0) <= 0
 			)
 			{
 				$bExtranetUser = true;

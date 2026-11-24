@@ -66,7 +66,7 @@ final class CreateChartOperation
 			return Refusal::error(FailureCode::InvalidArgument, $exception->getMessage());
 		}
 
-		$identityResult = $this->identity->forRead($actor->userId);
+		$identityResult = $this->identity->forWrite($actor->userId);
 		if (!$identityResult->isSuccess())
 		{
 			return $identityResult;
@@ -78,7 +78,8 @@ final class CreateChartOperation
 			return $dataset;
 		}
 
-		$response = IntegratorFactory::getInstance()->createChart($payload);
+		unset($payload['owners']);
+		$response = IntegratorFactory::getInstance()->createChart($payload, $identityResult->getData()['user']);
 		if ($response->hasErrors())
 		{
 			return ChartWriteGuard::unavailableBi(
@@ -103,6 +104,7 @@ final class CreateChartOperation
 			'id' => (int)($data['id'] ?? 0),
 			'name' => (string)($data['chart_name'] ?? $data['slice_name'] ?? $config['name'] ?? ''),
 			'viz_type' => (string)($data['viz_type'] ?? $payload['viz_type'] ?? ''),
+			'vizType' => ChartParamsBuilder::vizTypeAlias((string)($data['viz_type'] ?? $payload['viz_type'] ?? '')),
 			'dataset_id' => (int)($data['dataset_id'] ?? $data['datasource_id'] ?? $config['datasetId'] ?? 0),
 		]);
 	}

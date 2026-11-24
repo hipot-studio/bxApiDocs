@@ -6,13 +6,14 @@ namespace Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks;
 
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons\Button;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons\ButtonCollection;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons\ButtonsHolder;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FormFields\FormField;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FormFields\FormFieldCollection;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Field;
 use Bitrix\Main\Security\Random;
 
-class FormBlock extends AbstractBlock
+class FormBlock extends AbstractBlock implements ButtonsHolder
 {
 	protected FormFieldCollection $elements;
 	protected ButtonCollection $buttons;
@@ -90,17 +91,14 @@ class FormBlock extends AbstractBlock
 		return $this->elements;
 	}
 
+	public function getButtons(): ButtonCollection
+	{
+		return $this->buttons;
+	}
+
 	public function getButtonById(string $id): ?Button
 	{
-		foreach ($this->buttons as $button)
-		{
-			if ($button->getId() === $id)
-			{
-				return $button;
-			}
-		}
-
-		return null;
+		return $this->buttons->getById($id);
 	}
 
 	/**

@@ -2,10 +2,10 @@
 $MESS["SALE_YANDEX_RETURN_CERT"] = "SSL-сертификат";
 $MESS["SALE_YANDEX_RETURN_COMPANY_NAME"] = "Компания атауы (<b>бос орынсыз тек латын әріптері</b>)";
 $MESS["SALE_YANDEX_RETURN_CSR"] = "Сертификатқа сұрау салу";
-$MESS["SALE_YANDEX_RETURN_CSR_DOWNLOAD"] = "<a href='%s'>жүктеу</a>";
+$MESS["SALE_YANDEX_RETURN_CSR_DOWNLOAD"] = "<a href='%s'>жүктеп алу</a>";
 $MESS["SALE_YANDEX_RETURN_ERROR_CN"] = "Компанияның атауы дұрыс емес. Атау тек бос орынсыз латын әріптерінен тұруы керек	";
 $MESS["SALE_YANDEX_RETURN_GENERATE"] = "Жасау";
-$MESS["SALE_YANDEX_RETURN_HELP"] = "MWS-пен жұмыс істеу үшін ЮMoney-ден арнайы сертификат алып, оны осы парақшада жүктеуіңіз керек.";
+$MESS["SALE_YANDEX_RETURN_HELP"] = "MWS-пен жұмыс істеу үшін ЮMoney-ден арнайы сертификат алып, оны осы бетте жүктеуіңіз керек.";
 $MESS["SALE_YANDEX_RETURN_HOW"] = "Сертификатты қалай алуға болады";
 $MESS["SALE_YANDEX_RETURN_HOW_ITEM0"] = "Өтінімді толтыру үшін деректерді жасаңыз";
 $MESS["SALE_YANDEX_RETURN_HOW_ITEM1"] = "Сертификатқа дайын сұрау салуды жүктеп алыңыз (.cdr файл пішімінде).";
@@ -16,7 +16,7 @@ $MESS["SALE_YANDEX_RETURN_HOW_ITEM4"] = "ЮKassa менеджеріне <a href=
                                     <li>толтырылған өтінім сканы,</li>
                                     <li>Қайтаруға сұрау салулар келетін IP</li>
                                 </ul>";
-$MESS["SALE_YANDEX_RETURN_HOW_ITEM5"] = "Сертификатты күтіп, оны осы парақшада жүктеңіз.";
+$MESS["SALE_YANDEX_RETURN_HOW_ITEM5"] = "Сертификатты күтіп, оны осы бетте жүктеңіз.";
 $MESS["SALE_YANDEX_RETURN_PT"] = "Қайтарымдар";
 $MESS["SALE_YANDEX_RETURN_SAVE"] = "Сақтау";
 $MESS["SALE_YANDEX_RETURN_STATEMENT"] = "Өтінімді толтыру үшін деректер";

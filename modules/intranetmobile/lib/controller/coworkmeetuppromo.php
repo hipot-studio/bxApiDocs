@@ -13,7 +13,7 @@ use Bitrix\Main\Type\DateTime;
  */
 class CoworkMeetupPromo extends Base
 {
-	private const CAMPAIGN_END = '2026-09-30 11:00:00';
+	private const CAMPAIGN_END = '2026-11-11 18:00:00';
 	private const CAMPAIGN_END_FORMAT = 'Y-m-d H:i:s';
 	private const CAMPAIGN_TIMEZONE = 'Europe/Moscow';
 	private const SUPPORTED_REGION = 'ru';

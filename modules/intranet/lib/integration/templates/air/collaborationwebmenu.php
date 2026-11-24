@@ -15,6 +15,7 @@ class CollaborationWebMenu
 {
 	private const SYNC_MAIN_ITEM_ID = 'menu_sync_main';
 	private const SYNC_TELEPHONY_ITEM_ID = 'menu_sync_telephony';
+	private const TELEPHONY_ITEM_ID = 'menu_telephony';
 
 	private static ?string $renderedMenuId = null;
 
@@ -100,6 +101,12 @@ class CollaborationWebMenu
 			$section = $sections[$id] ?? [];
 			if (!($section['available'] ?? false))
 			{
+				// Without Sync its submenu is gone, so telephony takes the Sync place as a top level item
+				if ($id === 'sync' && isset($chatItems['call']))
+				{
+					$items[] = self::getTelephonyItem($chatItems['call']);
+				}
+
 				continue;
 			}
 
@@ -287,7 +294,7 @@ class CollaborationWebMenu
 			'URL' => $section['url'] ?? '',
 			'EXTRA_URLS' => $section['extraUrls'] ?? [],
 			'COUNTER_ID' => $data['counter_id'] ?? '',
-			'SUB_LINK' => $data['sub_link'] ?? '',
+			'SUB_LINK' => TopMenu::convertSubLink($data),
 			'ITEMS' => $data['sub_menu'] ?? [],
 			'ON_CLICK' => $section['onclick'] ?? $data['onclick'] ?? '',
 		];
@@ -307,6 +314,16 @@ class CollaborationWebMenu
 				'URL' => '',
 				'ON_CLICK' => $callItem['ON_CLICK'] ?? '',
 			],
+		];
+	}
+
+	private static function getTelephonyItem(array $callItem): array
+	{
+		return [
+			'ID' => self::TELEPHONY_ITEM_ID,
+			'TEXT' => $callItem['TEXT'] ?? '',
+			'URL' => '',
+			'ON_CLICK' => $callItem['ON_CLICK'] ?? '',
 		];
 	}
 

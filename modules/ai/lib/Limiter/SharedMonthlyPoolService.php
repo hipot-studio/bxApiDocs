@@ -4,6 +4,7 @@ namespace Bitrix\AI\Limiter;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Limiter\Period\Monthly;
+use Bitrix\AI\Limiter\Repository\MonthlyPoolRepository;
 use Bitrix\AI\Model\UsageTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
@@ -35,6 +36,105 @@ class SharedMonthlyPoolService
 		$this->logger = $logger ?? (new LoggerFactory())->createById(self::LOGGER_ID) ?? new NullLogger();
 	}
 
+	protected function getMode(): string
+	{
+		try
+		{
+			return (new SharedMonthlyPoolActivation($this->connection))->getMode();
+		}
+		catch (Throwable)
+		{
+			return 'closed';
+		}
+	}
+
+	protected function getRepository(): MonthlyPoolRepository
+	{
+		return new MonthlyPoolRepository($this->connection);
+	}
+
+	public function reserveSharedMonthly(int $userId, int $cost, int $limit): ?SharedMonthlyReservation
+	{
+		if ($userId <= 0 || $cost <= 0 || $limit < 0)
+		{
+			return null;
+		}
+		try
+		{
+			$mode = $this->getMode();
+			if ($mode === 'legacy')
+			{
+				return $this->tryConsumeSharedMonthly($userId, $cost, $limit)
+					? SharedMonthlyReservation::legacy($userId, $cost) : null;
+			}
+			if ($mode !== 'aggregate')
+			{
+				return null;
+			}
+
+			return $this->getRepository()->reserve($userId, $this->getCurrentPeriodCode($userId), $cost, $limit);
+		}
+		catch (Throwable $exception)
+		{
+			$this->logger->error('Unable to reserve the shared monthly AI pool.', ['exception' => $exception]);
+
+			return null;
+		}
+	}
+
+	public function findReservation(string $id, int $userId): ?SharedMonthlyReservation
+	{
+		try
+		{
+			return $this->getRepository()->findReservation($id, $userId);
+		}
+		catch (Throwable $exception)
+		{
+			$this->logger->error('Unable to find the shared monthly AI reservation.', ['exception' => $exception]);
+
+			throw $exception;
+		}
+	}
+
+	public function persistReservationRefund(string $id, int $userId, \Closure $persist): string
+	{
+		return $this->getRepository()->persistRefund($id, $userId, $persist);
+	}
+
+	public function releaseReservation(SharedMonthlyReservation $reservation): void
+	{
+		try
+		{
+			if ($reservation->isTracked())
+			{
+				// Receipt identity remains authoritative after policy or rollout changes.
+				$this->getRepository()->release($reservation);
+			}
+			elseif ($this->getMode() === 'legacy')
+			{
+				$this->releaseSharedMonthly($reservation->getUserId(), $reservation->getCost());
+			}
+		}
+		catch (Throwable $exception)
+		{
+			$this->logger->error('Unable to refund the shared monthly AI pool.', ['exception' => $exception]);
+			if ($reservation->isTracked())
+			{
+				throw $exception;
+			}
+		}
+	}
+
+	public function readTotal(string $period): int
+	{
+		return match ($this->getMode())
+		{
+			'aggregate' => $this->getRepository()->readTotal($period),
+			'legacy' => $this->getCurrentUsage($period),
+			default => throw new \RuntimeException('The shared monthly AI pool is unavailable.'),
+		};
+	}
+
 	public function canConsumeSharedMonthly(int $userId, int $cost, int $limit): bool
 	{
 		if ($userId <= 0 || $cost <= 0 || $limit < 0)
@@ -50,7 +150,7 @@ class SharedMonthlyPoolService
 			$masterOnly = true;
 			$period = $this->getCurrentPeriodCode($userId);
 
-			return $this->getCurrentUsage($period) + $cost <= $limit;
+			return $this->readTotal($period) + $cost <= $limit;
 		}
 		catch (Throwable $exception)
 		{
@@ -81,6 +181,11 @@ class SharedMonthlyPoolService
 	public function tryConsumeSharedMonthly(int $userId, int $cost, int $limit): bool
 	{
 		if ($userId <= 0 || $cost <= 0 || $limit < 0)
+		{
+			return false;
+		}
+
+		if ($this->getMode() !== 'legacy')
 		{
 			return false;
 		}
@@ -153,6 +258,11 @@ class SharedMonthlyPoolService
 	public function releaseSharedMonthly(int $userId, int $cost): void
 	{
 		if ($userId <= 0 || $cost <= 0)
+		{
+			return;
+		}
+
+		if ($this->getMode() !== 'legacy')
 		{
 			return;
 		}

@@ -4,6 +4,7 @@ namespace Bitrix\Pull;
 class Push
 {
 	static $types = null;
+	private static ?array $sources = null;
 	static $config = array();
 	protected static array $explodedOptionIdsStaticCache = [];
 
@@ -47,7 +48,7 @@ class Push
 			}
 
 			$types = Array();
-			foreach ($module['NOTIFY'] as $notifyType => $notifyConfig)
+			foreach ($module['NOTIFY'] ?? [] as $notifyType => $notifyConfig)
 			{
 				if (!$notifyConfig['PUSH'] && $notifyConfig['DISABLED']['PUSH'])
 				{
@@ -75,6 +76,88 @@ class Push
 		self::$types = $result;
 
 		return $result;
+	}
+
+	public static function getSources(): array
+	{
+		if (self::$sources !== null)
+		{
+			return self::$sources;
+		}
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return [];
+		}
+
+		return self::$sources = self::normalizeSources(\CIMNotifySchema::GetNotifySchema());
+	}
+
+	public static function normalizeSources(array $notifySchema): array
+	{
+		$result = [];
+		$position = 0;
+		foreach ($notifySchema as $schema)
+		{
+			$source = $schema['PRODUCT_SOURCE'] ?? null;
+			if (!self::isValidProductSource($source))
+			{
+				continue;
+			}
+
+			$id = $source['ID'];
+			if (isset($result[$id]))
+			{
+				continue;
+			}
+			$result[$id] = [
+				'sort' => $source['SORT'] ?? PHP_INT_MAX,
+				'position' => $position++,
+				'source' => [
+					'id' => $id,
+					'label' => $source['NAME'],
+					'description' => $source['DESCRIPTION'] ?? null,
+					'icon' => [
+						'type' => $source['ICON']['TYPE'],
+						'value' => $source['ICON']['VALUE'],
+					],
+				],
+			];
+		}
+
+		uasort($result, static fn(array $left, array $right): int =>
+			[$left['sort'], $left['position']] <=> [$right['sort'], $right['position']]
+		);
+
+		return array_column($result, 'source');
+	}
+
+	private static function isValidProductSource(mixed $source): bool
+	{
+		if (!is_array($source))
+		{
+			return false;
+		}
+		$id = $source['ID'] ?? null;
+		$name = $source['NAME'] ?? null;
+		$description = $source['DESCRIPTION'] ?? null;
+		$sort = $source['SORT'] ?? null;
+		$icon = $source['ICON'] ?? null;
+		if (
+			!is_string($id)
+			|| preg_match('/^[A-Za-z0-9._-]{1,64}$/D', $id) !== 1
+			|| !is_string($name)
+			|| trim($name) === ''
+			|| (!is_null($description) && !is_string($description))
+			|| (!is_null($sort) && (!is_int($sort) || $sort < 0))
+			|| !is_array($icon)
+		)
+		{
+			return false;
+		}
+
+		return in_array($icon['TYPE'] ?? null, ['named', 'uri'], true)
+			&& is_string($icon['VALUE'] ?? null)
+			&& trim($icon['VALUE']) !== '';
 	}
 
 	public static function getConfig($userId = null)

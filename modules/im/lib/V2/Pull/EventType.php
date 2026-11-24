@@ -11,6 +11,7 @@ enum EventType: string
 	case ChatFieldsUpdate = 'chatFieldsUpdate';
 	case UpdateFeature = 'updateFeature';
 	case PromotionUpdated = 'promotionUpdated';
+	case PromotionRead = 'promotionRead';
 	case ChangeEngine = 'changeEngine';
 	case ChatUserAdd = 'chatUserAdd';
 	case ChatUserLeave = 'chatUserLeave';
@@ -56,6 +57,10 @@ enum EventType: string
 	case SettingsUpdate = 'settingsUpdate';
 	case CopilotGenerationState = 'copilotGenerationState';
 	case ApplicationOpenChat = 'applicationOpenChat';
+	case ScheduledMessageCreate = 'scheduledMessageCreate';
+	case ScheduledMessageUpdate = 'scheduledMessageUpdate';
+	case ScheduledMessagesStatusUpdate = 'scheduledMessagesStatusUpdate';
+	case ScheduledMessageDelete = 'scheduledMessageDelete';
 	case ChatHistoryDeletedForSelf = 'chatHistoryDeletedForSelf';
 	case ChatHistoryDeletedForAll = 'chatHistoryDeletedForAll';
 }

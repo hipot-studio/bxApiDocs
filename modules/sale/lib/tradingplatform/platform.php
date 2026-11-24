@@ -235,7 +235,7 @@ abstract class Platform
 		
 		while ($arRes = $res->fetch())
 		{
-			if ($arRes["CATALOG_SECTIONS_TAB_CLASS_NAME"] <> '')
+			if ($arRes["CATALOG_SECTION_TAB_CLASS_NAME"] <> '')
 			{
 				$result = true;
 				break;

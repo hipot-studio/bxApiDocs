@@ -6,28 +6,12 @@ use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Result;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 
 class ChannelChat extends GroupChat
 {
 	private const MESSAGE_COMPONENT_START_CHANNEL = 'ChannelCreationMessage';
-
-	public function allowsComments(): bool
-	{
-		return true;
-	}
-
-	public function extendPullWatch(): void
-	{
-		if (!Loader::includeModule('pull'))
-		{
-			return;
-		}
-
-		\CPullWatch::Add($this->getContext()->getUserId(), "IM_PUBLIC_COMMENT_{$this->getId()}", true);
-	}
 
 	protected function updateStateAfterRelationsAdd(array $usersToAdd): Chat
 	{

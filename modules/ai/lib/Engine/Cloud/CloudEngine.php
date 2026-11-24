@@ -51,6 +51,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			'moduleId' => $this->getContext()->getModuleId(),
 			'contextId' => $this->getContext()->getContextId(),
 			'userId' => $this->getContext()->getUserId(),
+			'feature' => $this->getRequestContextFeature(),
 		];
 
 		try
@@ -254,9 +255,14 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		}
 	}
 
+	/**
+	 * Cloud engines work only through the queue: the Engine facade calls completionsInQueue() for them.
+	 *
+	 * @return void
+	 * @throws SystemException Always.
+	 */
 	final public function completions(): void
 	{
-		//todo Liskov substitution principle violation
 		throw new SystemException('Direct completions are not supported for cloud engines');
 	}
 

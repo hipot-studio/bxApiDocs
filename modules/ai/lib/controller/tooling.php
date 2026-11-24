@@ -93,7 +93,7 @@ class Tooling extends Controller
 	}
 
 	/**
-	 * Deletes all system prompts from local DB and loads new.
+	 * Synchronizes system prompts and roles with the remote prompt DB; see Prompt\Manager::clearAndRefresh().
 	 *
 	 * @param array $parameters System params.
 	 * @return void

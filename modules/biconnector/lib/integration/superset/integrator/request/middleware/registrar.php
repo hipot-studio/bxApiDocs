@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Logger\IntegratorLogger;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRequest;
 use \Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\Main\Error;
+use Bitrix\Main\Result;
 
 final class Registrar extends Base
 {
@@ -25,32 +26,17 @@ final class Registrar extends Base
 
 		$this->logger->logInfo('portal make register action', ['trigger_request' => $request->getAction()]);
 		$result = $this->registrar->register();
-		if (!$result->isSuccess())
+		if ($result->isSuccess())
 		{
-			$status = $result->getData()['STATUS_CODE'] ?? 0;
-
-			$this->logger->logErrors([
-				new Error('cannot register portal on supersetproxy while make method ' . $request->getAction()),
-				...$result->getErrors(),
-			]);
-
-			if ($status === IntegratorResponse::STATUS_LIMIT_EXCEEDED)
-			{
-				return new IntegratorResponse(
-					IntegratorResponse::STATUS_LIMIT_EXCEEDED,
-					null,
-					$result->getErrors(),
-				);
-			}
-
-			return new IntegratorResponse(
-				IntegratorResponse::STATUS_UNKNOWN,
-				null,
-				[new Error('portal registration is incomplete', IntegratorResponse::STATUS_UNKNOWN)]
-			);
+			return null;
 		}
 
-		return null;
+		$this->logger->logErrors([
+			new Error('cannot register portal on supersetproxy while make method ' . $request->getAction()),
+			...$result->getErrors(),
+		]);
+
+		return self::buildFailureResponse($result);
 	}
 
 	public function afterRequest(IntegratorRequest $request, IntegratorResponse $response): IntegratorResponse
@@ -75,6 +61,50 @@ final class Registrar extends Base
 		}
 
 		return $response;
+	}
+
+	private static function buildFailureResponse(Result $result): IntegratorResponse
+	{
+		$errors = $result->getErrors();
+		$status = (int)($result->getData()['STATUS_CODE'] ?? 0);
+
+		if ($status === IntegratorResponse::STATUS_LIMIT_EXCEEDED)
+		{
+			return new IntegratorResponse(IntegratorResponse::STATUS_LIMIT_EXCEEDED, null, $errors);
+		}
+
+		if (Diagnostics::isDiagnosedRefusal($errors))
+		{
+			return new IntegratorResponse(IntegratorResponse::STATUS_INNER_ERROR, null, $errors);
+		}
+
+		if (self::hasMachineCode($errors))
+		{
+			return new IntegratorResponse(IntegratorResponse::STATUS_UNKNOWN, null, $errors);
+		}
+
+		return new IntegratorResponse(
+			IntegratorResponse::STATUS_UNKNOWN,
+			null,
+			[new Error('portal registration is incomplete', IntegratorResponse::STATUS_UNKNOWN)]
+		);
+	}
+
+	/**
+	 * @param Error[] $errors
+	 */
+	private static function hasMachineCode(array $errors): bool
+	{
+		foreach ($errors as $error)
+		{
+			$code = $error->getCode();
+			if (is_string($code) && $code !== '' && !is_numeric($code))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static function getMiddlewareId(): string

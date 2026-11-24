@@ -38,6 +38,20 @@ final class ChatGPT extends CloudEngine implements IContext, IQueueOptional
 		return self::DEFAULT_MODEL;
 	}
 
+	/**
+	 * The context limit also applies to any model set by aiproxy in cloud_models.
+	 * @return bool
+	 */
+	protected function isContextMessagesLimitApplicable(): bool
+	{
+		$cloudModel = (new Engine\Cloud\EngineProperty\Model(
+			static::class,
+			$this->getContext()->getModuleId(),
+		))->getValue();
+
+		return $cloudModel !== null || str_starts_with($this->getModel(), 'gpt-4');
+	}
+
 	public function setUserParameters(array $params): void
 	{
 		$toSet = [];

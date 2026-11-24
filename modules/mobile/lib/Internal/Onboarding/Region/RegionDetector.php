@@ -3,7 +3,6 @@
 namespace Bitrix\Mobile\Internal\Onboarding\Region;
 
 use Bitrix\Main\Application;
-use Bitrix\Mobile\Internal\Onboarding\Checkers\PortalAgeChecker;
 use Bitrix\Mobile\Internal\Onboarding\Region\Regions\BrRegion;
 use Bitrix\Mobile\Internal\Onboarding\Region\Regions\ByRegion;
 use Bitrix\Mobile\Internal\Onboarding\Region\Regions\CnRegion;
@@ -23,9 +22,6 @@ class RegionDetector
 {
 	/** @var array<string, RegionConfig> */
 	private static ?array $regions = null;
-
-	public function __construct(private readonly ?PortalAgeChecker $portalAgeChecker = null)
-	{}
 
 	/**
 	 * @return array<string, RegionConfig>
@@ -91,14 +87,8 @@ class RegionDetector
 	{
 		$zone = $this->getPortalZone() ?? RegionCode::EN->value;
 		$regions = self::getRegions();
-		$regionConfig = clone ($regions[$zone] ?? $regions[RegionCode::EN->value]);
 
-		if ($this->portalAgeChecker !== null)
-		{
-			$regionConfig->setPortalAgeChecker($this->portalAgeChecker);
-		}
-
-		return $regionConfig;
+		return clone ($regions[$zone] ?? $regions[RegionCode::EN->value]);
 	}
 
 	private function getPortalZone(): ?string

@@ -13,6 +13,8 @@ class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 
 	public function __construct(
 		int $userId,
+		private readonly bool $fresh = false,
+		private readonly array $snapshot = [],
 	)
 	{
 		$this->userAccessResolver = new UnifiedLinkUserAccessResolver($userId);
@@ -52,7 +54,13 @@ class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 
 	protected function getAccessLevelForObject(BaseObject $baseObject): UnifiedLinkAccessLevel
 	{
-		return UnifiedLinkAccessRepository::getByObjectId((int)$baseObject->getId())
+		$id = (int)$baseObject->getId();
+		$level = $this->fresh
+			? ($this->snapshot['levels'][$id] ?? null)
+			: UnifiedLinkAccessRepository::getByObjectId($id)
+		;
+
+		return $level
 			?? $this->getDefaultAccessLevel($baseObject)
 		;
 	}

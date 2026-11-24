@@ -51,7 +51,7 @@ class Manager
 	}
 
 	/**
-	 * Remove existing custom Engine.
+	 * Removes custom Engine of the calling REST application by code.
 	 *
 	 * @param array $data Array contains fields: ['code'].
 	 * @param mixed $service During REST executes.
@@ -96,7 +96,8 @@ class Manager
 	}
 
 	/**
-	 * Returns collection of Engines.
+	 * Returns Engines as rows with lower-case keys and `date_create` as a timestamp.
+	 * During REST execution only Engines of the calling application are returned.
 	 *
 	 * @param array|null $data Maybe an array with `filter` and `limit` key.
 	 * @param mixed $service During REST executes.
@@ -147,7 +148,7 @@ class Manager
 	}
 
 	/**
-	 * Returns collection of Engines.
+	 * Returns collection of Engines, skipping rows with invalid data. Without $data the list is cached.
 	 *
 	 * @param array|null $data Maybe an array with `filter` and `limit` key.
 	 * @return Collection
@@ -234,9 +235,9 @@ class Manager
 	 * Checks Engine exists by code.
 	 * @param string $code Engine's code.
 	 * @return bool
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function hasEngine(string $code): bool
 	{
@@ -251,9 +252,9 @@ class Manager
 	/**
 	 * Checks ThirdParty Engines exists.
 	 * @return bool
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function hasEngines(): bool
 	{

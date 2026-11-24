@@ -23,6 +23,18 @@ class RecentConfigManager
 	private array $composedAliases = [];
 	/** @var array<string, string[]> */
 	private array $additionalSectionsByLiteral;
+	/**
+	 * The sections of a type stop changing once {@see load()} has run, while the rules of the folders
+	 * ask about them once per counter row ({@see \Bitrix\Im\V2\Reading\Counter\Entity\UserCounters::resolveRecentSections()}) -
+	 * hundreds of rows over a handful of types. The answer is kept so that the walk over the composed
+	 * aliases and the camelCase conversion of the type name run once per type and not once per row.
+	 * Keyed by {@see getSectionsCacheKey()}: the answer depends on the extended type and the literal.
+	 *
+	 * @var array<string, string[]>
+	 */
+	private array $baseSectionsByType = [];
+	/** @var array<string, string[]> */
+	private array $allSectionsByType = [];
 	private bool $isLoaded = false;
 	private Converter $converterToCamelCase;
 
@@ -82,6 +94,12 @@ class RecentConfigManager
 
 	public function getAllRecentSectionsByType(Chat\Type $type): array
 	{
+		$cacheKey = $this->getSectionsCacheKey($type);
+		if (isset($this->allSectionsByType[$cacheKey]))
+		{
+			return $this->allSectionsByType[$cacheKey];
+		}
+
 		$baseSections = $this->getBaseRecentSections($type);
 		$allSections = $baseSections;
 
@@ -93,7 +111,7 @@ class RecentConfigManager
 			}
 		}
 
-		return $allSections;
+		return $this->allSectionsByType[$cacheKey] = $allSections;
 	}
 
 	public function getExcludedComposedSections(Chat\Type $type): array
@@ -114,6 +132,12 @@ class RecentConfigManager
 
 	public function getBaseRecentSections(Chat\Type $type): array
 	{
+		$cacheKey = $this->getSectionsCacheKey($type);
+		if (isset($this->baseSectionsByType[$cacheKey]))
+		{
+			return $this->baseSectionsByType[$cacheKey];
+		}
+
 		$extendedType = $type->getExtendedType(false);
 		$config = $this->getByExtendedType($extendedType);
 		$recentSections = [];
@@ -133,7 +157,12 @@ class RecentConfigManager
 			$recentSections[] = $section;
 		}
 
-		return $recentSections;
+		return $this->baseSectionsByType[$cacheKey] = $recentSections;
+	}
+
+	private function getSectionsCacheKey(Chat\Type $type): string
+	{
+		return $type->getExtendedType(false) . ':' . $type->literal;
 	}
 
 	/**

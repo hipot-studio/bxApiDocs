@@ -17,14 +17,11 @@ class AISetting extends Intranet\Settings\AbstractSettings
 	{
 		$errors = new ErrorCollection();
 
-		//todo: need Validate?
-
 		return $errors;
 	}
 
 	public function save(): Result
 	{
-		// todo: validate
 		$config = new AI\Tuning\Manager();
 		foreach ($this->data as $code => $value)
 		{

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Promotion\Service;
 
+use Bitrix\AI\Facade\Portal;
 use Bitrix\Im\Common;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Common\SingletonTrait;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
 use Bitrix\Im\V2\Promotion\Entity\Promotion;
 use Bitrix\Im\V2\Promotion\Entity\PromotionList;
+use Bitrix\Im\V2\Promotion\Event\Read\PromotionReadEvent;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
 use Bitrix\Im\V2\Promotion\Internals\PortalAge;
 use Bitrix\Im\V2\Promotion\Internals\PromotionType;
@@ -22,7 +24,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Tour;
-use Bitrix\Pull\Event;
 
 class UIPromotionService implements PromotionServiceInterface
 {
@@ -33,11 +34,14 @@ class UIPromotionService implements PromotionServiceInterface
 	 * promo is still unwatched (BRIEF, R-11).
 	 */
 	public const CHECK_IN_PROMO_ID = 'im:check-in-from-chat:28082026:all';
+	public const FOLDER_ALL_ONBOARDING_PROMO_ID = 'im:folder-all-onboarding:12082026:all';
 
 	private const ONE_MONTH = 3600 * 24 * 30;
 	private const ENDLESS_LIFETIME = 0;
 	private const VOICE_MESSAGE_PROMO_CUTOFF_DATE_OPTION = 'voice_message_promo_cutoff_date';
 	private const VOICE_MESSAGE_PROMO_CUTOFF_DATE_DEFAULT = '2026-08-26';
+	private const SOUND_VOLUME_PROMO_CUTOFF_DATE_OPTION = 'sound_volume_promo_cutoff_date';
+	private const SOUND_VOLUME_PROMO_CUTOFF_DATE_DEFAULT = '2026-09-14';
 	private const FOLDER_ALL_ONBOARDING_PROMO_CUTOFF_DATE_OPTION = 'folder_all_onboarding_promo_cutoff_date';
 	private const FOLDER_ALL_ONBOARDING_PROMO_CUTOFF_DATE_DEFAULT = '2026-10-13';
 
@@ -288,7 +292,7 @@ class UIPromotionService implements PromotionServiceInterface
 			// are released independently, so viewing the onboarding on one keeps it waiting on the other.
 			// Endless by intent: without LIFETIME the promo expires thirty days after its first check.
 			$result[] = [
-				"ID" => 'im:folder-all-onboarding:12082026:all',
+				"ID" => self::FOLDER_ALL_ONBOARDING_PROMO_ID,
 				"USER_TYPE" => UserType::ALL->value,
 				"DEVICE_TYPE" => DeviceType::WEB->value,
 				"LIFETIME" => self::ENDLESS_LIFETIME,
@@ -333,16 +337,73 @@ class UIPromotionService implements PromotionServiceInterface
 			'LIFETIME' => self::ENDLESS_LIFETIME,
 		];
 
+		if ($this->isSoundVolumePromoAllowedByPortalAge())
+		{
+			$result[] = [
+				'ID' => 'im:sound-volume:14092026:all',
+				'USER_TYPE' => UserType::ALL->value,
+				'DEVICE_TYPE' => DeviceType::WEB->value,
+				'LIFETIME' => self::ENDLESS_LIFETIME,
+			];
+		}
+
 		$settings = Configuration::getValue('im');
 		if (isset($settings['promotion']) && is_array($settings['promotion']))
 		{
 			$result = array_merge($result, $settings['promotion']);
 		}
 
+		// The AI gate is expensive under the hood, so it runs only when a live AI promo
+		// is actually in the list; promos outside their date window are skipped anyway.
+		// method_exists keeps this working while the ai module is still on an older release.
+		if (
+			self::hasActiveAiPromotions($result)
+			&& Loader::includeModule('ai')
+			&& method_exists(Portal::class, 'hasEnabledAiScenario')
+			&& !Portal::hasEnabledAiScenario()
+		)
+		{
+			$result = array_values(array_filter(
+				$result,
+				static fn (array $config): bool => !self::isAiPromotionId((string)$config['ID']),
+			));
+		}
+
 		return $result;
 	}
 
-	private function isFolderAllOnboardingPromoAllowedByPortalAge(): bool
+	private static function hasActiveAiPromotions(array $promotions): bool
+	{
+		$now = time();
+		foreach ($promotions as $config)
+		{
+			if (!self::isAiPromotionId((string)($config['ID'] ?? '')))
+			{
+				continue;
+			}
+
+			$startsAt = (int)($config['START_DATE'] ?? 0);
+			$endsAt = (int)($config['END_DATE'] ?? 0);
+			if ($startsAt <= $now && ($endsAt === 0 || $endsAt >= $now))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function isAiPromotionId(string $promotionId): bool
+	{
+		return str_contains($promotionId, 'copilot') || str_contains($promotionId, 'gpt');
+	}
+
+	/**
+	 * Whether the portal is in the range the onboarding of the folder "All" is issued to.
+	 *
+	 * @return bool
+	 */
+	public function isFolderAllOnboardingPromoAllowedByPortalAge(): bool
 	{
 		return PortalAge::isCreatedBeforeCutoffDateOrUnknown(
 			'im',
@@ -357,6 +418,19 @@ class UIPromotionService implements PromotionServiceInterface
 			'im',
 			self::VOICE_MESSAGE_PROMO_CUTOFF_DATE_OPTION,
 			self::VOICE_MESSAGE_PROMO_CUTOFF_DATE_DEFAULT
+		);
+	}
+
+	/**
+	 * The onboarding tells about the volume section that was not there before, so it is meant for a
+	 * portal that already worked without it - and for one whose age is unknown.
+	 */
+	private function isSoundVolumePromoAllowedByPortalAge(): bool
+	{
+		return PortalAge::isCreatedBeforeCutoffDateOrUnknown(
+			'im',
+			self::SOUND_VOLUME_PROMO_CUTOFF_DATE_OPTION,
+			self::SOUND_VOLUME_PROMO_CUTOFF_DATE_DEFAULT
 		);
 	}
 
@@ -433,15 +507,7 @@ class UIPromotionService implements PromotionServiceInterface
 		$userId = Common::getUserId();
 		$tour->setViewDate($userId);
 
-		if (Loader::includeModule('pull'))
-		{
-			Event::add($userId, [
-				'module_id' => 'im',
-				'command' => 'promotionRead',
-				'params' => ['id' => $promoId],
-				'extra' => Common::getPullExtra()
-			]);
-		}
+		(new PromotionReadEvent((int)$userId, $promoId))->send();
 
 		return $result;
 	}

@@ -83,6 +83,20 @@ class BaasTokenService
 		return $service->forceConsume($tokens);
 	}
 
+	/**
+	 * @throws NotServiceException
+	 */
+	public function consumeAvailable(int $tokens = 1): Main\Result
+	{
+		$service = $this->getService();
+		if (empty($service))
+		{
+			throw new NotServiceException('Not Baas service');
+		}
+
+		return $service->consume($tokens);
+	}
+
 	protected function getService(): ?Baas\Service
 	{
 		if (!empty($this->service))

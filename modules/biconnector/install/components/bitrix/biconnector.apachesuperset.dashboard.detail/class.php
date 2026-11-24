@@ -317,6 +317,22 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			return;
 		}
 
+		// The mobile app passes the gate in its state action before it opens this page. Refused here, an app
+		// without that gate would reopen the page over and over.
+		if (
+			!$this->isMobile
+			&& !MarketAccessManager::getInstance()->ensureExpirationDateDelivered($this->dashboard->getType())
+		)
+		{
+			// The loading screen reloads the page every 10 seconds, and every reload is a new attempt of the gate.
+			$dashboard = $this->dashboard->toArray();
+			$dashboard['STATUS'] = SupersetDashboardTable::DASHBOARD_STATUS_LOAD;
+			$this->arResult['PERIODIC_RELOAD'] = true;
+			$this->showStartupTemplate($dashboard);
+
+			return;
+		}
+
 		$this->dashboard->loadCredentials();
 		if (SupersetInitializer::isSupersetUpdating())
 		{

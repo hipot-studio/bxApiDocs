@@ -4,7 +4,6 @@ namespace Bitrix\BIConnector\Access\Table;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Superset\Logger\Logger;
@@ -118,14 +117,11 @@ final class PermissionSetService
 	/**
 	 * Resolves the allowed table codes per operation for the employee.
 	 *
-	 * The access subsystem answers in group ids, the consumer speaks table codes, so the answer is
-	 * translated through the membership service. A group gives exactly the codes of its binding rows,
-	 * so a code bound to no group is allowed to nobody.
+	 * The access subsystem answers in table codes: the group rights of the roles with the overrides of
+	 * single tables laid over them. A code bound to no group is allowed to nobody.
 	 *
-	 * Deliberately no check for "the rights are not enforced here": the rule answers with every group
-	 * both for an administrator and on a portal with the rights feature off, and that is the meaning of
-	 * the axis being on with nothing to enforce - overriding it here would invent a second answer to a
-	 * question the subsystem already answers.
+	 * The rule already answers with every bound table for an administrator and on a portal without the rights
+	 * feature, so no separate bypass is needed here.
 	 *
 	 * @param int $userId
 	 * @return array<string, list<string>>
@@ -136,11 +132,10 @@ final class PermissionSetService
 		$controller = new AccessController($userId);
 
 		$set = [];
-		$codesByGroups = [];
 		foreach (self::OPERATION_ACTIONS as $operation => $action)
 		{
-			$allowedGroupIds = $controller->getAllowedGroupValue($action);
-			if ($allowedGroupIds === null)
+			$tableCodes = $controller->getAllowedTableValue($action);
+			if ($tableCodes === null)
 			{
 				// Not an absence of rights but an absence of the rule: the action is not served by the
 				// table rule at all. An empty list here would be read as "nothing is allowed" and a broken
@@ -148,35 +143,13 @@ final class PermissionSetService
 				throw new \RuntimeException("Action '{$action}' is not served by the table permission rule");
 			}
 
-			// The operations of the axis usually resolve to the same groups, and the catalog behind them
-			// costs the same every time, so it is unfolded once per distinct set of groups.
-			$groupsKey = self::groupsKey($allowedGroupIds);
-			if (!isset($codesByGroups[$groupsKey]))
-			{
-				$tableCodes = TableGroupMembershipService::getTableCodesByGroupIds($allowedGroupIds);
-				// The order of the groups is not the order of the rights: sorted, the answer is a function of
-				// what is allowed, and the consumer does not re-cache a set that did not change.
-				sort($tableCodes, SORT_STRING);
-
-				$codesByGroups[$groupsKey] = $tableCodes;
-			}
-
-			$set[$operation] = $codesByGroups[$groupsKey];
+			// Sorted, the answer is a function of what is allowed, and the consumer does not re-cache a set
+			// that did not change.
+			sort($tableCodes, SORT_STRING);
+			$set[$operation] = array_values($tableCodes);
 		}
 
 		return $set;
-	}
-
-	/**
-	 * @param array $groupIds
-	 * @return string Order-independent key of the group set.
-	 */
-	private static function groupsKey(array $groupIds): string
-	{
-		$ids = array_map('intval', $groupIds);
-		sort($ids, SORT_NUMERIC);
-
-		return implode(',', $ids);
 	}
 
 	/**

@@ -127,18 +127,18 @@ final class SupersetController
 		return $result;
 	}
 
-	public function getLoginUrl(): ?string
+	public function getLoginUrl(bool $allowStartingInstance = false): ?string
 	{
-		$result = $this->getLoginUrlResult();
+		$result = $this->getLoginUrlResult($allowStartingInstance);
 
 		return $result->isSuccess() ? $result->getData()['url'] : null;
 	}
 
-	public function getLoginUrlResult(): Main\Result
+	public function getLoginUrlResult(bool $allowStartingInstance = false): Main\Result
 	{
 		$result = new Main\Result();
 
-		$response = $this->integrator->getLoginUrl();
+		$response = $this->integrator->getLoginUrl($allowStartingInstance);
 		if ($response->hasErrors())
 		{
 			return $result->addErrors($response->getErrors());

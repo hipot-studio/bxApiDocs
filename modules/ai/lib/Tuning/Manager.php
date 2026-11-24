@@ -100,7 +100,11 @@ class Manager
 	}
 
 	/**
-	 * Loads config from external handlers.
+	 * Loads config from external handlers of the ai:onTuningLoad event.
+	 * A handler returns Bitrix\Main\ORM\EventResult with modified fields:
+	 * groups (code => raw group, existing codes are not overridden), items (code => raw item with optional
+	 * group and default; items of unknown or internal groups are ignored), itemRelations (group => parent => children).
+	 * Results of other types are ignored.
 	 *
 	 * @return void
 	 */

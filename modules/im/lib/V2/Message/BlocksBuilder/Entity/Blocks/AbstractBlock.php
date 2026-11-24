@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks;
 
 use Bitrix\Im\V2\Entity\File\FileCollection;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Footer\FooterElementCollection;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Field;
 
@@ -12,6 +13,8 @@ abstract class AbstractBlock implements \JsonSerializable
 {
 	protected string $id;
 	protected bool $isService;
+	protected FooterElementCollection $footer;
+	protected ?string $footerSpacing;
 
 	private ?array $fileNames = null;
 
@@ -19,6 +22,8 @@ abstract class AbstractBlock implements \JsonSerializable
 	{
 		$this->id = (string)$blockData[Field::Id->value];
 		$this->isService = (bool)($blockData[Field::IsService->value] ?? false);
+		$this->footer = FooterElementCollection::create($blockData[Field::Footer->value] ?? []);
+		$this->footerSpacing = $blockData[Field::FooterSpacing->value] ?? null;
 	}
 
 	abstract public static function create(array $blockData): AbstractBlock;
@@ -47,6 +52,24 @@ abstract class AbstractBlock implements \JsonSerializable
 	public function isService(): bool
 	{
 		return $this->isService;
+	}
+
+	/**
+	 * The footer belongs to every block type, so it is read here and merged into the payload by the
+	 * collection: serialization itself stays with each block.
+	 */
+	public function getFooter(): FooterElementCollection
+	{
+		return $this->footer;
+	}
+
+	/**
+	 * The gap between the content of the block and its footer, as the sender named it. No step means
+	 * the clients draw the one they hold as default.
+	 */
+	public function getFooterSpacing(): ?string
+	{
+		return $this->footerSpacing;
 	}
 
 	protected function getFileNamesText(): ?string

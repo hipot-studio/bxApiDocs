@@ -358,8 +358,11 @@ final class TableGroupRepository
 			return new TableSectionLevel(array_values(array_unique(array_merge($allowedCodes, $ungroupedCodes))));
 		}
 
-		$allowedGroupIds = $this->getAllowedGroupIds();
-		if ($allowedGroupIds === [])
+		// Only the groups of the own right are candidates to be named: a group seen through a table it
+		// shares with another one usually holds tables the person does not see, and it would keep the
+		// whole set from being named. Without overrides the own groups hold every allowed code.
+		$ownGroupIds = $this->getOwnGroupIds();
+		if ($ownGroupIds === [])
 		{
 			return new TableSectionLevel($allowedCodes);
 		}
@@ -367,7 +370,7 @@ final class TableGroupRepository
 		// The groups may be named only while the allowed codes are exactly their composition. The level of
 		// these groups names them only while its codes are the whole composition; those codes then stand
 		// for the allowed ones while they are a subset of them of the same size.
-		$groupLevel = $this->getLevel($allowedGroupIds);
+		$groupLevel = $this->getLevel($ownGroupIds);
 		$canNameGroups = $groupLevel->groupIds !== null
 			&& count($groupLevel->tableCodes ?? []) === count($allowedCodes)
 			&& array_diff($groupLevel->tableCodes ?? [], $allowedCodes) === []
@@ -398,18 +401,27 @@ final class TableGroupRepository
 	}
 
 	/**
-	 * Groups of the axis the person is allowed to view.
+	 * Groups of the axis the person sees: by the own right of view or by a visible table of the group.
 	 *
-	 * An action with no rule of its own answers null, and null is read here as "no group at all": the
-	 * axis grants by naming its groups, so an answer that names none grants none.
+	 * The callers ask it with the axis on only, so null - the axis is off - is read as "no group at all".
 	 *
 	 * @return int[]
 	 */
 	private function getAllowedGroupIds(): array
 	{
-		$allowedGroupIds = $this->getAccessController()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_TABLE_VIEW);
+		return array_map('intval', $this->visibility->getVisibleGroupIds() ?? []);
+	}
 
-		return array_map('intval', $allowedGroupIds ?? []);
+	/**
+	 * Groups the person sees by the own right of view, whatever the overrides of the tables are.
+	 *
+	 * @return int[]
+	 */
+	private function getOwnGroupIds(): array
+	{
+		$groupIds = $this->getAccessController()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_TABLE_VIEW) ?? [];
+
+		return array_values(array_unique(array_map('intval', $groupIds)));
 	}
 
 	private function getAccessController(): AccessController

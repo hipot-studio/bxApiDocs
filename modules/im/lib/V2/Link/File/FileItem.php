@@ -198,6 +198,21 @@ class FileItem extends BaseLinkItem
 		return (new static($entity))->fillFile();
 	}
 
+	public static function getByMessageIdAndDiskFileId(int $messageId, int $diskFileId): ?self
+	{
+		// nothing keeps the pair unique: its first record stands for it, a later duplicate would skip rows between
+		$entity = LinkFileTable::query()
+			->setSelect(['ID', 'MESSAGE_ID', 'CHAT_ID', 'SUBTYPE', 'DISK_FILE_ID', 'DATE_CREATE', 'AUTHOR_ID'])
+			->where('MESSAGE_ID', $messageId)
+			->where('DISK_FILE_ID', $diskFileId)
+			->setOrder(['ID' => 'ASC'])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $entity === null ? null : new static($entity);
+	}
+
 	public function setChatId(int $chatId): BaseLinkItem
 	{
 		if (isset($this->entity))

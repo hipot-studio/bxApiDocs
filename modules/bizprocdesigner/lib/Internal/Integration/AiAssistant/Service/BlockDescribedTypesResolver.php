@@ -115,7 +115,8 @@ final class BlockDescribedTypesResolver
 	 */
 	private function makeConditionDescription(): string
 	{
-		return 'This is the "operator" of a rule condition. '
+		return 'A rule condition decides whether the rule of the node fires and which output of the node the'
+			. ' process leaves by. This is the "operator" of such a condition. '
 			. ConditionOperatorDictionary::contractText('the rule', [Operator::Modified])
 		;
 	}

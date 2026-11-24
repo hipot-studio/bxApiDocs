@@ -52,6 +52,10 @@ class DisplayStatusResolver
 	// collected parameters (API-01 updateItem) - the temp bytes are still alive - so
 	// unlike quota/permission/size a retry does have a path out.
 	public const ERROR_BIZPROC_PARAMS_REQUIRED = 'bizproc_params_required';
+	// The format of the file is forbidden by the format restriction rules of the uploader
+	// (File::ERROR_FORMAT_RESTRICTED at commit). Non-retriable: the same name meets the
+	// same rule on every attempt.
+	public const ERROR_FORMAT_RESTRICTED = 'docked_format_restricted';
 
 	// Display statuses (PRD section 3, extended with the failed-item variants).
 	public const DISPLAY_QUEUED = 'queued';
@@ -71,6 +75,7 @@ class DisplayStatusResolver
 	public const DISPLAY_ERROR_RESTRICTION = 'error_restriction';
 	public const DISPLAY_ERROR_BIZPROC_PARAMS = 'error_bizproc_params';
 	public const DISPLAY_ERROR_CONNECTION = 'error_connection';
+	public const DISPLAY_ERROR_FORMAT = 'error_format';
 
 	// Item action tokens.
 	public const ACTION_RETRY = 'retry';
@@ -87,8 +92,8 @@ class DisplayStatusResolver
 
 	/**
 	 * The ERROR_CODE values for which a retry is pointless: quota, permission,
-	 * restriction, the per-file size cap, an empty file and a blocked common storage. Anything
-	 * else on a failed item is treated as a generic, retriable transport error.
+	 * restriction, the per-file size cap, an empty file, a forbidden format and a blocked
+	 * common storage. Anything else on a failed item is treated as a generic, retriable transport error.
 	 */
 	private const NON_RETRIABLE_ERROR_CODES = [
 		self::ERROR_QUOTA_CLOUD,
@@ -99,6 +104,7 @@ class DisplayStatusResolver
 		self::ERROR_COMMON_STORAGE_BLOCKED,
 		self::ERROR_RESTRICTION,
 		self::ERROR_FOLDER_TREE_FAILED,
+		self::ERROR_FORMAT_RESTRICTED,
 	];
 
 	public function __construct(
@@ -427,6 +433,7 @@ class DisplayStatusResolver
 			self::ERROR_COMMON_STORAGE_BLOCKED => self::DISPLAY_ERROR_BLOCKED,
 			self::ERROR_RESTRICTION => self::DISPLAY_ERROR_RESTRICTION,
 			self::ERROR_BIZPROC_PARAMS_REQUIRED => self::DISPLAY_ERROR_BIZPROC_PARAMS,
+			self::ERROR_FORMAT_RESTRICTED => self::DISPLAY_ERROR_FORMAT,
 			// A lost link is a variant of the generic error, not a family of its own: it is
 			// absent from NON_RETRIABLE_ERROR_CODES, so the row keeps the retry the matrix
 			// gives every repeatable failure and the queue keeps counting it among the ones

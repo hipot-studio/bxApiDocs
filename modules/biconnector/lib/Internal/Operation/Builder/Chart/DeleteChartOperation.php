@@ -114,13 +114,15 @@ final class DeleteChartOperation
 		}
 
 		$chartData = $lookup->getData()['entity'];
-		$dashboards = $chartData['dashboards'] ?? [];
+		$dashboards = $chartData['dashboards'] ?? null;
 		if (!is_array($dashboards))
 		{
 			return Refusal::unavailableBi([], ['stage' => 'delete_chart.load', 'chart_id' => $chartId]);
 		}
 
-		$editable = $this->guard->checkEditable($dashboards, $actor);
+		$editable = $this->guard->checkEditable(
+			$dashboards, $actor, is_array($chartData['owners'] ?? null) ? $chartData['owners'] : [],
+		);
 		if (!$editable->isSuccess())
 		{
 			return $editable;

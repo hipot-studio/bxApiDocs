@@ -84,28 +84,63 @@ final class AgentWebhookService
 			return $result->addError(new Error(Loc::getMessage('BIZPROCDESIGNER_WEBHOOK_ERR_MODULE_NOT_INSTALLED'), 'REST_NOT_INSTALLED'));
 		}
 
-		$existing = $this->findActiveTokens($userId, $templateId)[0] ?? null;
-
+		$existing = $this->findLiveTokens($userId, $templateId)[0] ?? null;
 		if ($existing !== null)
 		{
-			return $result->setData([
-				'url' => $existing->getWebhookUrl(),
-				'connected' => true,
-				'expiresAt' => $this->getTokenExpireAt($existing->getId()),
-			]);
+			return $this->answerWith($existing->getWebhookUrl(), $existing->getId(), $result);
 		}
 
-		$webhook = $this->create($userId, $templateId, $result);
+		// Past this point a token is about to be minted, and the read above is what decides that. Two calls
+		// of the same pair that both read "none" both mint one, and the pair ends up with two live secrets
+		// where the contract promises one - the same reason regenerate() holds this very lock.
+		$connection = Application::getConnection();
+		$lockName = self::pairLockName($userId, $templateId);
+		$acquired = $connection->lock($lockName, self::LOCK_TIMEOUT);
 
-		if ($webhook === null)
+		try
 		{
-			return $result;
-		}
+			if (!$acquired)
+			{
+				return $result->addError(
+					new Error(Loc::getMessage('BIZPROCDESIGNER_WEBHOOK_ERR_LOCK_NOT_ACQUIRED'), 'LOCK_NOT_ACQUIRED')
+				);
+			}
 
+			// Read again, now that nobody else can be minting: the call that held the lock before this one
+			// has already created the token this call was about to duplicate.
+			$existing = $this->findLiveTokens($userId, $templateId)[0] ?? null;
+			if ($existing !== null)
+			{
+				return $this->answerWith($existing->getWebhookUrl(), $existing->getId(), $result);
+			}
+
+			$webhook = $this->create($userId, $templateId, $result);
+			if ($webhook === null)
+			{
+				return $result;
+			}
+
+			return $this->answerWith(
+				\CRestUtil::getWebhookEndpoint($webhook->getPassword(), $userId),
+				$webhook->getId(),
+				$result,
+			);
+		}
+		finally
+		{
+			if ($acquired)
+			{
+				$connection->unlock($lockName);
+			}
+		}
+	}
+
+	private function answerWith(string $url, int $passwordId, Result $result): Result
+	{
 		return $result->setData([
-			'url' => \CRestUtil::getWebhookEndpoint($webhook->getPassword(), $userId),
+			'url' => $url,
 			'connected' => true,
-			'expiresAt' => $this->getTokenExpireAt($webhook->getId()),
+			'expiresAt' => $this->getTokenExpireAt($passwordId),
 		]);
 	}
 
@@ -173,7 +208,7 @@ final class AgentWebhookService
 		}
 
 		$connection = Application::getConnection();
-		$lockName = "bizprocdesigner:agent_token:{$userId}:{$templateId}";
+		$lockName = self::pairLockName($userId, $templateId);
 		$acquired = $connection->lock($lockName, self::LOCK_TIMEOUT);
 
 		try
@@ -237,7 +272,7 @@ final class AgentWebhookService
 			return ['connected' => false, 'expiresAt' => null];
 		}
 
-		foreach ($this->findActiveTokens($userId, $templateId) as $dto)
+		foreach ($this->findLiveTokens($userId, $templateId) as $dto)
 		{
 			return [
 				'connected' => true,
@@ -260,6 +295,46 @@ final class AgentWebhookService
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
+	/**
+	 * The lock of one pair, held by everything that mints a token for it. One spelling, because two calls
+	 * naming the pair differently would not exclude each other at all.
+	 */
+	private static function pairLockName(int $userId, int $templateId): string
+	{
+		return "bizprocdesigner:agent_token:{$userId}:{$templateId}";
+	}
+
+	/**
+	 * Active rows of the pair whose expiry is still ahead - what a caller can actually authorize with.
+	 *
+	 * Kept apart from {@see self::findActiveTokens()} rather than replacing it, because the two readings
+	 * serve opposite ends. Issuing and reporting must skip an expired row: it stays ACTIVE until the
+	 * gardener comes, while the contour already refuses it {@see AgentTokenGuard}, so handing its url
+	 * back hands back a session that is dead on arrival - and the entry offers no way to regenerate.
+	 * Revoking and re-issuing must see that same row, or a credential that still looks live is left
+	 * behind.
+	 *
+	 * A row carrying no expiry at all counts as expired, exactly as the contour reads it.
+	 *
+	 * @return IncomingWebhookDto[]
+	 */
+	private function findLiveTokens(int $userId, int $templateId): array
+	{
+		$now = time();
+		$live = [];
+
+		foreach ($this->findActiveTokens($userId, $templateId) as $dto)
+		{
+			$expireAt = $this->getTokenExpireAt($dto->getId());
+			if ($expireAt !== null && $expireAt > $now)
+			{
+				$live[] = $dto;
+			}
+		}
+
+		return $live;
+	}
+
 	private function findActiveTokens(int $userId, int $templateId): array
 	{
 		$params = new IncomingWebhookParams(

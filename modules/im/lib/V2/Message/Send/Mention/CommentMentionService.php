@@ -25,9 +25,11 @@ class CommentMentionService extends MentionService
 		return false;
 	}
 
-	protected function getNotifyTextCode(string $userGender): string
+	protected function getNotifyTextCode(string $userGender, Chat $chat): string
 	{
-		return "IM_MESSAGE_MENTION_COMMENT_{$userGender}";
+		return $chat instanceof Chat\ChannelChat
+			? "IM_MESSAGE_MENTION_COMMENT_{$userGender}"
+			: parent::getNotifyTextCode($userGender, $chat);
 	}
 
 	protected function getTitleWithContext(string $title, Message $message): string

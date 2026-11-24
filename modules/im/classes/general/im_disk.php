@@ -1274,7 +1274,7 @@ class CIMDisk
 				continue;
 			}
 
-			$file = self::getFileModel((int)mb_substr($wireId, 6), $userId);
+			$file = self::getFileModel((int)mb_substr($wireId, 6), $userId ?? 0);
 			if (!$file)
 			{
 				return false;
@@ -1295,10 +1295,13 @@ class CIMDisk
 
 			$objectId = (int)$file->getId();
 			$prepared[$wireId] = $file;
-			$identities[$objectId] = [
-				'userId' => (int)$file->getCreatedBy(),
-				'parentId' => (int)$file->getParentId(),
-			];
+			if ((int)$file->getCreatedBy() > 0)
+			{
+				$identities[$objectId] = [
+					'userId' => (int)$file->getCreatedBy(),
+					'parentId' => (int)$file->getParentId(),
+				];
+			}
 		}
 
 		$reserved = (new UploadCleanupService())->reserveBatchBeforeUse($identities, $claimForPublication);

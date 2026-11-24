@@ -66,7 +66,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public const MESSAGE_MAX_LENGTH = 20000;
 	public const REST_FIELDS = ['ID', 'CHAT_ID', 'AUTHOR_ID', 'DATE_CREATE', 'MESSAGE', 'NOTIFY_EVENT', 'NOTIFY_READ'];
-
 	protected ?int $messageId = null;
 
 	protected ?int $chatId = null;
@@ -1990,10 +1989,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	}
 
 	/**
-	 * Called by ForwardSourcePopupItem while popup data is being serialized, that is, before this
-	 * message is. The schema rests on that order (Rest\RestAdapter::toRestFormat()) and on the item
-	 * coming first in MessageCollection::getPopupData(): break either, and the title silently stops
-	 * reaching the block.
+	 * Called by ForwardSourcePopupItem in the prefill pass of PopupData, that is, before anything of the
+	 * answer is serialized (Rest\PopupData::toRestFormat(), Rest\RestAdapter::toRestFormat()). The
+	 * position of the item among the others does not matter, the pass does: an item that stops being a
+	 * Rest\PopupDataPrefill would silently stop reaching this block.
 	 *
 	 * @internal Written by the popup item that resolves the title, not part of the public surface.
 	 */
@@ -2071,6 +2070,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	}
 
 	/**
+	 * The same stored block is served to clients and server-side consumers.
+	 *
 	 * @param array $option
 	 * @return array
 	 */

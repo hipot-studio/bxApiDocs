@@ -70,6 +70,7 @@ class PushFormat
 				'block' => $message->getBlocksBuilder(),
 			],
 			'counterType' => $chat->getCounterType(),
+			'isNonAnswered' => $chat->isNonAnsweredSession(),
 			'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 			'files' => $message->getFiles()->toRestFormat(['IDS_AS_KEY' => true]),
 			'notify' => $notify,

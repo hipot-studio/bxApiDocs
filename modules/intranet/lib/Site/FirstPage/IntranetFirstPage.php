@@ -24,7 +24,7 @@ class IntranetFirstPage implements FirstPage
 
 	public function getUri(): Uri
 	{
-		$effective = Manager::getEffectiveState(SITE_ID, $this->userId);
+		$effective = Manager::getMenuSettingsForUser(SITE_ID, $this->userId);
 		if ($effective !== null)
 		{
 			$firstPagePath = $effective['firstPage'] ?? '';

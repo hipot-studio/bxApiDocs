@@ -65,9 +65,10 @@ abstract class BaseSync implements SyncInterface
 	}
 
 	/**
-	 * Return result of add or update
+	 * Adds the item or updates the existing one with the same CODE; an item with unchanged HASH is skipped.
 	 *
 	 * @param array $fields
+	 * @param RuleDto[]|null $rules Display rules; null takes them from the `RULES` field.
 	 *
 	 * @return AddResult|UpdateResult
 	 */
@@ -154,10 +155,14 @@ abstract class BaseSync implements SyncInterface
 	}
 
 	/**
-	 * Synchronization table with items by filter
+	 * Synchronizes the table with items: adds or updates every item, and in Standard mode deletes
+	 * rows matching $filter that are absent from $items. Items hidden for the portal's region
+	 * by their rules are skipped, so in Standard mode their rows are deleted too, as are rows
+	 * whose add or update failed.
 	 *
 	 * @param array $items
-	 * @param array $filter
+	 * @param array $filter Rows to compare with $items in Standard mode.
+	 * @param SyncMode $mode Partitional mode does not delete anything.
 	 *
 	 * @return void
 	 * @throws \Exception

@@ -7,12 +7,24 @@ namespace Bitrix\Disk\Document\Vibeoffice\Webhook;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Document\Vibeoffice\Configuration;
+use Bitrix\Disk\Document\Vibeoffice\ConflictCopyService;
+use Bitrix\Disk\Document\Vibeoffice\Connection\PlatformNamespace;
+use Bitrix\Disk\Document\Vibeoffice\Connection\PlatformSource;
 use Bitrix\Disk\Document\Vibeoffice\DocumentSessionManager;
 use Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository;
+use Bitrix\Disk\Document\Vibeoffice\HostDocumentKey;
+use Bitrix\Disk\Document\Vibeoffice\Logging\DatabaseErrorDiagnostic;
+use Bitrix\Disk\Document\Vibeoffice\Logging\DatabaseFailureResult;
+use Bitrix\Disk\Document\Vibeoffice\MissingDocumentRefusal;
 use Bitrix\Disk\Document\Vibeoffice\Models\SavedSnapshotTable;
 use Bitrix\Disk\Document\Vibeoffice\Models\PlatformSessionTable;
 use Bitrix\Disk\Document\Vibeoffice\SavedDocumentWriterInterface;
 use Bitrix\Disk\Document\Vibeoffice\SavedDocumentWriter;
+use Bitrix\Disk\Document\Vibeoffice\SavedNotificationAgent;
+use Bitrix\Disk\Document\Vibeoffice\SavedVersionJoinPolicy;
+use Bitrix\Disk\Document\Vibeoffice\SavedSnapshotHasher;
+use Bitrix\Disk\Document\Vibeoffice\SavedSnapshotCompletion;
+use Bitrix\Disk\Document\Vibeoffice\Internal\SavedSnapshotProofResolver;
 use Bitrix\Disk\Document\Vibeoffice\SessionRegistry;
 use Bitrix\Disk\Document\Vibeoffice\TerminalSessionFinalizer;
 use Bitrix\Disk\Document\Vibeoffice\TerminalSessionFinalizerInterface;
@@ -20,15 +32,19 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
+use Bitrix\Disk\Internal\Service\Audit\AuditTransactionException;
 use Bitrix\Disk\Internal\Service\Audit\AuditTransactionOutcome;
 use Bitrix\Disk\Version;
 use Bitrix\Disk\Internal\Enum\WriteOperationContext;
 use Bitrix\Disk\Public\Service\Restrictions\WriteErrorTransportMap;
 use Bitrix\Disk\SystemUser;
 use Bitrix\Main\Application;
+use Bitrix\Main\Data\ConnectionPool;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Data\Storage\PersistentStorageInterface;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Disk\Document\Vibeoffice\Logging\DiagnosticContext;
+use Bitrix\Disk\Document\Vibeoffice\Logging\SaveFailureDiagnostic;
 use Bitrix\Disk\Document\Vibeoffice\Logging\LoggerProvider;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Query\Query;
@@ -37,7 +53,6 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\MimeType;
-use Bitrix\Main\Web\Uri;
 use Closure;
 use Throwable;
 
@@ -60,7 +75,8 @@ use Throwable;
  *
  * The processor returns a {@see Result}; a successful `document.saved` carries an `ack` only
  * after the durable delivery row proves that the version was applied. The controller responds
- * 2xx only when that receipt is present, so every incomplete stage is retried.
+ * 2xx only when that receipt is present. SavedNotificationAgent retries notifications for
+ * negotiated saves independently of the webhook.
  * Acknowledging a delivery is not the same as storing a version: a write the model refuses for good
  * is acknowledged so the platform stops retrying it, and the refusal is recorded as such; a write
  * that merely did not go through this time is answered with an error and delivered again - see
@@ -121,8 +137,17 @@ final class WebhookProcessor
 	private array $deliveryObservation = ['result' => null, 'outcome' => null];
 	private ?int $activeDeliveryId = null;
 	private ?string $activeEvent = null;
-	private readonly SavedDocumentWriterInterface $savedDocumentWriter;
+	private ?string $activeDocumentCorrelationId = null;
+	private string $diagnosticStage = 'dispatch';
+	private ?string $diagnosticReason = null;
+	private array $activeDiagnosticFields = [];
+	private SavedDocumentWriterInterface $savedDocumentWriter;
+	private readonly bool $savedDocumentWriterInjected;
+	private ?PlatformSource $source = null;
 	private readonly bool $legacyUploaderInjected;
+	private readonly SavedSnapshotProofResolver $snapshotProofResolver;
+	private readonly MissingDocumentRefusal $missingDocumentRefusal;
+	private readonly DocumentStateRepository $documentStateRepository;
 
 	/**
 	 * @param callable(array): Result|null $deliveryMarkerWriter Internal ORM failure seam for tests.
@@ -136,10 +161,21 @@ final class WebhookProcessor
 		?callable $savedSideEffectsHandler = null,
 		?SavedDocumentWriterInterface $savedDocumentWriter = null,
 		?DocumentStateRepository $documentStateRepository = null,
+		private readonly bool $supportsSavedApplyAck = false,
+		private readonly SavedSnapshotHasher $snapshotHasher = new SavedSnapshotHasher(),
+		private readonly SavedVersionJoinPolicy $joinPolicy = new SavedVersionJoinPolicy(),
+		private readonly array $sources = [],
 	)
 	{
 		$documentStateRepository ??= new DocumentStateRepository();
-		$this->savedDocumentWriter = $savedDocumentWriter ?? new SavedDocumentWriter(repository: $documentStateRepository);
+		$this->documentStateRepository = $documentStateRepository;
+		$this->savedDocumentWriterInjected = $savedDocumentWriter !== null;
+		$this->missingDocumentRefusal = new MissingDocumentRefusal($documentStateRepository);
+		$this->snapshotProofResolver = new SavedSnapshotProofResolver($this->snapshotHasher);
+		if ($savedDocumentWriter !== null)
+		{
+			$this->savedDocumentWriter = $savedDocumentWriter;
+		}
 		$this->legacyUploaderInjected = $savedVersionUploader !== null;
 		$this->registry = new SessionRegistry($documentStateRepository);
 		$this->scopeResolver = new WebhookScopeResolver($documentStateRepository, $this->registry);
@@ -168,11 +204,39 @@ final class WebhookProcessor
 		return $this->deliveryObservation;
 	}
 
+	public function getSelectedSource(): ?PlatformSource
+	{
+		return $this->source;
+	}
+
 	public function process(int $deliveryId, string $event, array $payload): Result
 	{
-		$this->deliveryObservation = ['result' => null, 'outcome' => null];
-		$this->activeDeliveryId = $deliveryId > 0 ? $deliveryId : null;
-		$this->activeEvent = $event;
+		$configuration = $this->getConfiguration();
+		$this->source = PlatformSource::select($this->sources ?: [PlatformSource::current(
+			$configuration->getServer(), (string)$configuration->getWebhookSecret(),
+		)], $event, $payload);
+		if (!$this->savedDocumentWriterInjected)
+		{
+			$this->savedDocumentWriter = new SavedDocumentWriter(
+				repository: $this->documentStateRepository, snapshotHasher: $this->snapshotHasher,
+				joinPolicy: $this->joinPolicy, supportsSavedApplyAck: $this->supportsSavedApplyAck, source: $this->source,
+			);
+		}
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			return $this->processDelivery($deliveryId, $event, $payload);
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
+	private function processDelivery(int $deliveryId, string $event, array $payload): Result
+	{
+		$this->initializeDeliveryObservation($deliveryId, $event, $payload);
 		$result = $this->dispatch($deliveryId, $event, $payload);
 		if ($result->isSuccess())
 		{
@@ -180,8 +244,17 @@ final class WebhookProcessor
 				? $this->attachSavedApplyAcknowledgement($result, $deliveryId, $payload)
 				: $result;
 		}
+		if ($result instanceof DatabaseFailureResult)
+		{
+			$this->logWebhookDiagnostic('dispatch', 'delivery_exception', databaseFailure: $result);
+		}
 		if ($event === self::EVENT_SAVED)
 		{
+			$missingReason = $result->getData()['documentNotFoundReason'] ?? null;
+			if ($missingReason !== null && $missingReason !== $this->diagnosticReason)
+			{
+				$this->observeFailure($result, $this->diagnosticStage);
+			}
 			$refusal = $this->persistProvenSavedRefusal($deliveryId, $payload, $result);
 
 			return $refusal === null
@@ -203,6 +276,28 @@ final class WebhookProcessor
 		);
 	}
 
+	private function initializeDeliveryObservation(int $deliveryId, string $event, array $payload): void
+	{
+		$this->deliveryObservation = ['result' => null, 'outcome' => null];
+		$this->activeDeliveryId = $deliveryId > 0 ? $deliveryId : null;
+		$this->activeEvent = $event;
+		$this->activeDocumentCorrelationId = null;
+		$this->diagnosticStage = 'validation';
+		$this->diagnosticReason = null;
+		$this->activeDiagnosticFields = [];
+		try
+		{
+			$key = $payload['host_doc_key'] ?? null;
+			$this->activeDocumentCorrelationId = DiagnosticContext::documentCorrelationId(
+				is_string($key) ? $key : null,
+			);
+		}
+		catch (Throwable)
+		{
+			// A diagnostic failure must not reject an authenticated delivery.
+		}
+	}
+
 	private function persistProvenSavedRefusal(int $deliveryId, array $payload, Result $failure): ?Result
 	{
 		$errors = $failure->getErrors();
@@ -215,9 +310,15 @@ final class WebhookProcessor
 		{
 			return null;
 		}
-		$connection = Application::getConnection();
+		if (DocumentStateRepository::holdsAnyLock())
+		{
+			return (new Result())->addError(new Error(
+				'Delivery requires an unlocked caller.', 'vibeoffice_delivery_locked',
+			));
+		}
 		$lockName = self::LOCK_NAME_PREFIX . $deliveryId;
-		if (!$connection->lock($lockName, self::LOCK_TIMEOUT))
+		$connection = $this->acquireDeliveryLock($lockName);
+		if ($connection === null)
 		{
 			return null;
 		}
@@ -247,7 +348,17 @@ final class WebhookProcessor
 		}
 		finally
 		{
-			$connection->unlock($lockName);
+			try
+			{
+				$connection->unlock($lockName);
+			}
+			finally
+			{
+				if ($connection->getType() === 'mysql')
+				{
+					$connection->disconnect();
+				}
+			}
 		}
 	}
 
@@ -304,13 +415,26 @@ final class WebhookProcessor
 	{
 		if ($deliveryId <= 0)
 		{
-			return (new Result())->addError(new Error('Invalid delivery ID.', 'validation'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Invalid delivery ID.', 'validation')),
+				'validation', 'validation_failed',
+			);
 		}
-		$connection = Application::getConnection();
-		$lockName = self::LOCK_NAME_PREFIX . $deliveryId;
-		if (!$connection->lock($lockName, self::LOCK_TIMEOUT))
+		$this->diagnosticStage = 'ledger';
+		if (DocumentStateRepository::holdsAnyLock())
 		{
-			return (new Result())->addError(new Error('Could not acquire the delivery lock.', 'lock_timeout'));
+			return (new Result())->addError(new Error(
+				'Delivery requires an unlocked caller.', 'vibeoffice_delivery_locked',
+			));
+		}
+		$lockName = self::LOCK_NAME_PREFIX . $deliveryId;
+		$connection = $this->acquireDeliveryLock($lockName);
+		if ($connection === null)
+		{
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Could not acquire the delivery lock.', 'lock_timeout')),
+				'ledger', 'lock_timeout',
+			);
 		}
 
 		try
@@ -320,7 +444,41 @@ final class WebhookProcessor
 				$delivery['HOST_DOC_KEY'] !== null && $delivery['HOST_DOC_KEY'] !== ($payload['host_doc_key'] ?? null)
 			)))
 			{
-				return (new Result())->addError(new Error('Delivery identity changed.', 'validation'));
+				return $this->observeFailure(
+				(new Result())->addError(new Error('Delivery identity changed.', 'validation')),
+				'validation', 'snapshot_identity_mismatch',
+			);
+			}
+			if ($delivery && $event === self::EVENT_SAVED
+				&& $delivery['STATUS'] === DeliveryTable::STATUS_DONE
+				&& $delivery['OUTCOME'] === DeliveryTable::OUTCOME_REFUSED
+				&& in_array($delivery['REASON'], ['file_missing', 'validation'], true))
+			{
+				if ($delivery['REASON'] === 'validation'
+					&& (!$this->supportsSavedApplyAck || ($payload['source'] ?? null) !== 'save'))
+				{
+					return $this->observeFailure(
+						(new Result())->addError(new Error('The saved refusal cannot be acknowledged.', 'validation')),
+						'validation', 'validation_failed',
+					);
+				}
+				$classification = (new WebhookEventPolicy())->classify($event, $payload);
+				$policy = $classification->getData();
+				$state = $classification->isSuccess() && !HostDocumentKey::isStable($policy['hostDocKey'])
+					? $this->documentStateRepository->getByKey($policy['hostDocKey']) : null;
+				if (!$classification->isSuccess() || $policy['legacy'] || !$policy['identityKnown']
+					|| (!HostDocumentKey::isStable($policy['hostDocKey'])
+						&& (!$state || !HostDocumentKey::matchesSharedEditScope($state, $policy['hostDocKey'])))
+					|| $policy['snapshotSeq'] !== (int)$delivery['SNAPSHOT_SEQ'])
+				{
+					return $this->observeFailure(
+						(new Result())->addError(new Error('Delivery snapshot changed.', 'validation')),
+						'validation', 'snapshot_identity_mismatch',
+					);
+				}
+				$this->deliveryObservation = ['result' => 'duplicate', 'outcome' => DeliveryTable::OUTCOME_REFUSED];
+
+				return new Result();
 			}
 			if ($delivery && $delivery['STATUS'] === DeliveryTable::STATUS_DONE
 				&& ($event !== self::EVENT_SAVED || $delivery['HOST_DOC_KEY'] === null || (int)$delivery['RESULT_OBJECT_ID'] <= 0))
@@ -340,14 +498,41 @@ final class WebhookProcessor
 				return $this->markDeliveryProcessed($deliveryId, $event, $this->extractExternalHash($payload));
 			}
 
+			$this->diagnosticStage = 'validation';
 			$classification = (new WebhookEventPolicy())->classify($event, $payload);
 			if (!$classification->isSuccess())
 			{
-				return $classification;
+				return $this->observeFailure($classification, 'validation');
 			}
 			$policy = $classification->getData();
 			$key = $policy['hostDocKey'];
+			if ($delivery && DeliveryTable::isSavedNotificationSkipped($delivery))
+			{
+				$state = !HostDocumentKey::isStable($key) ? $this->documentStateRepository->getByKey($key) : null;
+				if ($policy['legacy'] || !$policy['identityKnown']
+					|| (!HostDocumentKey::isStable($key) && (!$state || !HostDocumentKey::matchesSharedEditScope($state, $key)))
+					|| $policy['snapshotSeq'] !== (int)$delivery['SNAPSHOT_SEQ'])
+				{
+					return $this->observeFailure(
+						(new Result())->addError(new Error('Delivery snapshot changed.', 'validation')),
+						'validation', 'snapshot_identity_mismatch',
+					);
+				}
+				$this->deliveryObservation = ['result' => 'duplicate', 'outcome' => DeliveryTable::OUTCOME_APPLIED];
+
+				return new Result();
+			}
+			$this->diagnosticStage = 'scope';
 			$scopeResult = $this->scopeResolver->resolveState($key);
+			if ($event === self::EVENT_SAVED && !$scopeResult->isSuccess())
+			{
+				$state = $this->documentStateRepository->getByKey($key);
+				if ((!$state && HostDocumentKey::isStable($key))
+					|| ($state && (int)$state['EDIT_SCOPE_VERSION'] === 1 && (int)$state['EDIT_FENCE_STATE'] === 2))
+				{
+					return (new Result())->addError(new Error('The shared registry is unavailable.', 'vibeoffice_registry_busy'));
+				}
+			}
 			if ($scopeResult->isSuccess() && (!$scopeResult->getData()['state']
 				|| ($policy['legacy'] && $scopeResult->getData()['legacy'])))
 			{
@@ -358,6 +543,8 @@ final class WebhookProcessor
 				return $this->ignoreDelivery($deliveryId, $event, $key, 'scope_unknown');
 			}
 			$scope = $scopeResult->getData();
+			$this->observeScope($scope['state'] ?? null);
+			$this->activeDiagnosticFields['generation_rev'] = $policy['rev'] ?? null;
 			// "There is no placement" is a known fact and not a lost identity: that form of the empty
 			// key is handled below instead of being thrown away with the delivery.
 			$identityUnknown = !$policy['identityKnown'] && !$policy['placementAbsent'];
@@ -372,11 +559,13 @@ final class WebhookProcessor
 			{
 				if (($delivery['SNAPSHOT_SEQ'] === null ? null : (int)$delivery['SNAPSHOT_SEQ']) !== $policy['snapshotSeq'])
 				{
-					return (new Result())->addError(new Error('Delivery snapshot changed.', 'validation'));
+					return $this->observeFailure(
+				(new Result())->addError(new Error('Delivery snapshot changed.', 'validation')),
+				'validation', 'snapshot_identity_mismatch',
+			);
 				}
-				// DONE can precede the notification checkpoint. A retry that completes
-				// those side effects is applied work, not a duplicate delivery.
-				if ((int)$delivery['NOTIFIED'] === 1)
+				$notified = (int)$delivery['NOTIFIED'] === 1;
+				if ($notified)
 				{
 					$this->deliveryObservation = [
 						'result' => 'duplicate',
@@ -384,7 +573,7 @@ final class WebhookProcessor
 					];
 				}
 
-				return $this->completeSavedDelivery((int)$delivery['ID'], $policy);
+				return $this->completeSavedDelivery((int)$delivery['ID'], $policy, $notified);
 			}
 
 			if ($event === self::EVENT_SAVED && $scope['state'])
@@ -397,15 +586,48 @@ final class WebhookProcessor
 			}
 			if ($event === self::EVENT_SESSION_CLOSED && !$policy['legacy'])
 			{
+				$this->diagnosticStage = 'finalize';
 				return $this->terminalSessionFinalizer->withDocumentTransaction(
 					$key,
-					function () use ($deliveryId, $event, $key, $policy): Result {
-						$closed = $this->registry->applyClosed($key, $policy['terminated'], $policy['retained']);
+					function () use ($deliveryId, $event, $key, $policy, $payload): Result {
+						$state = $this->documentStateRepository->getByKey($key);
+						$shared = $state && \Bitrix\Disk\Document\Vibeoffice\SharedSessionScope::version($state) === 1;
+						$closed = $this->registry->applyClosed(
+							$key, $policy['terminated'], $policy['retained'],
+							$policy['identityKnown'] ? $policy['editorKey'] : null,
+							$policy['identityKnown'] ? $policy['rev'] : null,
+						);
 						if (!$closed->isSuccess())
 						{
 							return $closed;
 						}
 						$finalized = $this->terminalSessionFinalizer->finalizeSessions($closed->getData()['sessionIds']);
+						if ($finalized->isSuccess() && ($closed->getData()['placementAccepted'] ?? true)
+							&& ($payload['notmodified'] ?? null) === true
+							&& $policy['identityKnown'] && $policy['retained'] === []
+							&& ($payload['reason'] ?? null) !== 'ds_session_lost')
+						{
+							if ($shared)
+							{
+								$advanced = $this->registry->advanceTerminalPlacementLocked($state, $policy['editorKey'], $policy['rev']);
+								if (!$advanced->isSuccess())
+								{
+									return $advanced;
+								}
+								if (!($advanced->getData()['accepted'] ?? false))
+								{
+									return $this->ignoreDelivery($deliveryId, $event, $key, 'placement_stale');
+								}
+								$closed = $this->registry->terminateEditorGeneration($key, $policy['editorKey'], $policy['rev']);
+								$finalized = $closed->isSuccess()
+									? $this->terminalSessionFinalizer->finalizeSessions($closed->getData()['sessionIds'])
+									: $closed;
+							}
+							if ($finalized->isSuccess())
+							{
+								$finalized = $this->documentStateRepository->storeTerminalProof($key, $policy, $deliveryId);
+							}
+						}
 
 						return $finalized->isSuccess()
 							? $this->markDeliveryProcessed($deliveryId, $event, null, ['HOST_DOC_KEY' => $key])
@@ -422,6 +644,7 @@ final class WebhookProcessor
 			}
 			if ($event === self::EVENT_FAILOVER && $scope['state'])
 			{
+				$this->diagnosticStage = 'finalize';
 				return $this->terminalSessionFinalizer->withDocumentTransaction(
 					$key,
 					function () use ($payload, $scope, $deliveryId, $event, $key): Result {
@@ -431,6 +654,15 @@ final class WebhookProcessor
 						if (!$recipients->isSuccess())
 						{
 							return $recipients;
+						}
+						$placement = $this->registry->advanceActivePlacement($key, $payload['editor_key'], $payload['rev']);
+						if (!$placement->isSuccess())
+						{
+							return $placement;
+						}
+						if (!($placement->getData()['accepted'] ?? false))
+						{
+							return $this->ignoreDelivery($deliveryId, $event, $key, 'placement_stale');
 						}
 						$updated = $this->updateFailoverMetadata($payload, $recipients->getData()['sessions']);
 
@@ -463,13 +695,61 @@ final class WebhookProcessor
 		}
 		finally
 		{
-			$connection->unlock($lockName);
+			try
+			{
+				$connection->unlock($lockName);
+			}
+			finally
+			{
+				if ($connection->getType() === 'mysql')
+				{
+					$connection->disconnect();
+				}
+			}
 		}
+	}
+
+	private function acquireDeliveryLock(string $lockName): ?Connection
+	{
+		$connection = $this->getDeliveryLockConnection();
+		$locked = false;
+		try
+		{
+			$locked = $connection->lock($lockName, self::LOCK_TIMEOUT);
+
+			return $locked ? $connection : null;
+		}
+		finally
+		{
+			if (!$locked && $connection->getType() === 'mysql')
+			{
+				$connection->disconnect();
+			}
+		}
+	}
+
+	private function getDeliveryLockConnection(): Connection
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$primary = $pool->getConnection(ConnectionPool::DEFAULT_CONNECTION_NAME);
+		// PostgreSQL advisory locks coexist. Its pg_connect may reuse the primary native handle,
+		// so a cloned wrapper must not disconnect it. MySQL needs its own physical connection.
+		return $primary->getType() === 'mysql'
+			? $pool->cloneConnection(ConnectionPool::DEFAULT_CONNECTION_NAME, 'disk_vo_delivery', [
+				'options' => 0, 'persistent' => false,
+			])
+			: $primary;
 	}
 
 	private function getDelivery(int $deliveryId): ?array
 	{
-		return DeliveryTable::query()->setSelect(['*'])->where('DELIVERY_ID', $deliveryId)->fetch() ?: null;
+		$namespaces = new PlatformNamespace($this->getConfiguration());
+		$delivery = DeliveryTable::query()->setSelect(['*'])->where('DELIVERY_ID', $deliveryId)
+			->whereIn('NAMESPACE', $namespaces->deliveryValues($this->source->namespace))->fetch() ?: null
+		;
+		$this->observeDelivery($delivery);
+
+		return $delivery;
 	}
 
 	/**
@@ -486,10 +766,10 @@ final class WebhookProcessor
 
 	/**
 	 * Writes the final "done" marker for a successfully applied delivery. The UNIQUE
-	 * `DELIVERY_ID` constraint remains the last-resort guard against a race; under the
+	 * delivery ID and namespace constraint remains the last-resort guard against a race; under the
 	 * per-delivery lock a duplicate here is not expected, so any error propagates to the
 	 * caller's failure path (the platform then retries and the existence check short-circuits).
-	 * `DELIVERY_ID` carries a unique index, so an existing ledger row - a saved delivery that
+	 * The delivery ID is unique within its namespace, so an existing ledger row - a saved delivery that
 	 * already reached PENDING and then took another branch on a retry - has to be updated, never
 	 * inserted a second time.
 	 */
@@ -506,6 +786,10 @@ final class WebhookProcessor
 		if ($existing)
 		{
 			$extra['ID'] = (int)$existing['ID'];
+		}
+		else
+		{
+			$extra['NAMESPACE'] = $this->source->storedNamespace();
 		}
 
 		$result = $this->writeDelivery($extra + [
@@ -532,10 +816,14 @@ final class WebhookProcessor
 	{
 		try
 		{
-			return ($this->deliveryMarkerWriter)($fields);
+			$this->diagnosticStage = 'ledger';
+			$result = ($this->deliveryMarkerWriter)($fields);
+
+			return $result->isSuccess() ? $result : $this->observeFailure($result, 'ledger', 'ledger_write_failed');
 		}
-		catch (Throwable)
+		catch (Throwable $exception)
 		{
+			$this->logWebhookDiagnostic('saved', 'delivery_exception', $exception, 'ledger', 'ledger_write_failed');
 			return (new Result())->addError(new Error('Could not persist the delivery.', 'delivery_marker_failed'));
 		}
 	}
@@ -544,7 +832,10 @@ final class WebhookProcessor
 	{
 		if ($event === self::EVENT_SAVED)
 		{
-			return (new Result())->addError(new Error('Saved document scope is unknown.', $reason));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Saved document scope is unknown.', $reason)),
+				'scope', 'scope_unwritable',
+			);
 		}
 		$this->acknowledgePermanent(
 			"Vibeoffice webhook: {$reason}; event={$event}; delivery={$deliveryId}.",
@@ -558,6 +849,33 @@ final class WebhookProcessor
 	private function processSavedDelivery(int $deliveryId, array $payload, array $policy, array $scope, ?array $delivery): Result
 	{
 		$key = $policy['hostDocKey'];
+		if ((int)($scope['state']['EDIT_SCOPE_VERSION'] ?? 0) === 1)
+		{
+			$registered = $this->documentStateRepository->registerSharedSavedDelivery($key,
+				function (array $_state) use ($deliveryId, $key, $policy): Result {
+					$current = $this->getDelivery($deliveryId);
+					if ($current && ($current['EVENT'] !== self::EVENT_SAVED
+						|| ($current['HOST_DOC_KEY'] ?? $current['EXTERNAL_HASH']) !== $key
+						|| (int)$current['SNAPSHOT_SEQ'] !== $policy['snapshotSeq']))
+					{
+						return (new Result())->addError(new Error('Delivery snapshot changed.', 'validation'));
+					}
+					if (!$current)
+					{
+						$created = $this->markDeliveryProcessed($deliveryId, self::EVENT_SAVED, null, [
+							'HOST_DOC_KEY' => $key, 'STATUS' => DeliveryTable::STATUS_PENDING,
+							'SNAPSHOT_SEQ' => $policy['snapshotSeq'],
+						]);
+						if (!$created->isSuccess()) { return $created; }
+						$current = $this->getDelivery($deliveryId);
+					}
+					return $current
+						? (new Result())->setData(['ledgerId' => (int)$current['ID']])
+						: (new Result())->addError(new Error('Saved delivery was not persisted.', 'delivery_marker_failed'));
+				});
+			if (!$registered->isSuccess()) { return $registered; }
+			$delivery = $this->getDelivery($deliveryId);
+		}
 		if ($delivery === null)
 		{
 			$created = $this->markDeliveryProcessed($deliveryId, self::EVENT_SAVED, null, [
@@ -573,26 +891,48 @@ final class WebhookProcessor
 		}
 		if ($delivery === null)
 		{
-			return (new Result())->addError(new Error('Saved delivery was not persisted.', 'delivery_marker_failed'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Saved delivery was not persisted.', 'delivery_marker_failed')),
+				'ledger', 'ledger_write_failed',
+			);
 		}
 		if (($delivery['SNAPSHOT_SEQ'] === null ? null : (int)$delivery['SNAPSHOT_SEQ']) !== $policy['snapshotSeq'])
 		{
-			return (new Result())->addError(new Error('Delivery snapshot changed.', 'validation'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Delivery snapshot changed.', 'validation')),
+				'validation', 'snapshot_identity_mismatch',
+			);
 		}
 		$ledgerId = (int)$delivery['ID'];
 		if ($delivery['STATUS'] !== DeliveryTable::STATUS_APPLIED)
 		{
+			$this->diagnosticStage = 'stage_file';
 			$prepared = $this->savedDocumentWriter->prepare($ledgerId, $payload);
 			if (!$prepared->isSuccess())
 			{
-				return $prepared;
+				return ($prepared->getData()['originalFileMissing'] ?? null) === true
+					? $this->refuseMissingDocument($ledgerId, $deliveryId, $payload, $prepared)
+					: $prepared;
 			}
+			$this->diagnosticStage = 'write_version';
 			$applied = $this->savedDocumentWriter->apply($ledgerId, $payload, $prepared->getData()['stagedFile']);
 			if (!$applied->isSuccess())
 			{
-				return $applied;
+				$errors = $applied->getErrors();
+
+				return count($errors) === 1 && $errors[0]->getCode() === 'vibeoffice_document_not_found'
+					? $this->refuseMissingDocument($ledgerId, $deliveryId, $payload, $applied)
+					: $applied;
 			}
 			$delivery = $this->getDelivery($deliveryId);
+			if ($delivery && $delivery['STATUS'] === DeliveryTable::STATUS_DONE
+				&& $delivery['OUTCOME'] === DeliveryTable::OUTCOME_REFUSED && $delivery['REASON'] === 'validation')
+			{
+				$this->deliveryObservation = ['result' => 'refused', 'outcome' => DeliveryTable::OUTCOME_REFUSED];
+				$this->logWebhookDiagnostic('saved', 'save_refused', reason: 'read_only_scope');
+
+				return new Result();
+			}
 			if ($delivery && $delivery['STATUS'] === DeliveryTable::STATUS_DONE
 				&& $delivery['OUTCOME'] === DeliveryTable::OUTCOME_IGNORED)
 			{
@@ -600,18 +940,51 @@ final class WebhookProcessor
 			}
 		}
 
+		$this->diagnosticStage = 'finalize';
 		$finished = $this->terminalSessionFinalizer->withDocumentTransaction(
 			$key,
 			function () use ($deliveryId, $ledgerId, $key, $policy, $scope): Result {
 				$delivery = $this->getDelivery($deliveryId);
 				if ($delivery['STATUS'] !== DeliveryTable::STATUS_APPLIED || (int)$delivery['RESULT_OBJECT_ID'] <= 0)
 				{
-					return (new Result())->addError(new Error('Saved content is not committed.', 'vibeoffice_saved_not_applied'));
+					return $this->observeFailure(
+				(new Result())->addError(new Error('Saved content is not committed.', 'vibeoffice_saved_not_applied')),
+				'ledger', 'ledger_write_failed',
+			);
+				}
+				if ($policy['identityKnown'] && !$policy['legacy'])
+				{
+					$placement = $this->registry->advanceActivePlacement($key, $policy['editorKey'], $policy['rev']);
+					if (!$placement->isSuccess())
+					{
+						return $placement;
+					}
 				}
 				$finalization = $this->finalizeSavedSessions($policy, $scope);
 				if (!$finalization->isSuccess())
 				{
-					return $finalization;
+					return $this->observeFailure($finalization, 'finalize', 'finalization_failed');
+				}
+				if ($policy['identityKnown'] && !$policy['legacy']
+					&& in_array($policy['source'], self::TERMINAL_SOURCES, true)
+					&& in_array($policy['finalization'], [
+						WebhookEventPolicy::FINALIZATION_THIS_EVENT, WebhookEventPolicy::FINALIZATION_SEPARATE,
+					], true))
+				{
+					$receipt = $this->documentStateRepository->getSnapshot($key, (int)$policy['snapshotSeq']);
+					if ($receipt && (int)$receipt['RESULT_OBJECT_ID'] > 0
+						&& (int)$receipt['RESULT_OBJECT_ID'] === (int)$delivery['RESULT_OBJECT_ID']
+						&& $receipt['RESULT_VERSION_ID'] === $delivery['RESULT_VERSION_ID']
+						&& $receipt['RESULT_CONTENT_VERSION'] === $delivery['RESULT_CONTENT_VERSION'])
+					{
+						$proof = $this->documentStateRepository->storeTerminalProof(
+							$key, $policy, $deliveryId, $receipt,
+						);
+						if (!$proof->isSuccess())
+						{
+							return $proof;
+						}
+					}
 				}
 
 				return $this->writeDelivery([
@@ -623,6 +996,32 @@ final class WebhookProcessor
 		);
 
 		return $finished->isSuccess() ? $this->completeSavedDelivery($ledgerId, $policy) : $finished;
+	}
+
+	private function refuseMissingDocument(int $ledgerId, int $deliveryId, array $payload, Result $failure): Result
+	{
+		if (!$this->supportsSavedApplyAck)
+		{
+			$this->activeDiagnosticFields['refusal_check'] = 'ack_not_negotiated';
+
+			return $this->observeFailure($failure, $this->diagnosticStage, 'file_missing');
+		}
+		$refusal = $this->missingDocumentRefusal->tryRefuse($ledgerId, $deliveryId, $payload);
+		$this->activeDiagnosticFields['refusal_check'] = $refusal->getData()['refusalCheck'] ?? null;
+		if (!$refusal->isSuccess())
+		{
+			return $this->observeFailure(
+				$refusal, $this->diagnosticStage, $failure->getData()['documentNotFoundReason'] ?? 'file_missing',
+			);
+		}
+		if (!($refusal->getData()['refused'] ?? false))
+		{
+			return $this->observeFailure($failure, $this->diagnosticStage, 'file_missing');
+		}
+		$this->deliveryObservation = ['result' => 'refused', 'outcome' => DeliveryTable::OUTCOME_REFUSED];
+		$this->logWebhookDiagnostic('saved', 'save_refused', reason: 'file_missing');
+
+		return new Result();
 	}
 
 	private function finalizeSavedSessions(array $policy, array $scope): Result
@@ -666,11 +1065,28 @@ final class WebhookProcessor
 		return $this->terminalSessionFinalizer->finalizeSessions($ids);
 	}
 
-	private function completeSavedDelivery(int $ledgerId, array $policy): Result
+	private function completeSavedDelivery(int $ledgerId, array $policy, bool $notified = false): Result
 	{
 		$generation = $policy['identityKnown'] && !$policy['legacy'] ? [
 			'hostDocKey' => $policy['hostDocKey'], 'editorKey' => $policy['editorKey'], 'rev' => $policy['rev'],
 		] : null;
+
+		$this->diagnosticStage = 'notify';
+		if ($this->supportsSavedApplyAck && $generation !== null)
+		{
+			// Persist the retry before acknowledging the committed version.
+			if ($notified || SavedNotificationAgent::schedule($ledgerId, $generation['editorKey'], $generation['rev']))
+			{
+				return new Result();
+			}
+
+			return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Could not schedule the saved notification.', 'vibeoffice_notification_queue',
+				)),
+				'notify', 'notification_failed',
+			);
+		}
 
 		return $this->savedDocumentWriter->complete($ledgerId, $generation);
 	}
@@ -687,12 +1103,20 @@ final class WebhookProcessor
 		$seq = $policy['snapshotSeq'];
 		if (!is_int($seq))
 		{
-			return (new Result())->addError(new Error('Legacy save requires a durable snapshot.', 'vibeoffice_audit_unavailable'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy save requires a durable snapshot.', 'vibeoffice_audit_unavailable',
+				)),
+				'validation', 'validation_failed',
+			);
 		}
 		$file = $this->legacyScopeFile($key, $scope['sessions']);
 		if (!$file)
 		{
-			return (new Result())->addError(new Error('Legacy saved scope is not proven.', 'scope_unknown'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved scope is not proven.', 'scope_unknown')),
+				'scope', 'scope_unwritable',
+			);
 		}
 		if ($delivery === null)
 		{
@@ -709,7 +1133,10 @@ final class WebhookProcessor
 		}
 		if (!$delivery || (int)$delivery['SNAPSHOT_SEQ'] !== $seq)
 		{
-			return (new Result())->addError(new Error('Legacy saved delivery identity changed.', 'validation'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved delivery identity changed.', 'validation')),
+				'validation', 'snapshot_identity_mismatch',
+			);
 		}
 		if ($delivery['STATUS'] === DeliveryTable::STATUS_DONE)
 		{
@@ -717,6 +1144,7 @@ final class WebhookProcessor
 		}
 		if ($delivery['STATUS'] !== DeliveryTable::STATUS_APPLIED)
 		{
+			$this->diagnosticStage = 'ledger';
 			$ordered = $this->legacySnapshotOrder($key, $seq, $deliveryId, $file);
 			if (!$ordered->isSuccess())
 			{
@@ -730,6 +1158,7 @@ final class WebhookProcessor
 					return $staged;
 				}
 			}
+			$this->diagnosticStage = 'write_version';
 			$applied = $this->applyLegacySavedFile($deliveryId, $payload, $file);
 			if (!$applied->isSuccess())
 			{
@@ -743,22 +1172,51 @@ final class WebhookProcessor
 		}
 		if ($delivery['OUTCOME'] !== DeliveryTable::OUTCOME_APPLIED || (int)$delivery['RESULT_OBJECT_ID'] <= 0)
 		{
-			return (new Result())->addError(new Error('Legacy saved content is not proven.', 'vibeoffice_saved_not_applied'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy saved content is not proven.', 'vibeoffice_saved_not_applied',
+				)),
+				'ledger', 'ledger_write_failed',
+			);
 		}
 		if (!(int)$delivery['NOTIFIED'])
 		{
-			if (in_array($policy['source'], self::TERMINAL_SOURCES, true))
+			$resolved = (new SavedSnapshotCompletion())->resolve($delivery);
+			if (!$resolved->isSuccess())
 			{
-				$finalized = $this->terminalSessionFinalizer->finalizeDocument($key);
-				if (!$finalized->isSuccess())
-				{
-					return $finalized;
-				}
+				return $this->observeFailure($resolved, 'notify', 'snapshot_identity_mismatch');
 			}
-			$effects = $this->dispatchSavedSideEffects(['file' => $file, 'sessions' => $scope['sessions']]);
-			if (!$effects->isSuccess())
+			$completion = $resolved->getData();
+		}
+		if (in_array($policy['source'], self::TERMINAL_SOURCES, true))
+		{
+			$this->diagnosticStage = 'finalize';
+			$finalized = $this->terminalSessionFinalizer->finalizeDocument($key);
+			if (!$finalized->isSuccess())
 			{
-				return $effects;
+				return $this->observeFailure($finalized, 'finalize', 'finalization_failed');
+			}
+		}
+		if (!(int)$delivery['NOTIFIED'])
+		{
+			if (!$completion['notified'])
+			{
+				$this->diagnosticStage = 'notify';
+				$effects = $this->dispatchSavedSideEffects([
+					'file' => $file, 'sessions' => $scope['sessions'], 'versionId' => $delivery['RESULT_VERSION_ID'],
+				]);
+				if (!$effects->isSuccess())
+				{
+					return $this->observeFailure($effects, 'notify', 'notification_failed');
+				}
+				if ($completion['ownerLedgerId'] !== (int)$delivery['ID'])
+				{
+					$marked = $this->writeDelivery(['ID' => $completion['ownerLedgerId'], 'NOTIFIED' => 1]);
+					if (!$marked->isSuccess())
+					{
+						return $this->observeFailure($marked, 'ledger', 'ledger_write_failed');
+					}
+				}
 			}
 		}
 
@@ -800,10 +1258,15 @@ final class WebhookProcessor
 			->where('HOST_DOC_KEY', $key)->where('SNAPSHOT_SEQ', $seq)->fetch();
 		$head = SavedSnapshotTable::query()->setSelect(['*'])
 			->where('HOST_DOC_KEY', $key)->setOrder(['SNAPSHOT_SEQ' => 'DESC'])->setLimit(1)->fetch();
-		if (($exact && (int)$exact['RESULT_OBJECT_ID'] !== (int)$file->getRealObjectId())
-			|| ($head && (int)$head['RESULT_OBJECT_ID'] !== (int)$file->getRealObjectId()))
+		if (!$this->source->departing && (
+			($exact && (int)$exact['RESULT_OBJECT_ID'] !== (int)$file->getRealObjectId())
+			|| ($head && (int)$head['RESULT_OBJECT_ID'] !== (int)$file->getRealObjectId())
+		))
 		{
-			return (new Result())->addError(new Error('Legacy snapshot object is unknown.', 'scope_unknown'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy snapshot object is unknown.', 'scope_unknown')),
+				'scope', 'scope_unwritable',
+			);
 		}
 		if ($exact && (int)$exact['DELIVERY_ID'] === $deliveryId)
 		{
@@ -811,7 +1274,12 @@ final class WebhookProcessor
 		}
 		if ($exact && $exact['DELIVERY_ID'] === null)
 		{
-			return (new Result())->addError(new Error('Legacy snapshot ownership is unknown.', 'snapshot_ownership_unknown'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy snapshot ownership is unknown.', 'snapshot_ownership_unknown',
+				)),
+				'ledger', 'snapshot_identity_mismatch',
+			);
 		}
 		if ($head && $seq < (int)$head['SNAPSHOT_SEQ'])
 		{
@@ -823,16 +1291,22 @@ final class WebhookProcessor
 
 	private function stageLegacySavedFile(array $delivery, array $payload, File $file): Result
 	{
+		$this->observeDelivery($delivery);
+		$this->diagnosticStage = 'stage_file';
 		$stagedId = (int)$delivery['STAGED_FILE_ID'];
-		if ($stagedId > 0 && \CFile::GetFileArray($stagedId))
+		if ($stagedId > 0 && \CFile::GetList([], ['ID' => $stagedId])->Fetch())
 		{
 			return new Result();
 		}
 		$url = (string)($payload['file_url'] ?? '');
-		if (!$this->isAllowedFileUrl($url))
+		if (!$this->source->allowsFileUrl($url))
 		{
-			return (new Result())->addError(new Error('Legacy saved URL is not allowed.', 'ssrf_blocked'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved URL is not allowed.', 'ssrf_blocked')),
+				'download', 'url_rejected',
+			);
 		}
+		$this->diagnosticStage = 'download';
 		$download = $this->downloadFromPlatform($url);
 		if (!$download->isSuccess())
 		{
@@ -844,20 +1318,35 @@ final class WebhookProcessor
 			$array = \CFile::MakeFileArray($tmp);
 			if (!is_array($array) || empty($array['tmp_name']))
 			{
-				return (new Result())->addError(new Error('Legacy saved file is not readable.', 'download_failed'));
+				return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved file is not readable.', 'download_failed')),
+				'download', 'downloaded_file_unreadable',
+			);
 			}
 			$limit = $this->getConfiguration()->getMaxFileSize();
 			if ($limit > 0 && (int)$array['size'] > $limit)
 			{
-				return (new Result())->addError(new Error('Legacy saved file exceeds the limit.', 'vibeoffice_file_too_large'));
+				return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy saved file exceeds the limit.', 'vibeoffice_file_too_large',
+				)),
+				'download', 'file_too_large',
+			);
 			}
 			$array['name'] = $file->getName();
 			$array['MODULE_ID'] = Driver::INTERNAL_MODULE_ID;
+			$this->diagnosticStage = 'stage_file';
 			$stagedId = (int)\CFile::SaveFile($array, Driver::INTERNAL_MODULE_ID, true, true);
 			if ($stagedId <= 0 || !\CFile::GetFileArray($stagedId))
 			{
-				return (new Result())->addError(new Error('Legacy saved file could not be staged.', 'vibeoffice_saved_write_failed'));
+				return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy saved file could not be staged.', 'vibeoffice_saved_write_failed',
+				)),
+				'stage_file', 'stage_file_failed',
+			);
 			}
+			$this->diagnosticStage = 'ledger';
 			$updated = DeliveryTable::update((int)$delivery['ID'], [
 				'STAGED_FILE_ID' => $stagedId,
 				'STATUS' => DeliveryTable::STATUS_STAGED,
@@ -866,7 +1355,10 @@ final class WebhookProcessor
 			{
 				\CFile::Delete($stagedId);
 
-				return (new Result())->addErrors($updated->getErrors());
+				return $this->observeFailure(
+					(new Result())->addErrors($updated->getErrors()),
+					'ledger', 'ledger_write_failed',
+				);
 			}
 
 			return new Result();
@@ -883,23 +1375,33 @@ final class WebhookProcessor
 	private function applyLegacySavedFile(int $deliveryId, array $payload, File $scopeFile): Result
 	{
 		$key = $payload['host_doc_key'];
+		$delivery = $this->getDelivery($deliveryId);
+		$hashedFileId = (int)($delivery['STAGED_FILE_ID'] ?? 0);
+		$hash = $hashedFileId > 0 ? $this->snapshotHasher->hash($hashedFileId) : null;
 		$connection = Application::getConnection();
 		$lockName = DocumentStateRepository::getDocumentLockName($key);
 		if (!$connection->lock($lockName, self::LOCK_TIMEOUT))
 		{
-			return (new Result())->addError(new Error('Could not lock the legacy document.', 'vibeoffice_lock_timeout'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Could not lock the legacy document.', 'vibeoffice_lock_timeout')),
+				'write_version', 'lock_timeout',
+			);
 		}
 		try
 		{
 			// Update lines shipped without the Disk audit (26.1300.0) have no AuditTransaction class.
 			if (!class_exists(AuditTransaction::class))
 			{
-				return $this->applyLegacySavedFileInTransaction($connection, $deliveryId, $payload, $scopeFile);
+				return $this->applyLegacySavedFileInTransaction(
+					$connection, $deliveryId, $payload, $scopeFile, $hashedFileId, $hash,
+				);
 			}
 
 			$audit = new AuditTransaction($connection);
-			$auditResult = $audit->execute(function () use ($deliveryId, $payload, $scopeFile): AuditTransactionOutcome {
-				$result = $this->applyLegacySavedFileInAudit($deliveryId, $payload, $scopeFile);
+			$auditResult = $audit->execute(function () use (
+				$deliveryId, $payload, $scopeFile, $hashedFileId, $hash,
+			): AuditTransactionOutcome {
+				$result = $this->applyLegacySavedFileInAudit($deliveryId, $payload, $scopeFile, $hashedFileId, $hash);
 
 				return $result->isSuccess()
 					? AuditTransactionOutcome::success($result)
@@ -914,7 +1416,13 @@ final class WebhookProcessor
 				return $result;
 			}
 
-			return (new Result())->addError(new Error('Legacy audit could not prove the file state.', 'vibeoffice_audit_failed'));
+			return $this->observeFailure(
+				DatabaseFailureResult::fromException(
+					new AuditTransactionException($auditResult),
+					new Error('Legacy audit could not prove the file state.', 'vibeoffice_audit_failed'),
+				),
+				$this->diagnosticStage, 'unknown_failure',
+			);
 		}
 		finally
 		{
@@ -927,12 +1435,14 @@ final class WebhookProcessor
 		int $deliveryId,
 		array $payload,
 		File $scopeFile,
+		int $hashedFileId,
+		?Result $hash,
 	): Result
 	{
 		$connection->startTransaction();
 		try
 		{
-			$result = $this->applyLegacySavedFileInAudit($deliveryId, $payload, $scopeFile);
+			$result = $this->applyLegacySavedFileInAudit($deliveryId, $payload, $scopeFile, $hashedFileId, $hash);
 		}
 		catch (Throwable $exception)
 		{
@@ -952,14 +1462,23 @@ final class WebhookProcessor
 		return $result;
 	}
 
-	private function applyLegacySavedFileInAudit(int $deliveryId, array $payload, File $scopeFile): Result
+	private function applyLegacySavedFileInAudit(
+		int $deliveryId,
+		array $payload,
+		File $scopeFile,
+		int $hashedFileId,
+		?Result $hash,
+	): Result
 	{
 		$key = $payload['host_doc_key'];
 		$seq = $payload['snapshot_seq'];
 		$delivery = $this->getDelivery($deliveryId);
 		if (!$delivery || $delivery['HOST_DOC_KEY'] !== $key || (int)$delivery['SNAPSHOT_SEQ'] !== $seq)
 		{
-			return (new Result())->addError(new Error('Legacy saved delivery changed.', 'validation'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved delivery changed.', 'validation')),
+				'validation', 'snapshot_identity_mismatch',
+			);
 		}
 		$locked = DocumentStateRepository::fetchForUpdate(ObjectTable::query()
 			->setSelect(['ID'])->where('ID', $scopeFile->getRealObjectId()));
@@ -967,21 +1486,34 @@ final class WebhookProcessor
 		if (!$file || $file->isDeleted()
 			|| (int)$file->getRealObjectId() !== (int)$scopeFile->getRealObjectId())
 		{
-			return (new Result())->addError(new Error('Legacy saved file is unavailable.', 'scope_unknown'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved file is unavailable.', 'scope_unknown')),
+				'scope', 'file_missing',
+			);
 		}
 		$scope = $this->scopeResolver->resolve($key);
 		if (!$scope->isSuccess() || !$this->legacyScopeFile($key, $scope->getData()['sessions']))
 		{
-			return (new Result())->addError(new Error('Legacy saved scope changed.', 'scope_unknown'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy saved scope changed.', 'scope_unknown')),
+				'scope', 'scope_unwritable',
+			);
 		}
 		$exact = SavedSnapshotTable::query()->setSelect(['*'])
-			->where('HOST_DOC_KEY', $key)->where('SNAPSHOT_SEQ', $seq)->fetch();
+			->where('HOST_DOC_KEY', $key)->where('SNAPSHOT_SEQ', $seq)->fetch()
+		;
 		$head = SavedSnapshotTable::query()->setSelect(['*'])
-			->where('HOST_DOC_KEY', $key)->setOrder(['SNAPSHOT_SEQ' => 'DESC'])->setLimit(1)->fetch();
-		if (($exact && (int)$exact['RESULT_OBJECT_ID'] !== (int)$file->getId())
-			|| ($head && (int)$head['RESULT_OBJECT_ID'] !== (int)$file->getId()))
+			->where('HOST_DOC_KEY', $key)->setOrder(['SNAPSHOT_SEQ' => 'DESC'])->setLimit(1)->fetch()
+		;
+		if (!$this->source->departing && (
+			($exact && (int)$exact['RESULT_OBJECT_ID'] !== (int)$file->getId())
+			|| ($head && (int)$head['RESULT_OBJECT_ID'] !== (int)$file->getId())
+		))
 		{
-			return (new Result())->addError(new Error('Legacy snapshot belongs to another object.', 'scope_unknown'));
+			return $this->observeFailure(
+				(new Result())->addError(new Error('Legacy snapshot belongs to another object.', 'scope_unknown')),
+				'ledger', 'snapshot_identity_mismatch',
+			);
 		}
 		if ($exact && (int)$exact['DELIVERY_ID'] === $deliveryId)
 		{
@@ -989,31 +1521,55 @@ final class WebhookProcessor
 		}
 		if ($head && $seq < (int)$head['SNAPSHOT_SEQ'])
 		{
+			$this->diagnosticStage = 'ledger';
 			$updated = DeliveryTable::update((int)$delivery['ID'], [
 				'STATUS' => DeliveryTable::STATUS_DONE,
 				'OUTCOME' => DeliveryTable::OUTCOME_IGNORED,
 				'REASON' => 'stale_snapshot',
 			]);
 
-			return $updated->isSuccess() ? new Result() : (new Result())->addErrors($updated->getErrors());
+			return $updated->isSuccess() ? new Result()
+				: $this->observeFailure(
+					(new Result())->addErrors($updated->getErrors()),
+					'ledger', 'ledger_write_failed',
+				);
 		}
 		$stagedId = (int)$delivery['STAGED_FILE_ID'];
-		$staged = $stagedId > 0 ? \CFile::GetFileArray($stagedId) : false;
-		if (!$staged)
+		if ($stagedId !== $hashedFileId || $hash === null)
 		{
-			return (new Result())->addError(new Error('Legacy staged file is unavailable.', 'vibeoffice_saved_write_failed'));
+			return (new Result())->addError(new Error('Legacy staged file changed.', 'vibeoffice_saved_write_failed'));
 		}
+		if (!$hash->isSuccess())
+		{
+			return $hash;
+		}
+		$sha256 = $hash->getData()['sha256'];
 		if ($exact)
 		{
 			$source = strtolower((string)($payload['source'] ?? ''));
 			if ($exact['DELIVERY_ID'] === null || $exact['SOURCE'] !== 'forcesave'
 				|| !in_array($source, self::TERMINAL_SOURCES, true)
-				|| !$this->sameLegacySnapshotBytes($stagedId, (int)$exact['RESULT_VERSION_ID']))
+				|| !$this->snapshotProofResolver->matches($exact, $sha256))
 			{
-				return (new Result())->addError(new Error('Legacy snapshot belongs to another delivery.', 'snapshot_ownership_unknown'));
+				return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy snapshot belongs to another delivery.', 'snapshot_ownership_unknown',
+				)),
+				'ledger', 'snapshot_identity_mismatch',
+			);
 			}
 
 			return $this->markLegacyApplied($delivery, $exact);
+		}
+		$staged = $stagedId > 0 ? \CFile::GetFileArray($stagedId) : false;
+		if (!$staged)
+		{
+			return $this->observeFailure(
+				(new Result())->addError(new Error(
+					'Legacy staged file is unavailable.', 'vibeoffice_saved_write_failed',
+				)),
+				'stage_file', 'staged_file_missing',
+			);
 		}
 		$session = $scope->getData()['sessions'][0];
 		$author = WebhookEventPolicy::resolveVersionAuthorId(
@@ -1021,27 +1577,67 @@ final class WebhookProcessor
 			array_map(static fn(DocumentSession $item): int => $item->getUserId(), $scope->getData()['sessions']),
 			$session->getUserId() > 0 ? $session->getUserId() : SystemUser::SYSTEM_USER_ID,
 		);
-		$version = $file->addVersion($staged, $author, true, $this->getEditingSessionWriteOptions($session));
-		if (!$version || (int)$file->getFileId() !== $stagedId)
+		$this->diagnosticStage = 'write_version';
+		if ($this->source->departing)
 		{
-			$finalRefusal = $this->findFinalRefusalCode($file);
+			$copyId = $head && (int)$head['RESULT_OBJECT_ID'] !== (int)$file->getId()
+				? (int)$head['RESULT_OBJECT_ID'] : null;
+			$copyService = new ConflictCopyService();
+			$saved = $copyService->save($file, $staged, $author, $copyId, true);
+			if (!$saved->isSuccess() && $saved->getErrorCollection()->getErrorByCode(ConflictCopyService::ERROR_STALE_COPY))
+			{
+				$saved = $copyService->save($file, $staged, $author, null, true);
+			}
+			if (!$saved->isSuccess())
+			{
+				return $this->observeFailure($saved, 'write_version');
+			}
+			$resultFile = $saved->getData()['file'];
+			$versionId = $saved->getData()['versionId'];
+		}
+		else
+		{
+			$version = $file->addVersion(
+				$staged, $author, !$this->joinPolicy->isAllowed($key, (int)$file->getRealObjectId()),
+				$this->getEditingSessionWriteOptions($session),
+			);
+			if (!$version || (int)$file->getFileId() !== $stagedId)
+			{
+				try
+				{
+					$this->observeFailure((new Result())->addErrors($file->getErrors()), 'write_version');
+				}
+				catch (Throwable)
+				{
+					// Reading model errors for diagnostics must not change the write refusal.
+				}
+				$finalRefusal = $this->findFinalRefusalCode($file);
 
-			return (new Result())->addError($finalRefusal !== null && $finalRefusal === File::ERROR_FORMAT_RESTRICTED
-				? new Error('Legacy saved version was refused.', 'format_restricted')
-				: new Error('Legacy saved version failed.', 'write_failed'));
+				return (new Result())->addError($finalRefusal !== null && $finalRefusal === File::ERROR_FORMAT_RESTRICTED
+					? new Error('Legacy saved version was refused.', 'format_restricted')
+					: new Error('Legacy saved version failed.', 'write_failed'));
+			}
+			$resultFile = $file;
+			$versionId = (int)$version->getId();
 		}
 		$receipt = [
 			'HOST_DOC_KEY' => $key,
 			'SNAPSHOT_SEQ' => $seq,
-			'RESULT_OBJECT_ID' => (int)$file->getId(),
-			'RESULT_VERSION_ID' => (int)$version->getId(),
+			'RESULT_OBJECT_ID' => (int)$resultFile->getId(),
+			'RESULT_VERSION_ID' => $versionId,
+			'RESULT_CONTENT_VERSION' => (int)$resultFile->getGlobalContentVersion(),
+			'CONTENT_SHA256' => $sha256,
 			'DELIVERY_ID' => $deliveryId,
 			'SOURCE' => (string)($payload['source'] ?? 'legacy'),
 		];
+		$this->diagnosticStage = 'ledger';
 		$insert = SavedSnapshotTable::add($receipt);
 		if (!$insert->isSuccess())
 		{
-			return (new Result())->addErrors($insert->getErrors());
+			return $this->observeFailure(
+				(new Result())->addErrors($insert->getErrors()),
+				'ledger', 'ledger_write_failed',
+			);
 		}
 
 		return $this->markLegacyApplied($delivery, $receipt);
@@ -1049,32 +1645,20 @@ final class WebhookProcessor
 
 	private function markLegacyApplied(array $delivery, array $receipt): Result
 	{
+		$this->diagnosticStage = 'ledger';
 		$updated = DeliveryTable::update((int)$delivery['ID'], [
 			'STATUS' => DeliveryTable::STATUS_APPLIED,
 			'OUTCOME' => DeliveryTable::OUTCOME_APPLIED,
 			'RESULT_OBJECT_ID' => (int)$receipt['RESULT_OBJECT_ID'],
 			'RESULT_VERSION_ID' => $receipt['RESULT_VERSION_ID'],
+			'RESULT_CONTENT_VERSION' => $receipt['RESULT_CONTENT_VERSION'] ?? null,
 		]);
 
-		return $updated->isSuccess() ? new Result() : (new Result())->addErrors($updated->getErrors());
-	}
-
-	private function sameLegacySnapshotBytes(int $stagedId, int $versionId): bool
-	{
-		$version = $versionId > 0 ? Version::loadById($versionId) : null;
-		$versionFileId = $version ? (int)$version->getFileId() : 0;
-		$old = $versionFileId > 0 ? \CFile::GetFileArray($versionFileId) : false;
-		$new = \CFile::GetFileArray($stagedId);
-		if (!$old || !$new)
-		{
-			return false;
-		}
-		$oldPath = Application::getDocumentRoot() . $old['SRC'];
-		$newPath = Application::getDocumentRoot() . $new['SRC'];
-
-		return is_file($oldPath) && is_file($newPath)
-			&& ($oldHash = hash_file('sha256', $oldPath)) !== false
-			&& $oldHash === hash_file('sha256', $newPath);
+		return $updated->isSuccess() ? new Result()
+				: $this->observeFailure(
+					(new Result())->addErrors($updated->getErrors()),
+					'ledger', 'ledger_write_failed',
+				);
 	}
 
 	/** Historical sessions without pinned state use the legacy source rules and cache checkpoint. */
@@ -1085,19 +1669,25 @@ final class WebhookProcessor
 		$externalHash = $this->extractExternalHash($payload);
 		if ($externalHash === null)
 		{
-			return $result->addError(new Error('Missing host_doc_key in document.saved webhook.', 'validation'));
+			return $this->observeFailure(
+				$result->addError(new Error('Missing host_doc_key in document.saved webhook.', 'validation')),
+				'validation', 'validation_failed',
+			);
 		}
 
 		$source = mb_strtolower((string)($payload['source'] ?? 'save'));
+		$this->diagnosticStage = 'ledger';
 		$savedDeliveryStage = $this->getSavedDeliveryStage($deliveryId);
 		$savedData = [];
 
 		if ($savedDeliveryStage === null)
 		{
+			$this->diagnosticStage = 'write_version';
 			$uploadResult = ($this->savedVersionUploader)($payload, $externalHash);
 			if (!$uploadResult->isSuccess())
 			{
-				return $result->addErrors($uploadResult->getErrors());
+				return $this->diagnosticReason !== null ? $result->addErrors($uploadResult->getErrors())
+					: $this->observeFailure($result->addErrors($uploadResult->getErrors()), $this->diagnosticStage);
 			}
 
 			$savedData = $uploadResult->getData();
@@ -1106,10 +1696,14 @@ final class WebhookProcessor
 				return $result->setData(['savedContentApplied' => false]);
 			}
 
+			$this->diagnosticStage = 'ledger';
 			$versionMarkerResult = $this->markSavedDeliveryStage($deliveryId, self::SAVED_STAGE_VERSION_APPLIED);
 			if (!$versionMarkerResult->isSuccess())
 			{
-				return $result->addErrors($versionMarkerResult->getErrors());
+				return $this->observeFailure(
+					$versionMarkerResult,
+					'ledger', 'ledger_write_failed',
+				);
 			}
 
 			$savedDeliveryStage = self::SAVED_STAGE_VERSION_APPLIED;
@@ -1117,15 +1711,21 @@ final class WebhookProcessor
 
 		if (in_array($source, self::TERMINAL_SOURCES, true))
 		{
+			$this->diagnosticStage = 'finalize';
 			$finalizationResult = $this->terminalSessionFinalizer->finalizeDocument($externalHash);
 			if (!$finalizationResult->isSuccess())
 			{
-				return $result->addErrors($finalizationResult->getErrors());
+				return $this->observeFailure(
+					$finalizationResult instanceof DatabaseFailureResult
+						? $finalizationResult : $result->addErrors($finalizationResult->getErrors()),
+					'finalize', 'finalization_failed',
+				);
 			}
 		}
 
 		if ($savedDeliveryStage !== self::SAVED_STAGE_SIDE_EFFECTS_APPLIED)
 		{
+			$this->diagnosticStage = 'notify';
 			if ($savedData === [])
 			{
 				$savedData = $this->loadSavedSideEffectsData($externalHash);
@@ -1134,16 +1734,23 @@ final class WebhookProcessor
 			$sideEffectsResult = ($this->savedSideEffectsHandler)($savedData);
 			if (!$sideEffectsResult->isSuccess())
 			{
-				return $result->addErrors($sideEffectsResult->getErrors());
+				return $this->observeFailure(
+					$result->addErrors($sideEffectsResult->getErrors()),
+					'notify', 'notification_failed',
+				);
 			}
 
+			$this->diagnosticStage = 'ledger';
 			$sideEffectsMarkerResult = $this->markSavedDeliveryStage(
 				$deliveryId,
 				self::SAVED_STAGE_SIDE_EFFECTS_APPLIED,
 			);
 			if (!$sideEffectsMarkerResult->isSuccess())
 			{
-				return $result->addErrors($sideEffectsMarkerResult->getErrors());
+				return $this->observeFailure(
+					$sideEffectsMarkerResult,
+					'ledger', 'ledger_write_failed',
+				);
 			}
 		}
 
@@ -1157,17 +1764,24 @@ final class WebhookProcessor
 		$fileUrl = (string)($payload['file_url'] ?? '');
 		if ($fileUrl === '')
 		{
-			return $result->addError(new Error('Missing file_url in document.saved webhook.', 'validation'));
+			return $this->observeFailure(
+				$result->addError(new Error('Missing file_url in document.saved webhook.', 'validation')),
+				'validation', 'validation_failed',
+			);
 		}
 
 		// `file_url` is attacker-influenceable payload data, so never dereference it blindly.
 		// Accept only http(s) URLs pointing at the configured
 		// platform host before it is downloaded and stored as a Disk version.
-		if (!$this->isAllowedFileUrl($fileUrl))
+		if (!$this->source->allowsFileUrl($fileUrl))
 		{
-			return $result->addError(new Error('Refusing to download file_url outside the configured platform host.', 'ssrf_blocked'));
+			return $this->observeFailure(
+				$result->addError(new Error('Refusing to download file_url outside the configured platform host.', 'ssrf_blocked')),
+				'download', 'url_rejected',
+			);
 		}
 
+		$this->diagnosticStage = 'scope';
 		$sessions = $this->getSessionsByHash($externalHash);
 		$session = $sessions[0] ?? null;
 		if (!$session)
@@ -1193,6 +1807,7 @@ final class WebhookProcessor
 			)->setData(['savedContentApplied' => false]);
 		}
 
+		$this->diagnosticStage = 'download';
 		$downloadResult = $this->downloadFromPlatform($fileUrl);
 		if (!$downloadResult->isSuccess())
 		{
@@ -1206,7 +1821,10 @@ final class WebhookProcessor
 			// Missing or empty temp files make makeFileArray return null/false.
 			// bail out with a clear error (the platform retries) instead of feeding an
 			// invalid array into uploadVersion and emitting a PHP warning.
-			return $result->addError(new Error('Downloaded document is not a readable file.', 'download_failed'));
+			return $this->observeFailure(
+				$result->addError(new Error('Downloaded document is not a readable file.', 'download_failed')),
+				'download', 'downloaded_file_unreadable',
+			);
 		}
 
 		// Cap the platform-supplied file against getMaxFileSize() before storing it as a Disk
@@ -1233,6 +1851,7 @@ final class WebhookProcessor
 			$tmpFileArray['type'] = MimeType::getByFileExtension($fileType);
 		}
 
+		$this->diagnosticStage = 'write_version';
 		$userId = $this->resolveSavingUserId($payload, $sessions, $session);
 
 		// commentAttachedObjects is run separately (on background) below, matching OnlyOffice.
@@ -1255,7 +1874,7 @@ final class WebhookProcessor
 
 		if ($file instanceof File)
 		{
-			$this->commentAttachedObjectsOnBackground($file);
+			$this->commentAttachedObjectsOnBackground($file, isset($data['versionId']) ? (int)$data['versionId'] : null);
 		}
 
 		if (is_array($sessions))
@@ -1316,10 +1935,9 @@ final class WebhookProcessor
 		}
 		catch (Throwable $exception)
 		{
-			return $result->addError(new Error(
-				$exception->getMessage(),
-				'saved_delivery_stage_marker_failed',
-			));
+			return DatabaseFailureResult::fromException(
+				$exception, new Error($exception->getMessage(), 'saved_delivery_stage_marker_failed'),
+			);
 		}
 
 		if (!$stored)
@@ -1380,10 +1998,12 @@ final class WebhookProcessor
 
 		if (($payload['notmodified'] ?? null) === true)
 		{
+			$this->diagnosticStage = 'finalize';
 			$finalizationResult = $this->terminalSessionFinalizer->finalizeDocument($externalHash);
 			if (!$finalizationResult->isSuccess())
 			{
-				return $result->addErrors($finalizationResult->getErrors());
+				return $finalizationResult instanceof DatabaseFailureResult
+					? $finalizationResult : $result->addErrors($finalizationResult->getErrors());
 			}
 		}
 		else
@@ -1435,47 +2055,6 @@ final class WebhookProcessor
 	}
 
 	/**
-	 * SSRF allowlist for the platform-supplied `file_url`.
-	 *
-	 * Accepts only http(s) URLs whose host equals the configured platform base URL host
-	 * ({@see Configuration::getServer()}). If the platform base URL is not configured we
-	 * cannot vouch for the target host, so we fail closed rather than dereference an
-	 * arbitrary address.
-	 */
-	private function isAllowedFileUrl(string $fileUrl): bool
-	{
-		$url = new Uri($fileUrl);
-
-		$scheme = mb_strtolower($url->getScheme());
-		if ($scheme !== 'http' && $scheme !== 'https')
-		{
-			return false;
-		}
-
-		$server = $this->getConfiguration()->getServer();
-		if (!is_string($server) || $server === '')
-		{
-			return false;
-		}
-
-		$expectedUri = new Uri($server);
-		$expectedHost = mb_strtolower($expectedUri->getHost());
-		$actualHost = mb_strtolower($url->getHost());
-
-		if ($expectedHost === '' || $actualHost !== $expectedHost)
-		{
-			return false;
-		}
-
-		// Defense-in-depth: also pin the port, so a same-host URL on a different port (e.g.
-		// an internal service co-located on the platform host) is rejected. Uri::getPort()
-		// normalises the scheme default (80/443), so an explicit default port compares equal.
-		// Private IPs are still deliberately NOT blocked (box/on-prem reachability). See
-		// self::downloadFromPlatform().
-		return $url->getPort() === $expectedUri->getPort();
-	}
-
-	/**
 	 * Resolves the shared vibeoffice {@see Configuration} through the registered singleton
 	 * service instead of `new Configuration()`, so the php_interface override file is
 	 * stat'ed/required once per request rather than on every hot-path call.
@@ -1513,11 +2092,21 @@ final class WebhookProcessor
 	 */
 	private function answerRefusedWrite(File $file, string $externalHash): Result
 	{
+		$this->diagnosticStage = 'write_version';
+		try
+		{
+			$this->diagnosticReason = SaveFailureDiagnostic::reasonFromErrors($file->getErrors());
+		}
+		catch (Throwable)
+		{
+			$this->diagnosticReason = 'unknown_failure';
+		}
 		if ($this->isRefusalFinal($file))
 		{
 			return $this->acknowledgeRefusedWrite($file, $externalHash);
 		}
 
+		$this->logWebhookDiagnostic('saved', 'save_refused', stage: 'write_version', reason: $this->diagnosticReason);
 		$reason = $this->describeRefusal($file);
 
 		return (new Result())->addError(new Error(
@@ -1616,24 +2205,122 @@ final class WebhookProcessor
 	 * trace of a deadlock, a lock timeout or a CFile failure. The record names the event, the
 	 * delivery and the exception, and carries neither payload nor session hash.
 	 */
-	private function logDeliveryException(Throwable $exception): void
+	private function observeFailure(Result $result, string $stage, ?string $reason = null): Result
 	{
-		$this->logWebhookDiagnostic('dispatch', 'delivery_exception', $exception);
+		$this->diagnosticStage = $stage;
+		if ($result instanceof DatabaseFailureResult)
+		{
+			return $result;
+		}
+		try
+		{
+			$reason = $result->getData()['documentNotFoundReason'] ?? $reason
+				?? SaveFailureDiagnostic::reasonFromErrors($result->getErrors());
+			$this->diagnosticReason = $reason;
+			$this->logWebhookDiagnostic(
+				$this->activeEvent === self::EVENT_SAVED ? 'saved' : 'dispatch',
+				$this->activeEvent === self::EVENT_SAVED ? 'save_refused' : 'permanent_refusal',
+				stage: $stage, reason: $reason,
+			);
+		}
+		catch (Throwable)
+		{
+			// Observation returns the original Result even when diagnostic data cannot be read.
+		}
+
+		return $result;
 	}
 
-	private function logWebhookDiagnostic(string $operation, string $code, ?Throwable $exception = null): void
+	private function observeDelivery(?array $delivery): void
 	{
-		LoggerProvider::get(self::LOGGER_ID)->log(
-			$exception === null ? 'warning' : 'error',
-			'vibeoffice webhook diagnostic',
-			[
-				'operation' => $operation,
-				'code' => $code,
-				'exception_class' => $exception !== null ? $exception::class : null,
-				'delivery_id' => $this->activeDeliveryId,
-				'event' => $this->activeEvent,
-			],
+		try
+		{
+			$notified = $delivery['NOTIFIED'] ?? null;
+			$this->activeDiagnosticFields = array_replace($this->activeDiagnosticFields, [
+				'result_object_id' => $delivery['RESULT_OBJECT_ID'] ?? null,
+				'result_version_id' => $delivery['RESULT_VERSION_ID'] ?? null,
+				'snapshot_seq' => $delivery['SNAPSHOT_SEQ'] ?? null,
+				'delivery_status' => $delivery['STATUS'] ?? null,
+				'delivery_outcome' => $delivery['OUTCOME'] ?? null,
+				'delivery_notified' => in_array($notified, [0, 1, '0', '1'], true)
+					? ($notified === 1 || $notified === '1') : null,
+			]);
+		}
+		catch (Throwable)
+		{
+			// Only fields from the existing delivery read may enrich diagnostics.
+		}
+	}
+
+	private function observeScope(?array $state): void
+	{
+		try
+		{
+			$this->activeDiagnosticFields = array_replace($this->activeDiagnosticFields, [
+				'source_object_id' => $state['OBJECT_ID'] ?? null,
+				'source_id_valid' => isset($state['OBJECT_ID']) ? (int)$state['OBJECT_ID'] > 0 : null,
+				'scope_session_type' => $state['SESSION_TYPE'] ?? null,
+				'scope_version_id' => $state['VERSION_ID'] ?? null,
+				'scope_external_link_id' => $state['EXTERNAL_LINK_ID'] ?? null,
+				'scope_generation_present' => $state === null ? null : !empty($state['CONTENT_GENERATION']),
+				'generation_correlation_id' => DiagnosticContext::generationCorrelationId(
+					$state['CONTENT_GENERATION'] ?? null,
+				),
+			]);
+		}
+		catch (Throwable)
+		{
+			// Unknown scope facets remain absent; diagnostics do not resolve another scope.
+		}
+	}
+
+	private function logDeliveryException(Throwable $exception): void
+	{
+		$this->logWebhookDiagnostic(
+			'dispatch', 'delivery_exception', $exception, $this->diagnosticStage,
 		);
+	}
+
+	private function logWebhookDiagnostic(
+		string $operation,
+		string $code,
+		?Throwable $exception = null,
+		?string $stage = null,
+		?string $reason = null,
+		?DatabaseFailureResult $databaseFailure = null,
+	): void
+	{
+		try
+		{
+			$database = $databaseFailure?->getDiagnosticFields()
+				?? ($exception === null ? [] : DatabaseErrorDiagnostic::fromException($exception));
+			$exceptionClass = $database['exception_class'] ?? ($exception === null ? null : $exception::class);
+			$reason ??= match ($code)
+			{
+				'delivery_exception' => $database === [] ? 'unknown_failure' : 'db_error',
+				'session_missing', 'file_missing', 'file_too_large' => $this->diagnosticReason ?? $code,
+				default => $this->diagnosticReason ?? 'unknown_failure',
+			};
+			LoggerProvider::get(self::LOGGER_ID)->log(
+				$exceptionClass === null ? 'warning' : 'error',
+				'vibeoffice webhook diagnostic',
+				[
+					'operation' => $operation,
+					'code' => $code,
+					'exception_class' => $exceptionClass,
+					'delivery_id' => $this->activeDeliveryId,
+					'document_correlation_id' => $this->activeDocumentCorrelationId,
+					'event' => $this->activeEvent,
+					'stage' => $stage ?? $databaseFailure?->getStage() ?? $this->diagnosticStage,
+					'reason_code' => $reason,
+					'httpStatus' => $code === 'delivery_exception' ? 500 : null,
+				] + $this->activeDiagnosticFields + $database,
+			);
+		}
+		catch (Throwable)
+		{
+			// Diagnostic failures do not change webhook acknowledgement or retry semantics.
+		}
 	}
 
 	/**
@@ -1658,13 +2345,21 @@ final class WebhookProcessor
 
 		if (!$httpClient->download($fileUrl, $tmpFile))
 		{
-			return $result->addError(new Error('Could not download the document from the platform.', 'download_failed'));
+			return $this->observeFailure(
+				$result->addError(new Error('Could not download the document from the platform.', 'download_failed')),
+				'download', 'download_failed',
+			);
 		}
 
 		$status = $httpClient->getStatus();
 		if ($status !== 200)
 		{
-			return $result->addError(new Error("Could not download the document from the platform. Got {$status}.", 'download_failed'));
+			return $this->observeFailure(
+				$result->addError(new Error(
+					"Could not download the document from the platform. Got {$status}.", 'download_failed',
+				)),
+				'download', 'download_failed',
+			);
 		}
 
 		return $result->setData(['file' => $tmpFile]);
@@ -1699,10 +2394,10 @@ final class WebhookProcessor
 		return new Result();
 	}
 
-	private function commentAttachedObjectsOnBackground(File $file): void
+	private function commentAttachedObjectsOnBackground(File $file, ?int $versionId = null): void
 	{
-		Application::getInstance()->addBackgroundJob(static function () use ($file) {
-			$lastVersion = $file->getLastVersion();
+		Application::getInstance()->addBackgroundJob(static function () use ($file, $versionId) {
+			$lastVersion = $versionId === null ? $file->getLastVersion() : Version::loadById($versionId);
 			if ($lastVersion)
 			{
 				$file->commentAttachedObjects($lastVersion);

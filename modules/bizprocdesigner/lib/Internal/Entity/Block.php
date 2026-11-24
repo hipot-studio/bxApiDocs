@@ -26,6 +26,17 @@ final class Block implements EntityInterface, Arrayable
 		public ?int $colorIndex = null,
 		public ?int $contentBlockColor = null,
 		public ?FrameData $frameData = null,
+		/**
+		 * Capabilities of the node the editor reads before it loads anything from the server: which settings
+		 * surface serves the block, whether it shows aux ports and its relations block, and the title of its
+		 * palette card. The same four fields the normal load of a template publishes
+		 * ({@see \Bitrix\Bizproc\Workflow\Template\Converter\TemplateToNodes}), so a block mounted from a pull
+		 * behaves as it does after a reload; an activity the portal does not know keeps the neutral default.
+		 */
+		public bool $servedByUnifiedPanel = false,
+		public bool $shouldShowAuxPorts = false,
+		public bool $relationsAvailable = false,
+		public ?string $defaultTitle = null,
 	)
 	{
 	}
@@ -62,7 +73,16 @@ final class Block implements EntityInterface, Arrayable
 			is_int($colorIndex) ? $colorIndex : null,
 			is_int($contentBlockColor) ? $contentBlockColor : null,
 			$frameData,
+			(bool)($data['node']['servedByUnifiedPanel'] ?? false),
+			(bool)($data['node']['shouldShowAuxPorts'] ?? false),
+			(bool)($data['node']['relationsAvailable'] ?? false),
+			self::readDefaultTitle($data['node']['defaultTitle'] ?? null),
 		);
+	}
+
+	private static function readDefaultTitle(mixed $value): ?string
+	{
+		return is_string($value) ? $value : null;
 	}
 
 	private static function readDimension(mixed $value): ?int
@@ -78,6 +98,10 @@ final class Block implements EntityInterface, Arrayable
 			'icon' => $this->icon,
 			'colorIndex' => $this->colorIndex,
 			'contentBlockColor' => $this->contentBlockColor,
+			'servedByUnifiedPanel' => $this->servedByUnifiedPanel,
+			'shouldShowAuxPorts' => $this->shouldShowAuxPorts,
+			'relationsAvailable' => $this->relationsAvailable,
+			'defaultTitle' => $this->defaultTitle,
 		];
 
 		// A frame block carries the node.frame* section (defaults + overrides) and keeps the top-level

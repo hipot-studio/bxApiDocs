@@ -147,7 +147,10 @@ class ChatService
 
 
 	/**
-	 * Send a message in a chat
+	 * Send a message in a chat.
+	 * Author 0 is the chatbot: author and input status checks are skipped and onMessageAdd() is not called.
+	 *
+	 * @return int Id of the added message.
 	 * @throws ObjectNotFoundException|AccessDeniedException|SystemException|LoaderException
 	 */
 	public function sendMessage(int $chatId, int $authorId, Message $message): int
@@ -318,9 +321,9 @@ class ChatService
 
 	/**
 	 * @param int $chatId
-	 * @param mixed $param
+	 * @param string $param
 	 *
-	 * @return string|null
+	 * @return mixed Null if the parameter is not set.
 	 * @throws ObjectNotFoundException
 	 * @throws SystemException
 	 */
@@ -344,7 +347,7 @@ class ChatService
 	 *
 	 * @return void
 	 * @throws ObjectNotFoundException
-	 * * @throws SystemException
+	 * @throws SystemException
 	 */
 	public function setParam(int $chatId, string $param, mixed $value): void
 	{

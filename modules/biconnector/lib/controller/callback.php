@@ -7,9 +7,13 @@ use Bitrix\BIConnector\Integration\Superset\Agent;
 use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
+use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
+use Bitrix\BIConnector\Superset\Operation\OperationIntentService;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Error;
@@ -24,16 +28,45 @@ class Callback extends Controller
 		];
 	}
 
+	public function configureActions(): array
+	{
+		return [
+			// Answered without a stored token, so the action only reads the intents and writes nothing.
+			'confirmOperationIntent' => [
+				'-prefilters' => [ProxyAuth::class],
+				'+prefilters' => [new ProxyAuth(acceptWithoutStoredToken: true)],
+			],
+		];
+	}
+
 	public function enableSupersetAction(): void
 	{
 		$context = Context::getCurrent();
 
 		$responseBody = $context->getRequest()->getJsonList();
 		$status = $responseBody->get('status');
+		$generation = self::readString($responseBody->get('generation'));
+
+		if (ConfigContainer::getConfigContainer()->isOutdatedServerGeneration($generation))
+		{
+			$this->logSkippedOutdatedCallback('enableSuperset', $generation);
+
+			return;
+		}
 
 		if (!SupersetInitializer::isActivationCallbackApplicable())
 		{
-			$this->logSkippedActivationCallback(is_string($status) ? $status : 'success');
+			$callbackStatus = is_string($status) ? $status : 'success';
+			$this->logSkippedActivationCallback($callbackStatus);
+
+			if ($callbackStatus !== 'error' && SupersetInitializer::isSupersetReady())
+			{
+				// The instance is up again (unfrozen, for instance). A date it refused meanwhile
+				// has no other trigger: the portal status never left READY.
+				Application::getInstance()->addBackgroundJob(static function (): void {
+					MarketAccessManager::getInstance()->syncPendingExpirationDate();
+				});
+			}
 
 			return;
 		}
@@ -47,6 +80,7 @@ class Callback extends Controller
 			return;
 		}
 
+		ConfigContainer::getConfigContainer()->setServerGeneration($generation);
 		SupersetInitializer::enableSuperset($responseBody->get('superset_address') ?? '');
 	}
 
@@ -60,30 +94,38 @@ class Callback extends Controller
 		]);
 	}
 
+	private function logSkippedOutdatedCallback(string $callbackAction, string $callbackGeneration): void
+	{
+		SupersetInitializerLogger::logInfo('Superset callback of an outdated generation skipped', [
+			'callback_action' => $callbackAction,
+			'callback_generation' => $callbackGeneration,
+			'current_generation' => ConfigContainer::getConfigContainer()->getServerGeneration(),
+			'current_status' => SupersetInitializer::getSupersetStatus(),
+		]);
+	}
+
 	public function freezeAction(): void
 	{
 		SupersetInitializerLogger::logInfo('Portal got freeze action', ['current_status' => SupersetInitializer::getSupersetStatus()]);
+
+		ConfigContainer::getConfigContainer()->adoptServerGeneration(
+			self::readString($this->getRequest()->getJsonList()->get('generation')),
+		);
 	}
 
 	public function suspendAction(): void
 	{
-		$currentStatus = SupersetInitializer::getSupersetStatus();
-		SupersetInitializerLogger::logInfo('Portal got suspend action', ['current_status' => $currentStatus]);
-
-		SupersetInitializer::markSupersetInstanceSuspended(true);
-
-		// suspend finished. Promote status so cancelPendingDelete() knows
-		// it is safe to call resume immediately if the user re-enables BI later.
-		if ($currentStatus === SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE)
+		$generation = self::readString($this->getRequest()->getJsonList()->get('generation'));
+		if (ConfigContainer::getConfigContainer()->isOutdatedServerGeneration($generation))
 		{
-			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE_SUSPENDED);
+			$this->logSkippedOutdatedCallback('suspend', $generation);
 
 			return;
 		}
 
-		// User already re-enabled BI — cancelPendingDelete() set status to LOAD and
-		// deferred resume. suspend is done now, so trigger resume.
-		if ($currentStatus === SupersetInitializer::SUPERSET_STATUS_LOAD)
+		ConfigContainer::getConfigContainer()->adoptServerGeneration($generation);
+
+		if (SupersetInitializer::applySuspendCallback() === true)
 		{
 			SupersetInitializer::resumeSuperset(['reason' => SupersetInitializer::FREEZE_REASON_PENDING_DELETE]);
 		}
@@ -96,6 +138,14 @@ class Callback extends Controller
 	public function deleteAction(): void
 	{
 		$responseBody = Context::getCurrent()?->getRequest()->getJsonList();
+		$generation = self::readString($responseBody?->get('generation'));
+		if (ConfigContainer::getConfigContainer()->isOutdatedServerGeneration($generation))
+		{
+			$this->logSkippedOutdatedCallback('delete', $generation);
+
+			return;
+		}
+
 		$status = $responseBody?->get('status');
 		if ($status === 'error')
 		{
@@ -139,5 +189,45 @@ class Callback extends Controller
 		SystemDashboardManager::actualizeSystemDashboards();
 
 		DashboardManager::notifySupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+	}
+
+	public function confirmOperationIntentAction(OperationIntentService $intentService): array
+	{
+		$payload = $this->getRequest()->getJsonList();
+
+		$intent = $intentService->findConfirmed(
+			self::readString($payload->get('operationId')),
+			self::readString($payload->get('operation')),
+			self::readString($payload->get('generation')),
+			self::readString($payload->get('paramsHash')),
+		);
+
+		if ($intent === null)
+		{
+			return [
+				'protocolSupported' => true,
+				'confirmed' => false,
+			];
+		}
+
+		return [
+			'protocolSupported' => true,
+			'confirmed' => true,
+			'operationId' => (string)$intent['OPERATION_ID'],
+			'operation' => (string)$intent['OPERATION'],
+			'serverId' => self::readInt($payload->get('serverId')),
+			'generation' => (string)$intent['GENERATION'],
+			'paramsHash' => (string)$intent['PARAMS_HASH'],
+		];
+	}
+
+	private static function readString(mixed $value): string
+	{
+		return is_scalar($value) ? (string)$value : '';
+	}
+
+	private static function readInt(mixed $value): int
+	{
+		return is_numeric($value) ? (int)$value : 0;
 	}
 }

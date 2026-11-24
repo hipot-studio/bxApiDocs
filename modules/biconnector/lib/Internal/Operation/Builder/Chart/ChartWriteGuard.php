@@ -14,14 +14,7 @@ use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
-/**
- * Checks the chart write tools run before and after loading the chart, refusing with their texts.
- *
- * A chart is written only by a user with ACTION_BIC_DASHBOARD_EDIT on at least one dashboard that uses it,
- * as BiToolBehaviour::assertChartEditableByDashboards() decides for the tools. The status of those
- * dashboards is not checked: a chart of a published dashboard changes it without the draft rule,
- * a known gap left as the tools have it.
- */
+/** Checks chart writes against the current consumers or the owner of an orphan. */
 final class ChartWriteGuard
 {
 	public const NOT_EDITABLE_MESSAGE =
@@ -86,8 +79,13 @@ final class ChartWriteGuard
 	/**
 	 * @param array $chartDashboards Raw Superset `dashboards` of the chart: `id` is the EXTERNAL_ID of a dashboard.
 	 */
-	public function checkEditable(array $chartDashboards, Actor $actor): Result
+	public function checkEditable(array $chartDashboards, Actor $actor, array $owners = []): Result
 	{
+		if ($chartDashboards === [])
+		{
+			return (new ChartAuthorAccess($this->accessControllerFactory))->check($owners, $actor);
+		}
+
 		$externalIds = [];
 		foreach ($chartDashboards as $dashboard)
 		{
@@ -96,8 +94,13 @@ final class ChartWriteGuard
 				continue;
 			}
 
-			$externalId = (int)($dashboard['id'] ?? 0);
-			if ($externalId > 0)
+			$rawId = $dashboard['id'] ?? null;
+			if (!is_int($rawId) && !is_string($rawId))
+			{
+				continue;
+			}
+			$externalId = (int)$rawId;
+			if ($externalId > 0 && (string)$externalId === (string)$rawId)
 			{
 				$externalIds[$externalId] = $externalId;
 			}
@@ -147,13 +150,7 @@ final class ChartWriteGuard
 
 		AiToolsLogger::logWarning($errors, $context);
 
-		$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));
-		$message = Refusal::appendDebugDetail(
-			self::UNAVAILABLE_BI_MESSAGE,
-			$details . ' | ctx: ' . json_encode($context, JSON_UNESCAPED_UNICODE),
-		);
-
-		return Refusal::error(FailureCode::Unavailable, $message);
+		return Refusal::error(FailureCode::Unavailable, self::UNAVAILABLE_BI_MESSAGE);
 	}
 
 	private static function checkBuilderEnabled(): Result

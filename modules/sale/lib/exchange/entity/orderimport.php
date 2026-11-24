@@ -317,16 +317,16 @@ class OrderImport extends EntityImport
         return $result;
     }
 
-	private function prepareFieldsBasketItem($productXML_ID, $item)
+	private function prepareFieldsBasketItem($productXML_ID, $item, array &$productCache)
 	{
     	/** @var Exchange\ISettingsImport $settings */
     	$settings = $this->getSettings();
 
     	$code = $this->getCodeAfterDelimiter($productXML_ID);
-		$product = $code<>'' ? static::getProduct($code):array();
+		$product = $code<>'' ? static::getCachedProduct($code, $productCache):array();
 
 		if(empty($product))
-			$product = static::getProduct($productXML_ID);
+			$product = static::getCachedProduct($productXML_ID, $productCache);
 
 		if(!empty($product))
         {
@@ -400,6 +400,16 @@ class OrderImport extends EntityImport
 		return $result;
 	}
 
+	private static function getCachedProduct($code, array &$productCache)
+	{
+		if (!array_key_exists($code, $productCache))
+		{
+			$productCache[$code] = static::getProduct($code);
+		}
+
+		return $productCache[$code];
+	}
+
     private static function getProduct($code)
     {
         $result = array();
@@ -432,35 +442,41 @@ class OrderImport extends EntityImport
 	 */
 	static public function getBasketItemByItem(Sale\BasketBase $basket, array $item)
     {
-        foreach($basket as $basketItem)
-        {
-            /** @var  Sale\BasketItem $basketItem*/
-            if($item['ID'] == $basketItem->getField('PRODUCT_XML_ID'))
-            {
-                $fieldsBasketProperty = static::prepareFieldsBasketProperty($item);
-
-                $propertyBasketItem = array();
-                /** @var Sale\BasketPropertiesCollection $basketPropertyCollection */
-                if($basketPropertyCollection = $basketItem->getPropertyCollection())
-                    $propertyBasketItem = $basketPropertyCollection->getPropertyValues();
-
-                if(!empty($fieldsBasketProperty) && is_array($fieldsBasketProperty))
-                {
-                    if($basketPropertyCollection->isPropertyAlreadyExists($fieldsBasketProperty))
-                    {
-                        return $basketItem;
-                    }
-                }
-                elseif(count($propertyBasketItem)<=0)
-                {
-                    return $basketItem;
-                }
-            }
-            else
-                continue;
-        }
-        return false;
+        return static::getBasketItemFromList($basket, $item);
     }
+
+	/** @internal */
+	public static function getBasketItemFromList(iterable $basketItems, array $item)
+	{
+		foreach ($basketItems as $basketItem)
+		{
+			if (static::matchesBasketItem($basketItem, $item))
+			{
+				return $basketItem;
+			}
+		}
+
+		return false;
+	}
+
+	protected static function matchesBasketItem(Sale\BasketItem $basketItem, array $item): bool
+	{
+		if ($item['ID'] != $basketItem->getField('PRODUCT_XML_ID'))
+		{
+			return false;
+		}
+
+		$fieldsBasketProperty = static::prepareFieldsBasketProperty($item);
+		$basketPropertyCollection = $basketItem->getPropertyCollection();
+		$propertyBasketItem = $basketPropertyCollection ? $basketPropertyCollection->getPropertyValues() : [];
+
+		if (!empty($fieldsBasketProperty) && is_array($fieldsBasketProperty))
+		{
+			return $basketPropertyCollection->isPropertyAlreadyExists($fieldsBasketProperty);
+		}
+
+		return count($propertyBasketItem) <= 0;
+	}
 
 	/**
 	 * @param array $fields
@@ -502,6 +518,9 @@ class OrderImport extends EntityImport
         $taxListModify = array();
         $basketItemsIndexList = array();
 
+        $productCache = [];
+        $basketCandidates = new BasketItemCandidateList($basket);
+
         /** @var Sale\BasketItem $basketItem */
         foreach ($basket as $basketItem)
         {
@@ -518,8 +537,10 @@ class OrderImport extends EntityImport
 				foreach($items as $productXML_ID => $item)
 				{
 					$fieldsBasket = array();
-					if($basketItem = static::getBasketItemByItem($basket, $item))
+					if($basketItem = static::getBasketItemFromList($basketCandidates, $item))
 					{
+						$basketCandidates->remove($basketItem->getBasketCode());
+
 						/** @var Exchange\ICriterionOrder $criterionBasketItems */
 						$criterionBasketItems = $this->getCurrentCriterion($basket->getOrder());
 
@@ -557,7 +578,7 @@ class OrderImport extends EntityImport
 					else
 					{
 
-						$fieldsBasket = $this->prepareFieldsBasketItem($productXML_ID, $item);
+						$fieldsBasket = $this->prepareFieldsBasketItem($productXML_ID, $item, $productCache);
 						$fieldsCurrency = $this->convertCurrency($item);
 
 						$fieldsBasket['CURRENCY'] = $fieldsCurrency['CURRENCY'];
@@ -800,6 +821,8 @@ class OrderImport extends EntityImport
     {
         $basketItemsIndexQuantityList = array();
 
+        $basketCandidates = new BasketItemCandidateList($basket);
+
         /** @var \Bitrix\Sale\BasketItem $basketItem */
         foreach ($basket as $basketItem)
         {
@@ -812,8 +835,10 @@ class OrderImport extends EntityImport
             {
                 foreach($items as $productXML_ID => $item)
                 {
-                    if($basketItem = static::getBasketItemByItem($basket, $item))
+                    if($basketItem = static::getBasketItemFromList($basketCandidates, $item))
                     {
+						$basketCandidates->remove($basketItem->getBasketCode());
+
                         if(isset($basketItemsIndexQuantityList[$basketItem->getId()]))
                         {
                             if($basketItemsIndexQuantityList[$basketItem->getId()] <= $item['QUANTITY'])

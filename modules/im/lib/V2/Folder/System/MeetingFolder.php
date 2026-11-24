@@ -54,4 +54,9 @@ final class MeetingFolder extends SystemFolder
 	{
 		return true;
 	}
+
+	public function canReadAll(): bool
+	{
+		return true;
+	}
 }

@@ -10,6 +10,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Bitrix\Disk\Document\Vibeoffice\Logging\DiagnosticContext;
 use Bitrix\Disk\Document\Vibeoffice\Logging\LoggerProvider;
 use Psr\Log\LoggerInterface;
 
@@ -30,6 +31,7 @@ final class ProtocolClient implements ProtocolClientInterface
 		'save_refused', 'doc_full', 'file_too_large', 'filetype_not_editable',
 		'unsupported_filetype', 'no_capacity', 'saving_in_progress',
 		'session_closing', 'open_in_progress', 'failover_in_progress', 'open_session_closed',
+		'not_active', 'no_editor_session', 'editor_key_mismatch', 'open_identity_mismatch', 'stale_attempt',
 	];
 
 	private string $baseUrl;
@@ -38,6 +40,7 @@ final class ProtocolClient implements ProtocolClientInterface
 	private ?\Closure $httpClientFactory;
 	private ProtocolCallContext $callContext;
 	private LoggerInterface $logger;
+
 	/**
 	 * @param (\Closure(): HttpClient)|null $httpClientFactory test seam; without it
 	 *        the client is built by {@see buildHttpClient()} with the production timeouts.
@@ -49,6 +52,7 @@ final class ProtocolClient implements ProtocolClientInterface
 		?\Closure $httpClientFactory = null,
 		?ProtocolCallContext $callContext = null,
 		?LoggerInterface $logger = null,
+		private readonly ?\Closure $requestIdFactory = null,
 	)
 	{
 		$this->baseUrl = rtrim($baseUrl, '/');
@@ -70,6 +74,7 @@ final class ProtocolClient implements ProtocolClientInterface
 			self::OPEN_CAPABILITIES,
 			'/v1/documents/{docKey}/open',
 			'open',
+			$docKey,
 		);
 	}
 
@@ -90,8 +95,7 @@ final class ProtocolClient implements ProtocolClientInterface
 			&& is_string($scheme)
 			&& strtolower($scheme) === 'https'
 			&& is_string($host)
-			&& $host !== ''
-		;
+			&& $host !== '';
 	}
 
 	/**
@@ -136,28 +140,88 @@ final class ProtocolClient implements ProtocolClientInterface
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/grants';
 
-		return $this->send(HttpClient::HTTP_POST, $path, $grants, route: '/v1/documents/{docKey}/grants', operation: 'upsertGrants');
+		return $this->send(
+			HttpClient::HTTP_POST,
+			$path,
+			$grants,
+			route: '/v1/documents/{docKey}/grants',
+			operation: 'upsertGrants',
+			documentKey: $docKey,
+		);
 	}
 
 	public function revokeGrant(string $docKey, string $userId): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/grants/' . self::encodeSegment($userId);
 
-		return $this->send(HttpClient::HTTP_DELETE, $path, null, route: '/v1/documents/{docKey}/grants/{userId}', operation: 'revokeGrant');
+		return $this->send(
+			HttpClient::HTTP_DELETE,
+			$path,
+			null,
+			route: '/v1/documents/{docKey}/grants/{userId}',
+			operation: 'revokeGrant',
+			documentKey: $docKey,
+		);
+	}
+
+	public function revokeGrantConfirmed(string $docKey, string $subject, ?float $deadline = null): Result
+	{
+		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/grants/' . self::encodeSegment($subject);
+
+		return $this->send(
+			HttpClient::HTTP_DELETE,
+			$path,
+			null,
+			$deadline,
+			['X-VO-Revoke-Confirmation' => '1'],
+			'/v1/documents/{docKey}/grants/{userId}',
+			'revokeGrantConfirmed',
+			$docKey,
+			$subject,
+		);
 	}
 
 	public function forcesave(string $docKey, ?array $userdata): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/forcesave';
 
-		return $this->send(HttpClient::HTTP_POST, $path, $userdata, route: '/v1/documents/{docKey}/forcesave', operation: 'forcesave');
+		return $this->send(
+			HttpClient::HTTP_POST,
+			$path,
+			$userdata,
+			route: '/v1/documents/{docKey}/forcesave',
+			operation: 'forcesave',
+			documentKey: $docKey,
+		);
+	}
+
+	public function forcesaveWithinDeadline(string $docKey, ?array $userdata, float $deadline): Result
+	{
+		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/forcesave';
+
+		return $this->send(
+			HttpClient::HTTP_POST,
+			$path,
+			$userdata,
+			$deadline,
+			route: '/v1/documents/{docKey}/forcesave',
+			operation: 'forcesave',
+			documentKey: $docKey,
+		);
 	}
 
 	public function updateMeta(string $docKey, string $title): Result
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/meta';
 
-		return $this->send(HttpClient::HTTP_POST, $path, ['title' => $title], route: '/v1/documents/{docKey}/meta', operation: 'updateMeta');
+		return $this->send(
+			HttpClient::HTTP_POST,
+			$path,
+			['title' => $title],
+			route: '/v1/documents/{docKey}/meta',
+			operation: 'updateMeta',
+			documentKey: $docKey,
+		);
 	}
 
 	public function convert(array $body): Result
@@ -169,7 +233,14 @@ final class ProtocolClient implements ProtocolClientInterface
 	{
 		$path = '/v1/documents/' . self::encodeSegment($docKey) . '/versions/sign-urls';
 
-		return $this->send(HttpClient::HTTP_POST, $path, $body, route: '/v1/documents/{docKey}/versions/sign-urls', operation: 'signVersionUrls');
+		return $this->send(
+			HttpClient::HTTP_POST,
+			$path,
+			$body,
+			route: '/v1/documents/{docKey}/versions/sign-urls',
+			operation: 'signVersionUrls',
+			documentKey: $docKey,
+		);
 	}
 
 	/**
@@ -196,6 +267,8 @@ final class ProtocolClient implements ProtocolClientInterface
 		array $extraHeaders = [],
 		string $route = '',
 		string $operation = '',
+		?string $documentKey = null,
+		?string $confirmationSubject = null,
 	): Result
 	{
 		$startedAt = hrtime(true);
@@ -204,28 +277,23 @@ final class ProtocolClient implements ProtocolClientInterface
 			: $this->callContext->nextAttempt($operation);
 		$requestSent = false;
 		$httpStatus = null;
-		$platformCode = null;
+		$platformError = null;
 		$diagnosticResult = 'not_sent';
 		$diagnosticCode = 'protocol_exception';
 		$thrown = false;
+		$http = null;
+		$requestId = null;
+		$openingBudgetMs = null;
 		try
 		{
 			$result = new Result();
 			if ($deadline !== null && (!is_finite($deadline) || $deadline - hrtime(true) / 1e9 < 0.001))
 			{
 				$diagnosticCode = 'vibeoffice_open_deadline';
+
 				return $result->addError(new Error(
 					'Vibeoffice opening deadline exceeded.',
 					'vibeoffice_open_deadline',
-					['requestSent' => false, 'responseVerified' => false],
-				));
-			}
-			if ($deadline !== null && !function_exists('curl_init'))
-			{
-				$diagnosticCode = 'vibeoffice_deadline_transport';
-				return $result->addError(new Error(
-					'Opening deadline requires cURL transport.',
-					'vibeoffice_deadline_transport',
 					['requestSent' => false, 'responseVerified' => false],
 				));
 			}
@@ -243,6 +311,7 @@ final class ProtocolClient implements ProtocolClientInterface
 				catch (ArgumentException $e)
 				{
 					$diagnosticCode = 'request_encode_failed';
+
 					return $result->addError(new Error($e->getMessage()));
 				}
 			}
@@ -250,7 +319,8 @@ final class ProtocolClient implements ProtocolClientInterface
 			$ts = time();
 			$nonce = Signer::generateNonce();
 			$headers = $this->signer->buildHeaders($method, $escapedPath, '', $rawBody, $ts, $nonce);
-			$http = $this->httpClientFactory === null ? $this->buildHttpClient($deadline) : ($this->httpClientFactory)($deadline);
+			$http = $this->httpClientFactory === null
+				? $this->buildHttpClient($deadline) : ($this->httpClientFactory)($deadline);
 			$http->setRedirect(false);
 			foreach ($headers as $name => $value)
 			{
@@ -263,11 +333,32 @@ final class ProtocolClient implements ProtocolClientInterface
 
 			$url = $this->baseUrl . $escapedPath;
 			$entityBody = $rawBody === '' ? null : $rawBody;
+			try
+			{
+				$http->getRequestHeaders()->delete('X-VO-Request-ID');
+				$id = $this->requestIdFactory === null
+					? DiagnosticContext::createTraceId() : ($this->requestIdFactory)();
+				if (is_string($id)
+					&& preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/D', $id) === 1)
+				{
+					$http->setHeader('X-VO-Request-ID', $id);
+					$requestId = $id;
+				}
+			}
+			catch (\Throwable)
+			{
+				// Passive correlation must not prevent a platform request.
+			}
+			$openingBudgetMs = $deadline === null ? null
+				: (int)min(2147483647, max(0, floor(($deadline - hrtime(true) / 1e9) * 1000)));
 			$requestSent = null;
-			if ($http->query($method, $url, $entityBody) === false)
+			$querySucceeded = $http->query($method, $url, $entityBody) !== false;
+			$statusAfterQuery = $querySucceeded ? (int)$http->getStatus() : 0;
+			if (!$querySucceeded || $statusAfterQuery <= 0)
 			{
 				$diagnosticResult = 'error';
 				$diagnosticCode = 'vibeoffice_transport_unknown';
+
 				return $result->addError(new Error(
 					'Vibeoffice server is not available.',
 					'vibeoffice_transport_unknown',
@@ -275,11 +366,12 @@ final class ProtocolClient implements ProtocolClientInterface
 				));
 			}
 			$requestSent = true;
-			$httpStatus = (int)$http->getStatus();
+			$httpStatus = $statusAfterQuery;
 			if ($deadline !== null && hrtime(true) / 1e9 >= $deadline)
 			{
 				$diagnosticResult = 'error';
 				$diagnosticCode = 'vibeoffice_open_deadline';
+
 				return $result->addError(new Error(
 					'Vibeoffice opening deadline exceeded.',
 					'vibeoffice_open_deadline',
@@ -289,6 +381,25 @@ final class ProtocolClient implements ProtocolClientInterface
 
 			if ($httpStatus >= 200 && $httpStatus < 300)
 			{
+				if ($operation === 'revokeGrantConfirmed')
+				{
+					$ack = $this->readRevokeConfirmation(
+						$httpStatus, (string)$http->getResult(), $documentKey, $confirmationSubject,
+					);
+					if ($ack === null)
+					{
+						$diagnosticResult = 'error';
+						$diagnosticCode = 'response_invalid';
+
+						return $result->addError(new Error(
+							'Vibeoffice revoke acknowledgement is invalid.', 'vibeoffice_revoke_unconfirmed',
+						));
+					}
+					$diagnosticResult = 'ok';
+					$diagnosticCode = null;
+
+					return $result->setData($ack);
+				}
 				if ($this->isValidDiagnosticResponse($operation, (string)$http->getResult()))
 				{
 					$diagnosticResult = 'ok';
@@ -304,8 +415,10 @@ final class ProtocolClient implements ProtocolClientInterface
 			{
 				$diagnosticResult = 'refused';
 				$diagnosticCode = 'platform_refused';
-				$parsedCode = $this->extractPlatformCode((string)$http->getResult());
-				$platformCode = in_array($parsedCode, self::LOGGABLE_PLATFORM_CODES, true) ? $parsedCode : null;
+				$response = $this->handleResponse($result, $http);
+				$platformError = $response->getErrors()[0]->getCustomData();
+
+				return $response;
 			}
 
 			return $this->handleResponse($result, $http);
@@ -323,24 +436,104 @@ final class ProtocolClient implements ProtocolClientInterface
 				: ($diagnosticResult === 'ok' ? 'info' : 'warning');
 			try
 			{
+				if ($httpStatus === 409 && $platformError === null)
+				{
+					try
+					{
+						$platformError = [
+							'platformCode' => $this->extractPlatformCode((string)$http->getResult()),
+							'retryAfter' => self::parseRetryAfter($http->getHeaders()->get('Retry-After')),
+						];
+					}
+					catch (\Throwable)
+					{
+						// A response received after the opening deadline is diagnostic only.
+					}
+				}
+				$parsedCode = $platformError['platformCode'] ?? null;
+				$platformCode = in_array($parsedCode, self::LOGGABLE_PLATFORM_CODES, true) ? $parsedCode : null;
+				$conflictCodeState = $httpStatus === 409 && $platformError !== null
+					? match (true)
+					{
+						$parsedCode === null => 'missing',
+						$platformCode === null => 'unrecognized',
+						default => 'known',
+					}
+					: null;
+				$transport = [];
+				if ($diagnosticResult !== 'ok' && $requestSent !== false)
+				{
+					try
+					{
+						$transport = $http instanceof ProtocolHttpClient ? $http->getTransportDiagnostics()
+							: ProtocolHttpClient::unavailableDiagnostics($http->getError(), $requestSent !== true);
+					}
+					catch (\Throwable)
+					{
+						$transport = ProtocolHttpClient::unavailableDiagnostics([], $requestSent !== true);
+					}
+					$transport['opening_budget_ms'] = $openingBudgetMs;
+					$transport['opening_budget_expired'] = $deadline === null ? null : hrtime(true) / 1e9 >= $deadline;
+				}
 				$this->logger->log($level, 'vibeoffice platform request', [
+					'request_id' => $requestId,
 					'method' => $method,
 					'path' => $route,
 					'httpStatus' => $httpStatus,
 					'platformCode' => $platformCode,
+					'conflict_code_state' => $conflictCodeState,
+					'retry_after_s' => $httpStatus === 409 ? ($platformError['retryAfter'] ?? null) : null,
 					'duration_ms' => max(0, (int)floor((hrtime(true) - $startedAt) / 1e6)),
 					'attempt' => $attempt,
 					'result' => $diagnosticResult,
 					'code' => $diagnosticCode,
 					'request_sent' => $requestSent,
-					'trace_id' => null,
-				]);
+					'trace_id' => $this->callContext->getTraceId(),
+					'document_correlation_id' => DiagnosticContext::documentCorrelationId($documentKey),
+				] + $transport);
 			}
 			catch (\Throwable)
 			{
 				// Diagnostic failures do not change the platform result.
 			}
 		}
+	}
+
+	private function readRevokeConfirmation(
+		int $status,
+		string $rawResponse,
+		?string $docKey,
+		?string $subject,
+	): ?array
+	{
+		if ($status !== 200)
+		{
+			return null;
+		}
+		$ack = $this->decodeBody($rawResponse);
+		if (($ack['confirmation_version'] ?? null) !== 1
+			|| ($ack['host_doc_key'] ?? null) !== $docKey
+			|| ($ack['subject'] ?? null) !== $subject
+			|| ($ack['result'] ?? null) !== 'confirmed'
+			|| !array_key_exists('placement', $ack))
+		{
+			return null;
+		}
+		$placement = $ack['placement'];
+		if ($placement !== null
+			&& (!is_array($placement)
+				|| !is_string($placement['instance_id'] ?? null)
+				|| preg_match(
+					'/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/Di',
+					$placement['instance_id'],
+				) !== 1
+				|| !is_string($placement['editor_key'] ?? null) || $placement['editor_key'] === ''
+				|| !is_int($placement['rev'] ?? null) || $placement['rev'] < 0))
+		{
+			return null;
+		}
+
+		return $ack;
 	}
 
 	private function isValidDiagnosticResponse(string $operation, string $rawResponse): bool
@@ -364,6 +557,7 @@ final class ProtocolClient implements ProtocolClientInterface
 				&& $decoded->config instanceof \stdClass
 				&& get_object_vars($decoded->config) !== [];
 		}
+
 		return $decoded instanceof \stdClass || is_array($decoded);
 	}
 
@@ -520,32 +714,12 @@ final class ProtocolClient implements ProtocolClientInterface
 	private function buildHttpClient(?float $deadline = null): HttpClient
 	{
 		$options = [
+			'useCurl' => function_exists('curl_init'),
 			'socketTimeout' => 5,
 			'streamTimeout' => 10,
 			'version' => HttpClient::HTTP_1_1,
 		];
-		$http = $deadline === null ? new HttpClient($options) : new class($options, $deadline) extends HttpClient {
-			public function __construct(array $options, private readonly float $deadline)
-			{
-				parent::__construct($options + ['useCurl' => true]);
-			}
-
-			protected function createHandler(\Psr\Http\Message\RequestInterface $request, bool $async = false)
-			{
-				$remainingMs = (int)floor(($this->deadline - hrtime(true) / 1e9) * 1000);
-				if ($remainingMs <= 0)
-				{
-					throw new \Bitrix\Main\Web\Http\ClientException($request, 'Vibeoffice opening deadline exceeded.');
-				}
-
-				// A dedicated handle prevents the opening deadline from affecting other requests.
-				$handler = parent::createHandler($request, true);
-				curl_setopt($handler->getHandle(), CURLOPT_TIMEOUT_MS, $remainingMs);
-				curl_setopt($handler->getHandle(), CURLOPT_CONNECTTIMEOUT_MS, min(5000, $remainingMs));
-
-				return $handler;
-			}
-		};
+		$http = new ProtocolHttpClient($options, $deadline);
 
 		$http->setHeader('Content-Type', 'application/json');
 		$http->setRedirect(false);

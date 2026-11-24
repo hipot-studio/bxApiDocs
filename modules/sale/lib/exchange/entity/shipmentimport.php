@@ -23,6 +23,10 @@ class ShipmentImport extends EntityImport
 {
 	protected static $currentSettingsStores = null;
 
+	protected ?BasketItemCandidateList $basketCandidates = null;
+
+	protected array $basketCandidatesByPosition = [];
+
 	public function __construct($parentEntityContext = null)
     {
         parent::__construct($parentEntityContext);
@@ -260,7 +264,67 @@ class ShipmentImport extends EntityImport
 	 */
 	protected function getBasketItemByItem(Sale\BasketBase $basket, array $item)
 	{
-		return OrderImport::getBasketItemByItem($basket, $item);
+		return OrderImport::getBasketItemFromList($this->getBasketCandidatesForItem($item), $item);
+	}
+
+	protected function getBasketCandidatesForItem(array $item): iterable
+	{
+		$position = $item['BASKET_NUMBER'] ?? null;
+		if ($position === null || $position === '')
+		{
+			return $this->basketCandidates ?? [];
+		}
+
+		return $this->basketCandidatesByPosition[(string)$position] ?? [];
+	}
+
+	/** @internal */
+	public function initializeBasketCandidates(Sale\BasketBase $basket): void
+	{
+		$this->basketCandidates = new BasketItemCandidateList();
+		$this->basketCandidatesByPosition = [];
+		foreach ($basket as $basketItem)
+		{
+			$position = (string)\CSaleExport::getNumberBasketPosition($basketItem->getId());
+			$this->basketCandidates->add($basketItem);
+			$code = $basketItem->getBasketCode();
+			if (!isset($this->basketCandidatesByPosition[$position]))
+			{
+				$this->basketCandidatesByPosition[$position] = [$code => $basketItem];
+			}
+			else
+			{
+				if (is_array($this->basketCandidatesByPosition[$position]))
+				{
+					$this->basketCandidatesByPosition[$position] = new BasketItemCandidateList(
+						$this->basketCandidatesByPosition[$position],
+					);
+				}
+				$this->basketCandidatesByPosition[$position]->add($basketItem);
+			}
+		}
+	}
+
+	/** @internal */
+	public function getNextBasketItem(Sale\BasketBase $basket, array $item): Sale\BasketItem|false
+	{
+		$basketItem = $this->getBasketItemByItem($basket, $item);
+		if ($basketItem)
+		{
+			$code = $basketItem->getBasketCode();
+			$position = (string)\CSaleExport::getNumberBasketPosition($basketItem->getId());
+			$this->basketCandidates->remove($code);
+			if (is_array($this->basketCandidatesByPosition[$position]))
+			{
+				unset($this->basketCandidatesByPosition[$position][$code]);
+			}
+			else
+			{
+				$this->basketCandidatesByPosition[$position]->remove($code);
+			}
+		}
+
+		return $basketItem;
 	}
 
     /**
@@ -273,6 +337,7 @@ class ShipmentImport extends EntityImport
     private function fillShipmentItems(Shipment $shipment, Sale\BasketBase $basket, array $params)
     {
         $result = new Sale\Result();
+        $this->initializeBasketCandidates($basket);
 
         /** @var Order $order */
         $order = $basket->getOrder();
@@ -290,7 +355,7 @@ class ShipmentImport extends EntityImport
 
                 	if($item['TYPE'] == Exchange\ImportBase::ITEM_ITEM)
                     {
-                        if($basketItem = $this->getBasketItemByItem($basket, $item))
+                        if($basketItem = $this->getNextBasketItem($basket, $item))
                         {
                             $basketItemQuantity = $this->getBasketItemQuantity($order, $basketItem);
 

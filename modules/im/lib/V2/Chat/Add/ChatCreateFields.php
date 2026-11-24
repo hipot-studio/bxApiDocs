@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Chat\Add;
 
 use Bitrix\Im\V2\AccessCheckable;
+use Bitrix\Im\V2\Analytics\VoiceWidgetLabels;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatCreateFieldsDto;
@@ -43,6 +44,10 @@ class ChatCreateFields implements AccessCheckable
 		protected ?array $memberEntities = null,
 		protected ?Chat $parentChat = null,
 		protected ?array $chatParams = null,
+		protected ?bool $threadsEnabled = null,
+		protected ?string $manageThreadCreate = null,
+		protected ?string $manageThreadPost = null,
+		protected ?VoiceWidgetLabels $copilotAnalytics = null,
 	)
 	{
 	}
@@ -82,6 +87,10 @@ class ChatCreateFields implements AccessCheckable
 			memberEntities: $dto->memberEntities,
 			parentChat: $parentChat,
 			chatParams: self::buildChatParamsFromDto($dto),
+			threadsEnabled: $dto->threadsEnabled,
+			manageThreadCreate: $dto->manageThreadCreate,
+			manageThreadPost: $dto->manageThreadPost,
+			copilotAnalytics: $dto->copilotAnalytics,
 		);
 	}
 
@@ -138,6 +147,10 @@ class ChatCreateFields implements AccessCheckable
 			'MEMBER_ENTITIES' => $this->memberEntities,
 			'PARENT_CHAT' => $this->parentChat,
 			'CHAT_PARAMS' => $this->chatParams,
+			'THREADS_ENABLED' => $this->threadsEnabled,
+			'MANAGE_THREAD_CREATE' => $this->manageThreadCreate,
+			'MANAGE_THREAD_POST' => $this->manageThreadPost,
+			'COPILOT_ANALYTICS' => $this->copilotAnalytics,
 		], fn($v) => $v !== null);
 	}
 
@@ -155,6 +168,14 @@ class ChatCreateFields implements AccessCheckable
 			$params[] = [
 				'PARAM_NAME' => Chat\Param\Params::COPILOT_MAIN_ROLE,
 				'PARAM_VALUE' => (new RoleManager())->getValidRoleCode($dto->copilotMainRole),
+			];
+		}
+
+		if ($dto->copilotAnalytics !== null)
+		{
+			$params[] = [
+				'PARAM_NAME' => Chat\Param\Params::COPILOT_ORIGIN,
+				'PARAM_VALUE' => VoiceWidgetLabels::ORIGIN,
 			];
 		}
 

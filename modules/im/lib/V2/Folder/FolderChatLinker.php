@@ -10,7 +10,10 @@ use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Cache\FolderCache;
 use Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypes;
 use Bitrix\Im\V2\Folder\Error\FolderError;
+use Bitrix\Im\V2\Folder\Mute\MuteCache;
+use Bitrix\Im\V2\Folder\Mute\MuteProvider;
 use Bitrix\Im\V2\Folder\Pin\PinService;
+use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 use Bitrix\Im\V2\Result;
 
 /**
@@ -22,6 +25,9 @@ class FolderChatLinker
 		private readonly PinService $pinService,
 		private readonly FolderCache $folderCache,
 		private readonly FolderProvider $folderProvider,
+		private readonly MuteCache $muteCache,
+		private readonly MuteProvider $muteProvider,
+		private readonly CountersCache $countersCache,
 	) {}
 
 	public function addChats(Folder $folder, array $chatIds): Result
@@ -72,6 +78,7 @@ class FolderChatLinker
 
 		$this->mergeChatIdsIntoFolder($folder, $chatIds);
 		$this->folderCache->clearByUser($userId);
+		$this->dropMuteStateOfMutedFolder($folder);
 
 		return $result;
 	}
@@ -102,6 +109,7 @@ class FolderChatLinker
 
 		$folder->setChatIds(array_values(array_diff($folder->getChatIds(), $chatIds)));
 		$this->folderCache->clearByUser($userId);
+		$this->dropMuteStateOfMutedFolder($folder);
 
 		return $result;
 	}
@@ -118,6 +126,7 @@ class FolderChatLinker
 		if ($userId !== null && $userId > 0)
 		{
 			$this->folderCache->clearByUser($userId);
+			$this->dropMuteStateOfRuledUser($userId);
 		}
 	}
 
@@ -140,6 +149,7 @@ class FolderChatLinker
 		]);
 
 		$this->folderCache->clearByUser($userId);
+		$this->dropMuteStateOfRuledUser($userId);
 	}
 
 	public function clearByUser(int $userId): void
@@ -158,6 +168,7 @@ class FolderChatLinker
 		FolderChatTable::deleteBatch(['=FOLDER_ID' => $folderIds]);
 
 		$this->folderCache->clearByUser($userId);
+		$this->dropMuteStateOfRuledUser($userId);
 	}
 
 	/**
@@ -173,7 +184,7 @@ class FolderChatLinker
 		}
 
 		$rows = FolderChatTable::query()
-			->setSelect(['FOLDER_ID', 'USER_ID' => 'FOLDER.USER_ID'])
+			->setSelect(['FOLDER_ID', 'USER_ID' => 'FOLDER.USER_ID', 'NOTIFY_BLOCK' => 'FOLDER.NOTIFY_BLOCK'])
 			->where('CHAT_ID', $chatId)
 			->fetchAll()
 		;
@@ -184,10 +195,18 @@ class FolderChatLinker
 
 		$folderIds = [];
 		$userIds = [];
+		// Only a muted folder put the chat into the state of its owner: the system part of the state
+		// holds sections and not chats, so taking the chat out of the folders changes nothing else.
+		$ruledUserIds = [];
 		foreach ($rows as $row)
 		{
+			$userId = (int)$row['USER_ID'];
 			$folderIds[] = (int)$row['FOLDER_ID'];
-			$userIds[(int)$row['USER_ID']] = true;
+			$userIds[$userId] = true;
+			if ($row['NOTIFY_BLOCK'] === 'Y')
+			{
+				$ruledUserIds[$userId] = true;
+			}
 		}
 		$userIds = array_keys($userIds);
 
@@ -198,6 +217,11 @@ class FolderChatLinker
 		foreach ($userIds as $userId)
 		{
 			$this->folderCache->clearByUser($userId);
+
+			if (isset($ruledUserIds[$userId]))
+			{
+				$this->dropMuteState($userId);
+			}
 		}
 	}
 
@@ -334,6 +358,47 @@ class FolderChatLinker
 		Chat::fillSelfRelations($chats, $userId);
 
 		return $chats;
+	}
+
+	/**
+	 * The composition of a muted folder is half of the rule state ({@see UserMuteState}), so a change
+	 * of it invalidates the state and every counter built from it. Asked of the folder itself: a
+	 * change in a sounding folder leaves the state as it was.
+	 */
+	private function dropMuteStateOfMutedFolder(PersonalFolder $folder): void
+	{
+		if (!$folder->isMuted())
+		{
+			return;
+		}
+
+		$this->dropMuteState((int)$folder->getUserId());
+	}
+
+	/**
+	 * The same invalidation where the affected folders are not at hand - a cascade wipes the
+	 * membership of every folder of the user at once. A user with no rule has nothing to drop, and
+	 * the answer to that comes from the cached state rather than from a query.
+	 */
+	private function dropMuteStateOfRuledUser(int $userId): void
+	{
+		if ($userId <= 0 || $this->muteProvider->getForUser($userId)->isEmpty())
+		{
+			return;
+		}
+
+		$this->dropMuteState($userId);
+	}
+
+	private function dropMuteState(int $userId): void
+	{
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		$this->muteCache->clearByUser($userId);
+		$this->countersCache->remove($userId);
 	}
 
 	private function persistMembership(int $folderId, array $chatIds): void

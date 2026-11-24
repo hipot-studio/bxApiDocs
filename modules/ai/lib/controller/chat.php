@@ -65,7 +65,12 @@ class Chat extends Controller
 	}
 
 	/**
-	 * Create or retrieve a chat
+	 * Creates or retrieves a chat of the scenario bound to an entity, or an existing chat by chatId.
+	 * Request fields: scenarioCode, entityType, entityId or chatId, parameters.
+	 *
+	 * @param ChatService $chatService
+	 * @param ChatInitDto $chatInitDto
+	 * @return array{chat: array{id: int, inputStatus: string}, messages: array, userPhoto: string|null}|null
 	 */
 	public function initAction(ChatService $chatService, ChatInitDto $chatInitDto): ?array
 	{
@@ -92,7 +97,13 @@ class Chat extends Controller
 	}
 
 	/**
-	 * Get chat messages
+	 * Returns chat messages older than offsetMessageId, oldest first.
+	 *
+	 * @param ChatService $chatService
+	 * @param int $chatId
+	 * @param int $offsetMessageId Message id to page from; 0 for the latest messages.
+	 * @param int $limit
+	 * @return array{messages: \Bitrix\AI\Chatbot\Dto\MessageDto[]}
 	 */
 	public function getMessagesAction(ChatService $chatService, int $chatId, int $offsetMessageId = 0, int $limit = 10): array
 	{
@@ -106,7 +117,12 @@ class Chat extends Controller
 
 
 	/**
-	 * Send a message
+	 * Sends a user message, or a button click when messageId and buttonId are passed, and locks the input.
+	 *
+	 * @param ChatService $chatService
+	 * @param int $chatId
+	 * @param array $messageData Keys: content (required non-empty string), messageId, buttonId.
+	 * @return array{message: \Bitrix\AI\Chatbot\Dto\MessageDto}|null
 	 */
 	public function sendMessageAction(ChatService $chatService, int $chatId, array $messageData): ?array
 	{
@@ -157,7 +173,12 @@ class Chat extends Controller
 
 
 	/**
-	 * Mark message as viewed
+	 * Marks messages as viewed.
+	 *
+	 * @param ChatService $chatService
+	 * @param int $chatId
+	 * @param array $messagesIds Numeric message ids.
+	 * @return void
 	 */
 	public function markMessageAsViewedAction(ChatService $chatService, int $chatId, array $messagesIds): void
 	{

@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Access\Table;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Model\TableAccessItem;
 use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\Configuration\Feature;
@@ -12,9 +13,9 @@ use Bitrix\Main\ArgumentException;
 /**
  * Answers whether a user may perform an action of the table axis with one table.
  *
- * The access rule answers by groups only, so the right on a table is derived here: the action is allowed
- * when at least one group the table is bound to is allowed to the user. A table without bindings belongs
- * to no group and is refused to everybody, an administrator included.
+ * The right on a table is answered by the access rule with the model of the table: the group rights of the
+ * roles with their overrides of single tables laid over them. A table without bindings belongs to no group
+ * and is refused to everybody, an administrator included. Managing the groups stays on the group rights.
  *
  * Answers are kept in the instance, one instance per user: nothing is shared between users.
  */
@@ -33,6 +34,14 @@ final class TableAccessChecker
 
 	/** @var int[]|null */
 	private ?array $existingGroupIds = null;
+
+	/**
+	 * A grid row or an import wizard asks the same question again and again, and every check of the
+	 * controller builds a rule and sends two events.
+	 *
+	 * @var array<string, bool>
+	 */
+	private array $canDoAnswers = [];
 
 	public function __construct(private readonly ?int $userId = null)
 	{
@@ -95,7 +104,7 @@ final class TableAccessChecker
 	 * @param string $action
 	 * @param string $tableCode
 	 *
-	 * @return bool True when the action is allowed in at least one group of the table.
+	 * @return bool True when the action is allowed with the table, the overrides of the roles included.
 	 *
 	 * @throws ArgumentException
 	 */
@@ -108,9 +117,13 @@ final class TableAccessChecker
 			return true;
 		}
 
-		$tableGroupIds = TableGroupMembershipService::getGroupIdsByTableCode($tableCode);
+		$key = $action . "\0" . $tableCode;
+		$this->canDoAnswers[$key] ??= $this->getAccessController()->check(
+			$action,
+			TableAccessItem::createFromCode($tableCode),
+		);
 
-		return !empty(array_intersect($tableGroupIds, $this->getAllowedGroupIds($action)));
+		return $this->canDoAnswers[$key];
 	}
 
 	/**
@@ -165,7 +178,7 @@ final class TableAccessChecker
 			return true;
 		}
 
-		if (empty($groupIds) || !$this->canDo(ActionDictionary::ACTION_BIC_TABLE_EDIT, $tableCode))
+		if (empty($groupIds) || !$this->canDoInAnyGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $tableCode))
 		{
 			return false;
 		}
@@ -237,6 +250,24 @@ final class TableAccessChecker
 		$customGroupIds = array_map('intval', array_column($rows, 'ID'));
 
 		return empty(array_diff($customGroupIds, $this->getAllowedGroupIds(ActionDictionary::ACTION_BIC_TABLE_EDIT)));
+	}
+
+	/**
+	 * Managing the groups of a table is a matter of the group rights: an override of a single table
+	 * does not take part in it.
+	 *
+	 * @param string $action
+	 * @param string $tableCode
+	 *
+	 * @return bool True when the action is allowed in at least one group of the table.
+	 *
+	 * @throws ArgumentException
+	 */
+	private function canDoInAnyGroup(string $action, string $tableCode): bool
+	{
+		$tableGroupIds = TableGroupMembershipService::getGroupIdsByTableCode($tableCode);
+
+		return !empty(array_intersect($tableGroupIds, $this->getAllowedGroupIds($action)));
 	}
 
 	private function getAccessController(): AccessController

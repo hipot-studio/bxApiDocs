@@ -13,7 +13,6 @@ use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
 use Bitrix\BIConnector\Internal\Services\SqlLab\SqlLabExecutionService;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 
@@ -149,16 +148,7 @@ final class ExecuteSqlTool extends BaseBiTool
 				throw self::toMcpException($actAsRefusal);
 			}
 
-			throw self::sqlLabException(
-				array_map(
-					static fn(Error $error): Error => new Error(
-						(string)($error->getCustomData()['detail'] ?? ''),
-						$error->getCode(),
-					),
-					$result->getErrors(),
-				),
-				$logContext,
-			);
+			throw self::sqlLabException($result->getErrors(), $logContext);
 		}
 
 		$data = $result->getData();
@@ -222,7 +212,7 @@ final class ExecuteSqlTool extends BaseBiTool
 		{
 			throw new McpException(
 				'sql is too long: the query must be at most ' . self::MAX_SQL_LENGTH
-				. ' characters. Simplify the query or split it into smaller ones.'
+				. ' characters. Simplify the query or split it into smaller ones.',
 			);
 		}
 

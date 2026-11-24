@@ -6,6 +6,7 @@ use Bitrix\Im\V2\Analytics\MessageAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
+use Bitrix\Im\V2\Controller\Filter\CheckThreadPostAccess;
 use Bitrix\Im\V2\Controller\Filter\PlatformContext;
 use Bitrix\Im\V2\Controller\Filter\DiskQuickAccessGrantor;
 use Bitrix\Im\V2\Entity\View\ViewCollection;
@@ -137,6 +138,9 @@ class Message extends BaseController
 		return [
 			'send' => [
 				'+prefilters' => [
+					// ahead of the general check, which answers every refusal alike: a discussion has
+					// reasons of its own to refuse, and each of them is a different text on the client
+					new CheckThreadPostAccess(),
 					new CheckActionAccess(Action::Send),
 					new PlatformContext(),
 				],
@@ -522,6 +526,16 @@ class Message extends BaseController
 		if (!empty($legacyFailureMap))
 		{
 			$response['legacyFailureMap'] = $legacyFailureMap;
+		}
+
+		if ($chat instanceof Chat\CommentChat)
+		{
+			$response['commentInfo'] = [
+				'chatId' => (int)$chat->getId(),
+				'dialogId' => $chat->getDialogId(),
+				'messageId' => $chat->getParentMessageId(),
+				'replyCount' => $chat->getReplyCount(),
+			];
 		}
 
 		return $response;

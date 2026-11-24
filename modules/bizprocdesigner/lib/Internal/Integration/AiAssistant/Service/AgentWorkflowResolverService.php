@@ -374,6 +374,18 @@ final class AgentWorkflowResolverService
 		return $metadata;
 	}
 
+	/**
+	 * Drops the memoised row of one template, read within this request.
+	 *
+	 * Needed by exactly one caller - the publication: it writes the live row and then assembles its
+	 * answer from a fresh read. The resolver is a singleton of the container, so without this the
+	 * answer would carry the `modified` the template had BEFORE the write.
+	 */
+	public function forgetTemplate(int $templateId): void
+	{
+		unset($this->templateById[$templateId]);
+	}
+
 	public function forgetDraftTemplateData(int $draftId): void
 	{
 		unset($this->draftRowById[$draftId]);

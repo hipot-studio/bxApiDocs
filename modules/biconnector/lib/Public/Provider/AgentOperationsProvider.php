@@ -14,7 +14,8 @@ use Bitrix\Main\Loader;
  *
  * The enumerating part of a tool set description is assembled from the same catalogue by
  * {@see \Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\AgentOperationsDescription},
- * so the text of the popup and the text of the instruction cannot diverge.
+ * using only unconditional operations. This provider also includes feature-gated operations
+ * available to the current user.
  */
 final class AgentOperationsProvider
 {

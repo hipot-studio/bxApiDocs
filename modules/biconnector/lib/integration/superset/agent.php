@@ -13,17 +13,27 @@ use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryScheduler;
 use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryWindow;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
+use Bitrix\BIConnector\Superset\Operation\DestructiveOperationOutcome;
+use Bitrix\BIConnector\Superset\Operation\DestructiveOperationResolver;
+use Bitrix\BIConnector\Superset\Operation\OperationIntentService;
 use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Data\Storage\PersistentStorageInterface;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LanguageTable;
 use Bitrix\Main\Localization\Loc;
 
 class Agent
 {
+	public const DATA_MISMATCH_NOTIFICATION_KEY = 'biconnector.superset.data_mismatch_notification';
+
 	private const IS_ACCESS_ROLES_REINSTALLED_OPTION = 'is_access_roles_reinstalled';
+
+	private const DATA_MISMATCH_NOTIFICATION_INTERVAL = 86400;
 
 	/**
 	 * @deprecated
@@ -60,6 +70,24 @@ class Agent
 	}
 
 	/**
+	 * @return string Own name while the deferred deletion is not set up yet, empty string to stop.
+	 */
+	public static function pendingDeleteRetry(): string
+	{
+		return Superset\SupersetInitializer::retryPendingDelete();
+	}
+
+	public static function pendingDeleteRepair(): string
+	{
+		return Superset\SupersetInitializer::repairPendingDelete();
+	}
+
+	public static function checkRebindDelete(): string
+	{
+		return Superset\SupersetInitializer::checkRebindDelete();
+	}
+
+	/**
 	 * Notify admins that BI Constructor will be deleted soon.
 	 * Scheduled by pendingDeleteInstance(), fires 1 day before actual deletion.
 	 *
@@ -67,7 +95,10 @@ class Agent
 	 */
 	public static function pendingDeleteNotify(): string
 	{
-		if (!Superset\SupersetInitializer::isSupersetPendingDelete())
+		if (
+			!Superset\SupersetInitializer::isSupersetPendingDelete()
+			|| Superset\SupersetInitializer::isBiBuilderToolEnabled()
+		)
 		{
 			return '';
 		}
@@ -98,6 +129,72 @@ class Agent
 		);
 
 		self::notifyAllAdmins($titleCallback, $notificationCallback);
+	}
+
+	/**
+	 * One notification per refused disable attempt, unlike the data mismatch one: every attempt is a user action.
+	 */
+	public static function notifyDisableRefused(): void
+	{
+		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_DISABLE_REFUSED_NOTIFY_TITLE',
+			language: $languageId,
+		);
+		$notificationCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_DISABLE_REFUSED_NOTIFY_TEXT',
+			language: $languageId,
+		);
+
+		Application::getInstance()->addBackgroundJob(
+			static fn() => self::notifyAllAdmins($titleCallback, $notificationCallback),
+		);
+	}
+
+	public static function notifyDataMismatch(): void
+	{
+		if (!self::claimDataMismatchNotification())
+		{
+			return;
+		}
+
+		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_DATA_MISMATCH_NOTIFY_TITLE',
+			language: $languageId,
+		);
+		$notificationCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_DATA_MISMATCH_NOTIFY_TEXT',
+			language: $languageId,
+		);
+
+		Application::getInstance()->addBackgroundJob(
+			static fn() => self::notifyAllAdmins($titleCallback, $notificationCallback),
+		);
+	}
+
+	private static function claimDataMismatchNotification(): bool
+	{
+		$connection = Application::getConnection();
+		if (!$connection->lock(self::DATA_MISMATCH_NOTIFICATION_KEY))
+		{
+			return false;
+		}
+
+		try
+		{
+			$storage = ServiceLocator::getInstance()->get(PersistentStorageInterface::class);
+			if ($storage->get(self::DATA_MISMATCH_NOTIFICATION_KEY) !== null)
+			{
+				return false;
+			}
+
+			$storage->set(self::DATA_MISMATCH_NOTIFICATION_KEY, time(), self::DATA_MISMATCH_NOTIFICATION_INTERVAL);
+
+			return true;
+		}
+		finally
+		{
+			$connection->unlock(self::DATA_MISMATCH_NOTIFICATION_KEY);
+		}
 	}
 
 	public static function notifyAllAdmins(callable $titleCallback, callable $messageCallback): void
@@ -152,14 +249,31 @@ class Agent
 			return '';
 		}
 
-		$deleteResult = Superset\SupersetInitializer::deleteInstance();
-		if ($deleteResult->isSuccess())
+		$ownName = '\\' . __CLASS__ . '::' . __FUNCTION__ . '();';
+
+		if (Superset\SupersetInitializer::isBiBuilderToolEnabled())
+		{
+			Superset\SupersetInitializer::onEnableBiBuilderTool();
+
+			return Superset\SupersetInitializer::isSupersetPendingDelete() ? $ownName : '';
+		}
+
+		$outcome =
+			DestructiveOperationResolver::checkGenerationAwait()
+			?? DestructiveOperationResolver::awaitGenerationBeforeRetry(
+				Superset\SupersetInitializer::getDeleteOutcome(Superset\SupersetInitializer::deleteInstance()),
+			)
+		;
+		if (
+			$outcome === DestructiveOperationOutcome::Success
+			|| $outcome === DestructiveOperationOutcome::FinalRefusal
+		)
 		{
 			return '';
 		}
 
 		// Retry on next cron tick until deletion succeeds or status changes
-		return '\\' . __CLASS__ . '::' . __FUNCTION__ . '();';
+		return $ownName;
 	}
 
 	/**
@@ -413,6 +527,13 @@ class Agent
 		StatusRecoveryScheduler::setExecutionPeriod($nextAttempt['delay']);
 
 		return StatusRecoveryScheduler::getAgentName();
+	}
+
+	public static function cleanUpOperationIntents(): string
+	{
+		(new OperationIntentService())->cleanUpExpired();
+
+		return __CLASS__ . '::' . __FUNCTION__ . '();';
 	}
 
 	/**

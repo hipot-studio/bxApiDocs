@@ -172,6 +172,8 @@ abstract class SystemFolder extends BaseFolder
 			'hiddenBySystem' => $this->isHiddenBySystem(),
 			'hiddenByUser' => $visibility['hiddenByUser'],
 			'canHide' => $visibility['canHide'],
+			'canReadAll' => $this->canReadAll(),
+			'isMuted' => $this->isMuted(),
 			'description' => $this->getDescription(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
 			'definition' => $this->getDefinition()->toRestFormat(),

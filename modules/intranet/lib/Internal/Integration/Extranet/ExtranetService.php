@@ -65,6 +65,25 @@ class ExtranetService
 		return \Bitrix\Extranet\PortalSettings::getInstance()->isEnabledCollabersInvitation();
 	}
 
+	public function isMainToolPickerAllowedByRole(int $userId): bool
+	{
+		try
+		{
+			if (!Loader::includeModule('extranet'))
+			{
+				return true;
+			}
+
+			$user = ServiceContainer::getInstance()->getExtranetUserRepository()->getByUserId($userId);
+
+			return $user?->getRole() !== ExtranetRole::Collaber;
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
 	public function isCollaber(int $userId): bool
 	{
 		if (!Loader::includeModule('extranet'))

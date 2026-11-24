@@ -178,7 +178,6 @@ class Manager
 			$payloadClass = $item['PAYLOAD_CLASS'];
 			$payload = $payloadClass::unpack($item['PAYLOAD']);
 
-			// todo: how add group item
 			$collection[$item['ID']] = new Item(
 				$item['ID'],
 				$item['DATE_CREATE'],

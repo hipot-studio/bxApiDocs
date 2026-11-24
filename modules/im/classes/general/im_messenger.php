@@ -8,7 +8,6 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Send\Push\MobilePush;
-use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Im\V2\Reading\Counter\Notification\CountersUpdater;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Sync;
@@ -1167,7 +1166,11 @@ class CIMMessenger
 
 				if ($message['MESSAGE_TYPE'] === Chat::IM_TYPE_COMMENT)
 				{
-					CommentTagPublisher::addToStack((int)$message['CHAT_ID'], $pull);
+					\Bitrix\Im\V2\Service\Locator::getPullSender()->sendToPostCommentSubscribers(
+						(int)$message['CHAT_PARENT_ID'],
+						(int)$message['CHAT_PARENT_MID'],
+						$pull
+					);
 				}
 				else
 				{
@@ -1640,7 +1643,11 @@ class CIMMessenger
 			{
 				// A comment chat never gets a START_ID border of its own, so the tag is filtered by the
 				// border of the post the comments hang on.
-				CommentTagPublisher::addToStack((int)$chat['ID'], $pull);
+				\Bitrix\Im\V2\Service\Locator::getPullSender()->sendToPostCommentSubscribers(
+					(int)$chat['PARENT_ID'],
+					(int)$chat['PARENT_MID'],
+					$pull
+				);
 			}
 			else
 			{
@@ -3180,7 +3187,7 @@ class CIMMessenger
 		if (isset($params['PARENT_MID']) && $params['PARENT_MID'])
 		{
 			$fromComment = true;
-			$commentModifier = '_COMMENT';
+			$commentModifier = $chat instanceof Chat\ChannelChat ? '_COMMENT' : '';
 			$titleWithContext = "[CONTEXT=chat{$params['CHAT_ID']}/{$params['PARENT_MID']}]{$chatTitle}[/CONTEXT]";
 		}
 

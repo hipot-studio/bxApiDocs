@@ -45,10 +45,10 @@ use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\StorageNodeF
  *
  * The same matching rule serves one graph that is NOT the published version: the graph the agent was HANDED
  * ({@see ValidationContext::$handed}). It authorises nothing on its own - what it answers is "the agent is
- * sending back what it was given" - and the two are kept apart at the point of use, never merged here. All three
+ * sending back what it was given" - and the two are kept apart at the point of use, never merged here. All four
  * questions the handed graph answers are put in one place, so the projection stays one rule and not two
  * ({@see ValidationContext::carriesBlockValue()}, {@see ValidationContext::carriesBlockIdentity()},
- * {@see ValidationContext::carriesBlockUnchanged()}).
+ * {@see ValidationContext::carriesBlockOutputs()}, {@see ValidationContext::carriesBlockUnchanged()}).
  */
 final class BaselineProjection
 {

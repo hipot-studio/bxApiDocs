@@ -14,19 +14,22 @@ use Bitrix\Intranet\Internal\Service\Portal\PortalFirstPageUrlNormalizer;
 use Bitrix\Intranet\Internal\Service\Portal\FirstPageUrlPolicy;
 use Bitrix\Intranet\UI\LeftMenu\MenuItem\ItemUserFavorites;
 use Bitrix\Intranet\UI\LeftMenu\Preset;
-use Bitrix\Intranet\Internal\MainTool\AccessPolicy;
-use Bitrix\Intranet\Internal\MainTool\Repository;
+use Bitrix\Intranet\Public\Provider\MainTool\StateProvider;
+use Bitrix\Intranet\Public\Command\MainTool\ApplySelectionCommand;
+use Bitrix\Intranet\Public\Command\MainTool\DisableForcedMainToolCommand;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Error;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
+use Bitrix\Main\SiteTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Main\UI\Extension;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\WorkgroupFavoritesTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
@@ -490,12 +493,30 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 		if (isset($_POST['itemInfo']) && is_array($_POST['itemInfo']))
 		{
+			$itemLink = $_POST['itemInfo']['link'] ?? null;
+			if (
+				!is_string($itemLink)
+				|| preg_match('~[\x00-\x20\x7f]|^[/\\\\]{2}~', $itemLink)
+				|| (
+					preg_match('~^[^/?#]*:~', $itemLink)
+					&& (
+						!preg_match('~^https?://~i', $itemLink)
+						|| !is_string(parse_url($itemLink, PHP_URL_HOST))
+					)
+				)
+			)
+			{
+				$this->addError(new Error(Loc::getMessage('INTRANET_LEFT_MENU_SELF_ITEM_LINK_ERROR')));
+
+				return null;
+			}
+
 			$itemText = trim($_POST['itemInfo']['text']);
 			$itemText = \Bitrix\Main\Text\Emoji::encode($itemText);
 
 			$itemData = array(
 				'TEXT' => $itemText,
-				'LINK' => $_POST['itemInfo']['link'],
+				'LINK' => $itemLink,
 				'ID' => $_POST['itemInfo']['id'],
 			);
 			if (isset($_POST['itemInfo']['openInNewPage']) && $_POST['itemInfo']['openInNewPage'] == 'Y')
@@ -585,7 +606,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		if ($this->isMainToolPickerEnabled())
 		{
 			$state = $this->getMainToolState();
-			if ($state['source'] === 'forced' && $state['presetId'] === 'custom')
+			if (($state['source'] ?? null) === 'forced' && $state['presetId'] === 'custom')
 			{
 				$structure = $this->getMainToolStructure('custom');
 				$sort = ['version' => 2];
@@ -737,25 +758,18 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 	protected function isMainToolPickerEnabled(): bool
 	{
-		return AccessPolicy::isFeatureEnabled();
-	}
-
-	protected function createMainToolController(): MainTool
-	{
-		$controller = new MainTool($this->getRequest());
-		$controller->setCurrentUser($this->getCurrentUser() ?? \Bitrix\Main\Engine\CurrentUser::get());
-
-		return $controller;
+		return StateProvider::isMainToolPickerEnabled();
 	}
 
 	public function setPresetAction()
 	{
-		global $USER;
+		$preset = $this->getRequest()->getPost('preset');
+		$mode = $this->getRequest()->getPost('mode');
 
 		if (
-			!isset($_POST['preset'])
-			|| !in_array($_POST['preset'], array('social', 'crm', 'tasks', 'sites', 'sync'))
-			|| !isset($_POST['mode'])
+			!is_string($preset)
+			|| $preset === ''
+			|| $mode === null
 		)
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_LEFT_MENU_PRESET_ERROR')));
@@ -764,34 +778,64 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 		if ($this->isMainToolPickerEnabled())
 		{
-			$controller = $this->createMainToolController();
-			$result = $controller->applyLegacyPreset($_POST['preset'], $_POST['mode']);
-			$this->addErrors($controller->getErrors());
+			if (!in_array($mode, ['personal', 'global'], true))
+			{
+				$this->addMainToolError('MAIN_TOOL_INVALID_ARGUMENT');
 
-			return $result;
+				return null;
+			}
+
+			try
+			{
+				$result = (new ApplySelectionCommand($preset, $mode === 'global'))->run();
+			}
+			catch (\Throwable)
+			{
+				$this->addMainToolError('MAIN_TOOL_SAVE_FAILED');
+
+				return null;
+			}
+
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+
+				return null;
+			}
+
+			return ['url' => $result->getData()['url']];
+		}
+
+		$presetData = Extension::getConfig('intranet.menu-preset')['settings']['presetData'] ?? [];
+		if ($preset !== 'social' && empty($presetData[strtoupper($preset) . '_PRESET_AVAILABLE']))
+		{
+			$this->addError(new Error(Loc::getMessage('INTRANET_LEFT_MENU_PRESET_ERROR')));
+
+			return null;
 		}
 
 		$res = [];
+		$userId = CurrentUser::get()->getId();
 
-		if ($_POST['mode'] == 'global' && $this->isCurrentUserAdmin())
+		if ($mode === 'global' && $this->isCurrentUserAdmin())
 		{
-			Option::set('intranet', 'left_menu_preset', $_POST['preset'], false, SITE_ID);
+			Option::set('intranet', 'left_menu_preset', $preset, false, SITE_ID);
 
 			$event = new Event(
 				'intranet',
 				'onAfterChangeLeftMenuPreset',
 				[
 					'SITE_ID' => SITE_ID,
-					'VALUE' => $_POST['preset'],
+					'VALUE' => $preset,
 				]
 			);
 			EventManager::getInstance()->send($event);
 
-			$this->enablePresetTool($_POST['preset']);
+			$this->enablePresetTool($preset);
 		}
 		else
 		{
-			\CUserOptions::SetOption('intranet', 'left_menu_preset_' . SITE_ID, $_POST['preset']);
+			\CUserOptions::SetOption('intranet', 'left_menu_preset_' . SITE_ID, $preset);
 
 			\CUserOptions::DeleteOption('intranet', 'left_menu_first_page_' . SITE_ID);
 			//	CUserOptions::DeleteOption('intranet', 'left_menu_self_items_'.$siteID);
@@ -801,15 +845,15 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 		if ($this->isCurrentUserAdmin())
 		{
-			$this->enablePresetTool($_POST['preset']);
+			$this->enablePresetTool($preset);
 		}
 
 		$firstPageUrl = SITE_DIR . 'stream/';
-		switch ($_POST['preset'])
+		switch ($preset)
 		{
 			case 'tasks':
 				$firstPageUrl = SITE_DIR . 'company/personal/user/'
-					. ($_POST['mode'] == 'global' ? '#USER_ID#' : $USER->GetID()) . '/tasks/'
+					. ($mode === 'global' ? '#USER_ID#' : $userId) . '/tasks/'
 				;
 				break;
 
@@ -838,7 +882,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 		if ($firstPageUrl)
 		{
-			if ($_POST['mode'] == 'global' && $this->isCurrentUserAdmin())
+			if ($mode === 'global' && $this->isCurrentUserAdmin())
 			{
 				Option::set('intranet', 'left_menu_first_page', $firstPageUrl, false, SITE_ID);
 			}
@@ -847,12 +891,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 				\CUserOptions::SetOption('intranet', 'left_menu_first_page_' . SITE_ID, $firstPageUrl);
 			}
 
-			$res['url'] = str_replace('#USER_ID#', $USER->GetID(), $firstPageUrl);
-		}
-
-		if($_POST['mode'] === 'global' && ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			$_SESSION['B24_SHOW_DEMO_LICENSE_HINT'] = 1;
+			$res['url'] = str_replace('#USER_ID#', $userId, $firstPageUrl);
 		}
 
 		$showPresetPopup = Option::get('intranet', 'show_menu_preset_popup', 'N') == 'Y';
@@ -1187,9 +1226,11 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		return false;
 	}
 
-	protected function getMainToolState(): array
+	protected function getMainToolState(): ?array
 	{
-		return Preset\Manager::getEffectiveState(SITE_ID);
+		return Preset\Manager::getMenuSettingsForUser(SITE_ID)
+			?? Preset\Manager::getCommonMenuSettings(SITE_ID)
+		;
 	}
 
 	protected function getMainToolStructure(string $presetId): array
@@ -1199,11 +1240,10 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 	protected function addMainToolError(string $code): void
 	{
-		Loc::loadMessages(__DIR__ . '/maintool.php');
 		$this->addError(new Error((string)Loc::getMessage($code), $code));
 	}
 
-	protected function isMainToolFirstPageAllowed(mixed $url, array $state): bool
+	protected function isMainToolFirstPageAllowed(mixed $url, ?array $state): bool
 	{
 		if (
 			!is_string($url)
@@ -1222,7 +1262,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		{
 			return false;
 		}
-		if ($state['source'] === 'forced')
+		if (($state['source'] ?? null) === 'forced')
 		{
 			$userId = (string)$this->getCurrentUser()->getId();
 			$expected = str_replace('#USER_ID#', $userId, $state['firstPage'] ?? '');
@@ -1265,7 +1305,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		$data = self::convertItemsSortFromJSToDB($_POST['items'], $_POST['version'] ?? null);
 		$state = $this->getMainToolState();
 		if (
-			$state['source'] === 'forced'
+			($state['source'] ?? null) === 'forced'
 			&& !Preset\PresetAbstract::isForcedSortAllowed(
 				$data,
 				$this->getMainToolStructure($state['presetId'] ?? 'social'),
@@ -1320,7 +1360,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 			$sort = self::convertItemsSortFromJSToDB($_POST['itemsSort'], $_POST['version'] ?? null);
 		}
 		if (
-			$state['source'] === 'forced'
+			($state['source'] ?? null) === 'forced'
 			&& (
 				$state['presetId'] !== 'custom'
 				|| ($sort !== null && !Preset\PresetAbstract::isForcedSortAllowed(
@@ -1349,7 +1389,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		}
 
 		if (
-			$state['source'] === 'forced'
+			($state['source'] ?? null) === 'forced'
 			&& isset($_POST['customItems'])
 			&& !$this->isMainToolCustomItemsAllowed($_POST['customItems'])
 		)
@@ -1453,6 +1493,22 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		{
 			return null;
 		}
+
+		if ($siteId === '')
+		{
+			$this->addMainToolError('MAIN_TOOL_INVALID_ARGUMENT');
+
+			return null;
+		}
+
+		$site = SiteTable::getById($siteId)->fetch();
+		if (!$site || $site['LID'] !== $siteId)
+		{
+			$this->addMainToolError('MAIN_TOOL_INVALID_ARGUMENT');
+
+			return null;
+		}
+
 		foreach ([
 			'left_menu_first_page_' . $siteId,
 			'left_menu_preset_' . $siteId,
@@ -1476,7 +1532,15 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 		\COption::RemoveOption('intranet', 'left_menu_preset', $siteId);
 		Preset\Manager::clearCache($siteId);
-		(new Repository())->setForced($siteId, false);
+
+		$result = (new DisableForcedMainToolCommand($siteId))->run();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
 		\COption::RemoveOption('intranet', 'show_menu_preset_popup');
 		Preset\Manager::clearCache($siteId);
 		\COption::RemoveOption('intranet', 'left_menu_items_to_all_' . $siteId);
@@ -1499,7 +1563,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 		if ($this->isMainToolPickerEnabled())
 		{
 			$state = $this->getMainToolState();
-			if ($state['source'] === 'forced')
+			if (($state['source'] ?? null) === 'forced')
 			{
 				$this->addMainToolError('MAIN_TOOL_FORCED');
 

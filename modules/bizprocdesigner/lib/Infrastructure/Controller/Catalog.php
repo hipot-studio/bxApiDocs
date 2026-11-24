@@ -12,6 +12,7 @@ use Bitrix\Bizproc\Runtime\ActivitySearcher\Activities;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\BizprocDesigner\Infrastructure\Catalog\NodeCatalogLayout;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Catalog\NodeCatalogItemDtoFactory;
+use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Loader;
 
@@ -29,11 +30,17 @@ class Catalog extends JsonController
 		$searcher = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
 
 		$documentType = Workflow::getComplexType();
+		$feature = Feature::instance();
 
 		$activities =
 			$searcher->searchByType([ActivityType::NODE->value, ActivityType::TRIGGER->value], $documentType)
 				//->computeDescriptionFilter($documentType)
-				->filter(static fn(ActivityDescription $description) => !$description->getExcluded() && !$description->getDeprecated())
+				->filter(
+					static fn(ActivityDescription $description) =>
+						!$description->getExcluded()
+						&& !$description->getDeprecated()
+						&& $feature->isActivityClassOffered($description->getClass())
+				)
 				->sort()
 		;
 

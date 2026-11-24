@@ -19,13 +19,19 @@ class IdFieldAssembler extends DetailLinkFieldAssembler
 			$sliderCode = DashboardTariffConfigurator::getSliderRestrictionCodeByAppId($value['APP_ID']);
 			if (!empty($sliderCode))
 			{
-				$onclick = "onclick=\"top.BX.UI.InfoHelper.show('{$sliderCode}');\"";
+				$script = "top.BX.UI.InfoHelper.show('" . \CUtil::JSEscape($sliderCode) . "');";
+				$onclick = 'onclick="' . htmlspecialcharsbx($script) . '"';
 			}
+			// No link to the detail page: a restricted report opens only the tariff slider.
+			$onkeydown = "if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }";
 
 			$link = "
 				<a 
 					style='cursor: pointer' 
+					role='button'
+					tabindex='0'
 					{$onclick}
+					onkeydown=\"{$onkeydown}\"
 				>
 					<span class='tariff-lock'></span> {$id}
 				</a>

@@ -13,6 +13,43 @@ use Bitrix\Sale\ShipmentCollection;
 
 class Shipment extends Controller
 {
+	private const READ_ACTIONS = [
+		'get',
+		'getallowdeliverydate',
+		'getallowdeliveryuserid',
+		'getcompanyid',
+		'getcurrency',
+		'getdeliveryid',
+		'getdeliveryname',
+		'getparentorderid',
+		'getpersontypeid',
+		'getprice',
+		'getshippeddate',
+		'getshippeduserid',
+		'getstoreid',
+		'getunshipreason',
+		'getvatrate',
+		'getvatsum',
+		'getweight',
+		'isallowdelivery',
+		'iscanceled',
+		'iscustomprice',
+		'isempty',
+		'ismarked',
+		'isreserved',
+		'isshipped',
+	];
+
+	private ?Sale\Public\Service\ShipmentReadAccess $shipmentAccess = null;
+
+	private function getShipmentAccess(): Sale\Public\Service\ShipmentReadAccess
+	{
+		return $this->shipmentAccess ??= new Sale\Public\Service\ShipmentReadAccess(
+			(int)$this->getCurrentUser()->getId(),
+			self::getApplication()->GetGroupRight('sale'),
+		);
+	}
+
 	public function getPrimaryAutoWiredParameter()
 	{
 		return new ExactParameter(
@@ -36,6 +73,16 @@ class Shipment extends Controller
 
 				if ($row = $r->fetch())
 				{
+					if (
+						in_array(mb_strtolower($this->getCurrentAction()->getName()), self::READ_ACTIONS, true)
+						&& !$this->getShipmentAccess()->canRead((int)$id)
+					)
+					{
+						$this->addError(new Error('Access Denied', 200040300010));
+
+						return null;
+					}
+
 					/** @var Sale\Order $orderClass */
 					$orderClass = $registry->getOrderClassName();
 
@@ -204,7 +251,11 @@ class Shipment extends Controller
 	{
 		$select = empty($select)? ['*']:$select;
 		$order = empty($order)? ['ID'=>'ASC']:$order;
-		$filter['!SYSTEM'] = 'Y';
+		$filter = [
+			$filter,
+			$this->getShipmentAccess()->getReadFilter(),
+			['!=SYSTEM' => 'Y'],
+		];
 
 		$runtime = [
 			new \Bitrix\Main\Entity\ReferenceField(
@@ -230,11 +281,17 @@ class Shipment extends Controller
 			]
 		)->fetchAll();
 
-		return new Page('SHIPMENTS', $shipments, function() use ($select, $filter, $runtime)
+		return new Page('SHIPMENTS', $shipments, function() use ($filter, $runtime)
 		{
-			return count(
-				\Bitrix\Sale\Shipment::getList(['select'=>$select, 'filter'=>$filter, 'runtime'=>$runtime])->fetchAll()
-			);
+			$result = \Bitrix\Sale\Shipment::getList([
+				'select' => ['CNT'],
+				'filter' => $filter,
+				'runtime' => array_merge($runtime, [
+					new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)'),
+				]),
+			])->fetch();
+
+			return (int)$result['CNT'];
 		});
 	}
 

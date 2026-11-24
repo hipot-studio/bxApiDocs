@@ -13,6 +13,8 @@ use Bitrix\Main\Result;
 
 final class Registrar
 {
+	public const ERROR_GENERATION_CONFIRMATION_REQUIRED = 'REBIND_GENERATION_CONFIRMATION_REQUIRED';
+
 	private const REGISTER_STAGE_OPTION = '~superset_register_stage';
 
 	private static self $instance;
@@ -39,7 +41,7 @@ final class Registrar
 
 	public function isComplete(): bool
 	{
-		return $this->getRegisterStage() >= 2;
+		return $this->config->isPortalIdBorrowed() || $this->getRegisterStage() >= 2;
 	}
 
 	public function register(): Result
@@ -56,32 +58,78 @@ final class Registrar
 		return new Result();
 	}
 
-	public function rebind(): Result
+	public function rebind(bool $isGenerationChangeConfirmed = false): Result
 	{
-		$result = new Result();
 		$response = IntegratorFactory::getInstance()->registerPortal();
 
 		$responseData = $response->getData();
+		$isRebindAnswer = !empty($responseData['rebind']);
 
-		if (!empty($responseData['rebind']))
+		if (!$isRebindAnswer && $response->hasErrors())
 		{
-			$portalId = $responseData['portalId'] ?? null;
-			if (!empty($portalId))
-			{
-				$this->config->setPortalId($portalId);
-				$this->config->setPortalIdVerified(true);
-				$this->setRegisterStage(2);
-			}
+			SupersetInitializerLogger::logErrors(
+				[new Error('Rebind register request end with errors'), ...$response->getErrors()],
+				['STATUS_CODE' => $response->getStatus()]
+			);
 
-			return $result;
+			return (new Result())
+				->addErrors($response->getErrors())
+				->setData(['STATUS_CODE' => $response->getStatus()])
+			;
 		}
 
-		SupersetInitializerLogger::logErrors(
-			[new Error('Rebind register request end with errors'), ...$response->getErrors()],
-			['STATUS_CODE' => $response->getStatus()]
-		);
-		$result->addErrors($response->getErrors());
-		$result->setData(['STATUS_CODE' => $response->getStatus()]);
+		// A registered answer without the rebind flag binds the portal to the same server as the rebind answer does,
+		// so both are allowed only for the generation of the local data or after the explicit confirmation.
+		$targetGeneration = (string)($responseData['generation'] ?? '');
+		if (!$isGenerationChangeConfirmed && !$this->holdsLocalDataGeneration($targetGeneration))
+		{
+			return $this->refuseUnconfirmedRebind($targetGeneration);
+		}
+
+		if ($isRebindAnswer)
+		{
+			$portalId = $responseData['portalId'] ?? null;
+			if (empty($portalId))
+			{
+				return new Result();
+			}
+
+			$this->config->setPortalId($portalId);
+			$this->config->setPortalIdVerified(true);
+			$this->setRegisterStage(2);
+		}
+
+		if (!$this->holdsServerGeneration($targetGeneration))
+		{
+			SupersetInitializer::requestServerGenerationRefresh();
+		}
+
+		return new Result();
+	}
+
+	private function holdsLocalDataGeneration(string $generation): bool
+	{
+		$localDataGeneration = $this->config->getLocalDataGeneration();
+
+		return $generation !== '' && $localDataGeneration !== '' && $generation === $localDataGeneration;
+	}
+
+	private function holdsServerGeneration(string $generation): bool
+	{
+		return $generation !== '' && $this->config->getServerGeneration() === $generation;
+	}
+
+	private function refuseUnconfirmedRebind(string $targetGeneration): Result
+	{
+		$result = (new Result())->addError(new Error(
+			'Target superset server does not hold the generation of the local data',
+			self::ERROR_GENERATION_CONFIRMATION_REQUIRED,
+		));
+
+		SupersetInitializerLogger::logWarning($result->getErrors(), [
+			'targetGeneration' => $targetGeneration,
+			'localDataGeneration' => $this->config->getLocalDataGeneration(),
+		]);
 
 		return $result;
 	}
@@ -162,18 +210,26 @@ final class Registrar
 		}
 
 		$response = IntegratorFactory::getInstance()->registerPortal();
+		$responseData = $response->getData();
 
 		if ($response->getStatus() === IntegratorResponse::STATUS_CREATED)
 		{
+			$registeredPortalId = (string)($responseData['portalId'] ?? '');
+			if ($registeredPortalId !== '')
+			{
+				ConfigContainer::getConfigContainer()->setPortalId($registeredPortalId);
+			}
+
 			ConfigContainer::getConfigContainer()->setPortalIdVerified(true);
+			ConfigContainer::getConfigContainer()->setServerGeneration((string)($responseData['generation'] ?? ''));
 
 			return $result;
 		}
 
 		if ($result->isSuccess() && $response->getStatus() === IntegratorResponse::STATUS_IN_PROGRESS)
 		{
-			$responseData = $response->getData();
 			ConfigContainer::getConfigContainer()->setPortalId($responseData['portalId'] ?? '');
+			ConfigContainer::getConfigContainer()->setServerGeneration((string)($responseData['generation'] ?? ''));
 		}
 		else
 		{

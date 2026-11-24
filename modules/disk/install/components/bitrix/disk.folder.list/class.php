@@ -11,9 +11,14 @@ use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Enum\WriteOperationContext;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Integration\AiAssistant\FileChatAvailability;
+use Bitrix\Disk\Internal\Service\Folder\FolderListRowPreloader;
+use Bitrix\Disk\Internal\Service\Folder\StoredFileRecordLoader;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
+use Bitrix\Disk\Public\Features\Favorites;
+use Bitrix\Disk\Public\Provider\FavoriteProvider;
 use Bitrix\Disk\Public\Service\DockedUpload\UploadOwner;
+use Bitrix\Disk\Public\Service\Favorite\FavoriteOnboardingService;
 use Bitrix\Disk\QuickAccess\FileDataParameterService;
 use Bitrix\Disk\Search\Reindex\BaseObjectIndex;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
@@ -51,6 +56,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\DI\Exception\CircularDependencyException;
 use Bitrix\Main\DI\Exception\ServiceNotFoundException;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -70,6 +76,7 @@ use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Search\Content;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
@@ -96,6 +103,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 	private const COLLABER_TOUR_ON_ADD_BUTTON_ID =  'tour-guide-on-add-button-for-collaber';
 	private const READONLY_COLLAB_FOLDER_STATE_COOKIE_NAME = 'DISK_IS_READONLY_COLLAB_FOLDER';
+	/** Tells the ajax redraw of the grid, which keeps the data of the page it was drawn with, of a failed list. */
+	private const FAVORITES_LOAD_ERROR_HEADER = 'X-Disk-Favorites-Load-Error';
+	// mirrored by the id limit of reloadTileSharingItems in templates/.default/script.js
+	private const TILE_ITEM_IDS_LIMIT = 10;
 
 	protected $componentId = 'folder_list';
 
@@ -123,6 +134,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private ?array $analytics = null;
 	private FileDataParameterService $fileDataParameterService;
 	private ?Ui\FolderListFileTypePageCollector $fileTypePageCollector = null;
+	/** Value of the filter field «Избранные» applied to the list, null when the field is not applied. */
+	private ?string $favoriteFilterValue = null;
+	private bool $isFavoriteLoadError = false;
+	/** Ids of the tile items the internal hit of the tile is asked for, null when the whole page is asked for. */
+	private ?array $requestedTileItemIds = null;
 
 	public function __construct($component = null)
 	{
@@ -321,6 +337,16 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	protected function processActionDefault(): void
 	{
 		$errorsInGridActions = $this->processGridActions();
+		if (
+			Grid\Context::isInternalRequest()
+			&& $this->gridOptions->getViewMode() === FolderListOptions::VIEW_MODE_TILE
+		)
+		{
+			$this->processTileInternalHit($errorsInGridActions);
+
+			return;
+		}
+
 		$this->setPageTitle();
 
 		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
@@ -328,7 +354,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$connectedGroupObject = $this->getConnectedGroupObject();
 		$filterOptions = new Options($this->gridOptions->getGridId());
-		$folderListFilter = new Ui\FolderListFilter($this->storage->getId(), $this->isTrashMode());
+		$folderListFilter = new Ui\FolderListFilter(
+			$this->storage->getId(),
+			$this->isTrashMode(),
+			$this->isViewByUnifiedLink,
+		);
 		$filterConfig = $folderListFilter->getConfig();
 		if (!$this->isTrashMode())
 		{
@@ -377,6 +407,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'IS_BITRIX24' => ModuleManager::isModuleInstalled('bitrix24'),
 			'IS_TRASH_MODE' => $this->isTrashMode(),
 			'IS_FAVORITE_STAR_ALLOWED' => $isFavoriteStarAllowed,
+			'FAVORITES' => $this->buildFavoritesResult(),
 			'FOLDER' => [
 				'ID' => $this->folder->getId(),
 				'MODEL' => $this->folder,
@@ -562,93 +593,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		if ($this->gridOptions->getViewMode() === FolderListOptions::VIEW_MODE_TILE)
 		{
-			$isEnabledObjectLock = Configuration::isEnabledObjectLock();
-			$this->arResult['TILE_ITEMS'] = [];
-			foreach ($this->arResult['GRID']['ROWS'] as $row)
-			{
-				/** @var BaseObject $object */
-				$object = $row['object'];
-				$uls = $this->getUlsForNavigation($object->getId());
-				$objectUls = $this->unifiedLinkAccessService->getUlsForObjectId($object->getId());
-
-				$dataSet = null;
-				$viewerAttributes = $row['data']['VIEWER_ATTRS'] ?? null;
-				if ($viewerAttributes instanceof ItemAttributes)
-				{
-					$dataSet = $viewerAttributes->toDataSet();
-				}
-
-				if ($this->isViewByUnifiedLink && $object instanceof Folder)
-				{
-					$dataSet['uls'] = $uls;
-				}
-
-				$info = [
-					'id' => $row['id'],
-					'name' => $object->getName(),
-					'uniqueCode' => $object instanceof Folder ? $object->getUniqueCode() : null,
-					'isViewByUnifiedLink' => $this->isViewByUnifiedLink,
-					'isFolder' => $object instanceof Folder,
-					'showFolderInfo' => ($object instanceof Folder) && !$object->isDeleted(),
-					'isFile' => $object instanceof File,
-					'canDownload' => (bool)$row['attrs']['data-can-download'],
-					'isMailAttachments' => ($object instanceof Folder) && $object->getCode() === SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS,
-					'canAdd' => ($object instanceof Folder) && $object->canAdd($securityContext),
-					'canDelete' => $object->canDelete($securityContext),
-					'link' => $row['data']['OPEN_URL'],
-					'isSymlink' => !empty($row['data']['SHARED']) || $object->isLink(),
-					'isLocked' => $isEnabledObjectLock && ($object instanceof File) && $object->getLock(),
-					'isDraggable' => !$this->isTrashMode(),
-					'isDroppable' => !$this->isTrashMode() && ($object instanceof Folder),
-					'formattedSize' => $row['columns']['FORMATTED_SIZE'],
-					'actions' => $row['actions'],
-					'attributes' => $dataSet,
-				];
-
-				if ($object instanceof File && TypeFile::isImage($object))
-				{
-					$unifiedLinkGetParam = [];
-
-					if ($this->isViewByUnifiedLink)
-					{
-						$unifiedLinkGetParam = $this->unifiedLinkUrl->addUlsToParams($unifiedLinkGetParam, $objectUls);
-					}
-
-					$quickAccessGetParam = [];
-					$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
-					if ($encryptedFileData !== null)
-					{
-						$quickAccessGetParam[FileDataParameterService::PARAMETER_NAME] = $encryptedFileData;
-					}
-
-					$info['image'] = UrlManager::getInstance()->create('disk.api.file.showImage', [
-						'fileId' => $object->getId(),
-						'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
-						'width' => 400,
-						'height' => 400,
-						...$unifiedLinkGetParam,
-						...$quickAccessGetParam,
-					]);
-				}
-				elseif ($object instanceof File && $object->getPreviewId())
-				{
-					$info['image'] = UrlManager::getInstance()->create('disk.api.file.showPreview', [
-						'fileId' => $object->getId(),
-						'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
-						'width' => 400,
-						'height' => 400,
-					]);
-				}
-
-				$this->arResult['TILE_ITEMS'][] = $info;
-			}
-
-			if (Bitrix\Main\Grid\Context::isInternalRequest())
-			{
-				$this->includeComponentTemplate('only_grid');
-
-				return;
-			}
+			$this->arResult['TILE_ITEMS'] = $this->buildTileItems($this->arResult['GRID']['ROWS'], $securityContext);
 		}
 
 		if ($this->arResult['STORAGE']['SHOW_BIZPROC'])
@@ -657,6 +602,136 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * An internal hit of the tile is answered by only_grid: the data of the full page is not built for it.
+	 */
+	private function processTileInternalHit(\Bitrix\Disk\Internals\Error\ErrorCollection $errorsInGridActions): void
+	{
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
+		if ($this->isUserCollaber)
+		{
+			$this->setUiFlagForReadonlyCollabFolderState($this->folder->canAdd($securityContext));
+		}
+
+		$tileItemIds = $this->request->getPost('tileItemIds');
+		if ($tileItemIds !== null)
+		{
+			// the answer fits one page starting from the first object, so no more ids are taken than a page holds
+			$limit = min(self::TILE_ITEM_IDS_LIMIT, $this->gridOptions->getPageSize());
+			$this->requestedTileItemIds = is_array($tileItemIds)
+				? array_slice($this->filterObjectIds($tileItemIds), 0, $limit)
+				: []
+			;
+		}
+
+		$grid = $this->getGridData();
+		$filterOptions = new Options($this->gridOptions->getGridId());
+
+		$this->arResult = [
+			'ERRORS_IN_GRID_ACTIONS' => $errorsInGridActions->toArray(),
+			'IS_RUNNING_FILTER' => !empty($filterOptions->getSearchString()),
+			'IS_TRASH_MODE' => $this->isTrashMode(),
+			'STORAGE' => [
+				'BLOCK_ADD_BUTTONS' => $this->shouldBeBlockAddButtons($this->storage),
+			],
+			'GRID' => $grid,
+			'TILE_ITEMS' => $this->buildTileItems($grid['ROWS'], $securityContext),
+		];
+
+		$this->includeComponentTemplate('only_grid');
+	}
+
+	private function buildTileItems(array $rows, SecurityContext $securityContext): array
+	{
+		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
+		$tileItems = [];
+		foreach ($rows as $row)
+		{
+			/** @var BaseObject $object */
+			$object = $row['object'];
+			$uls = $this->getUlsForNavigation($object->getId());
+			$objectUls = $this->unifiedLinkAccessService->getUlsForObjectId($object->getId());
+
+			$dataSet = null;
+			$viewerAttributes = $row['data']['VIEWER_ATTRS'] ?? null;
+			if ($viewerAttributes instanceof ItemAttributes)
+			{
+				$dataSet = $viewerAttributes->toDataSet();
+			}
+
+			if ($this->isViewByUnifiedLink && $object instanceof Folder)
+			{
+				$dataSet['uls'] = $uls;
+			}
+
+			$info = [
+				'id' => $row['id'],
+				'name' => $object->getName(),
+				'uniqueCode' => $object instanceof Folder ? $object->getUniqueCode() : null,
+				'isViewByUnifiedLink' => $this->isViewByUnifiedLink,
+				'isFolder' => $object instanceof Folder,
+				'showFolderInfo' => ($object instanceof Folder) && !$object->isDeleted(),
+				'isFile' => $object instanceof File,
+				'canDownload' => (bool)$row['attrs']['data-can-download'],
+				'isMailAttachments' => ($object instanceof Folder) && $object->getCode() === SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS,
+				'canAdd' => ($object instanceof Folder) && $object->canAdd($securityContext),
+				'canDelete' => $object->canDelete($securityContext),
+				'link' => $row['data']['OPEN_URL'] ?? '',
+				'isSymlink' => !empty($row['data']['SHARED']) || $object->isLink(),
+				'isLocked' => $isEnabledObjectLock && ($object instanceof File) && $object->getLock(),
+				'isDraggable' => !$this->isTrashMode(),
+				'isDroppable' => !$this->isTrashMode() && ($object instanceof Folder),
+				'formattedSize' => $row['columns']['FORMATTED_SIZE'],
+				'actions' => $row['actions'],
+				'attributes' => $dataSet,
+			];
+
+			if (isset($row['attrs']['data-favorite']))
+			{
+				$info['isFavorite'] = $row['attrs']['data-favorite'] === '1';
+			}
+
+			if ($object instanceof File && TypeFile::isImage($object))
+			{
+				$unifiedLinkGetParam = [];
+
+				if ($this->isViewByUnifiedLink)
+				{
+					$unifiedLinkGetParam = $this->unifiedLinkUrl->addUlsToParams($unifiedLinkGetParam, $objectUls);
+				}
+
+				$quickAccessGetParam = [];
+				$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
+				if ($encryptedFileData !== null)
+				{
+					$quickAccessGetParam[FileDataParameterService::PARAMETER_NAME] = $encryptedFileData;
+				}
+
+				$info['image'] = UrlManager::getInstance()->create('disk.api.file.showImage', [
+					'fileId' => $object->getId(),
+					'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
+					'width' => 400,
+					'height' => 400,
+					...$unifiedLinkGetParam,
+					...$quickAccessGetParam,
+				]);
+			}
+			elseif ($object instanceof File && $object->getPreviewId())
+			{
+				$info['image'] = UrlManager::getInstance()->create('disk.api.file.showPreview', [
+					'fileId' => $object->getId(),
+					'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
+					'width' => 400,
+					'height' => 400,
+				]);
+			}
+
+			$tileItems[] = $info;
+		}
+
+		return $tileItems;
 	}
 
 	private function isItTimeToShowBizProc()
@@ -678,6 +753,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'VIEW_SIZE' => $this->gridOptions->getViewSize(),
 		];
 		[$grid['SORT'], $grid['SORT_VARS']] = $this->gridOptions->getGridOptionsSorting();
+		$isTile = $grid['MODE'] === FolderListOptions::VIEW_MODE_TILE;
 
 		$possibleColumnForSorting = $this->gridOptions->getPossibleColumnForSorting();
 		$visibleColumns = array_combine(
@@ -695,6 +771,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$pageSize = $this->gridOptions->getPageSize();
 		$nav = $this->gridOptions->getNavigation();
 		$nav->initFromUri();
+		if ($this->requestedTileItemIds !== null)
+		{
+			// the items asked for by id are listed from the start of the list, whatever page the tile is on
+			$nav->setCurrentPage(1);
+		}
 
 		$parameters = [];
 
@@ -723,54 +804,83 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		$parameters = $this->modifyByFilter($parameters);
+		if ($this->requestedTileItemIds !== null)
+		{
+			// no object has id 0: an empty list of ids answers no items
+			$parameters['filter'][] = ['@ID' => $this->requestedTileItemIds ?: [0]];
+		}
 		$gridOrder = $parameters['order'];
 
-		if ($this->fileTypePageCollector?->needsExactMatching())
+		try
 		{
-			// stored file type does not tell these categories apart, so the page is built from exact matches
-			$gridOrder = $this->appendPrimaryKeyToOrder($parameters['order']);
-			$objectIds = $this->collectExactFileTypePageIds($parameters, $gridOrder, $pageSize, $nav->getOffset());
-			// exact matching stops at a candidate budget, so the total is only known up to the current page
-			$totalObjectCount = $nav->getOffset() + min(count($objectIds), $pageSize);
-		}
-		else
-		{
-			$parameters['select'] = ['ID'];
-			// +1 lets orm resolve the total on the last page without a dedicated count query
-			$parameters['limit'] = $pageSize + 1;
-			$parameters['offset'] = $nav->getOffset();
-			$parameters['count_total'] = true;
-
-			$objectIds = [];
-			$objectIdsCursor = ObjectTable::getList($parameters);
-			foreach ($objectIdsCursor as $row)
+			if ($this->fileTypePageCollector?->needsExactMatching())
 			{
-				$objectIds[] = $row['ID'];
+				// stored file type does not tell these categories apart, so the page is built from exact matches
+				$gridOrder = $this->appendPrimaryKeyToOrder($parameters['order']);
+				$objectIds = $this->collectExactFileTypePageIds($parameters, $gridOrder, $pageSize, $nav->getOffset());
+				// exact matching stops at a candidate budget, so the total is only known up to the current page
+				$totalObjectCount = $nav->getOffset() + min(count($objectIds), $pageSize);
 			}
-			$totalObjectCount = (int)$objectIdsCursor->getCount();
-
-			// a page past the last one is empty, and for an empty page orm reports the offset as the
-			// total; only a query from the start of the list tells the real count
-			if (!$objectIds && $nav->getOffset() > 0)
+			else
 			{
-				$countParameters = $parameters;
-				$countParameters['limit'] = 1;
-				$countParameters['offset'] = 0;
+				$parameters['select'] = ['ID'];
+				// +1 lets orm resolve the total on the last page without a dedicated count query
+				$parameters['limit'] = $pageSize + 1;
+				$parameters['offset'] = $nav->getOffset();
+				// the tile pages by "has more" only, so its id query skips the count
+				$parameters['count_total'] = !$isTile;
 
-				$totalObjectCount = (int)ObjectTable::getList($countParameters)->getCount();
-
-				// the list could shrink after a deletion: show the last page with records, not an empty one
-				$nav->setRecordCount($totalObjectCount);
-				if ($this->pinNavigationToLastPage($nav) && $totalObjectCount > 0)
+				$objectIds = [];
+				$objectIdsCursor = ObjectTable::getList($parameters);
+				foreach ($objectIdsCursor as $row)
 				{
-					$parameters['offset'] = $nav->getOffset();
-					foreach (ObjectTable::getList($parameters) as $row)
+					$objectIds[] = $row['ID'];
+				}
+				$totalObjectCount =
+					$isTile
+						? $nav->getOffset() + count($objectIds)
+						: (int)$objectIdsCursor->getCount()
+				;
+
+				// a page past the last one is empty, and for an empty page orm reports the offset as the
+				// total; only a query from the start of the list tells the real count
+				if (!$objectIds && $nav->getOffset() > 0)
+				{
+					$countParameters = $parameters;
+					$countParameters['limit'] = 1;
+					$countParameters['offset'] = 0;
+					$countParameters['count_total'] = true;
+
+					$totalObjectCount = (int)ObjectTable::getList($countParameters)->getCount();
+
+					// the list could shrink after a deletion: show the last page with records, not an empty one
+					$nav->setRecordCount($totalObjectCount);
+					if ($this->pinNavigationToLastPage($nav) && $totalObjectCount > 0)
 					{
-						$objectIds[] = $row['ID'];
+						$parameters['offset'] = $nav->getOffset();
+						foreach (ObjectTable::getList($parameters) as $row)
+						{
+							$objectIds[] = $row['ID'];
+						}
 					}
 				}
 			}
 		}
+		catch (SystemException $exception)
+		{
+			if ($this->favoriteFilterValue === null)
+			{
+				throw $exception;
+			}
+
+			// the page tells a failed list of the favorites from an empty one
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+			$this->isFavoriteLoadError = true;
+			$objectIds = [];
+			$totalObjectCount = 0;
+		}
+
+		$favoriteObjectIds = $this->loadFavoriteObjectIds($objectIds);
 
 		$this->folder->preloadOperationsForSpecifiedObjects(
 			$objectIds,
@@ -786,7 +896,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$sharedObjectIds = [];
 		if (!$this->isTrashMode() && $objectIds)
 		{
-			$sharedObjectIds = $this->getUserShareObjectIds();
+			$sharedObjectIds = $this->getUserShareObjectIds($objectIds);
 			$crumbStorage = \Bitrix\Disk\CrumbStorage::getInstance();
 		}
 		else
@@ -819,7 +929,9 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'FILE_CONTENT_TYPE' => 'FILE_CONTENT.CONTENT_TYPE',
 				'FILE_WIDTH' => 'FILE_CONTENT.WIDTH',
 				'FILE_HEIGHT' => 'FILE_CONTENT.HEIGHT',
+				...StoredFileRecordLoader::listingSelect(),
 			],
+			'runtime' => StoredFileRecordLoader::listingRuntime(),
 			'with' => $this->buildWithByVisibleColumns($visibleColumns),
 			'filter' => [
 				'@ID' => $objectIds ?: [0],
@@ -831,7 +943,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$parameters['with'][] = 'LOCK';
 		}
 
-		$rows = [];
+		$pageRows = [];
 		foreach (Folder::getList($parameters) as $row)
 		{
 			$countObjectsOnPage++;
@@ -841,7 +953,14 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				break;
 			}
 
-			$object = BaseObject::buildFromRow($row, $parameters['with']);
+			$pageRows[] = [$row, BaseObject::buildFromRow($row, $parameters['with'])];
+		}
+
+		$this->preloadRowData($pageRows);
+
+		$rows = [];
+		foreach ($pageRows as [$row, $object])
+		{
 			/** @var File|Folder $object */
 			$name = $object->getName();
 			$objectId = $object->getId();
@@ -1144,22 +1263,9 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					], true);
 				}
 
-				$closeActionsMenu = "
-					(function() {
-						if (BX.Main.gridManager)
-						{
-							const grid = BX.Main.gridManager.getById('{$this->gridOptions->getGridId()}');
-							const row = grid.instance.getRows().getById('{$row['ID']}');
-							if (row) row.closeActionsMenu();
-						}
-						if (BX.Main.tileGridManager)
-						{
-							const instance = BX.Main.tileGridManager.getInstanceById('{$this->gridOptions->getGridId()}');
-							const item = instance.getItem('{$row['ID']}');
-							if (item) item.destroyActionsMenu();
-						}
-					})();
-				";
+				$closeActionsMenu = "BX.Disk['FolderListClass_{$this->componentId}']"
+					. ".closeRowActionsMenu?.({$objectId});"
+				;
 
 
 				$actionToShare = $this->buildShareSectionItems(
@@ -1342,6 +1448,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					$bizprocIcon,
 					$exportData,
 					(string)$row['ID'],
+					menuOnly: $isTile,
 				);
 			}
 
@@ -1403,22 +1510,24 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				];
 			}
 			$iconClass = Ui\Icon::getIconClassByObject($object, !empty($sharedObjectIds[$objectId]));
-			if ($isFolder)
+
+			if ($isFolder && !$isTile)
 			{
 				$nameSpecialChars = htmlspecialcharsbx($name);
 				$ulsSpecialChars = htmlspecialcharsbx($uls);
 				$uniqueCodeSpecialChars = htmlspecialcharsbx($object->getUniqueCode());
+				$hrefAttribute = empty($exportData['OPEN_URL']) ? '' : " href=\"{$exportData['OPEN_URL']}\"";
 
 				$columnName = "
 					<table class=\"bx-disk-object-name\"><tr>
 							<td style=\"width: 45px;\">
 								<div data-object-id=\"{$objectId}\" class=\"js-disk-grid-open-folder bx-file-icon-container-small {$iconClass}\"></div>
 							</td>
-							<td><a class=\"bx-disk-folder-title js-disk-grid-folder\" id=\"disk_obj_{$objectId}\" href=\"{$exportData['OPEN_URL']}\" data-object-id=\"{$objectId}\" data-can-add=\"{$object->canAdd($securityContext)}\" data-unique-code=\"$uniqueCodeSpecialChars\" data-uls=\"$ulsSpecialChars\" onclick=\"BX.Disk['FolderListClass_{$this->componentId}'].openFolderByAnchor(this, event);\">{$nameSpecialChars}</a></td>
+							<td><a class=\"bx-disk-folder-title js-disk-grid-folder\" id=\"disk_obj_{$objectId}\"{$hrefAttribute} data-object-id=\"{$objectId}\" data-can-add=\"{$object->canAdd($securityContext)}\" data-unique-code=\"$uniqueCodeSpecialChars\" data-uls=\"$ulsSpecialChars\" onclick=\"BX.Disk['FolderListClass_{$this->componentId}'].openFolderByAnchor(this, event);\">{$nameSpecialChars}</a></td>
 					</tr></table>
 				";
 			}
-			else
+			elseif (!$isFolder)
 			{
 				$sourceUrl = $canDownload
 					? $urlManager->getUrlForDownloadFile($object)
@@ -1538,11 +1647,14 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					]);
 				}
 
-				if ($grid['MODE'] === FolderListOptions::VIEW_MODE_TILE)
+				if ($isTile)
 				{
 					$exportData['VIEWER_ATTRS'] = $attr;
 				}
+			}
 
+			if (!$isFolder && !$isTile)
+			{
 				$lockedBy = null;
 				$inlineStyleLockIcon = 'style="display:none;"';
 				if ($isEnabledObjectLock && $object->getLock())
@@ -1567,18 +1679,29 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 			}
 
-			$timestampCreate = $object->getCreateTime()->toUserTime()->getTimestamp();
-			$timestampUpdate = $object->getUpdateTime()->toUserTime()->getTimestamp();
-			$timestampDelete = $object->isDeleted() ? $object->getDeleteTime()->toUserTime()->getTimestamp() : 0;
+			if ($isTile)
+			{
+				// the tile reads only the size from the columns, table cells are not rendered there
+				$columns = [
+					'ID' => $objectId,
+					'FORMATTED_SIZE' => $isFolder ? '' : CFile::formatSize($object->getSize()),
+				];
+			}
+			else
+			{
+				$timestampCreate = $object->getCreateTime()->toUserTime()->getTimestamp();
+				$timestampUpdate = $object->getUpdateTime()->toUserTime()->getTimestamp();
+				$timestampDelete = $object->isDeleted() ? $object->getDeleteTime()->toUserTime()->getTimestamp() : 0;
 
-			$columns = [
-				'ID' => $objectId,
-				'CREATE_TIME' => ($nowTime - $timestampCreate > 158400) ? formatDate($fullFormatWithoutSec, $timestampCreate, $nowTime) : formatDate('x', $timestampCreate, $nowTime),
-				'UPDATE_TIME' => ($nowTime - $timestampUpdate > 158400) ? formatDate($fullFormatWithoutSec, $timestampUpdate, $nowTime) : formatDate('x', $timestampUpdate, $nowTime),
-				'DELETE_TIME' => ($nowTime - $timestampDelete > 158400) ? formatDate($fullFormatWithoutSec, $timestampDelete, $nowTime) : formatDate('x', $timestampDelete, $nowTime),
-				'NAME' => $columnName,
-				'FORMATTED_SIZE' => $isFolder ? '' : CFile::formatSize($object->getSize()),
-			];
+				$columns = [
+					'ID' => $objectId,
+					'CREATE_TIME' => ($nowTime - $timestampCreate > 158400) ? formatDate($fullFormatWithoutSec, $timestampCreate, $nowTime) : formatDate('x', $timestampCreate, $nowTime),
+					'UPDATE_TIME' => ($nowTime - $timestampUpdate > 158400) ? formatDate($fullFormatWithoutSec, $timestampUpdate, $nowTime) : formatDate('x', $timestampUpdate, $nowTime),
+					'DELETE_TIME' => ($nowTime - $timestampDelete > 158400) ? formatDate($fullFormatWithoutSec, $timestampDelete, $nowTime) : formatDate('x', $timestampDelete, $nowTime),
+					'NAME' => $columnName,
+					'FORMATTED_SIZE' => $isFolder ? '' : CFile::formatSize($object->getSize()),
+				];
+			}
 
 			if (isset($visibleColumns['CREATE_USER']))
 			{
@@ -1622,7 +1745,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				";
 			}
 
-			if ($isItTimeToShowBizProc)
+			if ($isItTimeToShowBizProc && !$isTile)
 			{
 				$columns['BIZPROC'] = $columnsBizProc["BIZPROC"];
 			}
@@ -1640,22 +1763,42 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				$attrs['data-unique-code'] = $object->getUniqueCode();
 			}
 
+			$nameCellActions = [];
+			if ($isFolder && !$object->isDeleted() && !$isTile)
+			{
+				$nameCellActions[] = [
+					'class' => 'js-disk-folder-info-placeholder',
+					'attributes' => [
+						'data-object-id' => $objectId,
+						'data-unique-code' => $object->getUniqueCode(),
+					],
+				];
+			}
+
+			if ($favoriteObjectIds !== null)
+			{
+				$favoriteState = isset($favoriteObjectIds[$objectId]) ? '1' : '0';
+				$attrs['data-favorite'] = $favoriteState;
+
+				if (!$isTile)
+				{
+					// The star goes last: the stars of files and folders line up at the right edge of the cell.
+					$nameCellActions[] = [
+						'class' => 'js-disk-favorite-star',
+						'attributes' => [
+							'data-object-id' => $objectId,
+							'data-favorite' => $favoriteState,
+						],
+					];
+				}
+			}
+
 			$rows[] = [
 				'id' => $objectId,
 				'object' => $object,
 				'data' => $exportData,
 				'columns' => $columns,
-				'cellActions' => ($isFolder && !$object->isDeleted()) ? [
-					'NAME' => [
-						[
-							'class' => 'js-disk-folder-info-placeholder',
-							'attributes' => [
-								'data-object-id' => $objectId,
-								'data-unique-code' => $object->getUniqueCode(),
-							],
-						],
-					],
-				] : [],
+				'cellActions' => $nameCellActions ? ['NAME' => $nameCellActions] : [],
 				'attrs' => $attrs,
 				'actions' => $this->appendBitrixGptMenuAction($actions, $object),
 			];
@@ -1928,6 +2071,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				$copyButton,
 				$configuration['delete'] ? $moveButton : null,
 				$configuration['edit'] ? $snippet->getEditAction() : null,
+				...$this->getFavoriteGroupActions(),
 				$configuration['delete'] ? $deleteButton : null,
 			];
 		}
@@ -1942,11 +2086,156 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	}
 
 	/**
+	 * Both actions are offered for any selection: a selection may mix favorites and plain objects.
+	 */
+	private function getFavoriteGroupActions(): array
+	{
+		if (!$this->isFavoritesEnabled())
+		{
+			return [];
+		}
+
+		$actions = [];
+		foreach ([
+			'favoriteAdd' => ['DISK_FOLDER_LIST_ACT_FAVORITE_ADD', 'addSelectedToFavorites'],
+			'favoriteRemove' => ['DISK_FOLDER_LIST_ACT_FAVORITE_REMOVE', 'removeSelectedFromFavorites'],
+		] as $value => [$phraseCode, $jsMethod])
+		{
+			$actions[] = [
+				'TYPE' => Grid\Panel\Types::BUTTON,
+				'NAME' => Loc::getMessage($phraseCode),
+				'TEXT' => Loc::getMessage($phraseCode),
+				'VALUE' => $value,
+				'ONCHANGE' => [
+					[
+						'ACTION' => Grid\Panel\Actions::CALLBACK,
+						'DATA' => [
+							[
+								'JS' => "BX.Disk['FolderListClass_{$this->componentId}'].{$jsMethod}()",
+							],
+						],
+					],
+				],
+			];
+		}
+
+		return $actions;
+	}
+
+	/**
+	 * The favorites belong to the main interface of Disk. A unified link opens its folder without the rights check
+	 * of the list, while a mark is answered by the general rights and the favorites span the whole storage.
+	 */
+	private function isFavoritesEnabled(): bool
+	{
+		return !$this->isTrashMode() && !$this->isViewByUnifiedLink && Feature::isEnabled(Favorites::class);
+	}
+
+	/**
+	 * @param array $objectIds ids of the objects of the page
+	 * @return array<int, int>|null ids marked by the current user as keys, null when the list has no favorites
+	 */
+	private function loadFavoriteObjectIds(array $objectIds): ?array
+	{
+		if (!$this->isFavoritesEnabled())
+		{
+			return null;
+		}
+
+		if (!$objectIds)
+		{
+			return [];
+		}
+
+		$markedIds = ServiceLocator::getInstance()->get(FavoriteProvider::class)->getMarkedIds(
+			(int)$this->getUser()->getId(),
+			array_map('intval', $objectIds),
+		);
+
+		return array_flip($markedIds);
+	}
+
+	/**
+	 * The favorites data of the page. A full load of the list outside the trashcan counts as an entry into Disk
+	 * for the onboarding of the favorites.
+	 */
+	private function buildFavoritesResult(): array
+	{
+		$isEnabled = $this->isFavoritesEnabled();
+		$showOnboarding = false;
+		if ($isEnabled && !Grid\Context::isInternalRequest() && !$this->request->isAjaxRequest())
+		{
+			$userId = (int)$this->getUser()->getId();
+			$onboardingService = ServiceLocator::getInstance()->get(FavoriteOnboardingService::class);
+			$onboardingService->registerEntry($userId, new Date());
+			$showOnboarding = $onboardingService->shouldShow($userId);
+		}
+
+		if ($isEnabled && $this->isFavoriteLoadError)
+		{
+			Application::getInstance()->getContext()->getResponse()->addHeader(self::FAVORITES_LOAD_ERROR_HEADER, 'Y');
+		}
+
+		return [
+			'enabled' => $isEnabled,
+			'filterActive' => $isEnabled && $this->favoriteFilterValue === Ui\FolderListFilter::FAVORITE_YES,
+			'loadError' => $isEnabled && $this->isFavoriteLoadError,
+			'storageId' => (int)$this->storage->getId(),
+			'showOnboarding' => $showOnboarding,
+		];
+	}
+
+	/**
+	 * Loads in a batch what the rows of the page read: the originals of links and the stored files.
+	 *
+	 * @param array<array{0: array, 1: BaseObject}> $pageRows Rows of the page with their models.
+	 */
+	protected function preloadRowData(array $pageRows): void
+	{
+		$objects = [];
+		$records = [];
+		$versionedFileIds = [];
+		foreach ($pageRows as [$row, $object])
+		{
+			$objects[] = $object;
+			$record = StoredFileRecordLoader::fromListingRow($row);
+			if ($record !== null)
+			{
+				$records[(int)$row['FILE_ID']] = $record;
+			}
+			elseif (StoredFileRecordLoader::hasVersionInListingRow($row))
+			{
+				$versionedFileIds[] = (int)$row['FILE_ID'];
+			}
+		}
+
+		(new FolderListRowPreloader())->preload($objects, $records, $versionedFileIds);
+	}
+
+	/**
+	 * Tells whether the viewer attributes of a row without its own stored file (a link) are built from the
+	 * record the model already holds instead of a new read of b_file.
+	 */
+	protected function useStoredFileForAttributes(): bool
+	{
+		return true;
+	}
+
+	/**
 	 * The rows of the grid and of the search open Markdown on a page of its own; the trashcan keeps the
 	 * viewer, as a deleted file has no page to open.
 	 */
 	private function buildItemAttributes(File $file, Uri $sourceUri, array $possibleFileData = [])
 	{
+		if (!isset($possibleFileData['CONTENT_TYPE']) && $this->useStoredFileForAttributes())
+		{
+			$storedFile = $file->getFile();
+			if (isset($storedFile['ID'], $storedFile['CONTENT_TYPE']))
+			{
+				$possibleFileData = $storedFile;
+			}
+		}
+
 		if (isset($possibleFileData['ID'], $possibleFileData['CONTENT_TYPE']))
 		{
 			$possibleFileData[FileAttributes::KEY_FILE_OBJECT] = $file;
@@ -2171,14 +2460,21 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			}
 		}
 
+		$this->favoriteFilterValue = $this->readFavoriteFilterValue($filterData);
+
 		if (!empty($filterData['SEARCH_IN_CURRENT_FOLDER']))
 		{
 			$filter['PARENT_ID'] = $this->folder->getRealObjectId();
 		}
 		else
 		{
-			$filter['PATH_CHILD.PARENT_ID'] = $this->folder->getRealObjectId();
-			$filter['!PATH_CHILD.OBJECT_ID'] = $this->folder->getRealObjectId();
+			// the favorites of the storage are searched for from its root, whatever folder is open
+			$subtreeRootId = $this->favoriteFilterValue === Ui\FolderListFilter::FAVORITE_YES
+				? (int)$this->storage->getRootObjectId()
+				: $this->folder->getRealObjectId()
+			;
+			$filter['PATH_CHILD.PARENT_ID'] = $subtreeRootId;
+			$filter['!PATH_CHILD.OBJECT_ID'] = $subtreeRootId;
 
 			unset($filter['PARENT_ID']);
 		}
@@ -2312,10 +2608,35 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$parameters['filter'] = array_merge($parameters['filter'] ?? [], $filter);
 
+		if ($this->favoriteFilterValue !== null)
+		{
+			$parameters = ServiceLocator::getInstance()->get(FavoriteProvider::class)->applyListFilter(
+				$parameters,
+				(int)$this->getUser()->getId(),
+				$this->favoriteFilterValue === Ui\FolderListFilter::FAVORITE_YES,
+			);
+		}
+
 		return $parameters;
 	}
 
-	private function getUserShareObjectIds()
+	private function readFavoriteFilterValue(array $filterData): ?string
+	{
+		// a unified link opens its folder without the rights check, while the favorites span the whole storage
+		if (!$this->isFavoritesEnabled() || $this->isViewByUnifiedLink)
+		{
+			return null;
+		}
+
+		$value = $filterData[Ui\FolderListFilter::FAVORITE_FIELD_ID] ?? null;
+
+		return in_array($value, [Ui\FolderListFilter::FAVORITE_YES, Ui\FolderListFilter::FAVORITE_NO], true)
+			? $value
+			: null
+		;
+	}
+
+	private function getUserShareObjectIds(array $objectIds): array
 	{
 		$sharedObjectIds = [];
 		foreach (SharingTable::getList([
@@ -2328,6 +2649,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				],
 				'!=STATUS' => SharingTable::STATUS_IS_DECLINED,
 				'REAL_STORAGE_ID' => $this->folder->getStorageId(),
+				'@REAL_OBJECT_ID' => $objectIds,
 			],
 		])->fetchAll() as $row)
 		{
@@ -2445,6 +2767,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		array $bizprocIcon,
 		array $exportData,
 		string $rowId,
+		bool $menuOnly = false,
 	)
 	{
 		$storageId = $this->storage->getId();
@@ -2511,6 +2834,12 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					'items' => $listBpTemplates,
 				];
 			}
+		}
+
+		// the tile shows only the start menu item, workflow states are not rendered there
+		if ($menuOnly)
+		{
+			return [$actions, $columnsBizProc, $bizprocIcon];
 		}
 
 		$webdavFileId = $object->getXmlId();

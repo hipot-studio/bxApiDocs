@@ -65,7 +65,14 @@ class SqlLabExecutionService
 
 		if ($response->hasErrors() || $response->getStatus() !== IntegratorResponse::STATUS_OK)
 		{
-			return $this->fail($result, $this->resolveErrorCode($response), $this->describeErrors($response));
+			$code = $this->resolveErrorCode($response);
+
+			return $this->fail(
+				$result,
+				$code,
+				$this->describeError($response, $code),
+				$this->findQueryError($response, $code),
+			);
 		}
 
 		$data = $response->getData();
@@ -149,29 +156,59 @@ class SqlLabExecutionService
 	/**
 	 * The Superset diagnostics a model fixes its query by. Callers decide whether to show it.
 	 */
-	private function describeErrors(IntegratorResponse $response): string
+	private function describeError(IntegratorResponse $response, string $code): mixed
 	{
-		$descriptions = [];
 		foreach ($response->getErrors() as $error)
 		{
+			if ($error->getCode() !== $code)
+			{
+				continue;
+			}
+
 			$customData = $error->getCustomData();
-			$detail = is_array($customData) ? ($customData['detail'] ?? null) : null;
-			$descriptions[] = is_string($detail) && $detail !== ''
-				? $error->getMessage() . ': ' . $detail
-				: $error->getMessage()
-			;
+
+			return is_array($customData) && array_key_exists('detail', $customData)
+				? $customData['detail']
+				: $error->getMessage();
 		}
 
-		return implode('; ', $descriptions);
+		return '';
 	}
 
-	private function fail(Result $result, string $code, string $detail = ''): Result
+	/**
+	 * The reason of a refused query Superset resolved its code by; an earlier Superset does not send it.
+	 */
+	private function findQueryError(IntegratorResponse $response, string $code): mixed
 	{
-		$result->addError(new Error(
-			'SQL Lab request failed.',
-			$code,
-			$detail === '' ? null : ['detail' => $detail],
-		));
+		if ($code !== 'SQLLAB_INVALID_QUERY')
+		{
+			return null;
+		}
+
+		foreach ($response->getErrors() as $error)
+		{
+			if ($error->getCode() !== $code)
+			{
+				continue;
+			}
+
+			$customData = $error->getCustomData();
+
+			return is_array($customData) ? ($customData['queryError'] ?? null) : null;
+		}
+
+		return null;
+	}
+
+	private function fail(Result $result, string $code, mixed $detail = '', mixed $queryError = null): Result
+	{
+		$customData = $detail === '' && $code !== 'SQLLAB_INVALID_QUERY' ? null : ['detail' => $detail];
+		if ($queryError !== null)
+		{
+			$customData['queryError'] = $queryError;
+		}
+
+		$result->addError(new Error('SQL Lab request failed.', $code, $customData));
 
 		return $result;
 	}

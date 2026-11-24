@@ -5,10 +5,13 @@ namespace Bitrix\Landing\Vibe;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Diag\LoggerFactory;
+use Bitrix\Main\Error;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Psr\Log\LoggerInterface;
 use Bitrix\Landing\Vibe\Provider\AbstractVibeProvider;
 use Bitrix\Landing\Vibe\Provider\VibeContextDto;
 use Bitrix\Landing;
@@ -40,6 +43,13 @@ class Vibe
 
 	private const USE_DEMO_OPTION_CODE = 'use_demo_data_in_block_widgets';
 	private const PREVIEW_OPTION_CODE_PREFIX = 'vibe_preview_';
+	private const LOGGER_ID = 'landing.vibe';
+
+	public const CREATE_ERROR_NO_PROVIDER = 'VIBE_CREATE_NO_PROVIDER';
+	public const CREATE_ERROR_NOT_AVAILABLE = 'VIBE_CREATE_NOT_AVAILABLE';
+	public const CREATE_ERROR_CREATE_DENIED = 'VIBE_CREATE_DENIED';
+	public const CREATE_ERROR_NO_SITE = 'VIBE_CREATE_NO_SITE';
+	public const CREATE_ERROR_INSTALL_FAILED = 'VIBE_CREATE_INSTALL_FAILED';
 
 	// region Common
 
@@ -780,25 +790,22 @@ class Vibe
 	}
 
 	/**
-	 * If true - enable some functionality at free tariff (by default in free tariff vibe is fully disabled)
+	 * Portal wide flag: allows creating and editing of all vibes at a tariff without the vibe feature.
 	 * @param bool $flag
 	 * @return void
 	 */
 	public function setFreeTariffMode(bool $flag = true): void
 	{
-		// todo: do! add field to table
-		// Landing\Manager::setOption(self::FREE_MODE_OPTION_CODE, $flag ? 'Y' : 'N');
+		$this->state->setFreeTariffMode($flag);
 	}
 
 	/**
-	 * If true - enable some functionality at free tariff (by default in free tariff vibe is fully disabled)
+	 * Portal wide flag: allows creating and editing of all vibes at a tariff without the vibe feature.
 	 * @return bool
 	 */
 	public function isFreeTariffMode(): bool
 	{
-		// todo: do
-		return true;
-		// return Landing\Manager::getOption(self::FREE_MODE_OPTION_CODE, 'N') === 'Y';
+		return $this->state->isFreeTariffMode();
 	}
 	// endregion
 
@@ -819,46 +826,158 @@ class Vibe
 
 	public function createPageByTemplate(?Templates $code = null): bool
 	{
-		$provider = $this->getProvider();
-		if (
-			!isset($provider)
-			|| !$this->isAvailable()
-			|| !$this->canCreate())
+		return $this->createPage($code)->isSuccess();
+	}
+
+	/**
+	 * Installs the template regardless of the tariff: the free tariff mode is enabled for the portal
+	 * before the creation and stays enabled on success. On failure (an installer exception included)
+	 * the mode is restored and the result carries the reason (see CREATE_ERROR_* codes).
+	 * @param Templates $code
+	 * @return Result
+	 */
+	public function createPageByTemplateAtFreeTariff(Templates $code): Result
+	{
+		$result = $this->checkCreatePrerequisites($code);
+		if (!$result->isSuccess())
 		{
-			return false;
+			return $result;
 		}
 
-		$siteId = $this->getSiteId();
-		if (!$siteId)
+		$wasFreeTariffMode = $this->isFreeTariffMode();
+		$this->setFreeTariffMode();
+		$this->registerLicenseChangeHandler();
+
+		$result = $this->createPage($code);
+		if (!$result->isSuccess())
 		{
-			return false;
+			$this->setFreeTariffMode($wasFreeTariffMode);
 		}
 
+		return $result;
+	}
+
+	private function checkCreatePrerequisites(?Templates $code): Result
+	{
+		$result = new Result();
+
+		if ($this->getProvider() === null)
+		{
+			return $this->addCreateError($result, self::CREATE_ERROR_NO_PROVIDER, 'Vibe provider is not set', $code);
+		}
+		if (!$this->isAvailable())
+		{
+			return $this->addCreateError($result, self::CREATE_ERROR_NOT_AVAILABLE, 'Vibe is not available', $code);
+		}
+
+		return $result;
+	}
+
+	private function createPage(?Templates $code): Result
+	{
+		$result = $this->checkCreatePrerequisites($code);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		if (!$this->canCreate())
+		{
+			return $this->addCreateError($result, self::CREATE_ERROR_CREATE_DENIED, 'Vibe creation is denied', $code);
+		}
+		if (!$this->getSiteId())
+		{
+			return $this->addCreateError($result, self::CREATE_ERROR_NO_SITE, 'Vibe site is not created', $code);
+		}
+
+		$previousStatus = $this->status;
+		$wasPublished = $this->isPublished();
 		$this->onStartPageCreation();
 
+		// the guard is stopped explicitly: a caught exception may keep the frame (and the guard) alive
 		$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
 		$guard->start();
-		$installer = new Installer($this);
 
-		if ($code === null)
+		try
 		{
-			$newPageId = $installer->createDemoPage();
+			try
+			{
+				$installer = $this->createInstaller();
+				$newPageId =
+					$code === null
+						? $installer->createDemoPage()
+						: $installer->createPageByTemplate($code);
+			}
+			catch (\Throwable $exception)
+			{
+				$this->onFailPageCreation($previousStatus, $wasPublished);
+
+				return $this->addCreateError(
+					$result,
+					self::CREATE_ERROR_INSTALL_FAILED,
+					'Vibe page installation failed',
+					$code,
+					[
+						'exception' => $exception::class,
+						'exceptionMessage' => $exception->getMessage(),
+					]
+				);
+			}
+
+			if (!$newPageId)
+			{
+				$this->onFailPageCreation($previousStatus, $wasPublished);
+
+				return $this->addCreateError(
+					$result,
+					self::CREATE_ERROR_INSTALL_FAILED,
+					'Vibe page installation failed',
+					$code
+				);
+			}
+
+			$this->landingId = $newPageId;
+			$this->onFinishPageCreation();
+
+			return $result;
 		}
-		else
+		finally
 		{
-			$newPageId = $installer->createPageByTemplate($code);
-			// todo: do onTemplateCreation? (free tariff mode)
+			$guard->stop();
 		}
+	}
 
-		if (!$newPageId)
-		{
-			return false;
-		}
+	protected function createInstaller(): Installer
+	{
+		return new Installer($this);
+	}
 
-		$this->landingId = $newPageId;
-		$this->onFinishPageCreation();
+	private function addCreateError(
+		Result $result,
+		string $errorCode,
+		string $message,
+		?Templates $code,
+		array $logContext = []
+	): Result
+	{
+		$this->getLogger()->warning($message, $logContext + [
+			'errorCode' => $errorCode,
+			'moduleId' => $this->moduleId,
+			'embedId' => $this->embedId,
+			'template' => $code?->value,
+		]);
 
-		return true;
+		return $result->addError(new Error($message, $errorCode));
+	}
+
+	/**
+	 * The registry check is skipped: creation failures are rare and must reach the default log without
+	 * enabling the logger on the portal.
+	 * @return LoggerInterface
+	 */
+	private function getLogger(): LoggerInterface
+	{
+		return (new LoggerFactory())->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false);
 	}
 
 	/**
@@ -876,10 +995,33 @@ class Vibe
 		$this->publish();
 	}
 
-	// todo: change name
-	private function onTemplateCreation(): void
+	/**
+	 * Returns the status and the publication changed by onStartPageCreation(): a published vibe without
+	 * a page leaves the portal on an empty main page.
+	 * @param Type\Status|null $previousStatus
+	 * @param bool $wasPublished publication state before the creation started
+	 * @return void
+	 */
+	private function onFailPageCreation(?Type\Status $previousStatus, bool $wasPublished): void
 	{
-		// todo: move logic to eventhandler
+		if ($previousStatus !== null && $previousStatus !== Type\Status::Created)
+		{
+			$this->saveStatus($previousStatus);
+		}
+
+		if (!$wasPublished)
+		{
+			$this->withdraw();
+		}
+	}
+
+	/**
+	 * The handler drops the free tariff mode when the portal gets a license without the vibe feature.
+	 * Registration is idempotent: the event manager ignores an already registered handler.
+	 * @return void
+	 */
+	private function registerLicenseChangeHandler(): void
+	{
 		EventManager::getInstance()->registerEventHandler(
 			'intranet',
 			'onLicenseHasChanged',
@@ -887,7 +1029,6 @@ class Vibe
 			Integration\Intranet\EventHandler::class,
 			'onLicenseHasChanged'
 		);
-		$this->setFreeTariffMode();
 	}
 
 	/**

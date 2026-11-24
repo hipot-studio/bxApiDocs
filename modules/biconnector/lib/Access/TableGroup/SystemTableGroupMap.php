@@ -111,6 +111,8 @@ final class SystemTableGroupMap
 			'task_efficiency',
 			'flow',
 			'socialnetwork_group',
+			'task_result',
+			'task_history',
 		],
 		self::GROUP_BIZPROC => [
 			'bizproc_task',
@@ -173,6 +175,23 @@ final class SystemTableGroupMap
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Whether the code names a system table of the declaration itself, leaving out the tables of smart
+	 * processes and automated solutions: those come and go with their entities, and their codes are reused.
+	 */
+	public static function isDeclaredSystemCode(string $tableCode): bool
+	{
+		foreach (self::DECLARED_MAP as $tableCodes)
+		{
+			if (in_array($tableCode, $tableCodes, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\User\Grid\Row\Assembler\Field\JsFields;
 
+use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\UserOtpStatusInfo;
 use Bitrix\Intranet\Internal\Enum\Otp\UserOtpStatus;
 use Bitrix\Intranet\Internal\Service\Otp\UserOtpStatusService;
@@ -15,6 +16,7 @@ class OtpStatusFieldAssembler extends JsExtensionFieldAssembler
 {
 	private ?array $statusCache = null;
 	private ?UserOtpStatusService $service = null;
+	private ?UserCollection $statusCollection = null;
 
 	public function __construct(array $columnIds, ?Settings $settings = null)
 	{
@@ -55,19 +57,25 @@ class OtpStatusFieldAssembler extends JsExtensionFieldAssembler
 
 	private function getStatusCache(): array
 	{
+		$userCollection = $this->getSettings()->getUserCollection();
+		if ($this->statusCollection !== $userCollection)
+		{
+			$this->statusCollection = $userCollection;
+			$this->statusCache = null;
+			$this->service = null;
+		}
+
+		if ($userCollection === null)
+		{
+			return [];
+		}
+
 		if ($this->statusCache !== null)
 		{
 			return $this->statusCache;
 		}
 
 		$this->statusCache = [];
-
-		$service = $this->getService();
-		$userCollection = $this->getSettings()->getUserCollection();
-		if ($userCollection === null)
-		{
-			return $this->statusCache;
-		}
 
 		$userIds = [];
 		foreach ($userCollection as $user)
@@ -77,7 +85,7 @@ class OtpStatusFieldAssembler extends JsExtensionFieldAssembler
 
 		if (!empty($userIds))
 		{
-			$this->statusCache = $service->getStatusesByUserIds($userIds);
+			$this->statusCache = $this->getService()->getStatusesByUserIds($userIds);
 		}
 
 		return $this->statusCache;
@@ -100,6 +108,7 @@ class OtpStatusFieldAssembler extends JsExtensionFieldAssembler
 			UserOtpStatus::UpdateRequired => Loc::getMessage('INTRANET_USER_GRID_OTP_STATUS_UPDATE_REQUIRED') ?? '',
 			UserOtpStatus::UpdateRecommended => Loc::getMessage('INTRANET_USER_GRID_OTP_STATUS_UPDATE_RECOMMENDED') ?? '',
 			UserOtpStatus::EnableRequired => Loc::getMessage('INTRANET_USER_GRID_OTP_STATUS_ENABLE_REQUIRED') ?? '',
+			UserOtpStatus::MandatoryExempted => Loc::getMessage('INTRANET_USER_GRID_OTP_STATUS_MANDATORY_EXEMPTED') ?? '',
 			UserOtpStatus::Disabled => Loc::getMessage('INTRANET_USER_GRID_OTP_STATUS_DISABLED') ?? '',
 		};
 	}
@@ -131,6 +140,7 @@ class OtpStatusFieldAssembler extends JsExtensionFieldAssembler
 			UserOtpStatus::UpdateRequired => 'INTRANET_USER_GRID_OTP_STATUS_HINT_UPDATE_REQUIRED_NO_DATE',
 			UserOtpStatus::UpdateRecommended => 'INTRANET_USER_GRID_OTP_STATUS_HINT_UPDATE_RECOMMENDED',
 			UserOtpStatus::EnableRequired => 'INTRANET_USER_GRID_OTP_STATUS_HINT_ENABLE_REQUIRED_NO_DATE',
+			UserOtpStatus::MandatoryExempted => 'INTRANET_USER_GRID_OTP_STATUS_HINT_MANDATORY_EXEMPTED',
 			UserOtpStatus::Disabled => 'INTRANET_USER_GRID_OTP_STATUS_HINT_DISABLED',
 		};
 

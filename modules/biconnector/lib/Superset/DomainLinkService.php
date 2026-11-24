@@ -8,14 +8,14 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 
-final class DomainLinkService
+final class DomainLinkService implements DomainLinkStatusInterface
 {
 	private const OPTION_SUPERSET_UNLINKED = '~is_superset_unlinked';
 
-	private static ?self $instance = null;
+	private static ?DomainLinkStatusInterface $instance = null;
 	private static ?bool $linkStatusCache = null;
 
-	public static function getInstance(): self
+	public static function getInstance(): DomainLinkStatusInterface
 	{
 		if (self::$instance === null)
 		{
@@ -23,6 +23,12 @@ final class DomainLinkService
 		}
 
 		return self::$instance;
+	}
+
+	public static function setInstance(?DomainLinkStatusInterface $instance): void
+	{
+		self::$instance = $instance;
+		self::$linkStatusCache = null;
 	}
 
 	/**

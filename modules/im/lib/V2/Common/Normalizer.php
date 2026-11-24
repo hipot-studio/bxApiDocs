@@ -25,6 +25,27 @@ final class Normalizer
 	}
 
 	/**
+	 * A boolean the way it arrives over the wire. The web client encodes booleans as Y/N
+	 * (im.v2.lib.rest), REST clients send JSON booleans, form-encoded ones send 1/0.
+	 *
+	 * @return bool|null null for a value that carries no boolean, an absent field included
+	 */
+	public static function toNullableBool(mixed $value): ?bool
+	{
+		if (!is_scalar($value) || $value === '')
+		{
+			return null;
+		}
+
+		return match ($value)
+		{
+			'Y' => true,
+			'N' => false,
+			default => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+		};
+	}
+
+	/**
 	 * Values that are neither a string nor a number are dropped: casting them would give
 	 * the 'Array' literal or throw.
 	 *

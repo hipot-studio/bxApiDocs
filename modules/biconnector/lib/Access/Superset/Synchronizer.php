@@ -6,6 +6,8 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\Model\UserAccessItem;
+use Bitrix\BIConnector\Access\Rule\VariableRule;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
@@ -17,6 +19,8 @@ final class Synchronizer
 	private const ROLE_WRITER_NAME = 'writer';
 	private const ROLE_READER_NAME = 'reader';
 	private const ROLE_EMPTY_NAME = 'empty';
+	// A sync waits for the one already running instead of failing, while that one is still within the proxy timeout.
+	private const SYNC_LOCK_TIMEOUT = 30;
 
 	public function __construct(private readonly int $userId)
 	{
@@ -24,7 +28,33 @@ final class Synchronizer
 
 	public function sync(): Main\Result
 	{
+		// Two syncs of one user may reach Superset interleaved and leave the hash of one with the owners of the other.
+		$connection = Main\Application::getConnection();
+		$lockName = 'biconnector_superset_sync_' . $this->userId;
+		if (!$connection->lock($lockName, self::SYNC_LOCK_TIMEOUT))
+		{
+			$error = new Main\Error("permissions of user {$this->userId} are being synced.");
+
+			return (new Main\Result())->addError($error);
+		}
+
+		try
+		{
+			return $this->syncUnderLock();
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+		}
+	}
+
+	private function syncUnderLock(): Main\Result
+	{
 		$syncResult = new Main\Result();
+
+		// Permissions cached earlier in the request may predate a revocation made while it waited for the lock or BI.
+		VariableRule::clearCache();
+		UserAccessItem::forget($this->userId);
 
 		$user = (new SupersetUserRepository())->getById($this->userId);
 		if (!$user || empty($user->clientId))
@@ -66,6 +96,15 @@ final class Synchronizer
 		}
 
 		$integrator = IntegratorFactory::getInstance();
+		// Superset takes the permissions request by request, so a sync broken halfway must not leave the old hash:
+		// permissions returning to the old set would then look delivered.
+		$resetResult = SupersetUserTable::updatePermissionHash($user->id, '');
+		if (!$resetResult->isSuccess())
+		{
+			$syncResult->addErrors($resetResult->getErrors());
+			return $syncResult;
+		}
+
 		$syncProfileResult = $integrator->syncProfile(
 			$user,
 			[
@@ -79,9 +118,31 @@ final class Synchronizer
 			return $syncResult;
 		}
 
-		SupersetUserTable::updatePermissionHash($user->id, $currentHash);
+		$updateResult = SupersetUserTable::updatePermissionHash($user->id, $currentHash);
+		$syncResult->addErrors($updateResult->getErrors());
 
 		return $syncResult;
+	}
+
+	/**
+	 * Whether Superset already holds the current permissions of the user, so nothing is left to sync.
+	 */
+	public function isSynchronized(): bool
+	{
+		$user = (new SupersetUserRepository())->getById($this->userId);
+		if (!$user || empty($user->clientId))
+		{
+			// An account created by a login request alone gets the default roles and no owned dashboards.
+			return false;
+		}
+
+		$accessController = new AccessController($this->userId);
+		$currentHash = $this->calculateHash(
+			$accessController->getAllowedDashboardValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+			$accessController->getAllowedDashboardValue(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT),
+		);
+
+		return $user->permissionHash === $currentHash;
 	}
 
 	private static function getDashboardExternalIdList(array $filter = []): array
@@ -103,24 +164,20 @@ final class Synchronizer
 		return array_map('intval', array_column($dashboards, 'EXTERNAL_ID'));
 	}
 
-	private function calculateHash($viewValues, $editValues): string
+	// Each part is sorted and labeled, so the hash follows the permissions and not the order of database rows.
+	private function calculateHash(?array $viewValues, ?array $editValues): string
 	{
-		$currentViewHash =
-			$viewValues
-				? md5(is_array($viewValues) ? implode('', $viewValues) : $viewValues)
-				: ''
-		;
+		return md5(implode('|', [
+			'view:' . self::joinIds($viewValues ?? []),
+			'edit:' . self::joinIds($editValues ?? []),
+			'dashboards:' . self::joinIds(self::getDashboardExternalIdList()),
+		]));
+	}
 
-		$currentEditHash =
-			$editValues
-				? md5(is_array($editValues) ? implode('', $editValues) : $editValues)
-				: ''
-		;
+	private static function joinIds(array $ids): string
+	{
+		sort($ids, SORT_STRING);
 
-		return md5(
-			$currentViewHash
-			. $currentEditHash
-			. implode('', self::getDashboardExternalIdList())
-		);
+		return implode(',', $ids);
 	}
 }

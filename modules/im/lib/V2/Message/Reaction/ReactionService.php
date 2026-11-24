@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Result;
 use Bitrix\Imopenlines\MessageParameter;
+use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 
@@ -146,6 +147,11 @@ class ReactionService
 
 	private function isMessageLiveChat(): bool
 	{
+		if (!Loader::includeModule('imopenlines'))
+		{
+			return false;
+		}
+
 		$chat = $this->message->getChat();
 		$isLiveChat = $chat->getEntityType() === 'LIVECHAT';
 		$isToLiveChat = false;

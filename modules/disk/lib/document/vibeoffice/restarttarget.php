@@ -69,10 +69,16 @@ final class RestartTarget
 				return null;
 			}
 
-			$url = \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlExternalLink([
+			$params = [
 				'hash' => $link->getHash(),
 				'action' => $isView ? 'default' : 'goToEdit',
-			]);
+			];
+			if ($isView)
+			{
+				$params[\Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator::QUERY_PARAM_EXACT_MODE] = 'Y';
+			}
+
+			$url = \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlExternalLink($params);
 		}
 		elseif ($channel === 'unified')
 		{

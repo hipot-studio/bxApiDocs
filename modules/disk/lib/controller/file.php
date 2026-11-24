@@ -7,11 +7,10 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Controller\Response\PreviewResponseBuilder;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Infrastructure\Controller\HtmlViewerRefusalResponse;
-use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Command\BaseObject\CreateByContentCommand;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
 use Bitrix\Disk\Internal\Service\HtmlEditor\SessionService;
-use Bitrix\Disk\Internal\Service\HtmlEditor\SaveService;
+use Bitrix\Disk\Internal\Service\HtmlEditor\AiLockService;
 use Bitrix\Disk\Internal\Service\HtmlEditor\SourceResolver;
 use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Disk\Internal\Service\TiffPreviewService;
@@ -76,7 +75,7 @@ class File extends BaseObject
 		foreach ([
 			'acquireHtmlEditingSession',
 			'finishHtmlEditingSession',
-			'saveHtmlEditingSession',
+			'getHtmlAiLockState',
 		] as $actionName)
 		{
 			$configureActions[$actionName] = [
@@ -86,12 +85,6 @@ class File extends BaseObject
 				])],
 			];
 		}
-		$configureActions['saveHtmlEditingSession']['+prefilters'][] = new Main\Engine\ActionFilter\ContentType([
-			Main\Engine\ActionFilter\ContentType::JSON,
-			'application/x-www-form-urlencoded',
-			'multipart/form-data',
-		]);
-
 		return $configureActions;
 	}
 
@@ -121,7 +114,7 @@ class File extends BaseObject
 		$source = $sourceResult->getData();
 		/** @var Disk\File $realFile */
 		$realFile = $source['file'];
-		$result = (new SessionService())->acquireWithContent(
+		$result = (new SessionService())->acquire(
 			$realFile,
 			$source['securityContext'],
 			$source['attachedObject'],
@@ -136,7 +129,62 @@ class File extends BaseObject
 
 		return [
 			'state' => $result->getData()['state']->toArray(),
-			'contentBase64' => base64_encode($result->getData()['content']),
+			'aiLock' => (new AiLockService())->getSnapshot((int)$realFile->getId()),
+		];
+	}
+
+	public function getHtmlAiLockStateAction(
+		Disk\File $file,
+		?int $attachedObjectId = null,
+		?string $uniqueCode = null,
+		?string $sessionHash = null,
+	): ?array
+	{
+		$realFile = $file->getRealObject();
+		$shouldCheckUnifiedLink = $realFile instanceof Disk\File
+			&& $this->hasMatchingUniqueCode($realFile, $uniqueCode);
+		$source = (new SourceResolver())->resolve(
+			$file,
+			(int)$this->getCurrentUser()->getId(),
+			$attachedObjectId,
+			$shouldCheckUnifiedLink,
+		);
+		if (!$source->isSuccess())
+		{
+			$this->addErrors($source->getErrors());
+
+			return null;
+		}
+		$resolved = $source->getData();
+		$realFile = $resolved['file'];
+		if (!Configuration::isEnabledHtmlEditor())
+		{
+			$this->addError(new Main\Error('feature_disabled', 'feature_disabled'));
+
+			return null;
+		}
+		if (!Disk\Internal\Service\HtmlViewerPolicy::isViewableFile($realFile))
+		{
+			$this->addError(new Main\Error('unsupported_format', 'unsupported_format'));
+
+			return null;
+		}
+		$session = null;
+		if ($sessionHash !== null)
+		{
+			$state = (new SessionService())->getOwnedState($realFile, $resolved['securityContext'], $sessionHash);
+			if (!$state->isSuccess())
+			{
+				$this->addErrors($state->getErrors());
+
+				return null;
+			}
+			$session = $state->getData()['session'];
+		}
+
+		return [
+			'aiLock' => (new AiLockService())->getSnapshot((int)$realFile->getId()),
+			'session' => $session,
 		];
 	}
 
@@ -145,55 +193,6 @@ class File extends BaseObject
 		$result = $this->finishHtmlSession($file, $sessionHash);
 
 		return $result?->getData();
-	}
-
-	public function saveHtmlEditingSessionAction(
-		Disk\File $file,
-		string $sessionHash,
-		int $globalContentVersion,
-		array $changeSet,
-		?string $uniqueCode = null,
-	): ?array
-	{
-		$realFile = $file->getRealObject();
-		$shouldCheckUnifiedLink = $realFile instanceof Disk\File
-			&& $this->hasMatchingUniqueCode($realFile, $uniqueCode)
-		;
-		$securityContext = $realFile instanceof Disk\File
-			? $realFile->getStorage()?->getSecurityContext(
-				(int)$this->getCurrentUser()->getId(),
-				$shouldCheckUnifiedLink,
-			)
-			: null
-		;
-		if (!$realFile instanceof Disk\File || $securityContext === null)
-		{
-			$this->addError(new Main\Error('access_denied', 'access_denied'));
-
-			return null;
-		}
-
-		$result = (new SaveService())->save(
-			$realFile,
-			$securityContext,
-			$sessionHash,
-			$globalContentVersion,
-			$changeSet,
-			$shouldCheckUnifiedLink,
-		);
-		if (!$result->isSuccess())
-		{
-			$this->addErrors($result->getErrors());
-
-			return null;
-		}
-
-		return [
-			'ok' => true,
-			'version' => $result->getData()['version'],
-			'contentBase64' => $result->getData()['contentBase64'],
-			'state' => $result->getData()['state']->toArray(),
-		];
 	}
 
 	private function finishHtmlSession(Disk\File $file, string $sessionHash): ?Main\Result
@@ -561,13 +560,6 @@ class File extends BaseObject
 
 	public function generateExternalLinkAction(Disk\File $file)
 	{
-		if (!$this->checkExternalLinkFeature($file))
-		{
-			$this->addError(new Error('Could not generate external link. Feature is disabled by tarif.'));
-
-			return null;
-		}
-
 		return $this->generateExternalLink($file);
 	}
 

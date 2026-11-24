@@ -152,7 +152,7 @@ class QuotaListProvider
 
 		// Dismissal is deactivation, and a service account is nobody to assign a limit to.
 		$query->where(self::USER_RELATION . '.ACTIVE', 'Y');
-		$query->where(self::USER_RELATION . '.IS_REAL_USER', true);
+		$query->where(self::USER_RELATION . '.REAL_USER', 'expr', true);
 
 		$this->applySearch($query, $search);
 

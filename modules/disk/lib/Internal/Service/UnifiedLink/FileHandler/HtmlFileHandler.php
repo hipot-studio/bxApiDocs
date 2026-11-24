@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\DocumentSource;
+use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\HtmlEditorPageService;
 use Bitrix\Disk\Internal\Service\HtmlViewerPageService;
@@ -15,6 +16,7 @@ use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Web\Uri;
 
 /**
  * Opens an html file by its unified link: a trusted portal page with the document in a sandboxed
@@ -53,12 +55,22 @@ class HtmlFileHandler implements HtmlRenderableHandler
 	}
 
 	/**
-	 * A portal with the editor disabled keeps the read-only behavior of its html links.
+	 * A portal with the editor disabled opens the viewer at its own address.
 	 */
 	public function edit(): HandlerOperationResult
 	{
 		if (!Configuration::isEnabledHtmlEditor())
 		{
+			$file = $this->documentSource->getFileFromSource();
+			if ($file !== null)
+			{
+				$viewUrl = Driver::getInstance()->getUrlManager()->getUnifiedLink($file);
+				$uri = new Uri((string)Application::getInstance()->getContext()->getRequest()->getRequestUri());
+				$uri->setPath($viewUrl);
+
+				return HandlerOperationResult::createSuccess('', $uri->getPathQuery());
+			}
+
 			return $this->view();
 		}
 

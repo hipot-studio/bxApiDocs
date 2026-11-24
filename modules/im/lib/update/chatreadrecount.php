@@ -39,10 +39,12 @@ final class ChatReadRecount extends Stepper
 			$params = [
 				'lastId' => 0,
 				'number' => 0,
-				'count' => UserTable::getCount([
-					'=ACTIVE' => true,
-					'=IS_REAL_USER' => true,
-				]),
+				'count' => (int)UserTable::query()
+					->setSelect(['ID'])
+					->where('ACTIVE', true)
+					->where('REAL_USER', 'expr', true)
+					->queryCountTotal()
+				,
 			];
 		}
 
@@ -51,16 +53,15 @@ final class ChatReadRecount extends Stepper
 			$result['steps'] = '';
 			$result['count'] = $params['count'];
 
-			$cursor = UserTable::getList([
-				'select' => ['ID'],
-				'filter' => [
-					'>ID' => $params['lastId'],
-					'=ACTIVE' => true,
-					'=IS_REAL_USER' => true,
-				],
-				'order' => ['ID' => 'ASC'],
-				'limit' => 500
-			]);
+			$cursor = UserTable::query()
+				->setSelect(['ID'])
+				->where('ID', '>', $params['lastId'])
+				->where('ACTIVE', true)
+				->where('REAL_USER', 'expr', true)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(500)
+				->exec()
+			;
 
 			$found = false;
 			$connection = \Bitrix\Main\Application::getInstance()->getConnection();

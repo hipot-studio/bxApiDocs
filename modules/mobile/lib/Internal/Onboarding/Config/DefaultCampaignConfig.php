@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mobile\Internal\Onboarding\Config;
 
+use Bitrix\Main\IO\File;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Json;
 
@@ -73,7 +74,8 @@ class DefaultCampaignConfig
 	 */
 	private static function readDocument(string $path): array
 	{
-		$raw = is_readable($path) ? file_get_contents($path) : false;
+		$file = new File($path);
+		$raw = $file->isExists() && $file->isReadable() ? $file->getContents() : false;
 		if ($raw === false)
 		{
 			self::logFailure('cannot read ' . $path);

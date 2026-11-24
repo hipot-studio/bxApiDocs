@@ -32,6 +32,13 @@ final class KanbanPreparer extends Base
 			return null;
 		}
 
+		// a datetime field rendered for mobile is already a Unix timestamp,
+		// while the raw row value is a string in user time
+		if (is_numeric($item['dateCreate']))
+		{
+			return (int)$item['dateCreate'];
+		}
+
 		return \CCrmDateTimeHelper::getServerTime(new DateTime($item['dateCreate']))->getTimestamp();
 	}
 

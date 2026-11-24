@@ -4,8 +4,8 @@ namespace Bitrix\Im\V2\Link;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
-use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Application;
 
 class Push
@@ -82,8 +82,13 @@ class Push
 			{
 				// RECIPIENT is dropped here on purpose: the tag serves everyone watching the parent
 				// channel, and a comment chat never gets a START_ID border of its own to filter by. The
-				// readers the post is already hidden from are taken off the tag by the publisher.
-				$event['commentChat'] = $chat;
+				// readers the post is already hidden from are taken off the delivery by the border of the
+				// root post - the publication is deferred, so the ids the border is held against are kept
+				// with the event instead of being looked up again when the job runs.
+				$event['comment'] = [
+					'parentChatId' => (int)$chat->getParentChatId(),
+					'postId' => $chat->getParentMessageId(),
+				];
 			}
 			else
 			{
@@ -116,9 +121,13 @@ class Push
 			{
 				\Bitrix\Pull\Event::add($event['recipient'], $event['params']);
 			}
-			if (isset($event['commentChat']))
+			if (isset($event['comment']))
 			{
-				CommentTagPublisher::addToStack($event['commentChat'], $event['params']);
+				Locator::getPullSender()->sendToPostCommentSubscribers(
+					$event['comment']['parentChatId'],
+					$event['comment']['postId'],
+					$event['params']
+				);
 			}
 		}
 		$this->isJobPlanned = false;

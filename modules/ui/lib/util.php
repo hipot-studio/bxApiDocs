@@ -41,6 +41,7 @@ class Util
 			case "ru":
 			case "by":
 			case "kz":
+			case "uz":
 				$helpdeskUrl = static::HELPDESK_DOMAIN['ru'];
 				break;
 

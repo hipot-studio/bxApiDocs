@@ -1,6 +1,6 @@
 <?php
 $MESS["SALE_PS_DESCRIPTION_APPROVED"] = "Төленген";
-$MESS["SALE_PS_DESCRIPTION_CANCELED"] = "Жойылды";
+$MESS["SALE_PS_DESCRIPTION_CANCELED"] = "Болдырылмады";
 $MESS["SALE_PS_DESCRIPTION_DECLINED"] = "Қабылданбады";
 $MESS["SALE_PS_DESCRIPTION_DELAYED"] = "Төлемді растауды күтуде";
 $MESS["SALE_PS_DESCRIPTION_INPROCESS"] = "Орындалуда";

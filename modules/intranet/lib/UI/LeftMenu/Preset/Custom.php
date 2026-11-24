@@ -2,7 +2,7 @@
 
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
-use Bitrix\Intranet\Internal\MainTool\AccessPolicy;
+use Bitrix\Intranet\Internal\Access\MainTool\AccessPolicy;
 use \Bitrix\Main;
 use \Bitrix\Intranet\UI\LeftMenu;
 

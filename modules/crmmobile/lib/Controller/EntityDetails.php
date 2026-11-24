@@ -92,6 +92,8 @@ class EntityDetails extends Controller
 		Conversion\DealConversionWizard::QUERY_PARAM_SRC_ID,
 	];
 
+	private const AHA_MOMENTS_DELAY_AFTER_CREATION_SECONDS = 3600;
+
 	protected function getDefaultPreFilters(): array
 	{
 		return [
@@ -114,6 +116,9 @@ class EntityDetails extends Controller
 			self::getTabActionName('timeline'),
 			'loadTabCounters',
 			'loadToDoNotificationParams',
+			'getRequiredFields',
+			'getEntityTotalAmount',
+			'getEntityDocuments',
 		];
 		foreach ($readActions as $action)
 		{
@@ -149,8 +154,11 @@ class EntityDetails extends Controller
 		return $this->getConfigurator()->toArray();
 	}
 
-	public function loadTabCountersAction(int $entityTypeId, int $entityId): array
+	public function loadTabCountersAction(Item $entity): array
 	{
+		$entityTypeId = $entity->getEntityTypeId();
+		$entityId = $entity->getId();
+
 		return $this->getConfigurator()->mapTabs(function (Tabs\Base $tab) use ($entityTypeId, $entityId)  {
 			$value = 0;
 
@@ -1241,13 +1249,13 @@ class EntityDetails extends Controller
 		return $this->getFactory()->getEntityDescription();
 	}
 
-	public function getEntityTotalAmountAction(int $entityId, int $entityTypeId): array
+	public function getEntityTotalAmountAction(Item $entity): array
 	{
 		/**
 		 * @var PaymentDocumentsRepository $repository
 		 */
 		$repository = ServiceLocator::getInstance()->get('crm.entity.paymentDocumentsRepository');
-		$data = $repository->getDocumentsForEntity($entityTypeId, $entityId)->getData();
+		$data = $repository->getDocumentsForEntity($entity->getEntityTypeId(), $entity->getId())->getData();
 
 		return [
 			'totalAmount' => $data['TOTAL_AMOUNT'] ?? 0,
@@ -1255,13 +1263,13 @@ class EntityDetails extends Controller
 		];
 	}
 
-	public function getEntityDocumentsAction(int $entityId, int $entityTypeId): array
+	public function getEntityDocumentsAction(Item $entity): array
 	{
 		/**
 		 * @var PaymentDocumentsRepository $repository
 		 */
 		$repository = ServiceLocator::getInstance()->get('crm.entity.paymentDocumentsRepository');
-		$data = $repository->getDocumentsForEntity($entityTypeId, $entityId)->getData();
+		$data = $repository->getDocumentsForEntity($entity->getEntityTypeId(), $entity->getId())->getData();
 
 		return [
 			'documents' => $data['DOCUMENTS'] ?? [],
@@ -1322,7 +1330,9 @@ class EntityDetails extends Controller
 		$timeCreated = $entity->getCreatedTime();
 		if ($timeCreated)
 		{
-			return $timeCreated->getDiff(new DateTime())->h > 1;
+			$secondsSinceCreation = (new DateTime())->getTimestamp() - $timeCreated->getTimestamp();
+
+			return $secondsSinceCreation > self::AHA_MOMENTS_DELAY_AFTER_CREATION_SECONDS;
 		}
 
 		return false;

@@ -5,12 +5,14 @@ namespace Bitrix\Im\V2\Message\Send\Push;
 use Bitrix\Im\Text;
 use Bitrix\Im\User;
 use Bitrix\Im\V2\Chat\CommentChat;
+use Bitrix\Im\V2\Folder\Mute\MuteProvider;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlocksBuilder;
 use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
@@ -20,12 +22,20 @@ class MobilePush
 	protected Message $message;
 	protected Message\Send\SendingConfig $config;
 	protected bool $importantPush;
+	private readonly MuteProvider $muteProvider;
+	/** @var array{0: array, 1: array}|null recipients of this send, split once for every group of it */
+	private ?array $pushUsers = null;
 
-	public function __construct(Message $message, Message\Send\SendingConfig $config)
+	public function __construct(
+		Message $message,
+		Message\Send\SendingConfig $config,
+		?MuteProvider $muteProvider = null,
+	)
 	{
 		$this->message = $message;
 		$this->config = $config;
 		$this->importantPush = $this->message->getChat()->getEntityType() === 'ANNOUNCEMENT';
+		$this->muteProvider = $muteProvider ?? ServiceLocator::getInstance()->get(MuteProvider::class);
 	}
 
 	public function sendForGroupMessage(array $group): void
@@ -73,7 +83,10 @@ class MobilePush
 
 		$chat = $this->message->getChat();
 		$relation = $chat->getRelationByUserId($userId);
-		$isNotifyBlocked = $relation && $relation->getNotifyBlock();
+		// The rule of a folder silences the chat for its owner the same way their own mute of it does.
+		$isNotifyBlocked = ($relation && $relation->getNotifyBlock())
+			|| $this->getFolderMutedUserIds([$userId]) !== []
+		;
 
 		$preparedPush['push']['advanced_params']['counter'] = $push['params']['counter'];
 		if ($userId === $this->message->getAuthorId() || $isNotifyBlocked)
@@ -104,7 +117,16 @@ class MobilePush
 		return true;
 	}
 
+	/**
+	 * The split is asked once per group of pull events ({@see self::sendForGroupMessage()}) and does
+	 * not depend on the group, so the send pays for it once.
+	 */
 	protected function getPushUsers(): array
+	{
+		return $this->pushUsers ??= $this->splitPushUsers();
+	}
+
+	private function splitPushUsers(): array
 	{
 		$pushUserSkip = [];
 		$pushUserSend = [];
@@ -121,6 +143,13 @@ class MobilePush
 			$activeUserRelations = $activeUserRelations->filter(fn(Relation $relation) => isset($pushRecipients[(int)$relation->getUserId()]));
 		}
 
+		// One read of the rules for the whole send: the loop below asks about a recipient it already
+		// has the answer for, so a hot path stays one query no matter how many recipients there are.
+		$folderMutedUserIds = $this->importantPush
+			? []
+			: array_fill_keys($this->getFolderMutedUserIds($this->collectRecipientIds($activeUserRelations)), true)
+		;
+
 		foreach ($activeUserRelations as $relation)
 		{
 			if ($relation->getUserId() === $this->message->getActionContextUserId())
@@ -128,7 +157,9 @@ class MobilePush
 				continue;
 			}
 
-			if ($relation->getNotifyBlock() && !$this->importantPush)
+			$isMuted = $relation->getNotifyBlock() || isset($folderMutedUserIds[(int)$relation->getUserId()]);
+
+			if ($isMuted && !$this->importantPush)
 			{
 				$pushUserSkip[] = $relation->getUserId();
 				$pushUserSend[] = $relation->getUserId();
@@ -140,6 +171,44 @@ class MobilePush
 		}
 
 		return [$pushUserSend, $pushUserSkip];
+	}
+
+	/**
+	 * @return int[]
+	 */
+	protected function collectRecipientIds(RelationCollection $relations): array
+	{
+		$userIds = [];
+		foreach ($relations as $relation)
+		{
+			$userIds[] = (int)$relation->getUserId();
+		}
+
+		return $userIds;
+	}
+
+	/**
+	 * Recipients whose folder rule covers this chat. The server decides it alone: the client takes no
+	 * part in whether a notification is shown, so no version of it can change the answer.
+	 *
+	 * @param int[] $userIds
+	 * @return int[]
+	 */
+	protected function getFolderMutedUserIds(array $userIds): array
+	{
+		if ($userIds === [])
+		{
+			return [];
+		}
+
+		$chat = $this->message->getChat();
+
+		return $this->muteProvider->getUsersCoveredByRule(
+			$userIds,
+			(int)$chat->getChatId(),
+			$chat->getRecentSections(),
+			$chat->getParentChatId(),
+		);
 	}
 
 	protected function preparePushForChat(array $params): array

@@ -38,6 +38,7 @@ class RightItem implements JsonSerializable, Arrayable
 
 	protected ?string $iconClass = null;
 	protected ?bool $isClickable = null;
+	protected ?bool $isValueClickable = null;
 	protected ?bool $isDeletable = null;
 	protected ?bool $isNew = null;
 	protected ?bool $isModified = null;
@@ -398,6 +399,18 @@ class RightItem implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function isValueClickable(): ?bool
+	{
+		return $this->isValueClickable;
+	}
+
+	public function setIsValueClickable(?bool $isValueClickable): static
+	{
+		$this->isValueClickable = $isValueClickable;
+
+		return $this;
+	}
+
 	public function isDeletable(): ?bool
 	{
 		return $this->isDeletable;
@@ -468,6 +481,7 @@ class RightItem implements JsonSerializable, Arrayable
 
 			'iconClass' => $this->getIconClass(),
 			'isClickable' => $this->isClickable(),
+			'isValueClickable' => $this->isValueClickable(),
 			'isDeletable' => $this->isDeletable(),
 			'isNew' => $this->isNew(),
 			'isModified' => $this->isModified(),
@@ -634,6 +648,11 @@ class RightItem implements JsonSerializable, Arrayable
 		if (isset($data['isClickable']))
 		{
 			$item->setIsClickable((bool)$data['isClickable']);
+		}
+
+		if (isset($data['isValueClickable']))
+		{
+			$item->setIsValueClickable((bool)$data['isValueClickable']);
 		}
 
 		if (isset($data['isDeletable']))

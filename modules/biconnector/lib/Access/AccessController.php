@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Access\Model\UserAccessItem;
 use Bitrix\BIConnector\Access\Rule\AbstractVariableRule;
 use Bitrix\BIConnector\Access\Rule\BaseRule;
 use Bitrix\BIConnector\Access\Rule\Factory\BIConstructorRuleFactory;
+use Bitrix\BIConnector\Access\Rule\TableRule;
 use Bitrix\BIConnector\Access\Rule\VariableRule;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\Main\Access\AccessibleItem;
@@ -102,8 +103,12 @@ final class AccessController extends BaseAccessController
 		}
 	}
 
-	/** @internal Runs the original VIEW dispatch with a chart-local loader scope. */
-	public function checkWithDashboardBatch(DashboardAccessItem $item, DashboardAclBatch $batch): bool
+	/** @internal Runs the requested dispatch with a chart-local loader scope. */
+	public function checkWithDashboardBatch(
+		DashboardAccessItem $item,
+		DashboardAclBatch $batch,
+		string $action = ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
+	): bool
 	{
 		$batch->refresh();
 		$previousBatch = $this->dashboardBatch;
@@ -114,7 +119,7 @@ final class AccessController extends BaseAccessController
 		$this->dashboardBatchDepth = $this->checkDepth + 1;
 		try
 		{
-			$result = $this->check(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $item);
+			$result = $this->check($action, $item);
 			$batch->refresh();
 			if ($this->dashboardBatch !== null && !$batch->isLegacy())
 			{
@@ -214,5 +219,25 @@ final class AccessController extends BaseAccessController
 		$params = ['action' => $action];
 
 		return $ruleObject->getPermissionAllowedGroupIds($params);
+	}
+
+	/**
+	 * Codes of the tables the user may access by the action, the overrides of his roles included.
+	 *
+	 * @param string $action
+	 *
+	 * @return string[]|null Null when the action is not one of the table axis.
+	 */
+	public function getAllowedTableValue(string $action): ?array
+	{
+		$ruleObject = $this->ruleFactory->createFromAction($action, $this);
+		if (!$ruleObject instanceof TableRule)
+		{
+			return null;
+		}
+
+		$params = ['action' => $action];
+
+		return $ruleObject->getPermissionAllowedTableCodes($params);
 	}
 }

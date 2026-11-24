@@ -6,10 +6,13 @@ namespace Bitrix\Im\V2\Pull;
 
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\TariffLimit\Limit;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Security\Random;
+use Bitrix\Main\Type\DateTime;
 use CPullWatch;
 
 /**
@@ -76,6 +79,8 @@ final class CommentTagPublisher
 
 	/** @var array<int, string> The version the answers of a channel are read under, for the process. */
 	private static array $versions = [];
+	/** @var array<int, bool> Whether the root post is available within the portal history limit. */
+	private static array $postsWithinHistoryLimit = [];
 
 	public static function tag(int $parentChatId): string
 	{
@@ -106,6 +111,10 @@ final class CommentTagPublisher
 
 		$parentMessageId = $chat->getParentMessageId();
 		$channel = $chat->getParentChat();
+		if (!self::isPostWithinHistoryLimit($parentMessageId))
+		{
+			return true;
+		}
 
 		// The post is behind the border of the channel itself, so it is unreachable for everyone and the
 		// comment chat is on its way out with the scheduled cleanup. Nobody on the tag may have this.
@@ -138,6 +147,25 @@ final class CommentTagPublisher
 		}
 
 		return CPullWatch::AddToStack($tag, $pull);
+	}
+
+	private static function isPostWithinHistoryLimit(int $postId): bool
+	{
+		return self::$postsWithinHistoryLimit[$postId] ??= self::weighPostAgainstHistoryLimit($postId);
+	}
+
+	private static function weighPostAgainstHistoryLimit(int $postId): bool
+	{
+		$limit = Limit::getInstance();
+
+		if (!$limit->hasRestrictions())
+		{
+			return true;
+		}
+
+		$post = new Message($postId);
+
+		return $limit->hasAccessByDate($post, $post->getDateCreate() ?? new DateTime());
 	}
 
 	/**

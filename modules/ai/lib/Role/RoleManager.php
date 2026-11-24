@@ -143,6 +143,15 @@ class RoleManager
 			$cache->store($roles);
 		}
 
+		if (isset($roles[self::UNIVERSAL_ROLE_CODE]))
+		{
+			$universalRole = new Role([
+				'CODE' => self::UNIVERSAL_ROLE_CODE,
+				'AVATAR' => $roles[self::UNIVERSAL_ROLE_CODE],
+			]);
+			$roles[self::UNIVERSAL_ROLE_CODE] = $universalRole->getAvatar();
+		}
+
 		if (empty($roleCodes))
 		{
 			return $roles;
@@ -231,9 +240,10 @@ class RoleManager
 	}
 
 	/**
-	 * Get list of recommended roles
+	 * Get list of active recommended roles whose availability rules pass for the manager's language.
+	 * Up to $limit * 2 rows are fetched before filtering, so the result may contain more than $limit roles.
 	 *
-	 * @param int $limit
+	 * @param int $limit Negative values fall back to 10; 0 means no limit.
 	 *
 	 * @return array
 	 */
@@ -416,9 +426,9 @@ class RoleManager
 	}
 
 	/**
-	 * Save role code to recent role table.
+	 * Save role code to recent role table. The copilot_chat_mention role is not recorded.
 	 *
-	 * @param Prompt\Role $role role code.
+	 * @param Prompt\Role $role
 	 * @return void
 	 */
 	public function addRecentRole(Prompt\Role $role): void
@@ -451,7 +461,7 @@ class RoleManager
 	}
 
 	/**
-	 * Get list of recent used roles
+	 * Get list of recent used roles, newest first; the universal and copilot_assistant_chat roles are excluded.
 	 *
 	 * @return array
 	 */
@@ -495,7 +505,7 @@ class RoleManager
 	/**
 	 * Add role to favorite role table.
 	 *
-	 * @param Prompt\Role $role role code.
+	 * @param Prompt\Role $role
 	 *
 	 * @return void
 	 */
@@ -524,7 +534,7 @@ class RoleManager
 	/**
 	 * Remove role code from favorite role table.
 	 *
-	 * @param Prompt\Role $role role code.
+	 * @param Prompt\Role $role
 	 *
 	 * @return void
 	 */

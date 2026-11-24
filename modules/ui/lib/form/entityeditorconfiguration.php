@@ -152,7 +152,8 @@ class EntityEditorConfiguration
 		{
 			Scope::getInstance()->updateScopeConfig(
 				$userScopeId,
-				$config
+				$config,
+				$this->getEventId($params)
 			);
 		}
 
@@ -185,6 +186,17 @@ class EntityEditorConfiguration
 				}
 			}
 			//todo check what to do with options for custom scopes
+		}
+
+		// custom scope change is reported by Scope::updateScopeConfig
+		if ($scope === EntityEditorConfigScope::COMMON)
+		{
+			$this->sendChangeEvent($configID, $scope, null, ConfigurationChangeEvent::KIND_LAYOUT, $params);
+		}
+		elseif ($scope === EntityEditorConfigScope::PERSONAL && ($forAllUsers || $this->userId))
+		{
+			$userIds = $forAllUsers ? null : [$this->userId];
+			$this->sendChangeEvent($configID, $scope, $userIds, ConfigurationChangeEvent::KIND_LAYOUT, $params);
 		}
 	}
 
@@ -246,6 +258,20 @@ class EntityEditorConfiguration
 			}
 		}
 
+		if ($scope === EntityEditorConfigScope::COMMON)
+		{
+			$this->sendChangeEvent($configID, $scope, null, ConfigurationChangeEvent::KIND_RESET, $params);
+		}
+		elseif ($forAllUsers || $this->userId)
+		{
+			$this->sendChangeEvent(
+				$configID,
+				EntityEditorConfigScope::PERSONAL,
+				$forAllUsers ? null : [$this->userId],
+				ConfigurationChangeEvent::KIND_RESET,
+				$params,
+			);
+		}
 	}
 
 	public function setScope($configID, $scope)
@@ -258,6 +284,8 @@ class EntityEditorConfiguration
 		if ($this->userId)
 		{
 			\CUserOptions::SetOption($this->getCategoryName(), $this->prepareScopeName($configID), $scope, false, $this->userId);
+
+			$this->sendChangeEvent($configID, $scope, [$this->userId], ConfigurationChangeEvent::KIND_ASSIGNMENT);
 		}
 	}
 
@@ -288,10 +316,43 @@ class EntityEditorConfiguration
 		{
 			\CUserOptions::DeleteOptionsByName($categoryName, $scopeName);
 		}
+
+		$this->sendChangeEvent(
+			$configID,
+			EntityEditorConfigScope::COMMON,
+			null,
+			ConfigurationChangeEvent::KIND_ASSIGNMENT,
+		);
 	}
 
 	private function isAvailableScopeType(string $type): bool
 	{
 		return in_array($type, self::AVAILABLE_SCOPE_TYPES, true);
+	}
+
+	private function sendChangeEvent(
+		$configID,
+		string $scope,
+		?array $userIds,
+		string $kind,
+		array $params = [],
+	): void
+	{
+		ConfigurationChangeEvent::send(
+			$this->getCategoryName(),
+			(string)$configID,
+			$scope,
+			0,
+			$userIds,
+			$kind,
+			$this->getEventId($params),
+		);
+	}
+
+	private function getEventId(array $params): ?string
+	{
+		$eventId = $params['eventId'] ?? null;
+
+		return (is_string($eventId) && $eventId !== '') ? $eventId : null;
 	}
 }

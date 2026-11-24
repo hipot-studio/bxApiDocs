@@ -9,6 +9,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\Internals\Path;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Public\Provider\ExternalLinkTariffProvider;
 use Bitrix\Disk\Sharing;
 use Bitrix\Disk\SpecificFolder;
 use Bitrix\Disk\Storage;
@@ -49,6 +50,7 @@ class DiskStorage extends AbstractStorage
 	/** @var \Bitrix\Main\DB\Connection */
 	protected $connection;
 	protected ExternalLinkProvider $externalLinkProvider;
+	protected ExternalLinkTariffProvider $externalLinkTariffProvider;
 	private $cacheBreadcrumbs = array();
 	private $errorCollection = array();
 	/** @var array */
@@ -67,6 +69,7 @@ class DiskStorage extends AbstractStorage
 		$this->userId = User::resolveUserId($user?: $USER);
 		$this->connection = Application::getConnection();
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+		$this->externalLinkTariffProvider = ServiceLocator::getInstance()->get(ExternalLinkTariffProvider::class);
 
 		Application::getInstance()->addBackgroundJob([$this, 'finalize']);
 	}
@@ -1405,6 +1408,16 @@ class DiskStorage extends AbstractStorage
 		}
 
 		$extModel = $this->externalLinkProvider->getForUse($object->getRealObjectId());
+
+		if(!$extModel && !$this->externalLinkTariffProvider->isManualLinkCreationAllowed($object))
+		{
+			$this->errorCollection[] = new Error(
+				'External link is disabled by tariff',
+				181557
+			);
+
+			return false;
+		}
 
 		if(!$extModel)
 		{

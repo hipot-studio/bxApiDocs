@@ -50,8 +50,8 @@ trait BuilderOperationSupport
 
 	/**
 	 * Data of a successful operation. A refusal is rebuilt from the code and the text of its first error
-	 * only: whatever else the operation keeps in the result never reaches the client. The one exception is
-	 * retryAfter of an Unavailable refusal: the client waits that many seconds before it repeats the call.
+	 * only, plus the allowed access reason or retryAfter of an Unavailable refusal. Other operation data
+	 * never reaches the client.
 	 *
 	 * @param int|null $entityId The record the request addresses; a NotFound lookup may name a related record.
 	 */
@@ -76,6 +76,14 @@ trait BuilderOperationSupport
 		if ($retryAfter !== null && $result->getErrors()[0]->getCode() === FailureCode::Unavailable->value)
 		{
 			$refusal->setData(['retryAfter' => $retryAfter]);
+		}
+		$reason = $result->getData()['reason'] ?? null;
+		if (
+			$result->getErrors()[0]->getCode() === FailureCode::AccessDenied->value
+			&& BuilderAccessDeniedException::isPublicReason($reason)
+		)
+		{
+			$refusal->setData(['reason' => $reason]);
 		}
 
 		return $this->requireResultData($refusal, $entityId);

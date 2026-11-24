@@ -23,6 +23,7 @@ use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\RuleDto;
 use Bitrix\BizprocDesigner\Infrastructure\Enum\ConstructionType;
 use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ConvertRuleCommand;
 use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ConvertRuleCommandResult;
+use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Exception\CommandValidateException;
 use Bitrix\BizprocDesigner\Internal\Entity\ActivityData;
 use Bitrix\BizprocDesigner\Internal\Entity\AgentPortDefault;
@@ -99,6 +100,8 @@ final class AiAssistantDraftConverterService
 	private array $passthroughSettingNamesCache = [];
 	/** @var array<string, array<string, mixed>> enforced setting values per (normalized code, document type) */
 	private array $enforcedSettingValuesCache = [];
+	/** @var array<string, array<string, mixed>> node capabilities per (block type, preset, feature gate) */
+	private array $nodeCapabilitiesCache = [];
 	/**
 	 * Whether the identifiers of the graph being converted were judged by the grammar on the way in
 	 * ({@see self::makeActivityId}). Read from the profile of the entry rather than from the source itself, so
@@ -175,6 +178,9 @@ final class AiAssistantDraftConverterService
 	): BlockCollection
 	{
 		$iconMap = $this->metadataResolver->getIconMap();
+		// Read once for the whole graph and passed by value, as the normal load takes it
+		// ({@see \Bitrix\Bizproc\Workflow\Template\Converter\TemplateToNodes::__construct()}).
+		$featureAvailable = Feature::instance()->areComplexNodeConnectionsAvailable();
 		$positions = (new TopologyLayoutEngine())->compute($blocks, $connections);
 		$blocksById = $this->indexById($blocks);
 		$collection = new BlockCollection();
@@ -202,10 +208,26 @@ final class AiAssistantDraftConverterService
 
 			// A frame overlay carries no ports/dialog; its geometry is the bounding box of the members it
 			// groups (server-computed), so it is assembled by a dedicated branch rather than the activity path.
+			// Its capabilities are resolved without the preset: the saved activity of a frame carries no
+			// PresetId, so a read of the template answers them by the class alone.
 			if ($nodeType === NodeType::Frame)
 			{
 				$collection->add(
-					$this->makeFrameBlock($block, $activityId, (string)$activityType, $systemName, $iconEntry, $positions, $blocksById),
+					$this->makeFrameBlock(
+						block: $block,
+						activityId: $activityId,
+						activityType: (string)$activityType,
+						systemName: $systemName,
+						iconEntry: $iconEntry,
+						positions: $positions,
+						blocksById: $blocksById,
+						capabilities: $this->resolveNodeCapabilities(
+							$block->type,
+							(string)$activityType,
+							null,
+							$featureAvailable,
+						),
+					),
 				);
 
 				continue;
@@ -213,6 +235,12 @@ final class AiAssistantDraftConverterService
 
 			$isComplex = $nodeType === NodeType::Complex && $block->rules !== null;
 			$dimensions = $this->resolveBlockDimensions($block, $activityId, $boundBlocks);
+			$capabilities = $this->resolveNodeCapabilities(
+				$block->type,
+				(string)$activityType,
+				$presetId,
+				$featureAvailable,
+			);
 
 			$collection->add(
 				new Block(
@@ -239,6 +267,10 @@ final class AiAssistantDraftConverterService
 						),
 					colorIndex: isset($iconEntry['colorIndex']) ? (int)$iconEntry['colorIndex'] : null,
 					contentBlockColor: isset($iconEntry['contentBlockColor']) ? (int)$iconEntry['contentBlockColor'] : null,
+					servedByUnifiedPanel: $capabilities['servedByUnifiedPanel'],
+					shouldShowAuxPorts: $capabilities['shouldShowAuxPorts'],
+					relationsAvailable: $capabilities['relationsAvailable'],
+					defaultTitle: $capabilities['defaultTitle'],
 				),
 			);
 		}
@@ -252,6 +284,13 @@ final class AiAssistantDraftConverterService
 	 * collection, so the port fallback never synthesises i0/o0), keeps the top-level frame type the frontend
 	 * needs for z-order, and its node.frame* styling layers the agent overrides over the shared defaults
 	 * ({@see FrameData}). The membership itself is a validated logical set - only the geometry is derived here.
+	 *
+	 * @param array{
+	 *     servedByUnifiedPanel: bool,
+	 *     shouldShowAuxPorts: bool,
+	 *     relationsAvailable: bool,
+	 *     defaultTitle: string|null
+	 * } $capabilities {@see self::resolveNodeCapabilities()}
 	 */
 	private function makeFrameBlock(
 		AgentBlock $block,
@@ -261,6 +300,7 @@ final class AiAssistantDraftConverterService
 		array $iconEntry,
 		array $positions,
 		array $blocksById,
+		array $capabilities,
 	): Block
 	{
 		$rect = FrameGeometry::boundingBox($this->collectMemberRects($block->memberBlockIds, $positions, $blocksById));
@@ -287,6 +327,10 @@ final class AiAssistantDraftConverterService
 				colorName: $block->frameColorName,
 				content: $block->frameContent,
 			),
+			servedByUnifiedPanel: $capabilities['servedByUnifiedPanel'],
+			shouldShowAuxPorts: $capabilities['shouldShowAuxPorts'],
+			relationsAvailable: $capabilities['relationsAvailable'],
+			defaultTitle: $capabilities['defaultTitle'],
 		);
 	}
 
@@ -447,6 +491,70 @@ final class AiAssistantDraftConverterService
 	private function describeActivity(string $activityType, ?string $presetId): ?ActivityDescription
 	{
 		return $this->getNodeTopologyResolver()->describe($activityType, $presetId);
+	}
+
+	/**
+	 * Capabilities of the node the editor reads off the block itself: the settings surface serving it, its aux
+	 * ports, its relations block and the title of its palette card. They are resolved from the same descriptors
+	 * and behind the same rollout gate as on the normal load of a template
+	 * ({@see \Bitrix\Bizproc\Workflow\Template\Converter\TemplateToNodes}) - this is the one place answering
+	 * both transports of the agent, because the draft of Marta is never saved and cannot be re-read.
+	 *
+	 * Keyed as the maps there are: the surface by the class of the activity (a preset never changes the panel
+	 * serving a node), everything else by the preset-applied description. An activity the portal does not know
+	 * keeps the neutral default, as it does on that load.
+	 *
+	 * The answer is fully decided by the arguments, so it is memoised per graph the way the descriptions
+	 * themselves are ({@see NodeTopologyResolver}): a graph of 256 blocks of one type resolves once. Every
+	 * argument enters the key, the activity class included - a preset carrying a class of its own would
+	 * otherwise be served the surface of the class resolved before it. The gate belongs to the key rather than
+	 * to the instance - the service lives in the container and outlives a single conversion.
+	 *
+	 * @return array{
+	 *     servedByUnifiedPanel: bool,
+	 *     shouldShowAuxPorts: bool,
+	 *     relationsAvailable: bool,
+	 *     defaultTitle: string|null
+	 * }
+	 */
+	private function resolveNodeCapabilities(
+		string $blockType,
+		string $activityCode,
+		?string $presetId,
+		bool $featureAvailable,
+	): array
+	{
+		$cacheKey = $blockType
+			. '#' . ($presetId ?? '')
+			. '#' . $activityCode
+			. '#' . ($featureAvailable ? '1' : '0')
+		;
+		if (isset($this->nodeCapabilitiesCache[$cacheKey]))
+		{
+			return $this->nodeCapabilitiesCache[$cacheKey];
+		}
+
+		$baseDescription = $this->describeActivity($blockType, null);
+		$description = $presetId === null ? $baseDescription : $this->describeActivity($blockType, $presetId);
+
+		return $this->nodeCapabilitiesCache[$cacheKey] = [
+			// The provider is asked with the gate of this conversion rather than through
+			// Internal\Service\Activity\UnifiedPanelSurfaceAvailability, which reads the flag itself: one graph
+			// must be answered by one gate, and that is also how the normal load asks the same question.
+			'servedByUnifiedPanel' => $baseDescription !== null
+				&& BizprocContainer::instance()->getUnifiedPanelDescriptorProvider()->isSurfaceAvailableForNode(
+					$activityCode,
+					$baseDescription,
+					$featureAvailable,
+				),
+			'shouldShowAuxPorts' => $description?->getNodeSettings()?->ports?->aux !== null,
+			'relationsAvailable' => $description !== null
+				&& BizprocContainer::instance()->getCapabilityCatalogService()->getRelationsAvailabilityForNode(
+					$description,
+					$featureAvailable,
+				),
+			'defaultTitle' => $description?->getName(),
+		];
 	}
 
 	private function getNodeTopologyResolver(): NodeTopologyResolver

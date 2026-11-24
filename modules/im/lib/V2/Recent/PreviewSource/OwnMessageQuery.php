@@ -4,17 +4,16 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Recent\PreviewSource;
 
 use Bitrix\Im\Model\ChatParamTable;
-use Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageUnreadTable;
-use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Query;
 
 /**
- * Queries messages belonging directly to a chat (CHAT_ID == chatId), excluding its thread/comment
- * children which live under a different CHAT_ID. "Own" means "belonging to the chat", not "authored
- * by the user".
+ * Asks about the messages belonging directly to a chat, excluding its thread/comment children which
+ * live under a different CHAT_ID. "Own" means "belonging to the chat", not "authored by the user";
+ * the last own message is the one the chat row itself names, the unread ones are counted per member.
  */
 class OwnMessageQuery
 {
@@ -34,15 +33,20 @@ class OwnMessageQuery
 		;
 
 		$value = $row ? (int)$row['MAX_MESSAGE_ID'] : 0;
+		if ($value <= 0)
+		{
+			return null;
+		}
 
-		return $this->skipBehindHistoryBorder($chatId, $value > 0 ? $value : null);
+		return $this->filterWithinHistoryBorder([$chatId => $value])[$chatId] ?? null;
 	}
 
 	/**
 	 * Batched {@see freshestUnread} with the same semantics and filters, for the member fan-out: every
 	 * member of a chunk asks about the one chat their ranking has picked, and the whole batch costs one
 	 * aggregated statement rather than one per chat the members picked. The borders are read for the
-	 * whole batch at once, the way {@see lastOwnBatch} reads them.
+	 * whole batch at once, the way {@see filterWithinHistoryBorder} reads them; a map keyed by member
+	 * cannot go through that cut itself, because two members may ask about one chat with two answers.
 	 *
 	 * @param array<int,int> $chatIdByUser map userId => the chat this member asks about
 	 * @return array<int,int> map userId => freshest unread MESSAGE_ID; members without one are absent
@@ -145,24 +149,20 @@ class OwnMessageQuery
 		return $freshestByUser;
 	}
 
+	/**
+	 * Single-chat {@see lastOwnBatch}: the batch is the only shape of the read, so the two cannot drift
+	 * apart on a chat that has no border - or no row - to read.
+	 */
 	public function lastOwn(int $chatId): ?int
 	{
-		$row = MessageTable::query()
-			->setSelect(['MAX_ID' => new ExpressionField('MAX_ID', 'MAX(%s)', ['ID'])])
-			->where('CHAT_ID', $chatId)
-			->fetch()
-		;
-
-		$value = $row ? (int)$row['MAX_ID'] : 0;
-
-		return $this->skipBehindHistoryBorder($chatId, $value > 0 ? $value : null);
+		return $this->lastOwnBatch([$chatId])[$chatId] ?? null;
 	}
 
 	/**
-	 * Batched {@see lastOwn} with the same semantics and filters. The borders are read for the whole
-	 * batch at once rather than per chat: a chat instance carries no parameters of its own, so the
-	 * per-chat form would load a chat and a parameter set for every candidate on top of the one
-	 * aggregated statement.
+	 * The last message of every chat of a batch, taken from the LAST_MESSAGE_ID the chat row carries
+	 * rather than from an aggregate over the messages: the branch asking this walks every candidate of
+	 * a collab, and a range of the PRIMARY does not grow with the messages the project has written,
+	 * while a grouped MAX() over b_im_message does.
 	 *
 	 * @param int[] $chatIds
 	 * @return array<int,int> map chatId => last own MESSAGE_ID; chats without an own message are absent
@@ -175,32 +175,45 @@ class OwnMessageQuery
 			return [];
 		}
 
-		$rows = MessageTable::query()
-			->setSelect([
-				'CHAT_ID',
-				'MAX_ID' => new ExpressionField('MAX_ID', 'MAX(%s)', ['ID']),
-			])
-			->whereIn('CHAT_ID', $chatIds)
-			->setGroup(['CHAT_ID'])
+		$rows = ChatTable::query()
+			->setSelect(['ID', 'LAST_MESSAGE_ID'])
+			->whereIn('ID', $chatIds)
+			->where('LAST_MESSAGE_ID', '>', 0)
 			->fetchAll()
 		;
 
 		$lastOwnByChat = [];
 		foreach ($rows as $row)
 		{
-			$chatId = (int)$row['CHAT_ID'];
-			$messageId = (int)$row['MAX_ID'];
-
-			if ($chatId > 0 && $messageId > 0)
-			{
-				$lastOwnByChat[$chatId] = $messageId;
-			}
+			$lastOwnByChat[(int)$row['ID']] = (int)$row['LAST_MESSAGE_ID'];
 		}
 
-		$borders = $this->readHistoryBorders(array_keys($lastOwnByChat));
+		return $this->filterWithinHistoryBorder($lastOwnByChat);
+	}
+
+	/**
+	 * The entries whose message is still readable. The message handed in is the newest one its chat
+	 * has, so a message behind the history border means everything the chat holds is behind it and
+	 * there is nothing left to preview. Without this the resolver would pick a message cleared for
+	 * everyone, which stays physically in the table until the scheduled cleanup reaches it.
+	 *
+	 * A chat with no border row keeps whatever the caller found, the way a chat that does not exist
+	 * does: neither has a border to stand behind.
+	 *
+	 * @param array<int,int> $messageIdByChat map chatId => the newest MESSAGE_ID found for the chat
+	 * @return array<int,int> the same map without the chats standing entirely behind their border
+	 */
+	public function filterWithinHistoryBorder(array $messageIdByChat): array
+	{
+		if (empty($messageIdByChat))
+		{
+			return [];
+		}
+
+		$borders = $this->readHistoryBorders(array_keys($messageIdByChat));
 
 		$result = [];
-		foreach ($lastOwnByChat as $chatId => $messageId)
+		foreach ($messageIdByChat as $chatId => $messageId)
 		{
 			if ($messageId >= ($borders[$chatId] ?? 0))
 			{
@@ -215,8 +228,7 @@ class OwnMessageQuery
 	 * The borders of a whole batch in one range over IX_B_IM_CHAT_PARAM_1 (CHAT_ID, PARAM_NAME). Read
 	 * from the table rather than from the chats for the reason
 	 * {@see \Bitrix\Im\V2\Chat\Cleanup\ChatHistoryCleanupAgent::readHistoryBorder()} gives: a border
-	 * written by another hit has to be seen. A chat with no border row keeps whatever the query found,
-	 * the way a chat that does not exist does.
+	 * written by another hit has to be seen.
 	 *
 	 * @param int[] $chatIds
 	 * @return array<int,int> map chatId => HISTORY_START_ID; chats without a border are absent
@@ -244,28 +256,5 @@ class OwnMessageQuery
 		}
 
 		return $borders;
-	}
-
-	/**
-	 * MAX() is the newest message the chat has, so a MAX behind the history border means everything the
-	 * chat holds is behind it and there is nothing left to preview. Without this the resolver would pick
-	 * a message cleared for everyone, which stays physically in the table until the scheduled cleanup
-	 * reaches it. A chat that does not exist keeps whatever the query found: it has no border to read.
-	 */
-	private function skipBehindHistoryBorder(int $chatId, ?int $messageId): ?int
-	{
-		if ($messageId === null || $messageId <= 0)
-		{
-			return null;
-		}
-
-		$chat = Chat::getInstance($chatId);
-
-		if ($chat instanceof Chat\NullChat)
-		{
-			return $messageId;
-		}
-
-		return $chat->isMessageBehindHistoryBorder($messageId) ? null : $messageId;
 	}
 }

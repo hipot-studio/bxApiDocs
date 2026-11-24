@@ -25,13 +25,12 @@ class Shared extends BaseFileList
 	 */
 	public function getChildrenAction(string $search = null, array $extra = []): ?array
 	{
-		/** @var array|null $page */
 		$page = $this->forward(
 			\Bitrix\Disk\Controller\CommonStorage::class,
 			'getChildren',
 		);
 
-		if (!$this->errorCollection->isEmpty())
+		if (!$this->errorCollection->isEmpty() || !$page instanceof Page)
 		{
 			return null;
 		}

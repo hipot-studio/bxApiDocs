@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\BIConnector\Integration\Crm;
 
+use Bitrix\BIConnector\DataSource\FieldKind;
 use Bitrix\Main\Localization\Loc;
 
 class DealStageHistory
@@ -68,6 +69,7 @@ class DealStageHistory
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'DSH.TYPE_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				//OWNER_ID INT(1) UNSIGNED NOT NULL,
 				'DEAL_ID' => [
@@ -109,6 +111,7 @@ class DealStageHistory
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'DSH.RESPONSIBLE_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -130,6 +133,8 @@ class DealStageHistory
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'DR.VALUE_STR',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DEPARTMENT,
+					FieldKind::KEY_OWNER => 'ASSIGNED_BY_ID',
 					'TABLE_ALIAS' => 'DR',
 					'JOIN' => 'INNER JOIN b_biconnector_dictionary_data DR ON DR.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_DEPARTMENT . ' AND DR.VALUE_ID = DSH.RESPONSIBLE_ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_biconnector_dictionary_data DR ON DR.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_DEPARTMENT . ' AND DR.VALUE_ID = DSH.RESPONSIBLE_ID',
@@ -172,6 +177,7 @@ class DealStageHistory
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'DSH.STAGE_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				'STAGE_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'

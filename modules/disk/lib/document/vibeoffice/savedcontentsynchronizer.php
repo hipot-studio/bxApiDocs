@@ -6,11 +6,14 @@ namespace Bitrix\Disk\Document\Vibeoffice;
 
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Document\Vibeoffice\Models\PlatformSessionTable;
+use Bitrix\Disk\Document\Vibeoffice\Models\SavedSnapshotTable;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientFactory;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientInterface;
 use Bitrix\Disk\Document\Vibeoffice\Webhook\DeliveryTable;
 use Bitrix\Disk\Document\Vibeoffice\Webhook\WebhookProcessor;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\ConnectionPool;
@@ -34,7 +37,6 @@ final class SavedContentSynchronizer
 	private const POLL_INTERVAL_MS = 300;
 	private const POLL_INTERVAL_GROWTH = 2;
 	private const POLL_INTERVAL_MAX_FACTOR = 4;
-	private const RECENT_NON_ACTIVE_SESSION_MAX_AGE_SEC = 60;
 
 	private const CONFLICT_STATUS = 409;
 	private const RESULT_NOT_MODIFIED = 'not_modified';
@@ -75,14 +77,21 @@ final class SavedContentSynchronizer
 	 *
 	 * Only one request of a document waits: the one that takes the sync lock. The other viewers
 	 * return the current version at once and get the newer one by the contentUpdated pull command.
+	 * A supplied opening budget bounds both the save requests and all subsequent polling.
 	 *
 	 * @return Result data: globalContentVersion, savingInProgress
 	 */
-	public function synchronize(File $file): Result
+	public function synchronize(File $file, ?OpeningBudget $budget = null): Result
 	{
+		if ($budget !== null && ($budget->remainingMs() <= 0
+			|| DocumentStateRepository::hasOpenTransaction() || DocumentStateRepository::holdsAnyLock()))
+		{
+			return (new Result())->addError($this->createTimeoutError());
+		}
 		$fileId = (int)$file->getRealObjectId();
 		$result = new Result();
-		$sessionsByKey = $this->selectSessionsByKey($fileId, $result);
+		$openedContentBaselines = [];
+		$sessionsByKey = $this->selectSessionsByKey($fileId, $result, $openedContentBaselines);
 		if ($sessionsByKey === [])
 		{
 			return $result->isSuccess() ? $this->currentVersionResult($fileId, false) : $result;
@@ -96,7 +105,7 @@ final class SavedContentSynchronizer
 
 		try
 		{
-			$failure = $this->waitAsInitiator($fileId, $sessionsByKey, $result);
+			$failure = $this->waitAsInitiator($fileId, $sessionsByKey, $result, $openedContentBaselines, $budget);
 		}
 		finally
 		{
@@ -115,33 +124,29 @@ final class SavedContentSynchronizer
 	 *
 	 * @return array<string, DocumentSession> the session to synchronize of each document key
 	 */
-	private function selectSessionsByKey(int $fileId, Result $result): array
+	private function selectSessionsByKey(int $fileId, Result $result, array &$openedContentBaselines): array
 	{
-		$sessions = DocumentSession::getModelList([
-			'select' => ['ID', 'EXTERNAL_HASH', 'STATUS', 'CONTEXT', 'CREATE_TIME'],
-			'filter' => [
-				'=OBJECT_ID' => $fileId,
-				'=VERSION_ID' => null,
-				'=TYPE' => DocumentSession::TYPE_EDIT,
-				'=SERVICE' => DocumentService::Vibeoffice->value,
-				[
-					'LOGIC' => 'OR',
-					['=STATUS' => DocumentSession::STATUS_ACTIVE],
-					[
-						'=STATUS' => DocumentSession::STATUS_NON_ACTIVE,
-						'>=CREATE_TIME' => DateTime::createFromTimestamp(
-							time() - self::RECENT_NON_ACTIVE_SESSION_MAX_AGE_SEC,
-						),
-					],
-				],
-			],
-			'order' => ['ID' => 'DESC'],
-		]);
+		$sessions = iterator_to_array((new SavedEditSessionSelector())->iterate($fileId), false);
+
+		$now = (new DateTime())->getTimestamp();
+		$candidateKeys = [];
+		foreach ($sessions as $session)
+		{
+			$key = $this->getRefusalCandidateKey($session, $fileId, $now);
+			if ($key !== null)
+			{
+				$candidateKeys[$session->getId()] = $key;
+			}
+		}
+		$registryResult = (new SessionRegistry())->getOpenRowsBySessionIds(array_keys($candidateKeys));
+		$rowsBySessionId = $registryResult->isSuccess()
+			? $registryResult->getData()['rowsBySessionId'] : [];
 
 		$sessionsByKey = [];
 		foreach ($sessions as $session)
 		{
-			if (!$session->isActive() && !$this->isRecentNonActiveSession($session))
+			$id = (int)$session->getId();
+			if (isset($candidateKeys[$id]) && $this->hasOnlyRefusedRows($rowsBySessionId[$id] ?? [], $id, $candidateKeys[$id]))
 			{
 				continue;
 			}
@@ -150,12 +155,29 @@ final class SavedContentSynchronizer
 			if ($docKey === '')
 			{
 				$result->addError(new Error('The document key is unavailable.', 'vibeoffice_sync_key_missing'));
+
 				continue;
 			}
 
 			if (!isset($sessionsByKey[$docKey]) || (!$sessionsByKey[$docKey]->isActive() && $session->isActive()))
 			{
 				$sessionsByKey[$docKey] = $session;
+			}
+			if ($session->isActive())
+			{
+				$baseline = DocumentSessionManager::extractVoMetadata($session)[
+					DocumentSessionManager::CONTEXT_VO_OPENED_CONTENT_VERSION_KEY
+				] ?? null;
+				if (!is_int($baseline) || $baseline < 0)
+				{
+					$openedContentBaselines[$docKey] = null;
+				}
+				elseif (!array_key_exists($docKey, $openedContentBaselines)
+					|| $openedContentBaselines[$docKey] !== null)
+				{
+					// Carrier IDs do not order platform opens of sessions sharing a key.
+					$openedContentBaselines[$docKey] = max($baseline, $openedContentBaselines[$docKey] ?? 0);
+				}
 			}
 		}
 
@@ -168,18 +190,31 @@ final class SavedContentSynchronizer
 	 * @param array<string, DocumentSession> $sessionsByKey
 	 * @return Result|null a failure that ends the synchronization at once
 	 */
-	private function waitAsInitiator(int $fileId, array $sessionsByKey, Result $result): ?Result
+	private function waitAsInitiator(
+		int $fileId,
+		array $sessionsByKey,
+		Result $result,
+		array $openedContentBaselines,
+		?OpeningBudget $budget,
+	): ?Result
 	{
-		$deadline = microtime(true) + $this->queuedBudgetSec;
+		$deadline = $budget?->deadlineForOpen() ?? hrtime(true) / 1e9 + $this->queuedBudgetSec;
 		foreach ($sessionsByKey as $docKey => $session)
 		{
+			if ($budget !== null && $budget->remainingMs() <= 0)
+			{
+				return $result->addError($this->createTimeoutError());
+			}
+			$metadata = DocumentSessionManager::extractVoMetadata($session);
+			$contentBaseline = $metadata[DocumentSessionManager::CONTEXT_VO_CONTENT_VERSION_KEY] ?? null;
+			$contentBaseline = is_int($contentBaseline) && $contentBaseline >= 0 ? $contentBaseline : null;
+			$savedVersionBaseline = $metadata[DocumentSessionManager::CONTEXT_VO_SAVED_VERSION_ID_KEY] ?? null;
+			$savedVersionBaseline = is_int($savedVersionBaseline) && $savedVersionBaseline >= 0
+				? $savedVersionBaseline : null;
 			if (!$session->isActive())
 			{
-				$metadata = DocumentSessionManager::extractVoMetadata($session);
-				$snapshot = $metadata[DocumentSessionManager::CONTEXT_VO_SAVED_VERSION_ID_KEY] ?? null;
-				$snapshot = is_int($snapshot) && $snapshot >= 0 ? $snapshot : null;
-				$budget = min($this->recentClosedBudgetSec, $deadline - microtime(true));
-				if (!$this->waitForVersion($fileId, $snapshot, $docKey, $budget))
+				$closedDeadline = min(hrtime(true) / 1e9 + $this->recentClosedBudgetSec, $deadline);
+				if (!$this->waitForVersion($fileId, $contentBaseline, $savedVersionBaseline, $docKey, $closedDeadline))
 				{
 					$result->addError($this->createTimeoutError());
 				}
@@ -188,12 +223,43 @@ final class SavedContentSynchronizer
 			}
 
 			// Each serial request starts after deliveries that arrived while earlier keys were waiting.
-			$activeBaseline = DocumentSessionManager::getLatestSavedVersionId($fileId);
-			if (File::loadById($fileId) === null)
+			$savedVersionBaseline = DocumentSessionManager::getLatestSavedVersionId($fileId);
+			$currentFile = File::loadById($fileId);
+			if ($currentFile === null)
 			{
 				return (new Result())->addError(new Error('The document is unavailable.', 'vibeoffice_sync_file_missing'));
 			}
-			$forcesaveResult = $this->protocolClient->forcesave($docKey, null);
+			// Old sessions stay in ID mode: their open-time content baseline cannot be reconstructed.
+			if ($contentBaseline !== null)
+			{
+				$contentBaseline = (int)$currentFile->getGlobalContentVersion();
+			}
+			$forcesaveResult = $budget === null
+				? $this->protocolClient->forcesave($docKey, null)
+				: $this->protocolClient->forcesaveWithinDeadline($docKey, null, $deadline);
+			if ($this->isVerifiedSaveRefusal($forcesaveResult, 404, ['not_found']))
+			{
+				continue;
+			}
+			if (!$forcesaveResult->isSuccess())
+			{
+				if ($this->isVerifiedSaveRefusal($forcesaveResult, self::CONFLICT_STATUS, self::NOTHING_TO_SAVE_CODES))
+				{
+					if (!$this->waitForVersion(
+						$fileId, $openedContentBaselines[$docKey] ?? null, null, $docKey,
+						$deadline, terminalOnly: true,
+					))
+					{
+						$result->addError($this->createTimeoutError());
+					}
+				}
+				else
+				{
+					$result->addErrors($forcesaveResult->getErrors());
+				}
+
+				continue;
+			}
 			if (!$this->isKnownSaveOutcome($forcesaveResult))
 			{
 				if ($forcesaveResult->isSuccess())
@@ -213,7 +279,9 @@ final class SavedContentSynchronizer
 			{
 				continue;
 			}
-			if (!$this->waitForVersion($fileId, $activeBaseline, $docKey, $deadline - microtime(true)))
+			if (!$this->waitForVersion(
+				$fileId, $contentBaseline, $savedVersionBaseline, $docKey, $deadline,
+			))
 			{
 				$result->addError($this->createTimeoutError());
 			}
@@ -272,32 +340,74 @@ final class SavedContentSynchronizer
 		$pool = Application::getInstance()->getConnectionPool();
 
 		return $pool->getConnection(self::SYNC_LOCK_CONNECTION_NAME)
-			?? $pool->cloneConnection(ConnectionPool::DEFAULT_CONNECTION_NAME, self::SYNC_LOCK_CONNECTION_NAME)
-		;
+			?? $pool->cloneConnection(ConnectionPool::DEFAULT_CONNECTION_NAME, self::SYNC_LOCK_CONNECTION_NAME);
 	}
 
-	/**
-	 * A platform reply describes its state, not whether the portal has applied the saved content.
-	 */
-	private function isKnownSaveOutcome(Result $forcesaveResult): bool
+	private function getRefusalCandidateKey(DocumentSession $session, int $fileId, int $now): ?string
 	{
-		if ($forcesaveResult->isSuccess())
+		try
 		{
-			return in_array($forcesaveResult->getData()['result'] ?? null, ['queued', self::RESULT_NOT_MODIFIED], true);
-		}
-
-		foreach ($forcesaveResult->getErrors() as $error)
-		{
-			$customData = $error->getCustomData();
-			if (!is_array($customData))
+			$age = $now - $session->getCreateTime()->getTimestamp();
+			if (
+				$session->getId() <= 0 || $age < 0
+				|| $age > SavedEditSessionSelector::RECENT_NON_ACTIVE_SESSION_MAX_AGE_SEC
+				|| $session->getObjectId() !== $fileId || $session->getVersionId() !== null
+				|| $session->getType() !== DocumentSession::TYPE_EDIT
+				|| $session->getService() !== DocumentService::Vibeoffice
+			)
 			{
-				return false;
+				return null;
+			}
+			$raw = $session->getContextRaw();
+			if (!is_string($raw) || !(json_decode($raw) instanceof \stdClass))
+			{
+				return null;
+			}
+			$context = json_decode($raw, true);
+			$vo = $context['vo'] ?? null;
+			$link = $context['externalLinkId'] ?? null;
+			if (
+				!is_array($vo) || !is_int($context['objectId'] ?? null) || $context['objectId'] !== $fileId
+				|| ($link !== null && (!is_int($link) || $link < 0))
+				|| ($link ?? 0) !== ($session->getExternalLinkId() ?? 0)
+				|| !is_string($vo['host_doc_key'] ?? null) || $vo['host_doc_key'] === ''
+				|| $vo['host_doc_key'] !== HostDocumentKey::resolve($session)
+				|| !is_int($vo['contentVersion'] ?? null) || $vo['contentVersion'] < 0
+				|| !is_int($vo['savedVersionId'] ?? null) || $vo['savedVersionId'] < 0
+				|| !in_array($vo['session_id'] ?? null, [null, ''], true)
+				|| !in_array($vo['editor_key'] ?? null, [null, ''], true)
+				|| ($vo['rev'] ?? null) !== null
+				|| OpenAttemptState::protectsCarrier($vo)
+			)
+			{
+				return null;
 			}
 
-			$httpStatus = (int)($customData['httpStatus'] ?? 0);
+			return $vo['host_doc_key'];
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	private function hasOnlyRefusedRows(array $rows, int $sessionId, string $hostDocKey): bool
+	{
+		if (!$rows)
+		{
+			return false;
+		}
+		foreach ($rows as $row)
+		{
 			if (
-				$httpStatus !== self::CONFLICT_STATUS
-				|| !in_array($customData['platformCode'] ?? null, self::NOTHING_TO_SAVE_CODES, true)
+				!is_array($row) || (int)($row['DOCUMENT_SESSION_ID'] ?? 0) !== $sessionId
+				|| ($row['HOST_DOC_KEY'] ?? null) !== $hostDocKey
+				|| ($row['STATUS'] ?? null) !== PlatformSessionTable::STATUS_REFUSED
+				|| !is_string($row['OPEN_TOKEN'] ?? null)
+				|| preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/Di', $row['OPEN_TOKEN']) !== 1
+				|| !in_array($row['API_SESSION_ID'] ?? null, [null, ''], true)
+				|| !in_array($row['EDITOR_KEY'] ?? null, [null, ''], true)
+				|| ($row['REV'] ?? null) !== null
 			)
 			{
 				return false;
@@ -305,6 +415,28 @@ final class SavedContentSynchronizer
 		}
 
 		return true;
+	}
+
+	/**
+	 * A platform reply describes its state, not whether the portal has applied the saved content.
+	 */
+	private function isKnownSaveOutcome(Result $forcesaveResult): bool
+	{
+		return $forcesaveResult->isSuccess()
+			&& in_array($forcesaveResult->getData()['result'] ?? null, ['queued', self::RESULT_NOT_MODIFIED], true);
+	}
+
+	private function isVerifiedSaveRefusal(Result $result, int $httpStatus, array $platformCodes): bool
+	{
+		if ($result->isSuccess() || count($result->getErrors()) !== 1)
+		{
+			return false;
+		}
+		$data = $result->getErrors()[0]->getCustomData();
+
+		return is_array($data) && ($data['responseVerified'] ?? null) === true
+			&& ($data['httpStatus'] ?? null) === $httpStatus
+			&& in_array($data['platformCode'] ?? null, $platformCodes, true);
 	}
 
 	private function isSettledNotModified(Result $forcesaveResult): bool
@@ -324,21 +456,87 @@ final class SavedContentSynchronizer
 		return new Error('Saved content synchronization timed out.', self::ERROR_TIMEOUT);
 	}
 
-	/** The applied receipt must point to this key's newer file version, including terminal replays. */
-	private function hasAppliedVersion(int $fileId, ?int $baseline, string $docKey): bool
+	private function hasAppliedTerminalVersion(int $fileId, int $openedContentBaseline, string $docKey): bool
 	{
-		if ($baseline === null)
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			$snapshot = SavedSnapshotTable::query()->setSelect(['*'])->where('HOST_DOC_KEY', $docKey)
+				->setOrder(['SNAPSHOT_SEQ' => 'DESC'])->setLimit(1)->fetch()
+			;
+			if (!$snapshot || $snapshot['DELIVERY_ID'] === null || $snapshot['RESULT_CONTENT_VERSION'] === null
+				|| (int)$snapshot['RESULT_OBJECT_ID'] !== $fileId
+				|| (int)$snapshot['RESULT_CONTENT_VERSION'] <= $openedContentBaseline)
+			{
+				return false;
+			}
+			$key = Query::filter()->logic('or')
+				->where('HOST_DOC_KEY', $docKey)
+				->where(Query::filter()->whereNull('HOST_DOC_KEY')->where('EXTERNAL_HASH', $docKey))
+			;
+			// An unsequenced obligation cannot be ordered against this generation's final snapshot.
+			if (DeliveryTable::query()->setSelect(['ID'])->where($key)
+				->where('EVENT', WebhookProcessor::EVENT_SAVED)->whereNull('SNAPSHOT_SEQ')->setLimit(1)->fetch())
+			{
+				return false;
+			}
+			$delivery = DeliveryTable::query()->setSelect(['*'])->where($key)
+				->where('EVENT', WebhookProcessor::EVENT_SAVED)
+				->setOrder(['SNAPSHOT_SEQ' => 'DESC', 'DELIVERY_ID' => 'DESC'])->setLimit(1)->fetch()
+			;
+			if (!$delivery || !in_array($delivery['STATUS'], [DeliveryTable::STATUS_APPLIED, DeliveryTable::STATUS_DONE], true)
+				|| $delivery['OUTCOME'] !== DeliveryTable::OUTCOME_APPLIED
+				|| (int)$delivery['SNAPSHOT_SEQ'] !== (int)$snapshot['SNAPSHOT_SEQ']
+				|| (int)$delivery['RESULT_OBJECT_ID'] !== $fileId
+				|| $delivery['RESULT_CONTENT_VERSION'] === null
+				|| (int)$delivery['RESULT_CONTENT_VERSION'] !== (int)$snapshot['RESULT_CONTENT_VERSION']
+				|| (int)$delivery['RESULT_VERSION_ID'] <= 0
+				|| (int)$delivery['RESULT_VERSION_ID'] !== (int)$snapshot['RESULT_VERSION_ID'])
+			{
+				return false;
+			}
+			$owner = (int)$delivery['DELIVERY_ID'] === (int)$snapshot['DELIVERY_ID'];
+			if (!(($owner && in_array($snapshot['SOURCE'], ['save', 'forgotten'], true))
+				|| (!$owner && $snapshot['SOURCE'] === 'forcesave')))
+			{
+				return false;
+			}
+			$liveFile = FileTable::query()->setSelect(['GLOBAL_CONTENT_VERSION'])->where('ID', $fileId)->fetch();
+
+			return $liveFile && $liveFile['GLOBAL_CONTENT_VERSION'] !== null
+				&& (int)$liveFile['GLOBAL_CONTENT_VERSION'] >= (int)$snapshot['RESULT_CONTENT_VERSION']
+				&& (bool)VersionTable::query()->setSelect(['ID'])
+					->where('ID', (int)$delivery['RESULT_VERSION_ID'])->where('OBJECT_ID', $fileId)->fetch()
+			;
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
+	/** Freshness belongs to the receipt: a joined Version row can change after it was applied. */
+	private function hasAppliedVersion(
+		int $fileId,
+		?int $contentBaseline,
+		?int $savedVersionBaseline,
+		string $docKey,
+	): bool
+	{
+		if ($contentBaseline === null && $savedVersionBaseline === null)
 		{
 			return false;
 		}
+		$liveFile = FileTable::query()->setSelect(['GLOBAL_CONTENT_VERSION'])->where('ID', $fileId)->fetch();
 		$keyFilters = [
 			Query::filter()->where('HOST_DOC_KEY', $docKey),
 			Query::filter()->whereNull('HOST_DOC_KEY')->where('EXTERNAL_HASH', $docKey),
 		];
-		// Separate lookups preserve the index path for both current and legacy keys.
+		// Key and proof modes use separate lookups to preserve their index paths.
 		foreach ($keyFilters as $keyFilter)
 		{
-			$row = DeliveryTable::query()
+			$query = DeliveryTable::query()
 				->setSelect(['ID'])
 				->registerRuntimeField(new Reference(
 					'SAVED_VERSION',
@@ -352,10 +550,32 @@ final class SavedContentSynchronizer
 				->where('OUTCOME', DeliveryTable::OUTCOME_APPLIED)
 				->where('RESULT_OBJECT_ID', $fileId)
 				->where('SAVED_VERSION.OBJECT_ID', $fileId)
-				->where('RESULT_VERSION_ID', '>', $baseline)
 				->setLimit(1)
-				->fetch();
-			if ($row)
+			;
+			if ($liveFile && $liveFile['GLOBAL_CONTENT_VERSION'] !== null)
+			{
+				$contentQuery = clone $query;
+				$contentQuery
+					->whereNotNull('RESULT_CONTENT_VERSION')
+					->where('RESULT_CONTENT_VERSION', '<=', (int)$liveFile['GLOBAL_CONTENT_VERSION'])
+				;
+				if ($contentBaseline !== null)
+				{
+					$contentQuery->where('RESULT_CONTENT_VERSION', '>', $contentBaseline);
+				}
+				else
+				{
+					$contentQuery->where('RESULT_VERSION_ID', '>', $savedVersionBaseline);
+				}
+				if ($contentQuery->fetch())
+				{
+					return true;
+				}
+			}
+			if ($savedVersionBaseline !== null && $query
+				->whereNull('RESULT_CONTENT_VERSION')
+				->where('RESULT_VERSION_ID', '>', $savedVersionBaseline)
+				->fetch())
 			{
 				return true;
 			}
@@ -364,14 +584,8 @@ final class SavedContentSynchronizer
 		return false;
 	}
 
-	private function isRecentNonActiveSession(DocumentSession $session): bool
-	{
-		return (new DateTime())->getTimestamp() - $session->getCreateTime()->getTimestamp()
-			<= self::RECENT_NON_ACTIVE_SESSION_MAX_AGE_SEC;
-	}
-
 	/**
-	 * Legacy closed sessions without an immutable baseline cannot confirm delivery and return immediately.
+	 * Closed sessions without either pinned baseline cannot confirm delivery and return immediately.
 	 *
 	 * The interval between checks grows up to a cap: a save that lands quickly - the common case - is
 	 * still noticed within the first interval, while a wait that runs on costs a fraction of the reads
@@ -379,28 +593,31 @@ final class SavedContentSynchronizer
 	 */
 	private function waitForVersion(
 		int $fileId,
-		?int $baseline,
+		?int $contentBaseline,
+		?int $savedVersionBaseline,
 		string $docKey,
-		float $budgetSec,
+		float $deadline,
+		bool $terminalOnly = false,
 	): bool
 	{
-		if ($baseline === null)
+		if ($contentBaseline === null && $savedVersionBaseline === null)
 		{
 			return false;
 		}
 
-		$deadline = microtime(true) + $budgetSec;
 		$intervalUsec = max(1, $this->pollIntervalMs * 1000);
 		$maxIntervalUsec = max(1, $this->pollIntervalMs * self::POLL_INTERVAL_MAX_FACTOR * 1000);
 
 		while (true)
 		{
-			if ($this->hasAppliedVersion($fileId, $baseline, $docKey))
+			if ($terminalOnly
+				? $this->hasAppliedTerminalVersion($fileId, $contentBaseline, $docKey)
+				: $this->hasAppliedVersion($fileId, $contentBaseline, $savedVersionBaseline, $docKey))
 			{
 				return true;
 			}
 
-			$remainingUsec = (int)round(($deadline - microtime(true)) * 1000000);
+			$remainingUsec = (int)floor(($deadline - hrtime(true) / 1e9) * 1000000);
 			if ($remainingUsec <= 0)
 			{
 				return false;

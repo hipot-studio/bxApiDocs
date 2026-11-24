@@ -8,10 +8,12 @@ use Bitrix\HumanResources\Service\Container;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
 use Bitrix\Intranet\Internal\Integration\Bitrix24\Admin\RestrictionService;
 use Bitrix\Intranet\Internal\Integration\Humanresources;
 use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
+use Bitrix\Intranet\Public\Provider\User\UserRegistrationDataProvider;
 use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Intranet\Service\UserService;
 use Bitrix\Intranet\Util;
@@ -29,7 +31,6 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Type\Date;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\UI;
 
 class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable, \Bitrix\Main\Errorable
@@ -88,6 +89,11 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				]
 			],
 			'getProfileBlogPost' => [
+				'+prefilters' => [
+					new CloseSession()
+				]
+			],
+			'getRegistrationData' => [
 				'+prefilters' => [
 					new CloseSession()
 				]
@@ -361,14 +367,30 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		return $this->userData;
 	}
 
-	protected function isCurrentUserAdmin()
+	protected function isCurrentUserAdmin(): bool
 	{
+		global $USER;
+
 		return (
 			(
 				Loader::includeModule('bitrix24')
-				&& \CBitrix24::IsPortalAdmin(CurrentUser::get()->getId())
+				&& \CBitrix24::IsPortalAdmin($USER->getId())
 			)
-			||CurrentUser::get()->isAdmin()
+			|| $USER->isAdmin()
+		);
+	}
+
+	protected function isProfileViewRestricted(?array $userData): bool
+	{
+		global $USER;
+
+		return (
+			!$this->isCurrentUserAdmin()
+			&& ModuleManager::isModuleInstalled('im')
+			&& (
+				($userData['EXTERNAL_AUTH_ID'] ?? null) === UserRole::IM_GUEST->value
+				|| $USER->GetParam('EXTERNAL_AUTH_ID') === UserRole::IM_GUEST->value
+			)
 		);
 	}
 
@@ -805,11 +827,20 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				$this->arParams["ID"],
 				\CSocNetUser::isCurrentUserModuleAdmin(SITE_ID, false)
 			);
+			$userData = $currentUserPerms['IsCurrentUser'] ? null : $this->getUserData();
 
 			$result = [
 				'view' => (
-					$currentUserPerms['IsCurrentUser']
-					|| \CSocNetUser::canProfileView($USER->getId(), $this->getUserData(), SITE_ID, ComponentHelper::getUrlContext())
+					!$this->isProfileViewRestricted($userData)
+					&& (
+						$currentUserPerms['IsCurrentUser']
+						|| \CSocNetUser::canProfileView(
+							$USER->getId(),
+							$userData,
+							SITE_ID,
+							ComponentHelper::getUrlContext(),
+						)
+					)
 				),
 				'edit' => (
 					$currentUserPerms["IsCurrentUser"]
@@ -1252,6 +1283,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 	public function getAdditionalBlocks(): array
 	{
 		$result = [];
+
 		$event = new Event(
 			'intranet',
 			self::ON_PROFILE_CONFIG_ADDITIONAL_BLOCKS,
@@ -1274,6 +1306,37 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		}
 
 		return $result;
+	}
+
+	protected function canViewRegistrationData(): bool
+	{
+		return $this->getUserId() > 0
+			&& Loader::includeModule('bitrix24')
+			&& \Bitrix\Intranet\CurrentUser::get()->isAuthorized()
+			&& \Bitrix\Intranet\CurrentUser::get()->isAdmin()
+		;
+	}
+
+	public function getRegistrationDataAction(): ?array
+	{
+		if (!$this->canViewRegistrationData())
+		{
+			return null;
+		}
+
+		try
+		{
+			return $this->getUserRegistrationDataProvider()->getProfileContactsByUserId($this->getUserId());
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	protected function getUserRegistrationDataProvider(): UserRegistrationDataProvider
+	{
+		return UserRegistrationDataProvider::createByDefault();
 	}
 
 	private function prepareDepartmentAndSubordinate(array &$user)

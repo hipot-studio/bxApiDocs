@@ -3,16 +3,27 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Chat\Tree;
 
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
+use Bitrix\Im\V2\Folder\Mute\MuteProvider;
+
 class ChatTreeFilterFactory
 {
 	public function __construct(
 		private readonly ChatAncestorNavigator $navigator,
+		private readonly MuteProvider $muteProvider,
+		private readonly TypeRegistry $typeRegistry,
 		private readonly ChatTreeLevelParents $levelParents,
 	) {}
 
 	public function forUnread(int $userId, int $maxDepth = ChatAncestorNavigator::DEFAULT_DEPTH): SubtreeUnreadFilter
 	{
-		return new SubtreeUnreadFilter($this->navigator, $userId, $maxDepth);
+		return new SubtreeUnreadFilter(
+			$this->navigator,
+			$this->muteProvider,
+			$this->typeRegistry,
+			$userId,
+			$maxDepth,
+		);
 	}
 
 	public function forTreeScope(ChatTreeScope $scope): ChatAncestorFilter

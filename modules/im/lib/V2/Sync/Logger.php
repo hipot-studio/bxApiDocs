@@ -2,7 +2,6 @@
 
 namespace Bitrix\Im\V2\Sync;
 
-use Bitrix\Im\Model\EO_Log_Collection;
 use Bitrix\Im\Model\LogTable;
 use Bitrix\Im\Model\UserTable;
 use Bitrix\Im\V2\Chat;
@@ -11,15 +10,12 @@ use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Pull\Model\PushTable;
 
 class Logger
 {
 	use ContextCustomer;
 
-	public const DEFAULT_EXPIRY_INTERVAL = '+4 weeks';
-	public const FAST_EXPIRY_INTERVAL = '+1 days';
 	protected const CHAT_TYPE_BLACKLIST = [
 		Chat::IM_TYPE_OPEN_LINE,
 		Chat::IM_TYPE_COMMENT,
@@ -134,26 +130,6 @@ class Logger
 		$this->addDeferred();
 	}
 
-	public function updateDateDelete(EO_Log_Collection $logs, ?DateTime $dateDelete = null): void
-	{
-		Application::getInstance()->addBackgroundJob(fn () => $this->updateDateDeleteDeferred($logs, $dateDelete));
-	}
-
-	public static function cleanAgent(): string
-	{
-		return '';
-
-		(new static())->clean();
-
-		return __METHOD__ . '();';
-	}
-
-	public function clean(): void
-	{
-		$now = new DateTime();
-		LogTable::deleteByFilter(['<=DATE_DELETE' => $now]); //Todo: add index in b_im_log
-	}
-
 	protected function needToLog(?Chat $chat): bool
 	{
 		if ($chat === null)
@@ -217,7 +193,6 @@ class Logger
 			$key = implode('|', [
 				$event->eventName,
 				$event->getDateCreate()->getTimestamp(),
-				$event->getDateDelete()?->getTimestamp() ?? '',
 			]);
 
 			if (isset($batches[$key]))
@@ -275,7 +250,6 @@ class Logger
 				'ENTITY_ID' => $event->entityId,
 				'EVENT' => $event->eventName,
 				'DATE_CREATE' => $event->getDateCreate(),
-				'DATE_DELETE' => $event->getDateDelete(),
 			];
 		}
 
@@ -286,7 +260,6 @@ class Logger
 			[
 				'EVENT' => $lastEvent->eventName,
 				'DATE_CREATE' => $lastEvent->getDateCreate(),
-				'DATE_DELETE' => $lastEvent->getDateDelete(),
 			],
 			[
 				'USER_ID',
@@ -295,29 +268,6 @@ class Logger
 			],
 			['DEADLOCK_SAFE' => true]
 		);
-	}
-
-	private function updateDateDeleteDeferred(EO_Log_Collection $logs, ?DateTime $dateDelete): void
-	{
-		return;
-
-		if ($dateDelete === null)
-		{
-			$dateDelete = new DateTime();
-			$dateDelete->add(self::FAST_EXPIRY_INTERVAL);
-		}
-
-		$newDateDeleteTs = $dateDelete->getTimestamp();
-		foreach ($logs as $log)
-		{
-			$oldDateDelete = $log->getDateDelete();
-			if ($oldDateDelete === null || $oldDateDelete->getTimestamp() > $newDateDeleteTs)
-			{
-				$log->setDateDelete($dateDelete);
-			}
-		}
-
-		$logs->save(true);
 	}
 
 	private function getGroupedEvents(): array
@@ -491,12 +441,10 @@ class Logger
 				'ENTITY_ID' => $event->entityId,
 				'EVENT' => $event->eventName,
 				'DATE_CREATE' => $event->getDateCreate(),
-				'DATE_DELETE' => $event->getDateDelete(),
 			],
 			[
 				'EVENT' => $event->eventName,
 				'DATE_CREATE' => $event->getDateCreate(),
-				'DATE_DELETE' => $event->getDateDelete(),
 			],
 			[
 				'USER_ID',
@@ -518,7 +466,6 @@ class Logger
 				'ENTITY_ID' => $event->entityId,
 				'EVENT' => $event->eventName,
 				'DATE_CREATE' => $event->getDateCreate(),
-				'DATE_DELETE' => $event->getDateDelete(),
 			];
 		}
 
@@ -527,7 +474,6 @@ class Logger
 			[
 				'EVENT' => $event->eventName,
 				'DATE_CREATE' => $event->getDateCreate(),
-				'DATE_DELETE' => $event->getDateDelete(),
 			],
 			[
 				'USER_ID',

@@ -12,6 +12,11 @@ class Summary implements SummaryInterface
 	{
 	}
 
+	public function getCoefficient(MetricThreshold $threshold): Coefficient
+	{
+		return new Coefficient($this->total, $threshold->getMax());
+	}
+
 	public function getId(): string
 	{
 		return $this->id;

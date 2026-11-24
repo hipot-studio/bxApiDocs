@@ -19,6 +19,8 @@ abstract class DatasetField
 	protected bool $isPreparedFieldName = true;
 	protected ?string $nativeSqlType = null;
 	protected ?string $collation = null;
+	protected ?string $kind = null;
+	protected ?string $ownerField = null;
 
 	public function __construct(
 		protected readonly string $code,
@@ -299,6 +301,34 @@ abstract class DatasetField
 	}
 
 	/**
+	 * Declares what the field holds for row rules, one of the FieldKind constants.
+	 *
+	 * @param string $kind
+	 *
+	 * @return $this
+	 */
+	public function setKind(string $kind): static
+	{
+		$this->kind = $kind;
+
+		return $this;
+	}
+
+	/**
+	 * Declares the code of the field whose employee owns the record, used by a `department` field.
+	 *
+	 * @param string $ownerField
+	 *
+	 * @return $this
+	 */
+	public function setOwnerField(string $ownerField): static
+	{
+		$this->ownerField = $ownerField;
+
+		return $this;
+	}
+
+	/**
 	 * Return field code
 	 *
 	 * @return string
@@ -332,6 +362,16 @@ abstract class DatasetField
 		if ($this->collation !== null)
 		{
 			$result['COLLATION'] = $this->collation;
+		}
+
+		if ($this->kind !== null)
+		{
+			$result[FieldKind::KEY_KIND] = $this->kind;
+		}
+
+		if ($this->ownerField !== null)
+		{
+			$result[FieldKind::KEY_OWNER] = $this->ownerField;
 		}
 
 		if ($this->isPrimary)

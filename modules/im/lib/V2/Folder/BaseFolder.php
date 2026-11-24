@@ -31,6 +31,7 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 	protected ?string $title = null;
 	protected int $sort = 0;
 	protected bool $hiddenByUser = false;
+	protected bool $isMuted = false;
 	private ?FolderVisibilityContext $visibilityContext = null;
 
 	public function __construct($source = null)
@@ -186,6 +187,19 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 		return $this;
 	}
 
+	/** The rule of the folder: notifications of its chats are off. Stored per folder row, default - the folder sounds. */
+	public function isMuted(): bool
+	{
+		return $this->isMuted;
+	}
+
+	public function setMuted(bool $isMuted): self
+	{
+		$this->isMuted = $isMuted;
+
+		return $this;
+	}
+
 	public function setVisibilityContext(FolderVisibilityContext $visibilityContext): self
 	{
 		$this->visibilityContext = $visibilityContext;
@@ -238,6 +252,11 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 	}
 
 	public function displaysNestedInRoot(): bool
+	{
+		return false;
+	}
+
+	public function canReadAll(): bool
 	{
 		return false;
 	}
@@ -301,6 +320,11 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 				'field' => 'hiddenByUser',
 				'set' => 'setHiddenByUser',
 				'get' => 'isHiddenByUser',
+			],
+			'NOTIFY_BLOCK' => [
+				'field' => 'isMuted',
+				'set' => 'setMuted',
+				'get' => 'isMuted',
 			],
 		];
 	}

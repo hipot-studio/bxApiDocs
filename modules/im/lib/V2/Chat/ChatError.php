@@ -40,8 +40,14 @@ class ChatError extends Error
 		TEXT_FIELD_DISABLED = 'TEXT_FIELD_DISABLED',
 		CHAT_ALREADY_HAS_PARENT = 'CHAT_ALREADY_HAS_PARENT',
 		CHAT_HAS_NO_PARENT = 'CHAT_HAS_NO_PARENT',
+		// threads are refused for four different reasons and clients show four different texts;
+		// WRONG_PARENT_CHAT keeps the fifth one, "the type admits no threads"
+		THREADS_NOT_AVAILABLE = 'THREADS_NOT_AVAILABLE',
+		THREADS_DISABLED = 'THREADS_DISABLED',
+		CREATE_THREAD_ACCESS_DENIED = 'CREATE_THREAD_ACCESS_DENIED',
+		POST_IN_THREAD_ACCESS_DENIED = 'POST_IN_THREAD_ACCESS_DENIED',
 		HISTORY_CLEANUP_CONFLICT = 'HISTORY_CLEANUP_CONFLICT',
-        USERS_NOT_ADDED = 'USERS_NOT_ADDED'
+		USERS_NOT_ADDED = 'USERS_NOT_ADDED'
 	;
 
 	protected function loadErrorMessage($code, $replacements): string

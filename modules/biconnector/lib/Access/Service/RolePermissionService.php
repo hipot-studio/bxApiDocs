@@ -2,6 +2,8 @@
 
 namespace Bitrix\BIConnector\Access\Service;
 
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\Component\PermissionSection\DashboardGroupSection;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionTable;
@@ -9,6 +11,9 @@ use Bitrix\BIConnector\Access\Role\RoleTable;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\Access\Table\PermissionCacheResetNotifier;
 use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Internal\Services\TableCell\RoleLocker;
+use Bitrix\BIConnector\Internal\Services\TableCell\TableCellService;
+use Bitrix\BIConnector\Public\Command\TableCell\SaveTableCellsCommand;
 use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlQueryException;
@@ -52,7 +57,8 @@ final class RolePermissionService
 	 * by the time the deletion asks whether the removal would move anything. A refusal of any of
 	 * these steps rolls the whole save back, the rights of the removed group included.
 	 *
-	 * @param array $permissionSettings Roles with their rights.
+	 * @param array $permissionSettings Roles with their rights; the tableCells of a role are the overrides of
+	 *        the table rights it has through its groups, array<string, TableRights|null> by table code.
 	 * @param array $accessRights Cells of the matrix, the groups of both axes among them.
 	 * @param int[] $deletedTableGroupIds Custom table groups the person removed from the matrix.
 	 * @param bool $isRolesKept The roles of the payload are proven to be the stored ones (the person may
@@ -75,8 +81,37 @@ final class RolePermissionService
 		{
 			$db->startTransaction();
 
+			/*
+			 * The roles are locked before any of their rows is written, in ascending order of ids: a save that
+			 * locked a role only on writing its cells would wait for it while holding the rights of the roles,
+			 * and a save writing the role would wait for those rights. A role created by the save is locked
+			 * once it has an id.
+			 */
+			$roleLocker = new RoleLocker();
+			$roleLocker->lock(array_map(
+				static fn($setting): int => is_array($setting) ? (int)($setting['id'] ?? 0) : 0,
+				$permissionSettings,
+			));
+
+			/*
+			 * A cell is written only through tableCells with its checks, and MySQL compares the identifiers
+			 * without case, so the cells leave the payload before anything reads it.
+			 */
+			$accessRights = self::dropTableCellRights($accessRights);
+			foreach ($permissionSettings as &$setting)
+			{
+				if (isset($setting['accessRights']) && is_array($setting['accessRights']))
+				{
+					$setting['accessRights'] = self::dropTableCellRights($setting['accessRights']);
+				}
+			}
+			unset($setting);
+
 			$groupPermissionIdList = array_reduce($accessRights, static function ($carry, $permission) {
-				if (PermissionDictionary::isDashboardGroupPermission($permission['id']))
+				if (
+					PermissionDictionary::isDashboardGroupPermission($permission['id'])
+					|| str_starts_with($permission['id'], DashboardGroupSection::PLACEHOLDER_PREFIX)
+				)
 				{
 					$carry[] = $permission['additionalRightData']['group'];
 				}
@@ -187,6 +222,10 @@ final class RolePermissionService
 			}
 
 			$rolePermissions = new RolePermissionChanges();
+			$tableCellChanges = [];
+			$canEditTableCells = AccessController::getCurrent()->check(
+				ActionDictionary::ACTION_BIC_SETTINGS_EDIT_TABLE_RIGHTS,
+			);
 			foreach ($permissionSettings as &$setting)
 			{
 				$roleId = (int)($setting['id'] ?? 0);
@@ -203,9 +242,33 @@ final class RolePermissionService
 						return $result;
 					}
 					$roleId = $saveRoleResult->getData()['id'];
+					$roleLocker->lock([$roleId]);
 				}
 
 				$setting['id'] = $roleId;
+
+				if (array_key_exists('tableCells', $setting))
+				{
+					/*
+					 * While the axis is off the matrix shows no table, so its cells are neither read nor written;
+					 * a person without the table rights section may not touch them either, inheriting included.
+					 */
+					if (!$isTableAxisHidden && $canEditTableCells)
+					{
+						$collectResult = (new TableCellService())->collectFromPayload($roleId, $setting['tableCells']);
+						if (!$collectResult->isSuccess())
+						{
+							$result->addErrors($collectResult->getErrors());
+							$db->rollbackTransaction();
+
+							return $result;
+						}
+
+						array_push($tableCellChanges, ...$collectResult->getData()['changes']);
+					}
+
+					unset($setting['tableCells']);
+				}
 
 				if (!isset($setting['accessRights']) || !is_array($setting['accessRights']))
 				{
@@ -232,6 +295,21 @@ final class RolePermissionService
 				$db->rollbackTransaction();
 
 				return $result;
+			}
+
+			if (!empty($tableCellChanges))
+			{
+				$tableCellsResult = (new SaveTableCellsCommand(
+					$tableCellChanges,
+					new TableCellService($roleLocker),
+				))->run();
+				if (!$tableCellsResult->isSuccess())
+				{
+					$result->addErrors($tableCellsResult->getErrors());
+					$db->rollbackTransaction();
+
+					return $result;
+				}
 			}
 
 			if (\Bitrix\Main\Loader::includeModule('intranet'))
@@ -293,6 +371,20 @@ final class RolePermissionService
 			|| PermissionDictionary::isTableGroupPermission($permissionId)
 			|| str_starts_with($permissionId, self::TABLE_GROUP_PLACEHOLDER_PREFIX)
 		;
+	}
+
+	/**
+	 * @param array $accessRights Rights of the matrix or of one role.
+	 *
+	 * @return array The rights without the cells of roles and tables.
+	 */
+	private static function dropTableCellRights(array $accessRights): array
+	{
+		return array_values(array_filter(
+			$accessRights,
+			static fn($accessRight): bool => !is_array($accessRight)
+				|| !PermissionDictionary::collidesWithTableCellPermission((string)($accessRight['id'] ?? '')),
+		));
 	}
 
 	/**

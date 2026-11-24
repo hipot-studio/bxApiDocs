@@ -275,18 +275,24 @@ class ConvertRuleCommand extends AbstractCommand
 
 			$this->processRuleCollection(
 				$portRule,
+				containerKey: $containerKey,
 				isPortless: $this->isPortlessRuleContainer($containerKey, $portRule),
 			);
 		}
 
-		foreach ($this->relationPortRuleDtoDictionary as $portRule)
+		foreach ($this->relationPortRuleDtoDictionary as $containerKey => $portRule)
 		{
 			if (!$portRule instanceof PortRuleDto)
 			{
 				continue;
 			}
 
-			$this->processRuleCollection($portRule, isPortless: false, relationPortId: (string)$portRule->portId);
+			$this->processRuleCollection(
+				$portRule,
+				containerKey: $containerKey,
+				isPortless: false,
+				relationPortId: (string)$portRule->portId,
+			);
 		}
 
 		// Deferred until every filter of the node has claimed its own id: a relation id is derived from the
@@ -363,10 +369,13 @@ class ConvertRuleCommand extends AbstractCommand
 	 * host-merged and never a proxy child, its condition is always the property of the node - and how the
 	 * starts of its chains are addressed ({@see self::registerInputNames()}).
 	 *
+	 * @param string|int $containerKey Key the container arrived under, the fallback of a container naming no
+	 *     `portId` ({@see self::resolveLogicalInputKey()}).
 	 * @param bool $isPortless Whether this is the reserved container of a node without input ports.
 	 */
 	private function processRuleCollection(
 		PortRuleDto $portRuleCollection,
+		string|int $containerKey,
 		bool $isPortless,
 		?string $relationPortId = null,
 	): void
@@ -540,7 +549,10 @@ class ConvertRuleCommand extends AbstractCommand
 			}
 		}
 
-		$this->registerInputNames($portRuleCollection, $isPortless, $inputActivities);
+		$this->registerInputNames(
+			$this->resolveLogicalInputKey($containerKey, $portRuleCollection, $isPortless),
+			$inputActivities,
+		);
 	}
 
 	/**
@@ -551,11 +563,11 @@ class ConvertRuleCommand extends AbstractCommand
 	 * ({@see ComplexActivityService::PORTLESS_RULES_KEY}), the very key that addresses the container itself.
 	 * A container that built no chain writes no entry at all: an absent key is what "no children" is.
 	 *
+	 * @param string|int $inputKey Logical input the container names ({@see self::resolveLogicalInputKey()}).
 	 * @param list<ActivityData> $inputActivities First activity of every rule chain of the container.
 	 */
 	private function registerInputNames(
-		PortRuleDto $portRuleCollection,
-		bool $isPortless,
+		string|int $inputKey,
 		array $inputActivities,
 	): void
 	{
@@ -575,19 +587,48 @@ class ConvertRuleCommand extends AbstractCommand
 			return;
 		}
 
-		$containerKey = $isPortless
-			? ComplexActivityService::PORTLESS_RULES_KEY
-			: (int)preg_replace('/\D+/', '', $portRuleCollection->portId);
-
 		// Wire the input of every rule of the container, not just the first one, so multi-rule switch nodes
 		// and multi-rule CRM-complex inputs do not lose part of their input binding on assembly and
 		// round-trip. A single-rule container keeps a scalar entry and a multi-rule one carries the list of
 		// all rule inputs; both the complex-node runtime (BaseComplexActivity::getStartActivityNames) and
 		// the one of a node served by the unified panel (CBPActivity::getStartActivityNames) normalise
 		// either shape.
-		$this->inputNames[$containerKey] = count($inputNameRefs) === 1
+		$this->inputNames[$inputKey] = count($inputNameRefs) === 1
 			? $inputNameRefs[0]
 			: $inputNameRefs;
+	}
+
+	/**
+	 * The logical input a rules container names, and the single answer both the checks of ALG-01 and the
+	 * routing of the conversion ask for. Containers are never resolved against the real ports of the node,
+	 * so one and the same input arrives spelled in more than one way - `i0`, `port-0`, the bare key of the
+	 * dictionary - and only a canonical key makes the uniqueness of an input and the addressing of its chain
+	 * agree.
+	 *
+	 * The reserved container of a node without input ports keeps its own key instead of a number: it is not
+	 * a port at all, and canonicalising `n0` into a number would merge it with input `0`.
+	 *
+	 * Which container is that reserved one is the caller's answer and not this method's: reading it off the
+	 * spelling ({@see self::isPortlessRuleContainer()}) is sound for the containers of the rules alone. A
+	 * relation is an input of its own however it is spelled, so a relation naming the reserved key would
+	 * otherwise be given it and take the chain of the container of the node away from it.
+	 *
+	 * @param bool $isPortless Whether the container is the reserved one of a node without input ports.
+	 */
+	private function resolveLogicalInputKey(
+		string|int $containerKey,
+		mixed $portRule,
+		bool $isPortless,
+	): string|int
+	{
+		if ($isPortless)
+		{
+			return ComplexActivityService::PORTLESS_RULES_KEY;
+		}
+
+		$portId = $portRule instanceof PortRuleDto ? $portRule->portId : '';
+
+		return (int)preg_replace('/\D+/', '', $portId === '' ? (string)$containerKey : $portId);
 	}
 
 	/**
@@ -601,20 +642,33 @@ class ConvertRuleCommand extends AbstractCommand
 	 * Uniqueness inside one card is answered before this, by
 	 * {@see ValidateSingleRuleCommand::validateConstructions()}; this is the answer for a card and its
 	 * neighbours in one container.
+	 *
+	 * The containers of the rules answer by the logical input they name and not by the key or the spelling
+	 * they arrived under ({@see self::resolveLogicalInputKey()}): two keys carrying the same `portId`, and
+	 * two spellings of one port alike, are one and the same input, and the blocks they hold are the blocks
+	 * of that input. Relation containers are keyed by their own port and keep being counted one by one.
 	 */
 	private function findSecondBaseSettingsOfAContainer(): ?Error
 	{
-		foreach ([$this->portRuleDtoDictionary, $this->relationPortRuleDtoDictionary] as $containerDictionary)
+		$counts = [];
+		foreach ($this->collectOrdinaryBaseSettingsByPortId() as $blocksOfInput)
 		{
-			foreach ($containerDictionary as $portRule)
+			$counts[] = count($blocksOfInput);
+		}
+
+		foreach ($this->relationPortRuleDtoDictionary as $portRule)
+		{
+			$counts[] = $this->countBaseSettingsConstructions($portRule);
+		}
+
+		foreach ($counts as $count)
+		{
+			if ($count > 1)
 			{
-				if ($this->countBaseSettingsConstructions($portRule) > 1)
-				{
-					return new Error(
-						'Only one base-settings construction is allowed per input.',
-						'ERR-BASE-SETTINGS-CONTAINER-DUPLICATE',
-					);
-				}
+				return new Error(
+					'Only one base-settings construction is allowed per input.',
+					'ERR-BASE-SETTINGS-CONTAINER-DUPLICATE',
+				);
 			}
 		}
 
@@ -622,38 +676,135 @@ class ConvertRuleCommand extends AbstractCommand
 	}
 
 	/**
-	 * ALG-01, the temporary half: the rules of a node carry one general-settings block between them all.
+	 * ALG-01, the temporary half: the host-merged blocks of the rules of a node share one place to be
+	 * written to, so a second one of them is refused.
 	 *
-	 * It exists because of how the rules store that block and for no other reason: a block of the rules is
-	 * host-merged into the properties of the node ({@see self::mergeBaseSettingsProperties()}), and those are
-	 * one flat set - a second block would write over the first instead of living beside it. Relations store
-	 * their blocks inside the relation record, one per input, which is why this must not look at them at all:
-	 * seeing a block of a relation here would let it forbid the block of the rules (AC-013).
+	 * It exists because of how the rules store such a block and for no other reason: a host-merged block
+	 * goes into the properties of the node ({@see self::mergeBaseSettingsProperties()}), and those are one
+	 * flat set - a second block would write over the first instead of living beside it. A block bound to a
+	 * node-action is written nowhere near them: it becomes a child activity of its own input, entered
+	 * through the `InputNames` entry of that input ({@see self::processRuleCollection()}), exactly the way a
+	 * block of a relation input already works. Blocks that are all bound therefore collide over nothing, and
+	 * the restriction has nothing to say about them.
 	 *
-	 * **Condition of removal:** the rules start storing the block per input, the way relations already do.
-	 * Then this method and its call are deleted, along with the error code and the phrase behind it, and
-	 * nothing else on the server changes - {@see self::findSecondBaseSettingsOfAContainer()} already says
-	 * everything that remains true.
+	 * The binding is read by the very resolver the conversion reads it by
+	 * ({@see self::isNodeActionBaseSettings()}), so the two never disagree about which route a block takes.
+	 * Whether the action a block names is one this node may carry is not answered here at all: the payload
+	 * guard and the node catalog answer it right after, in {@see ValidateSingleRuleCommand}, and a forged
+	 * binding is refused there instead of being admitted by this relaxation.
+	 *
+	 * Relations store their blocks inside the relation record, one per input, which is why this must not
+	 * look at them at all: seeing a block of a relation here would let it forbid the block of the rules
+	 * (AC-013).
+	 *
+	 * The reserved container of a node without input ports is the one place where being bound buys nothing:
+	 * such a block is dropped by the conversion instead of becoming a child of anything, so it is never the
+	 * block that lives beside the others and a set holding it keeps the refusal it had before.
+	 *
+	 * **Condition of removal:** the rules start storing the host-merged block per input, the way relations
+	 * already do. Then this method and its call are deleted, along with the error code and the phrase behind
+	 * it, and nothing else on the server changes - {@see self::findSecondBaseSettingsOfAContainer()} already
+	 * says everything that remains true.
 	 */
 	private function findSecondBaseSettingsOfTheNodeRules(): ?Error
 	{
-		$count = 0;
-		foreach ($this->portRuleDtoDictionary as $portRule)
+		$blocksByInput = $this->collectOrdinaryBaseSettingsByPortId();
+
+		$total = 0;
+		foreach ($blocksByInput as $blocksOfInput)
 		{
-			$count += $this->countBaseSettingsConstructions($portRule);
+			$total += count($blocksOfInput);
 		}
 
-		if ($count <= 1)
+		if ($total <= 1)
 		{
 			return null;
 		}
 
-		return new Error(
-			Loc::getMessage(
-				'BIZPROCDESIGNER_COMMAND_CONVERT_RULE_BASE_SETTINGS_NODE_DUPLICATE',
-			) ?? 'Only one base-settings construction is allowed across the rules of a node.',
-			'ERR-BASE-SETTINGS-NODE-DUPLICATE',
-		);
+		foreach ($blocksByInput as $inputKey => $blocksOfInput)
+		{
+			// A block of the reserved container is never routed anywhere: bound to a node-action it is
+			// dropped by the conversion ({@see self::processRuleCollection()}), so it cannot be the block
+			// that lives beside the others, and a set holding it keeps the refusal it has always had.
+			$isRoutedInput = (string)$inputKey !== ComplexActivityService::PORTLESS_RULES_KEY;
+
+			foreach ($blocksOfInput as $block)
+			{
+				$backingActivityType = (string)($block?->activityData['Type'] ?? '');
+
+				// Whose form it is comes first, exactly as the conversion reads it
+				// ({@see self::processRuleCollection()}): a payload carrying the class of the host is the
+				// node's own form and is host-merged, so it stays the block this refusal is about however
+				// its class is able to serve as an action.
+				if (
+					$isRoutedInput
+					&& $block !== null
+					&& !$this->isHostOwnBaseSettings($block, $backingActivityType, $this->activity->type)
+					&& $this->isNodeActionBaseSettings($block, $backingActivityType)
+				)
+				{
+					continue;
+				}
+
+				return new Error(
+					Loc::getMessage(
+						'BIZPROCDESIGNER_COMMAND_CONVERT_RULE_BASE_SETTINGS_NODE_DUPLICATE',
+					) ?? 'Only one base-settings construction is allowed across the rules of a node.',
+					'ERR-BASE-SETTINGS-NODE-DUPLICATE',
+				);
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The general-settings blocks of the rules of the node, grouped by the logical input their container
+	 * names ({@see self::resolveLogicalInputKey()}) - the very key the conversion routes that input by, so
+	 * two spellings of one port are one input here as well as there.
+	 *
+	 * An entry is the expression of a block, or null when the construction carries no base-settings
+	 * expression at all - such a payload names no binding and is read as bound to nothing.
+	 *
+	 * @return array<string|int, list<BaseSettingsExpressionDto|null>>
+	 */
+	private function collectOrdinaryBaseSettingsByPortId(): array
+	{
+		$blocksByPortId = [];
+		foreach ($this->portRuleDtoDictionary as $containerKey => $portRule)
+		{
+			if (!$portRule instanceof PortRuleDto)
+			{
+				continue;
+			}
+
+			// Containers of the rules alone are walked here, and the reserved one of a node without input
+			// ports is among them: its own spelling is what names it, exactly as before.
+			$inputKey = $this->resolveLogicalInputKey(
+				$containerKey,
+				$portRule,
+				$this->isPortlessRuleContainer($containerKey, $portRule),
+			);
+
+			foreach ($portRule->rules as $rule)
+			{
+				foreach ($rule->constructions as $construction)
+				{
+					if ($construction->constructionType !== ConstructionType::BASE_SETTINGS)
+					{
+						continue;
+					}
+
+					$expression = $construction->expression;
+					$blocksByPortId[$inputKey][] = $expression instanceof BaseSettingsExpressionDto
+						? $expression
+						: null
+					;
+				}
+			}
+		}
+
+		return $blocksByPortId;
 	}
 
 	private function countBaseSettingsConstructions(mixed $portRule): int
@@ -697,7 +848,9 @@ class ConvertRuleCommand extends AbstractCommand
 	 * Serialize one filter construction into the host-level filter settings and its return properties.
 	 *
 	 * @return string|null Id of the registered filter, becoming the source of the next filter of the
-	 *     chain; null when the construction carries no filter backing activity and registers nothing.
+	 *     chain; the id of the previous filter when the registered one draws on an external source and
+	 *     stays out of the chain; null when the construction carries no filter backing activity and
+	 *     registers nothing.
 	 */
 	private function processFilterConstruction(
 		ConstructionDto $construction,
@@ -719,7 +872,7 @@ class ConvertRuleCommand extends AbstractCommand
 			$this->registerFilterReturnProperty($filterSettings['id'], $filterReturnProperty);
 		}
 
-		return $filterSettings['id'];
+		return isset($filterSettings['targetEntityKey']) ? $previousFilterId : $filterSettings['id'];
 	}
 
 	/**
@@ -756,19 +909,43 @@ class ConvertRuleCommand extends AbstractCommand
 			? $activityData['Name']
 			: $construction->id;
 
+		$externalSourceKey = self::extractExternalSourceKey($properties);
+		$isChained = $previousFilterId && $externalSourceKey === '';
+
 		$filterSettings = [
 			'id' => $filterId,
 			'targetEntityTypeId' => (int)($properties['DynamicTypeId'] ?? 0),
-			'sourceMode' => $previousFilterId ? 'filter' : 'workflow',
+			// An external source is resolved from the root document of the node alone, so it takes no
+			// preceding filter as its source however late in the rule it stands.
+			'sourceMode' => $isChained ? 'filter' : 'workflow',
 			'conditions' => $conditions,
 		];
 
-		if ($previousFilterId)
+		if ($externalSourceKey !== '')
+		{
+			$filterSettings['targetEntityKey'] = $externalSourceKey;
+		}
+
+		if ($isChained)
 		{
 			$filterSettings['sourceFilterId'] = $previousFilterId;
 		}
 
 		return $filterSettings;
+	}
+
+	/**
+	 * Key of a source outside CRM, as the filter card writes it. A numeric key names a CRM entity type
+	 * and travels in `targetEntityTypeId` alone, the way settings saved before the key existed do.
+	 */
+	private static function extractExternalSourceKey(array $properties): string
+	{
+		$key = is_string($properties['DynamicEntityKey'] ?? null)
+			? trim($properties['DynamicEntityKey'])
+			: ''
+		;
+
+		return is_numeric($key) ? '' : $key;
 	}
 
 	private static function isNodeFilterBackingActivity(string $activityType): bool

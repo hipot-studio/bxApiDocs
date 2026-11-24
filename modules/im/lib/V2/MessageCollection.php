@@ -860,10 +860,9 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	{
 		$additionalMessageIds = array_diff($this->getReplayedMessageIds(), $this->getIds());
 		$popup = [
-			// First on purpose: PopupData::toRestFormat() serializes the items in insertion order, and this
-			// one fills the titles of the whole tree. Placed after AdditionalMessagePopupItem it would fill
-			// the nested collections only after they had already been serialized, so a reply target outside
-			// the loaded window and a pinned message would show no title even to a reader who has access.
+			// a prefill item: PopupData runs it ahead of every serialization whatever its place here, so
+			// the nested collections - a reply target outside the loaded window, a pinned message - carry
+			// their titles too
 			new ForwardSourcePopupItem($this),
 			new UserPopupItem($this->getUserIds()),
 			new FilePopupItem($this->getFiles()),

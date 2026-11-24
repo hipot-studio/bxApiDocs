@@ -13,55 +13,28 @@ final class BuilderArgumentGuard
 	public static function validate(string $uri, array $arguments): Result
 	{
 		$schema = BuilderArgumentContract::forMethod($uri);
-		$violation = null;
-		if (
-			$schema === []
-			|| !self::isJson($arguments)
-			|| !self::matches($schema, $arguments)
-			|| ($violation = self::ruleViolation($uri, $arguments)) !== null
-		)
+		if ($schema === [] || !self::isJson($arguments))
 		{
-			$result = Refusal::error(FailureCode::InvalidArgument, 'Invalid BI Builder arguments.');
-			$violation ??= self::facetViolation($schema, $arguments);
-			if ($violation !== null && $violation !== [])
-			{
-				$result->setData($violation);
-			}
+			return Refusal::error(FailureCode::InvalidArgument, 'Invalid BI Builder arguments.');
+		}
+		$violation = self::firstViolation($schema, $arguments);
+		if ($violation !== null)
+		{
+			$message = $violation->isNested()
+				? ArgumentViolationFormatter::format($violation) : 'Invalid BI Builder arguments.';
 
-			return $result;
+			return Refusal::error(FailureCode::InvalidArgument, $message)->setData([
+				'argumentViolation' => ArgumentViolationFormatter::path($violation->path) . '.' . $violation->facet,
+			]);
+		}
+		$rule = self::ruleViolation($uri, $arguments);
+		if ($rule !== null)
+		{
+			return Refusal::error(FailureCode::InvalidArgument,
+				ArgumentViolationFormatter::rule($rule) ?? 'Invalid BI Builder arguments.')->setData($rule);
 		}
 
 		return new Result();
-	}
-
-	/**
-	 * The first root argument that breaks a facet the MCP entry used to refuse with its own text.
-	 *
-	 * The violation is named `<argument>.<facet>`, e.g. `chartId.minimum`.
-	 */
-	private static function facetViolation(array $schema, array $arguments): ?array
-	{
-		foreach ($schema['properties'] ?? [] as $name => $property)
-		{
-			$value = $arguments[$name] ?? null;
-			$facet = match (true)
-			{
-				is_int($value) && isset($property['minimum']) && $value < $property['minimum'] => 'minimum',
-				is_string($value) && isset($property['minLength']) && $property['minLength'] > 0
-					&& (mb_strlen($value) < $property['minLength'] || trim($value) === '') => 'minLength',
-				is_array($value) && isset($property['minItems']) && count($value) < $property['minItems'] => 'minItems',
-				is_array($value) && isset($property['x-max-unique-items'])
-					&& array_filter($value, 'is_int') === $value
-					&& count(array_unique($value)) > $property['x-max-unique-items'] => 'x-max-unique-items',
-				default => null,
-			};
-			if ($facet !== null)
-			{
-				return ['argumentViolation' => $name . '.' . $facet];
-			}
-		}
-
-		return null;
 	}
 
 	/**
@@ -140,7 +113,7 @@ final class BuilderArgumentGuard
 		{
 			return ['argumentViolation' => 'dimensions.required', 'vizType' => $viz];
 		}
-		foreach ($arguments['filters'] ?? [] as $filter)
+		foreach ($arguments['filters'] ?? [] as $index => $filter)
 		{
 			$filter = (array)$filter;
 			if (($filter['operator'] ?? '=') !== 'between')
@@ -152,7 +125,7 @@ final class BuilderArgumentGuard
 			{
 				continue;
 			}
-			$between = ['column' => trim($filter['column'])];
+			$between = ['column' => trim($filter['column']), 'index' => $index];
 			if (!is_array($value))
 			{
 				return ['argumentViolation' => is_string($value) ? 'between.blank' : 'between.type'] + $between;
@@ -163,17 +136,17 @@ final class BuilderArgumentGuard
 			}
 			if (!array_is_list($value))
 			{
-				return [];
+				return ['argumentViolation' => 'between.list'] + $between;
 			}
-			foreach ($value as $bound)
+			foreach ($value as $boundIndex => $bound)
 			{
 				if ($bound === null || (is_scalar($bound) && trim((string)$bound) === ''))
 				{
-					return ['argumentViolation' => 'between.bounds'] + $between;
+					return ['argumentViolation' => 'between.bounds', 'boundIndex' => $boundIndex] + $between;
 				}
 				if (!is_scalar($bound))
 				{
-					return [];
+					return ['argumentViolation' => 'between.boundType', 'boundIndex' => $boundIndex] + $between;
 				}
 			}
 		}
@@ -273,26 +246,140 @@ final class BuilderArgumentGuard
 		return true;
 	}
 
-	private static function matches(array $schema, mixed $value): bool
+	private static function firstViolation(array $schema, mixed $value, array $path = []): ?ArgumentViolation
 	{
 		if (isset($schema['$ref']))
 		{
-			return true;
+			return null;
 		}
 		if (isset($schema['anyOf']))
 		{
+			$best = null;
+			$types = [];
 			foreach ($schema['anyOf'] as $alternative)
 			{
-				if (self::matches($alternative, $value))
+				$violation = self::firstViolation($alternative, $value, $path);
+				if ($violation === null)
 				{
-					return true;
+					return null;
+				}
+				$type = $alternative['type'] ?? '';
+				$types[] = $type;
+				if (self::hasType($type, $value)
+					&& ($best === null || count($violation->path) > count($best->path)))
+				{
+					$best = $violation;
 				}
 			}
 
-			return false;
+			return $best ?? new ArgumentViolation($path, 'type', ['type' => array_values(array_unique($types))]);
 		}
 		$type = $schema['type'] ?? '';
-		$typed = match ($type) {
+		if (!self::hasType($type, $value))
+		{
+			return new ArgumentViolation($path, 'type', $schema);
+		}
+		if (isset($schema['enum']) && !in_array($value, $schema['enum'], true))
+		{
+			return new ArgumentViolation($path, 'enum', $schema);
+		}
+		$facet = null;
+		if ($type === 'integer' || $type === 'number')
+		{
+			$facet = match (true)
+			{
+				isset($schema['minimum']) && $value < $schema['minimum'] => 'minimum',
+				isset($schema['maximum']) && $value > $schema['maximum'] => 'maximum',
+				default => null,
+			};
+		}
+		elseif ($type === 'string')
+		{
+			$length = mb_strlen($value);
+			$facet = match (true)
+			{
+				isset($schema['minLength']) && ($length < $schema['minLength']
+					|| ($schema['minLength'] > 0 && trim($value) === '')) => 'minLength',
+				isset($schema['maxLength']) && $length > $schema['maxLength'] => 'maxLength',
+				isset($schema['pattern']) && preg_match('~' . $schema['pattern'] . '~uD', $value) !== 1 => 'pattern',
+				default => null,
+			};
+		}
+		elseif ($type === 'array')
+		{
+			$count = count($value);
+			$facet = match (true)
+			{
+				isset($schema['minItems']) && $count < $schema['minItems'] => 'minItems',
+				isset($schema['maxItems']) && $count > $schema['maxItems'] => 'maxItems',
+				isset($schema['x-max-unique-items']) && array_filter($value, 'is_int') === $value
+					&& count(array_unique($value)) > $schema['x-max-unique-items'] => 'x-max-unique-items',
+				default => null,
+			};
+		}
+		if ($facet !== null)
+		{
+			return new ArgumentViolation($path, $facet, $schema);
+		}
+		if ($type === 'array')
+		{
+			foreach ($value as $index => $item)
+			{
+				$violation = self::firstViolation($schema['items'], $item, [...$path, $index]);
+				if ($violation !== null)
+				{
+					return $violation;
+				}
+			}
+		}
+		if ($type === 'object')
+		{
+			$record = is_array($value) ? $value : get_object_vars($value);
+			foreach ($schema['required'] ?? [] as $required)
+			{
+				if (!array_key_exists($required, $record))
+				{
+					return new ArgumentViolation([...$path, $required], 'required', $schema['properties'][$required] ?? []);
+				}
+			}
+			foreach ($schema['properties'] ?? [] as $key => $property)
+			{
+				if (array_key_exists($key, $record))
+				{
+					$violation = self::firstViolation($property, $record[$key], [...$path, (string)$key]);
+					if ($violation !== null)
+					{
+						return $violation;
+					}
+				}
+			}
+			$extra = array_diff_key($record, $schema['properties'] ?? []);
+			ksort($extra, SORT_STRING);
+			foreach ($extra as $key => $item)
+			{
+				$property = $schema['additionalProperties'] ?? true;
+				if ($property === false)
+				{
+					return new ArgumentViolation([...$path, (string)$key], 'additionalProperties', []);
+				}
+				if (is_array($property))
+				{
+					$violation = self::firstViolation($property, $item, [...$path, (string)$key]);
+					if ($violation !== null)
+					{
+						return $violation;
+					}
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private static function hasType(string $type, mixed $value): bool
+	{
+		return match ($type)
+		{
 			'integer' => is_int($value),
 			'number' => is_int($value) || is_float($value),
 			'string' => is_string($value),
@@ -303,63 +390,5 @@ final class BuilderArgumentGuard
 				|| (is_object($value) && get_class($value) === \stdClass::class),
 			default => false,
 		};
-		if (!$typed || (isset($schema['enum']) && !in_array($value, $schema['enum'], true)))
-		{
-			return false;
-		}
-		if ($type === 'integer' || $type === 'number')
-		{
-			return (!isset($schema['minimum']) || $value >= $schema['minimum'])
-				&& (!isset($schema['maximum']) || $value <= $schema['maximum']);
-		}
-		if ($type === 'string')
-		{
-			$length = mb_strlen($value);
-
-			return (!isset($schema['minLength']) || $length >= $schema['minLength'])
-				&& (!isset($schema['minLength']) || $schema['minLength'] === 0 || trim($value) !== '')
-				&& (!isset($schema['maxLength']) || $length <= $schema['maxLength'])
-				&& (!isset($schema['pattern']) || preg_match('~' . $schema['pattern'] . '~uD', $value) === 1);
-		}
-		if ($type === 'array')
-		{
-			$count = count($value);
-			if ((isset($schema['minItems']) && $count < $schema['minItems'])
-				|| (isset($schema['maxItems']) && $count > $schema['maxItems']))
-			{
-				return false;
-			}
-			foreach ($value as $item)
-			{
-				if (!self::matches($schema['items'], $item))
-				{
-					return false;
-				}
-			}
-
-			return !isset($schema['x-max-unique-items'])
-				|| count(array_unique($value)) <= $schema['x-max-unique-items'];
-		}
-		if ($type === 'object')
-		{
-			$record = is_array($value) ? $value : get_object_vars($value);
-			foreach ($schema['required'] ?? [] as $required)
-			{
-				if (!array_key_exists($required, $record))
-				{
-					return false;
-				}
-			}
-			foreach ($record as $key => $item)
-			{
-				$property = $schema['properties'][$key] ?? $schema['additionalProperties'] ?? true;
-				if ($property === false || (is_array($property) && !self::matches($property, $item)))
-				{
-					return false;
-				}
-			}
-		}
-
-		return true;
 	}
 }

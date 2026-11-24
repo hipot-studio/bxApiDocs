@@ -33,6 +33,11 @@ class FileError extends Error
 	 * Both are contract violations by the caller of im.v2.File.directDownload, not by the person behind it:
 	 * a type outside the enum and a call made inside a REST batch. A correct client reaches neither, and
 	 * both are left without a phrase for the same reason as UPDATE_STEP_OUT_OF_ORDER below.
+	 *
+	 * BATCH_NOT_ALLOWED is shared: im.v2.File.upload and im.v2.File.uploadToFolder raise it for the batch
+	 * form of fields.files called inside a REST batch, where one request would otherwise multiply into
+	 * hundreds of uploads. A correct client can meet it there - it is the composition that is refused,
+	 * not the call - so the answer carries the code as its own description, and both REST pages say so.
 	 */
 	public const UNKNOWN_DOWNLOAD_TYPE = 'FILE_UNKNOWN_DOWNLOAD_TYPE';
 	public const BATCH_NOT_ALLOWED = 'FILE_BATCH_NOT_ALLOWED';
@@ -43,6 +48,41 @@ class FileError extends Error
 	 */
 	public const UPDATE_STEP_OUT_OF_ORDER = 'FILE_UPDATE_STEP_OUT_OF_ORDER';
 	public const FEATURE_DISABLED = 'FEATURE_DISABLED';
+
+	/**
+	 * The refusals of the chunked upload door. All of them are addressed to a person behind a client
+	 * that can act on them - send the chunk again, resume from the offset the answer names, start the
+	 * upload over - so all of them carry a phrase.
+	 *
+	 * The door never lets a code of \Bitrix\UI\FileUploader\UploaderError out; the translation of the
+	 * circuit into these codes lives in Upload\UploadErrorMapper.
+	 */
+	public const UPLOAD_CHUNK_WINDOW_EMPTY = 'FILE_UPLOAD_CHUNK_WINDOW_EMPTY';
+	public const UPLOAD_CHUNK_MISSING = 'FILE_UPLOAD_CHUNK_MISSING';
+	public const UPLOAD_CHUNK_TOO_BIG = 'FILE_UPLOAD_CHUNK_TOO_BIG';
+	public const UPLOAD_CHUNK_TOO_SMALL = 'FILE_UPLOAD_CHUNK_TOO_SMALL';
+	public const UPLOAD_CHUNK_OFFSET_MISMATCH = 'FILE_UPLOAD_CHUNK_OFFSET_MISMATCH';
+	public const UPLOAD_SESSION_EXPIRED = 'FILE_UPLOAD_SESSION_EXPIRED';
+	public const UPLOAD_SESSION_BUSY = 'FILE_UPLOAD_SESSION_BUSY';
+	public const UPLOAD_NOT_COMPLETE = 'FILE_UPLOAD_NOT_COMPLETE';
+	public const UPLOAD_TOO_MANY_SESSIONS = 'FILE_UPLOAD_TOO_MANY_SESSIONS';
+	public const UPLOAD_FIELD_TOO_LONG = 'FILE_UPLOAD_FIELD_TOO_LONG';
+
+	/**
+	 * The two refusals of the half of the door that finishes an upload without publishing anything
+	 * ({@see Upload\ChunkedUploadService::finishToFolder()}). They describe the state of a session to
+	 * the REST client. The client handles them by code, so neither has a localized phrase.
+	 *
+	 * ALREADY_PUBLISHED is the one cross-mode guard of the door: a session whose file is already a message
+	 * is not answered by the identifier of that file, because the caller would hand it to
+	 * im.disk.file.commit and publish the very same file a second time.
+	 *
+	 * UPLOAD_FILE_GONE keeps the answer of the folder half whole: it carries the file or it is a refusal,
+	 * and a file registered without a message goes away in the ordinary course of things - the caller
+	 * discards the draft, or the cleanup of im sweeps it.
+	 */
+	public const UPLOAD_ALREADY_PUBLISHED = 'FILE_UPLOAD_ALREADY_PUBLISHED';
+	public const UPLOAD_FILE_GONE = 'FILE_UPLOAD_FILE_GONE';
 
 	protected function loadErrorMessage($code, $replacements): string
 	{

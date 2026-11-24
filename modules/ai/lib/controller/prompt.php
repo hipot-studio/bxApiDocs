@@ -210,6 +210,8 @@ class Prompt extends Controller
 	 * @param GetPromptDataByCodeRequest $request
 	 * @param PromptService $promptService
 	 * @param CategoryService $categoryService
+	 * @return array Keys: prompt (\Bitrix\AI\SharePrompt\Service\Dto\PromptForUpdateDto, [] if not found)
+	 *     and categoriesListWithTranslations.
 	 * @throws \Exception
 	 */
 	public function getPromptByCodeForUpdateAction(
@@ -329,7 +331,7 @@ class Prompt extends Controller
 	}
 
 	/**
-	 * Returned prompt data by code
+	 * Returned categories of the prompt by prompt code
 	 *
 	 * @param GetPromptDataByCodeRequest $request
 	 * @param CategoryService $categoryService

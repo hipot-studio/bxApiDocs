@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
-use Bitrix\Intranet\Internal\MainTool\AccessPolicy;
+use Bitrix\Intranet\Internal\Access\MainTool\AccessPolicy;
 use Bitrix\Intranet\Settings\Tools;
 use Bitrix\Intranet\UI\LeftMenu;
 use Bitrix\Main;
@@ -122,7 +122,7 @@ abstract class PresetAbstract implements PresetInterface
 		{
 			return $savedStructure;
 		}
-		$effective = Manager::getEffectiveState($this->getSiteId());
+		$effective = Manager::getMenuSettingsForUser($this->getSiteId());
 		$data = $effective !== null
 			? $effective['sortData']
 			: \CUserOptions::GetOption("intranet", "left_menu_sorted_items_" . $this->getSiteId())
@@ -312,7 +312,10 @@ abstract class PresetAbstract implements PresetInterface
 			return null;
 		}
 
-		$effective = Manager::getEffectiveState($this->getSiteId(), $forAllUsers ? 0 : null);
+		$effective = $forAllUsers
+			? Manager::getCommonMenuSettings($this->getSiteId())
+			: Manager::getMenuSettingsForUser($this->getSiteId())
+		;
 		if (
 			$effective !== null
 				? ($effective['source'] === 'forced' || $effective['hasPersonalChoice'])

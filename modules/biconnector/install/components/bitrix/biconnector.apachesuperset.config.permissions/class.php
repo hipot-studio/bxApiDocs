@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Component\PermissionConfig;
 use Bitrix\BIConnector\Access\Component\PermissionSection\SectionSet;
+use Bitrix\BIConnector\Access\Component\RoleManagementGuard;
 use Bitrix\BIConnector\Access\Component\SectionPayload;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main;
@@ -27,6 +28,9 @@ class ApacheSupersetConfigPermissionsComponent
 
 	/**
 	 * Sections the person may edit; resolved by the access check.
+	 *
+	 * The screen draws every section of the portal and saves these ones: a section outside the set is
+	 * drawn read only.
 	 */
 	private ?SectionSet $sections = null;
 
@@ -93,29 +97,32 @@ class ApacheSupersetConfigPermissionsComponent
 		$this->arResult['ACTION_URI'] = $this->getPath() . '/ajax.php';
 		$this->arResult['NAME'] = Loc::getMessage('BICONNECTOR_APACHESUPERSET_CONFIG_PERMISSIONS_ROLE_EDIT_COMP_TEMPLATE_NAME');
 
-		$configPermissions = new PermissionConfig($sections);
+		$shownSections = SectionSet::forPortal();
+		$configPermissions = new PermissionConfig($shownSections, $sections);
 
 		$this->arResult['USER_GROUPS'] = $configPermissions->getUserGroups();
 		$this->arResult['ACCESS_RIGHTS'] = $configPermissions->getAccessRights();
+		$this->arResult['CAN_MANAGE_ROLES'] = (new RoleManagementGuard())->canManageRoles();
 
-		$this->initLeftMenu($sections);
+		$this->initLeftMenu($shownSections, $sections);
 		$this->initSectionData($sections);
 	}
 
 	/**
-	 * Table of contents of the screen: the sections of the matrix, in its order.
+	 * Table of contents of the screen: every section of the matrix, in its order, the ones the person
+	 * may not set up marked read only.
 	 *
-	 * A person with a single section gets no column: there is nothing to scroll to, and the screen
-	 * of one section is the screen as it was before the sections appeared.
+	 * A portal with a single section gets no column: there is nothing to scroll to.
 	 */
-	private function initLeftMenu(SectionSet $sections): void
+	private function initLeftMenu(SectionSet $shown, SectionSet $editable): void
 	{
 		$items = [];
-		foreach ($sections->getSections() as $section)
+		foreach ($shown->getSections() as $section)
 		{
 			$items[] = [
 				'CODE' => $section->getCode(),
 				'NAME' => $section->getTitle(),
+				'IS_READ_ONLY' => !$editable->hasSection($section->getCode()),
 			];
 		}
 
@@ -124,10 +131,10 @@ class ApacheSupersetConfigPermissionsComponent
 	}
 
 	/**
-	 * Data of the groups the sections of this person draw, and of no other ones.
+	 * Data of the groups of the sections this person may set up, and of no other ones.
 	 *
-	 * The popup of a group and the list of its dashboards or tables are the payload of one axis,
-	 * and a person without that axis on his screen has no business reading its catalog.
+	 * The popup of a group and the list of its dashboards or tables are the payload of one axis, and
+	 * a section drawn read only opens no popup, so its catalog is not read.
 	 */
 	private function initSectionData(SectionSet $sections): void
 	{
@@ -137,6 +144,7 @@ class ApacheSupersetConfigPermissionsComponent
 		$this->arResult['DASHBOARD_GROUPS'] = $payload['DASHBOARD_GROUPS'];
 		$this->arResult['DASHBOARDS'] = $payload['DASHBOARDS'];
 		$this->arResult['NEW_TABLE_GROUP_PERMISSIONS'] = $payload['NEW_TABLE_GROUP_PERMISSIONS'];
+		$this->arResult['NEW_TABLE_ROW_PERMISSION'] = $payload['NEW_TABLE_ROW_PERMISSION'];
 		$this->arResult['TABLE_GROUPS'] = $payload['TABLE_GROUPS'];
 		$this->arResult['TABLES'] = $payload['TABLES'];
 		$this->arResult['USER_DATA'] = [

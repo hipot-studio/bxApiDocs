@@ -17,7 +17,6 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
-use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Dto\Audit\AuditActionContext;
 use Bitrix\Disk\Internal\Entity\Audit\AuditContext;
 use Bitrix\Disk\Internal\Service\Audit\AuditActionContextResolver;
@@ -25,8 +24,8 @@ use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
 use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Public\Provider\ExternalLinkTariffProvider;
 use Bitrix\Disk\Security\SecurityContext;
-use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
@@ -520,28 +519,16 @@ class CBPDiskGetLinkActivity extends BaseActivity implements IBPConfigurableActi
 	}
 
 	/**
-	 * Publishing is allowed by the portal and by the plan, checked exactly as the access popup checks it,
-	 * @see \Bitrix\Disk\Controller\AccessRights::checkManageExternalLink().
+	 * Publishing is allowed by the plan and by the portal. The feature of the plan for the type of the object
+	 * is chosen by the module alone, @see ExternalLinkTariffProvider.
 	 */
 	private static function isPublicLinkAllowed(BaseObject $realObject): bool
 	{
-		if ($realObject instanceof Folder)
-		{
-			$feature = 'disk_manual_external_folder';
-		}
-		elseif ($realObject instanceof File)
-		{
-			$feature = (int)$realObject->getTypeFile() === TypeFile::BOARD
-				? 'disk_board_external_link'
-				: 'disk_manual_external_link'
-			;
-		}
-		else
-		{
-			$feature = null;
-		}
-
-		if ($feature !== null && !Bitrix24Manager::isFeatureEnabled($feature))
+		$isAllowedByTariff = ServiceLocator::getInstance()
+			->get(ExternalLinkTariffProvider::class)
+			->isManualLinkCreationAllowed($realObject)
+		;
+		if (!$isAllowedByTariff)
 		{
 			return false;
 		}

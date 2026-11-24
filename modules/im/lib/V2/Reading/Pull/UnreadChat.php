@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Pull\EventType;
 use Bitrix\Im\V2\Pull\RecentPreviewPullTrait;
 use Bitrix\Im\V2\Recent\PreviewSource\PreviewSource;
 use Bitrix\Im\V2\Recent\RecentItem;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 
 class UnreadChat extends BaseChatEvent
@@ -36,6 +37,8 @@ class UnreadChat extends BaseChatEvent
 
 	protected function getBasePullParamsInternal(): array
 	{
+		$isOpenLine = $this->chat->getType() === Chat::IM_TYPE_OPEN_LINE;
+
 		return array_merge(
 			$this->getBaseRecentPreviewParams($this->chat, $this->chat->getLastMessage(), $this->getDateLastActivity()),
 			[
@@ -44,9 +47,31 @@ class UnreadChat extends BaseChatEvent
 				'muted' => $this->chat->getRelationByUserId($this->userId)?->getNotifyBlock() ?? false,
 				'counter' => $this->counter,
 				'markedId' => $this->recentItem?->getMarkedId() ?? 0,
-				'lines' => $this->chat->getType() === Chat::IM_TYPE_OPEN_LINE,
+				'lines' => $isOpenLine,
+				'isNonAnswered' => $isOpenLine && $this->hasNonAnsweredSession(),
 			],
 		);
+	}
+
+	/**
+	 * A missing flag means the indicator is taken away, and this event is published by reading a chat
+	 * and by marking it unread, not only by the point that drops the counter: both have to state the
+	 * fact. {@see Chat::isNonAnsweredSession()} is of no use here, its fake relations are only filled
+	 * while a message is being sent, so the state of the session is taken from the source the counter
+	 * unit of the same chat is marked from
+	 * ({@see \Bitrix\Im\V2\Reading\Counter\UserCountersCollector::fetchAdditionalOpenLinesCounters()}),
+	 * and the event cannot disagree with the counter it travels with.
+	 */
+	private function hasNonAnsweredSession(): bool
+	{
+		if (!Loader::includeModule('imopenlines'))
+		{
+			return false;
+		}
+
+		$nonAnsweredChatIds = \Bitrix\ImOpenLines\Recent::getNonAnsweredLines($this->userId);
+
+		return in_array((int)$this->chat->getId(), $nonAnsweredChatIds, true);
 	}
 
 	private function getDateLastActivity(): ?DateTime

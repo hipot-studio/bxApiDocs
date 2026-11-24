@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
-use Bitrix\Intranet\Internal\Integration\Ui\CopilotService;
+use Bitrix\Intranet\Internal\Service\LeftMenu\TeamWorkMenuItems;
 
 class Social extends PresetAbstract
 {
@@ -78,28 +78,7 @@ class Social extends PresetAbstract
 		$structure = static::STRUCTURE;
 		array_unshift($structure['shown']['menu_marketplace_group'], 'menu_vibecode');
 
-		$structure['shown']['menu_teamwork'] = [
-			'menu_im_messenger',
-			'menu_im_collab',
-			'menu_live_feed',
-			'menu_calendar',
-			'menu_documents',
-			'menu_boards',
-			'menu_files',
-			'menu_external_mail',
-			'menu_all_groups',
-			'menu_all_spaces',
-		];
-
-		if (CopilotService::shouldShowInLeftMenu())
-		{
-			array_splice($structure['shown']['menu_teamwork'], 1, 0, ['menu_im_copilot']);
-		}
-
-		if (\Bitrix\Main\Loader::includeModule('call') && \Bitrix\Call\Settings::isSyncPresetEnabled())
-		{
-			array_splice($structure['shown']['menu_teamwork'], 3, 0, ['menu_sync']);
-		}
+		$structure['shown']['menu_teamwork'] = TeamWorkMenuItems::getIds();
 
 		$found = false;
 		$filler = function(&$item, $key) use (&$filler, &$found) {

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\UnifiedLink;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository;
+use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
+use Bitrix\Main\Application;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\Internal\Access\UnifiedLink\AccessCheckHandlerFactory;
@@ -49,6 +52,20 @@ readonly class UnifiedLinkAccessService
 	public function checkUnifiedLinkSource(BaseObject $baseObject, int $userId): UnifiedLinkAccessLevel
 	{
 		return $this->accessCheckHandlerFactory->getForUnifiedLink($userId)->check($baseObject);
+	}
+
+	public function checkFreshUnifiedLinkSource(BaseObject $baseObject, int $userId): UnifiedLinkAccessLevel
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			$bypassOuterRepeatableRead = DocumentStateRepository::hasOpenTransaction()
+				&& !DocumentStateRepository::hasFreshDocumentTransaction();
+			$snapshot = UnifiedLinkAccessRepository::sourceSnapshot([(int)$baseObject->getId()], $bypassOuterRepeatableRead);
+			return $this->accessCheckHandlerFactory->getForUnifiedLink($userId, fresh: true, snapshot: $snapshot)->check($baseObject);
+		}
+		finally { $pool->useMasterOnly(false); }
 	}
 
 	public function checkAll(

@@ -6,6 +6,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Public\Provider\ExternalLinkTariffProvider;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
@@ -15,6 +16,7 @@ abstract class BaseObject extends Base
 {
 	protected ExternalLinkProvider $externalLinkProvider;
 	protected ExternalLinkAccessService $externalLinkAccessService;
+	protected ?ExternalLinkTariffProvider $externalLinkTariffProvider = null;
 
 	public function __construct($methodName, array $params, $start, \CRestServer $restServer)
 	{
@@ -22,6 +24,7 @@ abstract class BaseObject extends Base
 
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
 		$this->externalLinkAccessService = ServiceLocator::getInstance()->get(ExternalLinkAccessService::class);
+		$this->externalLinkTariffProvider = ServiceLocator::getInstance()->get(ExternalLinkTariffProvider::class);
 	}
 
 	/**
@@ -254,6 +257,11 @@ abstract class BaseObject extends Base
 
 		if(!$extModel)
 		{
+			if (!$this->getExternalLinkTariffProvider()->isManualLinkCreationAllowed($object))
+			{
+				throw new AccessException;
+			}
+
 			$extModel = $object->getRealObject()->addExternalLink(array(
 				'CREATED_BY' => $this->userId,
 				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
@@ -271,6 +279,16 @@ abstract class BaseObject extends Base
 			Disk\UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
 			$object,
 		);
+	}
+
+	private function getExternalLinkTariffProvider(): ExternalLinkTariffProvider
+	{
+		// Descendants may be built without the parent constructor.
+		$this->externalLinkTariffProvider ??= ServiceLocator::getInstance()
+			->get(ExternalLinkTariffProvider::class)
+		;
+
+		return $this->externalLinkTariffProvider;
 	}
 
 	/**

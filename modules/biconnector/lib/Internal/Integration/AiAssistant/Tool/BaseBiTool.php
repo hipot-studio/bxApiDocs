@@ -34,6 +34,7 @@ abstract class BaseBiTool extends ToolContract implements ImpactAwareTool
 
 	public function runWithArguments(int $callerUserId, array $args): array
 	{
+		$this->assertAiToolsEnabled();
 		$this->callerUserId = $callerUserId;
 		$this->enforceRateLimit($callerUserId);
 		if (BuilderArgumentContract::methodForTool($this->getName()) !== null)

@@ -27,6 +27,10 @@ final class DocumentSessionContext implements Jsonable
 	protected $object;
 	protected ?int $htmlBaselineVersion = null;
 	protected ?int $htmlExpiresAt = null;
+	/** @var array{baseVersion: int, lastSeenAt: int, lastActivityAt: int, expiresAt: int}|null */
+	protected ?array $markdownEditorState = null;
+	protected bool $markdownEditorReleased = false;
+	protected bool $htmlUnifiedLinkValidated = false;
 
 	public function __construct(int $objectId, int $attachedObjectId = null, int $externalLinkId = null)
 	{
@@ -107,14 +111,38 @@ final class DocumentSessionContext implements Jsonable
 			return null;
 		}
 
-		return (new self(
+		$context = (new self(
 			$decoded['objectId'],
 			$decoded['attachedObjectId'] ?? null,
 			$decoded['externalLinkId'] ?? null
 		))->setHtmlEditorState(
 			isset($decoded['html']['baselineVersion']) ? (int)$decoded['html']['baselineVersion'] : null,
 			isset($decoded['html']['expiresAt']) ? (int)$decoded['html']['expiresAt'] : null,
-		);
+		)->setHtmlUnifiedLinkValidated(($decoded['html']['unifiedLinkValidated'] ?? false) === true);
+
+		$markdown = $decoded['md'] ?? null;
+		if (
+			isset(
+				$markdown['baseVersion'],
+				$markdown['lastSeenAt'],
+				$markdown['lastActivityAt'],
+				$markdown['expiresAt'],
+			)
+		)
+		{
+			$context->setMarkdownEditorState(
+				(int)$markdown['baseVersion'],
+				(int)$markdown['lastSeenAt'],
+				(int)$markdown['lastActivityAt'],
+				(int)$markdown['expiresAt'],
+			);
+			if (($markdown['released'] ?? false) === true)
+			{
+				$context->markMarkdownEditorReleased();
+			}
+		}
+
+		return $context;
 	}
 
 	public function toJson($options = 0)
@@ -129,7 +157,16 @@ final class DocumentSessionContext implements Jsonable
 			$data['html'] = [
 				'baselineVersion' => $this->htmlBaselineVersion,
 				'expiresAt' => $this->htmlExpiresAt,
+				'unifiedLinkValidated' => $this->htmlUnifiedLinkValidated,
 			];
+		}
+		if ($this->markdownEditorState !== null)
+		{
+			$data['md'] = $this->markdownEditorState;
+			if ($this->markdownEditorReleased)
+			{
+				$data['md']['released'] = true;
+			}
 		}
 
 		return Json::encode($data, $options);
@@ -151,6 +188,54 @@ final class DocumentSessionContext implements Jsonable
 	public function getHtmlExpiresAt(): ?int
 	{
 		return $this->htmlExpiresAt;
+	}
+
+	public function setMarkdownEditorState(int $baseVersion, int $lastSeenAt, int $lastActivityAt, int $expiresAt): self
+	{
+		$this->markdownEditorState = [
+			'baseVersion' => $baseVersion,
+			'lastSeenAt' => $lastSeenAt,
+			'lastActivityAt' => $lastActivityAt,
+			'expiresAt' => $expiresAt,
+		];
+
+		return $this;
+	}
+
+	/**
+	 * @return array{baseVersion: int, lastSeenAt: int, lastActivityAt: int, expiresAt: int}|null
+	 */
+	public function getMarkdownEditorState(): ?array
+	{
+		return $this->markdownEditorState;
+	}
+
+	/**
+	 * The md session was left by its tab on purpose (release): it is never taken again, unlike one put out by
+	 * a deadline.
+	 */
+	public function markMarkdownEditorReleased(): self
+	{
+		$this->markdownEditorReleased = true;
+
+		return $this;
+	}
+
+	public function isMarkdownEditorReleased(): bool
+	{
+		return $this->markdownEditorReleased;
+	}
+
+	public function setHtmlUnifiedLinkValidated(bool $validated): self
+	{
+		$this->htmlUnifiedLinkValidated = $validated;
+
+		return $this;
+	}
+
+	public function isHtmlUnifiedLinkValidated(): bool
+	{
+		return $this->htmlUnifiedLinkValidated;
 	}
 
 	public function getAttachedObjectId(): ?int

@@ -217,7 +217,8 @@ class Source extends Base
 			| Converter::TO_SNAKE
 		);
 		$fields = $converter->process($params['fields']);
-		$fields['type'] = Type::Rest->value;
+		$active = $fields['active'] ?? null;
+		unset($fields['active']);
 		$sourceId = (int)$params['id'];
 
 		$source = ExternalSourceTable::getById($sourceId)->fetchObject();
@@ -232,6 +233,12 @@ class Source extends Base
 			return $result;
 		}
 
+		if ($active !== null && $fields === [])
+		{
+			return SourceManager::updateConnectionActive($sourceId, $active);
+		}
+
+		$fields['type'] = Type::Rest->value;
 		$isDiagnosticsEnabled = self::isConnectionDiagnosticsEnabled();
 		$checkResult = self::checkConnectionBeforeUpdate($sourceId, $fields['settings'] ?? [], $isDiagnosticsEnabled);
 		if (!$checkResult->isSuccess())
@@ -245,7 +252,7 @@ class Source extends Base
 			return $result;
 		}
 
-		$updateConnectionResult = SourceManager::updateConnection($sourceId, $fields);
+		$updateConnectionResult = SourceManager::updateConnection($sourceId, $fields, $active);
 
 		if (!$updateConnectionResult->isSuccess())
 		{

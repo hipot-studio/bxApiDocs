@@ -3,8 +3,8 @@
 namespace Bitrix\Im\V2\Message\Reaction;
 
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Engine\Response\Converter;
 
 class PushService
@@ -51,7 +51,7 @@ class PushService
 
 		if ($chat->getType() === Chat::IM_TYPE_COMMENT)
 		{
-			CommentTagPublisher::addToStack($chat, $pull);
+			Locator::getPullSender()->sendToCommentSubscribers($chat, $pull);
 		}
 		else
 		{

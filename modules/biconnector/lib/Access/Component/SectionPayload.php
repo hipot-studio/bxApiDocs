@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Component\PermissionSection\SectionSet;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 
 /**
@@ -26,7 +27,7 @@ final class SectionPayload
 	 * the client read them whatever the sections of the person are.
 	 *
 	 * The catalog of an axis costs a read of its own, so it is asked for only where its section is
-	 * drawn: a person without the section gets the empty keys and no query behind them.
+	 * editable: a person who may not set up the section gets the empty keys and no query behind them.
 	 */
 	public function getData(): array
 	{
@@ -36,6 +37,7 @@ final class SectionPayload
 			'DASHBOARDS' => [],
 			'ACCESSIBLE_GROUP_IDS' => [],
 			'NEW_TABLE_GROUP_PERMISSIONS' => [],
+			'NEW_TABLE_ROW_PERMISSION' => [],
 			'TABLE_GROUPS' => [],
 			'TABLES' => [],
 		];
@@ -49,6 +51,13 @@ final class SectionPayload
 		{
 			$data = array_merge($data, [
 				'NEW_TABLE_GROUP_PERMISSIONS' => PermissionDictionary::getNewTableGroupPermissions(),
+				// the client builds the rows of a table added to a group from it before the save
+				'NEW_TABLE_ROW_PERMISSION' => PermissionDictionary::getTableRowPermission(
+					0,
+					'',
+					'',
+					Feature::isRowRulesEnabled(),
+				),
 				'TABLE_GROUPS' => TableGroupService::getGroups(),
 				'TABLES' => TableGroupService::getTables(),
 			]);

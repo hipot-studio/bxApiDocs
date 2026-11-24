@@ -130,6 +130,52 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 	}
 
 	/**
+	 * Batched form of getStartId(): the relations already loaded in this request are taken from the same
+	 * static cache, and only the users left over cost a single query instead of one query each.
+	 *
+	 * The answer of every user asked about goes into that cache, the zero of a user with no relation
+	 * included. Only offsetSet() used to write there, so the watchers of an open chat, of an open channel
+	 * and of an open project - who hold no relation at all - were asked about again by every publication
+	 * of the same post.
+	 *
+	 * @param int[] $userIds
+	 * @return array<int, int> START_ID per user asked about, zero for a user with no relation
+	 */
+	public static function getStartIds(array $userIds, int $chatId): array
+	{
+		$startIds = [];
+		$notCachedUserIds = [];
+
+		foreach ($userIds as $userId)
+		{
+			$userId = (int)$userId;
+
+			if (isset(self::$startIdStaticCache[$chatId][$userId]))
+			{
+				$startIds[$userId] = self::$startIdStaticCache[$chatId][$userId];
+			}
+			else
+			{
+				$notCachedUserIds[$userId] = $userId;
+			}
+		}
+
+		if (!empty($notCachedUserIds))
+		{
+			$relations = static::find(['CHAT_ID' => $chatId, 'USER_ID' => $notCachedUserIds]);
+
+			foreach ($notCachedUserIds as $userId)
+			{
+				$startId = $relations->getByUserId($userId, $chatId)?->getStartId() ?? 0;
+				self::$startIdStaticCache[$chatId][$userId] = $startId;
+				$startIds[$userId] = $startId;
+			}
+		}
+
+		return $startIds;
+	}
+
+	/**
 	 * The same border for a whole list of chats, in one range over IX_IM_REL_9 (USER_ID, CHAT_ID): read one
 	 * by one, every chat a caller names costs a select of its own. Fills the very cache {@see self::getStartId()}
 	 * reads, so the per-chat calls that follow stay in memory.
@@ -406,6 +452,11 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 		if (isset($filter['IS_HIDDEN']))
 		{
 			$query->where('IS_HIDDEN', $filter['IS_HIDDEN']);
+		}
+
+		if (isset($filter['NOTIFY_BLOCK']))
+		{
+			$query->where('NOTIFY_BLOCK', $filter['NOTIFY_BLOCK']);
 		}
 	}
 

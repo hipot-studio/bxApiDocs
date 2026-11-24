@@ -45,7 +45,10 @@ class TenzorOfd extends Ofd
 
 		$dateObj = Main\Type\DateTime::createFromTimestamp($data[Check::PARAM_DOC_TIME]);
 		$date = $dateObj->format('dmy');
-		$url .= $data[Check::PARAM_REG_NUMBER_KKT].'/'.$date.'/'.$data[Check::PARAM_FISCAL_DOC_ATTR];
+		$url .= rawurlencode((string)$data[Check::PARAM_REG_NUMBER_KKT])
+			.'/'.$date
+			.'/'.rawurlencode((string)$data[Check::PARAM_FISCAL_DOC_ATTR])
+		;
 
 		return $url;
 	}

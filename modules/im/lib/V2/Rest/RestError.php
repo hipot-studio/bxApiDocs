@@ -9,6 +9,7 @@ class RestError extends Error
 {
 	public const ACCESS_ERROR = 'ACCESS_ERROR';
 	public const WRONG_DATETIME_FORMAT = 'WRONG_DATETIME_FORMAT';
+	public const INVALID_DEVICE_TYPE = 'INVALID_DEVICE_TYPE';
 
 	protected function loadErrorMessage($code, $replacements): string
 	{

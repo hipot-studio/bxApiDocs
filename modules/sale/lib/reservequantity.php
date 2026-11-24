@@ -12,6 +12,11 @@ use Bitrix\Sale\Reservation\BasketReservationService;
 class ReserveQuantity extends Internals\CollectableEntity
 {
 	/**
+	 * The store confirmed by the check in onFieldModify; save() of the same entity does not query it again.
+	 */
+	private int $checkedStoreId = 0;
+
+	/**
 	 * @return string
 	 */
 	public static function getRegistryType()
@@ -166,6 +171,16 @@ class ReserveQuantity extends Internals\CollectableEntity
 				);
 			}
 
+			if ($value > 0)
+			{
+				if (!$this->isStoreExists())
+				{
+					return $this->getStoreNotExistsResult();
+				}
+
+				$this->checkedStoreId = $this->getCheckedStoreId();
+			}
+
 			$result = Internals\Catalog\Provider::tryReserve($this);
 			if (!$result->isSuccess())
 			{
@@ -218,6 +233,13 @@ class ReserveQuantity extends Internals\CollectableEntity
 
 		$id = $this->getId();
 
+		$isReserveOnMissingStore = $this->isReserveOnMissingStore();
+		$this->checkedStoreId = 0;
+		if ($isReserveOnMissingStore)
+		{
+			return $this->getStoreNotExistsResult();
+		}
+
 		if ($id > 0)
 		{
 			$fields = $this->getFields()->getChangedValues();
@@ -260,6 +282,89 @@ class ReserveQuantity extends Internals\CollectableEntity
 		$result->setId($id);
 
 		return $result;
+	}
+
+	/**
+	 * A new reserve, or a changed quantity or store of a reserve, must not point to a store that does not exist.
+	 * The check also covers values written by setFieldNoDemand, which skip onFieldModify.
+	 *
+	 * @return bool
+	 */
+	private function isReserveOnMissingStore(): bool
+	{
+		if ($this->getQuantity() <= 0)
+		{
+			return false;
+		}
+
+		if ($this->getId() > 0)
+		{
+			$changedValues = $this->getFields()->getChangedValues();
+			if (
+				!array_key_exists('QUANTITY', $changedValues)
+				&& !array_key_exists('STORE_ID', $changedValues)
+			)
+			{
+				return false;
+			}
+		}
+
+		$storeId = $this->getCheckedStoreId();
+		if ($storeId > 0 && $storeId === $this->checkedStoreId)
+		{
+			return false;
+		}
+
+		return !$this->isStoreExists();
+	}
+
+	/**
+	 * An empty store is the default store.
+	 *
+	 * @return int
+	 */
+	private function getCheckedStoreId(): int
+	{
+		$storeId = $this->getStoreId();
+		if ($storeId <= 0)
+		{
+			$storeId = (int)Configuration::getDefaultStoreId();
+		}
+
+		return $storeId;
+	}
+
+	/**
+	 * No store at all (inventory management is off) is not checked.
+	 *
+	 * @return bool
+	 */
+	private function isStoreExists(): bool
+	{
+		$storeId = $this->getCheckedStoreId();
+		if ($storeId <= 0 || !Main\Loader::includeModule('catalog'))
+		{
+			return true;
+		}
+
+		$store = \Bitrix\Catalog\StoreTable::getRow([
+			'select' => ['ID'],
+			'filter' => ['=ID' => $storeId],
+		]);
+
+		return (bool)$store;
+	}
+
+	private function getStoreNotExistsResult(): Result
+	{
+		$result = new Result();
+
+		return $result->addError(
+			new ResultError(
+				Main\Localization\Loc::getMessage('SALE_RESERVE_QUANTITY_STORE_NOT_EXISTS_ERROR'),
+				'SALE_RESERVE_QUANTITY_STORE_NOT_EXISTS'
+			)
+		);
 	}
 
 	public function delete()

@@ -59,6 +59,8 @@ class OpenChat extends GroupChat
 
 	public function extendPullWatch(): void
 	{
+		parent::extendPullWatch();
+
 		if (Loader::includeModule('pull'))
 		{
 			\CPullWatch::Add($this->getContext()->getUserId(), "IM_PUBLIC_{$this->getId()}", true);

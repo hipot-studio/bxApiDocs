@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Public\Message\BlocksBuilder\Entity\SpaceDividerSize;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Entity\TitleSize;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\Buttons;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\Fold;
+use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\Footer;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\FormFields;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\List\Icon;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\List\OrderedListElements;
@@ -25,10 +26,24 @@ class BlockItem
 	)
 	{}
 
+	/**
+	 * The footer and the gap before it are written as one pair so that a block type added later
+	 * cannot take the footer and forget the gap. On the wire they stay two sibling fields: the
+	 * footer is an array of rows and must keep being one for the clients reading it.
+	 */
+	private static function footerFields(?Footer $footer): array
+	{
+		return [
+			Field::Footer->value => $footer?->jsonSerialize(),
+			Field::FooterSpacing->value => $footer?->getSpacing()?->value,
+		];
+	}
+
 	public static function createTextBlock(
 		string $text,
 		?Sources $sources = null,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
@@ -36,6 +51,7 @@ class BlockItem
 			Field::Type->value => BlockType::Text->value,
 			Field::Text->value => $text,
 			Field::Sources->value => $sources?->jsonSerialize(),
+			...self::footerFields($footer),
 		]);
 	}
 
@@ -43,7 +59,8 @@ class BlockItem
 		string $text,
 		TitleSize $size = TitleSize::Small,
 		Color $color = Color::Base,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
@@ -52,6 +69,7 @@ class BlockItem
 			Field::Text->value => $text,
 			Field::Size->value => $size->value,
 			Field::Color->value => $color->value,
+			...self::footerFields($footer),
 		]);
 	}
 
@@ -60,7 +78,8 @@ class BlockItem
 		Color $color = Color::Base,
 		?Fold $fold = null,
 		?Sources $sources = null,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
@@ -70,6 +89,7 @@ class BlockItem
 			Field::Fold->value => $fold?->jsonSerialize(),
 			Field::Color->value => $color->value,
 			Field::Sources->value => $sources?->jsonSerialize(),
+			...self::footerFields($footer),
 		]);
 	}
 
@@ -79,7 +99,8 @@ class BlockItem
 		?Icon $icon = null,
 		?Fold $fold = null,
 		?Sources $sources = null,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
@@ -90,18 +111,21 @@ class BlockItem
 			Field::Fold->value => $fold?->jsonSerialize(),
 			Field::Color->value => $color->value,
 			Field::Sources->value => $sources?->jsonSerialize(),
+			...self::footerFields($footer),
 		]);
 	}
 
 	public static function createTableBlock(
 		TableRows $rows,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
 			Field::Id->value => $id,
 			Field::Type->value => BlockType::Table->value,
 			Field::Rows->value => $rows->jsonSerialize(),
+			...self::footerFields($footer),
 		]);
 	}
 
@@ -129,7 +153,8 @@ class BlockItem
 		string $imageUrl,
 		?string $text = null,
 		?string $status = null,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
@@ -138,6 +163,7 @@ class BlockItem
 			Field::ImageUrl->value => $imageUrl,
 			Field::Text->value => $text,
 			Field::Status->value => $status,
+			...self::footerFields($footer),
 		]);
 	}
 
@@ -146,7 +172,8 @@ class BlockItem
 		string $text,
 		?string $id = null,
 		?int $progressValue = null,
-		?Color $progressColor = null
+		?Color $progressColor = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
@@ -155,6 +182,7 @@ class BlockItem
 			Field::Title->value => $title,
 			Field::Text->value => $text,
 			Field::Progress->value => self::buildProgress($progressValue, $progressColor),
+			...self::footerFields($footer),
 		]);
 	}
 
@@ -178,13 +206,15 @@ class BlockItem
 
 	public static function createGalleryBlock(
 		array $fileIds,
-		?string $id = null
+		?string $id = null,
+		?Footer $footer = null
 	): self
 	{
 		return new self([
 			Field::Id->value => $id,
 			Field::Type->value => BlockType::Gallery->value,
 			Field::FileIds->value => $fileIds,
+			...self::footerFields($footer),
 		]);
 	}
 

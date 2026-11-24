@@ -24,6 +24,7 @@ final class FolderError
 	public const FOLDER_SORT_INVALID = 'FOLDER_SORT_INVALID';
 	public const FOLDER_SORT_STALE_SCREEN = 'FOLDER_SORT_STALE_SCREEN';
 	public const FOLDER_HIDE_NOT_ALLOWED = 'FOLDER_HIDE_NOT_ALLOWED';
+	public const FOLDER_READ_ALL_FAILED = 'FOLDER_READ_ALL_FAILED';
 
 	private function __construct()
 	{

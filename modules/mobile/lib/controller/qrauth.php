@@ -8,9 +8,7 @@ use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Error;
-use Bitrix\Mobile\Config\Feature;
 use Bitrix\Mobile\Deeplink;
-use Bitrix\Mobile\Feature\QrLoginFeature;
 use Bitrix\Mobile\Provider\QrGenerator;
 
 class QrAuth extends JsonController
@@ -34,11 +32,6 @@ class QrAuth extends JsonController
 
 	public function getLoginCodeAction(?int $ttl = null, bool $isDarkMode = false): ?array
 	{
-		if (!Feature::isEnabled(QrLoginFeature::class))
-		{
-			return $this->fail('Login code feature is disabled', 403);
-		}
-
 		if ($this->isGuestSession())
 		{
 			return $this->fail('Login code is not available for a guest session', 403);

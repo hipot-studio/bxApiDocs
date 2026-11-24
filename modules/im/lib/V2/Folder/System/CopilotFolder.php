@@ -53,4 +53,9 @@ final class CopilotFolder extends SystemFolder
 		// Safety net for a locale with no phrase file or key; every shipped locale declares the phrase.
 		return $title !== '' ? $title : CopilotNameResolver::getInstance()->getName();
 	}
+
+	public function canReadAll(): bool
+	{
+		return true;
+	}
 }

@@ -12,6 +12,7 @@ use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\History\Manager;
 use Bitrix\AI\Limiter\LimitControlService;
+use Bitrix\AI\Model\MonthlyPoolReceiptTable;
 use Bitrix\AI\Model\QueueTable;
 use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Role\RoleManager;
@@ -29,8 +30,23 @@ use Bitrix\Main\Type\DateTime;
 
 final class QueueJob
 {
+	private const MONTHLY_REFUND_CODE = 'ai:monthly-refund';
 	private const EVENT_SUCCESS = 'onQueueJobExecute';
 	private const EVENT_FAIL = 'onQueueJobFail';
+	private const HISTORY_WRITE_ENABLED = 'Y';
+	private const HISTORY_WRITE_DISABLED = 'N';
+	private const HISTORY_WRITE_CLAIMED_ENABLED = 'A';
+	private const HISTORY_WRITE_CLAIMED_DISABLED = 'B';
+	private const HISTORY_WRITE_FINALIZING_ENABLED = 'C';
+	private const HISTORY_WRITE_FINALIZING_DISABLED = 'D';
+	private const HISTORY_WRITE_REFUND_ENABLED = 'R';
+	private const HISTORY_WRITE_REFUND_DISABLED = 'S';
+	private const HISTORY_WRITE_REOPENED_ENABLED = 'E';
+	private const HISTORY_WRITE_REOPENED_DISABLED = 'F';
+	private const HISTORY_WRITE_REPEAT_CLAIMED_ENABLED = 'G';
+	private const HISTORY_WRITE_REPEAT_CLAIMED_DISABLED = 'H';
+	private const HISTORY_WRITE_REPEAT_PENDING_ENABLED = 'I';
+	private const HISTORY_WRITE_REPEAT_PENDING_DISABLED = 'J';
 
 	public const ERROR_EXECUTE = 'EXECUTE_ERROR';
 	public const ERROR_INVALID_JSON = 'INVALID_JSON';
@@ -38,6 +54,7 @@ final class QueueJob
 
 	public const DEFAULT_TTL = 14400;
 	public const MAX_TTL = 86400;
+	private const CALLBACK_CLAIM_TTL = 900;
 	private const CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackBody&hash={hash}&rid={hash}';
 	private const CLOUD_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.b24cloudai.callbackSuccess&hash={hash}&rid={hash}';
 	private const THIRDPARTY_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.thirdparty.callbackSuccess&hash={hash}&rid={hash}';
@@ -52,6 +69,10 @@ final class QueueJob
 	private bool $apiRequestCompleted = true;
 	/** Whether this instance took over a row created by an earlier attempt. */
 	private bool $reusedRow = false;
+	private bool $repeatedRequestStarted = false;
+	private bool $repeatedRequestPending = false;
+	private string $historyWriteState = self::HISTORY_WRITE_DISABLED;
+	private ?DateTime $stateExpireDate = null;
 	private int $ttl = self::DEFAULT_TTL;
 	private Context $context;
 	private IEngine $engine;
@@ -88,22 +109,55 @@ final class QueueJob
 			->setLimit($limit)
 			->exec();
 
-		// Every selected row is expired, and createFromHash() handles both outcomes itself:
-		// a loadable job goes through expire(), a broken one (engine/payload failed to unpack)
-		// is deleted right away — no second delete needed here.
+		// Expired finalizations repeat only a durable, idempotent monthly receipt refund.
+		// Other terminal side effects must not be repeated.
 		while ($row = $res->fetch())
 		{
 			self::createFromHash($row['HASH']);
 		}
 
+		self::clearOldMonthlyPoolReceipts($limit);
+
 		return __CLASS__ . '::' . __FUNCTION__ . '();';
+	}
+
+	private static function clearOldMonthlyPoolReceipts(int $limit): void
+	{
+		try
+		{
+			if (!Application::getConnection()->isTableExists(MonthlyPoolReceiptTable::getTableName()))
+			{
+				return;
+			}
+			$cutoff = (new \DateTimeImmutable('first day of this month'))->modify('-3 months');
+			(new Limiter\Repository\MonthlyPoolRepository())->cleanupReceiptsBefore(
+				$cutoff->format('Y-m'),
+				$limit,
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			try
+			{
+				(new \Bitrix\Main\Diag\LoggerFactory())
+					->createById('ai.limiter.shared_monthly_pool')
+					?->error('Unable to clean up old monthly pool receipts.', ['exception' => $exception])
+				;
+			}
+			catch (\Throwable)
+			{
+			}
+		}
 	}
 
 	/**
 	 * Creates Queue Job instance within from Engine.
 	 *
 	 * @param IEngine $engine Engine instance.
+	 * @param int|null $ttl Job lifetime in seconds, from 1 to MAX_TTL; null takes the Engine's
+	 *   getQueueJobTtl() if it has one, otherwise DEFAULT_TTL.
 	 * @return self
+	 * @throws \InvalidArgumentException If $ttl is out of range.
 	 */
 	public static function createWithinFromEngine(IEngine $engine, ?int $ttl = null): self
 	{
@@ -138,6 +192,77 @@ final class QueueJob
 			: $dateCreate < DateTime::createFromTimestamp(time() - self::DEFAULT_TTL);
 	}
 
+	private static function isClaimedHistoryWriteState(string $state): bool
+	{
+		return in_array(
+			$state,
+			[
+				self::HISTORY_WRITE_CLAIMED_ENABLED,
+				self::HISTORY_WRITE_CLAIMED_DISABLED,
+				self::HISTORY_WRITE_REPEAT_CLAIMED_ENABLED,
+				self::HISTORY_WRITE_REPEAT_CLAIMED_DISABLED,
+			],
+			true,
+		);
+	}
+
+	private static function isFinalizingHistoryWriteState(string $state): bool
+	{
+		return in_array(
+			$state,
+			[
+				self::HISTORY_WRITE_FINALIZING_ENABLED, self::HISTORY_WRITE_FINALIZING_DISABLED,
+				self::HISTORY_WRITE_REFUND_ENABLED, self::HISTORY_WRITE_REFUND_DISABLED,
+			],
+			true,
+		);
+	}
+
+	private static function isReopenedHistoryWriteState(string $state): bool
+	{
+		return in_array(
+			$state,
+			[self::HISTORY_WRITE_REOPENED_ENABLED, self::HISTORY_WRITE_REOPENED_DISABLED],
+			true,
+		);
+	}
+
+	private static function isRepeatPendingHistoryWriteState(string $state): bool
+	{
+		return in_array(
+			$state,
+			[self::HISTORY_WRITE_REPEAT_PENDING_ENABLED, self::HISTORY_WRITE_REPEAT_PENDING_DISABLED],
+			true,
+		);
+	}
+
+	private static function incrementDate(?DateTime $date): DateTime
+	{
+		$timestamp = max(
+			($date?->getTimestamp() ?? 0) + 1,
+			time() + self::CALLBACK_CLAIM_TTL,
+		);
+
+		return DateTime::createFromTimestamp($timestamp);
+	}
+
+	private static function isHistoryWriteEnabled(string $state): bool
+	{
+		return in_array(
+			$state,
+			[
+				self::HISTORY_WRITE_ENABLED,
+				self::HISTORY_WRITE_CLAIMED_ENABLED,
+				self::HISTORY_WRITE_FINALIZING_ENABLED,
+				self::HISTORY_WRITE_REFUND_ENABLED,
+				self::HISTORY_WRITE_REOPENED_ENABLED,
+				self::HISTORY_WRITE_REPEAT_CLAIMED_ENABLED,
+				self::HISTORY_WRITE_REPEAT_PENDING_ENABLED,
+			],
+			true,
+		);
+	}
+
 	/**
 	 * Job data with the parameters that belong to the charge rather than to the request.
 	 *
@@ -159,7 +284,10 @@ final class QueueJob
 	/**
 	 * Latest unfinished and unexpired job with the same request fingerprint, if there is one.
 	 *
-	 * Being unfinished is expressed by the row's mere existence: a finished job is deleted.
+	 * Being unfinished is expressed by the row's existence outside finalization: a finished job
+	 * is deleted, and a finalizing one never accepts a callback again and is deleted right after
+	 * its terminal events. A repeat joining it — sent from a listener of those events or
+	 * concurrently — would keep the rid of a request whose result nothing will accept anymore.
 	 * The expiry rule of isRowExpired() is repeated here as a condition of the query rather
 	 * than applied to fetched rows — one fingerprint accumulates expired rows that the cleanup
 	 * agent has not reached yet, and TTL is per job, so an alive row with a long TTL can sit
@@ -180,8 +308,15 @@ final class QueueJob
 	private static function findAliveRowByCacheHash(string $cacheHash, string $requestHash): ?array
 	{
 		$rows = QueueTable::query()
-			->setSelect(['ID', 'HASH', 'ENGINE_CUSTOM_SETTINGS'])
+			->setSelect(['ID', 'HASH', 'HISTORY_WRITE', 'ENGINE_CUSTOM_SETTINGS', 'EXPIRE_DATE'])
 			->where('CACHE_HASH', $cacheHash)
+			->whereNotIn(
+				'HISTORY_WRITE',
+				[
+					self::HISTORY_WRITE_FINALIZING_ENABLED, self::HISTORY_WRITE_FINALIZING_DISABLED,
+					self::HISTORY_WRITE_REFUND_ENABLED, self::HISTORY_WRITE_REFUND_DISABLED,
+				],
+			)
 			->where(
 				Query::filter()
 					->logic('or')
@@ -211,6 +346,86 @@ final class QueueJob
 		return null;
 	}
 
+	/** Persists a tracked refund for the existing cleanup agent without submitting an AI request. */
+	public static function deferMonthlyRefund(Limiter\SharedMonthlyReservation $reservation): string
+	{
+		if (!$reservation->isTracked())
+		{
+			throw new \InvalidArgumentException('Only a tracked monthly reservation can be deferred.');
+		}
+		$service = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(Limiter\SharedMonthlyPoolService::class);
+		$stored = $service->findReservation($reservation->getId(), $reservation->getUserId());
+		if (
+			$stored === null
+			|| $stored->getPeriod() !== $reservation->getPeriod()
+			|| $stored->getCost() !== $reservation->getCost()
+		)
+		{
+			throw new \InvalidArgumentException('The deferred monthly reservation does not match its receipt.');
+		}
+
+		return self::persistMonthlyRefundIdentity($reservation->getId(), $reservation->getUserId());
+	}
+
+	private static function persistMonthlyRefundIdentity(string $receiptId, int $userId): string
+	{
+		if (
+			$userId <= 0
+			|| !preg_match(
+				'/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i',
+				$receiptId,
+			)
+		)
+		{
+			throw new \InvalidArgumentException('Invalid deferred monthly receipt identity.');
+		}
+
+		$service = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(Limiter\SharedMonthlyPoolService::class);
+
+		return $service->persistReservationRefund($receiptId, $userId, static function () use ($receiptId, $userId): string {
+			$hash = QueueTable::generateHash();
+			$result = QueueTable::add([
+				'HASH' => $hash,
+				'ENGINE_CLASS' => self::class,
+				'ENGINE_CODE' => self::MONTHLY_REFUND_CODE,
+				'PAYLOAD_CLASS' => self::class,
+				'PAYLOAD' => '-',
+				'CACHE_HASH' => $hash,
+				'PARAMETERS' => ['receiptId' => $receiptId, 'userId' => $userId],
+				'HISTORY_WRITE' => self::HISTORY_WRITE_REFUND_DISABLED,
+				'DATE_CREATE' => new DateTime(),
+				'EXPIRE_DATE' => DateTime::createFromTimestamp(time() - 1),
+			]);
+			if (!$result->isSuccess())
+			{
+				throw new \RuntimeException('Unable to persist the deferred monthly AI refund.');
+			}
+
+			return $hash;
+		});
+	}
+
+	private static function retryDeferredMonthlyRefund(array $row): void
+	{
+		try
+		{
+			$service = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(Limiter\SharedMonthlyPoolService::class);
+			$reservation = $service->findReservation(
+				(string)($row['PARAMETERS']['receiptId'] ?? ''),
+				(int)($row['PARAMETERS']['userId'] ?? 0),
+			);
+			if ($reservation !== null)
+			{
+				$service->releaseReservation($reservation);
+			}
+			QueueTable::delete((int)$row['ID']);
+		}
+		catch (\Throwable)
+		{
+			// The persisted receipt stays available to the next cleanup-agent run.
+		}
+	}
+
 	/**
 	 * Creates Queue Job object by hash, and return it (if exists).
 	 *
@@ -232,18 +447,42 @@ final class QueueJob
 		;
 		if ($row)
 		{
+			if (
+				$row['ENGINE_CLASS'] === self::class
+				&& $row['ENGINE_CODE'] === self::MONTHLY_REFUND_CODE
+				&& $row['HISTORY_WRITE'] === self::HISTORY_WRITE_REFUND_DISABLED
+			)
+			{
+				self::retryDeferredMonthlyRefund($row);
+
+				return null;
+			}
+			$historyWriteState = (string)($row['HISTORY_WRITE'] ?? self::HISTORY_WRITE_DISABLED);
+			$rowExpired = self::isRowExpired($row['EXPIRE_DATE'], $row['DATE_CREATE']);
+
 			/** @var IPayload $payloadClass */
 			/** @var IEngine&IQueue $engineClass */
 
 			$payloadClass = $row['PAYLOAD_CLASS'];
 			$payload = $payloadClass::unpack($row['PAYLOAD']);
-			$context = Context::unpack($row['CONTEXT']);
+			$context = null;
+			$contextLoadError = null;
+			try
+			{
+				$context = Context::unpack($row['CONTEXT']);
+			}
+			catch (\InvalidArgumentException $exception)
+			{
+				$contextLoadError = $exception->getMessage();
+			}
 
-			$engine = Engine::getByCode($row['ENGINE_CODE'], $context);
-			if ($engine === null || $payload === null)
+			$engine = $context === null ? null : Engine::getByCode($row['ENGINE_CODE'], $context);
+			if ($context === null || $engine === null || $payload === null)
 			{
 				Manager::writeDiagnosticHistory([
 					'RESULT_TEXT' => '[QUEUE_JOB_LOAD_FAILED] hash=' . $hash
+						. ', contextInvalid=' . ($contextLoadError !== null ? 'yes' : 'no')
+						. ($contextLoadError !== null ? ', contextError=' . $contextLoadError : '')
 						. ', engineNull=' . ($engine === null ? 'yes' : 'no')
 						. ', payloadNull=' . ($payload === null ? 'yes' : 'no'),
 					'CONTEXT_MODULE' => $context?->getModuleId() ?: 'ai',
@@ -256,7 +495,7 @@ final class QueueJob
 				// A broken row cannot go through expire() (nothing to notify or refund),
 				// so an expired one is removed right away — this lets clearOldAgent() rely
 				// on this method without a second delete of its own.
-				if (!$allowExpired && self::isRowExpired($row['EXPIRE_DATE'], $row['DATE_CREATE']))
+				if (!$allowExpired && $rowExpired)
 				{
 					QueueTable::delete($row['ID']);
 				}
@@ -284,7 +523,7 @@ final class QueueJob
 
 			$engine->setPayload($payload);
 			$engine->setParameters($row['PARAMETERS']);
-			$engine->setHistoryState($row['HISTORY_WRITE'] === 'Y');
+			$engine->setHistoryState(self::isHistoryWriteEnabled($historyWriteState));
 			$engine->setHistoryGroupId($row['HISTORY_GROUP_ID']);
 
 			if (
@@ -307,6 +546,8 @@ final class QueueJob
 			$queueJob->cacheHash = $row['CACHE_HASH'];
 			$queueJob->context = $context;
 			$queueJob->engine = $engine->getIEngine();
+			$queueJob->historyWriteState = $historyWriteState;
+			$queueJob->stateExpireDate = $row['EXPIRE_DATE'];
 
 			$expireDate = $row['EXPIRE_DATE'];
 			if ($expireDate !== null)
@@ -317,9 +558,20 @@ final class QueueJob
 			// Callback endpoints load a job purely by hash, so an expired-but-not-yet-cleaned-up
 			// row must be rejected here too, not just by the periodic clearOldAgent() agent.
 			// Success callbacks opt out via $allowExpired: a delivered valid result wins over TTL.
-			if (!$allowExpired && self::isRowExpired($expireDate, $row['DATE_CREATE']))
+			if (!$allowExpired && $rowExpired)
 			{
-				$queueJob->expire();
+				if (self::isFinalizingHistoryWriteState($historyWriteState))
+				{
+					$queueJob->deleteExpiredFinalization();
+				}
+				elseif (self::isClaimedHistoryWriteState($historyWriteState))
+				{
+					$queueJob->expireClaimed();
+				}
+				else
+				{
+					$queueJob->expire();
+				}
 
 				return null;
 			}
@@ -349,6 +601,10 @@ final class QueueJob
 			return $this;
 		}
 
+		$this->historyWriteState = $this->engine->shouldWriteHistory()
+			? self::HISTORY_WRITE_ENABLED
+			: self::HISTORY_WRITE_DISABLED
+		;
 		$data = [
 			'ENGINE_CLASS' => $this->engine::class,
 			'ENGINE_CODE' => $this->engine->getCode(),
@@ -356,7 +612,7 @@ final class QueueJob
 			'PAYLOAD' => $this->engine->getPayload()->pack(),
 			'CONTEXT' => $this->engine->getContext()->pack(),
 			'PARAMETERS' => $this->engine->getParameters(),
-			'HISTORY_WRITE' => $this->engine->shouldWriteHistory() ? 'Y' : 'N',
+			'HISTORY_WRITE' => $this->historyWriteState,
 			'HISTORY_GROUP_ID' => $this->engine->getHistoryGroupId(),
 			'ENGINE_CUSTOM_SETTINGS' => [
 				'JSON_RESPONSE_MODE' => $this->engine->getResponseJsonMode(),
@@ -389,16 +645,47 @@ final class QueueJob
 			$this->context = $this->engine->getContext();
 			$this->cacheHash = $cacheHash;
 			$this->reusedRow = true;
+			$this->historyWriteState = (string)$aliveRow['HISTORY_WRITE'];
+			$this->stateExpireDate = $aliveRow['EXPIRE_DATE'];
 
 			// The limit was charged before the request got here, and this attempt turned out not
 			// to be a request at all. The charge of the attempt that owns the row stays: it is
 			// the one the failure paths will roll back.
-			$this->getLimitControlService()->rollbackConsumption(
-				new Limiter\Usage($this->engine->getContext()),
-				$this->engine->getPayload()->getCost(),
-				$this->engine->getConsumptionId()
-			);
-
+			$usage = new Limiter\Usage($this->engine->getContext());
+			$consumptionId = $this->engine->getConsumptionId();
+			try
+			{
+				$this->getLimitControlService()->rollbackConsumption(
+					$usage,
+					$this->engine->getPayload()->getCost(),
+					$consumptionId,
+				);
+			}
+			catch (\Throwable $refundError)
+			{
+				if (!preg_match(
+					'/\Aai:shared_monthly_pool:v1:([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}'
+					. '-[89ab][0-9a-f]{3}-[0-9a-f]{12})\z/i',
+					$consumptionId,
+					$matches,
+				))
+				{
+					throw $refundError;
+				}
+				try
+				{
+					self::persistMonthlyRefundIdentity($matches[1], $usage->getUserId());
+				}
+				catch (\Throwable $persistError)
+				{
+					throw new \RuntimeException(
+						'Unable to defer repeated monthly AI refund ' . $consumptionId . ': '
+						. $persistError->getMessage(),
+						0,
+						$refundError,
+					);
+				}
+			}
 			return $this;
 		}
 
@@ -419,6 +706,7 @@ final class QueueJob
 			$this->hash = $hash;
 			$this->context = $this->engine->getContext();
 			$this->cacheHash = $cacheHash;
+			$this->stateExpireDate = $data['EXPIRE_DATE'];
 		}
 		else
 		{
@@ -446,6 +734,109 @@ final class QueueJob
 	public function getCacheHash(): ?string
 	{
 		return $this->cacheHash;
+	}
+
+	/** Opens a state window in which a fast callback may take over the previous owner. */
+	public function beginRepeatedRequest(): void
+	{
+		if (!$this->reusedRow || !$this->id)
+		{
+			return;
+		}
+		$this->repeatedRequestStarted = true;
+		while (true)
+		{
+			if (self::isRepeatPendingHistoryWriteState($this->historyWriteState))
+			{
+				$this->repeatedRequestPending = true;
+
+				return;
+			}
+			if (
+				self::isFinalizingHistoryWriteState($this->historyWriteState)
+				|| (
+					!self::isClaimedHistoryWriteState($this->historyWriteState)
+					&& !self::isReopenedHistoryWriteState($this->historyWriteState)
+					&& !in_array(
+						$this->historyWriteState,
+						[self::HISTORY_WRITE_ENABLED, self::HISTORY_WRITE_DISABLED],
+						true,
+					)
+				)
+			)
+			{
+				return;
+			}
+
+			$pendingState = self::isHistoryWriteEnabled($this->historyWriteState)
+				? self::HISTORY_WRITE_REPEAT_PENDING_ENABLED
+				: self::HISTORY_WRITE_REPEAT_PENDING_DISABLED;
+			if ($this->compareAndSetHistoryWriteState(
+				$this->id,
+				$this->historyWriteState,
+				$pendingState,
+				$this->stateExpireDate,
+			))
+			{
+				$this->repeatedRequestPending = true;
+
+				return;
+			}
+
+			$row = QueueTable::query()
+				->setSelect(['HISTORY_WRITE', 'EXPIRE_DATE'])
+				->where('ID', $this->id)
+				->fetch();
+			if (!$row)
+			{
+				return;
+			}
+			$this->historyWriteState = (string)$row['HISTORY_WRITE'];
+			$this->stateExpireDate = $row['EXPIRE_DATE'];
+		}
+	}
+
+	/**
+	 * Releases the callback owner that existed before the repeated request started. A callback
+	 * arriving during the request changes the pending state first and therefore keeps ownership.
+	 */
+	public function confirmRepeatedRequestSent(): void
+	{
+		if (!$this->repeatedRequestStarted || !$this->repeatedRequestPending || !$this->id)
+		{
+			return;
+		}
+
+		$pendingState = self::isHistoryWriteEnabled($this->historyWriteState)
+			? self::HISTORY_WRITE_REPEAT_PENDING_ENABLED
+			: self::HISTORY_WRITE_REPEAT_PENDING_DISABLED;
+		$releasedState = self::isHistoryWriteEnabled($this->historyWriteState)
+			? self::HISTORY_WRITE_REOPENED_ENABLED
+			: self::HISTORY_WRITE_REOPENED_DISABLED;
+		$releasedExpireDate = self::incrementDate($this->stateExpireDate);
+		if ($this->compareAndSetState(
+			$this->id,
+			$pendingState,
+			$releasedState,
+			$this->stateExpireDate,
+			$releasedExpireDate,
+		))
+		{
+			$this->historyWriteState = $releasedState;
+			$this->stateExpireDate = $releasedExpireDate;
+		}
+		$this->repeatedRequestPending = false;
+	}
+
+	/** Leaves the pending window available to the previous owner after a rejected request. */
+	public function abortRepeatedRequest(): void
+	{
+		if (!$this->repeatedRequestStarted || !$this->repeatedRequestPending || !$this->id)
+		{
+			return;
+		}
+
+		$this->repeatedRequestPending = false;
 	}
 
 	/**
@@ -512,75 +903,173 @@ final class QueueJob
 	}
 
 	/**
-	 * Executes Queue Job and removes Job.
+	 * Executes Queue Job and removes Job: writes history, sends success events to backend
+	 * and PULL listeners. An exception while processing the result goes to handleError() with ERROR_EXECUTE code.
 	 *
 	 * @param mixed $rawResult External raw result.
 	 * @return void
 	 */
 	public function execute(mixed $rawResult): void
 	{
-		if ($this->engine->getPayload()->shouldUseCache())
+		if (!$this->tryClaim())
 		{
-			$this->engine->setCache(true);
+			return;
 		}
-		$cacheManager = new EngineResultCache($this->getCacheHash());
-		if($this->engine->isCache() && !$cacheManager->getExists()){
-			$cacheManager->store($rawResult);
-		}
-
-		$analyticData = $this->engine->getAnalyticData();
-		$status = null;
-		if (Analytics::isVoiceWidgetAudio($this->engine, $analyticData))
-		{
-			try
-			{
-				$status = Analytics::getVoiceWidgetResultStatus($this->engine->getResultFromRaw($rawResult)->getPrettifiedData());
-			}
-			catch (\Throwable)
-			{
-				$status = Analytics::VOICE_WIDGET_STATUS_ERROR_B24;
-			}
-		}
-
-		Analytics::engineGenerateResultEvent(
-			'generate',
-			$this->engine,
-			$analyticData,
-			$status
-		);
 
 		try
 		{
+			if ($this->engine->getPayload()->shouldUseCache())
+			{
+				$this->engine->setCache(true);
+			}
+			$cacheManager = new EngineResultCache($this->getCacheHash());
+			if($this->engine->isCache() && !$cacheManager->getExists()){
+				$cacheManager->store($rawResult);
+			}
+
+			$analyticData = $this->engine->getAnalyticData();
+			$status = null;
+			if (Analytics::isVoiceWidgetAudio($this->engine, $analyticData))
+			{
+				try
+				{
+					$status = Analytics::getVoiceWidgetResultStatus(
+						$this->engine->getResultFromRaw($rawResult)->getPrettifiedData()
+					);
+				}
+				catch (\Throwable)
+				{
+					$status = Analytics::VOICE_WIDGET_STATUS_ERROR_B24;
+				}
+			}
+
 			$result = $this->engine->getResultFromRaw($rawResult);
-
-			// Soft error — writeHistory failure should not prevent success events
-			try
+		}
+		catch (\Throwable $e)
+		{
+			if ($this->handleClaimedError($e->getMessage(), self::ERROR_EXECUTE))
 			{
-				$this->engine->writeHistory($result);
-			}
-			catch (\Throwable)
-			{
-				// Manager already attempted diagnostic write to b_ai_history
+				$this->delete();
 			}
 
+			return;
+		}
+		if (!$this->tryFinalize())
+		{
+			return;
+		}
+
+		try
+		{
+			Analytics::engineGenerateResultEvent(
+				'generate',
+				$this->engine,
+				$analyticData,
+				$status
+			);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		try
+		{
+			$this->engine->writeHistory($result);
+		}
+		catch (\Throwable)
+		{
+			// Manager already attempted diagnostic write to b_ai_history
+		}
+
+		try
+		{
 			if ($this->engine->getPayload()->getRole() !== null)
 			{
 				$langCode = $this->context->getLanguage()?->getCode() ?? User::getUserLanguage();
 				$roleManager = new RoleManager($this->context->getUserId(), $langCode);
 				$roleManager->addRecentRole($this->engine->getPayload()->getRole());
 			}
-
-			$this->sendBackendEvent($result, self::EVENT_SUCCESS);
-			$this->sendFrontendEvent($result, self::EVENT_SUCCESS);
-			$this->delete();
 		}
-		catch (\Throwable $e)
+		catch (\Throwable)
 		{
-			$this->handleError($e->getMessage(), self::ERROR_EXECUTE);
+			// Best effort
+		}
+
+		try
+		{
+			$this->sendBackendEvent($result, self::EVENT_SUCCESS);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		try
+		{
+			$this->sendFrontendEvent($result, self::EVENT_SUCCESS);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		$this->delete();
+	}
+
+	/**
+	 * Fails Queue Job on a local processing error and removes Job: writes diagnostic history
+	 * and sends fail events. Unlike fail(), consumption is not rolled back.
+	 *
+	 * @param string $message Error message.
+	 * @param string $code Error code.
+	 * @return void
+	 */
+	public function handleError(string $message, string $code = 'PROCESSING_ERROR'): void
+	{
+		if (!$this->tryClaim())
+		{
+			return;
+		}
+
+		if ($this->handleClaimedError($message, $code))
+		{
+			$this->delete();
 		}
 	}
 
-	public function handleError(string $message, string $code = 'PROCESSING_ERROR'): void
+	private function handleClaimedError(string $message, string $code, bool $refund = false): bool
+	{
+		if (!$this->tryFinalize($refund))
+		{
+			return false;
+		}
+
+		$this->writeDiagnosticError($message, $code);
+
+		$result = new Result(null, null);
+		try
+		{
+			$this->sendBackendEvent($result, self::EVENT_FAIL);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		try
+		{
+			$this->sendFrontendEvent($result, self::EVENT_FAIL);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		return true;
+	}
+
+	private function writeDiagnosticError(string $message, string $code): void
 	{
 		$this->error = new Error($message, $code);
 
@@ -603,69 +1092,156 @@ final class QueueJob
 		{
 		}
 
-		Manager::writeDiagnosticHistory($data);
-
 		try
 		{
-			$this->sendBackendEvent(new Result(null, null), self::EVENT_FAIL);
-			$this->sendFrontendEvent(new Result(null, null), self::EVENT_FAIL);
+			Manager::writeDiagnosticHistory($data);
 		}
 		catch (\Throwable)
 		{
 			// Best effort
 		}
-
-		$this->delete();
 	}
 
 	/**
-	 * Fails Queue Job and removes Job.
+	 * Fails Queue Job by provider's error and removes Job. Does nothing if the Job is already removed,
+	 * for example by a concurrent callback or expiration. Listeners receive a localized
+	 * AI_ENGINE_ERROR_PROVIDER or AI_ENGINE_ERROR_OTHER error instead of the raw one.
+	 * Consumption is rolled back only if the provider reports `api_request_completed` as false.
 	 *
-	 * @param mixed $rawError External raw error.
+	 * @param mixed $rawError External raw error: `message` (or `error`), `code`, `api_request_completed`.
 	 * @return void
 	 */
 	public function fail(mixed $rawError): void
 	{
-		$errorMessage = $rawError['message'] ?? null;
-		if (!is_string($errorMessage) || $errorMessage === '')
+		if (!$this->tryClaim())
 		{
-			$errorField = $rawError['error'] ?? null;
-			$errorMessage = is_string($errorField) ? $errorField : 'Unknown Error';
+			return;
 		}
-		$this->error = new Error($errorMessage, $rawError['code'] ?? '');
-		$this->engine->writeErrorInHistory($this->error);
 
 		if (isset($rawError['api_request_completed']))
 		{
 			$this->apiRequestCompleted = (bool)$rawError['api_request_completed'];
 		}
 
-		$rawErrorCode = $rawError['code'] ?? null;
-		$errorCode = (int)$rawErrorCode;
-
-		Loc::loadLanguageFile(__DIR__ . '/Engine.php');
-
-		if ($errorCode === 100 || $errorCode >= 500 || $rawErrorCode === Engine\Engine::ERROR_CODE_COULD_NOT_LOCK)
+		try
 		{
-			$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_PROVIDER'), 'AI_ENGINE_ERROR_PROVIDER');
+			$errorMessage = $rawError['message'] ?? null;
+			if (!is_string($errorMessage) || $errorMessage === '')
+			{
+				$errorField = $rawError['error'] ?? null;
+				$errorMessage = is_string($errorField) ? $errorField : 'Unknown Error';
+			}
+			$historyError = new Error($errorMessage, $rawError['code'] ?? '');
+
+			$rawErrorCode = $rawError['code'] ?? null;
+			$errorCode = (int)$rawErrorCode;
+
+			Loc::loadLanguageFile(__DIR__ . '/Engine.php');
+
+			if (
+				$errorCode === 100
+				|| $errorCode >= 500
+				|| $rawErrorCode === Engine\Engine::ERROR_CODE_COULD_NOT_LOCK
+			)
+			{
+				$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_PROVIDER'), 'AI_ENGINE_ERROR_PROVIDER');
+			}
+			else
+			{
+				$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_OTHER'),'AI_ENGINE_ERROR_OTHER');
+			}
+
+			$analyticData = $this->engine->getAnalyticData();
 		}
-		else
+		catch (\Throwable $e)
 		{
-			$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_OTHER'),'AI_ENGINE_ERROR_OTHER');
+			$finalized = $this->handleClaimedError(
+				'Error processing failure callback: ' . $e->getMessage(),
+				self::ERROR_FAIL_PROCESSING,
+				!$this->apiRequestCompleted,
+			);
+			if ($finalized)
+			{
+				if ($this->rollbackClaimedConsumption())
+				{
+					$this->delete();
+				}
+			}
+
+			return;
+		}
+		if (!$this->tryFinalize(!$this->apiRequestCompleted))
+		{
+			return;
 		}
 
-		Analytics::sendVoiceWidgetAudioError(
-			$this->engine,
-			$this->engine->getAnalyticData(),
-			$this->error->getCode() === 'AI_ENGINE_ERROR_PROVIDER'
-				? Analytics::VOICE_WIDGET_STATUS_ERROR_PROVIDER
-				: Analytics::VOICE_WIDGET_STATUS_ERROR_B24,
-		);
+		$errorHistoryWritten = true;
+		try
+		{
+			$this->engine->writeErrorInHistory($historyError);
+		}
+		catch (\Throwable $e)
+		{
+			$errorHistoryWritten = false;
+			$this->writeDiagnosticError(
+				'Error processing failure callback: ' . $e->getMessage(),
+				self::ERROR_FAIL_PROCESSING,
+				!$this->apiRequestCompleted,
+			);
+		}
 
-		$this->sendBackendEvent(new Result(null, null), self::EVENT_FAIL);
-		$this->sendFrontendEvent(new Result(null, null), self::EVENT_FAIL);
+		if ($errorHistoryWritten)
+		{
+			try
+			{
+				Analytics::sendVoiceWidgetAudioError(
+					$this->engine,
+					$analyticData,
+					$this->error->getCode() === 'AI_ENGINE_ERROR_PROVIDER'
+						? Analytics::VOICE_WIDGET_STATUS_ERROR_PROVIDER
+						: Analytics::VOICE_WIDGET_STATUS_ERROR_B24,
+				);
+			}
+			catch (\Throwable)
+			{
+				// Best effort
+			}
+		}
 
-		if (!$this->apiRequestCompleted)
+		$result = new Result(null, null);
+		try
+		{
+			$this->sendBackendEvent($result, self::EVENT_FAIL);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		try
+		{
+			$this->sendFrontendEvent($result, self::EVENT_FAIL);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
+		if ($this->rollbackClaimedConsumption())
+		{
+			$this->delete();
+		}
+	}
+
+	private function rollbackClaimedConsumption(): bool
+	{
+		if ($this->apiRequestCompleted)
+		{
+			return true;
+		}
+
+		$tracked = str_starts_with($this->engine->getConsumptionId(), 'ai:shared_monthly_pool:v1:');
+		try
 		{
 			$this->getLimitControlService()->rollbackConsumption(
 				new Limiter\Usage($this->engine->getContext()),
@@ -673,8 +1249,11 @@ final class QueueJob
 				$this->engine->getConsumptionId()
 			);
 		}
-
-		$this->delete();
+		catch (\Throwable)
+		{
+			return !$tracked;
+		}
+		return true;
 	}
 
 	/**
@@ -694,46 +1273,340 @@ final class QueueJob
 	 */
 	private function expire(): void
 	{
-		// Delete is the claim: expire() is reachable from concurrent requests (a late callback
-		// racing the agent tick, or a retried callback), and only the caller that actually
-		// removed the row may send fail events and roll back consumption — otherwise both would.
-		if (!$this->tryDelete())
+		if (!$this->tryClaim())
+		{
+			return;
+		}
+
+		$this->processExpiration();
+	}
+
+	private function expireClaimed(): void
+	{
+		if (!$this->tryReclaimExpiredClaim())
+		{
+			return;
+		}
+
+		$this->processExpiration();
+	}
+
+	private function processExpiration(): void
+	{
+		if (!$this->tryFinalize(true))
 		{
 			return;
 		}
 
 		$this->error = new Error('Hash expired', 'HASH_EXPIRED');
-
 		$result = new Result(null, null);
 		$this->sendBackendEvent($result, self::EVENT_FAIL);
 		$this->sendFrontendEvent($result, self::EVENT_FAIL);
 
-		$this->getLimitControlService()->rollbackConsumption(
-			new Limiter\Usage($this->engine->getContext()),
-			$this->engine->getPayload()->getCost(),
-			$this->engine->getConsumptionId()
-		);
+		$this->apiRequestCompleted = false;
+		if ($this->rollbackClaimedConsumption())
+		{
+			$this->delete();
+		}
 	}
 
 	/**
-	 * Removes the row and reports whether this call actually deleted it.
-	 * Raw DELETE is used because ORM delete() gives no affected-rows contract.
+	 * Atomically marks the row as being processed while keeping its request identity visible.
+	 * The two claimed states preserve whether history was enabled. Only the caller whose
+	 * compare-and-swap changed the state may advance to finalization.
 	 *
 	 * @return bool
 	 */
-	private function tryDelete(): bool
+	private function tryClaim(): bool
 	{
 		if (!$this->id)
 		{
 			return false;
 		}
 
+		while (true)
+		{
+			$claimedState = match ($this->historyWriteState)
+			{
+				self::HISTORY_WRITE_ENABLED => self::HISTORY_WRITE_CLAIMED_ENABLED,
+				self::HISTORY_WRITE_DISABLED => self::HISTORY_WRITE_CLAIMED_DISABLED,
+				self::HISTORY_WRITE_REOPENED_ENABLED,
+				self::HISTORY_WRITE_REPEAT_PENDING_ENABLED => self::HISTORY_WRITE_REPEAT_CLAIMED_ENABLED,
+				self::HISTORY_WRITE_REOPENED_DISABLED,
+				self::HISTORY_WRITE_REPEAT_PENDING_DISABLED => self::HISTORY_WRITE_REPEAT_CLAIMED_DISABLED,
+				default => null,
+			};
+			if ($claimedState === null)
+			{
+				return false;
+			}
+
+			$claimExpireDate = (
+				self::isReopenedHistoryWriteState($this->historyWriteState)
+				|| self::isRepeatPendingHistoryWriteState($this->historyWriteState)
+			)
+				? self::incrementDate($this->stateExpireDate)
+				: DateTime::createFromTimestamp(time() + self::CALLBACK_CLAIM_TTL);
+			if ($this->compareAndSetState(
+				$this->id,
+				$this->historyWriteState,
+				$claimedState,
+				$this->stateExpireDate,
+				$claimExpireDate,
+			))
+			{
+				$this->historyWriteState = $claimedState;
+				$this->stateExpireDate = $claimExpireDate;
+
+				return true;
+			}
+
+			$row = QueueTable::query()
+				->setSelect(['HISTORY_WRITE', 'EXPIRE_DATE'])
+				->where('ID', $this->id)
+				->fetch();
+			if (!$row)
+			{
+				return false;
+			}
+			$this->historyWriteState = (string)$row['HISTORY_WRITE'];
+			$this->stateExpireDate = $row['EXPIRE_DATE'];
+		}
+	}
+
+	/**
+	 * Reserves the single terminal side-effect attempt. An expired finalization is removed
+	 * without events; tracked failure states retain the idempotent refund intent.
+	 */
+	private function tryFinalize(bool $refund = false): bool
+	{
+		if (!$this->id)
+		{
+			return false;
+		}
+		$finalizingState = match ($this->historyWriteState)
+		{
+			self::HISTORY_WRITE_CLAIMED_ENABLED,
+			self::HISTORY_WRITE_REPEAT_CLAIMED_ENABLED => self::HISTORY_WRITE_FINALIZING_ENABLED,
+			self::HISTORY_WRITE_CLAIMED_DISABLED,
+			self::HISTORY_WRITE_REPEAT_CLAIMED_DISABLED => self::HISTORY_WRITE_FINALIZING_DISABLED,
+			default => null,
+		};
+		if ($finalizingState === null)
+		{
+			return false;
+		}
+
+		if ($refund && str_starts_with($this->engine->getConsumptionId(), 'ai:shared_monthly_pool:v1:'))
+		{
+			$finalizingState = $finalizingState === self::HISTORY_WRITE_FINALIZING_ENABLED
+				? self::HISTORY_WRITE_REFUND_ENABLED : self::HISTORY_WRITE_REFUND_DISABLED;
+		}
+
+		$finalizationExpireDate = DateTime::createFromTimestamp(time() + self::CALLBACK_CLAIM_TTL);
+		if (!$this->compareAndSetState(
+			$this->id,
+			$this->historyWriteState,
+			$finalizingState,
+			$this->stateExpireDate,
+			$finalizationExpireDate,
+		))
+		{
+			return $this->tryFinalizePendingRepeat($finalizingState, $finalizationExpireDate);
+		}
+
+		$this->historyWriteState = $finalizingState;
+		$this->stateExpireDate = $finalizationExpireDate;
+
+		return true;
+	}
+
+	private function tryFinalizePendingRepeat(string $finalizingState, DateTime $finalizationExpireDate): bool
+	{
+		$row = QueueTable::query()
+			->setSelect(['HISTORY_WRITE', 'EXPIRE_DATE'])
+			->where('ID', $this->id)
+			->fetch();
+		if (
+			!$row
+			|| !self::isRepeatPendingHistoryWriteState((string)$row['HISTORY_WRITE'])
+			|| $row['EXPIRE_DATE'] != $this->stateExpireDate
+		)
+		{
+			return false;
+		}
+
+		if (!$this->compareAndSetState(
+			$this->id,
+			(string)$row['HISTORY_WRITE'],
+			$finalizingState,
+			$row['EXPIRE_DATE'],
+			$finalizationExpireDate,
+		))
+		{
+			return false;
+		}
+
+		$this->historyWriteState = $finalizingState;
+		$this->stateExpireDate = $finalizationExpireDate;
+
+		return true;
+	}
+
+	private function compareAndSetState(
+		int $id,
+		string $from,
+		string $to,
+		?DateTime $expectedExpireDate,
+		DateTime $newExpireDate,
+	): bool
+	{
 		$connection = Application::getConnection();
-		$connection->queryExecute(
-			(new SqlExpression('DELETE FROM ?# WHERE ID = ?i', QueueTable::getTableName(), $this->id))->compile()
-		);
+		if ($expectedExpireDate === null)
+		{
+			$sql = new SqlExpression(
+				'UPDATE ?# SET HISTORY_WRITE = ?s, EXPIRE_DATE = ?s '
+				. 'WHERE ID = ?i AND HISTORY_WRITE = ?s AND EXPIRE_DATE IS NULL',
+				QueueTable::getTableName(),
+				$to,
+				$newExpireDate->format('Y-m-d H:i:s'),
+				$id,
+				$from,
+			);
+		}
+		else
+		{
+			$sql = new SqlExpression(
+				'UPDATE ?# SET HISTORY_WRITE = ?s, EXPIRE_DATE = ?s '
+				. 'WHERE ID = ?i AND HISTORY_WRITE = ?s AND EXPIRE_DATE = ?s',
+				QueueTable::getTableName(),
+				$to,
+				$newExpireDate->format('Y-m-d H:i:s'),
+				$id,
+				$from,
+				$expectedExpireDate->format('Y-m-d H:i:s'),
+			);
+		}
+		$connection->queryExecute($sql->compile());
 
 		return $connection->getAffectedRowsCount() > 0;
+	}
+
+	private function compareAndSetHistoryWriteState(
+		int $id,
+		string $from,
+		string $to,
+		?DateTime $expectedExpireDate,
+	): bool
+	{
+		$connection = Application::getConnection();
+		if ($expectedExpireDate === null)
+		{
+			$sql = new SqlExpression(
+				'UPDATE ?# SET HISTORY_WRITE = ?s '
+				. 'WHERE ID = ?i AND HISTORY_WRITE = ?s AND EXPIRE_DATE IS NULL',
+				QueueTable::getTableName(),
+				$to,
+				$id,
+				$from,
+			);
+		}
+		else
+		{
+			$sql = new SqlExpression(
+				'UPDATE ?# SET HISTORY_WRITE = ?s '
+				. 'WHERE ID = ?i AND HISTORY_WRITE = ?s AND EXPIRE_DATE = ?s',
+				QueueTable::getTableName(),
+				$to,
+				$id,
+				$from,
+				$expectedExpireDate->format('Y-m-d H:i:s'),
+			);
+		}
+
+		$connection->queryExecute($sql->compile());
+
+		return $connection->getAffectedRowsCount() > 0;
+	}
+
+	/**
+	 * Takes over a claim whose lease expired. Extending the lease is the compare-and-swap:
+	 * only one cleanup worker may publish the failure and return consumption. If that worker
+	 * dies too, the next cleanup attempt can recover the row after the new lease expires.
+	 */
+	private function tryReclaimExpiredClaim(): bool
+	{
+		if (
+			!$this->id
+			|| !self::isClaimedHistoryWriteState($this->historyWriteState)
+			|| $this->stateExpireDate === null
+		)
+		{
+			return false;
+		}
+
+		$connection = Application::getConnection();
+		$now = new DateTime();
+		$claimExpireDate = DateTime::createFromTimestamp(time() + self::CALLBACK_CLAIM_TTL);
+		$connection->queryExecute(
+			(new SqlExpression(
+				'UPDATE ?# SET EXPIRE_DATE = ?s '
+				. 'WHERE ID = ?i AND HISTORY_WRITE = ?s AND EXPIRE_DATE = ?s AND EXPIRE_DATE < ?s',
+				QueueTable::getTableName(),
+				$claimExpireDate->format('Y-m-d H:i:s'),
+				$this->id,
+				$this->historyWriteState,
+				$this->stateExpireDate->format('Y-m-d H:i:s'),
+				$now->format('Y-m-d H:i:s'),
+			))->compile()
+		);
+
+		if ($connection->getAffectedRowsCount() === 0)
+		{
+			return false;
+		}
+
+		$this->stateExpireDate = $claimExpireDate;
+
+		return true;
+	}
+
+	private function deleteExpiredFinalization(): void
+	{
+		if (
+			!$this->id
+			|| !self::isFinalizingHistoryWriteState($this->historyWriteState)
+			|| $this->stateExpireDate === null
+		)
+		{
+			return;
+		}
+
+		if (in_array(
+			$this->historyWriteState,
+			[self::HISTORY_WRITE_REFUND_ENABLED, self::HISTORY_WRITE_REFUND_DISABLED],
+			true,
+		))
+		{
+			$this->apiRequestCompleted = false;
+			if (!$this->rollbackClaimedConsumption())
+			{
+				return;
+			}
+		}
+
+		$connection = Application::getConnection();
+		$connection->queryExecute(
+			(new SqlExpression(
+				'DELETE FROM ?# '
+				. 'WHERE ID = ?i AND HISTORY_WRITE = ?s AND EXPIRE_DATE = ?s AND EXPIRE_DATE < ?s',
+				QueueTable::getTableName(),
+				$this->id,
+				$this->historyWriteState,
+				$this->stateExpireDate->format('Y-m-d H:i:s'),
+				(new DateTime())->format('Y-m-d H:i:s'),
+			))->compile()
+		);
 	}
 
 	/**

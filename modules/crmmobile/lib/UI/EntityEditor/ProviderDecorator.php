@@ -143,6 +143,28 @@ final class ProviderDecorator implements ReturnsEditorFields
 		return $fields;
 	}
 
+	public function prepareRequiredFieldNames(array $fieldNames): array
+	{
+		$availableNames = array_column($this->getWrappedEntityFields(), 'name');
+		$observerAlias = $this->getAliasFieldNames()[Item::FIELD_NAME_OBSERVERS] ?? null;
+		if (
+			$this->factory->isObserversEnabled()
+			&& !in_array(Item::FIELD_NAME_OBSERVERS, $availableNames, true)
+			&& in_array($observerAlias, $availableNames, true)
+		)
+		{
+			$result = [];
+			foreach ($fieldNames as $index => $name)
+			{
+				$result[$index] = $name === Item::FIELD_NAME_OBSERVERS ? $observerAlias : $name;
+			}
+
+			return $result;
+		}
+
+		return $fieldNames;
+	}
+
 	private function getWrappedProviderFields(): array
 	{
 		if (!isset($this->wrappedProviderFields))

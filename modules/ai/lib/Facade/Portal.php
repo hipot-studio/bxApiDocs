@@ -8,8 +8,7 @@ use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\AI\Tuning\Defaults;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Bitrix24\License;
-use Bitrix\Bitrix24\Public\Enum\VibePlus\MonetizationModel;
-use Bitrix\Bitrix24\Public\Service\VibePlus\RuntimeStateProvider;
+use Bitrix\Bitrix24\Public\Provider\License\VibePlusPolicyProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
@@ -43,7 +42,7 @@ class Portal
 		'enable_bitrix_internal_mcp_server',
 	];
 
-	private static bool $missingRuntimeStateProviderWarningLogged = false;
+	private static bool $missingVibePlusPolicyProviderWarningLogged = false;
 	private static ?bool $enabledAiScenarioResult = null;
 	private static ?string $enabledAiScenarioKey = null;
 
@@ -231,35 +230,26 @@ class Portal
 		}
 	}
 
-	public static function hasVibePlusMonetizationModel(): bool
+	public static function isVibePlusPolicyActive(): bool
 	{
-		$runtimeStateProvider = self::getVibePlusRuntimeStateProvider();
-
-		return $runtimeStateProvider !== null
-			&& $runtimeStateProvider->getMonetizationModel() === MonetizationModel::VIBE_PLUS;
-	}
-
-	public static function isVibePlusLaunchDateReached(): bool
-	{
-		$runtimeStateProvider = self::getVibePlusRuntimeStateProvider();
-
-		return $runtimeStateProvider !== null && $runtimeStateProvider->isLaunchDateReached();
+		return self::getVibePlusPolicyProvider()?->isActive() ?? false;
 	}
 
 	public static function isCurrentEditionActive(): bool
 	{
-		$runtimeStateProvider = self::getVibePlusRuntimeStateProvider();
+		$licenseType = Bitrix24::getLicenseType();
 
-		return $runtimeStateProvider !== null && $runtimeStateProvider->isCurrentEditionActive();
+		return $licenseType !== null
+			&& ($licenseType !== self::DEMO_LICENSE_TYPE || License::getCurrent()->getDemo()->isActive());
 	}
 
 	public static function hasActiveVibePlusEdition(): bool
 	{
-		$runtimeStateProvider = self::getVibePlusRuntimeStateProvider();
+		$licenseType = Bitrix24::getLicenseType();
 
-		return $runtimeStateProvider !== null
-			&& method_exists($runtimeStateProvider, 'hasActiveVibePlusEdition')
-			&& $runtimeStateProvider->hasActiveVibePlusEdition();
+		return self::isVibePlusPolicyActive()
+			&& $licenseType !== null
+			&& str_ends_with($licenseType, self::VIBE_PLUS_LICENSE_TYPE_SUFFIX);
 	}
 
 	public static function isOnVibePlus(): bool
@@ -294,7 +284,7 @@ class Portal
 		return License::getCurrent()->getDemo()->isAvailable();
 	}
 
-	private static function getVibePlusRuntimeStateProvider(): ?RuntimeStateProvider
+	private static function getVibePlusPolicyProvider(): ?VibePlusPolicyProvider
 	{
 		if (!Loader::includeModule('bitrix24'))
 		{
@@ -302,18 +292,18 @@ class Portal
 		}
 
 		// bitrix24 is updated independently, so an older one may not carry the Vibe+ line-up yet
-		if (!class_exists(RuntimeStateProvider::class))
+		if (!class_exists(VibePlusPolicyProvider::class))
 		{
-			if (!self::$missingRuntimeStateProviderWarningLogged)
+			if (!self::$missingVibePlusPolicyProviderWarningLogged)
 			{
 				$logger = (new LoggerFactory())->createById(self::VIBE_PLUS_LOGGER_ID) ?? new NullLogger();
-				$logger->warning('Vibe+ runtime state provider is unavailable; limit messages keep the current behaviour.');
-				self::$missingRuntimeStateProviderWarningLogged = true;
+				$logger->warning('Vibe+ policy provider is unavailable; limit messages keep the current behaviour.');
+				self::$missingVibePlusPolicyProviderWarningLogged = true;
 			}
 
 			return null;
 		}
 
-		return new RuntimeStateProvider();
+		return new VibePlusPolicyProvider();
 	}
 }

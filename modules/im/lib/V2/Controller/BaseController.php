@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Controller\Filter\ActionUuidHandler;
 use Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter;
 use Bitrix\Im\V2\Controller\Filter\AutoJoinToChat;
 use Bitrix\Im\V2\Controller\Filter\CheckEntityAccess;
+use Bitrix\Im\V2\Controller\Filter\CheckThreadPostAccess;
 use Bitrix\Im\V2\Controller\Filter\SameChatMessageFilter;
 use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Error;
@@ -26,12 +27,15 @@ use Bitrix\Im\V2\Reading\ReadResult;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Rest\RestConvertible;
 use Bitrix\Im\V2\Rest\RestError;
+use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
 use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Im\V2\SharingLink\SharingLink;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Main\Engine\ActionFilter\FilterType;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\Converter;
@@ -43,6 +47,8 @@ abstract class BaseController extends Controller
 	protected const MAX_LIMIT = 200;
 	protected const DEFAULT_LIMIT = 50;
 	protected const MAX_MESSAGES_COUNT = 100;
+
+	private bool $threadPostAccessRequired = false;
 
 	public function getAutoWiredParameters()
 	{
@@ -255,6 +261,12 @@ abstract class BaseController extends Controller
 		return $filteredFields;
 	}
 
+	/**
+	 * ALG-01: entering a discussion that already exists depends neither on the portal flag nor on the
+	 * switch of the chat, so only the branch that opens a new one is guarded. The steps keep the order
+	 * the whole mechanics keeps: the visibility of the post first, the structure of the parent after
+	 * it, the rights last - a refusal must not tell the type of a chat the user cannot see.
+	 */
 	protected function getChatByPostId(int $postId, bool $createIfNotExists): ?Chat
 	{
 		$message = new Message($postId);
@@ -266,7 +278,12 @@ abstract class BaseController extends Controller
 			return null;
 		}
 
-		$result = CommentChat::get($message, $createIfNotExists);
+		$result = CommentChat::get($message, false);
+
+		if (!$result->isSuccess() && $createIfNotExists)
+		{
+			$result = $this->createChatByPost($message);
+		}
 
 		if (!$result->isSuccess())
 		{
@@ -276,6 +293,62 @@ abstract class BaseController extends Controller
 		}
 
 		return $result->getResult();
+	}
+
+	/**
+	 * @return Result<CommentChat|null>
+	 */
+	private function createChatByPost(Message $message): Result
+	{
+		$parentChat = $message->getChat();
+		$accessResult = $parentChat->checkThreadCreateAccess();
+
+		// nothing is created for a request that is going to be refused anyway
+		if ($accessResult->isSuccess() && $this->threadPostAccessRequired)
+		{
+			$accessResult = $parentChat->checkThreadPostAccess();
+		}
+
+		return $accessResult->isSuccess() ? CommentChat::create($message) : $accessResult;
+	}
+
+	/**
+	 * Creating a discussion is a state change of the parent chat: it publishes chatCreate to every
+	 * member of the parent and an analytics event of its own. The arguments of an action are bound
+	 * lazily, by the first prefilter that reads them, so on a path that writes into the discussion that
+	 * state change used to happen ahead of every prefilter - including the one naming the very right
+	 * the write needs - and a refused message left an empty discussion behind and told everybody about
+	 * it. The right is established before anything is created now.
+	 *
+	 * Which actions those are is read off the prefilter the action itself declares and is not a list of
+	 * names: the right that decides the refusal and the right gating the creation can then never name
+	 * two different sets. Read here because the action is known before its arguments are bound, and
+	 * because a controller has no other way of telling which of its actions is running.
+	 */
+	protected function processBeforeAction(Action $action)
+	{
+		$this->threadPostAccessRequired = $this->declaresThreadPostAccessCheck($action);
+
+		return parent::processBeforeAction($action);
+	}
+
+	private function declaresThreadPostAccessCheck(Action $action): bool
+	{
+		$config = $this->getActionConfig($action->getName()) ?? [];
+		$prefilters = array_merge(
+			$config[FilterType::Prefilter->value] ?? [],
+			$config[FilterType::EnablePrefilter->value] ?? [],
+		);
+
+		foreach ($prefilters as $prefilter)
+		{
+			if ($prefilter instanceof CheckThreadPostAccess)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	protected function getMessagesByIds(array $ids): ?MessageCollection

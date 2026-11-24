@@ -9,6 +9,7 @@ use Bitrix\BIConnector\DataSource\Dataset;
 use Bitrix\BIConnector\DataSource\Field\DateTimeField;
 use Bitrix\BIConnector\DataSource\Field\IntegerField;
 use Bitrix\BIConnector\DataSource\Field\StringField;
+use Bitrix\BIConnector\DataSource\FieldKind;
 use Bitrix\Tasks\Internals\Task\TimeUnitType;
 
 class Task extends Dataset
@@ -251,6 +252,7 @@ class Task extends Dataset
 			,
 			(new IntegerField('CREATED_BY_ID'))
 				->setName($this->getAliasFieldName('CREATED_BY'))
+				->setKind(FieldKind::EMPLOYEE)
 			,
 			(new StringField('CREATED_BY_NAME'))
 				->setName("
@@ -278,7 +280,9 @@ class Task extends Dataset
 				->setJoin($createdJoin)
 			,
 			(new DateTimeField('CREATED_DATE')),
-			(new IntegerField('RESPONSIBLE_ID')),
+			(new IntegerField('RESPONSIBLE_ID'))
+				->setKind(FieldKind::EMPLOYEE)
+			,
 			(new StringField('RESPONSIBLE_NAME'))
 				->setName("
 					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
@@ -371,6 +375,7 @@ class Task extends Dataset
 			,
 			(new IntegerField('CHANGED_BY_ID'))
 				->setName($this->getAliasFieldName('CHANGED_BY'))
+				->setKind(FieldKind::EMPLOYEE)
 			,
 			(new StringField('CHANGED_BY_NAME'))
 				->setName("
@@ -400,6 +405,7 @@ class Task extends Dataset
 			(new DateTimeField('CHANGED_DATE')),
 			(new IntegerField('STATUS_CHANGED_BY_ID'))
 				->setName($this->getAliasFieldName('STATUS_CHANGED_BY'))
+				->setKind(FieldKind::EMPLOYEE)
 			,
 			(new StringField('STATUS_CHANGED_BY_NAME'))
 				->setName("
@@ -429,6 +435,7 @@ class Task extends Dataset
 			(new DateTimeField('STATUS_CHANGED_DATE')),
 			(new IntegerField('CLOSED_BY_ID'))
 				->setName($this->getAliasFieldName('CLOSED_BY'))
+				->setKind(FieldKind::EMPLOYEE)
 			,
 			(new StringField('CLOSED_BY_NAME'))
 				->setName("

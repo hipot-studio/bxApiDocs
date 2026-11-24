@@ -204,10 +204,12 @@ class Engine
 	}
 
 	/**
-	 * Returns Engine's list by category.
+	 * Returns available Engines of the category as arrays for the UI, sorted by title.
+	 * Exactly one item is marked as selected: the last used engine, the configured default,
+	 * or the first available engine in registration order.
 	 *
 	 * @param string $category Engine's category.
-	 * @param Context|null $context Context instance.
+	 * @param Context|null $context Context instance, fake context if null.
 	 * @return array
 	 */
 	public static function getData(string $category, ?Context $context = null): array
@@ -318,7 +320,10 @@ class Engine
 	}
 
 	/**
-	 * Returns only one available Engine by category.
+	 * Returns only one available Engine by category: the engine configured for the category
+	 * (and quality) if it is available, otherwise the first available one with the quality.
+	 * If the configured engine is available but lacks the quality, null is returned.
+	 * Returns null if the current session user (not the Context's user) has no access to engines.
 	 *
 	 * @param string $category Engine's category.
 	 * @param Context $context Context instance.
@@ -466,7 +471,9 @@ class Engine
 	}
 
 	/**
-	 * Returns true, if current Engine has no agreement or current user accepted it.
+	 * Returns true, if current Engine has no agreement or the Context's user accepted it
+	 * (always true for a Context without a user).
+	 * On Bitrix24 cloud the agreement is not checked: the result is the `ai_available_by_version` feature.
 	 *
 	 * @return bool
 	 */
@@ -506,10 +513,13 @@ class Engine
 		return $this->engine->isExpired();
 	}
 
+	/**
+	 * Does nothing: memory context is not implemented yet, the call is kept for existing consumers.
+	 *
+	 * @return self
+	 */
 	public function useMemoryContextService(): self
 	{
-//		$this->engine->useMemoryContextService();
-
 		return $this;
 	}
 
@@ -750,7 +760,10 @@ class Engine
 	}
 
 	/**
-	 * Skips User Agreement (in fact just accept agreement by current Context's user).
+	 * Skips User Agreement: the Engine reports no agreement, so the Engine agreement check passes
+	 * (on box; on cloud isAvailableByAgreement() checks a feature and ignores the skip).
+	 * Does not bypass the BitrixGPT agreement check in completions().
+	 * Acceptance is not recorded for the Context's user.
 	 *
 	 * @return self
 	 */
@@ -800,9 +813,14 @@ class Engine
 
 	/**
 	 * Make request to AI Engine. The model will return one or more predicted completions.
+	 * Checks agreement, tariff, expiration and limits first; a failed check is reported
+	 * to the onError() callback. Results of onBeforeCompletions handlers are not inspected.
 	 *
-	 * @param bool $queue Try to send request throw the queue.
+	 * @param bool $queue Send request through the queue if the Engine implements IQueueOptional.
+	 *   Forced to true while the `force_queue` option is on (default), except for the
+	 *   `translate_picture_request` prompt. Cloud Engines always use the queue.
 	 * @return void
+	 * @throws \RuntimeException If the shared monthly pool cannot be charged (not reported to onError()).
 	 */
 	public function completions(bool $queue = false): void
 	{
@@ -952,9 +970,10 @@ class Engine
 	}
 
 	/**
-	 * Make request to AI Engine throw the queue. The model will return one or more predicted completions.
+	 * Make request to AI Engine through the queue. The model will return one or more predicted completions.
 	 *
 	 * @return void
+	 * @throws \RuntimeException If the shared monthly pool cannot be charged (not reported to onError()).
 	 */
 	public function completionsInQueue(): void
 	{

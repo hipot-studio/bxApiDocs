@@ -26,6 +26,8 @@ class CSaleOrderLoader
 	var $arExportInfo = array();
 	var $arIBInfo = array();
 
+	private ?array $productCache = null;
+
 	public $crmCompatibleMode = false;
 	public $marked_code = '[1C_Exchange:Order.deducted]';
 	public $delimiter_reason = "&nbsp;&nbsp;<br/>";
@@ -720,7 +722,8 @@ class CSaleOrderLoader
 						$foundedBasketItem = false;
 						foreach($arOrder["items"] as $k=>$items)
 						{
-							if($this->existsBasketItem($basketItem, $items))
+							if (($items[$basketItem->getField("PRODUCT_XML_ID")]["CHECKED"] ?? null) !== "Y"
+								&& $this->existsBasketItem($basketItem, $items))
 							{
 								$foundedBasketItem = true;
 
@@ -763,6 +766,7 @@ class CSaleOrderLoader
 								}
 
 								$arOrder["items"][$k][$basketItem->getField("PRODUCT_XML_ID")]["CHECKED"] = "Y";
+								break;
 							}
 						}
 
@@ -892,6 +896,20 @@ class CSaleOrderLoader
 	}
 
 	function saveOrderCompatibility($arDocument, $arAditFields=array())
+	{
+		$previousProductCache = $this->productCache;
+		$this->productCache = [];
+		try
+		{
+			return $this->saveOrderCompatibilityInternal($arDocument, $arAditFields);
+		}
+		finally
+		{
+			$this->productCache = $previousProductCache;
+		}
+	}
+
+	private function saveOrderCompatibilityInternal($arDocument, $arAditFields=array())
 	{
 		$documentBasketItems = array();
 		$this->arPersonTypesIDs = array();
@@ -1301,6 +1319,11 @@ class CSaleOrderLoader
 			{
 				foreach ($arDocument['items'] as $k=>$item)
 				{
+					if (($item[$basketItem->getField('PRODUCT_XML_ID')]['CHECKED'] ?? null) === 'Y')
+					{
+						continue;
+					}
+
 					if(
 						$this->existsBasketItem($basketItem, $item) &&
 						$item[$basketItem->getField('PRODUCT_XML_ID')]['PRICE'] == $basketItem->getField('PRICE')
@@ -1347,6 +1370,7 @@ class CSaleOrderLoader
 						}
 
 						$arDocument['items'][$k][$basketItem->getField('PRODUCT_XML_ID')]["CHECKED"] = "Y";
+						break;
 
 					}
 					elseif(
@@ -2030,6 +2054,100 @@ class CSaleOrderLoader
 		}
 
 		self::setVersionSchema($attr[GetMessage("CC_BSC1_COM_INFO_VARSION")]);
+	}
+
+	private function getItemIndexKey($productXmlId): ?string
+	{
+		return is_string($productXmlId) || is_int($productXmlId) ? 's' . $productXmlId : null;
+	}
+
+	private function buildItemIndex(array $items): ?array
+	{
+		$index = ['groups' => []];
+		foreach ($items as $key => $item)
+		{
+			$indexKey = $this->getItemIndexKey($item['ID'] ?? $key);
+			if ($indexKey === null)
+			{
+				return null;
+			}
+			$index['groups'][$indexKey]['keys'][] = $key;
+			$index['groups'][$indexKey]['position'] = 0;
+		}
+
+		return $index;
+	}
+
+	private function getUncheckedItemKey(array $items, $productXmlId, ?array &$itemIndex = null)
+	{
+		$indexKey = $this->getItemIndexKey($productXmlId);
+		if ($indexKey === null)
+		{
+			return null;
+		}
+		if ($itemIndex !== null)
+		{
+			if (!isset($itemIndex['groups'][$indexKey]))
+			{
+				return null;
+			}
+
+			$group = &$itemIndex['groups'][$indexKey];
+			while (isset($group['keys'][$group['position']]))
+			{
+				$key = $group['keys'][$group['position']];
+				if (($items[$key]['CHECKED'] ?? null) !== 'Y')
+				{
+					return $key;
+				}
+				$group['position']++;
+			}
+
+			return null;
+		}
+
+		foreach ($items as $key => $item)
+		{
+			if ($this->getItemIndexKey($item['ID'] ?? $key) === $indexKey
+				&& ($item['CHECKED'] ?? null) !== 'Y')
+			{
+				return $key;
+			}
+		}
+
+		return null;
+	}
+
+	private function sortRepeatedBasketItems(array $items): array
+	{
+		$positions = [];
+		foreach ($items as $key => $item)
+		{
+			if (is_string($item['PRODUCT_XML_ID']))
+			{
+				$positions['s' . $item['PRODUCT_XML_ID']][] = $key;
+			}
+		}
+		foreach ($positions as $keys)
+		{
+			if (count($keys) < 2)
+			{
+				continue;
+			}
+			$sortedKeys = $keys;
+			usort($sortedKeys, static fn($left, $right) => (int)$items[$left]['ID'] <=> (int)$items[$right]['ID']);
+			$rows = [];
+			foreach ($sortedKeys as $key)
+			{
+				$rows[] = $items[$key];
+			}
+			foreach ($keys as $position => $key)
+			{
+				$items[$key] = $rows[$position];
+			}
+		}
+
+		return $items;
 	}
 
 	function existsBasketItem(\Bitrix\Sale\BasketItem $basketItem, array $item = array())
@@ -3050,7 +3168,7 @@ class CSaleOrderLoader
 						if (self::getVersionSchema() >= self::PARTIAL_VERSION)
 							$arOrder["items"][][$productID] = $basketItems;
 						else
-							$arOrder["items"][$productID] = $basketItems;
+							$arOrder["items"][] = array_merge($basketItems, ['ID' => $productID]);
 					}
 				}
 			}
@@ -3221,40 +3339,66 @@ class CSaleOrderLoader
 		return $result;
 	}
 
-	function prepareProduct4Basket($itemID, $arItem, $orderId, $orderInfo)
+	private function getProductForBasket($itemID): array
 	{
-		$arFields = array();
+		if ($this->productCache !== null && array_key_exists($itemID, $this->productCache))
+		{
+			return $this->productCache[$itemID];
+		}
 
 		$products = array();
 		$productType = array();
 		$arIBlockElement = array();
+		$dbIBlockElement = CIBlockElement::GetList(
+			array(),
+			array("XML_ID" => $itemID, "ACTIVE" => "Y", "CHECK_PERMISSIONS" => "Y"),
+			false,
+			false,
+			array("ID", "IBLOCK_ID", "XML_ID", "NAME", "DETAIL_PAGE_URL")
+		);
+		while($arElement = $dbIBlockElement->Fetch())
+		{
+			$products[] = $arElement;
+		}
+
+		if(count($products)>1)
+		{
+			foreach($products as $product)
+			{
+				$ar = \CCatalogProduct::GetByID($product["ID"]);
+				$productType[$ar['TYPE']] = $product;
+			}
+
+			if(array_key_exists(3, $productType) && array_key_exists(4, $productType))
+			{
+				$arIBlockElement = $productType[4];
+			}
+		}
+		elseif(count($products)==1)
+		{
+			$arIBlockElement = $products[0];
+		}
+
+		$result = [
+			'ELEMENT' => $arIBlockElement,
+			'PRODUCT' => $arIBlockElement ? CCatalogProduct::GetByID($arIBlockElement['ID']) : false,
+		];
+		if ($this->productCache !== null)
+		{
+			$this->productCache[$itemID] = $result;
+		}
+
+		return $result;
+	}
+
+	function prepareProduct4Basket($itemID, $arItem, $orderId, $orderInfo)
+	{
+		$arFields = array();
 
 		if(CModule::IncludeModule("iblock"))
 		{
-			$dbIBlockElement = CIBlockElement::GetList(array(), array("XML_ID" => $itemID, "ACTIVE" => "Y", "CHECK_PERMISSIONS" => "Y"), false, false, array("ID", "IBLOCK_ID", "XML_ID", "NAME", "DETAIL_PAGE_URL"));
-			while($arElement = $dbIBlockElement->Fetch())
-			{
-				$products[] = $arElement;
-			}
-
-			if(count($products)>1)
-			{
-				foreach($products as $product)
-				{
-					$ar = \CCatalogProduct::GetByID($product["ID"]);
-					$productType[$ar['TYPE']] = $product;
-				}
-
-				if(array_key_exists(3, $productType) && array_key_exists(4, $productType))
-				{
-					$arIBlockElement = $productType[4];
-				}
-			}
-			elseif(count($products)==1)
-			{
-				$arIBlockElement = $products[0];
-			}
-
+			$product = $this->getProductForBasket($itemID);
+			$arIBlockElement = $product['ELEMENT'];
 			if($arIBlockElement)
 			{
 				if(empty($this->arIBInfo[$arIBlockElement["IBLOCK_ID"]]))
@@ -3280,7 +3424,7 @@ class CSaleOrderLoader
 						"CODE" => "PRODUCT.XML_ID",
 						"VALUE" => $arIBlockElement["XML_ID"]
 				);
-				$arProduct = CCatalogProduct::GetByID($arIBlockElement["ID"]);
+				$arProduct = $product['PRODUCT'];
 
 				$arFields = array(
 						"ORDER_ID" => $orderId,
@@ -3357,6 +3501,20 @@ class CSaleOrderLoader
 	}
 
 	function oldSaveOrder($arOrder, $option=array())
+	{
+		$previousProductCache = $this->productCache;
+		$this->productCache = [];
+		try
+		{
+			return $this->oldSaveOrderInternal($arOrder, $option);
+		}
+		finally
+		{
+			$this->productCache = $previousProductCache;
+		}
+	}
+
+	private function oldSaveOrderInternal($arOrder, $option=array())
 	{
 		global $APPLICATION;
 		global $USER;
@@ -3489,19 +3647,29 @@ class CSaleOrderLoader
 								)
 						);
 
+						$itemIndex = $this->buildItemIndex($arOrder['items'] ?? []);
+						$basketItems = [];
 						while ($arBasket = $dbBasket->Fetch())
 						{
+							$basketItems[] = $arBasket;
+						}
+
+						foreach ($this->sortRepeatedBasketItems($basketItems) as $arBasket)
+						{
 							$arFields = Array();
-							if(!empty($arOrder["items"][$arBasket["PRODUCT_XML_ID"]]))
+							$itemKey = $this->getUncheckedItemKey(
+								$arOrder['items'], $arBasket['PRODUCT_XML_ID'], $itemIndex
+							);
+							if ($itemKey !== null)
 							{
-								if($arBasket["QUANTITY"] != $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["QUANTITY"])
-									$arFields["QUANTITY"] = $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["QUANTITY"];
-								if($arBasket["PRICE"] != $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["PRICE"])
-									$arFields["PRICE"] = $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["PRICE"];
-								if($arBasket["VAT_RATE"] != $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["VAT_RATE"])
-									$arFields["VAT_RATE"] = $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["VAT_RATE"];
-								if($arBasket["DISCOUNT_PRICE"] != $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["DISCOUNT_PRICE"])
-									$arFields["DISCOUNT_PRICE"] = $arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["DISCOUNT_PRICE"];
+								if($arBasket["QUANTITY"] != $arOrder["items"][$itemKey]["QUANTITY"])
+									$arFields["QUANTITY"] = $arOrder["items"][$itemKey]["QUANTITY"];
+								if($arBasket["PRICE"] != $arOrder["items"][$itemKey]["PRICE"])
+									$arFields["PRICE"] = $arOrder["items"][$itemKey]["PRICE"];
+								if($arBasket["VAT_RATE"] != $arOrder["items"][$itemKey]["VAT_RATE"])
+									$arFields["VAT_RATE"] = $arOrder["items"][$itemKey]["VAT_RATE"];
+								if($arBasket["DISCOUNT_PRICE"] != $arOrder["items"][$itemKey]["DISCOUNT_PRICE"])
+									$arFields["DISCOUNT_PRICE"] = $arOrder["items"][$itemKey]["DISCOUNT_PRICE"];
 
 								if(count($arFields)>0)
 								{
@@ -3535,7 +3703,7 @@ class CSaleOrderLoader
 								}
 								//CSaleBasket::Update($arBasket["ID"], $arFields);
 
-								$arOrder["items"][$arBasket["PRODUCT_XML_ID"]]["CHECKED"] = "Y";
+								$arOrder["items"][$itemKey]["CHECKED"] = "Y";
 							}
 							else
 							{
@@ -3569,7 +3737,7 @@ class CSaleOrderLoader
 										{
 											$bNeedUpdate = true;
 
-											if ($arBasketFields = $this->prepareProduct4Basket($itemID, $arItem, $orderId, $orderInfo))
+											if ($arBasketFields = $this->prepareProduct4Basket($arItem['ID'] ?? $itemID, $arItem, $orderId, $orderInfo))
 											{
 												if($isInvoice)
 												{
@@ -3581,6 +3749,7 @@ class CSaleOrderLoader
 												}
 												else
 												{
+													$arBasketFields['DUPLICATE'] = 'Y';
 													$arShoppingCart[] = $arBasketFields;
 												}
 											}
@@ -3869,7 +4038,9 @@ class CSaleOrderLoader
 
 						foreach($arOrder["items"] as $productID => $val)
 						{
-							$orderFields["BASKET_ITEMS"][] = $this->prepareProduct4Basket($productID, $val, false, $orderFields);
+							$basketFields = $this->prepareProduct4Basket($val['ID'] ?? $productID, $val, false, $orderFields);
+							$basketFields['DUPLICATE'] = 'Y';
+							$orderFields['BASKET_ITEMS'][] = $basketFields;
 						}
 
 						if(!empty($arOrder["TAX"]))

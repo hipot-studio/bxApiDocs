@@ -6,10 +6,12 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\StandalonePageRenderer;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\TypeFile;
@@ -63,7 +65,18 @@ class ExternalLinkHandler implements HtmlRenderableHandler, AutomaticEditModeCap
 	{
 		return $this->baseObject instanceof File
 			&& (int)$this->baseObject->getTypeFile() === TypeFile::DOCUMENT
+			&& $this->isViewableDocument($this->baseObject, $this->version)
 			&& VibeofficeHandler::isEditable($this->version?->getExtension() ?? $this->baseObject->getExtension())
+		;
+	}
+
+	private function isViewableDocument(File $file, ?Version $version = null): bool
+	{
+		$extension = $version?->getExtension() ?? $file->getExtension();
+
+		return DocumentHandler::isEditable($extension)
+			|| mb_strtolower($extension) === 'pdf'
+			|| DocumentViewPolicy::isAdditionalVibeofficeSource($file, $version)
 		;
 	}
 

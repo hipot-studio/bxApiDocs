@@ -16,6 +16,6 @@ class Shipment extends ShipmentImport
 	 */
 	protected function getBasketItemByItem(BasketBase $basket, array $item)
 	{
-		return Order::getBasketItemByItem($basket, $item);
+		return Order::getBasketItemFromList($this->getBasketCandidatesForItem($item), $item);
 	}
 }

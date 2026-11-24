@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Integration\Search;
 
 use Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\Public\Features\MessageSearch;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\Search\Access\CodeCarrierResolver;
@@ -12,6 +13,7 @@ use Bitrix\Im\V2\Logger;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Pull\Event\UpdateFeature;
 use Bitrix\Im\V2\Service\Locator;
+use Bitrix\Main\Config\Feature\FeatureFlagTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
@@ -68,6 +70,11 @@ final class EventHandler
 	{
 		$value = $event->getParameter('value');
 		if (!in_array($value, ['Y', 'N'], true))
+		{
+			return;
+		}
+
+		if (FeatureFlagTable::getByPrimary(MessageSearch::class)->fetch() !== false)
 		{
 			return;
 		}

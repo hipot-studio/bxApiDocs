@@ -33,9 +33,9 @@ class MessageAnalytics extends ChatAnalytics
 		$this->message = $message;
 	}
 
-	public function addSendMessage(): void
+	public function addSendMessage(string $sendMessageAnalyticsType): void
 	{
-		$this->async(function () {
+		$this->async(function () use ($sendMessageAnalyticsType) {
 			if ($this->message->getMessageId() === null)
 			{
 				return;
@@ -61,6 +61,7 @@ class MessageAnalytics extends ChatAnalytics
 			$this
 				->createMessageEvent(self::SEND_MESSAGE)
 				?->setType($componentName)
+				?->setP3($sendMessageAnalyticsType)
 				?->send()
 			;
 

@@ -19,8 +19,12 @@ final class WorkflowTemplateIdentifier
 		public readonly ?DateTime $modified = null,
 	) {}
 
-	/** The same template, pointed at another draft of it - the one a write has just produced. */
-	public function withDraftId(int $draftId): self
+	/**
+	 * The same template pointing at another draft - the one a write has just produced. A null means
+	 * "there is no draft any more": that is how the answer of a publication is assembled, since
+	 * publishing deletes every draft of the template.
+	 */
+	public function withDraftId(?int $draftId): self
 	{
 		return new self($this->documentDescription, $this->templateId, $draftId, $this->name, $this->modified);
 	}

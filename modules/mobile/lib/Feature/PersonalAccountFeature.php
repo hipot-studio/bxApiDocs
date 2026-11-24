@@ -15,7 +15,7 @@ final class PersonalAccountFeature extends FeatureFlag
 
 	protected function isOptionEnabled(): bool
 	{
-		return Option::get('mobile', self::OPTION_NAME, 'N') === 'Y';
+		return Option::get('mobile', self::OPTION_NAME, 'Y') === 'Y';
 	}
 
 	public function enable(): void

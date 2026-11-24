@@ -389,7 +389,27 @@ class SourceManager
 		return $result;
 	}
 
-	public static function updateConnection(int $sourceId, array $data): Result
+	public static function updateConnectionActive(int $sourceId, bool $active): Result
+	{
+		$source = ExternalSourceTable::getById($sourceId)->fetchObject();
+		if (!$source)
+		{
+			$result = new Result();
+			$result->addError(new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_NOT_FOUND')));
+
+			return $result;
+		}
+
+		$source
+			->setActive($active)
+			->setDateUpdate(new DateTime())
+			->setUpdatedById((int)CurrentUser::get()->getId())
+		;
+
+		return $source->save();
+	}
+
+	public static function updateConnection(int $sourceId, array $data, ?bool $active = null): Result
 	{
 		$result = new Result();
 
@@ -428,6 +448,11 @@ class SourceManager
 			if (isset($data['description']))
 			{
 				$source->setDescription($data['description']);
+			}
+
+			if ($active !== null)
+			{
+				$source->setActive($active);
 			}
 
 			if ($source->getType() === Type::Rest->value)

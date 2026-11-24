@@ -22,6 +22,7 @@ use Psr\Container\NotFoundExceptionInterface;
 final readonly class AiAssistantDraftCreatorService
 {
 	private BizprocDesignerPullManager $pullManager;
+	private TemplateEditAccess $editAccess;
 
 	/**
 	 * @throws NotFoundExceptionInterface
@@ -29,9 +30,13 @@ final readonly class AiAssistantDraftCreatorService
 	 * @throws ObjectNotFoundException
 	 * @throws ServiceNotFoundException
 	 */
-	public function __construct(?BizprocDesignerPullManager $pullManager = null)
+	public function __construct(
+		?BizprocDesignerPullManager $pullManager = null,
+		?TemplateEditAccess $editAccess = null,
+	)
 	{
 		$this->pullManager = $pullManager ?? Container::getPullManager();
+		$this->editAccess = $editAccess ?? new TemplateEditAccess();
 	}
 
 	/**
@@ -81,8 +86,7 @@ final readonly class AiAssistantDraftCreatorService
 			return [$draft->userId];
 		}
 
-		$editAccess = new TemplateEditAccess();
-		$tpl = $editAccess->resolve($draft->templateId);
+		$tpl = $this->editAccess->resolve($draft->templateId);
 		if ($tpl === null)
 		{
 			return [];
@@ -97,7 +101,7 @@ final readonly class AiAssistantDraftCreatorService
 
 		return array_values(array_filter(
 			$recipientIds,
-			static fn(int $userId): bool => $editAccess->canEdit($tpl, $userId),
+			fn(int $userId): bool => $this->editAccess->canEdit($tpl, $userId),
 		));
 	}
 

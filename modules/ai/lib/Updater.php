@@ -180,9 +180,13 @@ final class Updater
 	}
 
 	/**
-	 * Refreshes local DB from remote JSON file.
+	 * Refreshes local DB from remote JSON file if its version or format is newer than the local one
+	 * or the local format subversion differs from the current one. Does nothing if another refresh holds
+	 * the lock; invalid JSON or an unsupported format_version only postpones the next refresh.
 	 *
 	 * @param string $rawJson JSON string.
+	 * @param string $etag ETag of the JSON to store after a successful refresh.
+	 * @param SyncMode $mode Partitional mode only upserts items and deletes the ones listed in `deleted`.
 	 * @return void
 	 */
 	private static function refreshFromJson(string $rawJson, string $etag, SyncMode $mode = SyncMode::Standard): void
@@ -312,7 +316,7 @@ final class Updater
 	}
 
 	/**
-	 * Returns UNIX time when Prompts' local DB will be expired.
+	 * Returns true if Prompts' local DB is expired.
 	 *
 	 * @return bool
 	 */
@@ -334,7 +338,7 @@ final class Updater
 	/**
 	 * Sets new version of Prompts' local DB.
 	 *
-	 * @param int $version New version.
+	 * @param string $version New version.
 	 * @return void
 	 */
 	public static function setVersion(string $version): void
@@ -343,9 +347,9 @@ final class Updater
 	}
 
 	/**
-	 * Sets new version of Prompts' local DB.
+	 * Sets new format version of Prompts' local DB.
 	 *
-	 * @param int $version New version.
+	 * @param int $version New format version.
 	 * @return void
 	 */
 	public static function setFormatVersion(int $version): void

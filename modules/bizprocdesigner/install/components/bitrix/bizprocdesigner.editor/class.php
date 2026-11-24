@@ -8,11 +8,13 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BizprocDesigner\Infrastructure\Enum\StartTrigger;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\CopilotOptionsService;
 use Bitrix\BizprocDesigner\Internal\Integration\Main\Service\HotkeysOptionsService;
+use Bitrix\BizprocDesigner\Internal\Service\SystemTemplateView\SystemTemplateViewServiceProvider;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Api;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Internal\Service\Feature\BpDesignerFeature;
+use Bitrix\Bizproc\Public\Service\AiAgent\SystemTemplateViewService;
 use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 
 use Bitrix\Main\DI\ServiceLocator;
@@ -26,11 +28,22 @@ use Bitrix\Main\Localization\Loc;
 class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errorable
 {
 	use ErrorableImplementation;
+
+	private const MODE_EDIT = 'edit';
+	private const MODE_VIEW = 'view';
+
 	private \CMain $application;
 	private bool $isLegacyPropertiesDialog;
 	private BpDesignerFeature $bpDesignerFeature;
+	private ?SystemTemplateViewService $viewService;
+	private TemplateAccessService $accessService;
 
-	public function __construct($component = null, ?BpDesignerFeature $bpDesignerFeature = null)
+	public function __construct(
+		$component = null,
+		?BpDesignerFeature $bpDesignerFeature = null,
+		?SystemTemplateViewService $viewService = null,
+		?TemplateAccessService $accessService = null,
+	)
 	{
 		parent::__construct($component);
 		Loader::requireModule('bizproc');
@@ -41,6 +54,8 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 		$this->isLegacyPropertiesDialog = (bool)\Bitrix\Main\Config\Option::get('bizproc', 'legacy_properties_dialog', 1);
 
 		$this->bpDesignerFeature = $bpDesignerFeature ?? ServiceLocator::getInstance()->get(BpDesignerFeature::class);
+		$this->viewService = $viewService;
+		$this->accessService = $accessService ?? new TemplateAccessService();
 	}
 
 	/**
@@ -62,6 +77,9 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 		$requestedNoteId = $_REQUEST['noteId'] ?? null;
 		$noteId = is_scalar($requestedNoteId) ? (int)$requestedNoteId : 0;
 		$params['NOTE_ID'] = $noteId > 0 ? $noteId : null;
+
+		// Only the exact value opens the view: anything else is the editor as it always was.
+		$params['MODE'] = ($_REQUEST['mode'] ?? null) === self::MODE_VIEW ? self::MODE_VIEW : self::MODE_EDIT;
 
 		if (!isset($params['MODULE_ID'], $params['ENTITY'], $params['DOCUMENT_TYPE']))
 		{
@@ -116,12 +134,24 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 			$this->arParams['DOCUMENT_TYPE'] ?? '',
 		];
 
-		$accessService = new TemplateAccessService();
-		$canEdit = $templateId > 0
-			? $accessService->canEdit($templateId, null, $documentType)
-			: $accessService->canCreate(null, $documentType);
+		$isViewMode = ($this->arParams['MODE'] ?? self::MODE_EDIT) === self::MODE_VIEW;
+		if ($isViewMode)
+		{
+			$viewedDocumentType = $this->resolveViewedDocumentType($templateId);
+			$isAllowed = $viewedDocumentType !== null;
+			$documentType = $viewedDocumentType ?? $documentType;
+			$this->arParams['MODULE_ID'] = $documentType[0];
+			$this->arParams['ENTITY'] = $documentType[1];
+			$this->arParams['DOCUMENT_TYPE'] = $documentType[2];
+		}
+		else
+		{
+			$isAllowed = $templateId > 0
+				? $this->accessService->canEdit($templateId, null, $documentType)
+				: $this->accessService->canCreate(null, $documentType);
+		}
 
-		if (!$canEdit)
+		if (!$isAllowed)
 		{
 			$this->arResult['ERROR_TITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_ACCESS_RIGHTS_ERROR_TITLE') ?? '';
 			$this->arResult['ERROR_SUBTITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_ACCESS_RIGHTS_ERROR_SUBTITLE') ?? '';
@@ -131,9 +161,11 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 			return;
 		}
 
+		$this->fillActivitiesOfTheDocumentType();
+
 		if ($this->isLegacyPropertiesDialog)
 		{
-			$this->fillLegacyModeResult();
+			$this->arResult['IS_LEGACY_PROPERTIES_DIALOG'] = true;
 		}
 
 		// A node action is not part of ALL_NODES — that list holds nodes, activities and triggers — so its
@@ -142,24 +174,58 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 		// template publishes as arAllActivities stays as it was.
 		$this->arResult['NODE_ACTIONS'] = $this->getNodeActions($documentType);
 
+		// The id of the grid row travels as it came: the read actions of the view resolve it themselves.
 		$this->arResult['templateId'] = $templateId;
 		$this->arResult['documentType'] = \CBPHelper::normalizeComplexDocumentId($documentType);
+		$this->arResult['mode'] = $isViewMode ? self::MODE_VIEW : self::MODE_EDIT;
 		// DTO-02: editability flags consumed by the chart editor (JS).
-		$this->arResult['canEdit'] = $canEdit;
-		$this->arResult['canPublish'] = $accessService->canPublish($templateId, null, $documentType);
+		$this->arResult['canEdit'] = !$isViewMode;
+		$this->arResult['canPublish'] =
+			!$isViewMode
+			&& $this->accessService->canPublish($templateId, null, $documentType)
+		;
 		// CFG-01: null means the description editor shows no AI button; so does an unresolved user.
 		$currentUserId = (int)CurrentUser::get()->getId();
-		$this->arResult['initCopilotOptions'] = (new CopilotOptionsService())->resolveOptions(
-			$currentUserId > 0 ? $currentUserId : null,
-			$templateId,
-		);
+		$this->arResult['initCopilotOptions'] = $isViewMode
+			? null
+			: (new CopilotOptionsService())->resolveOptions(
+				$currentUserId > 0 ? $currentUserId : null,
+				$templateId,
+			)
+		;
 		// DTO-01: the raw personal option; the frontend drops whatever it cannot vouch for.
 		$this->arResult['initHotkeys'] = (new HotkeysOptionsService())->resolveBindings($currentUserId);
 		// TPL-02: the note the interface focuses on right after the template opens. Existence is not
 		// checked here: a completed note is a normal case, and the interface reports it as unavailable.
-		$this->arResult['noteId'] = $this->arParams['NOTE_ID'] ?? null;
+		// The view opens no discussions.
+		$this->arResult['noteId'] = $isViewMode ? null : ($this->arParams['NOTE_ID'] ?? null);
 
 		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * Document type of the system template the row resolves to, or null when the view is refused: the catalog
+	 * of the page is built for the template that is shown, not for a copy of it.
+	 */
+	private function resolveViewedDocumentType(int $rowTemplateId): ?array
+	{
+		$result = $this->viewService()?->resolve($rowTemplateId);
+		if ($result === null || !$result->isSuccess())
+		{
+			return null;
+		}
+
+		$row = WorkflowTemplateTable::getList([
+			'filter' => ['=ID' => (int)$result->getData()[SystemTemplateViewService::SYSTEM_TEMPLATE_ID]],
+			'select' => ['MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE'],
+		])->fetch();
+
+		return is_array($row) ? array_values($row) : null;
+	}
+
+	private function viewService(): ?SystemTemplateViewService
+	{
+		return $this->viewService ??= ServiceLocator::getInstance()->get(SystemTemplateViewServiceProvider::class)->get();
 	}
 
 	protected function setTemplateTitle(?string $templateName): void
@@ -168,15 +234,16 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 	}
 
 	/**
+	 * Filled whatever the legacy dialog option says: the rendering classes of these activities draw the form
+	 * built from the properties map, and the option decides the legacy scripts alone.
+	 *
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	private function fillLegacyModeResult(): void
+	private function fillActivitiesOfTheDocumentType(): void
 	{
-		$this->arResult['IS_LEGACY_PROPERTIES_DIALOG'] = true;
-
 		/** @var Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher $activitySearcher */
 		$activitySearcher = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
 		$documentType = [$this->arParams['MODULE_ID'], $this->arParams['ENTITY'], $this->arParams['DOCUMENT_TYPE']];

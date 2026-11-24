@@ -9,7 +9,7 @@ use Bitrix\BIConnector\Configuration\Feature;
  *
  * The list of sections is not fixed twice over: a section belonging to a feature that is not
  * applied on the portal is no section of this screen at all, and a section the person holds no
- * right of is no section of his screen - it is not drawn and nothing of it is saved.
+ * right of is drawn to him read only - nothing of it is saved.
  */
 final class SectionFactory
 {

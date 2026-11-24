@@ -380,6 +380,15 @@ class DocumentBase
 
 					$result['ITEM_TYPE'] = $fieldValue;	//TODO: check && fix
                 }
+				elseif ($name === 'BASKET_NUMBER')
+				{
+					$exportMessage = static::getMessageExport();
+					$positionName = $exportMessage['SALE_EXPORT_BASKET_NUMBER'];
+					if (array_key_exists($positionName, $traits))
+					{
+						$result[$name] = $traits[$positionName];
+					}
+				}
                 elseif(!empty($traits[$message["CC_BSC1_".$name]]))
                 {
                     $fieldValue = $traits[$message["CC_BSC1_".$name]];
@@ -431,15 +440,15 @@ class DocumentBase
 		$result = null;
 		$message = self::getMessage();
 
-		if (is_array($value["#"][$message["CC_BSC1_DISCOUNTS"]][0]["#"][$message["CC_BSC1_DISCOUNT"]])
-			&& !empty($value["#"][$message["CC_BSC1_DISCOUNTS"]][0]["#"][$message["CC_BSC1_DISCOUNT"]]))
+		$discount = $value["#"][$message["CC_BSC1_DISCOUNTS"]][0]["#"][$message["CC_BSC1_DISCOUNT"]][0]["#"] ?? null;
+
+		if (is_array($discount))
 		{
-			$field = $value["#"][$message["CC_BSC1_DISCOUNTS"]][0]["#"][$message["CC_BSC1_DISCOUNT"]];
 			foreach($fieldsInfo['FIELDS'] as $name => $info)
 			{
-				if(!empty($field[0]["#"][$message["CC_BSC1_".$name]][0]["#"]))
+				if(!empty($discount[$message["CC_BSC1_".$name]][0]["#"]))
 				{
-					$fieldValue = $field[0]["#"][$message["CC_BSC1_".$name]][0]["#"];
+					$fieldValue = $discount[$message["CC_BSC1_".$name]][0]["#"];
 					self::internalizeFields($fieldValue, $info);
 
 					$result[$name] = $fieldValue;
@@ -603,6 +612,7 @@ class DocumentBase
 
                 $basketItems = Array(
                     'ID' => $item['ID'],
+                    'BASKET_NUMBER' => $item['REK_VALUES']['BASKET_NUMBER'] ?? null,
                     'NAME' => $item['NAME'],
                     'PRICE' => $price,
                     'PRICE_ONE' => $priceone,

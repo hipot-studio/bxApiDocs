@@ -44,4 +44,9 @@ final class CollabFolder extends SystemFolder
 	{
 		return Collab::isAvailable();
 	}
+
+	public function canReadAll(): bool
+	{
+		return true;
+	}
 }

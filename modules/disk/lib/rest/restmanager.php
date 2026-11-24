@@ -72,7 +72,7 @@ final class RestManager extends IRestService implements IErrorable
 			'disk.file.markDeleted',
 			'disk.file.restore',
 			'disk.file.uploadVersion',
-			Bitrix24Manager::isFeatureEnabled('disk_manual_external_link')? 'disk.file.getExternalLink' : null,
+			'disk.file.getExternalLink',
 			Bitrix24Manager::isFeatureEnabled('disk_file_history')? 'disk.file.getVersions' : null,
 			Bitrix24Manager::isFeatureEnabled('disk_file_history')? 'disk.file.restoreFromVersion': null,
 			'disk.file.listAllowedOperations',

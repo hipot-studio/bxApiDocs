@@ -37,6 +37,16 @@ class UserRowAssembler extends RowAssembler
 			new Field\DesktopAppsField(['DESKTOP_APPS'], $this->settings),
 		];
 
+		if (
+			in_array('REGISTRATION_DATA', $this->getVisibleColumnIds(), true)
+			&& $this->settings->isCloud()
+			&& $this->settings->isCurrentUserAdmin()
+			&& $this->settings->isHtmlMode()
+		)
+		{
+			$assemblers[] = $this->createRegistrationDataFieldAssembler();
+		}
+
 		if ($this->settings->isCurrentUserAdmin() && \Bitrix\Main\Loader::includeModule('security'))
 		{
 			$assemblers[] = new Field\JsFields\OtpStatusFieldAssembler(['OTP_STATUS'], $this->settings);
@@ -53,5 +63,10 @@ class UserRowAssembler extends RowAssembler
 		$assemblers[] = new Field\IntegratorFieldAssembler(['INTEGRATOR'], $this->settings);
 
 		return $assemblers;
+	}
+
+	protected function createRegistrationDataFieldAssembler(): Field\RegistrationDataFieldAssembler
+	{
+		return new Field\RegistrationDataFieldAssembler(['REGISTRATION_DATA'], $this->settings);
 	}
 }

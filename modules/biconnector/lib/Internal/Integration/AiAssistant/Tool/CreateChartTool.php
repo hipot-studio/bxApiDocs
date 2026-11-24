@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
 use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
 use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
 use Bitrix\BIConnector\Internal\Operation\Builder\Chart\CreateChartOperation;
@@ -174,13 +175,20 @@ final class CreateChartTool extends BaseBiTool
 
 		$payload = ChartParamsBuilder::build($args);
 
-		$dataset = (new ChartDatasetGuard())->validate($args, self::findActAsUser($userId), true);
+		$identity = (new SupersetIdentity())->forWrite($userId);
+		if (!$identity->isSuccess())
+		{
+			throw self::toMcpException($identity);
+		}
+		$user = $identity->getData()['user'];
+		$dataset = (new ChartDatasetGuard())->validate($args, $user, true);
 		if (!$dataset->isSuccess())
 		{
 			throw self::toMcpException(OperationRefusal::forTool($dataset));
 		}
 
-		$response = IntegratorFactory::getInstance()->createChart($payload);
+		unset($payload['owners']);
+		$response = IntegratorFactory::getInstance()->createChart($payload, $user);
 		if ($response->hasErrors())
 		{
 			throw self::unavailableBiException(

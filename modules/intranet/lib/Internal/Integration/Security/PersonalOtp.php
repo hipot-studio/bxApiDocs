@@ -10,6 +10,7 @@ use Bitrix\Intranet\Entity\UserOtp;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
+use Bitrix\Intranet\Internal\Service\Otp\ConfirmationCallAvailability;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\OtpGraceDeadlineResolver;
 use Bitrix\Intranet\Internal\Service\Otp\RecoverAccessRequestService;
@@ -224,12 +225,14 @@ class PersonalOtp
 	public function getOtpConfig(): array
 	{
 		$config = PushOtp::getPullConfig();
+		$canConfirmByCall = $this->canConfirmByCall();
 		$config['canSkipDeviceConnect'] = Option::get('intranet', 'allow_skip_device_connect', 'Y') === 'Y'
 			&& $this->canSkipDeviceConnect()
 			&& \Bitrix\Security\Mfa\Otp::isPushPossible()
 			&& (
 				(new VerifyPhoneService($this->user))->canSendSms()
 				|| (new VerifyEmailService($this->user))->canSendEmail()
+				|| $canConfirmByCall
 			);
 		$intent = 'pushOtpInit/' . $config['channelTag'];
 		$phoneConfirmed = false;
@@ -251,6 +254,7 @@ class PersonalOtp
 			'canSkipDeviceConnect' => $config['canSkipDeviceConnect'],
 			'canSendSms' => (new VerifyPhoneService($this->user))->canSendSms(),
 			'canSendEmail' => (new VerifyEmailService($this->user))->canSendEmail(),
+			'canConfirmByCall' => $canConfirmByCall,
 			'ttl' => 600,
 			'intent' => $intent,
 			'email' => $this->getBackupEmail(),
@@ -263,6 +267,23 @@ class PersonalOtp
 	public function getBackupEmail(): ?string
 	{
 		return $this->getOtpByUser()->getEmail();
+	}
+
+	protected function createConfirmationCallAvailability(): ConfirmationCallAvailability
+	{
+		return new ConfirmationCallAvailability();
+	}
+
+	/**
+	 * The confirmation call of the setup scenario is driven by the actions the owner alone may call,
+	 * so a profile opened by an admin or an editor never offers it. The number is entered inside the
+	 * popup, so its confirmation is not a precondition here, unlike the login scenario.
+	 */
+	private function canConfirmByCall(): bool
+	{
+		return $this->user->isCurrent()
+			&& $this->createConfirmationCallAvailability()->forSetup((int)$this->user->getId())
+		;
 	}
 
 	/**

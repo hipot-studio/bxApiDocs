@@ -10,8 +10,8 @@ use Bitrix\Main\Loader;
  * Enumerating part of a tool set description, read by the agent and not by a person.
  *
  * The handwritten preamble routing the agent to the set stays with the set; everything the set
- * can do comes from the catalogue, so an operation is declared once and the description cannot
- * drift away from the list shown to whoever grants the connection.
+ * always offers comes from the catalogue. Feature-gated operations describe their capabilities
+ * and consequences in their individual tool descriptions, after user access is checked.
  */
 final class AgentOperationsDescription
 {
@@ -44,8 +44,13 @@ final class AgentOperationsDescription
 			return '';
 		}
 
+		$operations = $this->getCatalog()->getOperations(
+			$toolSetCode,
+			self::DESCRIPTION_LANGUAGE,
+			includeFlaggedOperations: false,
+		);
 		$lines = [];
-		foreach ($this->getCatalog()->getOperations($toolSetCode, self::DESCRIPTION_LANGUAGE) as $operation)
+		foreach ($operations as $operation)
 		{
 			$lines[] = $this->describeOperation($operation);
 		}

@@ -39,6 +39,15 @@ final class GuideCatalog
 		['id' => 'ref-rest-table', 'parts' => 1],
 		['id' => 'ref-rest-catalog', 'parts' => 1],
 		['id' => 'ref-rest-guide', 'parts' => 1],
+		['id' => 'skill-rules', 'parts' => 2],
+		['id' => 'skill-flow', 'parts' => 2],
+		['id' => 'skill-data', 'parts' => 2],
+		['id' => 'skill-charts', 'parts' => 2],
+		['id' => 'skill-change', 'parts' => 1],
+		['id' => 'skill-check', 'parts' => 1],
+		['id' => 'layout-read', 'parts' => 1],
+		['id' => 'layout-batch', 'parts' => 2],
+		['id' => 'layout-refusals', 'parts' => 1],
 	];
 
 	private const LANGUAGE_PATTERN = '/^[a-z]{2,3}$/';

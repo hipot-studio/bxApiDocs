@@ -20,6 +20,8 @@ trait ChatGPTCommonTrait
 	protected array $reasoningModels = [
 		'o3-mini-2025-01-31',
 		'o1-2024-12-17',
+		'gpt-6.1-sol',
+		'gpt-6-luna',
 	];
 
 	private function shouldUseReasoning(): bool
@@ -39,9 +41,14 @@ trait ChatGPTCommonTrait
 		$this->isModeResponseJson = ($enable && !in_array($this->getModel(), $this->noJsonModeSupportModels, true));
 	}
 
+	protected function isContextMessagesLimitApplicable(): bool
+	{
+		return str_starts_with($this->getModel(), 'gpt-4');
+	}
+
 	private function reduceMessagesByModelLimitaion(array $messages): array
 	{
-		if (!$this->isGpt4())
+		if (!$this->isContextMessagesLimitApplicable())
 		{
 			return $messages;
 		}

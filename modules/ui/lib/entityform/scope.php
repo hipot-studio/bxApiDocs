@@ -21,6 +21,7 @@ use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\UI\AccessRights\DataProvider;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Ui\EntityForm\Dto\EntityEditorConfigDto;
+use Bitrix\UI\Form\ConfigurationChangeEvent;
 use Bitrix\UI\Form\EntityEditorConfigScope;
 use CAccess;
 use CUserOptions;
@@ -440,13 +441,28 @@ class Scope
 			return (new DeleteResult())->addError(new Error('Configuration not found'));
 		}
 
+		$memberIds = $this->getScopeUserIds($id);
+
 		$this->removeScopeMembers($id);
 
 		$scopeName = $this->getScopeName(EntityEditorConfigDto::fromEntityFormConfig($scopeObject));
 
 		$this->removeUsersScopeOptions($id, $scopeObject->getOptionCategory(), $scopeName);
 
-		return EntityFormConfigTable::delete($id);
+		$result = EntityFormConfigTable::delete($id);
+		if ($result->isSuccess() && $memberIds !== [])
+		{
+			ConfigurationChangeEvent::send(
+				$scopeObject->getOptionCategory(),
+				$scopeObject->getEntityTypeId(),
+				EntityEditorConfigScope::CUSTOM,
+				$id,
+				$memberIds,
+				ConfigurationChangeEvent::KIND_ASSIGNMENT,
+			);
+		}
+
+		return $result;
 	}
 
 	/**
@@ -809,13 +825,43 @@ class Scope
 		{
 			CUserOptions::SetOption($config->getCategoryName(), $scopeNameToApply, $value, false, $userId);
 		}
+
+		$changedUserId = $userId === false ? (int)CurrentUser::get()->getId() : $userId;
+		if ($scopeNamesToApply !== [] && $changedUserId > 0)
+		{
+			ConfigurationChangeEvent::send(
+				$config->getCategoryName(),
+				$config->getEntityTypeId(),
+				$scope,
+				$scope === EntityEditorConfigScope::CUSTOM ? (int)$config->getUserScopeId() : 0,
+				[$changedUserId],
+				ConfigurationChangeEvent::KIND_ASSIGNMENT,
+			);
+		}
 	}
 
-	public function updateScopeConfig(int $id, array $config)
+	public function updateScopeConfig(int $id, array $config, ?string $eventId = null)
 	{
-		return EntityFormConfigTable::update($id, [
+		$scopeObject = EntityFormConfigTable::getById($id)->fetchObject();
+
+		$result = EntityFormConfigTable::update($id, [
 			'CONFIG' => $config,
 		]);
+
+		if ($scopeObject && $result->isSuccess())
+		{
+			ConfigurationChangeEvent::send(
+				$scopeObject->getOptionCategory(),
+				$scopeObject->getEntityTypeId(),
+				EntityEditorConfigScope::CUSTOM,
+				$id,
+				null,
+				ConfigurationChangeEvent::KIND_LAYOUT,
+				$eventId,
+			);
+		}
+
+		return $result;
 	}
 
 	public function updateScope(int $scopeId, array $fields): UpdateResult
@@ -1438,6 +1484,16 @@ class Scope
 
 	private function removeUsersScopeOptions(int $configId, string $optionCategory, string $scopeName): void
 	{
+		$userIds = $this->getScopeUserIds($configId);
+
+		foreach ($userIds as $userId)
+		{
+			CUserOptions::DeleteOption($optionCategory, $scopeName, false, $userId);
+		}
+	}
+
+	private function getScopeUserIds(int $configId): array
+	{
 		$accessCodes = $this->getScopeAccessCodesByScopeId($configId);
 
 		$userIds = [];
@@ -1470,12 +1526,7 @@ class Scope
 			}
 		}
 
-		$userIds = array_unique($userIds);
-
-		foreach ($userIds as $userId)
-		{
-			CUserOptions::DeleteOption($optionCategory, $scopeName, false, $userId);
-		}
+		return array_values(array_unique($userIds));
 	}
 
 	public function copyScope(int $scopeId, string $entityTypeId): null|int|array

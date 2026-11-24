@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Controller\Chat;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Entity\User\UserCollection;
@@ -43,6 +44,10 @@ class Member extends BaseController
 		;
 		$rest = $this->toRestFormat($members);
 		$rest['nextCursor'] = $nextCursor?->toRestFormat();
+		if ($chat instanceof CommentChat && $relationCursor === null)
+		{
+			$rest['subscribersCount'] = $provider->getMembersCount();
+		}
 
 		return $rest;
 	}

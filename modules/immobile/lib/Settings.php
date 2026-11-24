@@ -3,6 +3,15 @@
 namespace Bitrix\ImMobile;
 
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\ImMobile\Public\Feature\BetaAvailableFlag;
+use Bitrix\ImMobile\Public\Feature\ChatLocalStorageAvailableFlag;
+use Bitrix\ImMobile\Public\Feature\MarketAvailableFlag;
+use Bitrix\ImMobile\Public\Feature\MarkdownNativeRendererAvailableFlag;
+use Bitrix\ImMobile\Public\Feature\OpenlinesInMessengerV2AvailableFlag;
+use Bitrix\ImMobile\Public\Feature\RecentLightRefreshFlag;
+use Bitrix\ImMobile\Public\Feature\VibecodeAppChatSendPermissionAvailableFlag;
+use Bitrix\ImMobile\Public\Feature\VibecodeRecentActionAvailableFlag;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\StaffTrack\Public\Provider\CheckInProvider;
@@ -13,13 +22,12 @@ class Settings
 {
 	public static function isBetaAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'beta_available', 'N') === 'Y';
+		return Feature::isEnabled(BetaAvailableFlag::class);
 	}
 
 	public static function isChatLocalStorageAvailable(): bool
 	{
-		$isChatLocalStorageAvailable = \Bitrix\Main\Config\Option::get('immobile', 'chat_local_storage_available', 'Y') === 'Y';
-		if (!$isChatLocalStorageAvailable)
+		if (!Feature::isEnabled(ChatLocalStorageAvailableFlag::class))
 		{
 			return false;
 		}
@@ -72,6 +80,19 @@ class Settings
 		return \Bitrix\Im\V2\Message\MessageService::getMultipleActionMessageLimit();
 	}
 
+	/**
+	 * @return array{titleLength: int, instructionLength: int}|null
+	 */
+	public static function aiRequestTemplateLimits(): ?array
+	{
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return null;
+		}
+
+		return \Bitrix\Im\V2\Message\AiRequestTemplateLimit::getClientLimits();
+	}
+
 	public static function isTasksRecentListAvailable(): bool
 	{
 		return Loader::includeModule('tasks');
@@ -80,7 +101,7 @@ class Settings
 
 	public static function isMarketAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'is_market_available', 'N') === 'Y';
+		return Feature::isEnabled(MarketAvailableFlag::class);
 	}
 
 	public static function isVibecodeButtonAvailable(): bool
@@ -103,7 +124,7 @@ class Settings
 
 	public static function isVibecodeRecentActionAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'vibecode_recent_action_available', 'N') === 'Y';
+		return Feature::isEnabled(VibecodeRecentActionAvailableFlag::class);
 	}
 
 	/**
@@ -128,16 +149,12 @@ class Settings
 
 	public static function isVibecodeAppChatSendPermissionAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get(
-			'immobile',
-			'vibecode_app_chat_send_permission_available',
-			'Y',
-		) === 'Y';
+		return Feature::isEnabled(VibecodeAppChatSendPermissionAvailableFlag::class);
 	}
 
 	public static function isMarkdownNativeRendererAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'is_markdown_native_renderer_available', 'N') === 'Y';
+		return Feature::isEnabled(MarkdownNativeRendererAvailableFlag::class);
 	}
 
 	public static function isCopilotSelectModelEnabled(): bool
@@ -156,9 +173,31 @@ class Settings
 		return Features::isMarkdownAvailable();
 	}
 
+	/**
+	 * Whether the client may refresh the chat list by the light fragments instead of the hydrated first
+	 * page: `recentShape` and `portalRecentList` on the "Chats" tab, `folderRecentShape` on a folder tab.
+	 *
+	 * The verdict is the feature flag {@see RecentLightRefreshFlag}: on by default, switched by the
+	 * administrator as the way back. Its requirement is one probe of the presence of the code and not a
+	 * version of im or an option written by the installer: a version does not answer whether the commit
+	 * made it into this particular update, and an installer option lies after a portal is restored from a
+	 * dump - the client would go light against a server that answers neither fragment. `SHAPE_OPTION` is
+	 * the marker of the contract; `\Bitrix\Im\V2\Recent\PortalRecentProvider` and
+	 * `Recent::applyAcquaintanceMeta()` are not probed separately, because they are older and ship in any
+	 * build of im that has the constant.
+	 *
+	 * The gates of the user are not here: hidden colleagues give an empty acquaintance fragment, not a
+	 * refusal of the light mode, so the flag depends neither on the type of the user nor on his
+	 * settings.
+	 */
+	public static function isRecentLightRefreshAvailable(): bool
+	{
+		return Feature::isEnabled(RecentLightRefreshFlag::class);
+	}
+
 	public static function isOpenlinesInMessengerV2Available(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'openlines_in_messenger_v2_available', 'Y') === 'Y';
+		return Feature::isEnabled(OpenlinesInMessengerV2AvailableFlag::class);
 	}
 
 	public static function isAutoTaskEnabled(): bool

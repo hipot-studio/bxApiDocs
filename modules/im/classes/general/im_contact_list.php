@@ -531,7 +531,6 @@ class CAllIMContactList
 		$filter = \Bitrix\Main\UserUtils::getUserSearchFilter(Array('FIND'=> $searchText));
 		$filter["=ACTIVE"] = "Y";
 		$filter["=CONFIRM_CODE"] = false;
-		$filter["=IS_REAL_USER"] = "Y";
 
 		$bIntranetEnable = IsModuleInstalled('intranet');
 		$bVoximplantEnable = IsModuleInstalled('voximplant');
@@ -554,10 +553,8 @@ class CAllIMContactList
 		if ($bVoximplantEnable)
 			$select[] = 'UF_VI_PHONE';
 
-		$orm = \Bitrix\Main\UserTable::getList(Array(
-			'select' => $select,
-			'filter' => $filter,
-			'runtime' => Array(
+		$orm = \Bitrix\Main\UserTable::query()
+			->registerRuntimeField(
 				new \Bitrix\Main\Entity\ReferenceField(
 					'ST',
 					'\Bitrix\Im\Model\StatusTable',
@@ -566,9 +563,13 @@ class CAllIMContactList
 					),
 					array("join_type"=>"LEFT")
 				)
-			),
-			'order' => Array('LAST_NAME' => 'ASC')
-		));
+			)
+			->setSelect($select)
+			->setFilter($filter)
+			->where('REAL_USER', 'expr', true)
+			->setOrder(['LAST_NAME' => 'ASC'])
+			->exec()
+		;
 		$arUsers = Array();
 		while ($arUser = $orm->fetch())
 		{
@@ -1511,10 +1512,13 @@ class CAllIMContactList
 		return true;
 	}
 
-	// Discussions are owned by the channel family only.
+	/**
+	 * Both sides of the discussion tag speak of one set of parents: it is put up for a chat the tree
+	 * admits a thread under ({@see Chat::extendPullWatch()}), so it is taken down for that very set.
+	 */
 	protected static function canHaveComments(?Chat $chat): bool
 	{
-		return $chat instanceof Chat\ChannelChat;
+		return $chat?->allowsComments() ?? false;
 	}
 
 	/**

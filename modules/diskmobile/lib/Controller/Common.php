@@ -145,8 +145,13 @@ class Common extends Base
 
 	private function buildReadableFile(?Disk\File $file): ?array
 	{
-		$securityContext = $file ? $this->getFileSecurityContext($file) : null;
-		if (!$file || $file->isDeleted() || !$file->canRead($securityContext))
+		if (!$file || $file->isDeleted())
+		{
+			return null;
+		}
+
+		$securityContext = $this->getFileSecurityContext($file);
+		if (!$securityContext || !$file->canRead($securityContext))
 		{
 			return null;
 		}
@@ -164,9 +169,9 @@ class Common extends Base
 		return Disk\File::loadById($id);
 	}
 
-	protected function getFileSecurityContext(Disk\File $file): Disk\Security\SecurityContext
+	protected function getFileSecurityContext(Disk\File $file): ?Disk\Security\SecurityContext
 	{
-		return $file->getStorage()->getSecurityContext($this->getCurrentUser());
+		return $file->getStorage()?->getSecurityContext($this->getCurrentUser());
 	}
 
 	protected function getFileStorage(string $entityType, string $entityId, string $fileBasePath): ?Disk\Storage
@@ -206,7 +211,7 @@ class Common extends Base
 		return null;
 	}
 
-	private function denyFilePath(): ?array
+	private function denyFilePath(): null
 	{
 		$this->addError(new Error('File is not available', 'DISKMOBILE_FILE_PATH_DENIED'));
 
@@ -215,7 +220,6 @@ class Common extends Base
 
 	public function getFolderByPathAction(string $entityType, string $entityId, string $path): ?array
 	{
-		/** @var array $page */
 		$resolvedPath = $this->forward(
 			\Bitrix\Disk\Controller\CommonActions::class,
 			'resolveFolderPath',

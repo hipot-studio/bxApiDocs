@@ -28,13 +28,13 @@ use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Chat\Access\OpenChatAccessPolicy;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\ImBot\Bot\Network;
 use Bitrix\ImBot\Bot\Support24;
 use Bitrix\ImBot\Bot\SupportBox;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Pull\Event;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Chat\Add\AddResult;
@@ -464,7 +464,7 @@ class GroupChat extends Chat
 		$push['params']['dialogId'] = $this->getDialogId();
 		if ($this->getType() === self::IM_TYPE_COMMENT)
 		{
-			CommentTagPublisher::addToStack($message->getChat(), $push);
+			Locator::getPullSender()->sendToCommentSubscribers($message->getChat(), $push);
 		}
 		else
 		{

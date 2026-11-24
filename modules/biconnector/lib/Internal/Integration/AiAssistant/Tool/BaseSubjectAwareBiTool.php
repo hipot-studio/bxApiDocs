@@ -35,6 +35,7 @@ abstract class BaseSubjectAwareBiTool extends SubjectAwareToolContract implement
 	 */
 	public function run(int $userId, ?RequestSubjectDto $subject, array $args = []): array
 	{
+		$this->assertAiToolsEnabled();
 		$this->callerUserId = $userId;
 		$this->enforceRateLimit($userId);
 		$args = (new PinnedArgumentResolver())->apply($this, $subject, $args);

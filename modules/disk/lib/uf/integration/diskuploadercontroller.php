@@ -23,6 +23,8 @@ use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\File\Image;
+use Bitrix\Main\File\Image\Rectangle;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
@@ -1209,10 +1211,56 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				$fileInfo->setPreviewUrl($previewUrl, $rectangle->getWidth(), $rectangle->getHeight());
 			}
 		}
+		elseif ($file)
+		{
+			$this->setVideoPreview($fileInfo, $fileModel, $file);
+		}
 
 		$fileInfo->setViewerAttrs($this->prepareViewerAttrs($fileModel, $viewerSourceUrl, $fileInfo, $canDownload));
 
 		return $fileInfo;
+	}
+
+	private function setVideoPreview(
+		FileInfo $fileInfo,
+		Disk\File|Disk\AttachedObject $fileModel,
+		Disk\File $file,
+	): void
+	{
+		if (!Disk\TypeFile::isVideo($file) || (int)$file->getPreviewId() <= 0)
+		{
+			return;
+		}
+
+		$view = $file->getView();
+		$previewData = $view->getPreviewData();
+		$width = (int)($previewData['WIDTH'] ?? 0);
+		$height = (int)($previewData['HEIGHT'] ?? 0);
+		if ($width <= 0 || $height <= 0)
+		{
+			return;
+		}
+
+		if ($fileModel instanceof Disk\File)
+		{
+			$previewUrl = $this->urlManager->getUrlForShowPreview($fileModel);
+		}
+		else
+		{
+			$previewUrl = \Bitrix\Disk\UrlManager::getUrlUfController(
+				'showPreview',
+				['attachedId' => $fileModel->getId(), 'viewId' => $view->getId()]
+			);
+		}
+
+		$sourceRectangle = new Rectangle($width, $height);
+		$destinationRectangle = new Rectangle(1200, 1200);
+		if ($sourceRectangle->resize($destinationRectangle, Image::RESIZE_PROPORTIONAL))
+		{
+			$sourceRectangle = $destinationRectangle;
+		}
+
+		$fileInfo->setPreviewUrl($previewUrl, $sourceRectangle->getWidth(), $sourceRectangle->getHeight());
 	}
 
 	private function getEncryptedFileDataForQuickAccess(AttachedObject $fileModel): ?string

@@ -38,23 +38,23 @@ class ImToolSet extends BaseToolSet
 
 	/**
 	 * Unlike getUsesTools(), which is materialized into the 24h DefinitionRegistry cache,
-	 * canList()/canRun() are consulted on every request, so flipping the gating options
+	 * canList()/canRun() are consulted on every request, so changing the gating feature flags
 	 * takes effect immediately regardless of the registry cache.
 	 */
 	public function canList(int $userId): bool
 	{
-		return ToolScope::Read->isEnabled() || ToolScope::Write->isEnabled();
+		return ToolScope::Read->isEnabled($userId) || ToolScope::Write->isEnabled($userId);
 	}
 
 	public function canRun(int $userId): bool
 	{
-		return ToolScope::Read->isEnabled() || ToolScope::Write->isEnabled();
+		return ToolScope::Read->isEnabled($userId) || ToolScope::Write->isEnabled($userId);
 	}
 
 	/**
 	 * Always returns the full tool list: the result is materialized into the 24h DefinitionRegistry
 	 * cache (ToolManager::callTool() resolves tool classes from that cached map), so a conditional
-	 * list would desync the live listing from the cached call map when a gating option is flipped.
+	 * list would desync the live listing from the cached call map when a gating flag changes.
 	 * Visibility and execution are gated per tool by BaseImTool::canList()/canRun() instead.
 	 *
 	 * After a deployment that changes this composition, an already warmed registry cache keeps

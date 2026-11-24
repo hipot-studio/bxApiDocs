@@ -69,14 +69,16 @@ class Buttons extends AbstractField
 			}
 		}
 
-		// v1 allows exactly one submit button. The rule is structured to be relaxed in the next version
-		// to "at least one button, among which there is a requestButton" without changing the shape here.
-		if (count($buttons) !== 1)
+		if (empty($buttons))
 		{
 			return (new Result())->addError(new BuilderError(BuilderError::FORM_BUTTONS_COUNT_INVALID));
 		}
 
-		if (($buttons[0]['type'] ?? null) !== Type::RequestButton->value)
+		$submitButtons = array_filter(
+			$buttons,
+			static fn(array $button): bool => ($button['type'] ?? null) === Type::RequestButton->value,
+		);
+		if (empty($submitButtons))
 		{
 			return (new Result())->addError(new BuilderError(BuilderError::FORM_BUTTON_TYPE_INVALID));
 		}

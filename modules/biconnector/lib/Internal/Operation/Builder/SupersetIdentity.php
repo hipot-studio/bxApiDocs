@@ -58,7 +58,9 @@ final class SupersetIdentity
 		$user = $userId > 0 ? ($this->findSupersetUser)($userId) : null;
 		if ($user === null)
 		{
-			return Refusal::error(FailureCode::AccessDenied, self::NO_ACCOUNT_MESSAGE);
+			return Refusal::error(FailureCode::AccessDenied, self::NO_ACCOUNT_MESSAGE)
+				->setData(['reason' => 'no_bi_profile'])
+			;
 		}
 
 		return (new Result())->setData(['user' => $user]);

@@ -5,6 +5,9 @@ namespace Bitrix\Im\V2\Reading\Counter\Entity;
 
 use Bitrix\Im\V2\Chat\Tree\ChatAncestorNavigator;
 use Bitrix\Im\V2\Chat\Type;
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
+use Bitrix\Im\V2\Folder\Mute\UserMuteState;
+use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Registry;
 use Bitrix\Im\V2\Rest\RestConvertible;
 
@@ -102,17 +105,25 @@ final class UserCounters extends Registry implements RestConvertible
 		return $this->notificationCounter;
 	}
 
-	public function addAdditionalOpenLineCounter(int $chatId, array $recentSections, Type $type): void
+	/**
+	 * A non-answered session only adds the flag on top of what the chat itself already contributes,
+	 * so an already collected unit keeps its own data. The counter is raised to one only when the
+	 * chat shows nothing, otherwise the indicator would have nothing to appear on.
+	 */
+	public function markNonAnswered(int $chatId, array $recentSections, Type $type): void
 	{
+		$existing = $this[$chatId] ?? null;
+
 		$this->addCounter(new ChatCounter(
 			chatId: $chatId,
-			counter: 1,
-			parentChatId: 0,
-			isMuted: false,
-			isMarkedAsUnread: false,
-			recentSections: $recentSections,
-			type: $type,
-			requiresParentMembership: $type->requiresParentMembership,
+			counter: max($existing?->counter ?? 0, 1),
+			parentChatId: $existing?->parentChatId ?? 0,
+			isMuted: $existing?->isMuted ?? false,
+			isMarkedAsUnread: $existing?->isMarkedAsUnread ?? false,
+			recentSections: $existing?->recentSections ?? $recentSections,
+			type: $existing?->type ?? $type,
+			requiresParentMembership: $existing?->requiresParentMembership ?? $type->requiresParentMembership,
+			isNonAnswered: true,
 		));
 	}
 
@@ -158,6 +169,80 @@ final class UserCounters extends Registry implements RestConvertible
 		}
 
 		return $current->parentChatId === 0;
+	}
+
+	/**
+	 * A copy of the set with the rules of the folders applied (TPL-01): a row is muted when its chat
+	 * was silenced by hand or when a rule of its owner covers it.
+	 *
+	 * A copy and not a mutation on purpose: this very object is what the cache of the unprocessed
+	 * representation holds ({@see \Bitrix\Im\V2\Reading\Counter\Internal\CountersCache}), and the
+	 * client is the one who applies the rules to it itself.
+	 */
+	public function withFolderMuteApplied(
+		UserMuteState $muteState,
+		RecentConfigManager $recentConfig,
+		TypeRegistry $typeRegistry,
+	): self
+	{
+		if ($muteState->isEmpty())
+		{
+			return $this;
+		}
+
+		$processed = new self();
+		$processed->setNotificationCounter($this->notificationCounter);
+
+		foreach ($this as $counter)
+		{
+			$covered = !$counter->isMuted
+				&& $muteState->covers(
+					$counter->chatId,
+					self::resolveRecentSections(
+						$counter->type,
+						$counter->parentChatId,
+						$recentConfig,
+						$typeRegistry,
+					),
+					$counter->parentChatId,
+				)
+			;
+
+			$processed->addCounter($covered ? $counter->with(isMuted: true) : $counter);
+		}
+
+		return $processed;
+	}
+
+	/**
+	 * Sections of a counter row, derived the way the collector derives them
+	 * ({@see \Bitrix\Im\V2\Reading\Counter\UserCountersCollector::getRecentSections()}) and not read
+	 * from the row: the collector deliberately stores empty sections for a parent hidden from the
+	 * recent list, and a rule of a system folder still covers such a parent.
+	 *
+	 * Derived the same way includes the exclusions: a chat kept out of a section is not in the
+	 * folder of that section, so a rule of that folder must not silence it. Without the filter this
+	 * answer would be wider than the one the counter row carries, and a chat would be silenced by a
+	 * folder whose badge never counted it.
+	 *
+	 * @return string[]
+	 */
+	public static function resolveRecentSections(
+		Type $type,
+		int $parentChatId,
+		RecentConfigManager $recentConfig,
+		TypeRegistry $typeRegistry,
+	): array
+	{
+		$sections = $parentChatId > 0
+			? $recentConfig->getAllRecentSectionsByType($type)
+			: $recentConfig->getBaseRecentSections($type)
+		;
+
+		return array_values(array_filter(
+			$sections,
+			static fn(string $section): bool => !$typeRegistry->isTypeExcludedFromSection($type, $section),
+		));
 	}
 
 	public function getByChatId(int $chatId): ?ChatCounter

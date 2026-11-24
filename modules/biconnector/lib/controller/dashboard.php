@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
+use Bitrix\BIConnector\Access\Superset\Synchronizer;
 use Bitrix\BIConnector\Public\Command\Dashboard\InstallDashboardCommand;
 use Bitrix\BIConnector\Public\Command\DashboardChat\DashboardDiscussionChatResult;
 use Bitrix\BIConnector\Public\Command\DashboardChat\GetOrCreateDashboardDiscussionChatCommand;
@@ -66,6 +67,7 @@ class Dashboard extends Controller
 	private const DEMO_REPORT_CODE_MAX_LENGTH = 128;
 	private const BITRIXGPT_BI_ANNOUNCE_LOCK_PREFIX = 'biconnector.bitrixgpt-bi-announce.';
 	private const CONSTRUCTOR_WORKSPACE_PATH = '/dashboard/list/';
+	private const SUPERSET_STARTUP_LOCK = 'biconnector_superset_startup';
 
 	/**
 	 * @return array
@@ -628,9 +630,6 @@ class Dashboard extends Controller
 		$shareData = $shareProvider->getAuthorShareState($dashboard->getId(), (int)CurrentUser::get()->getId());
 		$isShareBanned = $shareProvider->isShareBanned($dashboard->getId());
 
-		$dashboard->loadCredentials();
-		$dashboard->loadProxyData();
-
 		$paramsService = new UrlParameter\Service($dashboard->getOrmObject());
 		$dashboardParamCodes = array_map(static fn($param) => $param->code(), $paramsService->getUrlParameters());
 		if ($paramsService->isExistScopeParams())
@@ -648,6 +647,28 @@ class Dashboard extends Controller
 		{
 			$urlParams = $paramsService->getGlobalValues();
 		}
+
+		$marketAccessManager = MarketAccessManager::getInstance();
+		$isAvailable = $marketAccessManager->isDashboardAvailableByType($dashboard->getType());
+		if ($isAvailable && !$marketAccessManager->ensureExpirationDateDelivered($dashboard->getType()))
+		{
+			// No credentials: Superset would refuse the dashboard by the date it knows.
+			// embeddedUrl leads callers to the detail page, whose waiting screen opens the dashboard when ready.
+			return [
+				'dashboard' => [
+					'type' => $dashboard->getType(),
+					'title' => $dashboard->getTitle(),
+					'id' => $dashboard->getId(),
+					'dashboardUrl' => $dashboard->getOrmObject()->getDetailUrl(),
+					'embeddedUrl' => $paramsService->getEmbeddedUrl($urlParams),
+					'isAvailable' => true,
+					'isExpirationSyncPending' => true,
+				],
+			];
+		}
+
+		$dashboard->loadCredentials();
+		$dashboard->loadProxyData();
 
 		// The company structure filter may be added in Superset after the parameters were saved;
 		// a dashboard whose filters were not loaded may hold it as well. The value of the client is not taken for it.
@@ -679,7 +700,7 @@ class Dashboard extends Controller
 				'isShareBanned' => $isShareBanned,
 				'urlParams' => $urlParams,
 				'isUseExternalDatasets' => $dashboard->isUseExternalDatasets(),
-				'isAvailable' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
+				'isAvailable' => $isAvailable,
 			],
 		];
 	}
@@ -901,11 +922,60 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$loginUrl = (new SupersetController())->getLoginUrl();
+		$userId = (int)CurrentUser::get()->getId();
+		$synchronizer = new Synchronizer($userId);
+		$syncErrors = [];
+
+		// Permissions changed while the instance slept reach Superset only on a sync, so the url must not outrun it.
+		if (SupersetInitializer::isSupersetReady())
+		{
+			// On the first visit the account is created here, so the sync has someone to deliver permissions to.
+			$createUserResult = (new SupersetController())->createUser($userId);
+			$syncErrors = [...$createUserResult->getErrors(), ...$synchronizer->sync()->getErrors()];
+		}
+
+		// A frozen cloud instance stays in LOAD until something starts it, and a sync waits for READY.
+		$isSupersetLoading = SupersetInitializer::isSupersetLoading();
+		$loginUrl = $synchronizer->isSynchronized()
+			? (new SupersetController())->getLoginUrl($isSupersetLoading)
+			: null
+		;
+
+		// The request itself may find the instance frozen and move the portal to LOAD.
+		if (SupersetInitializer::isSupersetLoading())
+		{
+			Application::getInstance()->addBackgroundJob(static function () use ($userId): void {
+				// The button repeats the request every few seconds while BI wakes up, and one startup serves them all.
+				$connection = Application::getConnection();
+				if (!$connection->lock(self::SUPERSET_STARTUP_LOCK))
+				{
+					return;
+				}
+
+				try
+				{
+					SupersetInitializer::startupSuperset();
+				}
+				finally
+				{
+					$connection->unlock(self::SUPERSET_STARTUP_LOCK);
+				}
+
+				// The url may already be issued while the portal was still in LOAD, where a sync is blocked.
+				if (SupersetInitializer::isSupersetReady())
+				{
+					(new Synchronizer($userId))->sync();
+				}
+			});
+		}
 
 		if (!$loginUrl)
 		{
-			$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_OPEN_CONSTRUCTOR_ERROR')));
+			// The user sees only a status, so the reason the permissions were not delivered goes to the log.
+			$this->addError(IntegrationErrorPresenter::present(
+				$syncErrors,
+				Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_OPEN_CONSTRUCTOR_ERROR'),
+			));
 
 			return null;
 		}
@@ -1360,7 +1430,9 @@ class Dashboard extends Controller
 		$request = Application::getInstance()->getContext()->getRequest();
 		$scheme = $request->isHttps() ? 'https' : 'http';
 		$host = $request->getHttpHost();
-		$shareUrl = $scheme . '://' . $host . '/pub/bi/dashboard/' . $share->getToken() . '/';
+		$sharePath = '/pub/bi/dashboard/' . $share->getToken() . '/';
+		$shortPath = \CBXShortUri::getShortUri($sharePath);
+		$shareUrl = $scheme . '://' . $host . ($shortPath !== '' ? $shortPath : $sharePath);
 
 		return [
 			'id' => $share->getId(),

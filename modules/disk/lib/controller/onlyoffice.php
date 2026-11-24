@@ -199,9 +199,11 @@ final class OnlyOffice extends Engine\Controller
 				],
 			],
 			'endSession' => [
+				'-prefilters' => [Document\OnlyOffice\Filters\OnlyOfficeEnabled::class],
 				'+prefilters' => [
 					new HttpMethod([HttpMethod::METHOD_POST]),
 					new ContentType([ContentType::JSON]),
+					new Document\OnlyOffice\Filters\OnlyOfficeEnabled(vibeofficeSessionParameter: 'session'),
 					(new Document\OnlyOffice\Filters\DocumentSessionCheck())
 						->enableOwnerCheck()
 						->enableHashCheck(function(){

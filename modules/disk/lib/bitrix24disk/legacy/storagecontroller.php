@@ -565,6 +565,15 @@ class StorageController extends Controller
 			));
 		}
 
+		$folderName = trim($folderName);
+		if ($folderName === '')
+		{
+			$this->sendJsonResponse([
+				'status' => static::STATUS_DENIED,
+				'message' => 'Directory name should not be empty',
+			]);
+		}
+
 		$parentFolderId = null;
 		if(!$inRoot)
 		{
@@ -597,12 +606,13 @@ class StorageController extends Controller
 				$this->sendJsonErrorResponse();
 			}
 
+			$isSameName = $folderName == trim($targetFolder['name']);
 			//it is the same directory todo this logic $storage->moveDirectory, but ....we have many query. Or refactor signature
-			if($targetFolder['extra']['sectionId'] == $parentFolderId && $folderName == $targetFolder['name'])
+			if($targetFolder['extra']['sectionId'] == $parentFolderId && $isSameName)
 			{
 				$this->sendJsonSuccessResponse($targetFolder);
 			}
-			if($folderName != $targetFolder['name'])
+			if(!$isSameName)
 			{
 				$item = $storage->renameDirectory($folderName, $targetFolder['extra']['id'], $parentFolderId);
 			}

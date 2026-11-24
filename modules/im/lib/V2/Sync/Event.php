@@ -25,7 +25,6 @@ class Event
 
 	private ?int $id;
 	private DateTime $dateCreate;
-	private ?DateTime $dateDelete;
 	public string $entityType;
 	public int $entityId;
 	public string $eventName;
@@ -34,21 +33,14 @@ class Event
 		string $eventName,
 		string $entityType,
 		int $entityId,
-		?DateTime $dateDelete = null,
 		?DateTime $dateCreate = null,
 		?int $id = null
 	)
 	{
 		$dateCreate ??= new DateTime();
-		if ($dateDelete === null)
-		{
-			$dateDelete = clone $dateCreate;
-			$dateDelete->add(Logger::DEFAULT_EXPIRY_INTERVAL);
-		}
 		$this->eventName = $eventName;
 		$this->entityType = $entityType;
 		$this->entityId = $entityId;
-		$this->dateDelete = $dateDelete;
 		$this->dateCreate = $dateCreate;
 		$this->id = $id;
 	}
@@ -63,18 +55,12 @@ class Event
 		return $this->dateCreate;
 	}
 
-	public function getDateDelete(): ?DateTime
-	{
-		return $this->dateDelete;
-	}
-
 	public static function initByEntity(array $entity): self
 	{
 		return new self(
 			$entity['EVENT'] ?? '',
 			$entity['ENTITY_TYPE'] ?? '',
 			$entity['ENTITY_ID'] ?? 0,
-			$entity['DATE_DELETE'] ?? null,
 			$entity['DATE_CREATE'] ?? null,
 			$entity['ID'] ?? null
 		);

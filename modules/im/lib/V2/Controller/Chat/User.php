@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Controller\Chat;
 
+use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\RelationCollection;
 
@@ -15,6 +16,10 @@ class User extends BaseController
 		$relationOrder = $this->prepareRelationOrder($order);
 		$limit = $this->getLimit($limit);
 		$relationFilter = ['ACTIVE' => true, 'CHAT_ID' => $chat->getId()];
+		if ($chat instanceof CommentChat)
+		{
+			$relationFilter['NOTIFY_BLOCK'] = false;
+		}
 		$relations = RelationCollection::find($relationFilter, $relationOrder, $limit);
 
 		return $relations->getUsers()->toRestFormat();

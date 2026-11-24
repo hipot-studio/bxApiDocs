@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Vibe\Facade;
 
+use Bitrix\Landing\Manager;
 use Bitrix\Main\Loader;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Intranet;
@@ -10,6 +11,7 @@ use Bitrix\Intranet;
 class Portal
 {
 	public const VIBE_FEATURE = 'main_page';
+	private const FREE_TARIFF_OPTION_CODE = 'vibe_free_tariff_mode';
 
 	private bool $isBitrix24;
 	private bool $isIntranet;
@@ -51,6 +53,35 @@ class Portal
 		}
 
 		return Feature::isFeatureEnabled($feature);
+	}
+
+	/**
+	 * Portal wide permission to create and edit vibes while the tariff has no vibe feature
+	 * (demo vibes installed from presets). Viewing does not depend on it.
+	 * @return bool
+	 */
+	public function isFreeTariffMode(): bool
+	{
+		return Manager::getOption(self::FREE_TARIFF_OPTION_CODE, 'N') === 'Y';
+	}
+
+	public function setFreeTariffMode(bool $flag): void
+	{
+		if ($flag === $this->isFreeTariffMode())
+		{
+			return;
+		}
+
+		Manager::setOption(self::FREE_TARIFF_OPTION_CODE, $flag ? 'Y' : 'N');
+	}
+
+	/**
+	 * Creating and editing of vibes is allowed by the vibe feature or by the free tariff mode.
+	 * @return bool
+	 */
+	public function isVibeFeatureAvailable(): bool
+	{
+		return $this->checkFeature(self::VIBE_FEATURE) || $this->isFreeTariffMode();
 	}
 
 	public function isIntranetUser(): bool

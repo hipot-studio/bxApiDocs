@@ -80,13 +80,35 @@ class PopupData
 		// is idempotent, so the adapter calling it earlier costs nothing.
 		$this->applyOptions($options);
 		$this->fillNextLevel();
+		$this->prefillItems();
 
 		foreach ($this->popupItems as $item)
 		{
+			if ($item instanceof PopupDataPrefill)
+			{
+				continue;
+			}
+
 			$result[$item::getRestEntityName()] = $item->toRestFormat($options);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Past fillNextLevel(), so the items of the nested levels are already merged in, and ahead of every
+	 * serialization: an item preparing what the others serialize must not depend on where in the list it
+	 * happens to sit.
+	 */
+	private function prefillItems(): void
+	{
+		foreach ($this->popupItems as $item)
+		{
+			if ($item instanceof PopupDataPrefill)
+			{
+				$item->prefill();
+			}
+		}
 	}
 
 	protected function fillNextLevel(int $level = 1): void

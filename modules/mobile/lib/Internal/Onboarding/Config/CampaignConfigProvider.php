@@ -4,28 +4,26 @@ namespace Bitrix\Mobile\Internal\Onboarding\Config;
 
 use Bitrix\Mobile\Internal\Onboarding\Activation\ActivationPath;
 use Bitrix\Mobile\Internal\Onboarding\Activation\ActivationStep;
-use Bitrix\Mobile\Internal\Onboarding\Checkers\Gate\GateCondition;
 use Bitrix\Mobile\Internal\Onboarding\PushType;
 
 /**
- * The configuration seam of the activation series: the engine (ActivationResolver)
- * and the push pipeline know only this interface, never the concrete source
+ * The configuration seam of the activation series: the rules of the push channel
+ * (CampaignRuleSet) and the push pipeline know only this interface, never the concrete source
  * (bundled code default, cached JSON, remote admin service). Swapping the source
- * behind it changes neither the engine nor the domain model.
+ * behind it changes neither the rules nor the domain model.
  *
  * Backing document sections: meta, schedule, steps, paths, industries, content,
  * finals, analytics.
  *
- * The pipeline itself runs on the typed part of the contract: resolvePath(),
+ * The pipeline itself runs on the typed part of the contract: getPaths(),
  * getScheduleConfig(), findStepByPushType(), getGateCondition(), getContent(),
  * getFinalContent(), getFinals() and getAnalytics(). The raw-section methods -
- * getPaths(), getMeta(), getStepConfig(), getSchedule() - exist for tools and
- * diagnostics (the dev harness, config tests) and carry no default: they answer exactly
- * what the document holds.
+ * getMeta(), getStepConfig(), getSchedule() - exist for tools and diagnostics (the dev
+ * harness, config tests) and carry no default: they answer exactly what the document holds.
  *
  * Two keys of the document are addressed to its author and read by nobody here, because
- * what they describe is declared in code: `steps[].checker` (the check of a step is wired
- * to its id in StepCheckerRegistry) and `finals[].sendOnce` (a final is sent once by
+ * what they describe is declared in code: `steps[].checker` (the check of a step is the
+ * condition CampaignRuleSet declares for its id) and `finals[].sendOnce` (a final is sent once by
  * construction, see OnboardingService). Every other key is read in exactly one place and
  * explained there - StepConfig, FinalPushConfig, ScheduleConfig and the acceptance criteria
  * of JsonCampaignConfigProvider.
@@ -33,16 +31,9 @@ use Bitrix\Mobile\Internal\Onboarding\PushType;
 interface CampaignConfigProvider
 {
 	/**
-	 * Path for the given tool codes (from QualificationChecker::getToolValues,
-	 * 'other' already filtered). Empty list / only unknown codes -> the "default"
-	 * path. When several tools match, the highest-priority path wins (PATH-MAP).
-	 *
-	 * @param string[] $toolCodes
-	 */
-	public function resolvePath(array $toolCodes): ActivationPath;
-
-	/**
-	 * Every configured path, keyed by path code.
+	 * Every configured path, keyed by path code. Which of them a user walks is decided by the
+	 * rules of the campaign alone (CampaignRuleSet), where the "default" path is only the
+	 * fallback: its own tools and priority are never weighed.
 	 *
 	 * @return array<string, ActivationPath>
 	 */
@@ -69,7 +60,7 @@ interface CampaignConfigProvider
 	 * Values of the step targeting the given push type (`steps[].pushType`), or null
 	 * when no step targets it. Lets the push pipeline read the attempt limit and the
 	 * analytics code of a resolved push type, which is all the
-	 * activation resolver returns. Mapping the type onto its document token is the job
+	 * activation rule chooses. Mapping the type onto its document token is the job
 	 * of the configuration layer, not of the caller.
 	 */
 	public function findStepByPushType(PushType $pushType): ?StepConfig;
@@ -77,8 +68,8 @@ interface CampaignConfigProvider
 	/**
 	 * Gate condition declared for the step (`steps[].gate`), or null when the step
 	 * declares none or names a condition unknown to the code. Selecting the condition is
-	 * all the document may do: the gates themselves are declared in code and resolved
-	 * through StepGateFactory.
+	 * all the document may do: the gates themselves are declared in code, as conditions
+	 * of the rules of the campaign (CampaignRuleSet).
 	 */
 	public function getGateCondition(ActivationStep $step): ?GateCondition;
 

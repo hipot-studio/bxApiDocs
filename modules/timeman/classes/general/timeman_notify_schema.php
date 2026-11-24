@@ -32,6 +32,7 @@ class CTimemanNotifySchema
 					],
 					"report" => [
 						"NAME" => GetMessage("TIMEMAN_NS_REPORT"),
+						"PUSH" => 'Y',
 					],
 					"report_comment" => [
 						"NAME" => GetMessage("TIMEMAN_NS_REPORT_COMMENT"),

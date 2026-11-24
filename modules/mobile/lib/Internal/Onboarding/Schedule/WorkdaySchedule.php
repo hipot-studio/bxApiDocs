@@ -3,6 +3,8 @@
 namespace Bitrix\Mobile\Internal\Onboarding\Schedule;
 
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Mobile\Internal\Service\Marketing\Time\PortalCalendar;
+use Bitrix\Mobile\Internal\Service\Marketing\Time\TimeWindow;
 
 /**
  * Counts send dates as offsets from the series anchor. Pure mechanism: which days
@@ -30,8 +32,8 @@ class WorkdaySchedule implements ScheduleInterface
 	public function __construct(
 		private readonly bool $workdaysOnly = true,
 		private readonly bool $shiftWeekendToMonday = false,
-		private readonly ?SendWindow $sendWindow = null,
-		private readonly ?SeriesCalendar $calendar = null,
+		private readonly ?TimeWindow $sendWindow = null,
+		private readonly ?PortalCalendar $calendar = null,
 	)
 	{}
 

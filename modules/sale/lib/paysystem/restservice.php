@@ -1169,6 +1169,7 @@ class RestService extends \IRestService
 		self::checkParamsBeforeSettingsByPaymentGet($params);
 
 		[$orderId, $paymentId] = Manager::getIdsByPayment($params['PAYMENT_ID']);
+		self::checkPaymentReadPermission((int)$paymentId);
 
 		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
 
@@ -1545,7 +1546,7 @@ class RestService extends \IRestService
 	{
 		global $APPLICATION;
 
-		if (IsModuleInstalled('intranet') && Main\Loader::includeModule('crm'))
+		if (self::isCrmContext())
 		{
 			$crmUserPermissions = Container::getInstance()->getUserPermissions()->entityType();
 			if (
@@ -1564,6 +1565,28 @@ class RestService extends \IRestService
 			{
 				throw new AccessException();
 			}
+		}
+	}
+
+	private static function isCrmContext(): bool
+	{
+		return IsModuleInstalled('intranet') && Main\Loader::includeModule('crm');
+	}
+
+	/**
+	 * @throws AccessException
+	 */
+	private static function checkPaymentReadPermission(int $paymentId): void
+	{
+		if (!self::isCrmContext())
+		{
+			return;
+		}
+
+		$itemPermissions = Container::getInstance()->getUserPermissions()->item();
+		if ($paymentId <= 0 || !$itemPermissions->canRead(\CCrmOwnerType::OrderPayment, $paymentId))
+		{
+			throw new AccessException();
 		}
 	}
 

@@ -87,7 +87,7 @@ class UserCountersCollector
 		foreach ($additionalOpenLinesCounters as $chatId)
 		{
 			$type = $this->getType(['CHAT_TYPE' => Chat::IM_TYPE_OPEN_LINE]);
-			$counters->addAdditionalOpenLineCounter($chatId, $this->getRecentSections($type), $type);
+			$counters->markNonAnswered($chatId, $this->getRecentSections($type), $type);
 		}
 		foreach ($parentChats as $chat)
 		{
@@ -271,6 +271,12 @@ class UserCountersCollector
 		);
 	}
 
+	/**
+	 * Sections are counted by extended type, exclusions are declared by sub-type, so the set has to
+	 * be narrowed here the same way {@see Chat::getRecentSections()} narrows it. The sections named
+	 * in a counter row are the only ones its readers ever see - folder membership, badges and the
+	 * unread-only mode all judge by the row - so an excluded chat must not name the section here.
+	 */
 	protected function getRecentSections(Chat\Type $type, int $parentId = 0): array
 	{
 		return $this->typeRegistry->getRecentSectionsMinusExclusions($type, hasParent: $parentId > 0);

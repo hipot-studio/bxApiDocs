@@ -25,4 +25,6 @@ enum Field: string
 	case FileId = 'fileId';
 	case Progress = 'progress';
 	case IsService = 'isService';
+	case Footer = 'footer';
+	case FooterSpacing = 'footerSpacing';
 }

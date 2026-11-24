@@ -136,7 +136,7 @@ class Superset extends Controller
 		}
 	}
 
-	public function rebindSupersetAction(): void
+	public function rebindSupersetAction(bool $confirmed = false): void
 	{
 		if (!AccessController::getCurrent()->getUser()->isAdmin())
 		{
@@ -154,13 +154,23 @@ class Superset extends Controller
 			return;
 		}
 
-		$rebindResult = Registrar::getRegistrar()->rebind();
+		$rebindResult = null;
+		$isRegistrationLocked = SupersetInitializer::withRebindRegistrationLock(
+			static function () use (&$rebindResult, $confirmed): void {
+				$rebindResult = Registrar::getRegistrar()->rebind($confirmed);
+			},
+			__FUNCTION__,
+		);
+		if (!$isRegistrationLocked)
+		{
+			$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR')));
+
+			return;
+		}
+
 		if (!$rebindResult->isSuccess())
 		{
-			$this->addError(IntegrationErrorPresenter::present(
-				$rebindResult->getErrors(),
-				Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR'),
-			));
+			$this->addError(self::presentRebindError($rebindResult->getErrors()));
 
 			return;
 		}
@@ -179,6 +189,28 @@ class Superset extends Controller
 		}
 
 		SupersetInitializer::clearRebindRequired();
+	}
+
+	/**
+	 * @param \Bitrix\Main\Error[] $errors
+	 */
+	private static function presentRebindError(array $errors): UserFacingError
+	{
+		foreach ($errors as $error)
+		{
+			if ($error->getCode() === Registrar::ERROR_GENERATION_CONFIRMATION_REQUIRED)
+			{
+				return new UserFacingError(
+					Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_CONFIRMATION_REQUIRED'),
+					Registrar::ERROR_GENERATION_CONFIRMATION_REQUIRED,
+				);
+			}
+		}
+
+		return IntegrationErrorPresenter::present(
+			$errors,
+			Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR'),
+		);
 	}
 
 	public function linkAddressAction(): void

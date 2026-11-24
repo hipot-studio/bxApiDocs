@@ -7,16 +7,18 @@ namespace Bitrix\Im\V2\Controller\Chat\Message\Block;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\BlocksBuilder\Action\ButtonActionService;
 use Bitrix\Im\V2\Message\BlocksBuilder\BuilderError;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\FormBlock;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons\RequestButton;
-use Bitrix\Im\V2\Message\BlocksBuilder\FormSubmitError;
-use Bitrix\Im\V2\Message\BlocksBuilder\Validation\FormSubmitValidationService;
-use Bitrix\Im\V2\Message\Form\FormSubmitService;
 
 class Form extends BaseController
 {
 	/**
+	 * The narrow door of the Form block into the same click service, kept for released mobile
+	 * builds. Everything that is not a submit button of a form is answered the way this method
+	 * always answered it - the general Block.Action.run accepts a click on any block instead.
+	 *
 	 * @restMethod im.v2.Chat.Message.Block.Form.submit
 	 */
 	public function submitAction(Message $message, string $blockId, string $buttonId, array $values = [], string $actionUuid = ''): ?array
@@ -37,37 +39,20 @@ class Form extends BaseController
 		}
 
 		$block = $builder->getBlockById($blockId);
-		if (!($block instanceof FormBlock))
+		if (!($block instanceof FormBlock) || !($block->getButtonById($buttonId) instanceof RequestButton))
 		{
 			$this->addError(new BuilderError(BuilderError::ELEMENT_NOT_FOUND));
 
 			return null;
 		}
 
-		$button = $block->getButtonById($buttonId);
-		if (!($button instanceof RequestButton))
-		{
-			$this->addError(new BuilderError(BuilderError::ELEMENT_NOT_FOUND));
-
-			return null;
-		}
-
-		if ($button->isDisabled())
-		{
-			$this->addError(new FormSubmitError(FormSubmitError::FORM_DISABLED));
-
-			return null;
-		}
-
-		$result = (new FormSubmitValidationService())->validate($block, $values);
+		$result = (new ButtonActionService())->run($message, $blockId, $buttonId, $values);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
 
 			return null;
 		}
-
-		(new FormSubmitService())->submit($message, $block, $button, $result->getResult());
 
 		return ['status' => 'accepted'];
 	}

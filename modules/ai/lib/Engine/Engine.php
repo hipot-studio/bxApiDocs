@@ -104,7 +104,7 @@ abstract class Engine
 	}
 
 	/**
-	 * Set id consumption from bass
+	 * Sets id of the limit consumption charged for the request.
 	 */
 	public function setConsumptionId(string $consumptionId): void
 	{
@@ -115,7 +115,7 @@ abstract class Engine
 	}
 
 	/**
-	 * Returns id consumption from bass
+	 * Returns id of the limit consumption charged for the request.
 	 */
 	public function getConsumptionId(): string
 	{
@@ -404,7 +404,7 @@ abstract class Engine
 	}
 
 	/**
-	 * Writes history, must depend on isWriteHistory.
+	 * Writes history if shouldWriteHistory() allows it.
 	 *
 	 * @param Result $result Engine's work result.
 	 * @return void
@@ -418,7 +418,7 @@ abstract class Engine
 	}
 
 	/**
-	 * Writes error response in history, must depend on isWriteHistory.
+	 * Writes error response in history if shouldWriteHistory() allows it and the `write_errors` option is on.
 	 *
 	 * @param Error $error Error instance.
 	 * @return void
@@ -728,7 +728,7 @@ abstract class Engine
 	}
 
 	/**
-	 * Makes request to AI Engine throw the queue.
+	 * Makes request to AI Engine through the queue.
 	 *
 	 * @return void
 	 */
@@ -789,13 +789,22 @@ abstract class Engine
 
 			return;
 		}
-
 		$body = [
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),
 			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
 		] + $body;
 
-		$response = $http->post($url, json_encode($body));
+		$this->queueJob->beginRepeatedRequest();
+		try
+		{
+			$response = $http->post($url, json_encode($body));
+		}
+		catch (\Throwable $exception)
+		{
+			$this->queueJob->abortRepeatedRequest();
+
+			throw $exception;
+		}
 
 		// A transport failure is not a refusal: the request never reached the receiver, so there
 		// is no status to read. Keeping the two apart is the whole point of this log line.
@@ -810,8 +819,9 @@ abstract class Engine
 			);
 		}
 
-		if ($http->getStatus() === self::HTTP_STATUS_OK)
+		if ($status === self::HTTP_STATUS_OK)
 		{
+			$this->queueJob->confirmRepeatedRequestSent();
 			if (is_callable($this->onSuccessCallback))
 			{
 				call_user_func(
@@ -821,24 +831,28 @@ abstract class Engine
 				);
 			}
 		}
-		elseif (is_callable($this->onErrorCallback))
+		else
 		{
-			$error = $http->getError();
-
-			$message = 'Unknown error';
-			$code    = '';
-
-			if (is_array($error) && !empty($error))
+			$this->queueJob->abortRepeatedRequest();
+			if (is_callable($this->onErrorCallback))
 			{
-				$code    = (string)array_key_first($error);
-				$message = (string)$error[$code];
-			}
-			elseif (is_string($error) && $error !== '')
-			{
-				$message = $error;
-			}
+				$error = $http->getError();
 
-			$this->onResponseError($message, $code);
+				$message = 'Unknown error';
+				$code    = '';
+
+				if (is_array($error) && !empty($error))
+				{
+					$code    = (string)array_key_first($error);
+					$message = (string)$error[$code];
+				}
+				elseif (is_string($error) && $error !== '')
+				{
+					$message = $error;
+				}
+
+				$this->onResponseError($message, $code);
+			}
 		}
 	}
 
@@ -954,9 +968,12 @@ abstract class Engine
 	}
 
 	/**
-	 * Skips User Agreement (in fact just accept agreement by current Context's user).
+	 * Skips User Agreement: getAgreement() returns null, so the Engine agreement check passes
+	 * (on box; on cloud \Bitrix\AI\Engine::isAvailableByAgreement() checks a feature and ignores the skip).
+	 * Does not bypass the BitrixGPT agreement check.
+	 * Acceptance is not recorded for the Context's user.
 	 *
-	 * @return self
+	 * @return void
 	 */
 	public function skipAgreement(): void
 	{

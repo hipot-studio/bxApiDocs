@@ -388,7 +388,6 @@ class ForwardService
 				return $result->addError(new FileError(FileError::NOT_FOUND));
 			}
 
-			$newFileIds = [];
 			foreach ($files as $file)
 			{
 				$copyResult = $file->getCopyToChatResult($this->toChat);
@@ -400,23 +399,25 @@ class ForwardService
 				}
 
 				$copy = $copyResult->getResult();
-				$newFileIds[] = $copy->getId();
 				$copiedFileIds[$file->getId()] = $copy->getId();
 				$diskFiles[] = $copy->getDiskFile();
 				$copies[] = $copy;
 				$fileCopyMap->addFileIdMapping($copy, $file);
 			}
+		}
 
-			$fileIdsResult = $this->setFileIds($forwardingMessage, $newFileIds, $newParams, $copiedFileIds);
-			if (!$fileIdsResult->isSuccess())
+		$blocksResult = $this->prepareBlocksForForward($forwardingMessage, $newParams, $copiedFileIds);
+		if (!$blocksResult->isSuccess())
+		{
+			if (!empty($copies))
 			{
 				$this->takeFileCopiesBack($copies, $fileCopyMap);
-
-				return $result->addErrors($fileIdsResult->getErrors());
 			}
 
-			$newParams = $fileIdsResult->getResult();
+			return $result->addErrors($blocksResult->getErrors());
 		}
+
+		$newParams = $blocksResult->getResult();
 
 		$newParams = self::setFileOrderOfCopies($newParams, $copiedFileIds);
 
@@ -498,55 +499,63 @@ class ForwardService
 	}
 
 	/**
+	 * Blocks of the copy are prepared before it is sent: the footer buttons that only make sense in the
+	 * source chat are taken off and the files of the blocks are pointed at their copies. Both happen in
+	 * a single rebuild of the builder, because the checks it goes through belong to the target chat and
+	 * must see the copy as it will be sent.
+	 *
 	 * @param array<int, int> $copiedFileIds original file id => id of its copy in the target chat
 	 * @return Result<array>
 	 */
-	private function setFileIds(
+	private function prepareBlocksForForward(
 		Message $forwardingMessage,
-		array $newFileIds,
 		array $newParams,
-		array $copiedFileIds
+		array $copiedFileIds = []
 	): Result
 	{
 		$result = new Result();
 		$builder = $forwardingMessage->getBlocksBuilder();
 
-		if ($builder !== null)
+		if ($builder === null)
 		{
-			$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
-			$builderResult = $builderService->updateFileIds(
-				$builder,
-				$this->toChat,
-				$copiedFileIds,
-				$this->getMissingFileIds($forwardingMessage)
-			);
-			// a message that silently lost a copy of an available file is not the message that was forwarded
-			if (!$builderResult->isSuccess())
+			if (!empty($copiedFileIds))
 			{
-				return $result->addErrors($builderResult->getErrors());
-			}
-
-			$updatedBuilder = $builderResult->getBlocksBuilder();
-			if ($updatedBuilder === null)
-			{
-				// nothing is left to hand the files to, so the copy carries its text and attachments alone
-				unset($newParams[Message\Params::BLOCK]);
-			}
-			else
-			{
-				$newParams[Message\Params::BLOCK] = $updatedBuilder;
-			}
-
-			$attachmentIds = $this->getAttachmentCopyIds($forwardingMessage, $copiedFileIds);
-			if (!empty($attachmentIds))
-			{
-				$newParams[Message\Params::FILE_ID] = $attachmentIds;
+				$newParams[Message\Params::FILE_ID] = array_values($copiedFileIds);
 			}
 
 			return $result->setResult($newParams);
 		}
 
-		$newParams[Message\Params::FILE_ID] = $newFileIds;
+		$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+
+		$builderResult = $builderService->prepareForwardedCopy(
+			$builder,
+			$this->toChat,
+			$copiedFileIds,
+			$this->getMissingFileIds($forwardingMessage)
+		);
+		// a message that silently lost a copy of an available file is not the message that was forwarded
+		if (!$builderResult->isSuccess())
+		{
+			return $result->addErrors($builderResult->getErrors());
+		}
+
+		$updatedBuilder = $builderResult->getBlocksBuilder();
+		if ($updatedBuilder === null)
+		{
+			// nothing is left to hand the files to, so the copy carries its text and attachments alone
+			unset($newParams[Message\Params::BLOCK]);
+		}
+		else
+		{
+			$newParams[Message\Params::BLOCK] = $updatedBuilder;
+		}
+
+		$attachmentIds = $this->getAttachmentCopyIds($forwardingMessage, $copiedFileIds);
+		if (!empty($attachmentIds))
+		{
+			$newParams[Message\Params::FILE_ID] = $attachmentIds;
+		}
 
 		return $result->setResult($newParams);
 	}

@@ -368,6 +368,16 @@ class Cleaner implements IErrorable, Volume\IVolumeTimeLimit
 				}
 			}
 		}
+		catch (\Throwable $exception)
+		{
+			Main\Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+			// LAST_ERROR is varchar(255); the failed task leaves the queue, FAIL_COUNT counts undeleted files only
+			$message = $exception->getMessage() !== '' ? $exception->getMessage() : $exception::class;
+			$task->setLastError(mb_substr(mb_scrub($message, 'UTF-8'), 0, 255));
+			$task->raiseFatalError();
+			$taskDone = true;
+		}
 		finally
 		{
 			$usageCounter->flushAccumulator();

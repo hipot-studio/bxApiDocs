@@ -23,6 +23,7 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\AiAgentsEntrySource;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\AiAgentsSection;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\BitrixGptBiAnnouncement;
 use Bitrix\BIConnector\Manager;
+use Bitrix\BIConnector\Superset\Error\IntegrationErrorPresenter;
 use Bitrix\BIConnector\Superset\Filter\StaleConditionResolver;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
@@ -58,6 +59,14 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 	 * flag: a renewed term is a new occasion to warn.
 	 */
 	private const SELFHOST_LICENSE_POPUP_OPTION = 'selfhost_license_expiry_popup';
+
+	private const CONSTRUCTOR_BUTTON_ID = 'biconnector-open-constructor-button';
+	private const CONSTRUCTOR_BUTTON_STATUSES = [
+		SupersetInitializer::SUPERSET_STATUS_READY,
+		SupersetInitializer::SUPERSET_STATUS_LOAD,
+		SupersetInitializer::SUPERSET_STATUS_ERROR,
+		SupersetInitializer::SUPERSET_STATUS_LIMIT_EXCEEDED,
+	];
 
 	private DashboardGrid $grid;
 	private SupersetController $supersetController;
@@ -169,11 +178,11 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$grid->initPagination($superset->getUnionDashboardGroupRepository()->getCount($this->getOrmParams()));
 	}
 
-	private function canOpenConstructor(): bool
+	private function canShowConstructorButton(): bool
 	{
 		if (
 			!Feature::isBuilderEnabled()
-			|| !SupersetInitializer::isSupersetReady()
+			|| !in_array(SupersetInitializer::getSupersetStatus(), self::CONSTRUCTOR_BUTTON_STATUSES, true)
 		)
 		{
 			return false;
@@ -218,19 +227,45 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function initConstructorButton(): void
 	{
-		if (!$this->canOpenConstructor())
+		if (!$this->canShowConstructorButton())
 		{
 			return;
 		}
 
 		$button = new Button([
-			'id' => 'biconnector-open-constructor-button',
+			'id' => self::CONSTRUCTOR_BUTTON_ID,
 			'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_OPEN_CONSTRUCTOR'),
 			'color' => Color::LIGHT_BORDER,
 			'click' => new JsCode('BX.BIConnector.SupersetDashboardGridManager.Instance.openConstructorWorkspace();'),
 		]);
+		$button->setUniqId(self::CONSTRUCTOR_BUTTON_ID);
+
+		$unavailableReasons = $this->getConstructorUnavailableReasons();
+		if (isset($unavailableReasons[SupersetInitializer::getSupersetStatus()]))
+		{
+			// Not setDisabled(): the native attribute swallows the click that explains the reason.
+			$button->addClass(Buttons\State::DISABLED);
+			$button->addAttribute('aria-disabled', 'true');
+		}
 
 		Toolbar::addButton($button);
+
+		$this->arResult['CONSTRUCTOR_BUTTON'] = [
+			'id' => self::CONSTRUCTOR_BUTTON_ID,
+			'unavailableReasons' => $unavailableReasons,
+		];
+	}
+
+	// Includes statuses the page can switch to by pull.
+	private function getConstructorUnavailableReasons(): array
+	{
+		$errorReason = Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_CONSTRUCTOR_UNAVAILABLE_ERROR');
+
+		return [
+			SupersetInitializer::SUPERSET_STATUS_ERROR => $errorReason,
+			SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS => $errorReason,
+			SupersetInitializer::SUPERSET_STATUS_LIMIT_EXCEEDED => IntegrationErrorPresenter::getLimitExceededMessage(),
+		];
 	}
 
 	private function getOrmParams(): array

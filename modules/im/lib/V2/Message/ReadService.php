@@ -60,7 +60,7 @@ class ReadService
 
 		$chat = Chat::getInstance($chatId);
 		$chat->onAfterAllMessagesRead($userId);
-		if ($chat instanceof Chat\ChannelChat)
+		if ($chat->allowsComments())
 		{
 			$childrenScope = ServiceLocator::getInstance()
 				->get(ChatTreeScopeFactory::class)

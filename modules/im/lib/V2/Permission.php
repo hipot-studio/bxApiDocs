@@ -295,6 +295,16 @@ class Permission
 		];
 	}
 
+	/**
+	 * Keys of this table are merged into every chat type, external ones owned by other modules
+	 * included, so an action added here reaches them too. Absence of an action is no denial: the
+	 * table answers ROLE_GUEST for it (see getRoleForActionByType()) and every role passes that
+	 * threshold. A denial is said by an explicit ROLE_NONE and by nothing else.
+	 *
+	 * Action::CreateThread and Action::PostInThread are left out of the whole table on purpose: for
+	 * threads it is no second line of defence, the check by type is always true for them, and the
+	 * whole ban is held by the thread predicates alone.
+	 */
 	private function getDefaultByChatTypes(): array
 	{
 		return [

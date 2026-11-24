@@ -507,6 +507,8 @@ class BasketCompatibility extends Internals\EntityCompatibility
 	public static function add(array $fields)
 	{
 		$result = new Sale\Result();
+		$itemDuplicate = ($fields['DUPLICATE'] ?? null) === 'Y';
+		unset($fields['DUPLICATE']);
 
 		$order = null;
 		$basket = null;
@@ -541,7 +543,14 @@ class BasketCompatibility extends Internals\EntityCompatibility
 
 
 		/** @var \Bitrix\Sale\BasketItem|bool $item */
-		if ($item = $basket->getExistsItem($fields["MODULE"], $fields["PRODUCT_ID"], ((!empty($fields["PROPS"]) && is_array($fields["PROPS"]))? $fields["PROPS"] : array())))
+		if (
+			!$itemDuplicate
+			&& ($item = $basket->getExistsItem(
+				$fields["MODULE"],
+				$fields["PRODUCT_ID"],
+				(!empty($fields["PROPS"]) && is_array($fields["PROPS"])) ? $fields["PROPS"] : array()
+			))
+		)
 		{
 			$item->setField('QUANTITY', $item->getQuantity() + $fields['QUANTITY']);
 

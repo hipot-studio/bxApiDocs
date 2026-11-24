@@ -459,6 +459,15 @@ final class TypeFile
 				break;
 		}
 
+		if (in_array($mimeType, ['', 'application/octet-stream', 'application/x-empty'], true))
+		{
+			$mimeTypeByFilename = self::getMimeTypeByFilename($filename);
+			if (str_starts_with($mimeTypeByFilename, 'video/'))
+			{
+				return $mimeTypeByFilename;
+			}
+		}
+
 		return $mimeType;
 	}
 

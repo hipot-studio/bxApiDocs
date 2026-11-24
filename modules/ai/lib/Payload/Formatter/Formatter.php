@@ -16,19 +16,19 @@ abstract class Formatter
 	){}
 
 	/**
-	 * Retrieves user data by ID and stores it to the static cache.
+	 * Retrieves user data by ID and stores it to the static cache keyed by user ID.
 	 *
 	 * @return array
 	 */
 	protected function getUserDataById(int $userId): array
 	{
-		static $user = null;
+		static $users = [];
 
-		if ($user === null)
+		if (!isset($users[$userId]))
 		{
-			$user = User::getUserDataById($userId);
+			$users[$userId] = User::getUserDataById($userId);
 		}
 
-		return $user;
+		return $users[$userId];
 	}
 }

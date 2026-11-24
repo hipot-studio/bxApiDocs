@@ -22,6 +22,7 @@ class RestBot
 		'OnImBotV2CommandAdd' => 'onImBotV2CommandAdd',
 		'OnImBotV2ReactionChange' => 'onImBotV2ReactionChange',
 		'OnImBotV2FormSubmit' => 'onImBotV2FormSubmit',
+		'OnImBotV2BlockButtonClick' => 'onImBotV2BlockButtonClick',
 	];
 
 	/**

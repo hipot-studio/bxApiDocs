@@ -26,6 +26,10 @@ class DefaultPolicy implements ActionAccessPolicy
 			ActionGroup::ManageMessagesAutoDelete => $chat->getManageMessagesAutoDelete(),
 			ActionGroup::ManageGuestInvites => $chat->getManageGuestInvites(),
 			ActionGroup::ManageDelete => $chat->getManageDelete(),
+			// both rules are read off the chat the question is asked of, and for a thread that chat is
+			// its parent: a rule changed later has to reach the discussions opened before it
+			ActionGroup::ThreadCreate => $chat->getManageThreadCreate(),
+			ActionGroup::ThreadPost => $chat->getManageThreadPost(),
 			default => Chat::ROLE_GUEST,
 		};
 

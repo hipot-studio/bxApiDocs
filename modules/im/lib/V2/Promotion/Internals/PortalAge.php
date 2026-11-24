@@ -22,13 +22,8 @@ final class PortalAge
 		string $defaultDate = ''
 	): bool
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return false;
-		}
-
-		$portalCreateTime = (int)\CBitrix24::getCreateTime();
-		if ($portalCreateTime <= 0)
+		$portalCreateTime = self::getPortalCreateTime();
+		if ($portalCreateTime === null)
 		{
 			return false;
 		}
@@ -36,20 +31,6 @@ final class PortalAge
 		$cutoffDate = self::getCutoffDate($moduleId, $optionName, $defaultDate);
 
 		return $cutoffDate !== null && $portalCreateTime < $cutoffDate->getTimestamp();
-	}
-
-	private static function getCutoffDate(string $moduleId, string $optionName, string $defaultDate): ?Date
-	{
-		$value = trim((string)Option::get($moduleId, $optionName, $defaultDate));
-		if (!Date::isCorrect($value, self::CUTOFF_DATE_FORMAT))
-		{
-			return null;
-		}
-
-		$date = new Date($value, self::CUTOFF_DATE_FORMAT);
-
-		// the parsing accepts a value the format only starts with, so the date has to survive a round trip
-		return $date->format(self::CUTOFF_DATE_FORMAT) === $value ? $date : null;
 	}
 
 	/**
@@ -83,5 +64,19 @@ final class PortalAge
 		$portalCreateTime = (int)\CBitrix24::getCreateTime();
 
 		return $portalCreateTime > 0 ? $portalCreateTime : null;
+	}
+
+	private static function getCutoffDate(string $moduleId, string $optionName, string $defaultDate): ?Date
+	{
+		$value = trim((string)Option::get($moduleId, $optionName, $defaultDate));
+		if (!Date::isCorrect($value, self::CUTOFF_DATE_FORMAT))
+		{
+			return null;
+		}
+
+		$date = new Date($value, self::CUTOFF_DATE_FORMAT);
+
+		// the parsing accepts a value the format only starts with, so the date has to survive a round trip
+		return $date->format(self::CUTOFF_DATE_FORMAT) === $value ? $date : null;
 	}
 }

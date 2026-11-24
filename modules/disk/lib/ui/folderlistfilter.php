@@ -4,8 +4,10 @@ namespace Bitrix\Disk\Ui;
 
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\FilePicker\Filter;
+use Bitrix\Disk\Public\Features\Favorites;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
 use Bitrix\Disk\User;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
@@ -16,6 +18,9 @@ use Bitrix\Main\UI\Filter\Options;
 class FolderListFilter
 {
 	public const FILE_TYPE_FIELD_ID = 'FILE_TYPE_FILTERS';
+	public const FAVORITE_FIELD_ID = 'FAVORITE';
+	public const FAVORITE_YES = 'Y';
+	public const FAVORITE_NO = 'N';
 
 	private const WITH_EXTERNAL_LINK = 1;
 	private const SHARED_FROM_ME = 2;
@@ -46,11 +51,17 @@ class FolderListFilter
 
 	private int $storageId;
 	private bool $trashcanMode;
+	private bool $viewByUnifiedLink;
 
-	public function __construct(int $storageId, bool $trashcanMode = false)
+	/**
+	 * @param bool $viewByUnifiedLink the list of a folder opened by a unified link: it is bounded by that folder,
+	 * while the favorites span the whole storage, so the field and the preset «Избранные» are not offered there
+	 */
+	public function __construct(int $storageId, bool $trashcanMode = false, bool $viewByUnifiedLink = false)
 	{
 		$this->trashcanMode = $trashcanMode;
 		$this->storageId = $storageId;
+		$this->viewByUnifiedLink = $viewByUnifiedLink;
 	}
 
 	public function getId(): string
@@ -139,6 +150,7 @@ class FolderListFilter
 				],
 			],
 			$this->getFileTypeField(),
+			$this->isFavoritesEnabled() ? $this->getFavoriteField() : null,
 		];
 
 		return array_filter($filters);
@@ -161,6 +173,25 @@ class FolderListFilter
 				'multiple' => true,
 			],
 			'items' => $items,
+		];
+	}
+
+	private function isFavoritesEnabled(): bool
+	{
+		return !$this->trashcanMode && !$this->viewByUnifiedLink && Feature::isEnabled(Favorites::class);
+	}
+
+	private function getFavoriteField(): array
+	{
+		return [
+			'id' => self::FAVORITE_FIELD_ID,
+			'name' => Loc::getMessage('DISK_FOLDER_FILTER_FAVORITE'),
+			'type' => 'list',
+			'default' => false,
+			'items' => [
+				self::FAVORITE_YES => Loc::getMessage('DISK_FOLDER_FILTER_FAVORITE_YES'),
+				self::FAVORITE_NO => Loc::getMessage('DISK_FOLDER_FILTER_FAVORITE_NO'),
+			],
 		];
 	}
 
@@ -188,7 +219,20 @@ class FolderListFilter
 			? Loc::getMessage('DISK_FOLDER_FILTER_PRESETS_SHARED_FROM_ME')
 			: Loc::getMessage("DISK_FOLDER_FILTER_PRESETS_SHARED_FROM_ME_$userGender");
 
+		$favoritePresets = [];
+		if ($this->isFavoritesEnabled())
+		{
+			$favoritePresets['favorites'] = [
+				'name' => Loc::getMessage('DISK_FOLDER_FILTER_PRESETS_FAVORITES'),
+				'default' => false,
+				'fields' => [
+					self::FAVORITE_FIELD_ID => self::FAVORITE_YES,
+				],
+			];
+		}
+
 		return [
+			...$favoritePresets,
 			...$this->getFileTypePresetFields(),
 			'recently_updated' => [
 				'name' => Loc::getMessage('DISK_FOLDER_FILTER_PRESETS_RECENTLY_UPDATED'),

@@ -2,7 +2,6 @@
 
 namespace Bitrix\BIConnector\Infrastructure\Rest\Access;
 
-use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Internal\Feature\FlagGate;
 
 final class BuilderFamilyGate
@@ -16,7 +15,6 @@ final class BuilderFamilyGate
 
 	public function isEnabled(int $userId): bool
 	{
-		return $this->flagGate->isEnabled(FlagGate::BUILDER_REST, $userId)
-			&& Feature::isBitrixGptBiConstructorEnabled();
+		return $this->flagGate->isEnabled(FlagGate::BUILDER_REST, $userId);
 	}
 }

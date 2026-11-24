@@ -56,6 +56,7 @@ final class OpeningContext
 		private readonly bool $hasPublicLinkAccess = false,
 		private readonly ?ShortLinkOpening $shortLinkOpening = null,
 		private readonly bool $offersRevisionLink = false,
+		private readonly bool $editsInPlace = false,
 	)
 	{
 	}
@@ -208,5 +209,14 @@ final class OpeningContext
 	public function servesContentItself(): bool
 	{
 		return $this->servesContentItself;
+	}
+
+	/**
+	 * Whether the page drawing the content itself turns into the editor of it, with no shell of an engine
+	 * to hand the page over to: the page of a Markdown file offered to a visitor who may edit it (TPL-04).
+	 */
+	public function editsInPlace(): bool
+	{
+		return $this->editsInPlace;
 	}
 }

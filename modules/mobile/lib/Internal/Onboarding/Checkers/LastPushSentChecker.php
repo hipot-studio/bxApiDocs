@@ -3,9 +3,9 @@
 namespace Bitrix\Mobile\Internal\Onboarding\Checkers;
 
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Mobile\Internal\Onboarding\Schedule\SeriesCalendar;
-use Bitrix\Mobile\Internal\Onboarding\Services\OnboardingPushService;
 use Bitrix\Mobile\Internal\Onboarding\PushType;
+use Bitrix\Mobile\Internal\Onboarding\Service\OnboardingPushService;
+use Bitrix\Mobile\Internal\Service\Marketing\Time\PortalCalendar;
 
 /**
  * Dates given to the checker are calendar dates of the series, and the stored moment of
@@ -32,7 +32,7 @@ class LastPushSentChecker
 	 * series, where the resolved type may change between two runs of the same day
 	 * once the user completes a step.
 	 */
-	public function isSentOnDate(int $userId, DateTime $date, ?SeriesCalendar $calendar = null): bool
+	public function isSentOnDate(int $userId, DateTime $date, ?PortalCalendar $calendar = null): bool
 	{
 		$sentDay = $this->getSentDay($userId, $calendar);
 
@@ -43,7 +43,7 @@ class LastPushSentChecker
 		int $userId,
 		PushType $pushType,
 		DateTime $scheduledDate,
-		?SeriesCalendar $calendar = null,
+		?PortalCalendar $calendar = null,
 	): bool
 	{
 		$lastPush = $this->pushStorage->getLastSentPush($userId);
@@ -55,14 +55,14 @@ class LastPushSentChecker
 		return $this->toCalendarDay($lastPush->timestamp, $calendar) >= $scheduledDate->format('Y-m-d');
 	}
 
-	private function getSentDay(int $userId, ?SeriesCalendar $calendar): ?string
+	private function getSentDay(int $userId, ?PortalCalendar $calendar): ?string
 	{
 		$lastPush = $this->pushStorage->getLastSentPush($userId);
 
 		return $lastPush === null ? null : $this->toCalendarDay($lastPush->timestamp, $calendar);
 	}
 
-	private function toCalendarDay(int $timestamp, ?SeriesCalendar $calendar): string
+	private function toCalendarDay(int $timestamp, ?PortalCalendar $calendar): string
 	{
 		$moment = DateTime::createFromTimestamp($timestamp);
 

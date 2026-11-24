@@ -74,16 +74,21 @@ class BaseSettingsExpressionDto extends BaseExpressionDto
 
 	public function jsonSerialize(): array
 	{
-		return [
+		$data = [
 			'actionId' => $this->actionId,
 			'rawActivityData' => $this->rawActivityData,
 			'activityData' => $this->activityData,
-			'document' => $this->document,
-			'auxPortId' => $this->auxPortId,
-			'auxPortTitle' => $this->auxPortTitle,
-			'area' => $this->area,
-			'object' => $this->object,
 		];
+
+		foreach (['document', 'auxPortId', 'auxPortTitle', 'area', 'object'] as $field)
+		{
+			if ($this->{$field} !== null)
+			{
+				$data[$field] = $this->{$field};
+			}
+		}
+
+		return $data;
 	}
 
 	public static function fromArray(array $data): self

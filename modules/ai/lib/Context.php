@@ -13,10 +13,19 @@ use Bitrix\Main\EventResult;
  */
 class Context
 {
+	private const FEATURE_CODE_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/D';
+
 	private mixed $contextParams = null;
 	private ?Language $contextLanguage = null;
 	private array $eventGetMessagesNextStep = [];
+	private string $featureCode = '';
 
+	/**
+	 * @param string $moduleId Module that makes the request.
+	 * @param string $contextId Scenario of the request within the module.
+	 * @param int|null $userId Request's user: 0 for a background request, null for the current user.
+	 * @param ResponseFormat $responseFormat Format of the result delivered to the consumer.
+	 */
 	public function __construct(
 		private string $moduleId,
 		private string $contextId,
@@ -46,9 +55,13 @@ class Context
 		return $this->contextId;
 	}
 
+	/**
+	 * Returns the request's user id; the current user if it was not passed to the constructor.
+	 *
+	 * @return int
+	 */
 	public function getUserId(): int
 	{
-		// todo: pay attention. User should be set manually
 		return $this->userId ?? User::getCurrentUserId();
 	}
 
@@ -65,6 +78,25 @@ class Context
 	public function getResponseFormat(): ResponseFormat
 	{
 		return $this->responseFormat;
+	}
+
+	/**
+	 * Sets the feature code: a stable scenario name that labels AI usage in place of the context ID.
+	 * A code is 1-64 bytes of [A-Za-z0-9_-]; any other value leaves the code empty, resetting a previous one.
+	 * Keep codes within 30 bytes: FeatureTag cuts the scenario part of the label to fit its budget,
+	 * so codes that differ only beyond the cut share one label.
+	 *
+	 * @param string $featureCode Feature code.
+	 * @return void
+	 */
+	public function setFeatureCode(string $featureCode): void
+	{
+		$this->featureCode = preg_match(self::FEATURE_CODE_PATTERN, $featureCode) === 1 ? $featureCode : '';
+	}
+
+	public function getFeatureCode(): string
+	{
+		return $this->featureCode;
 	}
 
 	/**
@@ -97,6 +129,10 @@ class Context
 	 * Returns context messages for current Context.
 	 * For example, you can send another post's comments in current request.
 	 * In this case, external Engine will understand the context and be able to answer more accurately.
+	 *
+	 * Messages are collected from onContextGetMessages handlers: each successful EventResult may return
+	 * `messages` (arrays with `content`, optional `role`, `meta`, `is_original_message`) and `next_step`,
+	 * which is passed to handlers on the next call; a null `next_step` stops further calls.
 	 *
 	 * @return Context\Message[]
 	 */
@@ -147,14 +183,22 @@ class Context
 	 */
 	public function pack(): string
 	{
-		return json_encode([
+		$data = [
 			'moduleId' => $this->getModuleId(),
 			'contextId' => $this->getContextId(),
 			'userId' => $this->getUserId(),
 			'parameters' => $this->getParameters(),
 			'responseFormat' => $this->getResponseFormat(),
 			'languageCode' => $this->getLanguage()?->getCode(),
-		]);
+		];
+
+		// Without a code the package keeps its previous bytes: it is a part of the queue result cache key.
+		if ($this->featureCode !== '')
+		{
+			$data['featureCode'] = $this->featureCode;
+		}
+
+		return json_encode($data);
 	}
 
 	/**
@@ -165,6 +209,40 @@ class Context
 	 */
 	public static function unpack(string $packedData): self
 	{
+		$data = json_decode($packedData, true);
+		if (json_last_error() !== JSON_ERROR_NONE)
+		{
+			throw new \InvalidArgumentException(
+				'Packed context contains invalid JSON: ' . json_last_error_msg(),
+			);
+		}
+		if (!is_array($data) || array_is_list($data))
+		{
+			throw new \InvalidArgumentException('Packed context root must be an object');
+		}
+
+		$requiredTypes = [
+			'moduleId' => ['string'],
+			'contextId' => ['string'],
+			'userId' => ['integer', 'NULL'],
+			'parameters' => null,
+			'responseFormat' => ['string', 'NULL'],
+			'languageCode' => ['string', 'NULL'],
+		];
+		foreach ($requiredTypes as $field => $types)
+		{
+			if (!array_key_exists($field, $data))
+			{
+				throw new \InvalidArgumentException('Packed context is missing field ' . $field);
+			}
+			if ($types !== null && !in_array(gettype($data[$field]), $types, true))
+			{
+				throw new \InvalidArgumentException(
+					'Packed context field ' . $field . ' has invalid type ' . get_debug_type($data[$field]),
+				);
+			}
+		}
+
 		[
 			'moduleId' => $moduleId,
 			'contextId' => $contextId,
@@ -172,7 +250,7 @@ class Context
 			'parameters' => $parameters,
 			'responseFormat' => $responseFormat,
 			'languageCode' => $languageCode,
-		] = json_decode($packedData, true);
+		] = $data;
 
 		$context = new self(
 			$moduleId,
@@ -184,6 +262,12 @@ class Context
 		if ($languageCode !== null)
 		{
 			$context->setLanguage($languageCode);
+		}
+
+		$featureCode = $data['featureCode'] ?? null;
+		if (is_string($featureCode))
+		{
+			$context->setFeatureCode($featureCode);
 		}
 
 		return $context;

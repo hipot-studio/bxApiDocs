@@ -88,7 +88,9 @@ final class ActiveTabProvider
 			$tab = $this->manager->getTabInstance($presetKey);
 			if ($tab !== null)
 			{
+				// Tab data may override getId() with the preset key (news to stream).
 				$sortByTabId[$tab->getId()] = $sort;
+				$sortByTabId[$presetKey] = $sort;
 			}
 		}
 

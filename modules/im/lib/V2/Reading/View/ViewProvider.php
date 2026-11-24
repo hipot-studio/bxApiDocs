@@ -99,6 +99,34 @@ class ViewProvider
 		return $result;
 	}
 
+	/**
+	 * Whether the messages are viewed by others, by message id: the same fact as Message::isViewedByOthers().
+	 * Ids of messages that are not found are absent from the result.
+	 *
+	 * @param int[] $messageIds
+	 * @return array<int, bool>
+	 */
+	public function getViewedByOthersStatuses(array $messageIds): array
+	{
+		if (empty($messageIds))
+		{
+			return [];
+		}
+
+		$query = MessageTable::query()
+			->setSelect(['ID', 'NOTIFY_READ'])
+			->whereIn('ID', $messageIds)
+		;
+
+		$result = [];
+		foreach ($query->fetchAll() as $row)
+		{
+			$result[(int)$row['ID']] = $row['NOTIFY_READ'] === 'Y';
+		}
+
+		return $result;
+	}
+
 	public function getViewedCount(int $messageId): int
 	{
 		return MessageViewedTable::getCount(['=MESSAGE_ID' => $messageId]);

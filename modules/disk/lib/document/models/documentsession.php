@@ -430,7 +430,7 @@ final class DocumentSession extends Model
 
 	public function forkForUser(int $userId, ?DocumentSessionContext $context = null): ?self
 	{
-		return self::add([
+		return $this->addClonedSession([
 			'EXTERNAL_HASH' => $this->getExternalHash(),
 			'OBJECT_ID' => $this->getObjectId(),
 			'VERSION_ID' => $this->getVersionId(),
@@ -440,12 +440,12 @@ final class DocumentSession extends Model
 			'TYPE' => $this->getType(),
 			'CONTEXT' => $context? $context->toJson() : $this->getContextRaw(),
 			'SERVICE' => $this->getServiceRaw(),
-		], $this->errorCollection);
+		]);
 	}
 
 	public function cloneWithNewHash(int $userId, ?DocumentSessionContext $context = null): ?self
 	{
-		return self::add([
+		return $this->addClonedSession([
 			'OBJECT_ID' => $this->getObjectId(),
 			'VERSION_ID' => $this->getVersionId(),
 			'USER_ID' => $userId,
@@ -454,7 +454,24 @@ final class DocumentSession extends Model
 			'TYPE' => $this->getType(),
 			'CONTEXT' => $context? $context->toJson() : $this->getContextRaw(),
 			'SERVICE' => $this->getServiceRaw(),
-		], $this->errorCollection);
+		]);
+	}
+
+	private function addClonedSession(array $fields): ?self
+	{
+		if ($this->getService() !== DocumentService::Vibeoffice || $fields['TYPE'] !== self::TYPE_EDIT || $this->isVersion())
+		{
+			return self::add($fields, $this->errorCollection);
+		}
+		$result = (new \Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository())->createLegacyLocalSession(
+			(int)$this->getObjectId(), fn() => self::add($fields, $this->errorCollection),
+		);
+		if (!$result->isSuccess())
+		{
+			$this->errorCollection->add($result->getErrors());
+			return null;
+		}
+		return $result->getData()['session'];
 	}
 
 	public function createEditSession(): ?self
@@ -490,7 +507,7 @@ final class DocumentSession extends Model
 			return $this->transformToEdit()? $this : null;
 		}
 
-		return self::add([
+		return $this->addClonedSession([
 			'OBJECT_ID' => $this->getObjectId(),
 			'USER_ID' => $this->getUserId(),
 			'OWNER_ID' => $this->getUserId(),
@@ -499,7 +516,7 @@ final class DocumentSession extends Model
 			'TYPE' => self::TYPE_EDIT,
 			'CONTEXT' => $this->getContextRaw(),
 			'SERVICE' => $this->getServiceRaw(),
-		], $this->errorCollection);
+		]);
 	}
 
 	private function findEditSessionByExternalContext(
@@ -565,9 +582,20 @@ final class DocumentSession extends Model
 
 	public function transformToEdit(): bool
 	{
-		return $this->update([
-			'TYPE' => self::TYPE_EDIT,
-		]);
+		$mutation = fn(): bool => $this->update(['TYPE' => self::TYPE_EDIT]);
+		if ($this->getService() !== DocumentService::Vibeoffice || $this->isVersion())
+		{
+			return $mutation();
+		}
+		$result = (new \Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository())->createLegacyLocalSession(
+			(int)$this->getObjectId(), fn(): ?self => $mutation() ? $this : null,
+		);
+		if (!$result->isSuccess())
+		{
+			$this->errorCollection->add($result->getErrors());
+			return false;
+		}
+		return true;
 	}
 
 	public function canTransformToEdit(SecurityContext $securityContext): bool
@@ -689,9 +717,24 @@ final class DocumentSession extends Model
 		return $this->canRename($securityContext);
 	}
 
-	protected function getSecurityContext(CurrentUser $user): ?SecurityContext
+	/**
+	 * Returns null when a security context cannot be resolved and no permission was checked.
+	 */
+	public function checkUserModeAccess(CurrentUser $user, ?bool &$hasFile = null): ?bool
+	{
+		$securityContext = $this->getSecurityContext($user, $hasFile);
+		if (!$securityContext)
+		{
+			return null;
+		}
+
+		return $this->isEdit() ? $this->canEdit($securityContext) : $this->canRead($securityContext);
+	}
+
+	protected function getSecurityContext(CurrentUser $user, ?bool &$hasFile = null): ?SecurityContext
 	{
 		$file = $this->getObject();
+		$hasFile = $file !== null;
 		if (!$file)
 		{
 			return null;

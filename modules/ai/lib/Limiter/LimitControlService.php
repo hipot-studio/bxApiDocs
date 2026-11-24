@@ -20,7 +20,8 @@ use RuntimeException;
 use Throwable;
 
 /**
- *  Service for control limits in ai
+ * Controls AI request limits in two steps: reserveRequest() checks the limit,
+ * commitRequest() charges it, rollbackConsumption() returns the charge on failure.
  */
 class LimitControlService
 {
@@ -38,6 +39,17 @@ class LimitControlService
 		$this->sharedMonthlyPoolService = $sharedMonthlyPoolService;
 	}
 
+	/**
+	 * Charges the limit checked by reserveRequest().
+	 *
+	 * @param ReserveRequest $reservedRequest
+	 * @return string Consumption id for rollbackConsumption(): BaaS consumption id, shared monthly pool id,
+	 *   or an empty string when the request is free, failed the check or charged the promo limit,
+	 *   and also when the BaaS charge returned no consumption id (BaaS service unavailable
+	 *   or no id in the BaaS response).
+	 * @throws SharedMonthlyPoolLimitExceededException If the shared monthly pool is exhausted meanwhile.
+	 * @throws RuntimeException If the shared monthly pool cannot be charged.
+	 */
 	public function commitRequest(ReserveRequest $reservedRequest): string
 	{
 		if ($reservedRequest->getCost() === self::FREE_COST)
@@ -67,8 +79,8 @@ class LimitControlService
 			$limit = Bitrix24::getMonthlyPoolLimit();
 			try
 			{
-				$consumed = $limit !== null
-					&& $this->getSharedMonthlyPoolService()->tryConsumeSharedMonthly(
+				$reservation = $limit === null ? null
+					: $this->getSharedMonthlyPoolService()->reserveSharedMonthly(
 						$reservedRequest->getLimiter()->getUserId(),
 						$reservedRequest->getCost(),
 						$limit,
@@ -79,7 +91,7 @@ class LimitControlService
 				throw new RuntimeException('Unable to consume the shared monthly AI pool.', 0, $exception);
 			}
 
-			if (!$consumed)
+			if ($reservation === null)
 			{
 				$reservedRequest
 					->setErrorLimit(ErrorLimit::PROMO_LIMIT)
@@ -91,14 +103,19 @@ class LimitControlService
 				);
 			}
 
-			return self::SHARED_MONTHLY_POOL_CONSUMPTION_ID;
+			return $reservation->getConsumptionId();
 		}
 
 		return '';
 	}
 
 	/**
-	 * Main logic for check limits
+	 * Checks whether a request of the given cost fits the limits; nothing is charged yet.
+	 * Selects the limit by the tariff policy: shared monthly pool, BaaS package or promo limit.
+	 *
+	 * @param Usage $limiter
+	 * @param int $cost
+	 * @return ReserveRequest Not successful if the limit is exceeded, with the exceeded limit set.
 	 */
 	public function reserveRequest(Usage $limiter, int $cost = self::DEFAULT_COST): ReserveRequest
 	{
@@ -150,6 +167,19 @@ class LimitControlService
 		return $this->getReserveRequestInPromoLimit($reserveRequest, ErrorLimit::BAAS_LIMIT);
 	}
 
+	/**
+	 * Returns the charge made by commitRequest(). The shared monthly pool id releases the pool,
+	 * a non-empty id rolls back the BaaS consumption. An empty id decrements the promo counter
+	 * whatever limit was charged, also for a BaaS charge that returned no consumption id
+	 * and when nothing was charged: an Engine without limit check (checkLimits() is false,
+	 * e.g. cloud Engines) never calls commitRequest(), and QueueJob still rolls back its empty id.
+	 * The promo counter was not incremented in these cases.
+	 *
+	 * @param Usage $limiter
+	 * @param int $cost
+	 * @param string $consumptionId Value returned by commitRequest().
+	 * @return void
+	 */
 	public function rollbackConsumption(Usage $limiter, int $cost, string $consumptionId): void
 	{
 		if ($cost === self::FREE_COST)
@@ -160,6 +190,22 @@ class LimitControlService
 		if ($consumptionId === self::SHARED_MONTHLY_POOL_CONSUMPTION_ID)
 		{
 			$this->getSharedMonthlyPoolService()->releaseSharedMonthly($limiter->getUserId(), $cost);
+		}
+		elseif (str_starts_with($consumptionId, self::SHARED_MONTHLY_POOL_CONSUMPTION_ID))
+		{
+			if (preg_match(
+				'/\Aai:shared_monthly_pool:v1:([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}'
+				. '-[89ab][0-9a-f]{3}-[0-9a-f]{12})\z/i',
+				$consumptionId,
+				$matches,
+			))
+			{
+				$reservation = $this->getSharedMonthlyPoolService()->findReservation($matches[1], $limiter->getUserId());
+				if ($reservation !== null)
+				{
+					$this->getSharedMonthlyPoolService()->releaseReservation($reservation);
+				}
+			}
 		}
 		elseif (!empty($consumptionId))
 		{

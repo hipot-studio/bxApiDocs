@@ -2,7 +2,11 @@
 
 namespace Bitrix\AI\Facade;
 
+use Bitrix\AI\Config;
+use Bitrix\AI\Image\Url\RuntimeInterface;
+use Bitrix\AI\Image\Url\SecureImageUrlLoader;
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\IO\File as FileCore;
 use Bitrix\Main\Security\Random;
 use CFile;
@@ -28,20 +32,19 @@ class File
 			return null;
 		}
 
-		$file = CFile::makeFileArray($pictureUrl);
-		if (!$file)
+		$forbiddenRanges = Config::getValue('image_url_forbidden_ranges');
+		if (is_string($forbiddenRanges))
 		{
-			return null;
+			$forbiddenRanges = preg_split('/\s*,\s*/', $forbiddenRanges, -1, PREG_SPLIT_NO_EMPTY);
+		}
+		if (!is_array($forbiddenRanges))
+		{
+			$forbiddenRanges = [];
 		}
 
-		$file['MODULE_ID'] = $moduleId;
-		$isImage = CFile::checkImageFile($file, 0, 0, 0, ['IMAGE']) === null;
-		if (!$isImage)
-		{
-			return null;
-		}
+		$runtime = ServiceLocator::getInstance()->get(RuntimeInterface::class);
 
-		return CFile::saveFile($file, $moduleId);
+		return (new SecureImageUrlLoader($runtime, $forbiddenRanges))->save($pictureUrl, $moduleId);
 	}
 
 	/**

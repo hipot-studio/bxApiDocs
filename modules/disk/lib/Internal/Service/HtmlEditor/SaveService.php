@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\HtmlEditor;
 
+use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
@@ -19,19 +20,46 @@ use Bitrix\Main\Result;
 final class SaveService
 {
 	public function __construct(
-		private readonly ?ChangeSetApplier $applier = null,
 		private readonly ?SessionService $sessionService = null,
 	)
 	{
 	}
 
-	public function save(
+	public function saveHtml(
 		File $file,
 		SecurityContext $securityContext,
 		string $sessionHash,
-		int $globalContentVersion,
-		array $changeSet,
+		string $html,
+		string $baseVersion,
 		bool $shouldCheckUnifiedLink = false,
+	): Result
+	{
+		if (preg_match('/^[0-9a-f]{12}$/D', $baseVersion) !== 1)
+		{
+			return $this->error('content_version_conflict');
+		}
+		if (strlen($html) > Configuration::getMaxSizeForHtmlViewer())
+		{
+			return $this->error('content_too_large');
+		}
+
+		return $this->savePrepared(
+			$file,
+			$securityContext,
+			$sessionHash,
+			$html,
+			$baseVersion,
+			$shouldCheckUnifiedLink,
+		);
+	}
+
+	private function savePrepared(
+		File $file,
+		SecurityContext $securityContext,
+		string $sessionHash,
+		string $html,
+		string $baseVersion,
+		bool $shouldCheckUnifiedLink,
 	): Result
 	{
 		$auditTransaction = new AuditTransaction(Application::getConnection());
@@ -53,27 +81,30 @@ final class SaveService
 		{
 			return $this->error('access_denied');
 		}
-		$baseline = $this->readContent((int)$preparedFile->getFileId());
-		if ($baseline === null)
-		{
-			return $this->error('access_denied');
-		}
-		$applyResult = ($this->applier ?? new ChangeSetApplier())->apply($baseline, $changeSet);
-		if (!$applyResult->isSuccess())
-		{
-			return $applyResult;
-		}
 
+		$preparedFileId = (int)$preparedFile->getFileId();
+		$preparedContentVersion = (int)$preparedFile->getGlobalContentVersion();
 		$temporaryFile = null;
 		$stagedFileId = 0;
 		$cleanupDelegated = false;
 		$finishSessionAfterRollback = false;
 		try
 		{
+			$currentContent = $this->readContent($preparedFileId);
+			if ($currentContent === null || substr(sha1($currentContent), 0, 12) !== $baseVersion)
+			{
+				return $this->error('content_version_conflict');
+			}
+			$imageLimit = (new InlineImageLimit())->validate($currentContent, $html);
+			if (!$imageLimit->isSuccess())
+			{
+				return $imageLimit;
+			}
+
 			$temporaryFile = tempnam(sys_get_temp_dir(), 'disk-html-save-');
 			if (
 				!is_string($temporaryFile)
-				|| file_put_contents($temporaryFile, $applyResult->getData()['html']) === false
+				|| file_put_contents($temporaryFile, $html) === false
 			)
 			{
 				return $this->error('access_denied');
@@ -99,11 +130,12 @@ final class SaveService
 					$realObjectId,
 					$securityContext,
 					$sessionHash,
-					$globalContentVersion,
 					$sessionService,
 					$stagedFileId,
 					$stagedFileArray,
-					$applyResult,
+					$html,
+					$preparedFileId,
+					$preparedContentVersion,
 					$shouldCheckUnifiedLink,
 					&$cleanupDelegated,
 					&$finishSessionAfterRollback,
@@ -113,6 +145,20 @@ final class SaveService
 					});
 					$cleanupDelegated = true;
 					$this->lockObject($realObjectId);
+					try
+					{
+						$aiLock = (new AiLockService())->getSnapshot($realObjectId);
+					}
+					catch (\Throwable $exception)
+					{
+						Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+						return AuditTransactionOutcome::failure($this->error(AiLockService::ERROR_UNAVAILABLE));
+					}
+					if ($aiLock !== null)
+					{
+						return AuditTransactionOutcome::failure($this->error(AiLockService::ERROR_LOCKED));
+					}
 					$lockedFile = File::loadById($realObjectId);
 					if (!$lockedFile)
 					{
@@ -137,9 +183,14 @@ final class SaveService
 					/** @var DocumentSession $session */
 					$session = $active->getData()['session'];
 					$sessionBaseline = $session->getContext()?->getHtmlBaselineVersion();
+					if ($sessionBaseline !== (int)$lockedFile->getGlobalContentVersion())
+					{
+						return AuditTransactionOutcome::failure($this->error('content_version_conflict'));
+					}
+
 					if (
-						(int)$lockedFile->getGlobalContentVersion() !== $globalContentVersion
-						|| $sessionBaseline !== $globalContentVersion
+						(int)$lockedFile->getFileId() !== $preparedFileId
+						|| (int)$lockedFile->getGlobalContentVersion() !== $preparedContentVersion
 					)
 					{
 						return AuditTransactionOutcome::failure($this->error('content_version_conflict'));
@@ -180,8 +231,8 @@ final class SaveService
 
 					return AuditTransactionOutcome::success((new Result())->setData([
 						'ok' => true,
-						'version' => $applyResult->getData()['version'],
-						'contentBase64' => base64_encode($applyResult->getData()['html']),
+						'version' => substr(sha1($html), 0, 12),
+						'contentBase64' => base64_encode($html),
 						'state' => $touch->getData()['state'],
 					]));
 				},
@@ -243,6 +294,13 @@ final class SaveService
 
 	private function mapWriteError(File $file): Result
 	{
+		foreach ([AiLockService::ERROR_LOCKED, AiLockService::ERROR_UNAVAILABLE] as $code)
+		{
+			if ($file->getErrorByCode($code))
+			{
+				return $this->error($code);
+			}
+		}
 		if ($file->getErrorByCode(File::ERROR_EXCLUSIVE_LOCK))
 		{
 			return $this->error('file_locked');

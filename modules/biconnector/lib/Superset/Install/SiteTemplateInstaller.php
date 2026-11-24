@@ -17,6 +17,11 @@ final class SiteTemplateInstaller
 			'CONDITION' => "CSite::InDir('/bi/dashboard/demo/')",
 			'TEMPLATE' => 'dashboard_detail',
 		],
+		[
+			'SORT' => 500,
+			'CONDITION' => "CSite::InDir('/bi/dashboard/') && (\$_GET['wait'] ?? '') === 'constructor'",
+			'TEMPLATE' => 'dashboard_detail',
+		],
 	];
 
 	public static function install(): bool

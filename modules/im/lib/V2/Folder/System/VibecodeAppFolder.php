@@ -59,6 +59,11 @@ final class VibecodeAppFolder extends SystemFolder
 		return true;
 	}
 
+	public function canReadAll(): bool
+	{
+		return true;
+	}
+
 	public function canBeHiddenWithoutSource(): bool
 	{
 		return true;

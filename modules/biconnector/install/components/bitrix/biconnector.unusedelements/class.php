@@ -176,10 +176,20 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 		$rows = [];
 		foreach ($elements as $element)
 		{
+			$type = (string)($element['type'] ?? '');
+			$externalId = (int)($element['external_id'] ?? 0);
+			// The grid prints the ID of the row unescaped, and the row actions put the type into a script.
+			if (!in_array($type, [self::ELEMENT_TYPE_CHART, self::ELEMENT_TYPE_DATASET], true) || $externalId <= 0)
+			{
+				continue;
+			}
+
 			$rows[] = [
+				// Charts and datasets are numbered apart, so only the type with the ID tells the element.
+				'ID' => $type . '_' . $externalId,
 				'TITLE' => $element['name'],
-				'TYPE' => $element['type'],
-				'EXTERNAL_ID' => $element['external_id'],
+				'TYPE' => $type,
+				'EXTERNAL_ID' => $externalId,
 				'DESCRIPTION' => $element['description'],
 				'DATE_CREATE' => $element['created_on'] ? $this->parseDateFromIntegratorResponse($element['created_on']) : null,
 				'DATE_UPDATE' => $element['changed_on'] ? $this->parseDateFromIntegratorResponse($element['changed_on']) : null,

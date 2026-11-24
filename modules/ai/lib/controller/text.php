@@ -6,6 +6,7 @@ use Bitrix\AI\Container;
 use Bitrix\AI\Context\Message;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IQueue;
+use Bitrix\AI\Engine\ResponseFormat;
 use Bitrix\AI\History;
 use Bitrix\AI\Result;
 use Bitrix\AI\Prompt\Role;
@@ -29,11 +30,14 @@ class Text extends Controller
 	/**
 	 * Makes request to AI Engine. The model will return one or more predicted completions.
 	 *
-	 * @param string|array $prompt Prompt to completion.
-	 * @param string | null $engineCode Engine's code (by default is taken first Engine in category).
+	 * @param string|array $prompt Raw prompt text, or ['code' => promptCode] for a library prompt.
+	 * @param string|null $engineCode Engine's code (by default the selected Engine of the category is used).
 	 * @param array $markers Marker for replacing in prompt ({key} => value).
-	 * @param array $parameters Additional params for tuning query.
-	 * @return array
+	 * @param string|null $roleCode Role's code (by default the universal role is used).
+	 * @param array $parameters Context (see parent class) and tuning params: bx_history, bx_analytic, promptCategory.
+	 * @return array{result: mixed, last: array|null, queue: string|null}|array{} Queue hash is set in queue mode.
+	 *   Empty array if the context, engine, agreement or prompt check fails; on an engine error
+	 *   the shape is returned with result = null and the error is added to the controller errors.
 	 */
 	public function completionsAction($prompt, string $engineCode = null, array $markers = [], string $roleCode = null, array $parameters = []): array
 	{
@@ -84,6 +88,7 @@ class Text extends Controller
 		}
 
 		$resultData = null;
+		$prettifiedData = null;
 		$queueHash = null;
 		$roleCode = $roleCode ?: RoleManager::getUniversalRoleCode();
 		$role = Role::get($roleCode) ?: Role::getUniversalRole();
@@ -95,8 +100,12 @@ class Text extends Controller
 			->setUserParameters($parameters)
 			->setAnalyticData($parameters['bx_analytic'] ?? [])
 			->setHistoryState($this->isTrue($parameters['bx_history'] ?? false))
-			->onSuccess(function(Result $result, ?string $hash = null) use(&$resultData, &$queueHash) {
-				$resultData = $result->getPrettifiedData();
+			->onSuccess(function(Result $result, ?string $hash = null) use($engine, &$resultData, &$prettifiedData, &$queueHash) {
+				$prettifiedData = $result->getPrettifiedData();
+				$resultData = $engine->getIEngine()->getResponseFormat() === ResponseFormat::HTML
+					? $result->getData(ResponseFormat::HTML)
+					: $prettifiedData
+				;
 				$queueHash = $hash;
 			})
 			->onError(function(Error $error ) {
@@ -117,7 +126,7 @@ class Text extends Controller
 			'result' => $resultData,
 			'last' => $engine->shouldWriteHistory()
 				? History\Manager::getLastItem($this->context)
-				: History\Manager::getFakeItem($resultData, $engine)->toArray()
+				: History\Manager::getFakeItem($prettifiedData, $engine)->toArray()
 			,
 			'queue' => $queueHash,
 		];

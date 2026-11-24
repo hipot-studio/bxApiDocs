@@ -26,6 +26,11 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internal\Service\HtmlViewerPageService;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\AccessResolver;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\EditPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownRenderService;
+use Bitrix\Disk\Internal\Service\MarkdownTabPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownViewerPageService;
 use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
@@ -44,6 +49,7 @@ use Bitrix\Disk\Internal\Service\TiffPreviewService;
 use Bitrix\Disk\Internal\Service\ExternalLink\PasswordProtectionResult;
 use Bitrix\Disk\Internal\Service\ExternalLink\PasswordProtectionState;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
 use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\TypeFile;
@@ -94,11 +100,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 	private const ACTION_DOWNLOAD_FILE_UNDER_FOLDER = 'downloadFileUnderFolder';
 	private const ACTION_SHOW_FILE_UNDER_FOLDER = 'showFileUnderFolder';
 	private const HTML_FILE_VIEWER = 'html';
+	private const MARKDOWN_FILE_VIEWER = 'markdown';
 	private const FILE_VIEWERS = [
 		self::ONLYOFFICE_FILE_VIEWER,
 		self::VIBEOFFICE_FILE_VIEWER,
 		self::BOARD_FILE_VIEWER,
 		self::HTML_FILE_VIEWER,
+		self::MARKDOWN_FILE_VIEWER,
 	];
 
 	protected ExternalLinkProvider $externalLinkProvider;
@@ -157,13 +165,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 		PullInitializationSuppressor::suppressForDocumentEditor(DocumentEditorUser::isCurrentUserDocumentEditor());
 
 		$this->findLink();
-		$this->maybeGenerateUnifiedLink($actionName);
-
 		$this->defaultHandlerForView = $this->getHandlerForView();
+		$this->maybeGenerateUnifiedLink($actionName);
 
 		if (!$this->externalLinkOpenPolicy->canOpenByPortalPolicy($this->externalLink))
 		{
 			$this->maybeRefuseHtmlViewerContent();
+			$this->maybeRefuseMarkdownContent();
 
 			$this->arResult = [
 				'ERROR_MESSAGE' => $this->getMessage('DISK_EXTERNAL_LINK_ERROR_DISABLED_MODE'),
@@ -187,7 +195,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 			}
 			elseif ($this->externalLink->allowEdit())
 			{
-				if ($this->isBoardsHandler() && $this->validatePassword() && $actionName !== 'goToEdit')
+				if (
+					$this->shouldAutomaticallyMoveToEdit()
+					&& $this->validatePassword()
+					&& $actionName !== 'goToEdit'
+				)
 				{
 					return $this->moveToAction('goToEdit');
 				}
@@ -208,13 +220,15 @@ class CDiskExternalLinkComponent extends DiskComponent
 			)
 			{
 				$this->maybeRefuseHtmlViewerContent();
+				$this->maybeRefuseMarkdownContent();
 
-				return $this->moveToAction('default', ['session' => 'expired']);
+				return $this->moveToAction('default', $this->buildExpiredSessionParams());
 			}
 
 			if ($this->validatePassword() !== true)
 			{
 				$this->maybeRefuseHtmlViewerContent();
+				$this->maybeRefuseMarkdownContent();
 				$this->showAccessDenied();
 
 				return false;
@@ -282,6 +296,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 	{
 		if ($this->shortLinkOpening === null)
 		{
+			if (
+				$this->hasRequestedExactMode()
+				&& (($params['action'] ?? null) === 'default' || isset($params['token']))
+			)
+			{
+				$params[UrlGenerator::QUERY_PARAM_EXACT_MODE] ??= 'Y';
+			}
+
 			return $this->getUrlManager()->getUrlExternalLink($params, $absolute);
 		}
 
@@ -322,7 +344,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 	}
 
 	#[NoReturn]
-	private function redirectToAction(string $action, array $uriParams = []): void
+	protected function redirectToAction(string $action, array $uriParams = []): void
 	{
 		$uriParams = [
 			...$uriParams,
@@ -338,6 +360,58 @@ class CDiskExternalLinkComponent extends DiskComponent
 	private function isBoardsHandler(): bool
 	{
 		return $this->defaultHandlerForView instanceof BoardsHandler;
+	}
+
+	private function hasRequestedExactMode(): bool
+	{
+		return $this->request?->get(UrlGenerator::QUERY_PARAM_EXACT_MODE) !== null;
+	}
+
+	private function buildExpiredSessionParams(): array
+	{
+		$params = ['session' => 'expired'];
+		if ($this->shortLinkOpening === null && $this->hasRequestedExactMode())
+		{
+			$params[UrlGenerator::QUERY_PARAM_EXACT_MODE] = 'Y';
+		}
+
+		return $params;
+	}
+
+	private function shouldAutomaticallyMoveToEdit(): bool
+	{
+		return !$this->shortLinkViewOnly
+			&& (bool)$this->externalLink?->allowEdit()
+			&& ($this->isBoardsHandler() || $this->supportsAutomaticEditMode())
+		;
+	}
+
+	private function shouldDeferAutomaticEditForPassword(): bool
+	{
+		return $this->shouldAutomaticallyMoveToEdit() && !$this->validatePassword();
+	}
+
+	private function supportsAutomaticEditMode(): bool
+	{
+		if (
+			$this->fromUnifiedLink
+			|| $this->hasRequestedExactMode()
+			|| $this->externalLink->isSpecificVersion()
+			|| $this->resolveDocumentViewer($this->defaultHandlerForView) !== self::VIBEOFFICE_FILE_VIEWER
+		)
+		{
+			return false;
+		}
+
+		$file = $this->externalLink->getFile();
+
+		return $file instanceof File
+			&& (int)$file->getTypeFile() === TypeFile::DOCUMENT
+			&& $this->isViewableDocument($file)
+			&& !$this->isHtmlViewerTarget($file, null)
+			&& !$this->isMarkdownPageTarget($file, null)
+			&& Vibeoffice\VibeofficeHandler::isEditable($file->getExtension())
+		;
 	}
 
 	/**
@@ -359,6 +433,47 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$this->sendHtmlViewerResponse(
 			ServiceLocator::getInstance()->get(HtmlViewerService::class)->unavailableResponse()
 		);
+	}
+
+	/**
+	 * The document of the Markdown page is asked by a script expecting the envelope of the render action, so a
+	 * refused request is answered with that envelope and not with a redirect or a portal page it cannot read.
+	 */
+	private function maybeRefuseMarkdownContent(): void
+	{
+		if ($this->getAction() !== 'showMarkdown')
+		{
+			return;
+		}
+
+		$this->sendMarkdownResponse(null, [
+			new Error(
+				(string)Loc::getMessage('DISK_BASE_COMPONENT_ERROR_ACCESS_DENIED'),
+				AccessResolver::ERROR_ACCESS_DENIED,
+			),
+		]);
+	}
+
+	/**
+	 * The envelope of an action of the engine, which the Markdown page reads: {status, data, errors}.
+	 *
+	 * @param \Bitrix\Main\Error[] $errors
+	 */
+	#[NoReturn]
+	private function sendMarkdownResponse(?array $data, array $errors = []): void
+	{
+		$this->sendJsonResponse([
+			'status' => $errors === [] ? 'success' : 'error',
+			'data' => $data,
+			'errors' => array_map(
+				static fn(\Bitrix\Main\Error $error): array => [
+					'message' => $error->getMessage(),
+					'code' => $error->getCode(),
+					'customData' => $error->getCustomData(),
+				],
+				$errors,
+			),
+		]);
 	}
 
 	#[NoReturn]
@@ -422,6 +537,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			],
 			'showViewHtml',
 			'showHtml',
+			'showMarkdown',
 			'showFile',
 			'showTiffPreview',
 			'showPreview',
@@ -524,6 +640,20 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return HtmlViewerPolicy::isViewableExtension($pinnedVersion?->getExtension());
 	}
 
+	/**
+	 * Asks about the very content the page shows, as {@see isHtmlViewerTarget()} does. The page of a public link
+	 * belongs to the editing of Markdown files: while that is off, the file keeps the download card it had.
+	 */
+	private function isMarkdownPageTarget(File $file, ?Version $pinnedVersion): bool
+	{
+		if ($this->externalLink->isSpecificVersion() && $pinnedVersion === null)
+		{
+			return false;
+		}
+
+		return EditPolicy::isEnabled() && MarkdownTabPolicy::isTabSource($file, $pinnedVersion);
+	}
+
 	private function storeDownloadToken($token)
 	{
 		$_SESSION['DISK_PUBLIC_VERIFICATION'][$this->externalLink->getObject()->getId()] = $token;
@@ -550,6 +680,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return false;
 		}
 		if ($file instanceof File && $this->externalLink->isSpecificVersion())
+		{
+			$this->runMovedAction('default');
+
+			return false;
+		}
+
+		// The page of a Markdown file is its editor as well: the guest enters editing there.
+		if ($file instanceof File && $this->isMarkdownPageTarget($file, null))
 		{
 			$this->runMovedAction('default');
 
@@ -722,6 +860,25 @@ class CDiskExternalLinkComponent extends DiskComponent
 					];
 
 					$this->showFileViewer(self::HTML_FILE_VIEWER);
+
+					return;
+				}
+
+				if ($this->isMarkdownPageTarget($file, $pinnedVersion))
+				{
+					$pageService = ServiceLocator::getInstance()->get(MarkdownViewerPageService::class);
+					$this->arResult['MARKDOWN_VIEWER'] = $pageService->buildParamsByExternalLink(
+						$file,
+						$this->externalLink,
+						$this->downloadToken,
+						$pinnedVersion,
+					);
+					$this->arResult['OPEN_GRAPH'] = [
+						'URL' => $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
+						'TITLE' => $pinnedVersion?->getName() ?? $file->getName(),
+					];
+
+					$this->showFileViewer(self::MARKDOWN_FILE_VIEWER);
 
 					return;
 				}
@@ -1002,18 +1159,32 @@ class CDiskExternalLinkComponent extends DiskComponent
 		;
 		$this->setDocumentSource($sessionManager, $file, $version);
 
-		if (!$sessionManager->lock())
+		if ($sessionManager instanceof Vibeoffice\DocumentSessionManager && $sessionManager->requiresSharedAdmission())
 		{
-			return null;
+			$sessionManager->setSessionContext(new DocumentSessionContext(
+				(int)$file->getRealObjectId(), null, $this->externalLink->getId(),
+			));
+			$admission = $sessionManager->admitSharedEdit(new Vibeoffice\OpeningBudget(
+				\Bitrix\Main\DI\ServiceLocator::getInstance()
+					->get('disk.vibeofficeConfiguration')->getOpenBudgetSeconds() * 1000,
+			));
+			$documentSession = $admission->isSuccess() ? $admission->getData()['session'] : null;
 		}
+		else
+		{
+			if (!$sessionManager->lock())
+			{
+				return null;
+			}
 
-		try
-		{
-			$documentSession = $sessionManager->findOrCreateSession();
-		}
-		finally
-		{
-			$sessionManager->unlock();
+			try
+			{
+				$documentSession = $sessionManager->findOrCreateSession();
+			}
+			finally
+			{
+				$sessionManager->unlock();
+			}
 		}
 
 		if ($sessionManager instanceof Vibeoffice\DocumentSessionManager)
@@ -1921,6 +2092,33 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $version ? $service->showByVersion($version) : $service->unavailableResponse();
 	}
 
+	/**
+	 * Feeds the Markdown page of the link: the document rendered as the render action of the portal renders it
+	 * ({status, data: {html, diagrams}}). The token and the password are settled in processBeforeAction().
+	 */
+	protected function processActionShowMarkdown(): void
+	{
+		session_write_close();
+
+		$file = $this->externalLink->getFile();
+		$pinnedVersion = $file instanceof File ? $this->resolvePinnedVersion($file) : null;
+		if (!$file instanceof File || !$this->isMarkdownPageTarget($file, $pinnedVersion))
+		{
+			$this->sendMarkdownResponse(null, [
+				new Error('Markdown viewer is disabled.', MarkdownRenderService::ERROR_VIEWER_DISABLED),
+			]);
+		}
+
+		$service = new MarkdownRenderService();
+		$result = $pinnedVersion === null ? $service->renderByFile($file) : $service->renderByVersion($pinnedVersion);
+		if (!$result->isSuccess())
+		{
+			$this->sendMarkdownResponse(null, $result->getErrors());
+		}
+
+		$this->sendMarkdownResponse($result->getData());
+	}
+
 	protected function processActionShowFile()
 	{
 		$this->processActionDownload(true);
@@ -2150,6 +2348,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 	protected function showNotFoundPage()
 	{
 		$this->maybeRefuseHtmlViewerContent();
+		$this->maybeRefuseMarkdownContent();
 
 		\CHTTP::SetStatus('404 Not Found');
 
@@ -2422,9 +2621,15 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$urlManager = Driver::getInstance()->getUrlManager();
 		$options = $baseObject instanceof File ? $this->getUnifiedLinkOptions($baseObject) : [];
+		$isEdit = $actionName === 'goToEdit';
+		if (!$isEdit && !$this->shouldDeferAutomaticEditForPassword())
+		{
+			$options['exactMode'] = true;
+		}
+
 		$this->unifiedLink = $urlManager->getPublicUnifiedLink(
 			$baseObject,
-			$actionName === 'goToEdit',
+			$isEdit,
 			$options,
 		);
 	}

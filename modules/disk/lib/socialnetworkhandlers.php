@@ -3,6 +3,7 @@
 namespace Bitrix\Disk;
 
 use Bitrix\Disk\Internal\Model\UserQuotaTable;
+use Bitrix\Disk\Internal\Service\Favorite\FavoriteReconcileScheduler;
 use Bitrix\Disk\Internal\Service\Sync\Access\GroupAccessPublisher;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\RightTable;
@@ -271,6 +272,7 @@ class SocialnetworkHandlers
 
 			// the storage of the group closes for the user whether they had connected it or not
 			(new GroupAccessPublisher())->publishMembershipChanged((int)$storage->getRootObjectId(), (int)$userId);
+			FavoriteReconcileScheduler::getInstance()->scheduleUserInStorage((int)$userId, (int)$storage->getId());
 
 			/** @var Sharing $sharing */
 			$sharing = Sharing::load(array(
@@ -332,6 +334,7 @@ class SocialnetworkHandlers
 		// asked about here: it takes no code off the root of the group storage, so the boundary moves
 		// whether it stands or not.
 		(new GroupAccessPublisher())->publishMembershipChanged((int)$storage->getRootObjectId(), (int)$userId);
+		FavoriteReconcileScheduler::getInstance()->scheduleUserInStorage($userId, (int)$storage->getId());
 
 		if (!$becameMember || !\CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $groupId, 'files'))
 		{

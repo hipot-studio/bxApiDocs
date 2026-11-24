@@ -11,12 +11,12 @@ final class Dalle extends ImageCloudEngine  implements IContext, IQueueOptional
 {
 	use Engine\Trait\DalleCommonTrait;
 
-	protected const ENGINE_NAME = 'gpt-image-1';
+	protected const ENGINE_NAME = 'gpt-image-2.5-flare';
 	public const ENGINE_CODE = 'Dalle';
 
 	protected const URL_COMPLETIONS = 'https://api.openai.com/v1/images/generations';
 
-	protected const DEFAULT_MODEL = 'gpt-image-1';
+	protected const DEFAULT_MODEL = 'gpt-image-2.5-flare-2026-09-08';
 	protected const DEFAULT_QUALITY = 'medium';
 
 	protected function getDefaultModel(): string

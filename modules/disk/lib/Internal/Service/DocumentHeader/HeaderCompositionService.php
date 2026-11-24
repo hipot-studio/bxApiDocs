@@ -20,6 +20,7 @@ use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Enum\DocumentHeaderElement;
 use Bitrix\Disk\Internal\Integration\AiAssistant\FileChatAvailability;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\EditPolicy;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\User;
 use Bitrix\Intranet\Util;
@@ -295,9 +296,10 @@ class HeaderCompositionService
 					&& !$isVersion
 					&& $openingContext->canRename(),
 
-				// Only the page which draws the content itself is written by nobody and is told nothing;
-				// a board carries the element as a permanent label of its mode.
-				DocumentHeaderElement::SaveStatus => !$servesContentItself,
+				// Only the page which draws the content itself is written by nobody and is told nothing,
+				// unless it turns into the editor of it (TPL-04); a board carries the element as a permanent
+				// label of its mode.
+				DocumentHeaderElement::SaveStatus => !$servesContentItself || $openingContext->editsInPlace(),
 
 				// The boost sold is the one of an editing session (BaaS `disk_oo_edit`). The type of the
 				// user is asked first: the availability of the purchase resolves BaaS and the tariff
@@ -413,6 +415,8 @@ class HeaderCompositionService
 					&& HtmlViewerPolicy::isViewableExtension($openingContext->contentExtension())
 				)
 				&& $openingContext->accessType() !== OpeningContext::ACCESS_TYPE_UNIFIED
+				// A page editing in place has no other editor to choose (TPL-04).
+				&& !$openingContext->editsInPlace()
 			)
 				? $this->listEditors()
 				: [],
@@ -568,6 +572,12 @@ class HeaderCompositionService
 	 */
 	private function isExtensionEditableByTheEngineOfTheOpening(OpeningContext $openingContext): bool
 	{
+		// The page editing in place is its own engine: the format was already asked by its opening.
+		if ($openingContext->editsInPlace())
+		{
+			return EditPolicy::isEnabled();
+		}
+
 		$extension = (string)$openingContext->file()?->getExtension();
 		if (
 			$openingContext->servesContentItself()
@@ -582,6 +592,9 @@ class HeaderCompositionService
 			Models\DocumentService::OnlyOffice => OnlyOfficeHandler::isEditable($extension),
 			Models\DocumentService::Vibeoffice => VibeofficeHandler::isEditable($extension),
 			Models\DocumentService::FlipChart => BoardsHandler::isEditable($extension),
+			// The engines of the pages of Disk: a session row of theirs names the switch of the engine.
+			Models\DocumentService::HtmlEditor => Configuration::isEnabledHtmlEditor(),
+			Models\DocumentService::MarkdownEditor => EditPolicy::isEnabled(),
 			// An opening served by no editing engine names no editor to ask.
 			null => false,
 		};

@@ -210,14 +210,15 @@ class FileDiskProperty
 		if($type == FileUserType::TYPE_ALREADY_ATTACHED)
 		{
 			$attachedModel = AttachedObject::loadById($realId);
-			if(!$attachedModel)
+			if (
+				!$attachedModel
+				|| !$userFieldManager->belongsToEntity($attachedModel, 'iblock_workflow', $iblockId)
+			)
 			{
 				return null;
 			}
-			else
-			{
-				return $realId;
-			}
+
+			return $attachedModel->getObjectId();
 		}
 
 		$errorCollection = new ErrorCollection();
@@ -478,7 +479,7 @@ class FileDiskProperty
 		}
 	}
 
-	public static function getPublicEditHTML($property, $value, $controlSettings)
+	public static function getPublicEditHTML($property, $value, $controlSettings, bool $isWorkflow = false)
 	{
 		global $APPLICATION;
 
@@ -492,6 +493,21 @@ class FileDiskProperty
 
 		foreach($value['VALUE'] as $idKey => $id)
 		{
+			if ($isWorkflow)
+			{
+				$attachedModel = AttachedObject::load(array(
+					'OBJECT_ID' => $id,
+					'=ENTITY_TYPE' => $connectorClass,
+					'=ENTITY_ID' => $property['IBLOCK_ID'],
+					'=MODULE_ID' => $moduleId,
+				));
+				if ($attachedModel)
+				{
+					$value['VALUE'][$idKey] = $attachedModel->getId();
+					continue;
+				}
+			}
+
 			$attachedModel = AttachedObject::loadById($id);
 			if(!$attachedModel)
 			{

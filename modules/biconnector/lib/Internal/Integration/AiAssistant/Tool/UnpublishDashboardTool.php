@@ -36,9 +36,8 @@ final class UnpublishDashboardTool extends BaseBiTool
 			. 'URLs stop working immediately and CANNOT be restored — recipients '
 			. 'will need a freshly issued share link if the dashboard is '
 			. 'published again. '
-			. 'Idempotent: unpublishing an already-draft dashboard is a safe no-op, '
-			. 'and repeating the call after a failure is safe too — it resumes from '
-			. 'the step that failed and carries the operation through. A failed call '
+			. 'Every call revokes public share links and confirms that the remote dashboard is a draft, '
+			. 'even if its local status is already DRAFT. Repeating the call retries these steps. A failed call '
 			. 'reports which steps did complete. Does NOT touch charts, filters, or '
 			. 'the title. '
 			. 'TWO-STEP CONFIRMATION (MANDATORY): the first call (omit `confirm`, or pass '
@@ -109,7 +108,8 @@ final class UnpublishDashboardTool extends BaseBiTool
 				'impact' => $data['wasPublished']
 					? 'The dashboard will be moved to DRAFT and hidden from other portal users. '
 						. 'ALL its public share links will be permanently revoked and cannot be restored.'
-					: 'The dashboard is already a draft; this is a safe no-op (no live share links to revoke).',
+					: 'The local dashboard is already a draft. ALL public share links will be permanently revoked, '
+						. 'and the remote dashboard will be moved to DRAFT.',
 				'confirmHint' => 'Show this preview to the user; only AFTER they explicitly approve, call '
 					. 'unpublish_dashboard again with the same dashboardId and confirm=true.',
 			];
@@ -165,7 +165,8 @@ final class UnpublishDashboardTool extends BaseBiTool
 				'impact' => $wasPublished
 					? 'The dashboard will be moved to DRAFT and hidden from other portal users. '
 						. 'ALL its public share links will be permanently revoked and cannot be restored.'
-					: 'The dashboard is already a draft; this is a safe no-op (no live share links to revoke).',
+					: 'The local dashboard is already a draft. ALL public share links will be permanently revoked, '
+						. 'and the remote dashboard will be moved to DRAFT.',
 				'confirmHint' => 'Show this preview to the user; only AFTER they explicitly approve, call unpublish_dashboard again with the same dashboardId and confirm=true.',
 			];
 		}

@@ -5,6 +5,7 @@ IncludeModuleLangFile(__FILE__);
 use Bitrix\Tasks\Item\Task;
 use Bitrix\Tasks\Util;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Im\V2\Integration\Socialnetwork\GroupBlogAccess;
 
 class CIMShare
 {
@@ -333,9 +334,9 @@ class CIMShare
 				)
 				{
 					if (
-						CSocNetFeaturesPerms::canPerformOperation($this->user_id, SONET_ENTITY_GROUP, $chat['ENTITY_ID'], 'blog', 'write_post')
-						|| CSocNetFeaturesPerms::canPerformOperation($this->user_id, SONET_ENTITY_GROUP, $chat['ENTITY_ID'], 'blog', 'moderate_post')
-						|| CSocNetFeaturesPerms::canPerformOperation($this->user_id, SONET_ENTITY_GROUP, $chat['ENTITY_ID'], 'blog', 'full_post')
+						GroupBlogAccess::canPerformOperation($this->user_id, $chat['ENTITY_ID'], 'write_post')
+						|| GroupBlogAccess::canPerformOperation($this->user_id, $chat['ENTITY_ID'], 'moderate_post')
+						|| GroupBlogAccess::canPerformOperation($this->user_id, $chat['ENTITY_ID'], 'full_post')
 					)
 					{
 						$sonetRights = array('SG' . $chat['ENTITY_ID']);

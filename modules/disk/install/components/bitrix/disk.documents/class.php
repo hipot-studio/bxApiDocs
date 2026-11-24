@@ -827,6 +827,9 @@ HTML
 					],
 					'actions' => [[
 						'id' => 'loader',
+						'className' => 'disk-documents-menu-loader',
+						'focusable' => false,
+						'dataset' => ['preventCloseContextMenu' => true],
 						'html' => '<svg class="disk-documents-circular" viewBox="25 25 50 50">
 									   <circle class="disk-documents-path" cx="50" cy="50" r="20" fill="none" stroke-miterlimit="10"/>
 									   <circle class="disk-documents-inner-path" cx="50" cy="50" r="20" fill="none" stroke-miterlimit="10"/>

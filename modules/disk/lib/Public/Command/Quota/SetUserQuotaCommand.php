@@ -130,15 +130,15 @@ class SetUserQuotaCommand extends AbstractCommand
 	 */
 	protected function isEmployeeOnTheList(): bool
 	{
-		$employee = UserTable::getRow([
-			'select' => ['ID'],
-			'filter' => [
-				'=ID' => $this->userId,
-				'=ACTIVE' => 'Y',
-				'=IS_REAL_USER' => true,
-			],
-		]);
+		$employee = UserTable::query()
+			->setSelect(['ID'])
+			->where('ID', $this->userId)
+			->where('ACTIVE', 'Y')
+			->where('REAL_USER', 'expr', true)
+			->setLimit(1)
+			->fetch()
+		;
 
-		return $employee !== null;
+		return $employee !== false;
 	}
 }

@@ -581,7 +581,7 @@ class RecentProvider extends BaseProvider
 				))->configureJoinType(Join::TYPE_INNER)
 			)
 			->whereIn('MESSAGE_TYPE', [Chat::IM_TYPE_CHAT, Chat::IM_TYPE_OPEN])
-			->where('USER.IS_REAL_USER', 'Y')
+			->where('USER.REAL_USER', 'expr', true)
 			->whereMatch('USER_INDEX.SEARCH_USER_CONTENT', $this->preparedSearchString)
 			->setGroup(['CHAT_ID'])
 		;

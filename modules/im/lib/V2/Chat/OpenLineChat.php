@@ -179,6 +179,15 @@ class OpenLineChat extends EntityChat
 		return $this->session;
 	}
 
+	/**
+	 * The same condition the counter of such a chat is written under
+	 * by {@see self::updateCountersAfterMessageSend()}.
+	 */
+	public function isNonAnsweredSession(): bool
+	{
+		return $this->hasFakeRelations() && $this->getSession()?->isClosed() !== true;
+	}
+
 	protected function getDefaultType(): string
 	{
 		return self::IM_TYPE_OPEN_LINE;

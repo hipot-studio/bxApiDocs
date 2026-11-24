@@ -14,17 +14,12 @@ class Order extends \Bitrix\Sale\Exchange\Entity\OrderImport
 	 */
 	static public function getBasketItemByItem(\Bitrix\Sale\BasketBase $basket, array $item)
 	{
-		foreach($basket as $basketItem)
-		{
-			/** @var  \Bitrix\Sale\BasketItem $basketItem*/
-			if($item['ID'] == $basketItem->getField('PRODUCT_XML_ID'))
-			{
-				return $basketItem;
-			}
-			else
-				continue;
-		}
-		return false;
+		return parent::getBasketItemByItem($basket, $item);
+	}
+
+	protected static function matchesBasketItem(\Bitrix\Sale\BasketItem $basketItem, array $item): bool
+	{
+		return $item['ID'] == $basketItem->getField('PRODUCT_XML_ID');
 	}
 
 	/**

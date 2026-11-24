@@ -107,6 +107,7 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 
 	protected function processBeforeAction($actionName)
 	{
+		$this->initializeRecoveryNotice();
 		if (!Vibeoffice\VibeofficeHandler::isEnabled())
 		{
 			// vibeoffice is switched off on the portal: render the "editor unavailable" surface
@@ -155,6 +156,7 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 
 	protected function processActionDefault()
 	{
+		$this->initializeRecoveryNotice();
 		$this->arResult['UNIFIED_LINK_MODE'] = $this->unifiedLinkMode;
 		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
 		$this->arResult['INITIAL_NOTICE'] = $this->getOpeningNoticeCode() !== null;
@@ -185,6 +187,15 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			return;
 		}
 
+		$recoveryOpening = $this->arParams['TRUSTED_OPENING'] ?? [];
+		$recoveryOpening['externalLinkMode'] = $this->arResult['EXTERNAL_LINK_MODE'];
+		$recoveryDestination = $this->shortLinkOpening?->getCanonicalUrl()
+			?? Vibeoffice\RestartTarget::build($documentSession, $recoveryOpening)
+		;
+		$this->arResult['RECOVERY_NOTICE_CONTEXT'] = Vibeoffice\RecoveryNoticeContext::build(
+			$documentSession, $recoveryOpening, (int)(CurrentUser::get()->getId() ?? 0), $recoveryDestination,
+		);
+
 		if ($documentSession->isNonActive())
 		{
 			if ($documentSession->isEdit())
@@ -192,6 +203,10 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 				Disk\Controller\Vibeoffice::markOpenObservationFailure(
 					$this->openObservationScope,
 					'session_nonactive',
+				);
+				Disk\Controller\Vibeoffice::observeOpenRefusal(
+					$this->openObservationScope,
+					Vibeoffice\Logging\OpenRefusalReason::SessionInactive,
 				);
 				$this->prepareOpenFailureScreen($documentSession, 'cloud-error');
 				$this->includeComponentTemplate('open-error');
@@ -248,6 +263,8 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		{
 			// The source of a short opening goes to the config by the setter of this render, checked just above.
 			$controller->setShortLinkOpening($this->shortLinkOpening);
+			$classicLink = $this->arParams['CLASSIC_EXTERNAL_LINK'] ?? null;
+			$controller->setClassicLinkSource($classicLink instanceof Disk\ExternalLink ? $classicLink : null);
 			$openConfig = $controller->getEditorConfigForUnifiedLinkAction($documentSession);
 		}
 		else
@@ -261,6 +278,10 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		{
 			$this->arResult['VO_OPEN_REFUSAL']['CAPACITY_FALLBACK'] = true;
 			$this->arResult['CAPACITY_RETRY_URL'] = $capacityRetryTarget;
+			if ($capacityRetryTarget !== null)
+			{
+				$this->arResult['CAPACITY_RETRY_POST'] = $this->getCapacityRetryPost();
+			}
 			$this->arResult['OPEN_RETRY_URL'] = $capacityRetryTarget;
 		}
 		$openedDocumentSession = $controller->getOpenedDocumentSession();
@@ -270,6 +291,15 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			// sees a server-rendered screen instead of a silent refusal; the controller errors are
 			// collapsed for the user but logged here so the diagnostics are not lost.
 			$errors = $controller->getErrors();
+			foreach ($errors as $error)
+			{
+				if (in_array($error->getCode(), [Vibeoffice\OpenFailureCode::NoGrant->value,
+					Vibeoffice\OpenFailureCode::Auth->value, 'not_found'], true))
+				{
+					$this->arResult['RECOVERY_NOTICE_CONTEXT'] = null;
+					break;
+				}
+			}
 			$failedSession = $capacityOutcome !== null ? $capacityData['view'] : $documentSession;
 			Vibeoffice\Logging\LoggerProvider::get('disk.vibeoffice.component')->warning(
 				'vibeoffice component',
@@ -282,8 +312,13 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			);
 			$this->arResult['OPEN_RETRY_DELAY'] = $this->resolveOpenRetryDelay($errors);
 			$template = $this->chooseOpenFailureTemplate($errors);
+			$unknownOutcome = false;
 			foreach ($errors as $error)
 			{
+				if ($error->getCode() === Vibeoffice\SessionRegistry::ERROR_CODE_OPEN_UNRESOLVED)
+				{
+					$unknownOutcome = true;
+				}
 				if ($error->getCode() === Vibeoffice\OpenFailureCode::SaveRefused->value)
 				{
 					$this->arResult['OPEN_FAILURE_KIND'] = 'save_refused';
@@ -300,21 +335,20 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 				if ($error->getCode() === 'open_operation_expired')
 				{
 					$this->arResult['OPEN_FAILURE_KIND'] = 'open_operation_expired';
-					if ($isCapacityFallback)
-					{
-						$this->arResult['OPEN_RETRY_URL'] = $capacityRetryTarget;
-					}
-					else
-					{
-						$requestUri = $_SERVER['REQUEST_URI'] ?? null;
-						if (is_string($requestUri) && preg_match(self::SAME_PORTAL_PATH_PATTERN, $requestUri) === 1)
-						{
-							$this->arResult['OPEN_RETRY_URL'] = $requestUri;
-						}
-					}
+					$this->arResult['OPEN_RETRY_URL'] = $this->resolveOpenFailureRetryUrl(
+						$capacityRetryTarget, $isCapacityFallback,
+					);
 
 					break;
 				}
+			}
+
+			if ($template === 'cloud-error' && $unknownOutcome && !isset($this->arResult['OPEN_FAILURE_KIND']))
+			{
+				$this->arResult['OPEN_FAILURE_KIND'] = Vibeoffice\SessionRegistry::ERROR_CODE_OPEN_UNRESOLVED;
+				$this->arResult['OPEN_RETRY_URL'] = $this->resolveOpenFailureRetryUrl(
+					$capacityRetryTarget, $isCapacityFallback,
+				);
 			}
 
 			if ($capacityOutcome === null && $this->shouldReleaseAfterOpenFailure($template, $errors))
@@ -342,6 +376,9 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 				(int)CurrentUser::get()->getId(),
 			);
 		}
+		$this->arResult['RECOVERY_NOTICE_CONTEXT'] = Vibeoffice\RecoveryNoticeContext::build(
+			$openedDocumentSession, $recoveryOpening, (int)(CurrentUser::get()->getId() ?? 0), $recoveryDestination,
+		);
 		$documentSession = $openedDocumentSession;
 		if ($capacityOutcome === null && $documentSession->isView())
 		{
@@ -355,6 +392,10 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		$this->arResult['DOCUMENT_SESSION'] = [
 			'ID' => $documentSession->getId(),
 			'HASH' => $documentSession->getExternalHash(),
+			'IS_STABLE_VIEW' => $documentSession->isView()
+				&& Vibeoffice\HostDocumentKey::isStable(Vibeoffice\HostDocumentKey::resolve($documentSession)),
+			'CONTENT_VERSION_SNAPSHOT' => $documentSession->getContentVersionSnapshot(),
+			'IS_HISTORICAL_VERSION' => $documentSession->isVersion(),
 		];
 		$this->arResult['OBJECT'] = [
 			'ID' => $documentSession->getObjectId(),
@@ -470,7 +511,7 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 	{
 		if ($this->unifiedLinkMode)
 		{
-			$unifiedLinkOptions = [];
+			$unifiedLinkOptions = $this->arParams['TRUSTED_OPENING']['unifiedOptions'] ?? [];
 			$attachedObjectId = (int)$documentSession->getContext()?->getAttachedObjectId();
 			if ($attachedObjectId > 0)
 			{
@@ -502,10 +543,16 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			$externalLink = $documentSession->getContext()?->getExternalLink();
 			if ($externalLink instanceof Disk\ExternalLink)
 			{
-				return $this->getUrlManager()->getUrlExternalLink([
+				$params = [
 					'hash' => $externalLink->getHash(),
 					'action' => 'default',
-				]);
+				];
+				if ($exactlyView)
+				{
+					$params[Disk\Public\Service\UnifiedLink\UrlGenerator::QUERY_PARAM_EXACT_MODE] = 'Y';
+				}
+
+				return $this->getUrlManager()->getUrlExternalLink($params);
 			}
 		}
 
@@ -711,8 +758,7 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 	}
 
 	/**
-	 * The retry of an editor out of capacity opens the document again the way it was opened. A short opening is
-	 * opened again at its own address, where the entry checks the link anew and chooses the mode of the source.
+	 * The retry of an editor out of capacity stays on the original opening route.
 	 */
 	private function buildCapacityRetryUrl(DocumentSession $documentSession): ?string
 	{
@@ -722,6 +768,25 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 				$this->arParams['TRUSTED_OPENING'] ?? [],
 			)
 		;
+	}
+
+	private function getCapacityRetryPost(): ?array
+	{
+		if (
+			$this->shortLinkOpening === null
+			|| $this->arResult['EXTERNAL_LINK_MODE']
+			|| $this->shortLinkOpening->allowsEditBySource()
+		)
+		{
+			return null;
+		}
+
+		return [
+			Disk\Controller\ShortLink::PARAM_CODE => $this->shortLinkOpening->getCode(),
+			Disk\Controller\ShortLink::PARAM_OPERATION => Disk\Controller\ShortLink::OPERATION_MODE_TRANSITION,
+			Disk\Controller\ShortLink::PARAM_REQUESTED_MODE => Disk\Controller\ShortLink::MODE_EDIT,
+			'sessid' => bitrix_sessid(),
+		];
 	}
 
 	/**
@@ -746,8 +811,65 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		];
 	}
 
+	private function resolveOpenFailureRetryUrl(?string $capacityRetryTarget, bool $isCapacityFallback): ?string
+	{
+		if ($isCapacityFallback)
+		{
+			return $capacityRetryTarget;
+		}
+
+		$requestUri = $_SERVER['REQUEST_URI'] ?? null;
+		if (!is_string($requestUri) || preg_match(self::SAME_PORTAL_PATH_PATTERN, $requestUri) !== 1)
+		{
+			return null;
+		}
+
+		return (new Uri($requestUri))->deleteParams(['disk_vo_reopen'], true)->getUri();
+	}
+
+	/** @return array{url?: string, post?: array<string, string>} */
+	private function getShortLinkOpenRetryContinuation(): array
+	{
+		$opening = $this->shortLinkOpening;
+		$request = Application::getInstance()->getContext()->getRequest();
+		$operation = $request->getPost(Disk\Controller\ShortLink::PARAM_OPERATION);
+		$mode = $this->arParams['SHORT_LINK_MODE'] ?? null;
+		if (
+			$opening === null
+			|| $request->getPost(Disk\Controller\ShortLink::PARAM_CODE) !== $opening->getCode()
+			|| !in_array($operation, [
+				Disk\Controller\ShortLink::OPERATION_CONTINUE, Disk\Controller\ShortLink::OPERATION_MODE_TRANSITION,
+			], true)
+			|| !in_array($mode, [Disk\Controller\ShortLink::MODE_VIEW, Disk\Controller\ShortLink::MODE_EDIT], true)
+		)
+		{
+			return [];
+		}
+
+		return [
+			'url' => $opening->getCanonicalUrl(),
+			'post' => [
+				Disk\Controller\ShortLink::PARAM_CODE => $opening->getCode(),
+				Disk\Controller\ShortLink::PARAM_OPERATION => $operation,
+				Disk\Controller\ShortLink::PARAM_REQUESTED_MODE => $mode,
+			] + ($operation === Disk\Controller\ShortLink::OPERATION_MODE_TRANSITION
+				? ['sessid' => bitrix_sessid()]
+				: ['immediate_load' => 'Y']),
+		];
+	}
+
+	private function initializeRecoveryNotice(): void
+	{
+		$this->arResult['RECOVERY_NOTICE_CONTEXT'] = null;
+		$this->arResult['RECOVERY_NOTICE_EARLY_BOOTSTRAP'] = true;
+	}
+
 	private function prepareOpenFailureScreen(?DocumentSession $session, string $kind, ?int $attemptedType = null): void
 	{
+		if ($kind === 'not-found')
+		{
+			$this->arResult['RECOVERY_NOTICE_CONTEXT'] = null;
+		}
 		$screen = Vibeoffice\OpenFailureScreen::forKind(
 			$kind,
 			$this->arResult['OPEN_FAILURE_KIND'] ?? null,
@@ -763,6 +885,16 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 		{
 			$screen['size'] = (string)CFile::FormatSize($source->getSize());
 		}
+		$shortLinkRetry = null;
+		if (
+			($this->arResult['OPEN_FAILURE_KIND'] ?? null) === Vibeoffice\SessionRegistry::ERROR_CODE_OPEN_UNRESOLVED
+			&& $this->shortLinkOpening !== null
+			&& Application::getInstance()->getContext()->getRequest()->isPost()
+		)
+		{
+			$shortLinkRetry = $this->getShortLinkOpenRetryContinuation();
+		}
+
 		$screen['allowedActions'] = [];
 		foreach ($screen['actions'] as $action)
 		{
@@ -777,11 +909,18 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 					: ''
 				,
 				'return' => $this->getSafeReturnUrl(),
-				'retry' => (string)($this->arResult['OPEN_RETRY_URL'] ?? ''),
+				'retry' => $shortLinkRetry === null
+					? (string)($this->arResult['OPEN_RETRY_URL'] ?? '')
+					: ($shortLinkRetry['url'] ?? '')
+				,
 				default => '',
 			};
 			if ($url !== '' && preg_match(self::SAME_PORTAL_PATH_PATTERN, $url) === 1)
 			{
+				$retryPost = $shortLinkRetry['post'] ?? ($url === ($this->arResult['CAPACITY_RETRY_URL'] ?? null)
+					? ($this->arResult['CAPACITY_RETRY_POST'] ?? null)
+					: null
+				);
 				$screen['allowedActions'][] = [
 					'type' => $action,
 					'label' => match ($action)
@@ -794,7 +933,12 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 							: 'DISK_FILE_EDITOR_VIBEOFFICE_OPEN_EXPIRED_RETRY',
 					},
 					'url' => $url,
-				] + ($action === 'view' ? $this->getShortLinkViewContinuation() : []);
+				] + match ($action)
+				{
+					'view' => $this->getShortLinkViewContinuation(),
+					'retry' => $retryPost === null ? [] : ['post' => $retryPost],
+					default => [],
+				};
 			}
 		}
 		if ($screen['kind'] === 'cloud-error' && isset($screen['reasonLabel']))
@@ -947,6 +1091,13 @@ class CDiskFileEditorVibeofficeComponent extends BaseComponent implements Contro
 			$documentSession,
 			$this->arParams['SHORT_LINK_MODE'] ?? null,
 			(bool)$this->arResult['EXTERNAL_LINK_MODE'],
+			onRefusal: function (string $reason): void {
+				$refusal = Vibeoffice\Logging\OpenRefusalReason::tryFrom($reason);
+				if ($refusal !== null)
+				{
+					Disk\Controller\Vibeoffice::observeOpenRefusal($this->openObservationScope, $refusal);
+				}
+			},
 		);
 
 		return $this->shortLinkOpening !== null;

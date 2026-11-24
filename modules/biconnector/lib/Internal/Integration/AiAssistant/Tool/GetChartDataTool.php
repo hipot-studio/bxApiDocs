@@ -77,7 +77,10 @@ final class GetChartDataTool extends BaseSubjectAwareBiTool
 			. 'Use `sortBy`+`sortOrder` when the user asks for top/bottom-N by a specific column — '
 			. 'column names come from `column_descriptions` in the preceding get_dashboard_meta. '
 			. '`no_access_chart_ids` lists requested charts closed by the access rights of the user: '
-			. 'say they are not available to the user and do not guess their data.';
+			. 'say they are not available to the user and do not guess their data. '
+			. '`failed_charts`, when present, lists requested charts whose data could not be loaded, each with '
+			. '`error` {`code`, `message`}: the call still succeeds, answer by the other charts and say these failed. '
+			. 'These failures differ from `missing_chart_ids` (charts not found) and access denials.';
 	}
 
 	public function getInputSchema(): array

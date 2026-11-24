@@ -87,6 +87,17 @@ final class DashboardGuard
 	 */
 	public function hasViewableCandidates(iterable $mappedChunks, Actor $actor): bool
 	{
+		return $this->hasCandidates($mappedChunks, $actor, false);
+	}
+
+	/** @param iterable<iterable<int>> $mappedChunks */
+	public function hasEditableCandidates(iterable $mappedChunks, Actor $actor): bool
+	{
+		return $this->hasCandidates($mappedChunks, $actor, true);
+	}
+
+	private function hasCandidates(iterable $mappedChunks, Actor $actor, bool $requireEdit): bool
+	{
 		$batch = $this->usesDefaultPolicies ? new DashboardAclBatch($actor->userId) : null;
 		$firstCandidate = true;
 		foreach ($mappedChunks as $mappedIds)
@@ -98,14 +109,14 @@ final class DashboardGuard
 				if ($firstCandidate || count($ids) === DashboardAclBatch::CHUNK_SIZE)
 				{
 					$firstCandidate = false;
-					if ($this->hasViewableChunk($ids, $actor, $batch))
+					if ($this->hasViewableChunk($ids, $actor, $batch, $requireEdit))
 					{
 						return true;
 					}
 					$ids = [];
 				}
 			}
-			if ($ids !== [] && $this->hasViewableChunk($ids, $actor, $batch))
+			if ($ids !== [] && $this->hasViewableChunk($ids, $actor, $batch, $requireEdit))
 			{
 				return true;
 			}
@@ -114,7 +125,12 @@ final class DashboardGuard
 		return false;
 	}
 
-	private function hasViewableChunk(array $ids, Actor $actor, ?DashboardAclBatch $batch): bool
+	private function hasViewableChunk(
+		array $ids,
+		Actor $actor,
+		?DashboardAclBatch $batch,
+		bool $requireEdit,
+	): bool
 	{
 		foreach ($ids as $offset => $id)
 		{
@@ -133,7 +149,7 @@ final class DashboardGuard
 				}
 				if ($canBatch)
 				{
-					if ($this->finishView($id, $actor, $fields, $batch)->isSuccess())
+					if ($this->finishView($id, $actor, $fields, $batch, $requireEdit)->isSuccess())
 					{
 						return true;
 					}
@@ -145,7 +161,7 @@ final class DashboardGuard
 				$batch->observeNext();
 			}
 			$activeBatch = $batch !== null && !$batch->isLegacy() ? $batch : null;
-			if ($this->loadForView($id, $actor, $activeBatch)->isSuccess())
+			if ($this->loadForView($id, $actor, $activeBatch, $requireEdit)->isSuccess())
 			{
 				return true;
 			}
@@ -155,7 +171,12 @@ final class DashboardGuard
 		return false;
 	}
 
-	private function loadForView(int $dashboardId, Actor $actor, ?DashboardAclBatch $batch = null): Result
+	private function loadForView(
+		int $dashboardId,
+		Actor $actor,
+		?DashboardAclBatch $batch = null,
+		bool $requireEdit = false,
+	): Result
 	{
 		$result = new Result();
 
@@ -167,7 +188,7 @@ final class DashboardGuard
 			return $result->addError(new Error('Dashboard not found.', FailureCode::NotFound->value));
 		}
 
-		return $this->finishView($dashboardId, $actor, $dashboard, $batch);
+		return $this->finishView($dashboardId, $actor, $dashboard, $batch, $requireEdit);
 	}
 
 	private function finishView(
@@ -175,9 +196,18 @@ final class DashboardGuard
 		Actor $actor,
 		SupersetDashboard|array $dashboard,
 		?DashboardAclBatch $batch = null,
+		bool $requireEdit = false,
 	): Result
 	{
 		$result = new Result();
+		if ($requireEdit)
+		{
+			$fields = is_array($dashboard) ? $dashboard : $dashboard->collectValues();
+			if (!$this->canAct(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboardId, $actor->userId, $batch, $fields))
+			{
+				return $result->addError(new Error('Access denied.', FailureCode::AccessDenied->value));
+			}
+		}
 		$fields = is_array($dashboard) ? $dashboard : null;
 		if (!$this->canAct(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboardId, $actor->userId, $batch, $fields))
 		{
@@ -234,6 +264,11 @@ final class DashboardGuard
 		}
 
 		return $result->setData(['dashboard' => $dashboard]);
+	}
+
+	public function canEdit(int $dashboardId, Actor $actor): bool
+	{
+		return $this->canAct(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboardId, $actor->userId);
 	}
 
 	public function forWrite(int $dashboardId, Actor $actor): Result
@@ -323,7 +358,7 @@ final class DashboardGuard
 		;
 		if ($batch !== null && !$batch->isLegacy())
 		{
-			return $accessController->checkWithDashboardBatch($item, $batch);
+			return $accessController->checkWithDashboardBatch($item, $batch, $action);
 		}
 
 		return $accessController->check($action, $item);

@@ -16,25 +16,7 @@ class CAllPullWatch
 		if ($userId == 0 || $tag == '')
 			return false;
 
-		$arResult = $CACHE_MANAGER->Read(3600, $cache_id="b_pw_".$userId, "b_pull_watch");
-		if ($arResult)
-			$arResult = $CACHE_MANAGER->Get($cache_id);
-
-		if(!$arResult)
-		{
-			CTimeZone::Disable();
-			$strSql = "
-					SELECT ID, USER_ID, TAG, ".$DB->DatetimeToTimestampFunction("DATE_CREATE")." AS DATE_CREATE
-					FROM b_pull_watch
-					WHERE USER_ID = ".intval($userId)."
-			";
-			CTimeZone::Enable();
-			$dbRes = $DB->Query($strSql);
-			while ($arRes = $dbRes->Fetch())
-				$arResult[$arRes["TAG"]] = $arRes;
-
-			$CACHE_MANAGER->Set($cache_id, $arResult);
-		}
+		$arResult = self::getUserWatches($userId);
 		if (!empty($arResult[$tag]))
 		{
 			if ($arResult[$tag]['DATE_CREATE']+1860 > time())
@@ -60,6 +42,89 @@ class CAllPullWatch
 		self::cleanCacheByTag((string)$tag);
 
 		return true;
+	}
+
+	/** @param string[] $tags */
+	public static function AddMulti(int $userId, array $tags, bool $immediate = false): bool
+	{
+		global $DB, $CACHE_MANAGER;
+
+		$tags = array_unique(array_filter(
+			array_map('trim', $tags),
+			static fn(string $tag): bool => $tag !== '',
+		));
+		if ($userId === 0 || $tags === [])
+		{
+			return false;
+		}
+
+		$watches = self::getUserWatches($userId);
+		$hasNewTags = false;
+		$expiredTags = [];
+		foreach ($tags as $tag)
+		{
+			if (!empty($watches[$tag]))
+			{
+				if ($watches[$tag]['DATE_CREATE'] + 1860 > time())
+				{
+					$id = (int)$watches[$tag]['ID'];
+					self::$arUpdate[$id] = $id;
+
+					continue;
+				}
+
+				$expiredTags[] = $DB->ForSQL($tag);
+			}
+
+			self::$arInsert[$tag] = $tag;
+			self::cleanCacheByTag($tag);
+			$hasNewTags = true;
+		}
+
+		foreach (array_chunk($expiredTags, self::bucket_size) as $tagsToDelete)
+		{
+			$DB->Query("DELETE FROM b_pull_watch WHERE USER_ID = " . $userId
+				. " AND TAG IN ('" . implode("', '", $tagsToDelete) . "')");
+		}
+
+		if ($hasNewTags)
+		{
+			$CACHE_MANAGER->Clean('b_pw_' . $userId, 'b_pull_watch');
+		}
+
+		if ($immediate || defined('BX_CHECK_AGENT_START') && !defined('BX_WITH_ON_AFTER_EPILOG'))
+		{
+			self::DeferredSql($userId);
+		}
+
+		return true;
+	}
+
+	private static function getUserWatches(int $userId): array|false
+	{
+		global $DB, $CACHE_MANAGER;
+
+		$arResult = $CACHE_MANAGER->Read(3600, $cache_id="b_pw_".$userId, "b_pull_watch");
+		if ($arResult)
+			$arResult = $CACHE_MANAGER->Get($cache_id);
+
+		if(!$arResult)
+		{
+			CTimeZone::Disable();
+			$strSql = "
+					SELECT ID, USER_ID, TAG, ".$DB->DatetimeToTimestampFunction("DATE_CREATE")." AS DATE_CREATE
+					FROM b_pull_watch
+					WHERE USER_ID = ".intval($userId)."
+			";
+			CTimeZone::Enable();
+			$dbRes = $DB->Query($strSql);
+			while ($arRes = $dbRes->Fetch())
+				$arResult[$arRes["TAG"]] = $arRes;
+
+			$CACHE_MANAGER->Set($cache_id, $arResult);
+		}
+
+		return $arResult;
 	}
 
 	public static function DeferredSql($userId = false)

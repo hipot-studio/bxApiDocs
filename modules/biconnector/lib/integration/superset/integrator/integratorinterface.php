@@ -20,9 +20,12 @@ interface IntegratorInterface
 	 *
 	 * @see self::verifyPortal()
 	 *
+	 * @param bool $raiseRebindMode Whether the refusal "portal has already registered" is allowed to switch
+	 *        the portal into the rebind mode. Background reads pass false: the rebind screen belongs to an
+	 *        action of the administrator, not to a follow-up of an agent.
 	 * @return IntegratorResponse<string>
 	 */
-	public function registerPortal(): IntegratorResponse;
+	public function registerPortal(bool $raiseRebindMode = true): IntegratorResponse;
 
 	/**
 	 * Verify portal ID on proxy-server, created by <b>registerPortal</b> action.
@@ -91,6 +94,12 @@ interface IntegratorInterface
 	 * @return IntegratorResponse<null>
 	 */
 	public function deleteSuperset(): IntegratorResponse;
+
+	/**
+	 * @param string $operationId
+	 * @return IntegratorResponse<Array<string,mixed>>
+	 */
+	public function getOperationStatus(string $operationId): IntegratorResponse;
 
 	/**
 	 * Change bi token for getting data from apache superset
@@ -381,9 +390,10 @@ interface IntegratorInterface
 	/**
 	 * Gets login url with jwt
 	 *
+	 * @param bool $allowStartingInstance
 	 * @return IntegratorResponse
 	 */
-	public function getLoginUrl(): IntegratorResponse;
+	public function getLoginUrl(bool $allowStartingInstance = false): IntegratorResponse;
 
 	/**
 	 * Updates supersetUser
@@ -650,7 +660,7 @@ interface IntegratorInterface
 	 * @param array $payload
 	 * @return IntegratorResponse
 	 */
-	public function createChart(array $payload): IntegratorResponse;
+	public function createChart(array $payload, ?User $user = null): IntegratorResponse;
 
 	/**
 	 * Updates an existing chart with the given fields.
@@ -694,10 +704,21 @@ interface IntegratorInterface
 	// region Market subscription
 	/**
 	 * @param Date|null $date
+	 * @param int $socketTimeout Connect timeout of the remote call in seconds; 0 keeps the default one.
+	 * @param int $streamTimeout Same meaning as in getDashboardById().
+	 * @param bool $detectFrozenInstance Whether an answer of a frozen instance moves the local status to LOAD,
+	 *        from where the next visit wakes the instance up. Only an attempt made while a user opens
+	 *        a dashboard passes true: a delivery in the background must not change the status of the portal.
+	 *        The self-hosted instance is never frozen and ignores it.
 	 *
 	 * @return IntegratorResponse
 	 */
-	public function setExpirationDate(?Date $date): IntegratorResponse;
+	public function setExpirationDate(
+		?Date $date,
+		int $socketTimeout = 0,
+		int $streamTimeout = 0,
+		bool $detectFrozenInstance = false,
+	): IntegratorResponse;
 
 	/**
 	 * @param array $marketDashboardsIdList

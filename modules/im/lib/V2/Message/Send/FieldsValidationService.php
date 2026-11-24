@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Message\Send;
 
+use Bitrix\Im\V2\Analytics\VoiceWidgetLabels;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
@@ -11,6 +12,7 @@ use Bitrix\Im\V2\Message\Contact\ContactCardError;
 use Bitrix\Im\V2\Message\Contact\ContactCardService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Param\ParamError;
+use Bitrix\Im\V2\Message\AiRequestTemplateType;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Reply\ReplyValidator;
 use Bitrix\Im\V2\Message\Sticker\PackType;
@@ -149,6 +151,11 @@ class FieldsValidationService
 					$this->fields['PARAMS'][Params::COPILOT_REASONING] = $item === 'Y' ? 'Y' : 'N';
 				}
 
+				if ($key === 'research' && Features::get()->isBitrixGptResearchAvailable)
+				{
+					$this->fields['PARAMS'][Params::COPILOT_RESEARCH] = $item === 'Y' ? 'Y' : 'N';
+				}
+
 				if ($key === 'agentMode')
 				{
 					$this->fields['PARAMS'][Params::COPILOT_AGENT_MODE] = $item === 'Y' ? 'Y' : 'N';
@@ -164,6 +171,15 @@ class FieldsValidationService
 					$this->fields['PARAMS'][Params::COPILOT_PAGE_CONTEXT] = $item;
 				}
 
+				if ($key === 'analytics' && $this->chat instanceof Chat\CopilotChat)
+				{
+					$labels = VoiceWidgetLabels::fromArray($item);
+					if ($labels !== null)
+					{
+						$this->fields['PARAMS'][Params::COPILOT_ANALYTICS] = $labels->toArray();
+					}
+				}
+
 				if (
 					$key === 'mcpAuthId'
 					&& is_numeric($item)
@@ -174,9 +190,78 @@ class FieldsValidationService
 					$this->fields['PARAMS'][Params::COPILOT_MCP_AUTH_ID] = (int)$item;
 				}
 			}
+
+			$this->fillAiRequestTemplate($this->fields['COPILOT']);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Пометка происхождения запроса: какая запись библиотеки сценариев его породила.
+	 *
+	 * Рядом с годной тройкой записывается раздел запуска, см. fillAiRequestTemplateSection.
+	 *
+	 * Три значения принимаются только полным набором: неполный набор не записывается вовсе, потому
+	 * что помощнику он бесполезен — по одному лишь ключу записи нельзя отличить устаревший запуск
+	 * от свежего. Смысловой проверки здесь нет: существует ли запись, чья она и та ли это версия,
+	 * знает только сторона AI, а поле отправки доступно и по REST, и из бот-контроллера.
+	 */
+	private function fillAiRequestTemplate(array $copilot): void
+	{
+		$id = $copilot['aiRequestTemplateId'] ?? null;
+		$type = $copilot['aiRequestTemplateType'] ?? null;
+		$version = $copilot['aiRequestTemplateVersion'] ?? null;
+
+		// the flag is asked after the fields: every copilot message goes through here, and building
+		// the whole feature set for a message without a launch mark is work for nothing
+		if (!is_string($id) || trim($id) === '')
+		{
+			return;
+		}
+
+		if (!Features::get()->isAiRequestTemplatesAvailable)
+		{
+			return;
+		}
+
+		if (!in_array($type, AiRequestTemplateType::values(), true))
+		{
+			return;
+		}
+
+		if (!is_numeric($version) || (int)$version <= 0 || (float)$version !== (float)(int)$version)
+		{
+			return;
+		}
+
+		$this->fields['PARAMS'][Params::AI_REQUEST_TEMPLATE_ID] = trim($id);
+		$this->fields['PARAMS'][Params::AI_REQUEST_TEMPLATE_TYPE] = $type;
+		$this->fields['PARAMS'][Params::AI_REQUEST_TEMPLATE_VERSION] = (int)$version;
+
+		$this->fillAiRequestTemplateSection($copilot);
+	}
+
+	/**
+	 * Раздел библиотеки сценариев, из которого запустили запрос: пишется только рядом с годной
+	 * пометкой происхождения и только если годен по форме сам.
+	 *
+	 * Форма — та же, что у ключа записи в разборе стороны AI, чтобы годное на одной стороне было
+	 * годным и на другой. Проверка строже, чем у соседнего ключа записи, сознательно: ключ всё
+	 * равно проходит строгий разбор на стороне AI и неузнанный отбрасывает всю пометку, а раздел
+	 * там необязателен — негодное значение прошло бы молча и осело в аналитике. Негодный раздел
+	 * отбрасывается в одиночку и пометку происхождения не роняет.
+	 */
+	private function fillAiRequestTemplateSection(array $copilot): void
+	{
+		$section = $copilot['aiRequestTemplateSection'] ?? null;
+
+		if (!is_string($section) || !preg_match('/^[A-Za-z0-9_-]{1,100}\z/', $section))
+		{
+			return;
+		}
+
+		$this->fields['PARAMS'][Params::AI_REQUEST_TEMPLATE_SECTION] = $section;
 	}
 
 	private function checkMessage(): Result

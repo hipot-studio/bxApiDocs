@@ -23,6 +23,7 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 	private const URL_TEMPLATE_STATISTICS = 'statistics';
 	private const URL_TEMPLATE_SOURCE = 'source';
 	private const URL_TEMPLATE_UNUSED_ELEMENTS = 'unused_elements';
+	private const URL_TEMPLATE_ROW_RULES = 'row_rules';
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -99,6 +100,27 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 			$template = $this->processSefMode($templateUrls);
 		}
 
+		if ($template === self::URL_TEMPLATE_ROW_RULES)
+		{
+			if (!self::isRowRulesEnabled())
+			{
+				$this->printError(
+					Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_CONTROLLER_ROW_RULES_UNAVAILABLE'),
+				);
+
+				return;
+			}
+
+			if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_ROW_RULES))
+			{
+				$this->printError(
+					Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_CONTROLLER_PERMISSION_ROW_RULES_ERROR'),
+				);
+
+				return;
+			}
+		}
+
 		if (!isset($this->arParams['COMPONENT_PARAMS']) || !is_array($this->arParams['COMPONENT_PARAMS']))
 		{
 			$this->arParams['COMPONENT_PARAMS'] = [];
@@ -123,6 +145,11 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 		}
 
 		return $template;
+	}
+
+	private static function isRowRulesEnabled(): bool
+	{
+		return Feature::isRowRulesEnabled();
 	}
 
 	/**
@@ -153,6 +180,7 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 			self::URL_TEMPLATE_STATISTICS => 'bi/statistics/',
 			self::URL_TEMPLATE_SOURCE => 'bi/source/',
 			self::URL_TEMPLATE_UNUSED_ELEMENTS => 'bi/unused_elements/',
+			self::URL_TEMPLATE_ROW_RULES => 'bi/rls/',
 		];
 	}
 }

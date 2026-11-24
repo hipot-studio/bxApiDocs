@@ -10,6 +10,7 @@ abstract class Event
 {
 	protected AnalyticsEvent $event;
 	protected Chat $chat;
+	protected int $userId = 0;
 	protected ?string $type = null;
 	protected ?string $section = null;
 	protected ?string $subSection = null;
@@ -24,6 +25,7 @@ abstract class Event
 	public function __construct(string $eventName, Chat $chat, int $userId)
 	{
 		$this->chat = $chat;
+		$this->userId = $userId;
 		$this->event = new AnalyticsEvent($eventName, $this->getTool(), $this->getCategory($eventName));
 		$this->event->setUserId($userId);
 		$this->setDefaultParams();
@@ -158,6 +160,11 @@ abstract class Event
 	{
 		$this->p4 = $p4;
 		return $this;
+	}
+
+	public function getP4(): ?string
+	{
+		return $this->p4;
 	}
 
 	public function setP5(?string $p5): self

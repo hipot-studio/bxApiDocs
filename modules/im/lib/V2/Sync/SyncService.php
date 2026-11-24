@@ -18,6 +18,11 @@ class SyncService
 	private const MODULE_ID = 'im';
 	private const ENABLE_OPTION_NAME = 'sync_logger_enable';
 
+	// A cursor slightly ahead of the DB clock is normal client/server drift, not
+	// a gap. Anything past this tolerance is treated as a future cursor and
+	// forces a reset instead of silently trusting the client.
+	private const FUTURE_CURSOR_TOLERANCE_SECONDS = 60;
+
 	public static function isEnable(): bool
 	{
 		return Option::get(self::MODULE_ID, self::ENABLE_OPTION_NAME, 'Y') === 'Y';
@@ -27,7 +32,13 @@ class SyncService
 	{
 		if (!self::isEnable())
 		{
-			return [];
+			return $this->formatData([], $lastDate, $lastId, false);
+		}
+
+		$state = $this->readBoundary();
+		if ($this->isGap($lastDate, $state))
+		{
+			return $this->getResetResponse($lastDate, $lastId, $state);
 		}
 
 		$currentUserId = $this->getContext()->getUserId();
@@ -39,7 +50,64 @@ class SyncService
 		$merged = $this->mergeAndSlice($rowsUser, $rowsGlobal, $limit, $mergedCount);
 		$hasMore = $mergedCount > $limit || count($rowsUser) >= $limit || count($rowsGlobal) >= $limit;
 
-		return $this->formatData($merged, $lastDate, $lastId, $hasMore, $currentUserId);
+		$page = $this->formatData($merged, $lastDate, $lastId, $hasMore, $currentUserId);
+
+		$state = $this->readBoundary();
+		if ($this->isGap($lastDate, $state))
+		{
+			return $this->getResetResponse($lastDate, $lastId, $state);
+		}
+
+		return $page;
+	}
+
+	/**
+	 * Seam for the race test: a subclass overrides this to raise the boundary
+	 * between the two reads inside one getChangesFromDate() call.
+	 *
+	 * @return array{boundary: ?int, dbNow: int}
+	 * @throws LogBoundaryException
+	 */
+	protected function readBoundary(): array
+	{
+		return LogBoundary::readFromPrimary();
+	}
+
+	/**
+	 * @param array{boundary: ?int, dbNow: int} $boundaryState
+	 */
+	protected function isGap(DateTime $lastDate, array $boundaryState): bool
+	{
+		$cursor = $lastDate->getTimestamp();
+
+		return
+			($boundaryState['boundary'] !== null && $cursor <= $boundaryState['boundary'])
+			|| $cursor > $boundaryState['dbNow'] + self::FUTURE_CURSOR_TOLERANCE_SECONDS
+		;
+	}
+
+	/**
+	 * @param array{boundary: ?int, dbNow: int} $boundaryState
+	 * @throws LogBoundaryException
+	 */
+	protected function getResetResponse(DateTime $lastDate, ?int $lastId, array $boundaryState): array
+	{
+		if ($boundaryState['boundary'] !== null && $boundaryState['dbNow'] <= $boundaryState['boundary'])
+		{
+			// The DB clock is not strictly ahead of the boundary it just gave us -
+			// resetServerDate could not be a truthful "safe to resync from" point.
+			throw new LogBoundaryException('The DB time is not newer than the log boundary');
+		}
+
+		return [
+			'navigationData' => [
+				'lastServerDate' => $lastDate,
+				'hasMore' => false,
+				'lastId' => $lastId ?? 0,
+				'resetRequired' => true,
+				'resetServerDate' => DateTime::createFromTimestamp($boundaryState['dbNow']),
+			],
+		];
 	}
 
 	/**
@@ -148,6 +216,7 @@ class SyncService
 				'lastServerDate' => $incomingLastDate,
 				'hasMore' => $hasMore,
 				'lastId' => $incomingLastId ?? 0,
+				'resetRequired' => false,
 			];
 		}
 
@@ -160,6 +229,7 @@ class SyncService
 			'lastServerDate' => $lastDate,
 			'hasMore' => $hasMore,
 			'lastId' => $lastId,
+			'resetRequired' => false,
 		];
 	}
 }

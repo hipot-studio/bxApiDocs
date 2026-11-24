@@ -64,6 +64,15 @@ class ShareRole extends Controller
 		parent::runProcessingThrowable($throwable);
 	}
 
+	/**
+	 * Creates a custom role and shares it by access codes.
+	 * Request fields: roleTitle, roleDescription, roleText, roleAvatar (file), accessCodes.
+	 *
+	 * @param CreateRequest $request
+	 * @param RoleService $roleService
+	 * @param ShareService $shareService
+	 * @return array{code?: string} Code of the created role.
+	 */
 	public function createAction(
 		CreateRequest $request,
 		RoleService $roleService,
@@ -99,6 +108,16 @@ class ShareRole extends Controller
 		];
 	}
 
+	/**
+	 * Updates a custom role and replaces its sharing. Only the role author may change it.
+	 * Request fields: roleCode and the fields of createAction.
+	 *
+	 * @param ChangeRequest $request
+	 * @param RoleService $roleService
+	 * @param ShareService $shareService
+	 * @param OwnerService $ownerService
+	 * @return void
+	 */
 	public function changeAction(
 		ChangeRequest $request,
 		RoleService $roleService,
@@ -130,6 +149,13 @@ class ShareRole extends Controller
 		$event->send(Status::Success, $requestDTO->userCreatorId);
 	}
 
+	/**
+	 * Returns custom role data for the edit form. Requires share access to the role.
+	 *
+	 * @param GetRoleDataByCodeRequest $request
+	 * @param RoleService $roleService
+	 * @return array{role: \Bitrix\AI\ShareRole\Dto\RoleForUpdateDto|null}
+	 */
 	public function getRoleByCodeForUpdateAction(
 		GetRoleDataByCodeRequest $request,
 		RoleService $roleService,
@@ -162,6 +188,15 @@ class ShareRole extends Controller
 		];
 	}
 
+	/**
+	 * Outputs the role avatar image inline; falls back to the default avatar. CSRF check is disabled
+	 * so that the URL can be used in img tags.
+	 *
+	 * @param RoleService $roleService
+	 * @param int $roleId
+	 * @param string $avatarSize One of \Bitrix\AI\Enum\RoleAvatarSize values.
+	 * @return BFile
+	 */
 	public function showAvatarAction(
 		RoleService $roleService,
 		int $roleId,

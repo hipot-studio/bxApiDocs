@@ -411,6 +411,26 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	}
 
 	/**
+	 * Hands over the original of the link loaded elsewhere, so that a batch read of originals serves this
+	 * model too and getRealObject() sends no query. An object which is not a link or an original of another
+	 * object is ignored.
+	 *
+	 * @internal
+	 * @param BaseObject $realObject Original of the link.
+	 * @return void
+	 */
+	public function primeRealObject(BaseObject $realObject): void
+	{
+		if (!$this->isLink() || (int)$realObject->getId() !== (int)$this->realObjectId)
+		{
+			return;
+		}
+
+		$this->realObject = $realObject;
+		$this->setAsLoadedAttribute('realObject');
+	}
+
+	/**
 	 * Returns id of real object of object.
 	 *
 	 * For example if object is link (@see FolderLink, @see FileLink), then method returns id of original object.

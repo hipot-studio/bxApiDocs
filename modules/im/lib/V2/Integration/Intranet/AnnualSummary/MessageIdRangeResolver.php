@@ -154,6 +154,7 @@ class MessageIdRangeResolver
 			->setSelect(['MIN_ID'])
 			->registerRuntimeField('MIN_ID', new ExpressionField('MIN_ID', 'MIN(ID)'))
 			->where('DATE_CREATE', '>=', $date)
+			->where('NOTIFY_TYPE', 0)
 			->fetch()
 		;
 

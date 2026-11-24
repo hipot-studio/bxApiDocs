@@ -4,7 +4,7 @@ namespace Bitrix\Mobile\Internal\Onboarding;
 
 use Bitrix\Main\Config\Feature;
 use Bitrix\Mobile\Public\Feature\OnboardingPushFlag;
-use Bitrix\Mobile\Internal\Onboarding\Services\OnboardingService;
+use Bitrix\Mobile\Internal\Onboarding\Service\OnboardingService;
 
 class PushAgent
 {

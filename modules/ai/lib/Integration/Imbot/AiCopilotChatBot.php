@@ -7,6 +7,7 @@ use Bitrix\AI\Services\MarkdownToBBCodeTranslationService;
 use Bitrix\AiAssistant\Config\Feature;
 use Bitrix\AiAssistant\Core\Dto\MessageDto;
 use Bitrix\AiAssistant\Core\Im\ImBot as AiAssistantImBot;
+use Bitrix\AiAssistant\Core\Enum\LaunchSource;
 use Bitrix\AiAssistant\Core\Enum\MessageType;
 use Bitrix\AiAssistant\Core\Enum\UserPlatform;
 use Bitrix\AiAssistant\Core\Repository\MessageParamsRepository;
@@ -445,9 +446,10 @@ class AiCopilotChatBot extends Base
 			return false;
 		}
 
+		$hasBotMention = self::checkBotMention($originalMessage);
 		if (
 			$chat->getType() !== Chat::IM_TYPE_COPILOT
-			&& !self::checkBotMention($originalMessage)
+			&& !$hasBotMention
 			&& !self::checkBotReply($messageFields)
 		)
 		{
@@ -465,7 +467,7 @@ class AiCopilotChatBot extends Base
 
 		if (self::isBgptV2Enabled())
 		{
-			return self::handleMessageViaAiAssistant($messageId, $messageFields);
+			return self::handleMessageViaAiAssistant($messageId, $messageFields, $hasBotMention);
 		}
 
 
@@ -602,7 +604,8 @@ class AiCopilotChatBot extends Base
 			->setChat($chat)
 		;
 
-		if (!self::checkBotMention($originalMessage) && !self::checkBotReply($messageFields))
+		$hasBotMention = self::checkBotMention($originalMessage);
+		if (!$hasBotMention && !self::checkBotReply($messageFields))
 		{
 			return false;
 		}
@@ -633,7 +636,7 @@ class AiCopilotChatBot extends Base
 				? UserPlatform::Mobile->value
 				: UserPlatform::Web->value
 			,
-		] + self::buildAiAssistantParams($messageFields);
+		] + self::buildAiAssistantParams($messageFields) + self::buildLaunchSourceParams($chat, $hasBotMention);
 		$messageDto = new MessageDto(
 			id: $messageId,
 			chatId: $chatId,
@@ -657,7 +660,11 @@ class AiCopilotChatBot extends Base
 		return true;
 	}
 
-	private static function handleMessageViaAiAssistant(int $messageId, array $messageFields): bool
+	private static function handleMessageViaAiAssistant(
+		int $messageId,
+		array $messageFields,
+		bool $hasBotMention
+	): bool
 	{
 		$chatId = (int)$messageFields['TO_CHAT_ID'];
 		$userId = (int)$messageFields['FROM_USER_ID'];
@@ -666,7 +673,8 @@ class AiCopilotChatBot extends Base
 		// In a private 1-on-1 chat with the bot there are exactly 2 participants (user + bot) and the
 		// bot answers every message in default mode. Once other people are added (collective copilot
 		// chat or any non-private chat with the bot) it must switch to inline mode.
-		$chatMode = Im\V2\Chat::getInstance($chatId)->getUserCount() > 2 ? 'inline' : 'default';
+		$chat = Im\V2\Chat::getInstance($chatId);
+		$chatMode = $chat->getUserCount() > 2 ? 'inline' : 'default';
 
 		$persistentParams = [
 			'messageType' => MessageType::Default->value,
@@ -679,7 +687,7 @@ class AiCopilotChatBot extends Base
 				? UserPlatform::Mobile->value
 				: UserPlatform::Web->value
 			,
-		] + self::buildAiAssistantParams($messageFields);
+		] + self::buildAiAssistantParams($messageFields) + self::buildLaunchSourceParams($chat, $hasBotMention);
 
 		$params = $persistentParams + [
 			'pageContext' => $messageFields['PARAMS']['COPILOT_PAGE_CONTEXT'] ?? null,
@@ -713,6 +721,24 @@ class AiCopilotChatBot extends Base
 		return true;
 	}
 
+	private static function buildLaunchSourceParams(Chat $chat, bool $hasBotMention): array
+	{
+		if (!class_exists(LaunchSource::class) || !$hasBotMention
+			|| $chat instanceof Chat\OpenLineChat || $chat instanceof Chat\OpenLineLiveChat)
+		{
+			return [];
+		}
+
+		$isGroupChat = in_array($chat->getType(), [
+			Chat::IM_TYPE_CHAT, Chat::IM_TYPE_OPEN, Chat::IM_TYPE_COLLAB,
+			Chat::IM_TYPE_OPEN_COLLAB, Chat::IM_TYPE_EXTERNAL,
+		], true)
+			|| ($chat->getType() === Chat::IM_TYPE_COPILOT && $chat->getUserCount() > 2)
+		;
+
+		return $isGroupChat ? [LaunchSource::PARAM_KEY => LaunchSource::Mention->value] : [];
+	}
+
 	/**
 	 * A scheduled task run publishes its request as the task owner and submits that request to the
 	 * service itself, so the chat shows what was asked. Answering it here would put a second,
@@ -724,8 +750,8 @@ class AiCopilotChatBot extends Base
 	}
 
 	/**
-	 * The params whose names belong to aiassistant: which MCP servers the message carries and
-	 * whether it was typed by a person or created by the server. Both handlers merge the same set,
+	 * The params whose names belong to aiassistant: MCP selection, research mode, and whether the
+	 * message was typed by a person or created by the server. Both handlers merge the same set,
 	 * so neither path can drift away from the other. `generationSource` is not decoration here:
 	 * without it a server created message looks to `AiBot::carriesClientChatSelection()` like a
 	 * fresh choice from the chat selector and overwrites the stored one.
@@ -734,6 +760,7 @@ class AiCopilotChatBot extends Base
 	{
 		return [
 			'generationSource' => $messageFields['PARAMS'][AiAssistantImBot::PARAM_GENERATION_SOURCE] ?? null,
+			'research' => ($messageFields['PARAMS']['COPILOT_RESEARCH'] ?? null) === 'Y',
 		] + self::buildMcpSelectionParams($messageFields);
 	}
 
@@ -966,7 +993,7 @@ class AiCopilotChatBot extends Base
 
 	/**
 	 * Generates summary.
-	 * @param array{CHAT_ID: int, MESSAGE_TEXT: string} $params
+	 * @param array{CHAT_ID: int, MESSAGE_TEXT: string, USER_ID?: int|null} $params
 	 * @return Result
 	 */
 	protected static function extractSummary(array $params): Result
@@ -979,7 +1006,12 @@ class AiCopilotChatBot extends Base
 			$contextParams = ['chat_id' => $params['CHAT_ID']];
 			$text = $params['MESSAGE_TEXT'];
 
-			$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_SUMMARY, $contextParams);
+			$context = self::getContext(
+				self::CONTEXT_MODULE,
+				self::CONTEXT_SUMMARY,
+				$contextParams,
+				$params['USER_ID'] ?? null
+			);
 
 			$chat = Chat::getInstance((int)$params['CHAT_ID']);
 
@@ -1145,7 +1177,12 @@ class AiCopilotChatBot extends Base
 				Main\Application::getInstance()->addBackgroundJob(
 					[self::class, 'getDialogMeaning'],
 					[
-						['CHAT_ID' => $chatId, 'MESSAGE' => $messageText, 'MESSAGE_ID' => (int)$messageId],
+						[
+							'CHAT_ID' => $chatId,
+							'MESSAGE' => $messageText,
+							'MESSAGE_ID' => (int)$messageId,
+							'FROM_USER_ID' => $message->getAuthorId(),
+						],
 						$chat,
 					]
 				);
@@ -1274,9 +1311,14 @@ class AiCopilotChatBot extends Base
 		return $engine;
 	}
 
-	protected static function getContext(string $moduleId, string $contextId, array $parameters = []): Context
+	protected static function getContext(
+		string $moduleId,
+		string $contextId,
+		array $parameters = [],
+		?int $userId = null
+	): Context
 	{
-		$context = new Context($moduleId, $contextId);
+		$context = new Context($moduleId, $contextId, $userId);
 
 		if (!empty($parameters))
 		{
@@ -1428,13 +1470,26 @@ class AiCopilotChatBot extends Base
 	 */
 	protected static function isDialogHasDefaultTitle(Im\V2\Chat $chat): bool
 	{
-		if ($chat instanceof Im\V2\Chat\CopilotChat)
+		if (!$chat instanceof Im\V2\Chat\CopilotChat)
 		{
-			if ($template = Im\V2\Chat\CopilotChat::getTitleTemplate())
-			{
-				$template = strtr($template, ['#NUMBER#' => '[0-9]+']);
-				return (bool)preg_match("/{$template}/", $chat->getTitle());
-			}
+			return false;
+		}
+
+		if (method_exists(Im\V2\Chat\Copilot\CopilotTitle::class, 'canGenerateFinal'))
+		{
+			return (new Im\V2\Chat\Copilot\CopilotTitle($chat->getChatId()))->canGenerateFinal();
+		}
+
+		if (method_exists(Im\V2\Chat\Copilot\CopilotTitle::class, 'isDefault'))
+		{
+			return (new Im\V2\Chat\Copilot\CopilotTitle($chat->getChatId()))->isDefault();
+		}
+
+		if ($template = Im\V2\Chat\CopilotChat::getTitleTemplate())
+		{
+			$template = strtr($template, ['#NUMBER#' => '[0-9]+']);
+
+			return (bool)preg_match("/{$template}/", $chat->getTitle());
 		}
 
 		return false;
@@ -1443,15 +1498,22 @@ class AiCopilotChatBot extends Base
 	/**
 	 * Rename copilot chat.
 	 *
-	 * @param array $messageFields
+	 * @param array $messageFields FROM_USER_ID, when present, is the author of the question
+	 * and the user of the summary request; a non-positive value makes it a background request.
 	 * @param Im\V2\Chat $chat
 	 * @return void
 	 */
 	public static function getDialogMeaning(array $messageFields, Im\V2\Chat $chat): void
 	{
+		if (!self::isDialogHasDefaultTitle($chat))
+		{
+			return;
+		}
+
 		$resultTitle = self::extractSummary([
 			'CHAT_ID' => $messageFields['CHAT_ID'],
-			'MESSAGE_TEXT' => $messageFields['MESSAGE']
+			'MESSAGE_TEXT' => $messageFields['MESSAGE'],
+			'USER_ID' => self::getQuestionAuthorId($messageFields),
 		]);
 		if (
 			$resultTitle->isSuccess()
@@ -1477,6 +1539,19 @@ class AiCopilotChatBot extends Base
 	}
 
 	/**
+	 * Null when the caller does not name the author: the request then keeps the current user.
+	 */
+	private static function getQuestionAuthorId(array $messageFields): ?int
+	{
+		if (!array_key_exists('FROM_USER_ID', $messageFields))
+		{
+			return null;
+		}
+
+		return max(0, (int)$messageFields['FROM_USER_ID']);
+	}
+
+	/**
 	 * Rename copilot chat.
 	 *
 	 * @param Im\V2\Chat $chat
@@ -1485,16 +1560,19 @@ class AiCopilotChatBot extends Base
 	 */
 	private static function renameChat(Im\V2\Chat $chat, string $title): void
 	{
-		if (
-			!empty($title)
-			&& $chat instanceof Im\V2\Chat\CopilotChat
-		)
+		if (empty($title) || !$chat instanceof Im\V2\Chat\CopilotChat)
 		{
-			//todo: Use v2 api for renaming
-			//$chat->setTitle($title)->save();
-
-			(new \CIMChat())->rename($chat->getChatId(), $title, false, false);
+			return;
 		}
+
+		if (method_exists(Im\V2\Chat\Copilot\CopilotTitle::class, 'applyFinal'))
+		{
+			(new Im\V2\Chat\Copilot\CopilotTitle($chat->getChatId()))->applyFinal($title);
+
+			return;
+		}
+
+		(new \CIMChat())->rename($chat->getChatId(), $title, false, false);
 	}
 
 	//endregion

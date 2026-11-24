@@ -1,110 +1,89 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Mobile\Menu\Service;
 
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Loader;
-use Bitrix\Main\Application;
-use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\Web\Json;
+use Bitrix\Mobile\Internal\Entity\Marketing\RuleEvaluation;
+use Bitrix\Mobile\Internal\Entity\Marketing\SelectionResult;
+use Bitrix\Mobile\Internal\Entity\Marketing\Verdict;
+use Bitrix\Mobile\Public\Provider\Marketing\SelectionProvider;
 
+/**
+ * The support banners of the "More" menu, as the shared selection decides them for the signed-in user:
+ * whether he sees them and which form they open. Nobody signed in sees nothing and gets the smaller form.
+ */
 final class SupportBanners
 {
+	private const CHANNEL = 'banner';
+	private const PLACEMENT = 'menu.more';
+	private const AUDIENCE_RULE = 'menu.supportBanners';
+	private const FORM_RULE = 'menu.supportBanners.form';
+	private const FORM_CHOICE = 'form';
+
 	private const FORM_ID_LT_100 = 'integrationConsultLt100';
 	private const FORM_ID_GT_100 = 'integrationConsultGt100';
 
+	/** The form chosen by the rule => the form the menu opens. */
+	private const FORM_IDS = [
+		'lt100' => self::FORM_ID_LT_100,
+		'gt100' => self::FORM_ID_GT_100,
+	];
+
+	private readonly SelectionProvider $provider;
+
+	/**
+	 * Both rules for the signed-in user once selected: rule code => evaluation, empty when nobody is signed
+	 * in or the selection failed.
+	 *
+	 * @var array<string, RuleEvaluation>|null
+	 */
+	private ?array $evaluations = null;
+
+	public function __construct(?SelectionProvider $provider = null)
+	{
+		$this->provider = $provider ?? new SelectionProvider();
+	}
+
 	public function shouldShowSupportBanners(): bool
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return false;
-		}
-
-		$region = Application::getInstance()->getLicense()->getRegion();
-		if ($region !== 'ru')
-		{
-			return false;
-		}
-
-		$daysAlive = $this->getPortalAgeInDays();
-
-		if ($daysAlive > 60)
-		{
-			return false;
-		}
-
-		if (!$this->isPortalAdmin())
-		{
-			return false;
-		}
-
-		return true;
+		return $this->evaluate(self::AUDIENCE_RULE)?->verdict === Verdict::Matched;
 	}
 
 	public function getFormCode(): string
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return self::FORM_ID_LT_100;
-		}
+		$form = $this->evaluate(self::FORM_RULE)?->chosen[self::FORM_CHOICE] ?? null;
 
-		$employeeCount = $this->getEmployeeCountByQualification();
-
-		return $employeeCount < 100 ? self::FORM_ID_LT_100 : self::FORM_ID_GT_100;
+		return self::FORM_IDS[$form] ?? self::FORM_ID_LT_100;
 	}
 
-	private function getPortalAgeInDays(): int
+	/**
+	 * The rule for the signed-in user, null when nobody is signed in or the selection failed. Both rules are
+	 * selected together on the first question, so a menu asking both costs one evaluation.
+	 */
+	private function evaluate(string $ruleCode): ?RuleEvaluation
 	{
-		$portalCreatedTimestamp = \CBitrix24::getCreateTime();
-		$portalCreatedAt = empty($portalCreatedTimestamp)
-			? new DateTime()
-			: Datetime::createFromTimestamp((int)$portalCreatedTimestamp);
+		$this->evaluations ??= $this->selectBoth();
 
-		$diff = $portalCreatedAt->getDiff(new DateTime())->days ?? 0;
-
-		return $diff <= 0 ? 0 : $diff;
+		return $this->evaluations[$ruleCode] ?? null;
 	}
 
-	private function isPortalAdmin(): bool
+	/**
+	 * @return array<string, RuleEvaluation>
+	 */
+	private function selectBoth(): array
 	{
-		$userId = (int)CurrentUser::get()->getId();
-		if ($userId > 0)
+		$result = $this->provider->selectForCurrentUser(
+			self::CHANNEL,
+			self::PLACEMENT,
+			[self::AUDIENCE_RULE, self::FORM_RULE],
+		);
+		$selection = $result->isSuccess() ? ($result->getData()[SelectionProvider::DATA_SELECTION] ?? null) : null;
+		if (!$selection instanceof SelectionResult)
 		{
-			return \CBitrix24::IsPortalAdmin($userId);
+			return [];
 		}
 
-		return false;
-	}
-
-	private function getEmployeeCountByQualification(): int
-	{
-		$rawValue = Option::get('bitrix24', 'cjm-employee-count', '');
-		if (empty($rawValue))
-		{
-			return 0;
-		}
-
-		$maxEmployeeCount = 0;
-
-		try
-		{
-			$objValue = Json::decode($rawValue);
-			$strValue = $objValue['itemValue'] ?? '';
-
-			if (preg_match('/^\d+-(\d+)$/', $strValue, $matches))
-			{
-				$maxEmployeeCount = (int)$matches[1];
-			}
-			elseif (preg_match('/^(\d+)\+$/', $strValue, $matches))
-			{
-				$maxEmployeeCount = (int)$matches[1];
-			}
-		}
-		catch (ArgumentException $e)
-		{}
-
-		return $maxEmployeeCount;
+		return $selection->getEvaluations($selection->getUserIds()[0] ?? 0);
 	}
 }

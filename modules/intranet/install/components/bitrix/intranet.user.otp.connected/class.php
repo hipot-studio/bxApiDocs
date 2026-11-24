@@ -17,6 +17,7 @@ use Bitrix\Intranet\Internal\Service\Otp\DeviceReconnect;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
 use Bitrix\Intranet\Public\Provider\Otp\DayListProvider;
+use Bitrix\Intranet\Public\Provider\Otp\CurrentProvisioningProvider;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\PhoneNumber\Format;
 use Bitrix\Main\Localization\Loc;
@@ -69,6 +70,8 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		{
 			return;
 		}
+
+		$this->arResult['OTP']['CAN_EXPORT_CURRENT_OTP'] = (new CurrentProvisioningProvider())->canShow($user);
 
 		$otpSettings = new OtpSettings();
 
@@ -147,7 +150,11 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 			&& $personalOtp->canSkipDeviceConnect()
 			&& Option::get('intranet', 'allow_skip_device_connect', 'Y') === 'Y'
 			&& \Bitrix\Security\Mfa\Otp::isPushPossible()
-			&& ($verifyPhone->canSendSms() || $verifyEmail->canSendEmail());
+			&& (
+				$verifyPhone->canSendSms()
+				|| $verifyEmail->canSendEmail()
+				|| ($otpConfig['canConfirmByCall'] ?? false) === true
+			);
 
 		$dateDeactivate = $personalOtp->getDeactivateUntil();
 		$this->arResult["OTP"]["NUM_LEFT_DAYS"] = $dateDeactivate

@@ -34,14 +34,14 @@ class ExternalLink extends BaseFileList
 		?string $newPassword = null,
 		?bool $allowEditDocument = null,
 		?int $deathTime = null,
-	)
+	): ?array
 	{
 		$externalLink = $this->forward(
 			\Bitrix\Disk\Controller\CommonActions::class,
 			'generateExternalLink',
-		)['externalLink'];
+		)['externalLink'] ?? null;
 
-		if (!$this->errorCollection->isEmpty())
+		if (!$this->errorCollection->isEmpty() || !$externalLink)
 		{
 			return null;
 		}
@@ -108,6 +108,11 @@ class ExternalLink extends BaseFileList
 		return Disk\ExternalLink::loadById($externalLinkId);
 	}
 
+	protected function getUrlManager(): object
+	{
+		return Driver::getInstance()->getUrlManager();
+	}
+
 	private function parseExternalLinkObject(Disk\ExternalLink $extLink): ?array
 	{
 		$object = $extLink->getObject();
@@ -122,11 +127,22 @@ class ExternalLink extends BaseFileList
 			return null;
 		}
 
-		$driver = Driver::getInstance();
-		$link = new Uri($driver->getUrlManager()->getPublicExternalLink(
-			object: $object,
-			hash: $extLink->getHash(),
-		));
+		/** @var Disk\UrlManager $urlManager */
+		$urlManager = $this->getUrlManager();
+		// A Disk which issues short public addresses names the method of its facade; an older Disk is asked
+		// for the plain address of the object as before, never for the signed one of generateUrl().
+		$link = new Uri(
+			method_exists($urlManager, 'getCopyablePublicExternalLinkForConsumer')
+				? $urlManager->getCopyablePublicExternalLinkForConsumer(
+					$extLink,
+					Disk\UrlManager::PUBLIC_LINK_CONSUMER_UNMARKED_COPY,
+					$object,
+				)
+				: $urlManager->getPublicExternalLink(
+					object: $object,
+					hash: $extLink->getHash(),
+				)
+		);
 
 		$canEditDocument = null;
 		$availableEdit = $extLink->availableEdit();
@@ -165,7 +181,7 @@ class ExternalLink extends BaseFileList
 		?bool $allowEditDocument = null,
 		?int $deathTime = null,
 		bool $disableDeathTime = false,
-	)
+	): void
 	{
 		if (!$disablePassword && $newPassword)
 		{

@@ -5,7 +5,7 @@ namespace Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
-use Bitrix\Im\V2\Pull\CommentTagPublisher;
+use Bitrix\Im\V2\Service\Locator;
 use CPullWatch;
 
 class PushService
@@ -51,7 +51,7 @@ class PushService
 
 		if ($chat->getType() === Chat::IM_TYPE_COMMENT)
 		{
-			CommentTagPublisher::addToStack($chat, $pullParams);
+			Locator::getPullSender()->sendToCommentSubscribers($chat, $pullParams);
 		}
 		else
 		{

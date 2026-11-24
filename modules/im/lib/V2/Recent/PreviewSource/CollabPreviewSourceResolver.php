@@ -4,18 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Recent\PreviewSource;
 
-use Bitrix\Im\Model\ChatTable;
-use Bitrix\Im\Model\RecentTable;
-use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Chat\Access\OpenChatAccessPolicy;
-use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
-use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
-use Bitrix\Im\V2\Entity\User\UserFactory;
-use Bitrix\Main\ORM\Fields\Relations\Reference;
-use Bitrix\Main\ORM\Query\Join;
-use Bitrix\Main\ORM\Query\Query;
 
 /**
  * Per-user resolver of the preview source (chat + own message) for a collab recent row.
@@ -34,16 +24,19 @@ readonly class CollabPreviewSourceResolver
 	 */
 	private const FAN_OUT_CHUNK_SIZE = 200;
 
-	/** Column the batched candidate statement matches every per-user join against. */
-	private const MEMBER_USER_COLUMN = 'OWN_REL.USER_ID';
-
 	public function __construct(
 		private UnreadFreshnessQuery $unreadFreshnessQuery,
 		private OwnMessageQuery $ownMessageQuery,
-		private ParentChainFilterFactory $parentChainFilterFactory,
-		private OpenChatAccessPolicy $openChatAccessPolicy,
+		private CollabCandidateQuery $candidateQuery,
 	) {}
 
+	/**
+	 * Freshness first, candidates second: the user's unread inside the collab is folded into ancestor
+	 * chains ({@see UnreadFreshnessQuery::fetchChains()}), and only the chats met on those chains are
+	 * probed for candidacy. Nothing unread in the scope - the candidates are never enumerated and the
+	 * winner comes from the denormalized last message. The cost of the hit follows the user's unread,
+	 * not the collab's size.
+	 */
 	public function resolve(int $collabChatId, int $userId): PreviewSource
 	{
 		if (!Features::isCollabPreviewSourceEnabled())
@@ -51,8 +44,39 @@ readonly class CollabPreviewSourceResolver
 			return $this->mainChatSource($collabChatId);
 		}
 
+		$this->candidateQuery->beginResolution();
+
+		$chainBuckets = $this->unreadFreshnessQuery->fetchChains($collabChatId, $userId);
+		if ($chainBuckets === null)
+		{
+			return $this->resolveCandidatesFirst($collabChatId, $userId);
+		}
+
+		$observedChatIds = $chainBuckets->observedChatIds();
+		if (empty($observedChatIds))
+		{
+			return $this->bestByLastMessageSource($collabChatId, $userId);
+		}
+
+		$candidateIds = $this->fetchAccessibleCandidates($collabChatId, $userId, $observedChatIds);
+
+		return $this->resolveSingle(
+			$collabChatId,
+			$userId,
+			$candidateIds,
+			$chainBuckets->assign($candidateIds),
+			isCandidateSetNarrowed: true,
+		);
+	}
+
+	/**
+	 * The order of the dialects without the flat unread statement: freshness is one aggregating query
+	 * per depth carrying the candidate ids in SQL, so the candidates have to be enumerated first.
+	 */
+	private function resolveCandidatesFirst(int $collabChatId, int $userId): PreviewSource
+	{
 		$candidateIds = $this->fetchAccessibleCandidates($collabChatId, $userId);
-		$freshUnreadByChat = $this->unreadFreshnessQuery->fetch($collabChatId, $candidateIds, $userId);
+		$freshUnreadByChat = $this->unreadFreshnessQuery->fetch($candidateIds, $userId);
 
 		return $this->resolveSingle($collabChatId, $userId, $candidateIds, $freshUnreadByChat);
 	}
@@ -86,6 +110,8 @@ readonly class CollabPreviewSourceResolver
 			// One shared immutable PreviewSource instance under every key - intentional, do not clone per user.
 			return array_fill_keys($userIds, $this->mainChatSource($collabChatId));
 		}
+
+		$this->candidateQuery->beginResolution();
 
 		// The last-own map is user-independent (per-chat MAX) and the candidate sets of one collab's
 		// members overlap heavily, so it is memoized across the whole fan-out with delta loading: each
@@ -195,7 +221,9 @@ readonly class CollabPreviewSourceResolver
 	}
 
 	/**
-	 * @param int[] $candidateIds accessible, not-hidden, not-muted candidates of this collab
+	 * @param int[] $candidateIds accessible, not-hidden, not-muted candidates of this collab; on the
+	 *        read path already narrowed to the chats met on the user's unread chains, which the
+	 *        ranking cannot tell apart from the full set ({@see UnreadChainBuckets})
 	 * @param array<int,int> $freshUnreadByChat chatId => freshest unread MESSAGE_ID
 	 * @param callable():array<int,?int>|null $lastOwnLoader shared last-own map loader of the fan-out
 	 *        path; must cover (be a superset of) $candidateIds. Null = per-user statements (the
@@ -203,6 +231,10 @@ readonly class CollabPreviewSourceResolver
 	 * @param array<int,int>|null $ownFreshestByUser freshest unread of each member in the candidate
 	 *        their ranking picked, resolved for the whole chunk ahead of the loop; a member without
 	 *        one is absent from the map. Null = per-user statement (the single-user paths).
+	 * @param bool $isCandidateSetNarrowed whether $candidateIds is the narrowing of the read path
+	 *        rather than the member's full candidate set. Only the narrowed set has to re-ask the
+	 *        database in the no-unread branch; a full set is already the answer that branch would
+	 *        query for, so it is ranked in place.
 	 */
 	protected function resolveSingle(
 		int $collabChatId,
@@ -211,13 +243,12 @@ readonly class CollabPreviewSourceResolver
 		array $freshUnreadByChat,
 		?callable $lastOwnLoader = null,
 		?array $ownFreshestByUser = null,
+		bool $isCandidateSetNarrowed = false,
 	): PreviewSource
 	{
-		if (empty($candidateIds))
-		{
-			return $this->mainChatSource($collabChatId);
-		}
-
+		// No early return on an empty candidate set: on the read path it is the narrowed set, and its
+		// emptiness says nothing about the full one. The no-unread branch below queries the full set
+		// itself, under the same access conditions, and its empty answer yields the same main-chat source.
 		$winner = $this->rankWinner($candidateIds, $freshUnreadByChat);
 
 		if ($winner !== null)
@@ -250,10 +281,20 @@ readonly class CollabPreviewSourceResolver
 			return $this->mainChatSource($collabChatId);
 		}
 
-		// No unread anywhere: pick the last own message among the candidates.
+		if ($isCandidateSetNarrowed)
+		{
+			// The narrowed set says nothing about the full one, so the branch asks the database for
+			// the full set itself, ranked inside the statement.
+			return $this->bestByLastMessageSource($collabChatId, $userId);
+		}
+
+		// No unread anywhere and the full candidate set already in hand: the winner is the last own
+		// message among them, taken from the map the whole chunk shares on the fan-out path and from
+		// one batched statement on the single-user paths without the chain aggregate.
 		$lastOwnByChat = $lastOwnLoader !== null
 			? $lastOwnLoader()
-			: $this->ownMessageQuery->lastOwnBatch($candidateIds);
+			: $this->ownMessageQuery->lastOwnBatch($candidateIds)
+		;
 		$bestChatId = 0;
 		$bestMessageId = 0;
 		foreach ($candidateIds as $candidateId)
@@ -278,6 +319,28 @@ readonly class CollabPreviewSourceResolver
 		return $this->mainChatSource($collabChatId);
 	}
 
+	/**
+	 * The read path's branch for "nothing unread": the winner is ranked by the denormalized last
+	 * message inside the statement, so the candidates never reach PHP and b_im_message is never
+	 * aggregated. No candidate survives the history border - the main chat, exactly as an empty
+	 * candidate set used to yield. Only the narrowed set comes here; a caller already holding the full
+	 * set ranks it in place instead ({@see resolveSingle()}).
+	 */
+	private function bestByLastMessageSource(int $collabChatId, int $userId): PreviewSource
+	{
+		$best = $this->candidateQuery->bestByLastMessage($collabChatId, $userId);
+		if ($best === null)
+		{
+			return $this->mainChatSource($collabChatId);
+		}
+
+		return new PreviewSource(
+			sourceChatId: $best['chatId'],
+			messageId: $best['messageId'],
+			isMainChat: $best['chatId'] === $collabChatId,
+		);
+	}
+
 	protected function mainChatSource(int $collabChatId): PreviewSource
 	{
 		$chat = Chat::getInstance($collabChatId);
@@ -291,144 +354,29 @@ readonly class CollabPreviewSourceResolver
 	 * through the parent-membership-aware access filter. Threads are excluded (their unread is
 	 * rolled up by UnreadFreshnessQuery).
 	 *
+	 * @param int[]|null $restrictToChatIds the chats met on the user's unread chains; the statement
+	 *        then probes them by PRIMARY instead of walking every child of the collab
 	 * @return int[] candidate chat ids
 	 */
-	protected function fetchAccessibleCandidates(int $collabChatId, int $userId): array
+	protected function fetchAccessibleCandidates(
+		int $collabChatId,
+		int $userId,
+		?array $restrictToChatIds = null,
+	): array
 	{
-		$query = ChatTable::query()
-			->setSelect(['ID'])
-			->where(
-				Query::filter()
-					->logic('OR')
-					->where('PARENT_ID', $collabChatId)
-					->where('ID', $collabChatId),
-			)
-			// Exclude comment chats defensively: their unread is rolled up by UnreadFreshnessQuery.
-			// The collab itself is COLLAB / OPEN_COLLAB, so this never drops the main chat.
-			->whereNot('TYPE', Chat::IM_TYPE_COMMENT)
-		;
-
-		$query->registerRuntimeField(
-			'OWN_REL',
-			(new Reference(
-				'OWN_REL',
-				RelationTable::class,
-				Join::on('ref.CHAT_ID', 'this.ID')
-					->where('ref.USER_ID', $userId),
-			))->configureJoinType(Join::TYPE_INNER),
-		);
-		$query->where('OWN_REL.NOTIFY_BLOCK', 'N');
-		$query->where('OWN_REL.IS_HIDDEN', 'N');
-
-		// A hidden chat is just a removed b_im_recent row, so a candidate must still be present in recent.
-		$query->registerRuntimeField(
-			'OWN_RECENT',
-			(new Reference(
-				'OWN_RECENT',
-				RecentTable::class,
-				Join::on('ref.ITEM_CID', 'this.ID')
-					->where('ref.USER_ID', $userId),
-			))->configureJoinType(Join::TYPE_INNER),
-		);
-
-		$this->parentChainFilterFactory
-			->forUser($userId, new TreeOrigin('PARENT_ID', 'ID'))
-			->apply($query)
-		;
-
-		$candidateIds = [];
-		foreach ($query->fetchAll() as $row)
-		{
-			$candidateIds[] = (int)$row['ID'];
-		}
-
-		return $candidateIds;
+		return $this->candidateQuery->forUser($collabChatId, $userId, $restrictToChatIds);
 	}
 
 	/**
-	 * The same candidate set as {@see fetchAccessibleCandidates()} for a whole member chunk: one
-	 * statement per open-chat policy group instead of one per member. The chat-side restriction is
-	 * shared by the whole group, while the mute/hidden relation, the recent row and the parent chain
-	 * are matched against the driving USER_ID column, so each member is still resolved on their own
-	 * state. The single-user form above stays as it is - it is the read path, where the constant
-	 * USER_ID gives the optimizer the narrowest possible probes.
+	 * The same candidate set as {@see fetchAccessibleCandidates()} for a whole member chunk. The form
+	 * and the open-chat policy grouping it depends on belong to {@see CollabCandidateQuery}, which is
+	 * the only place in the module deciding which members may share one statement.
 	 *
 	 * @param int[] $userIds
 	 * @return array<int,int[]> userId => candidate chat ids, one entry per input member
 	 */
 	protected function fetchAccessibleCandidatesForMembers(int $collabChatId, array $userIds): array
 	{
-		$candidatesByUser = array_fill_keys($userIds, []);
-
-		foreach ($this->groupByOpenChatPolicy($userIds) as $groupUserIds)
-		{
-			$query = ChatTable::query()
-				->setSelect(['ID', 'MEMBER_USER_ID' => self::MEMBER_USER_COLUMN])
-				->where(
-					Query::filter()
-						->logic('OR')
-						->where('PARENT_ID', $collabChatId)
-						->where('ID', $collabChatId),
-				)
-				->whereNot('TYPE', Chat::IM_TYPE_COMMENT)
-			;
-
-			$query->registerRuntimeField(
-				'OWN_REL',
-				(new Reference(
-					'OWN_REL',
-					RelationTable::class,
-					Join::on('ref.CHAT_ID', 'this.ID')
-						->whereIn('ref.USER_ID', $groupUserIds)
-						->where('ref.NOTIFY_BLOCK', 'N')
-						->where('ref.IS_HIDDEN', 'N'),
-				))->configureJoinType(Join::TYPE_INNER),
-			);
-
-			$query->registerRuntimeField(
-				'OWN_RECENT',
-				(new Reference(
-					'OWN_RECENT',
-					RecentTable::class,
-					Join::on('ref.ITEM_CID', 'this.ID')
-						->whereColumn('ref.USER_ID', self::MEMBER_USER_COLUMN),
-				))->configureJoinType(Join::TYPE_INNER),
-			);
-
-			$this->parentChainFilterFactory
-				->forUsersColumn($groupUserIds[0], self::MEMBER_USER_COLUMN, new TreeOrigin('PARENT_ID', 'ID'))
-				->apply($query)
-			;
-
-			// Streamed: the statement yields a row per member and child chat, and only the ids are kept.
-			$rows = $query->exec();
-			while ($row = $rows->fetch())
-			{
-				$candidatesByUser[(int)$row['MEMBER_USER_ID']][] = (int)$row['ID'];
-			}
-		}
-
-		return $candidatesByUser;
-	}
-
-	/**
-	 * Splits the members by the open-chat exemption, which the chain condition resolves once per
-	 * statement. Users are loaded in one query first, so the policy reads a warm registry.
-	 *
-	 * @param int[] $userIds
-	 * @return array<int[]> non-empty groups
-	 */
-	private function groupByOpenChatPolicy(array $userIds): array
-	{
-		UserFactory::getInstance()->getUsersByIds($userIds);
-
-		$groups = [];
-		foreach ($userIds as $userId)
-		{
-			$canSkip = (int)$this->openChatAccessPolicy->canSkipMembershipForOpenChats($userId);
-			$groups[$canSkip][] = $userId;
-		}
-
-		return array_values($groups);
+		return $this->candidateQuery->forMembers($collabChatId, $userIds);
 	}
 }

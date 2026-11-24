@@ -8,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 class SyncError extends Error
 {
 	public const LAST_ID_AND_DATE_EMPTY = 'LAST_ID_AND_DATE_EMPTY_ERROR';
+	public const LOG_BOUNDARY_UNAVAILABLE = 'LOG_BOUNDARY_UNAVAILABLE';
 
 	protected function loadErrorMessage($code, $replacements): string
 	{

@@ -69,6 +69,7 @@ class FileCommitService
 	public const ERROR_COMMON_STORAGE_BLOCKED = DisplayStatusResolver::ERROR_COMMON_STORAGE_BLOCKED;
 	public const ERROR_BIZPROC_PARAMS_REQUIRED = DisplayStatusResolver::ERROR_BIZPROC_PARAMS_REQUIRED;
 	public const ERROR_CONNECTION = DisplayStatusResolver::ERROR_CONNECTION;
+	public const ERROR_FORMAT_RESTRICTED = DisplayStatusResolver::ERROR_FORMAT_RESTRICTED;
 
 	/**
 	 * The client transport codes that mean "the link went, not the file": the code
@@ -471,7 +472,7 @@ class FileCommitService
 
 			$this->deleteOrphanBFile($bFileId);
 
-			return $this->failItem($item, self::ERROR_INTERNAL);
+			return $this->failItem($item, self::classifyWriteRefusal($folder));
 		}
 
 		$this->postCommitHook->beforeAtomicUpdate($item);
@@ -635,9 +636,10 @@ class FileCommitService
 			// version-row write failure the head carries the new content without a version
 			// row while the item is failed; not rolled back, since updateContent() also
 			// mutates links/recently-used, so a faithful rollback is more fragile than the gap.
+			// A format refusal is taken before updateContent(), so its b_file is never on the head.
 			$this->deleteOrphanBFile($bFileId);
 
-			return $this->failItem($item, self::ERROR_INTERNAL);
+			return $this->failItem($item, self::classifyWriteRefusal($file));
 		}
 
 		$this->postCommitHook->beforeAtomicUpdate($item);
@@ -1771,6 +1773,19 @@ class FileCommitService
 		]);
 
 		return true;
+	}
+
+	/**
+	 * The item error code of a refused domain write (addFile / addVersion) that is neither a
+	 * quota stop nor a name collision: a format forbidden by the format restriction rules gets
+	 * its own non-retriable code, any other refusal stays the generic retriable one.
+	 */
+	private static function classifyWriteRefusal(BaseObject $object): string
+	{
+		return $object->getErrorByCode(File::ERROR_FORMAT_RESTRICTED) !== null
+			? self::ERROR_FORMAT_RESTRICTED
+			: self::ERROR_INTERNAL
+		;
 	}
 
 	private function failItem(DockedUploadItem $item, string $errorCode): ?int

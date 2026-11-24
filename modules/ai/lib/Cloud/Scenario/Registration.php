@@ -122,8 +122,9 @@ final class Registration
 	/**
 	 * Tries to register portal in cloud aiproxy service. Uses most suitable server.
 	 * If registration fails, adds a notification to admin panel.
-	 * @return Result
+	 * @return Result Successful without registration if there is no suitable server.
 	 * @throws ArgumentException
+	 * @throws \RuntimeException If the allowed server list cannot be loaded; no notification is added then.
 	 */
 	public function tryAutoRegister(): Result
     {

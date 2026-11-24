@@ -47,11 +47,7 @@ class Security extends BaseTool
 			return false;
 		}
 
-		$user = new Intranet\Entity\User((int)CurrentUser::get()->getId());
-
-		return (new Integration\Security\PersonalOtp($user))->hasConnectedPushDevice()
-			&& (new Intranet\Internal\Service\Otp\DeviceReconnect())->isDeviceLost((int)$user->getId())
-		;
+		return (new Intranet\Internal\Service\Otp\DeviceReconnect())->isDeviceLost((int)CurrentUser::get()->getId());
 	}
 
 	public static function hasPhoneConfirmationCounter(): bool

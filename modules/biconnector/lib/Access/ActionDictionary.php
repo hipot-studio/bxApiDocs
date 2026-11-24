@@ -13,6 +13,7 @@ final class ActionDictionary
 	public const ACTION_BIC_SETTINGS_EDIT_RIGHTS = 'bic_settings_edit_rights';
 	public const ACTION_BIC_SETTINGS_EDIT_TABLE_RIGHTS = 'bic_settings_edit_table_rights';
 	public const ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS = 'bic_section_edit_dashboard_rights';
+	public const ACTION_BIC_SETTINGS_EDIT_ROW_RULES = 'bic_settings_edit_row_rules';
 	public const ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG = 'bic_external_dashboard_config';
 	public const ACTION_BIC_DELETE_ALL_UNUSED_ELEMENTS = 'bic_delete_unused_elements';
 	public const ACTION_BIC_DASHBOARD_VIEW = 'bic_dashboard_view';
@@ -43,6 +44,7 @@ final class ActionDictionary
 			self::ACTION_BIC_SETTINGS_EDIT_RIGHTS => PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
 			self::ACTION_BIC_SETTINGS_EDIT_TABLE_RIGHTS => PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS,
 			self::ACTION_BIC_SECTION_EDIT_DASHBOARD_RIGHTS => PermissionDictionary::BIC_SECTION_EDIT_DASHBOARD_RIGHTS,
+			self::ACTION_BIC_SETTINGS_EDIT_ROW_RULES => PermissionDictionary::BIC_SETTINGS_EDIT_ROW_RULES,
 			self::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG => PermissionDictionary::BIC_EXTERNAL_DASHBOARD_CONFIG,
 			self::ACTION_BIC_DELETE_ALL_UNUSED_ELEMENTS => PermissionDictionary::BIC_DELETE_ALL_UNUSED_ELEMENTS,
 			self::ACTION_BIC_DASHBOARD_VIEW => PermissionDictionary::BIC_DASHBOARD,

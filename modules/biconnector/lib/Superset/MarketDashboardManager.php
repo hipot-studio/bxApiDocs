@@ -655,10 +655,11 @@ final class MarketDashboardManager
 
 			if (is_null($existGroupRelation))
 			{
-				$groupRelation = SupersetDashboardGroupBindingTable::createObject();
-				$groupRelation->setGroupId((int)$groupId);
-				$groupRelation->setDashboardId($dashboardId);
-				$groupRelation->save();
+				// A parallel import of the same app can bind the group between the check and the insert.
+				SupersetDashboardGroupBindingTable::addInsertIgnore([
+					'GROUP_ID' => (int)$groupId,
+					'DASHBOARD_ID' => $dashboardId,
+				]);
 			}
 
 			$scopes = ScopeService::getInstance()->getDashboardScopes($dashboardId);

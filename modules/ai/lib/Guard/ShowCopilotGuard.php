@@ -8,10 +8,8 @@ use Bitrix\Intranet\Util;
 use Bitrix\Main\LoaderException;
 
 /**
- * @deprecated @use
- * 	\Bitrix\AI\Container::init()
- * 		->getItem(\Bitrix\AI\Services\CopilotAccessCheckerService::class)
- * 		->canShowInFrontend($userId)
+ * @deprecated Use \Bitrix\AI\Services\CopilotAccessCheckerService::canShowInFrontend()
+ * via \Bitrix\AI\Container::init()->getItem(CopilotAccessCheckerService::class).
  */
 class ShowCopilotGuard
 {

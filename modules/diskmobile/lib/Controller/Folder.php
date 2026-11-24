@@ -173,7 +173,7 @@ class Folder extends BaseFileList
 		return null;
 	}
 
-	private function respondWithGlobalSearchResults(string $search, ?array $searchContext = null): ?array
+	private function respondWithGlobalSearchResults(string $search, ?array $searchContext = null): array
 	{
 		$entities = $searchContext['entities'] ?? [];
 		$entities = is_array($entities) ? $entities : [];
@@ -190,7 +190,7 @@ class Folder extends BaseFileList
 		);
 
 		$storageFileFinder = new \Bitrix\Disk\Search\StorageFileFinder(
-			userId: $this->getCurrentUser()->getId(),
+			userId: $this->getCurrentUserId(),
 			entityTypes: $entityTypes,
 		);
 		$items = $storageFileFinder->findModelsByText($search);

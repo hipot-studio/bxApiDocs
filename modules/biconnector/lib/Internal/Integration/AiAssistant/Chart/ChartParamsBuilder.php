@@ -48,6 +48,13 @@ final class ChartParamsBuilder
 		'between' => 'TEMPORAL_RANGE',
 	];
 
+	public static function vizTypeAlias(string $storedType): ?string
+	{
+		$alias = array_search($storedType, self::VIZ_TYPE_MAP, true);
+
+		return $alias === false ? null : $alias;
+	}
+
 	/**
 	 * @param array $dsl {
 	 *   datasetId: int (required),

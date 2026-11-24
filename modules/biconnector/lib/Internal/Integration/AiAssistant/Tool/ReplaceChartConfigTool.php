@@ -222,7 +222,7 @@ final class ReplaceChartConfigTool extends BaseBiTool
 		}
 
 		$chartData = $lookup->getData()['entity'];
-		if (!is_array($chartData['dashboards'] ?? []))
+		if (!is_array($chartData['dashboards'] ?? null))
 		{
 			throw self::unavailableBiException([], ['stage' => 'chart_lookup.dashboards', 'chart_id' => $chartId]);
 		}
@@ -234,6 +234,7 @@ final class ReplaceChartConfigTool extends BaseBiTool
 		$this->assertChartEditableByDashboards(
 			$userId,
 			$chartData['dashboards'] ?? [],
+			is_array($chartData['owners'] ?? null) ? $chartData['owners'] : [],
 		);
 
 		$dataset = (new ChartDatasetGuard())->validate($args, $user);

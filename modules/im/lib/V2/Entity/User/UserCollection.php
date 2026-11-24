@@ -105,7 +105,7 @@ class UserCollection extends EntityCollection
 				)
 			)
 			->where('ACTIVE', 'Y')
-			->where('IS_REAL_USER', true)
+			->where('REAL_USER', 'expr', true)
 			->whereNotIn('ID', $excludeUserIds)
 			->whereMatch('USER_INDEX.SEARCH_USER_CONTENT', $matchString)
 			->setLimit($limit);

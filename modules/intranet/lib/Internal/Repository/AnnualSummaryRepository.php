@@ -12,6 +12,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity\EntityCollection;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\SystemException;
 
 class AnnualSummaryRepository
@@ -32,7 +33,29 @@ class AnnualSummaryRepository
 			->fetchObject()
 		;
 		
+		if ($model === null)
+		{
+			throw new ObjectNotFoundException('Annual summary is unavailable.');
+		}
+
 		return $this->convertToEntity($model);
+	}
+
+	public function findByUserId(int $userId): AnnualSummary\SummaryCollection
+	{
+		$rows = AnnualSummaryTable::query()
+			->setSelect(['NAME', 'TOTAL'])
+			->where('USER_ID', $userId)
+			->exec()
+		;
+		$summaries = [];
+		while ($row = $rows->fetch())
+		{
+			$code = (string)$row['NAME'];
+			$summaries[$code] = new AnnualSummary\Summary($userId, $code, (int)$row['TOTAL']);
+		}
+
+		return new AnnualSummary\SummaryCollection(...array_values($summaries));
 	}
 
 	public function has(int $userId): bool

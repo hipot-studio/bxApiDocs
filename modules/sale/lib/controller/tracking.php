@@ -3,18 +3,17 @@
 
 namespace Bitrix\Sale\Controller;
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Sale\Delivery\Tracking\Manager;
+use Bitrix\Sale\Public\Service\ModuleAccess;
 
 
 class Tracking extends \Bitrix\Main\Engine\Controller
 {
 	private $manager;
-
-	const PERMISSION_READ = 'D';
-	const PERMISSION_WRITE = 'W';
 
 	public function __construct(?Request $request = null)
 	{
@@ -24,6 +23,11 @@ class Tracking extends \Bitrix\Main\Engine\Controller
 
 	public function getStatusByShipmentIdAction(int $shipmentId, string $trackingNumber = '')
 	{
+		if (!$this->checkReadAccess())
+		{
+			return null;
+		}
+
 		if($shipmentId <= 0)
 		{
 			$this->addError(new Error(Loc::getMessage('SALE_CONTROLLER_TRACKING_ERROR_SHIPMENT_ZERO')));
@@ -33,11 +37,6 @@ class Tracking extends \Bitrix\Main\Engine\Controller
 		if($trackingNumber == '')
 		{
 			$this->addError(new Error(Loc::getMessage('SALE_CONTROLLER_TRACKING_ERROR_DELETE_STATUS')));
-			return null;
-		}
-
-		if(!$this->checkPermission(self::PERMISSION_READ))
-		{
 			return null;
 		}
 
@@ -62,7 +61,7 @@ class Tracking extends \Bitrix\Main\Engine\Controller
 				'lastChange' => $lastChange
 			];
 
-			if($this->checkPermission(self::PERMISSION_WRITE))
+			if ($this->getModuleAccess()->canModify())
 			{
 				$res = $this->manager->updateShipment($shipmentId, $res);
 
@@ -80,23 +79,20 @@ class Tracking extends \Bitrix\Main\Engine\Controller
 		return $result;
 	}
 
-	protected function checkPermission($permissionType)
+	private function getModuleAccess(): ModuleAccess
 	{
-		$result =  self::getApplication()->GetGroupRight("sale") >= $permissionType;
+		return ServiceLocator::getInstance()->get('sale.moduleAccess');
+	}
 
-		if(!$result)
+	private function checkReadAccess(): bool
+	{
+		$result = $this->getModuleAccess()->canRead();
+
+		if (!$result)
 		{
 			$this->addError(new Error('Access denied'));
 		}
 
 		return $result;
-	}
-
-	protected static function getApplication()
-	{
-		/** @global \CMain $APPLICATION */
-		global $APPLICATION;
-
-		return $APPLICATION;
 	}
 }

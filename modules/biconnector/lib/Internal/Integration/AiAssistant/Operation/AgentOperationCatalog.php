@@ -134,19 +134,28 @@ final class AgentOperationCatalog
 	 * @param string $toolSetCode Code the tool set class answers with.
 	 * @param string|null $language Language of the wording; null takes the language of the request.
 	 *        A caller whose text is stored beyond the request that built it names the language.
+	 * @param bool $includeFlaggedOperations Whether to include operations gated for the current user.
+	 *        Shared descriptions pass false; records shown to a person keep the default.
 	 * @return AgentOperation[] Records of the set in the declared order; empty for a code the
 	 * catalogue does not know, which keeps an unknown set from failing the text it describes.
 	 */
-	public function getOperations(string $toolSetCode, ?string $language = null): array
+	public function getOperations(
+		string $toolSetCode,
+		?string $language = null,
+		bool $includeFlaggedOperations = true,
+	): array
 	{
 		$definitions = self::OPERATIONS[$toolSetCode] ?? [];
-		$userId = (int)CurrentUser::get()->getId();
-		$gate = new FlagGate();
-		foreach (self::FLAGGED_OPERATIONS as $flag => $sets)
+		if ($includeFlaggedOperations)
 		{
-			if ($gate->isEnabled($flag, $userId))
+			$userId = (int)CurrentUser::get()->getId();
+			$gate = new FlagGate();
+			foreach (self::FLAGGED_OPERATIONS as $flag => $sets)
 			{
-				$definitions += $sets[$toolSetCode] ?? [];
+				if ($gate->isEnabled($flag, $userId))
+				{
+					$definitions += $sets[$toolSetCode] ?? [];
+				}
 			}
 		}
 		$operations = [];

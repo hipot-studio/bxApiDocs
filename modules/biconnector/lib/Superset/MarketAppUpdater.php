@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset;
 
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
@@ -11,6 +12,8 @@ use Bitrix\Rest\Marketplace\Client;
 
 class MarketAppUpdater
 {
+	private const LOCK_KEY = 'biconnector_market_app_updater';
+
 	private static ?MarketAppUpdater $instance = null;
 
 	public static function getInstance(): self
@@ -95,19 +98,34 @@ class MarketAppUpdater
 			return $result;
 		}
 
-		$dashboardsToUpdate = $this->getDashboardsToUpdate();
-
-		$manager = MarketDashboardManager::getInstance();
-		foreach ($dashboardsToUpdate as $dashboard)
+		// Every dashboard page hit starts the update in the background, so parallel hits would import
+		// the same apps at once. The hit that does not get the lock leaves the update to the one that did.
+		$connection = Application::getConnection();
+		if (!$connection->lock(self::LOCK_KEY, 0))
 		{
-			$installResult = $manager->installApplication($dashboard['CODE'], $dashboard['VERSION']);
-			if (!$installResult->isSuccess())
-			{
-				$result->addErrors($installResult->getErrors());
-			}
+			return $result;
 		}
 
-		Option::set('biconnector', 'last_time_dashboard_check_update', (new DateTime())->getTimestamp());
+		try
+		{
+			$dashboardsToUpdate = $this->getDashboardsToUpdate();
+
+			$manager = MarketDashboardManager::getInstance();
+			foreach ($dashboardsToUpdate as $dashboard)
+			{
+				$installResult = $manager->installApplication($dashboard['CODE'], $dashboard['VERSION']);
+				if (!$installResult->isSuccess())
+				{
+					$result->addErrors($installResult->getErrors());
+				}
+			}
+
+			Option::set('biconnector', 'last_time_dashboard_check_update', (new DateTime())->getTimestamp());
+		}
+		finally
+		{
+			$connection->unlock(self::LOCK_KEY);
+		}
 
 		return $result;
 	}

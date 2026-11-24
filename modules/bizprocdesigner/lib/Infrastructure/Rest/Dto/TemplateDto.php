@@ -46,6 +46,13 @@ class TemplateDto extends Dto
 	#[Description('Draft of the current user. Comes only when the template is read back: getting it or adding a draft.')]
 	public ?int $draftId;
 
+	#[Description(
+		'Fingerprint of the content of that draft, to be passed back to template.publish. Comes alongside'
+		. ' draftId and is null when there is no draft. Changes whenever the draft is rewritten, which is'
+		. ' what lets a publication refuse a graph that is no longer the one it was shown.'
+	)]
+	public ?string $draftFingerprint;
+
 	#[ElementType(AgentBlockDto::class)]
 	#[Editable(['add'])]
 	#[Description('Blocks of the graph. Comes only when the template is read back; on write it carries the new graph.')]

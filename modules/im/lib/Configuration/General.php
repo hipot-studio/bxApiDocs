@@ -6,6 +6,8 @@ use Bitrix\Im\Model\OptionStateTable;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat\Background\BackgroundId;
+use Bitrix\Im\V2\Settings\Entity;
+use Bitrix\Im\V2\Settings\Sound;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\ObjectPropertyException;
@@ -109,6 +111,12 @@ class General extends Base
 			'viewBirthday' => true,
 			'viewCommonUsers' => true,
 			'enableSound' => true,
+			Entity\General::SOUND_VOLUME_GENERAL => Entity\General::SOUND_VOLUME_MAX,
+			Entity\General::SOUND_VOLUME_MESSAGES => Entity\General::SOUND_VOLUME_MAX,
+			Entity\General::SOUND_VOLUME_NOTIFICATIONS => Entity\General::SOUND_VOLUME_MAX,
+			Entity\General::SOUND_VOLUME_CALLS => Entity\General::SOUND_VOLUME_MAX,
+			Entity\General::SOUND_VOLUME_SERVICE => Entity\General::SOUND_VOLUME_MAX,
+			Entity\General::SOUND_MUTED => false,
 			'enableBigSmile' => true,
 			'defaultReaction' => 'like',/** @see \Bitrix\UI\Public\Enum\Reaction\ReactionName::LIKE */
 			'enableDarkTheme' => 'auto',
@@ -154,6 +162,10 @@ class General extends Base
 			return;
 		}
 		$settings = self::checkingValues($settings);
+		// The legacy flag becomes levels before the defaults are merged in: after the merge a flag
+		// saying the sound is off would stand next to the default levels of 100, and a read, which
+		// takes the levels for the truth, would switch the sound back on.
+		$settings = Sound\VolumeLevels::fill($settings);
 		$encodedSettings = self::encodeSettings($settings);
 		$defaultSettings = self::encodeSettings(self::getDefaultSettings());
 
@@ -213,7 +225,7 @@ class General extends Base
 			return $defaultSettings;
 		}
 
-		$settings = static::decodeSettings($settings);
+		$settings = Sound\VolumeLevels::fill(static::decodeSettings($settings));
 
 		return array_replace_recursive($defaultSettings, $settings);
 	}
@@ -435,8 +447,35 @@ class General extends Base
 		return self::prepareRawGroupSettings($settings);
 	}
 
+	/**
+	 * Setting names the group really has a row for, as opposed to the ones a read fills in
+	 * from the defaults.
+	 *
+	 * @return string[]
+	 */
+	public static function getStoredSettingNames(int $groupId): array
+	{
+		$query =
+			OptionStateTable::query()
+				->setSelect(['NAME'])
+				->where('GROUP_ID', $groupId)
+				->whereLike('NAME', static::ENTITY.'%')
+		;
+
+		$names = [];
+		foreach ($query->exec() as $rowSetting)
+		{
+			$names[] = self::decodeName($rowSetting['NAME']);
+		}
+
+		return $names;
+	}
+
 	public static function prepareRawGroupSettings(array $settings): array
 	{
+		// Sound levels are derived from what is actually stored, so they are filled in
+		// before the defaults hide the difference between a missing and a stored key.
+		$settings = Sound\VolumeLevels::fill($settings);
 		$settings = self::filterGroupSettingsByDefault($settings);
 
 		// Normalize backgroundImageId: legacy numeric values → text codes.
@@ -564,6 +603,11 @@ class General extends Base
 			elseif ($value === false)
 			{
 				$encodedSettings[$encodeName] = 'N';
+			}
+			elseif (is_int($value) || is_float($value))
+			{
+				// The stored value is a string, so a number has to be compared and written as one.
+				$encodedSettings[$encodeName] = (string)$value;
 			}
 			else
 			{
@@ -759,8 +803,8 @@ class General extends Base
 				case 'sendByEnter': // for legacy
 					$verifiedSettings[$name] = $value === 'Y' || $value === true;
 					break;
-				case 'enableSound': // for legacy
-					$verifiedSettings[$name] = !($value === 'N' || $value === false);
+				case Entity\General::ENABLE_SOUND: // for legacy
+					$verifiedSettings[$name] = Sound\VolumeLevels::isLegacySoundEnabled($value);
 					break;
 				case 'backgroundImageId':
 					$normalized = BackgroundId::normalize((string)$value);
@@ -783,6 +827,13 @@ class General extends Base
 							: $defaultSettings[$name]
 					;
 					break;
+				case Entity\General::SOUND_VOLUME_GENERAL:
+				case Entity\General::SOUND_VOLUME_MESSAGES:
+				case Entity\General::SOUND_VOLUME_NOTIFICATIONS:
+				case Entity\General::SOUND_VOLUME_CALLS:
+				case Entity\General::SOUND_VOLUME_SERVICE:
+					$verifiedSettings[$name] = self::clampSoundVolume($value, (int)$defaultSettings[$name]);
+					break;
 				case 'pinnedChatSort':
 					$verifiedSettings[$name] =
 						($value === 'byDate')
@@ -803,4 +854,13 @@ class General extends Base
 		return $verifiedSettings;
 	}
 
+	private static function clampSoundVolume($value, int $defaultValue): int
+	{
+		if (!is_numeric($value))
+		{
+			return $defaultValue;
+		}
+
+		return max(0, min(Entity\General::SOUND_VOLUME_MAX, (int)$value));
+	}
 }

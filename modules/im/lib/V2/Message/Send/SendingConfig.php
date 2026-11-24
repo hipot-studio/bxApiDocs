@@ -174,6 +174,7 @@ class SendingConfig
 	private bool $skipFireEventBeforeMessageNotifySend = false;
 
 	private bool $skipCounterIncrements = false;
+	private bool $skipUrlIndex = false;
 
 	/**
 	 * SILENT_CONNECTOR - Keep silent. Do not send message into OL connector to the client side.
@@ -203,6 +204,7 @@ class SendingConfig
 
 	private ?array $counterRecipients = null;
 	private ?array $pushRecipients = null;
+	private string $sendMessageAnalyticsType = 'message_standart';
 	private ?Uuid $messageUuidReservation = null;
 
 	public function __construct(?array $args = null)
@@ -270,6 +272,18 @@ class SendingConfig
 	public function setPushRecipients(?array $pushRecipients): self
 	{
 		$this->pushRecipients = $pushRecipients !== null ? $this->prepareSet($pushRecipients) : null;
+
+		return $this;
+	}
+
+	public function getSendMessageAnalyticsType(): string
+	{
+		return $this->sendMessageAnalyticsType;
+	}
+
+	public function setSendMessageAnalyticsType(string $sendMessageAnalyticsType): self
+	{
+		$this->sendMessageAnalyticsType = $sendMessageAnalyticsType;
 
 		return $this;
 	}
@@ -342,13 +356,15 @@ class SendingConfig
 		foreach (self::MAP_LEGACY_TO_ACTUAL_FIELD as $legacyFieldName => $fieldInfo)
 		{
 			$actualFieldName = $fieldInfo['actual'];
+			// Карта называет и поля, которых у класса нет (skipUrlIndex): значение и раньше выходило пустым, но
+			// каждый вызов писал предупреждение в php-лог — 5 тысяч записей за ночной проход 22.09.2026.
 			if ($fieldInfo['type'] === self::TYPE_BOOL && $boolAsString)
 			{
-				$data[$legacyFieldName] = $this->{$actualFieldName} ? 'Y' : 'N';
+				$data[$legacyFieldName] = ($this->{$actualFieldName} ?? false) ? 'Y' : 'N';
 			}
 			else
 			{
-				$data[$legacyFieldName] = $this->{$actualFieldName};
+				$data[$legacyFieldName] = $this->{$actualFieldName} ?? null;
 			}
 		}
 

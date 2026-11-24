@@ -957,6 +957,17 @@ class CMobileHelper
 			}
 		}
 
+		else if (
+			mb_strpos($tag, 'STAFFTRACK|OFFICES_ONBOARDING|') === 0
+			&& self::isOfficesOpenSupportedByStaffTrackMobile()
+		)
+		{
+			$officesPage = CUtil::JSEscape(SITE_DIR . 'stafftrack/offices/');
+
+			return "BXMobileApp.Events.postToComponent('stafftrack::offices::open',"
+				. " [{url: '{$officesPage}'}], 'background');";
+		}
+
 		if ($result)
 		{
 			if ($unique)
@@ -980,6 +991,12 @@ class CMobileHelper
 	{
 		return Loader::includeModule('timemanmobile')
 			&& method_exists(\Bitrix\TimemanMobile\Infrastructure\Controllers\FullReport::class, 'getReportAction');
+	}
+
+	public static function isOfficesOpenSupportedByStaffTrackMobile(): bool
+	{
+		return Loader::includeModule('stafftrackmobile')
+			&& class_exists(\Bitrix\StaffTrackMobile\Infrastructure\Controllers\CheckIn\OfficesOnboarding::class);
 	}
 
 	public static function getUserInfo($userId)
@@ -1107,7 +1124,14 @@ class CMobileHelper
 	{
 		$preparedText = $text;
 
-		if (mb_strpos($tag, 'TASKS|TASK|') === 0 || mb_strpos($tag, 'TASKS|COMMENT|') === 0)
+		if (
+			mb_strpos($tag, 'TASKS|TASK|') === 0
+			|| mb_strpos($tag, 'TASKS|COMMENT|') === 0
+			|| (
+				mb_strpos($tag, 'STAFFTRACK|OFFICES_ONBOARDING|') === 0
+				&& self::isOfficesOpenSupportedByStaffTrackMobile()
+			)
+		)
 		{
 			$preparedText = strip_tags($text, '<br>');
 		}

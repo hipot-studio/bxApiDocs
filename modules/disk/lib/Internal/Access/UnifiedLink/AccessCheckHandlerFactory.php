@@ -160,10 +160,10 @@ final class AccessCheckHandlerFactory
 	/**
 	 * The unified-link chain alone: the parent folders and the record of the object itself.
 	 */
-	public function getForUnifiedLink(int $userId): AccessCheckHandler
+	public function getForUnifiedLink(int $userId, bool $fresh = false, array $snapshot = []): AccessCheckHandler
 	{
-		$unifiedLinkParentFoldersAccessCheckHandler = new UnifiedLinkParentFoldersAccessCheckHandler($userId);
-		$unifiedLinkAccessCheckHandler = new UnifiedLinkAccessCheckHandler($userId);
+		$unifiedLinkParentFoldersAccessCheckHandler = new UnifiedLinkParentFoldersAccessCheckHandler($userId, $fresh, $snapshot);
+		$unifiedLinkAccessCheckHandler = new UnifiedLinkAccessCheckHandler($userId, $fresh, $snapshot);
 
 		return $unifiedLinkParentFoldersAccessCheckHandler->append($unifiedLinkAccessCheckHandler);
 	}

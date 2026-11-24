@@ -6,13 +6,13 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\DestructiveBudget;
 use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
 use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
 use Bitrix\BIConnector\Internal\Operation\Builder\SupersetIdentity;
+use Bitrix\BIConnector\Internal\Operation\Builder\SupersetOwnership;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
@@ -526,22 +526,7 @@ final class WriteDatasetOperations
 	 */
 	private static function checkOwned(int $userId, array $datasetOwners): ?Result
 	{
-		$row = SupersetUserTable::getRow([
-			'select' => ['CLIENT_ID'],
-			'filter' => ['=USER_ID' => $userId],
-		]);
-		$clientId = (string)($row['CLIENT_ID'] ?? '');
-
-		$owners = [];
-		foreach ($datasetOwners as $owner)
-		{
-			if (is_string($owner) && $owner !== '')
-			{
-				$owners[] = $owner;
-			}
-		}
-
-		if ($clientId === '' || !in_array($clientId, $owners, true))
+		if (!SupersetOwnership::isOwner($userId, $datasetOwners))
 		{
 			return Refusal::error(FailureCode::AccessDenied, 'You can modify or delete only datasets you own.');
 		}
@@ -632,17 +617,17 @@ final class WriteDatasetOperations
 		{
 			return $actAsRefusal;
 		}
+		$rejection = Refusal::requestRejected($errors, $context);
+		if ($rejection !== null)
+		{
+			return $rejection;
+		}
 
 		AiToolsLogger::logWarning($errors, $context);
 
-		$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));
-
 		return Refusal::error(
 			FailureCode::Unavailable,
-			Refusal::appendDebugDetail(
-				self::UNAVAILABLE_BI_MESSAGE,
-				$details . ' | ctx: ' . json_encode($context, JSON_UNESCAPED_UNICODE),
-			),
+			self::UNAVAILABLE_BI_MESSAGE,
 		);
 	}
 }

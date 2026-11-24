@@ -196,11 +196,13 @@ class ShareLinkFieldAssembler extends FieldAssembler
 		if ($isActive)
 		{
 			$text = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_ACTIVE');
+			$name = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_CELL_ACTIVE_ARIA');
 			$cssClass = 'dashboard-share-link--active';
 		}
 		else
 		{
 			$text = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_INACTIVE');
+			$name = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_CELL_INACTIVE_ARIA');
 			$cssClass = 'dashboard-share-link--inactive';
 		}
 
@@ -211,7 +213,10 @@ class ShareLinkFieldAssembler extends FieldAssembler
 			$onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.showSharePopup(this)";
 			$typeEncoded = htmlspecialcharsbx(mb_strtolower($type));
 			$titleEncoded = htmlspecialcharsbx($title);
+			$nameEncoded = htmlspecialcharsbx((string)$name);
 
+			// The state alone says nothing out of the column header, so the button is named by a whole phrase
+			// that starts with the visible text.
 			return <<<HTML
 			<button
 				type="button"
@@ -221,9 +226,11 @@ class ShareLinkFieldAssembler extends FieldAssembler
 				data-share="{$shareDataEncoded}"
 				data-type="{$typeEncoded}"
 				data-title="{$titleEncoded}"
+				aria-haspopup="dialog"
 				onclick="{$onclick}"
 			>
-				{$text}
+				<span aria-hidden="true">{$text}</span>
+				<span class="biconnector-grid-sr-only">{$nameEncoded}</span>
 			</button>
 			HTML;
 		}

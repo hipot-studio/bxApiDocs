@@ -9,6 +9,7 @@ use Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\AbstractAgentRestContr
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Dto\TemplateDto;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\DraftSaveFailedException;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\GraphValidationException;
+use Bitrix\BizprocDesigner\Infrastructure\Rest\Request\DraftAddRequest;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\WorkflowTemplateIdentifier;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\AgentWorkflowValidationResult;
@@ -19,7 +20,7 @@ use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Exception\SkipWriteToLogException;
-use Bitrix\Rest\V3\Interaction\Request\AddRequest;
+use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 
 /**
@@ -34,18 +35,19 @@ final class Draft extends AbstractAgentRestController
 	 * Validates blocks and connections, saves a draft and pushes it live to the open editor.
 	 * The user must click "Save" in the designer to publish.
 	 *
-	 * The graph replaces the whole content of the bound template. A graph the domain rejects is a failed
-	 * request here, unlike in the dry run of template.validate, but the two judge it the same way.
+	 * The graph replaces the whole content of the template the call names. A graph the domain rejects is a
+	 * failed request here, unlike in the dry run of template.validate, but the two judge it the same way.
 	 *
 	 * @restMethod bizprocdesigner.template.draft.add
 	 * @throws AccessDeniedException
 	 * @throws DraftSaveFailedException
 	 * @throws EntityNotFoundException
 	 * @throws GraphValidationException
+	 * @throws RequiredFieldInRequestException
 	 */
-	public function addAction(AddRequest $request): GetResponse
+	public function addAction(DraftAddRequest $request): GetResponse
 	{
-		$subject = $this->resolveAuthorizedSubjectForBoundTemplate();
+		$subject = $this->resolveAuthorizedSubject($request->templateId);
 		$identifier = $subject->toIdentifier();
 		$userId = $subject->userId;
 

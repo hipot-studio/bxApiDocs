@@ -19,6 +19,8 @@ class UnifiedLinkParentFoldersAccessCheckHandler extends ChainableAccessCheckHan
 	 */
 	public function __construct(
 		protected readonly int $userId,
+		private readonly bool $fresh = false,
+		private readonly array $snapshot = [],
 	)
 	{
 		$this->userAccessResolver = new UnifiedLinkUserAccessResolver($userId);
@@ -29,6 +31,18 @@ class UnifiedLinkParentFoldersAccessCheckHandler extends ChainableAccessCheckHan
 		if (!$this->userAccessResolver->canUseUnifiedLink($baseObject))
 		{
 			return UnifiedLinkAccessLevel::Denied;
+		}
+
+		if ($this->fresh)
+		{
+			$maximum = UnifiedLinkAccessLevel::Denied;
+			$id = (int)$baseObject->getId();
+			foreach ($this->snapshot['paths'][$id] ?? [] as $parent)
+			{
+				$level = $this->snapshot['levels'][$parent] ?? null;
+				if ($parent !== $id && $level !== null && $level->value > $maximum->value) { $maximum = $level; }
+			}
+			return $maximum;
 		}
 
 		$fetchResult = ObjectPathTable::query()

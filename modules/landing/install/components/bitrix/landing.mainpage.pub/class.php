@@ -236,6 +236,7 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 		$this->arResult['IS_VIBE_PUBLISHED'] = false;
 		$this->arResult['IS_VIBE_FEATURE_AVAILABLE'] = false;
 		$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = false;
+		$this->arResult['IS_VIBE_VIEW_AVAILABLE'] = false;
 
 		if (
 			isset($this->arParams['SEF_MODE'])
@@ -282,6 +283,7 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 					$this->arResult['IS_VIBE_CREATED'] = (int)$landing['ID'];
 					$this->arResult['IS_VIBE_FEATURE_AVAILABLE'] = Vibe\Vibe::isFeatureEnable();
 					$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = false;
+					$this->arResult['IS_VIBE_VIEW_AVAILABLE'] = $this->arResult['IS_VIBE_FEATURE_AVAILABLE'];
 					// sef mode always shows a draft, publication alert is meaningless here
 					$this->arResult['IS_VIBE_PUBLISHED'] = true;
 				}
@@ -299,7 +301,9 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 			$this->arResult['IS_VIBE_PUBLISHED'] = $vibe->isPublished();
 			$this->arResult['IS_VIBE_CREATED'] = $vibe->getLandingId();
 			$this->arResult['IS_VIBE_FEATURE_AVAILABLE'] = Vibe\Vibe::isFeatureEnable();
-			$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = $vibe->isfreeTariffMode();
+			$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = $vibe->isFreeTariffMode();
+			// a created vibe stays viewable at any tariff: the feature limits only creating and editing
+			$this->arResult['IS_VIBE_VIEW_AVAILABLE'] = true;
 			if (
 				!$this->arResult['IS_VIBE_PUBLISHED']
 				&& Manager::isAdmin()

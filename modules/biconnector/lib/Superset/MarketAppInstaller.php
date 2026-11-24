@@ -97,20 +97,28 @@ class MarketAppInstaller
 
 	private function importConfiguration(int $appId): Result
 	{
-		$result = new Result();
-
 		$app = AppTable::getRowById($appId);
 		if ($app === null)
 		{
+			$result = new Result();
 			$result->addError(new Error("App with id {$appId} not found"));
 
 			return $result;
 		}
 
+		return $this->importAppConfiguration($app);
+	}
+
+	protected function importAppConfiguration(array $app): Result
+	{
+		$result = new Result();
+
 		$prepareArchiveResult = $this->prepareArchive($app);
 		if (!$prepareArchiveResult->isSuccess())
 		{
 			$result->addErrors($prepareArchiveResult->getErrors());
+
+			return $result;
 		}
 
 		$import = $this->prepareImport($app);
@@ -197,6 +205,17 @@ class MarketAppInstaller
 			return $result;
 		}
 
+		return $this->unpackArchive($app, $fileInfo);
+	}
+
+	protected function unpackArchive(array $app, array $fileInfo): Result
+	{
+		$result = new Result();
+
+		// The environment may type the downloaded file as application/octet-stream (no fileinfo extension,
+		// random temp name), while Structure::unpack picks the unpacker by type, so the content decides.
+		$fileInfo['type'] = self::detectArchiveType((string)($fileInfo['tmp_name'] ?? '')) ?? ($fileInfo['type'] ?? '');
+
 		$checkResult = \CFile::checkFile(
 			arFile: $fileInfo,
 			mimeType: [
@@ -237,6 +256,25 @@ class MarketAppInstaller
 		}
 
 		return $result;
+	}
+
+	private static function detectArchiveType(string $path): ?string
+	{
+		$handle = is_file($path) ? fopen($path, 'rb') : false;
+		if ($handle === false)
+		{
+			return null;
+		}
+
+		$signature = (string)fread($handle, 4);
+		fclose($handle);
+
+		return match (true)
+		{
+			$signature === "PK\x03\x04", $signature === "PK\x05\x06" => 'application/zip',
+			str_starts_with($signature, "\x1f\x8b") => 'application/gzip',
+			default => null,
+		};
 	}
 
 	private function prepareContent(array $app): Result

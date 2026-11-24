@@ -5,6 +5,7 @@ namespace Bitrix\Disk;
 use Bitrix\Disk\Access\AccessCodeEnum;
 use Bitrix\Disk\Document\TrackedObject;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\Favorite\FavoriteReconcileScheduler;
 use Bitrix\Disk\Internal\Service\Sync\Access\RightsAccessPublisher;
 use Bitrix\Disk\Internal\Service\Sync\Access\SharingAccessPublisher;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
@@ -131,13 +132,16 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		return $this->setInternal(
+		$isSet = $this->setInternal(
 			$object,
 			$rights,
 			$this->getAccessPublisher()->captureCodes($object->getId()),
 			$auditTransaction,
 			$isServiceEdit ? null : $this->getSharingPublisher()->captureTargets($object),
 		);
+		$this->scheduleFavoriteReconcile($object);
+
+		return $isSet;
 	}
 
 	/**
@@ -594,7 +598,10 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		return $this->setInternal($object, [], $codesBeforeEdit, targetsBeforeEdit: $targetsBeforeEdit);
+		$isSet = $this->setInternal($object, [], $codesBeforeEdit, targetsBeforeEdit: $targetsBeforeEdit);
+		$this->scheduleFavoriteReconcile($object);
+
+		return $isSet;
 	}
 
 	public function deleteByDomain(
@@ -625,13 +632,16 @@ class RightsManager implements IErrorable
 			return true;
 		}
 
-		return $this->setInternal(
+		$isSet = $this->setInternal(
 			$object,
 			$this->getSpecificRights($object),
 			$codesBeforeEdit,
 			$auditTransaction,
 			$targetsBeforeEdit,
 		);
+		$this->scheduleFavoriteReconcile($object);
+
+		return $isSet;
 	}
 
 	public function append(
@@ -645,6 +655,15 @@ class RightsManager implements IErrorable
 			array_merge($this->getSpecificRights($object), $rights),
 			$auditTransaction,
 		);
+	}
+
+	/**
+	 * Favorite marks of the subtree are reconciled with the access after the answer; the edit is not held up.
+	 * The append edits through {@see set()}, so it is scheduled there.
+	 */
+	private function scheduleFavoriteReconcile(BaseObject $object): void
+	{
+		FavoriteReconcileScheduler::getInstance()->scheduleSubtree((int)$object->getId());
 	}
 
 	private function revokeCleanupBeforeRightsMutation(BaseObject $object): bool

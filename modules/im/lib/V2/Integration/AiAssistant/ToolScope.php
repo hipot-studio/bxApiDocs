@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\AiAssistant;
 
-use Bitrix\Main\Config\Option;
+use Bitrix\Im\Public\Features\McpReadTools;
+use Bitrix\Im\Public\Features\McpWriteTools;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Config\Feature\Context;
 
 /**
  * Read/write scope of the IM MCP tools.
  *
- * Single source of truth for the gating options, shared by the toolset-level
+ * Single source of truth for the gating feature flags, shared by the toolset-level
  * checks in ImToolSet and the tool-level checks in BaseImTool.
  */
 enum ToolScope
@@ -17,17 +20,14 @@ enum ToolScope
 	case Read;
 	case Write;
 
-	public function isEnabled(): bool
+	public function isEnabled(int $userId): bool
 	{
-		return Option::get('im', $this->getOptionName(), 'Y') === 'Y';
-	}
-
-	private function getOptionName(): string
-	{
-		return match ($this)
+		$flag = match ($this)
 		{
-			self::Read => 'mcp_read_tools_enabled',
-			self::Write => 'mcp_write_tools_enabled',
+			self::Read => McpReadTools::class,
+			self::Write => McpWriteTools::class,
 		};
+
+		return Feature::isEnabled($flag, new Context($userId));
 	}
 }

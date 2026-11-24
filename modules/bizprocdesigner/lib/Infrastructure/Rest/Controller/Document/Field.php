@@ -29,6 +29,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
+use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 
 /**
  * REST V3 controller for the fields of a document type the agent can address in a workflow graph.
@@ -70,10 +71,11 @@ final class Field extends AbstractAgentRestController
 	 * @throws SemanticSearchUnavailableException
 	 * @throws LoaderException
 	 * @throws ArgumentException
+	 * @throws RequiredFieldInRequestException
 	 */
 	public function listAction(DocumentFieldListRequest $request): DocumentFieldListResponse
 	{
-		$identifier = $this->resolveAndAuthorizeBoundTemplate();
+		$identifier = $this->resolveAndAuthorize($request->templateId);
 		$search = $request->search ?? '';
 		$service = new DocumentFieldService();
 

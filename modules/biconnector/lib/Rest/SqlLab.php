@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Internal\Services\SqlLab\SqlLabExecutionService;
 use Bitrix\BIConnector\Internal\Services\SqlLab\SqlLabRestLease;
 use Bitrix\BIConnector\Internal\Services\SqlLab\SqlLabRestLimiter;
 use Bitrix\BIConnector\Superset\Logger\SqlLabRestLogger;
+use Bitrix\Main\Context;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -131,6 +132,7 @@ final class SqlLab
 
 			try
 			{
+				$params['sql'] = $this->readSql($params, $server);
 				$result = $this->runQuery($params, $context->user);
 			}
 			catch (\Throwable)
@@ -179,6 +181,25 @@ final class SqlLab
 				}
 			}
 		}
+	}
+
+	private function readSql(array $params, \CRestServer $server): mixed
+	{
+		// Legacy batch filters each command separately and does not expose its original arguments.
+		if ($server instanceof \CRestServerBatchItem || $server->getMethod() !== self::METHOD)
+		{
+			return $params['sql'] ?? null;
+		}
+
+		$request = Context::getCurrent()->getRequest();
+		if (!$request->isPost())
+		{
+			return $params['sql'] ?? null;
+		}
+
+		$body = $request->isJson() ? $request->getJsonList() : $request->getPostList();
+
+		return array_key_exists('sql', $body->toArray()) ? $body->getRaw('sql') : ($params['sql'] ?? null);
 	}
 
 	/**
@@ -245,7 +266,11 @@ final class SqlLab
 	private function failedResult(string $code): Result
 	{
 		$result = new Result();
-		$result->addError(new Error('SQL Lab request failed.', $code));
+		$result->addError(new Error(
+			'SQL Lab request failed.',
+			$code,
+			$code === 'SQLLAB_INVALID_QUERY' ? ['detail' => null] : null,
+		));
 
 		return $result;
 	}

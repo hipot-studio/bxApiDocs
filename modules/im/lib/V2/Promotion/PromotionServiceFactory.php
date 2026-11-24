@@ -6,6 +6,7 @@ namespace Bitrix\Im\V2\Promotion;
 
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Onboarding\CollabOnboardingPromotionService;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\ProjectAiPromotionService;
+use Bitrix\Im\V2\Promotion\Service\FolderAllSettingsBannerPromotionService;
 use Bitrix\Im\V2\Promotion\Service\PromotionServiceInterface;
 use Bitrix\Im\V2\Promotion\Service\UIPromotionService;
 
@@ -15,6 +16,7 @@ class PromotionServiceFactory
 	public static function getServiceList(): array
 	{
 		return [
+			FolderAllSettingsBannerPromotionService::getInstance(),
 			UIPromotionService::getInstance(),
 			CollabOnboardingPromotionService::getInstance(),
 			ProjectAiPromotionService::getInstance(),

@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Infrastructure\Rest\Documentation\Builder;
 
 use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder;
 
 final class BuilderContractSchemas
 {
@@ -48,6 +49,36 @@ final class BuilderContractSchemas
 			$schema,
 			$path . '/requestBody/content/application~1json/schema',
 		);
+
+		$operation['responses'][403] = [
+			'description' => 'Access denied; known Builder access reasons may be supplied in data.reason.',
+			'content' => ['application/json' => ['schema' => [
+				'type' => 'object',
+				'properties' => [
+					'error' => [
+						'type' => 'object',
+						'properties' => [
+							'code' => ['type' => 'string'],
+							'message' => ['type' => 'string'],
+							'data' => [
+								'type' => 'object',
+								'properties' => ['reason' => [
+									'type' => 'string',
+									'enum' => ['no_bi_profile', 'chart_author_required'],
+								]],
+								'required' => ['reason'],
+								'additionalProperties' => false,
+							],
+						],
+						'required' => ['code', 'message'],
+						'additionalProperties' => false,
+					],
+					'time' => self::responseTime(),
+				],
+				'required' => ['error'],
+				'additionalProperties' => false,
+			]]],
+		];
 
 		return $operation;
 	}
@@ -1192,6 +1223,11 @@ final class BuilderContractSchemas
 				'viz_type' => [
 					'type' => 'string',
 				],
+				'vizType' => [
+					'type' => 'string',
+					'nullable' => true,
+					'enum' => [...ChartParamsBuilder::VIZ_TYPES, null],
+				],
 				'dataset_id' => [
 					'type' => 'integer',
 				],
@@ -1300,6 +1336,7 @@ final class BuilderContractSchemas
 				'name',
 				'description',
 				'viz_type',
+				'vizType',
 				'dataset_id',
 				'datasource_type',
 				'params',
@@ -1470,6 +1507,11 @@ final class BuilderContractSchemas
 				'viz_type' => [
 					'type' => 'string',
 				],
+				'vizType' => [
+					'type' => 'string',
+					'nullable' => true,
+					'enum' => [...ChartParamsBuilder::VIZ_TYPES, null],
+				],
 				'dataset_id' => [
 					'type' => 'integer',
 				],
@@ -1481,6 +1523,7 @@ final class BuilderContractSchemas
 				'id',
 				'name',
 				'viz_type',
+				'vizType',
 				'dataset_id',
 			],
 			'additionalProperties' => false,
@@ -1703,6 +1746,11 @@ final class BuilderContractSchemas
 				'viz_type' => [
 					'type' => 'string',
 				],
+				'vizType' => [
+					'type' => 'string',
+					'nullable' => true,
+					'enum' => [...ChartParamsBuilder::VIZ_TYPES, null],
+				],
 				'signature' => [
 					'type' => 'string',
 				],
@@ -1711,6 +1759,7 @@ final class BuilderContractSchemas
 				'id',
 				'name',
 				'viz_type',
+				'vizType',
 			],
 			'additionalProperties' => false,
 		];
@@ -2045,6 +2094,25 @@ final class BuilderContractSchemas
 						],
 						'additionalProperties' => false,
 					],
+				],
+				'failed_charts' => [
+					'type' => 'array',
+					'minItems' => 1,
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'id' => ['type' => 'integer'],
+							'name' => ['type' => 'string'],
+							'error' => self::chartError(),
+						],
+						'required' => ['id', 'name', 'error'],
+						'additionalProperties' => false,
+					],
+				],
+				'no_access_chart_ids' => [
+					'type' => 'array',
+					'minItems' => 1,
+					'items' => ['type' => 'integer'],
 				],
 				'missing_chart_ids' => [
 					'type' => 'array',
@@ -2777,6 +2845,19 @@ final class BuilderContractSchemas
 		];
 	}
 
+	private static function chartError(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'code' => ['type' => 'string', 'enum' => ['CHART_ERROR', 'DOMAIN_RULE']],
+				'message' => ['type' => 'string'],
+			],
+			'required' => ['code', 'message'],
+			'additionalProperties' => false,
+		];
+	}
+
 	private static function responseTime(): array
 	{
 		return [
@@ -3245,6 +3326,8 @@ final class BuilderContractSchemas
 							self::successfulStats($path . '/items/properties/stats/anyOf/1'),
 						],
 					],
+					'error' => self::chartError(),
+					'no_access' => ['type' => 'boolean'],
 					'stats_omitted' => [
 						'type' => 'boolean',
 						'enum' => [

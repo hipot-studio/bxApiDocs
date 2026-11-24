@@ -7,6 +7,10 @@ namespace Bitrix\Disk\Document\Vibeoffice\Webhook;
 use Bitrix\Disk\Internals\DataManager;
 use Bitrix\Disk\Document\Vibeoffice\MaintenanceAgent;
 use Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository;
+use Bitrix\Disk\Document\Vibeoffice\HostDocumentKey;
+use Bitrix\Disk\Document\Vibeoffice\Models\DocumentStateTable;
+use Bitrix\Disk\Document\Vibeoffice\SharedEditingSchema;
+use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\EventLog\Internal\EventLogTable;
@@ -45,6 +49,7 @@ final class DeliveryTable extends DataManager
 	public const OUTCOME_APPLIED = 'applied';
 	public const OUTCOME_REFUSED = 'refused';
 	public const OUTCOME_IGNORED = 'ignored';
+	public const REASON_NOTIFICATION_RESULT_DELETED = 'notification_result_deleted';
 	private const SAFE_REFUSAL_REASONS = [
 		'validation', 'ssrf_blocked', 'vibeoffice_file_too_large', 'vibeoffice_lock_order',
 		'vibeoffice_registry_failed', 'session_missing', 'file_missing', 'file_too_large',
@@ -73,12 +78,14 @@ final class DeliveryTable extends DataManager
 				->configureSize(128)
 			,
 			(new StringField('HOST_DOC_KEY'))->configureNullable()->configureSize(128),
+			(new StringField('NAMESPACE'))->configureSize(64)->configureDefaultValue(''),
 			(new StringField('STATUS'))->configureSize(24)->configureDefaultValue(self::STATUS_DONE),
 			(new StringField('OUTCOME'))->configureSize(16)->configureNullable(),
 			(new StringField('REASON'))->configureSize(64)->configureNullable(),
 			(new IntegerField('SNAPSHOT_SEQ'))->configureSize(8)->configureNullable(),
 			(new IntegerField('RESULT_OBJECT_ID'))->configureNullable(),
 			(new IntegerField('RESULT_VERSION_ID'))->configureNullable(),
+			(new IntegerField('RESULT_CONTENT_VERSION'))->configureNullable(),
 			(new IntegerField('STAGED_FILE_ID'))->configureNullable(),
 			(new TextField('CLEANUP_FILE_IDS'))->configureNullable(),
 			(new IntegerField('NOTIFIED'))->configureDefaultValue(0),
@@ -93,6 +100,15 @@ final class DeliveryTable extends DataManager
 				})
 			,
 		];
+	}
+
+	public static function isSavedNotificationSkipped(array $delivery): bool
+	{
+		return $delivery['EVENT'] === WebhookProcessor::EVENT_SAVED
+			&& $delivery['STATUS'] === self::STATUS_DONE
+			&& $delivery['OUTCOME'] === self::OUTCOME_APPLIED
+			&& (int)$delivery['NOTIFIED'] === 0
+			&& $delivery['REASON'] === self::REASON_NOTIFICATION_RESULT_DELETED;
 	}
 
 	public static function findLatestSafeRefusalReason(string $hostDocKey): ?string
@@ -128,6 +144,16 @@ final class DeliveryTable extends DataManager
 			return (new Result())->addError(new Error('Saved outcome resolution is not authorized.', 'access_denied'));
 		}
 		$connection = Application::getConnection();
+		$state = (new DocumentStateRepository())->getByKey($hostDocKey);
+		if (!$state && HostDocumentKey::isStable($hostDocKey))
+		{
+			return (new Result())->addError(new Error('The shared registry is unavailable.', 'vibeoffice_registry_busy'));
+		}
+		$shared = (int)($state['EDIT_SCOPE_VERSION'] ?? 0) === 1;
+		if ($shared && (DocumentStateRepository::hasOpenTransaction() || DocumentStateRepository::holdsAnyLock()))
+		{
+			return (new Result())->addError(new Error('Saved registration requires its own transaction.', 'vibeoffice_registry_busy'));
+		}
 		$lockName = DocumentStateRepository::getDocumentLockName($hostDocKey);
 		if (!$connection->lock($lockName, 5))
 		{
@@ -138,6 +164,23 @@ final class DeliveryTable extends DataManager
 			$connection->startTransaction();
 			try
 			{
+				if ($shared)
+				{
+					$objectId = (int)$state['OBJECT_ID'];
+					if ($objectId > 0)
+					{
+						DocumentStateRepository::fetchForUpdate(ObjectTable::query()->setSelect(['ID'])->where('ID', $objectId));
+					}
+					$fresh = DocumentStateRepository::fetchForUpdate(DocumentStateTable::query()
+						->setSelect(SharedEditingSchema::documentFields())->where('HOST_DOC_KEY', $hostDocKey));
+					if (!$fresh || (int)$fresh['OBJECT_ID'] !== $objectId
+						|| !HostDocumentKey::matchesSharedEditScope($fresh, $hostDocKey)
+						|| !in_array((int)$fresh['EDIT_FENCE_STATE'], [0, 1], true))
+					{
+						$connection->rollbackTransaction();
+						return (new Result())->addError(new Error('The shared registry is unavailable.', 'vibeoffice_registry_busy'));
+					}
+				}
 				$latest = DocumentStateRepository::fetchForUpdate(self::query()->setSelect(['*'])
 					->where('HOST_DOC_KEY', $hostDocKey)
 					->where('EVENT', WebhookProcessor::EVENT_SAVED)
@@ -158,6 +201,7 @@ final class DeliveryTable extends DataManager
 					'REASON' => null,
 					'RESULT_OBJECT_ID' => null,
 					'RESULT_VERSION_ID' => null,
+					'RESULT_CONTENT_VERSION' => null,
 					'NOTIFIED' => 0,
 				]);
 				if (!$updated->isSuccess())
@@ -205,7 +249,21 @@ final class DeliveryTable extends DataManager
 
 	public static function deleteOldDeliveriesAgent(): string
 	{
-		self::logMaintenancePass((new MaintenanceAgent())->run());
+		$started = hrtime(true) / 1e9;
+		try
+		{
+			self::logMaintenancePass((new MaintenanceAgent(absoluteDeadline: $started + 50))->run());
+		}
+		catch (\Throwable)
+		{
+			MaintenanceAgent::logger()?->error('vibeoffice maintenance', [
+				'operation' => 'run', 'result' => 'error', 'code' => 'maintenance_exception',
+			]);
+		}
+		finally
+		{
+			$GLOBALS['pPERIOD'] = max(1, 55 - (int)ceil(hrtime(true) / 1e9 - $started));
+		}
 
 		return self::class . '::deleteOldDeliveriesAgent();';
 	}

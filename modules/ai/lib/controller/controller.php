@@ -181,6 +181,12 @@ abstract class Controller extends \Bitrix\Main\Engine\Controller
 				ResponseFormat::fromString($parameters['response_format']),
 			);
 			$this->context->setParameters($parameters['bx_context_parameters'] ?? null);
+
+			$featureCode = $parameters['bx_feature'] ?? null;
+			if (is_string($featureCode))
+			{
+				$this->context->setFeatureCode($featureCode);
+			}
 		}
 	}
 }

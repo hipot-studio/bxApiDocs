@@ -7,13 +7,13 @@ use Bitrix\AI\Prompt;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Defaults;
 use Bitrix\AI\Tuning\Manager;
+use Bitrix\Im\Public\Features\AiTaskDedup;
 use Bitrix\Im\Public\Features\BitrixGptVoiceWidget;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Integration\AI\TaskCreation\Duplicate\DuplicateCheckCreator;
 use Bitrix\Im\V2\Integration\AI\Restriction\Type;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Feature;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
@@ -35,7 +35,6 @@ class Restriction
 	private const SETTING_TRANSCRIPTION = 'im_allow_file_transcription_generate';
 	private const SETTING_AUTO_TASK_CREATION = 'im_allow_auto_task_creation_after_transcription';
 	private const SETTING_TRANSCRIPTION_EMOTIONS = 'im_allow_file_transcription_emotions_generate';
-	private const OPTION_TASK_DEDUP = 'ai_task_dedup_enabled';
 	private const PORTAL_ZONE_BLACKLIST = ['cn'];
 	private const EMOTION_TRANSCRIPTION_PORTAL_ZONES_WHITE_LIST = ['ru', 'by'];
 	private const TRANSCRIPTION_QUALITY = 'transcribe_chat_voice_messages'; /** @see Quality::QUALITIES */
@@ -278,7 +277,7 @@ class Restriction
 			return false;
 		}
 
-		if (Option::get('im', self::OPTION_TASK_DEDUP, 'N') !== 'Y')
+		if (!Feature::isEnabled(AiTaskDedup::class))
 		{
 			return false;
 		}

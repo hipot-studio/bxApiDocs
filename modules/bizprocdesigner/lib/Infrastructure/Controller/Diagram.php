@@ -28,19 +28,20 @@ use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
 use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
 use Bitrix\Bizproc\Workflow\Template\Converter\TemplateToNodes;
-use Bitrix\Bizproc\Workflow\Template\Converter\SequentialToNodeWorkflow;
 use Bitrix\BizprocDesigner\Infrastructure\Enum\StartTrigger;
 use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Config\TemplateMetadataLimits;
+use Bitrix\BizprocDesigner\Internal\Entity\DocumentDescription;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\AgentEntryVerdict;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AgentEntryAuthorizationService;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AgentWebhookService;
 use Bitrix\BizprocDesigner\Internal\Integration\Pull\Enum\BizprocDesignerPullEvent;
 use Bitrix\BizprocDesigner\Internal\Service\TemplateEditAccess;
-use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\OperationAuthorizationGuard;
-use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\UserAdminResolver;
 use Bitrix\BizprocDesigner\Internal\Integration\Pull\TemplateNoteWatch;
 use Bitrix\BizprocDesigner\Internal\Service\Activity\ReadableExpressionContextFactory;
 use Bitrix\BizprocDesigner\Internal\Service\Container;
 use Bitrix\BizprocDesigner\Internal\Service\NodeFilter\FoundItemsService;
+use Bitrix\BizprocDesigner\Internal\Service\WorkflowTemplate\EmptyTemplateCreationService;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -1903,44 +1904,34 @@ class Diagram extends JsonController
 	 */
 	private function authorizeAgentTemplate(int $templateId): ?int
 	{
-		if (!Feature::instance()->isExternalAiAgentAccessible())
-		{
-			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
-
-			return null;
-		}
-
 		$userId = (int)CurrentUser::get()->getId();
-		$identifier = Container::getAgentWorkflowResolverService()->resolveByTemplateId($templateId, $userId);
+		$result = (new AgentEntryAuthorizationService())->authorizeTemplate($userId, $templateId);
 
-		if ($identifier === null)
+		if ($result->isAllowed())
 		{
-			$this->addError(ErrorMessage::TEMPLATE_NOT_FOUND->getError(['#ID#' => $templateId]));
-
-			return null;
+			return $userId;
 		}
 
-		$isUserAdmin = UserAdminResolver::isAdmin($userId);
-		$verdict = (new OperationAuthorizationGuard())->authorize(
-			$userId,
-			$identifier->documentDescription,
-			$templateId,
-			$isUserAdmin,
+		// A missing template keeps its own message, everything else answers as access denied - the same
+		// two forms this method has always produced. The four-valued verdict is collapsed here on purpose:
+		// the editor is the surface where a feature that is switched off and a right that is missing read
+		// alike, because the user of it can act on neither.
+		$this->addError(
+			$result->verdict === AgentEntryVerdict::TemplateNotFound
+				? ErrorMessage::TEMPLATE_NOT_FOUND->getError(['#ID#' => $templateId])
+				: ErrorMessage::ACCESS_DENIED->getError()
 		);
-		if (!$verdict->allowed)
-		{
-			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 
-			return null;
-		}
-
-		return $userId;
+		return null;
 	}
 
 	/**
 	 * Builds the connect/regenerate response payload from the base webhook URL and the token status.
-	 * The /rest/api/ prefix is added here: the controller is the single owner of it; the
-	 * webhook URL from the service has /rest/<userId>/<token>.
+	 * The /rest/api/ prefix is added here: the webhook URL from the service has /rest/<userId>/<token>,
+	 * and the V3 router lives one segment deeper. The rewrite has a second site since the REST entry was
+	 * opened - {@see \Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\Agent\Session::contourBaseUrl()};
+	 * they are deliberately not shared (one builds a command line, the other a base URL), so a change to
+	 * the router path has to be made in both.
 	 *
 	 * The url carries no template identifier: agent.connect answers for the template its token is bound
 	 * to and takes no argument at all.
@@ -2169,18 +2160,10 @@ class Diagram extends JsonController
 	 */
 	private function createEmptyTemplate(array $documentType, ?string $startTrigger = null): ?\Bitrix\Bizproc\Workflow\Template\Tpl
 	{
-		$tpl = $this->getDefaultTemplateFields($startTrigger);
-		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
-		$fields = $this->prepareFields($tpl, $documentType);
-		$request = new Api\Request\WorkflowTemplateService\SaveTemplateRequest(
-			templateId: 0,
-			parameters: [],
-			fields: $fields,
-			user: $user,
-			checkAccess: false,
+		$result = (new EmptyTemplateCreationService())->create(
+			DocumentDescription::fromBizprocComplexType($documentType),
+			startTrigger: $startTrigger,
 		);
-		$templateService = new Api\Service\WorkflowTemplateService();
-		$result = $templateService->saveTemplate($request, withoutCommonVersion: true);
 
 		if (!$result->isSuccess())
 		{
@@ -2189,48 +2172,12 @@ class Diagram extends JsonController
 			return null;
 		}
 
-		return $this->getTpl($result->getTemplateId());
-	}
-
-	private function getDefaultTemplateFields(?string $startTrigger = null): array
-	{
-		$template = [];
-
-		$converter = new SequentialToNodeWorkflow([]);
-		if ($startTrigger)
-		{
-			$converter->setStartTrigger($startTrigger);
-		}
-		$template['TEMPLATE'] = $converter->convert();
-
-		$template['NAME'] = Loc::getMessage('BIZPROCDESIGNER_CONTROLLER_DIAGRAM_TEMPLATE_DEFAULT_TITLE');
-		$template['AUTO_EXECUTE'] = \CBPDocumentEventType::None;
-		$template['DESCRIPTION'] = '';
-		$template['PARAMETERS'] = [];
-		$template['VARIABLES'] = [];
-		$template['CONSTANTS'] = [];
-		$template['TEMPLATE_SETTINGS'] = [];
-
-		return $template;
+		return $this->getTpl((int)$result->getData()['templateId']);
 	}
 
 	private function prepareFields(array $template, array $documentType): array
 	{
-		return [
-			'TEMPLATE' => $template['TEMPLATE'],
-			'DOCUMENT_TYPE' => $documentType,
-			'NAME' => $template['NAME'],
-			// The column is nullable and rows written before the editor still hold NULL there, so the
-			// editor is handed a null it sends back with the whole template on every draft save. That is
-			// the absence of a description, not a value the gate below should refuse: refusing it would
-			// stop the autosave of those templates outright. Anything else keeps its type and is judged.
-			'DESCRIPTION' => $template['DESCRIPTION'] ?? '',
-			'PARAMETERS' => $template['PARAMETERS'],
-			'VARIABLES' => $template['VARIABLES'],
-			'CONSTANTS' => $template['CONSTANTS'],
-			'TEMPLATE_SETTINGS' => $template['TEMPLATE_SETTINGS'],
-			'AUTO_EXECUTE' => $template['AUTO_EXECUTE'],
-		];
+		return EmptyTemplateCreationService::prepareFields($template, $documentType);
 	}
 
 	private function normalizeSetupConstantsInFields(array $fields): array

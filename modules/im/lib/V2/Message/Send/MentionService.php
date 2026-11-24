@@ -208,19 +208,19 @@ class MentionService
 			. $pushMessage;
 	}
 
-	private function prepareNotifyMail(string $chatTitle, string $userGender): callable
+	private function prepareNotifyMail(string $chatTitle, string $userGender, Chat $chat): callable
 	{
 		return fn (?string $languageId = null) => Loc::getMessage(
-			$this->getNotifyTextCode($userGender),
+			$this->getNotifyTextCode($userGender, $chat),
 			['#TITLE#' => $chatTitle],
 			$languageId
 		);
 	}
 
-	private function prepareNotifyMessage(string $chatTitle, Message $message, string $userGender): callable
+	private function prepareNotifyMessage(string $chatTitle, Message $message, string $userGender, Chat $chat): callable
 	{
 		return fn (?string $languageId = null) => Loc::getMessage(
-			$this->getNotifyTextCode($userGender),
+			$this->getNotifyTextCode($userGender, $chat),
 			['#TITLE#' => $this->getTitleWithContext($chatTitle, $message)],
 			$languageId
 		);
@@ -233,7 +233,7 @@ class MentionService
 		return "[CHAT={$chat->getId()}]{$title}[/CHAT]";
 	}
 
-	protected function getNotifyTextCode(string $userGender): string
+	protected function getNotifyTextCode(string $userGender, Chat $chat): string
 	{
 		return "IM_MESSAGE_MENTION_{$userGender}";
 	}
@@ -271,8 +271,8 @@ class MentionService
 					"NOTIFY_EVENT" => "mention",
 					"NOTIFY_TAG" => 'IM|MENTION|' . $notifyChatId,
 					"NOTIFY_SUB_TAG" => 'IM_MESS_' . $notifyChatId . '_' . $userId,
-					"NOTIFY_MESSAGE" => $this->prepareNotifyMessage($chatTitle, $message, $userGender),
-					"NOTIFY_MESSAGE_OUT" => $this->prepareNotifyMail($chatTitle, $userGender),
+					"NOTIFY_MESSAGE" => $this->prepareNotifyMessage($chatTitle, $message, $userGender, $chat),
+					"NOTIFY_MESSAGE_OUT" => $this->prepareNotifyMail($chatTitle, $userGender, $chat),
 				];
 				CIMNotify::Add($messageFields);
 			}

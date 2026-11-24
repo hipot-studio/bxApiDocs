@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service;
 
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Install\LegacyAgentTokenMigratorAgent;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\WebhookType;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
@@ -17,8 +18,8 @@ use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
  * the single place in bizprocdesigner that reads that slice.
  *
  * Kept between judgments is the row, not the verdicts: one call judges the same token more than once while
- * a read of it costs three queries {@see IncomingWebhookRepository::getById()}. Status, binding and
- * expiration are computed from the row every time, so the read lives one request and the verdicts none.
+ * a read of it costs three queries {@see IncomingWebhookRepository::getById()}. Status, binding, expiration
+ * and scope are computed from the row every time, so the read lives one request and the verdicts none.
  */
 final class AgentTokenGuard
 {
@@ -107,6 +108,63 @@ final class AgentTokenGuard
 		}
 
 		return (int)$boundTemplateId;
+	}
+
+	/**
+	 * Whether the credential is one of the contour at all - a System webhook carrying our owner marker -
+	 * regardless of whether it is still active and still within its expiry.
+	 *
+	 * Blind to both on purpose. The entry refuses such a credential BECAUSE it is one: a token issued for
+	 * template A must not reach the action that issues tokens, or it walks out with one for template B and
+	 * the binding is undone. Judging it by validity would reopen that door the hour a token goes stale,
+	 * and a stale token is exactly what a caller retries with.
+	 */
+	public function isContourCredential(?string $passwordId): bool
+	{
+		if ($passwordId === null || $passwordId === '')
+		{
+			return false;
+		}
+
+		$webhook = $this->readToken($passwordId);
+
+		return $webhook !== null
+			&& $webhook->getType() === WebhookType::System
+			&& $webhook->getExternalAttribute(self::ATTR_OWNER)?->getValue() === 'Y'
+		;
+	}
+
+	/**
+	 * Whether the webhook has a row at all. rest has just authorized the call by it, so a missing row is a
+	 * webhook deleted mid-request - and reading that as "no owner marker, so an application key" would strip
+	 * a token of the contour of its binding in that window.
+	 */
+	public function isKnownCredential(?string $passwordId): bool
+	{
+		if ($passwordId === null || $passwordId === '')
+		{
+			return false;
+		}
+
+		return $this->readToken($passwordId) !== null;
+	}
+
+	/**
+	 * Whether the webhook is a legacy token of the external agent
+	 * {@see LegacyAgentTokenMigratorAgent::isLegacyToken()}: issued for one template, it carries no binding,
+	 * and as an application key it would reach every template of its owner. Judged off the same row: the
+	 * repository reads the scope together with it.
+	 */
+	public function isLegacyAgentToken(?string $passwordId): bool
+	{
+		if ($passwordId === null || $passwordId === '')
+		{
+			return false;
+		}
+
+		$webhook = $this->readToken($passwordId);
+
+		return $webhook !== null && LegacyAgentTokenMigratorAgent::isLegacyToken($webhook);
 	}
 
 	/**

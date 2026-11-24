@@ -136,6 +136,10 @@ class CategoryService
 				'name' => Loc::getMessage('AI_SERVICE_CATEGORY_PRODUCT_DESCRIPTION'),
 				'code' => Category::PRODUCT_DESCRIPTION->value,
 			],
+			[
+				'name' => Loc::getMessage('AI_SERVICE_CATEGORY_BIZPROCDESIGNER'),
+				'code' => Category::BIZPROCDESIGNER->value,
+			],
 		];
 	}
 

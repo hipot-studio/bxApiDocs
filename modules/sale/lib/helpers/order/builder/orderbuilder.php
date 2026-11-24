@@ -1262,6 +1262,7 @@ abstract class OrderBuilder
 			$isNew = ($paymentId <= 0);
 			$hasError = false;
 			$products = $paymentData['PRODUCT'] ?? [];
+			$paymentFields = [];
 
 			$settablePaymentFields = $this->getSettablePaymentFields();
 

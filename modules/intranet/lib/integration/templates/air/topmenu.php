@@ -24,7 +24,7 @@ class TopMenu
 					? $item['PARAMS']['super_title'] : '',
 				'ON_CLICK' => isset($item['PARAMS']['onclick']) && is_string($item['PARAMS']['onclick'])
 					? $item['PARAMS']['onclick'] : '',
-				'SUB_LINK' => $item["PARAMS"]["sub_link"] ?? '',
+				'SUB_LINK' => self::convertSubLink($item['PARAMS'] ?? []),
 				'CLASS' => $item['PARAMS']['class'] ?? '',
 				'IS_DISABLED' => $item['PARAMS']['is_disabled'] ?? false,
 				'IS_DELIMITER' => $item['PARAMS']['is_delimiter'] ?? false,
@@ -76,5 +76,24 @@ class TopMenu
 		}
 
 		return $items;
+	}
+
+	/**
+	 * Converts file menu params into the SUB_LINK of a main.interface.buttons item.
+	 *
+	 * @param array $params File menu item params with lower case keys.
+	 */
+	public static function convertSubLink(array $params): string|array
+	{
+		$onClick = $params['sub_link_onclick'] ?? null;
+		if (empty($params['sub_link']) && is_string($onClick) && $onClick !== '')
+		{
+			return [
+				'URL' => '',
+				'ON_CLICK' => $onClick,
+			];
+		}
+
+		return $params['sub_link'] ?? '';
 	}
 }

@@ -225,7 +225,9 @@ class Manager
 	}
 
 	/**
-	 * Deletes all system prompts from local DB and loads new.
+	 * Synchronizes system prompts, roles, industries, plans, sections and image styles with the remote prompt DB.
+	 * Applied if the remote version or format is newer or the local format subversion differs from the current one;
+	 * see Updater::refreshFromRemote() and Updater::refreshFromJson().
 	 *
 	 * @return void
 	 */

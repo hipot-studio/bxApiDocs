@@ -14,6 +14,7 @@ final class EditorFailureAdmission
 {
 	private const CONTEXT_KEY = 'editorFailureReports';
 	private const LIMIT = 10;
+	private const DIAGNOSTIC_CONTEXT_KEY = 'editorLoadingDiagnosticReportsV1';
 
 	public function reserve(DocumentSession $session, EditorFailureReport $report): bool
 	{
@@ -72,25 +73,29 @@ final class EditorFailureAdmission
 			{
 				return false;
 			}
-			$history = self::readHistory(
-				array_key_exists(self::CONTEXT_KEY, $vo) ? $vo[self::CONTEXT_KEY] : null,
+			$observed = $report->get('outcome') === 'observed';
+			$contextKey = $observed ? self::DIAGNOSTIC_CONTEXT_KEY : self::CONTEXT_KEY;
+			$history = ($observed ? self::readDiagnosticHistory(...) : self::readHistory(...))(
+				array_key_exists($contextKey, $vo) ? $vo[$contextKey] : null,
 				$sessionId,
-				array_key_exists(self::CONTEXT_KEY, $vo),
+				array_key_exists($contextKey, $vo),
 			);
 			if ($history === null)
 			{
 				return false;
 			}
 
-			$group = $report->get('outcome') === 'recovered' ? 'recovered' : 'errors';
-			$hash = $report->getDeduplicationHash();
+			$group = $observed ? 'observed' : ($report->get('outcome') === 'failed' ? 'errors' : 'recovered');
+			$hash = $observed
+				? hash('sha256', $sessionId . ':' . $report->get('report_attempt_id'))
+				: $report->getDeduplicationHash();
 			if (in_array($hash, $history[$group], true) || count($history[$group]) >= self::LIMIT)
 			{
 				return false;
 			}
 
 			$history[$group][] = $hash;
-			$vo[self::CONTEXT_KEY] = $history;
+			$vo[$contextKey] = $history;
 			$context[DocumentSessionManager::CONTEXT_VO_KEY] = $vo;
 			$result = DocumentSessionTable::update($sessionId, [
 				'CONTEXT' => Json::encode($context),
@@ -175,6 +180,29 @@ final class EditorFailureAdmission
 			$marker['documentSessionId'] = $sessionId;
 			$marker['errors'] = [];
 			$marker['recovered'] = [];
+		}
+
+		return $marker;
+	}
+
+	private static function readDiagnosticHistory(mixed $marker, int $sessionId, bool $exists): ?array
+	{
+		if (!$exists)
+		{
+			return ['version' => 1, 'documentSessionId' => $sessionId, 'observed' => []];
+		}
+		if (
+			!is_array($marker) || count($marker) !== 3 || ($marker['version'] ?? null) !== 1
+			|| !is_int($marker['documentSessionId'] ?? null) || $marker['documentSessionId'] <= 0
+			|| !self::validHashes($marker['observed'] ?? null) || count($marker['observed']) > self::LIMIT
+		)
+		{
+			return null;
+		}
+		if ($marker['documentSessionId'] !== $sessionId)
+		{
+			$marker['documentSessionId'] = $sessionId;
+			$marker['observed'] = [];
 		}
 
 		return $marker;

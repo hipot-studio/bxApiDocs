@@ -44,4 +44,9 @@ final class TaskFolder extends SystemFolder
 	{
 		return true;
 	}
+
+	public function canReadAll(): bool
+	{
+		return true;
+	}
 }

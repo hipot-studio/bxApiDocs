@@ -10,5 +10,6 @@ enum UserOtpStatus: string
 	case UpdateRequired = 'update_required';
 	case UpdateRecommended = 'update_recommended';
 	case EnableRequired = 'enable_required';
+	case MandatoryExempted = 'mandatory_exempted';
 	case Disabled = 'disabled';
 }

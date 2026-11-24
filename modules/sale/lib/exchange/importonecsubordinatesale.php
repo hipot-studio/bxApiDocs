@@ -37,6 +37,7 @@ final class ImportOneCSubordinateSale extends ImportOneCPackage
 		{
 			$fieldsOrder = $documentOrder->getFieldValues();
 			$itemsOrder = $this->getProductsItems($fieldsOrder);
+			$orderItemKeys = null;
 
 			if(is_array($fieldsOrder['SUBORDINATES']))
 			{
@@ -46,8 +47,23 @@ final class ImportOneCSubordinateSale extends ImportOneCPackage
 
 					if($typeId == static::getShipmentEntityTypeId())
 					{
+						if ($orderItemKeys === null)
+						{
+							$orderItemKeys = [];
+							foreach ($itemsOrder as $parentKey => $parentItem)
+							{
+								foreach ($parentItem as $xmlId => $fields)
+								{
+									$orderItemKeys[$xmlId][''][] = $parentKey;
+									$orderItemKeys[$xmlId]['s' . (string)($fields['BASKET_NUMBER'] ?? '')][] = $parentKey;
+								}
+							}
+						}
+
 						$subordinateDocumentItems = array();
 						$itemsSubordinate = $this->getProductsItems($subordinateDocumentFields);
+						$itemPositions = [];
+						$consumedOrderItems = [];
 
 						foreach ($itemsSubordinate as $itemSubordinate)
 						{
@@ -60,12 +76,33 @@ final class ImportOneCSubordinateSale extends ImportOneCPackage
 							}
 							else
 							{
-								$item = $this->getItemByParam($xmlId, $itemsOrder);
+								$item = null;
+								$position = $itemSubordinate[$xmlId]['BASKET_NUMBER'] ?? null;
+								$queueKey = $position === null || $position === '' ? '' : 's' . (string)$position;
+								$keys = $orderItemKeys[$xmlId][$queueKey] ?? [];
+								$cursor = $itemPositions[$xmlId][$queueKey] ?? 0;
+								while (isset($keys[$cursor]))
+								{
+									$parentKey = $keys[$cursor++];
+									if (!isset($consumedOrderItems[$parentKey]))
+									{
+										$item = $itemsOrder[$parentKey];
+										$consumedOrderItems[$parentKey] = true;
+
+										break;
+									}
+								}
+								$itemPositions[$xmlId][$queueKey] = $cursor;
 
 								if($item !== null)
 								{
 									$item[$xmlId]['QUANTITY'] = $itemSubordinate[$xmlId]['QUANTITY'];
+									$item[$xmlId]['BASKET_NUMBER'] = $itemSubordinate[$xmlId]['BASKET_NUMBER'] ?? null;
 									$subordinateDocumentItems[] = $item;
+								}
+								elseif ($position !== null && $position !== '')
+								{
+									$subordinateDocumentItems[] = $itemSubordinate;
 								}
 							}
 						}

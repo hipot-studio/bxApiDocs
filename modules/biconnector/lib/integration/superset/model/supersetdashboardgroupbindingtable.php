@@ -3,6 +3,9 @@
 namespace Bitrix\BIConnector\Integration\Superset\Model;
 
 use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\ORM\Data\AddStrategy\Contract\AddStrategy;
+use Bitrix\Main\ORM\Data\AddStrategy\InsertIgnore;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields;
@@ -27,6 +30,8 @@ use Bitrix\Main\ORM\Query\Join;
 class SupersetDashboardGroupBindingTable extends DataManager
 {
 	use DeleteByFilterTrait;
+	use AddInsertIgnoreTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -35,6 +40,11 @@ class SupersetDashboardGroupBindingTable extends DataManager
 	public static function getTableName(): string
 	{
 		return 'b_biconnector_superset_dashboard_group_binding';
+	}
+
+	protected static function getInsertIgnoreStrategy(): AddStrategy
+	{
+		return new InsertIgnore(static::getEntity(), ['GROUP_ID', 'DASHBOARD_ID']);
 	}
 
 	/**

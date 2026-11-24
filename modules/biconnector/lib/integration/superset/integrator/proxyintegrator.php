@@ -15,6 +15,9 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\SupersetStatusOptionContainer;
+use Bitrix\BIConnector\Superset\Config\ConfigContainer;
+use Bitrix\BIConnector\Superset\Operation\OperationIntentService;
+use Bitrix\BIConnector\Superset\Operation\OperationIntentTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
@@ -38,6 +41,7 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	private const PROXY_ACTION_CHANGE_BI_TOKEN_SUPERSET = '/instance/changeToken';
 	private const PROXY_ACTION_REFRESH_DOMAIN_CONNECTION = '/instance/refreshDomain';
 	private const PROXY_ACTION_CLEAR_CACHE = '/instance/clearCache';
+	private const PROXY_ACTION_OPERATION_STATUS = '/instance/operation/status';
 	private const PROXY_ACTION_CLEAR_PERMISSION_CACHE = '/instance/clearPermissionCache';
 	private const PROXY_ACTION_TIMEZONE_SET = '/timezone/set';
 	private const PROXY_ACTION_LIST_DASHBOARD = '/dashboard/list';
@@ -142,8 +146,32 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 			->addAfter($registrarMiddleware)
 			->addAfter($domainLinkGateMiddleware)
 			->addAfter(new Middleware\Logger($this->logger))
+			->addAfter(new Middleware\Diagnostics())
 			->addAfter(new Middleware\StatusArbiter($this->logger))
 		;
+
+		return $request;
+	}
+
+	private function createLifecycleRequest(string $action): IntegratorRequest
+	{
+		$request = $this
+			->createDefaultRequest($action)
+			->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
+			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->addAfter(new Middleware\StatusArbiter($this->logger, arbitrateServiceFailure: false))
+		;
+
+		// The registration is refused by the tariff, and the service finds the server of a cloud portal by its account.
+		if (!Feature::isBuilderEnabled())
+		{
+			$request
+				->removeBefore(Middleware\Registrar::getMiddlewareId())
+				->removeAfter(Middleware\Registrar::getMiddlewareId())
+			;
+		}
 
 		return $request;
 	}
@@ -169,7 +197,7 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	/**
 	 * @inheritDoc
 	 */
-	public function registerPortal(): IntegratorResponse
+	public function registerPortal(bool $raiseRebindMode = true): IntegratorResponse
 	{
 		$response = $this
 			->createDefaultRequest(self::PROXY_ACTION_REGISTER_PORTAL)
@@ -185,13 +213,18 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 
 		$clientId = $response->getData()['portalId'] ?? null;
 		$isRebind = (bool)($response->getData()['rebind'] ?? false);
+		$generation = (string)($response->getData()['generation'] ?? '');
 
-		if ($response->hasErrors() && $isRebind)
+		if ($raiseRebindMode && $response->hasErrors() && $isRebind)
 		{
 			Option::set('biconnector', '~superset_rebind_required', 'Y');
 		}
 
-		return $response->setData(['portalId' => $clientId, 'rebind' => $isRebind]);
+		return $response->setData([
+			'portalId' => $clientId,
+			'rebind' => $isRebind,
+			'generation' => $generation,
+		]);
 	}
 
 	/**
@@ -413,6 +446,12 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 
 	/**
 	 * @inheritDoc
+	 *
+	 * The guest path asks for these credentials without a visit of an employee to refresh the status
+	 * first, so the request is gated by the existence of the instance rather than by 'READY': a stale
+	 * ERROR or LOAD is decided by the answer of the service.
+	 *
+	 * @see Middleware\InstanceExistsGate
 	 */
 	public function getDashboardEmbeddedCredentials(
 		int $dashboardId,
@@ -438,6 +477,10 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_GET_EMBEDDED_DASHBOARD_CREDENTIALS)
+				->replaceBefore(
+					Middleware\ReadyGate::getMiddlewareId(),
+					new Middleware\InstanceExistsGate(new SupersetStatusOptionContainer(), $this->logger),
+				)
 				->setParams($requestParams)
 				->setUser($user)
 				->perform()
@@ -486,6 +529,7 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 				->removeAfter(Middleware\DomainLinkGate::getMiddlewareId())
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 				->removeAfter(Middleware\Logger::getMiddlewareId())
+				->removeAfter(Middleware\Diagnostics::getMiddlewareId())
 				->perform()
 		;
 
@@ -727,6 +771,7 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 			'token' => $response->getData()['token'],
 			'superset_address' => $response->getData()['superset_address'] ?? null,
 			'rebind' => (bool)($response->getData()['rebind'] ?? false),
+			'generation' => (string)($response->getData()['generation'] ?? ''),
 		];
 
 		return $response->setData($responseData);
@@ -737,18 +782,11 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function freezeSuperset(array $params = []): IntegratorResponse
 	{
-		$requestParams = [];
-		if (isset($params['reason']))
-		{
-			$requestParams['reason'] = $params['reason'];
-		}
-
-		return (new IntegratorRequest($this->sender))
-			->setAction(self::PROXY_ACTION_FREEZE_SUPERSET)
-			->setParams($requestParams)
-			->addAfter(new Middleware\Logger($this->logger))
-			->perform()
-		;
+		return $this->performDestructiveOperation(
+			self::PROXY_ACTION_FREEZE_SUPERSET,
+			OperationIntentTable::OPERATION_FREEZE,
+			self::extractReasonParams($params),
+		);
 	}
 
 	/**
@@ -756,16 +794,9 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function unfreezeSuperset(array $params = []): IntegratorResponse
 	{
-		$requestParams = [];
-		if (isset($params['reason']))
-		{
-			$requestParams['reason'] = $params['reason'];
-		}
-
-		return (new IntegratorRequest($this->sender))
-			->setAction(self::PROXY_ACTION_UNFREEZE_SUPERSET)
-			->setParams($requestParams)
-			->addAfter(new Middleware\Logger($this->logger))
+		return $this
+			->createLifecycleRequest(self::PROXY_ACTION_UNFREEZE_SUPERSET)
+			->setParams(self::extractReasonParams($params))
 			->perform()
 		;
 	}
@@ -775,18 +806,11 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function suspendSuperset(array $params = []): IntegratorResponse
 	{
-		$requestParams = [];
-		if (isset($params['reason']))
-		{
-			$requestParams['reason'] = $params['reason'];
-		}
-
-		return (new IntegratorRequest($this->sender))
-			->setAction(self::PROXY_ACTION_SUSPEND_SUPERSET)
-			->setParams($requestParams)
-			->addAfter(new Middleware\Logger($this->logger))
-			->perform()
-		;
+		return $this->performDestructiveOperation(
+			self::PROXY_ACTION_SUSPEND_SUPERSET,
+			OperationIntentTable::OPERATION_SUSPEND,
+			self::extractReasonParams($params),
+		);
 	}
 
 	/**
@@ -794,16 +818,9 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function resumeSuperset(array $params = []): IntegratorResponse
 	{
-		$requestParams = [];
-		if (isset($params['reason']))
-		{
-			$requestParams['reason'] = $params['reason'];
-		}
-
-		return (new IntegratorRequest($this->sender))
-			->setAction(self::PROXY_ACTION_RESUME_SUPERSET)
-			->setParams($requestParams)
-			->addAfter(new Middleware\Logger($this->logger))
+		return $this
+			->createLifecycleRequest(self::PROXY_ACTION_RESUME_SUPERSET)
+			->setParams(self::extractReasonParams($params))
 			->perform()
 		;
 	}
@@ -813,11 +830,66 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function deleteSuperset(): IntegratorResponse
 	{
-		return (new IntegratorRequest($this->sender))
-			->setAction(self::PROXY_ACTION_DELETE_SUPERSET)
-			->addAfter(new Middleware\Logger($this->logger))
+		return $this->performDestructiveOperation(
+			self::PROXY_ACTION_DELETE_SUPERSET,
+			OperationIntentTable::OPERATION_DELETE,
+			[],
+		);
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getOperationStatus(string $operationId): IntegratorResponse
+	{
+		return $this
+			->createLifecycleRequest(self::PROXY_ACTION_OPERATION_STATUS)
+			->setParams([Sender::FIELD_OPERATION_ID => $operationId])
 			->perform()
 		;
+	}
+
+	private static function extractReasonParams(array $params): array
+	{
+		return isset($params['reason']) ? ['reason' => $params['reason']] : [];
+	}
+
+	private function performDestructiveOperation(
+		string $action,
+		string $operation,
+		array $params,
+	): IntegratorResponse
+	{
+		$generation = ConfigContainer::getConfigContainer()->getServerGeneration();
+
+		$intent = (new OperationIntentService())->create($operation, null, $generation, $params);
+		if (!$intent->isSuccess())
+		{
+			$this->logger->logMethodErrors($action, IntegratorResponse::STATUS_INNER_ERROR, $intent->getErrors());
+
+			return new IntegratorResponse(
+				IntegratorResponse::STATUS_INNER_ERROR,
+				null,
+				$intent->getErrors(),
+			);
+		}
+
+		$operationId = (string)$intent->getData()[OperationIntentService::FIELD_OPERATION_ID];
+		$paramsHash = (string)$intent->getData()[OperationIntentService::FIELD_PARAMS_HASH];
+
+		$response = $this
+			->createLifecycleRequest($action)
+			->setParams($params + [
+				Sender::FIELD_OPERATION_ID => $operationId,
+				Sender::FIELD_GENERATION => $generation,
+				Sender::FIELD_PARAMS_HASH => $paramsHash,
+			])
+			->perform()
+		;
+
+		$responseData = is_array($response->getData()) ? $response->getData() : [];
+
+		return $response->setData($responseData + [Sender::FIELD_OPERATION_ID => $operationId]);
 	}
 
 	/**
@@ -918,9 +990,16 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	/**
 	 * @inheritDoc
 	 */
-	public function getLoginUrl(): IntegratorResponse
+	public function getLoginUrl(bool $allowStartingInstance = false): IntegratorResponse
 	{
-		return $this->createDefaultRequest(self::PROXY_ACTION_GET_LOGIN_URL)->perform();
+		$request = $this->createDefaultRequest(self::PROXY_ACTION_GET_LOGIN_URL);
+		if ($allowStartingInstance)
+		{
+			// The proxy signs the url without calling the instance.
+			$request->removeBefore(Middleware\ReadyGate::getMiddlewareId());
+		}
+
+		return $request->perform();
 	}
 
 	/**
@@ -1199,11 +1278,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		?int $pageSize = null
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		if ($user === null && $this->isActAsEnabled())
 		{
 			return self::personRequiredResponse();
@@ -1285,11 +1359,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		?string $sourceSchema = null,
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$parameters = [
 			'datasetName' => $datasetName,
 			'sourceTable' => $sourceTable,
@@ -1316,11 +1385,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function createDatasetFromSql(User $user, string $datasetName, string $sql): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$parameters = [
 			'datasetName' => $datasetName,
 			'sql' => $sql,
@@ -1346,11 +1410,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		?SqlExecutionContext $context = null,
 	): IntegratorResponse
 	{
-		if (!($context?->isRest() ?? false) && !self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$params = ['sql' => $sql];
 		if ($limit !== null)
 		{
@@ -1387,11 +1446,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function listTables(?User $user, ?string $schema = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		if ($user === null && $this->isActAsEnabled())
 		{
 			return self::personRequiredResponse();
@@ -1424,11 +1478,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function getTableMetadata(?User $user, string $tableName, ?string $schema = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		if ($user === null && $this->isActAsEnabled())
 		{
 			return self::personRequiredResponse();
@@ -1671,11 +1720,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		bool $arbitrateServiceFailure = true,
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		if ($user === null && $this->isActAsEnabled())
 		{
 			return self::personRequiredResponse();
@@ -1730,11 +1774,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		bool $arbitrateServiceFailure = true,
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		if ($user === null && $this->isActAsEnabled())
 		{
 			return self::personRequiredResponse();
@@ -1803,18 +1842,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		);
 	}
 
-	private static function isAiToolsFeatureEnabled(): bool
-	{
-		return Feature::isBitrixGptBiConstructorEnabled();
-	}
-
-	private static function aiToolsDisabledResponse(): IntegratorResponse
-	{
-		$response = new IntegratorResponse(status: IntegratorResponse::STATUS_NO_ACCESS);
-		$response->addError(new Error('AI tools are disabled.', 'ai_tools_disabled'));
-
-		return $response;
-	}
 
 	/**
 	 * Inits a server-side scenario to create or update required system datasets (e.g., for filters).
@@ -1838,20 +1865,49 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	/**
 	 * @inheritDoc
 	 */
-	public function setExpirationDate(?Date $date): IntegratorResponse
+	public function setExpirationDate(
+		?Date $date,
+		int $socketTimeout = 0,
+		int $streamTimeout = 0,
+		bool $detectFrozenInstance = false,
+	): IntegratorResponse
 	{
 		$parameters = [
 			'timestamp' => self::normalizeExpirationTimestamp($date),
 		];
 
-		return
-			$this
+		if ($detectFrozenInstance)
+		{
+			// A frozen answer moves the portal to LOAD; a failure of the service leaves it as it is.
+			$request = $this->createArbitratedRequest(self::PROXY_ACTION_SET_SUBSCRIPTION_EXPIRATION, false);
+		}
+		else
+		{
+			$request = $this
 				->createDefaultRequest(self::PROXY_ACTION_SET_SUBSCRIPTION_EXPIRATION)
-				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
-				->setParams($parameters)
-				->perform()
+			;
+		}
+
+		$request
+			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			// One date for the whole portal: no user to prepare, and the own requests of these two
+			// would take the single-use timeouts of this one.
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->setParams($parameters)
 		;
+
+		$httpClientParams = array_filter([
+			'socketTimeout' => $socketTimeout,
+			'streamTimeout' => $streamTimeout,
+		]);
+		if ($httpClientParams)
+		{
+			$request->setSenderHttpClientParams($httpClientParams);
+		}
+
+		return $request->perform();
 	}
 
 	/**
@@ -1884,11 +1940,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 		?int $pageSize = null
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		if ($user === null && $this->isActAsEnabled())
 		{
 			return self::personRequiredResponse();
@@ -1937,11 +1988,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function getChartById(int $id, ?User $user = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$requestParams = ['id' => $id];
 		$request = $this->createDefaultRequest(self::PROXY_ACTION_GET_CHART);
 		if ($user !== null)
@@ -1956,11 +2002,11 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	/**
 	 * @inheritDoc
 	 */
-	public function createChart(array $payload): IntegratorResponse
+	public function createChart(array $payload, ?User $user = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
+		if ($user !== null)
 		{
-			return self::aiToolsDisabledResponse();
+			unset($payload['owners']);
 		}
 
 		return
@@ -1968,6 +2014,7 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 				->createDefaultRequest(self::PROXY_ACTION_CREATE_CHART)
 				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
+				->setUser($user)
 				->setParams(['payload' => $payload])
 				->perform()
 			;
@@ -1978,11 +2025,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function updateChart(int $id, array $fields): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_UPDATE_CHART)
@@ -2001,11 +2043,6 @@ class ProxyIntegrator implements IntegratorInterface, DashboardSourceReaderInter
 	 */
 	public function deleteChart(int $id): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_DELETE_CHART)

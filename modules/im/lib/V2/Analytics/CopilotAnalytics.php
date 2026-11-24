@@ -261,13 +261,14 @@ class CopilotAnalytics extends AbstractAnalytics
 	 * Emits create_new_chat ai-label for a copilot chat creation (chat-level).
 	 *
 	 * p4 = reduced modes snapshot (role + chatType), p5 = chatId.
+	 * A chat of the mobile voice widget also gets its labels: origin and requestSource in p4, its screen as section.
 	 */
-	public function addCreateNewChat(): void
+	public function addCreateNewChat(?VoiceWidgetLabels $voiceWidgetLabels = null): void
 	{
-		$this->async(fn () => $this->buildCreateNewChatEvent()?->send());
+		$this->async(fn () => $this->buildCreateNewChatEvent($voiceWidgetLabels)?->send());
 	}
 
-	protected function buildCreateNewChatEvent(): ?CopilotEvent
+	protected function buildCreateNewChatEvent(?VoiceWidgetLabels $voiceWidgetLabels = null): ?CopilotEvent
 	{
 		$event = $this->createV2CopilotEvent(self::CREATE_NEW_CHAT);
 		if ($event === null)
@@ -276,6 +277,10 @@ class CopilotAnalytics extends AbstractAnalytics
 		}
 
 		$event->applyV2FormatReduced();
+		if ($voiceWidgetLabels !== null)
+		{
+			$event->applyVoiceWidgetLabels($voiceWidgetLabels);
+		}
 
 		return $event;
 	}

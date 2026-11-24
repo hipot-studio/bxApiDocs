@@ -39,6 +39,7 @@ final class TemplateMapper extends AbstractAgentMapper
 	 *     hasDraft?: bool,
 	 *     description?: string,
 	 *     draftId?: ?int,
+	 *     draftFingerprint?: ?string,
 	 *     blocks?: AgentBlockCollection,
 	 *     connections?: AgentConnectionCollection,
 	 * }> $items

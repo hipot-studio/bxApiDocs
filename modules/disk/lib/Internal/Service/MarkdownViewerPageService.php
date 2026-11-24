@@ -5,15 +5,23 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service;
 
 use Bitrix\Disk\Configuration;
+use Bitrix\Disk\Document\DocumentEditorUser;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionService;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContext;
 use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\EditPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\PreviewPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\Readiness;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\ReadinessService;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\SessionService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSignature;
 use Bitrix\Disk\ObjectLock;
+use Bitrix\Disk\Realtime\Tags\ObjectTag;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
@@ -37,6 +45,10 @@ use Bitrix\Main\Web\Uri;
  * The header is drawn from HEADER_COMPOSITION only, and an opening that could not be described falls
  * back to the minimal header and is logged, as on the html viewer page. Errors of rendering the document
  * are answered to the page by the action itself and are not logged here.
+ *
+ * While the policy of editing allows the file {@see EditPolicy}, the page of the file is also the editor of it:
+ * the verdict on entering editing {@see ReadinessService::assess()} is taken once and feeds both the header and
+ * DOCUMENT_STATE (DTO-02), and the viewer is subscribed to the events of the object (PULL-01).
  */
 class MarkdownViewerPageService
 {
@@ -47,6 +59,7 @@ class MarkdownViewerPageService
 		private ?OpeningContextFactory $openingContextFactory = null,
 		private ?HeaderCompositionService $compositionService = null,
 		private ?UnifiedLinkAccessService $accessService = null,
+		private ?ReadinessService $readinessService = null,
 	)
 	{
 	}
@@ -75,21 +88,87 @@ class MarkdownViewerPageService
 		$contentUrl = $this->sign($contentUrl, $signature);
 		$downloadUrl = $this->sign($downloadUrl, $signature);
 
+		$isEditable = EditPolicy::isEditableSource($file);
+		// The page is reached by the unified link of the file, so its code is what the page presents.
+		$uniqueCode = (string)$file->getRealObject()?->getUniqueCode();
+		$readiness = $isEditable ? $this->assess($file, $userId, $uniqueCode === '' ? null : $uniqueCode) : null;
+		$openingContextFactory = $this->getOpeningContextFactory();
+		$openingContext = $readiness === null
+			? $openingContextFactory->fromFile($file, $userId, $downloadUrl, $accessLevel)
+			: $openingContextFactory->fromMarkdownFile($file, $userId, $downloadUrl, $accessLevel, $readiness)
+		;
+
+		return [
+			'NAME' => $name,
+			'CONTENT_URL' => $contentUrl,
+			'DOWNLOAD_URL' => $downloadUrl,
+			'PORTAL_URL' => $this->getPortalUrl(),
+			'HEADER_COMPOSITION' => $this->composeHeader($openingContext, $userId, $name, $downloadUrl),
+			'DOCUMENT_STATE' => $this->buildDocumentState(
+				file: $file,
+				versionId: $version === null ? null : (int)$version->getId(),
+				readiness: $readiness,
+				edit: $readiness?->hasRight ? $this->buildEditOptions($file, $uniqueCode) : null,
+				pullTag: $isEditable ? $this->subscribeViewer($file, $userId) : null,
+			),
+		];
+	}
+
+	/**
+	 * The page of a public link (API-02): the document and its download are the actions of the link itself,
+	 * authorized by the token the link page stored in the session, so a guest without an account reads it.
+	 * A link pinned to a revision shows that revision for reading only; a link with the right to edit makes the
+	 * page the editor of the file, and the actions of editing are told the link by its hash. The pull of a page
+	 * reached by a public link is not set up: the guest gets none, and the link grants no watch of the object.
+	 */
+	public function buildParamsByExternalLink(File $file, ExternalLink $link, string $token, ?Version $pinned): array
+	{
+		$urlManager = Driver::getInstance()->getUrlManager();
+		$userId = $this->getCurrentUserId();
+		$name = (string)($pinned?->getName() ?? $file->getName());
+		$contentUrl = $urlManager->getUrlExternalLink([
+			'hash' => $link->getHash(),
+			'action' => 'showMarkdown',
+			'token' => $token,
+		]);
+		$downloadUrl = $urlManager->getUrlExternalLink([
+			'hash' => $link->getHash(),
+			'action' => 'download',
+			'token' => $token,
+		]);
+
+		$readiness = EditPolicy::isEditableSource($file, $pinned)
+			? $this->assessByExternalLink($file, $userId, $link)
+			: null
+		;
+		$version = $pinned ?? $this->getNewestRevision($file);
+
 		return [
 			'NAME' => $name,
 			'CONTENT_URL' => $contentUrl,
 			'DOWNLOAD_URL' => $downloadUrl,
 			'PORTAL_URL' => $this->getPortalUrl(),
 			'HEADER_COMPOSITION' => $this->composeHeader(
-				$this->getOpeningContextFactory()->fromFile($file, $userId, $downloadUrl, $accessLevel),
+				$this->getOpeningContextFactory()->fromExternalLink(
+					$file,
+					$link,
+					$pinned,
+					$userId,
+					$downloadUrl,
+					readiness: $readiness,
+				),
 				$userId,
 				$name,
 				$downloadUrl,
 			),
 			'DOCUMENT_STATE' => $this->buildDocumentState(
-				$file,
-				$version === null ? null : (int)$version->getId(),
-				$accessLevel->canEdit(),
+				file: $file,
+				versionId: $version === null ? null : (int)$version->getId(),
+				readiness: $readiness,
+				edit: $readiness?->hasRight
+					? $this->buildEditOptions($file, '', (string)$link->getHash())
+					: null,
+				isLockOwnerHidden: true,
 			),
 		];
 	}
@@ -131,9 +210,8 @@ class MarkdownViewerPageService
 				$downloadUrl,
 			),
 			'DOCUMENT_STATE' => $this->buildDocumentState(
-				$file instanceof File ? $file : null,
-				(int)$version->getId(),
-				false,
+				file: $file instanceof File ? $file : null,
+				versionId: (int)$version->getId(),
 			),
 		];
 	}
@@ -160,29 +238,119 @@ class MarkdownViewerPageService
 	}
 
 	/**
-	 * What the page knows of the document beyond the header. Nothing on the page draws it yet: it is the
-	 * ground an editing mode of the page would stand on.
+	 * What the page knows of the document beyond the header (DTO-02): the revision it was built on, whether
+	 * the viewer may enter editing now and why not, what the editing mode stands on, and the tag of the object
+	 * the viewer listens to. A refusal is named only to a viewer holding the right; a revision, a viewer without
+	 * the right and a portal with the editing off get no editing block at all.
 	 *
-	 * @return array{versionId: ?int, canEdit: bool, lock: array{isLocked: bool, lockedBy: ?int}}
+	 * @return array{
+	 *     versionId: ?int,
+	 *     canEdit: bool,
+	 *     lock: array{isLocked: bool, lockedBy: ?int},
+	 *     editRefusal: array{code: string, message: string, customData: ?array}|null,
+	 *     edit: array|null,
+	 *     pullTag: ?string,
+	 * }
 	 */
-	private function buildDocumentState(?File $file, ?int $versionId, bool $canEdit): array
+	private function buildDocumentState(
+		?File $file,
+		?int $versionId,
+		?Readiness $readiness = null,
+		?array $edit = null,
+		?string $pullTag = null,
+		bool $isLockOwnerHidden = false,
+	): array
 	{
 		$lock = $file !== null && $this->isObjectLockEnabled() ? $file->getLock() : null;
+		// a visitor of a public link learns nothing of the people of the portal, the id of the lock holder included
+		$lockedBy = $lock instanceof ObjectLock && !$isLockOwnerHidden ? (int)$lock->getCreatedBy() : null;
+		$refusal = $readiness?->hasRight ? $readiness->refusal : null;
 
 		return [
 			'versionId' => $versionId,
-			'canEdit' => $canEdit,
+			'canEdit' => (bool)$readiness?->canEdit,
 			'lock' => [
 				'isLocked' => $lock instanceof ObjectLock,
-				'lockedBy' => $lock instanceof ObjectLock ? (int)$lock->getCreatedBy() : null,
+				'lockedBy' => $lockedBy,
 			],
+			'editRefusal' => $refusal === null ? null : [
+				'code' => (string)$refusal->getCode(),
+				'message' => (string)$refusal->getMessage(),
+				'customData' => $refusal->getCustomData(),
+			],
+			'edit' => $edit,
+			'pullTag' => $pullTag,
 		];
 	}
 
 	/**
+	 * What the editing mode of the page stands on: the file the actions name, the code of its unified link or the
+	 * hash of the public link the actions present as the page does, the limits and the clock of the md session, and
+	 * whether the preview of the text being edited is offered.
+	 */
+	private function buildEditOptions(File $file, string $uniqueCode, string $externalLinkHash = ''): array
+	{
+		return [
+			'fileId' => (int)$file->getId(),
+			'uniqueCode' => $uniqueCode === '' ? null : $uniqueCode,
+			'externalLinkHash' => $externalLinkHash === '' ? null : $externalLinkHash,
+			'maxSize' => Configuration::getMaxSizeForMarkdownRender(),
+			'previewMaxSize' => Configuration::getMaxSizeForMarkdownPreview(),
+			'heartbeatSeconds' => SessionService::HEARTBEAT_SECONDS,
+			'livenessSeconds' => SessionService::LIVENESS_SECONDS,
+			'idleSeconds' => SessionService::IDLE_SECONDS,
+			'preview' => PreviewPolicy::isEnabled(),
+		];
+	}
+
+	/**
+	 * Subscribes the viewer to the events of the object, so a revision written by somebody else reaches the
+	 * open page. A guest is not subscribed: the pull of a guest is suppressed.
+	 *
+	 * @return string|null the tag the client keeps the watch of, null when nobody was subscribed
+	 */
+	private function subscribeViewer(File $file, int $userId): ?string
+	{
+		if ($this->isGuest($userId))
+		{
+			return null;
+		}
+
+		$tag = new ObjectTag((int)$file->getRealObjectId());
+		$this->subscribe($tag, $userId);
+
+		return $tag->getName();
+	}
+
+	protected function subscribe(ObjectTag $tag, int $userId): void
+	{
+		$tag->subscribe($userId);
+	}
+
+	protected function isGuest(int $userId): bool
+	{
+		return $userId <= 0 || DocumentEditorUser::isCurrentUserDocumentEditor();
+	}
+
+	protected function assess(File $file, int $userId, ?string $uniqueCode): Readiness
+	{
+		return $this->getReadinessService()->assess($file, $userId, $uniqueCode);
+	}
+
+	protected function assessByExternalLink(File $file, int $userId, ExternalLink $link): Readiness
+	{
+		return $this->getReadinessService()->assess($file, $userId, link: $link);
+	}
+
+	private function getReadinessService(): ReadinessService
+	{
+		return $this->readinessService ??= new ReadinessService();
+	}
+
+	/**
 	 * The revision the file shows now. Revisions are ordered by the time they were created, which has a
-	 * precision of a second, so two of them uploaded within one second are told apart by their ids -
-	 * File::getLastVersion() leaves such a tie to the database.
+	 * precision of a second, so two of them uploaded within one second are told apart by their ids - the
+	 * order File::getVersions() takes by default, stated here so the page does not depend on that default.
 	 */
 	private function getNewestRevision(File $file): ?Version
 	{

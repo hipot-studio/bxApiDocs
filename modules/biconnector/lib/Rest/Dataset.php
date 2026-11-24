@@ -163,6 +163,14 @@ class Dataset extends Base
 				'isMultiple' => false,
 			],
 			[
+				'title' => 'verboseName',
+				'type' => 'string',
+				'isRequired' => false,
+				'isReadOnly' => false,
+				'isImmutable' => false,
+				'isMultiple' => false,
+			],
+			[
 				'title' => 'description',
 				'type' => 'string',
 				'isRequired' => false,
@@ -268,6 +276,14 @@ class Dataset extends Base
 		$fields['TYPE'] = Type::Rest->value;
 
 		$datasetFields = $fields['FIELDS'];
+		foreach ($datasetFields as $field)
+		{
+			$descriptionResult = self::validateFieldDescription($field, 'DESCRIPTION');
+			if (!$descriptionResult->isSuccess())
+			{
+				return $descriptionResult;
+			}
+		}
 		unset($fields['FIELDS']);
 		$sourceId = $fields['SOURCE_ID'];
 		unset($fields['SOURCE_ID']);
@@ -728,7 +744,7 @@ class Dataset extends Base
 	private static function getAccessDeniedResult(): Result
 	{
 		return (new Result())->addError(new Error(
-			self::ACCESS_ERROR['error_description'],
+			self::accessErrorDescription(self::ACCESS_DENIED_REASON_TABLE_GROUP),
 			self::ACCESS_ERROR['error']
 		));
 	}
@@ -757,15 +773,16 @@ class Dataset extends Base
 	public static function fieldsUpdate(array $params, $n, \CRestServer $server): array|bool
 	{
 		\Bitrix\Main\Localization\Loc::setCurrentLang('en');
-		if (!self::checkPermission())
+		$accessResult = self::checkAccess();
+		if (!$accessResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError($accessResult->getErrors()[0]->getMessage());
 		}
 
 		$checkAppIdResult = self::checkAndPrepareAppId($server);
 		if (!$checkAppIdResult->isSuccess())
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_WEBHOOK);
 		}
 		$params['appId'] = $checkAppIdResult->getData()['appId'];
 		$validateResult = static::validateParamsForFieldsUpdate($params);
@@ -797,7 +814,7 @@ class Dataset extends Base
 
 		if (!self::canEditTable((string)$dataset->getName()))
 		{
-			return ['error' => self::ACCESS_ERROR];
+			return self::accessError(self::ACCESS_DENIED_REASON_TABLE_GROUP);
 		}
 
 		$result = RestDatasetManager::updateFieldsByDatasetId(
@@ -838,11 +855,21 @@ class Dataset extends Base
 
 					return $result;
 				}
-				$addArray[] = [
+				$descriptionResult = self::validateFieldDescription($field, 'description');
+				if (!$descriptionResult->isSuccess())
+				{
+					return $descriptionResult;
+				}
+				$preparedField = [
 					'NAME' => $field['name'],
 					'EXTERNAL_CODE' => $field['externalCode'],
 					'TYPE' => $field['type'],
 				];
+				if (array_key_exists('description', $field))
+				{
+					$preparedField['DESCRIPTION'] = $field['description'];
+				}
+				$addArray[] = $preparedField;
 			}
 		}
 
@@ -851,16 +878,34 @@ class Dataset extends Base
 			$updateArray = [];
 			foreach ($params['update'] as $field)
 			{
-				if (!isset($field['id'], $field['visible']))
+				if (
+					!isset($field['id'])
+					|| (!isset($field['visible']) && !array_key_exists('description', $field))
+				)
 				{
-					$result->addError(new Error('Field to be updated must include the required parameters: "id" and "visible".', 'VALIDATION_FIELD_UPDATE_MISSING_REQUIRED_FIELDS'));
+					$result->addError(new Error(
+						'Field to be updated must include the required parameters: "id" and "visible".'
+						. ' "description" can be passed instead of "visible".',
+						'VALIDATION_FIELD_UPDATE_MISSING_REQUIRED_FIELDS',
+					));
 
 					return $result;
 				}
-				$updateArray[] = [
-					'ID' => $field['id'],
-					'VISIBLE' => $field['visible'],
-				];
+				$descriptionResult = self::validateFieldDescription($field, 'description');
+				if (!$descriptionResult->isSuccess())
+				{
+					return $descriptionResult;
+				}
+				$preparedField = ['ID' => $field['id']];
+				if (isset($field['visible']))
+				{
+					$preparedField['VISIBLE'] = $field['visible'];
+				}
+				if (array_key_exists('description', $field))
+				{
+					$preparedField['DESCRIPTION'] = $field['description'];
+				}
+				$updateArray[] = $preparedField;
 			}
 		}
 
@@ -885,6 +930,20 @@ class Dataset extends Base
 			'fieldsToUpdate' => $updateArray ?? [],
 			'fieldsToDelete' => $deleteArray ?? [],
 		]);
+
+		return $result;
+	}
+
+	private static function validateFieldDescription(mixed $field, string $key): Result
+	{
+		$result = new Result();
+		if (is_array($field) && array_key_exists($key, $field) && !is_string($field[$key]))
+		{
+			$result->addError(new Error(
+				'Field "description" must be of type string.',
+				'VALIDATION_INVALID_FIELD_TYPE',
+			));
+		}
 
 		return $result;
 	}

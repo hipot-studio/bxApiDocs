@@ -1552,6 +1552,7 @@ class CBlogPostEdit extends CBitrixComponent
 	private function clearBlogCache($blogParams)
 	{
 		BXClearCache(true, "/" . SITE_ID . "/blog/" . $blogParams["URL"] . "/first_page/");
+		BXClearCache(true, "/" . SITE_ID . "/blog/" . $blogParams["URL"] . "/pages/");
 		BXClearCache(true, "/" . SITE_ID . "/blog/" . $blogParams["URL"] . "/calendar/");
 		BXClearCache(true, "/" . SITE_ID . "/blog/last_messages/");
 		BXClearCache(true, "/" . SITE_ID . "/blog/commented_posts/");

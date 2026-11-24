@@ -9,7 +9,9 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\NotImplementedException;
@@ -193,9 +195,33 @@ final class SetupSession extends Internals\Entity\Model
 		}
 		catch (Throwable $exception)
 		{
-			$connection->rollbackTransaction();
+			$this->rollbackFinishTransaction($connection);
 
 			throw $exception;
+		}
+	}
+
+	/**
+	 * Rolls back the transaction opened by finish() without masking the original failure.
+	 * The connection decrements its transaction level before the rollback query, so the level stays balanced
+	 * even when the rollback itself throws; an outer transaction is responsible for rolling back its root.
+	 * @param Connection $connection Connection with the transaction opened by finish().
+	 * @return void
+	 */
+	private function rollbackFinishTransaction(Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (TransactionException)
+		{
+			// MySQL reports a nested rollback this way after rolling back to the savepoint: expected, not an error.
+		}
+		catch (Throwable $rollbackException)
+		{
+			// The server may have already ended the transaction (e.g. deadlock), destroying the savepoint.
+			Application::getInstance()->getExceptionHandler()->writeToLog($rollbackException);
 		}
 	}
 

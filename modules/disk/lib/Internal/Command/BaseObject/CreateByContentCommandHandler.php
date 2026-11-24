@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Internal\Command\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\Text;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
@@ -85,7 +86,7 @@ class CreateByContentCommandHandler
 			[
 				'name' => $command->content->getFilename(),
 				'tmp_name' => $command->content->getAbsolutePath(),
-				'type' => $command->contentType,
+				'type' => TypeFile::normalizeMimeType($command->contentType, $command->filename),
 				'width' => $command->content->getWidth(),
 				'height' => $command->content->getHeight(),
 				'MODULE_ID' => Driver::INTERNAL_MODULE_ID,

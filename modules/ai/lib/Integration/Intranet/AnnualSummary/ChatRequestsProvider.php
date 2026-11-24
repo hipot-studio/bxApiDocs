@@ -27,12 +27,17 @@ use Throwable;
  *
  * The collector keeps one number per metric name, so the seasons live under four names, and the
  * product asked for one more number next to them: the all time count of the person's requests,
- * which is not limited by the period the collector runs for.
+ * which is not limited by the period the collector runs for. The request query counts per calendar
+ * month, and a season is the sum of its months.
+ *
+ * The most active month of the period lives under PEAK_MONTH_ID as a number 0..12: 1..12 is the month
+ * with the most requests, and on a tie the earlier month wins; 0 means the person has the chat but made
+ * no requests in the period.
  *
  * Three states stay distinguishable without a text payload in the storage:
  * - the person never used BitrixGPT: the value rows are not written at all, so a reader tells
  *   "no data" from a real zero by their absence (`findByIdAndUserId()` returns null);
- * - the person has the chat but no requests: the four season rows and the all time row carry zeros;
+ * - the person has the chat but no requests: the season, all time and peak month rows carry zeros;
  * - the batch failed to calculate: only the *_error row is written with 1, the reason goes to the
  *   log, and the batch is not silently skipped.
  *
@@ -49,6 +54,8 @@ class ChatRequestsProvider implements SummaryProviderInterface
 	public const SEASON_ID_PREFIX = self::PROVIDER_ID . '_';
 	/** All time requests of the person, not limited by the period of the collector. */
 	public const TOTAL_ID = self::PROVIDER_ID . '_total';
+	/** Most active month of the period, 1..12; 0 when the person has the chat but no requests in it. */
+	public const PEAK_MONTH_ID = self::PROVIDER_ID . '_peak_month';
 	/** Flag row: 1 means the batch failed to calculate, so no value rows exist for these people. */
 	public const ERROR_ID = self::PROVIDER_ID . '_error';
 
@@ -114,10 +121,10 @@ class ChatRequestsProvider implements SummaryProviderInterface
 			$chatMap = $this->chatsOfUsers($userIds);
 			$counts = [];
 
-			// The messages of a chunk of the batch chats are read once: the season sums carry the period
-			// inside the expression, and the all time number is the same pass. The all time card needs
-			// the whole history of those chats anyway, so a second pass restricted to the period would
-			// buy nothing but a doubled read.
+			// The messages of a chunk of the batch chats are read once: the query counts per month, the
+			// period picks its months from those rows, and the all time number is their sum. The all time
+			// card needs the whole history of those chats anyway, so a second pass restricted to the period
+			// would buy nothing but a doubled read.
 			foreach (array_chunk($chatMap['chats'], self::CHAT_LIMIT) as $chatIds)
 			{
 				foreach ($this->countByUsers($userIds, $chatIds) as $userId => $values)
@@ -147,7 +154,7 @@ class ChatRequestsProvider implements SummaryProviderInterface
 
 	/**
 	 * @param int[] $userIds
-	 * @param array<int, array<string, int>> $counts
+	 * @param array<int, array<int|string, int>> $counts month sums keyed 1..12, the total under TOTAL_ID
 	 * @param array<int, true> $chatUsers
 	 */
 	private function buildCollection(array $userIds, array $counts, array $chatUsers): EntityCollection
@@ -162,16 +169,37 @@ class ChatRequestsProvider implements SummaryProviderInterface
 				continue;
 			}
 
+			// The query counts per month, so a season is the sum of its months.
+			$seasonCounts = array_fill_keys(Season::getAll(), 0);
+			for ($month = 1; $month <= 12; $month++)
+			{
+				$seasonCounts[Season::ofMonth($month)] += $counts[$userId][$month] ?? 0;
+			}
+
 			foreach (Season::getAll() as $season)
 			{
 				$collection->add(new Summary(
 					$userId,
 					self::SEASON_ID_PREFIX . $season,
-					$counts[$userId][$season] ?? 0,
+					$seasonCounts[$season],
 				));
 			}
 
 			$collection->add(new Summary($userId, self::TOTAL_ID, $counts[$userId][self::TOTAL_ID] ?? 0));
+
+			// Strict comparison in ascending order: on a tie the earlier month wins.
+			$peak = 0;
+			$peakCount = 0;
+			for ($month = 1; $month <= 12; $month++)
+			{
+				$monthCount = $counts[$userId][$month] ?? 0;
+				if ($monthCount > $peakCount)
+				{
+					$peak = $month;
+					$peakCount = $monthCount;
+				}
+			}
+			$collection->add(new Summary($userId, self::PEAK_MONTH_ID, $peak));
 		}
 
 		return $collection;
@@ -192,15 +220,15 @@ class ChatRequestsProvider implements SummaryProviderInterface
 	}
 
 	/**
-	 * One grouped query per chunk of the batch chats for all five numbers: the seasons are the period
-	 * part of the same pass and the all time total is the rest of it, so the messages of those chats
-	 * are read once. The chat of a message is joined to the relation of the person who wrote it, so a
-	 * request counts only in a chat that person takes part in; the chat type is not checked again,
-	 * because the ids already come from the BitrixGPT chats of the batch.
+	 * One grouped query per chunk of the batch chats: the messages are counted per author and calendar
+	 * month, and the months of the period and the all time total are both taken from those rows, so the
+	 * messages of those chats are read once. The chat of a message is joined to the relation of the person
+	 * who wrote it, so a request counts only in a chat that person takes part in; the chat type is not
+	 * checked again, because the ids already come from the BitrixGPT chats of the batch.
 	 *
 	 * @param int[] $userIds
 	 * @param int[] $chatIds
-	 * @return array<int, array<string, int>>
+	 * @return array<int, array<int|string, int>> month sums keyed 1..12, the all time total under TOTAL_ID
 	 */
 	protected function countByUsers(array $userIds, array $chatIds = []): array
 	{
@@ -214,48 +242,43 @@ class ChatRequestsProvider implements SummaryProviderInterface
 			return [];
 		}
 
-		// The period sits in the season sums and not in the WHERE clause, because the total is not
-		// limited by it: one pass projects all five numbers. The bounds come from the collector and not
-		// from a request, so they are inlined into the expression.
-		$from = $this->from->format('Y-m-d') . ' 00:00:00';
-		$to = $this->to->format('Y-m-d') . ' 00:00:00';
-		$seasonField = static function (array $months, string $alias) use ($from, $to): ExpressionField
-		{
-			return new ExpressionField(
-				$alias,
-				// EXTRACT is understood by both supported databases, unlike MONTH().
-				'SUM(CASE WHEN %s >= \'' . $from . '\' AND %s < \'' . $to . '\''
-				. ' AND EXTRACT(MONTH FROM %s) IN (' . implode(', ', $months) . ') THEN 1 ELSE 0 END)',
-				['DATE_CREATE', 'DATE_CREATE', 'DATE_CREATE'],
-			);
-		};
-
+		// The period is not in the WHERE clause, because the total is not limited by it: the query groups
+		// by month and the period is applied to those groups below.
 		$result = MessageTable::query()
-			->setSelect([
-				'AUTHOR_ID',
-				$seasonField([3, 4, 5], 'SPRING'),
-				$seasonField([6, 7, 8], 'SUMMER'),
-				$seasonField([9, 10, 11], 'AUTUMN'),
-				$seasonField([12, 1, 2], 'WINTER'),
-				new ExpressionField('TOTAL_REQUESTS', 'COUNT(%s)', ['ID']),
-			])
+			->setSelect(['AUTHOR_ID', 'YEAR', 'MONTH', 'CNT'])
+			// EXTRACT is understood by both supported databases, unlike YEAR() and MONTH().
+			->registerRuntimeField('YEAR', new ExpressionField('YEAR', 'EXTRACT(YEAR FROM %s)', ['DATE_CREATE']))
+			->registerRuntimeField('MONTH', new ExpressionField('MONTH', 'EXTRACT(MONTH FROM %s)', ['DATE_CREATE']))
+			->registerRuntimeField('CNT', new ExpressionField('CNT', 'COUNT(%s)', ['ID']))
 			->whereIn('AUTHOR_ID', $userIds)
 			->whereIn('CHAT_ID', $chatIds)
 			->whereColumn('RELATION.USER_ID', 'AUTHOR_ID')
-			->setGroup(['AUTHOR_ID'])
-			->fetchAll()
+			->setGroup(['AUTHOR_ID', 'YEAR', 'MONTH'])
+			->exec()
 		;
 
+		// Months are compared as year * 12 + month. ponytail: the collector passes month starts; a bound
+		// inside a month takes that whole month (from) or counts it when its start is before the bound
+		// (to), group by day if exact bounds are ever needed.
+		$fromMonth = (int)$this->from->format('Y') * 12 + (int)$this->from->format('n');
+		$toMonth = (int)$this->to->format('Y') * 12 + (int)$this->to->format('n')
+			+ ((int)$this->to->format('j') > 1 ? 1 : 0);
+
 		$counts = [];
-		foreach ($result as $row)
+		while ($row = $result->fetch())
 		{
-			$counts[(int)$row['AUTHOR_ID']] = [
-				Season::SPRING => (int)$row['SPRING'],
-				Season::SUMMER => (int)$row['SUMMER'],
-				Season::AUTUMN => (int)$row['AUTUMN'],
-				Season::WINTER => (int)$row['WINTER'],
-				self::TOTAL_ID => (int)$row['TOTAL_REQUESTS'],
-			];
+			$userId = (int)$row['AUTHOR_ID'];
+			// PostgreSQL returns EXTRACT as numeric, so the parts are cast before any comparison.
+			$month = (int)$row['MONTH'];
+			$key = (int)$row['YEAR'] * 12 + $month;
+			$count = (int)$row['CNT'];
+
+			$counts[$userId] ??= array_fill(1, 12, 0) + [self::TOTAL_ID => 0];
+			$counts[$userId][self::TOTAL_ID] += $count;
+			if ($key >= $fromMonth && $key < $toMonth)
+			{
+				$counts[$userId][$month] += $count;
+			}
 		}
 
 		return $counts;

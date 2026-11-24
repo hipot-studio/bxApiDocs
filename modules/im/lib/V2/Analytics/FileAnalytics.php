@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Analytics;
 
+use Bitrix\Im\V2\Analytics\Event\ChatEvent;
 use Bitrix\Im\V2\Analytics\Event\FileMessageEvent;
 use Bitrix\Im\V2\Analytics\Event\MediaMessageEvent;
-use Bitrix\Im\V2\Chat\ChannelChat;
-use Bitrix\Im\V2\Chat\CollabChat;
-use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Entity\File\Param\ParamName;
 use Bitrix\Im\V2\Entity\File\ParamCollection;
 use Bitrix\Im\V2\Integration\AI\Transcription\LaunchType;
@@ -96,33 +94,16 @@ class FileAnalytics extends AbstractAnalytics
 				?->setP2($this->formatLaunchType($launchType))
 			;
 
-			if ($this->hasProjectP4())
+			// transcripts do not report the project; p4 values of other chats stay untouched.
+			// The resolved value is read instead of the rules behind it: a mirror of the branches of
+			// ChatEvent::setChatP4() drifts apart from them in silence.
+			if ($event !== null && str_starts_with((string)$event->getP4(), ChatEvent::PROJECT_P4_PREFIX))
 			{
-				// transcripts do not report the project; p4 values of other chats stay untouched
-				$event?->setP4(null);
+				$event->setP4(null);
 			}
 
 			$event?->send();
 		}
-	}
-
-	/**
-	 * Mirrors the branches of ChatEvent::setChatP4() that resolve to projectId_: the project chat
-	 * itself and any chat under it except channels and comments, which keep their parentChatId_.
-	 */
-	private function hasProjectP4(): bool
-	{
-		if ($this->chat instanceof CollabChat)
-		{
-			return true;
-		}
-
-		if ($this->chat instanceof ChannelChat || $this->chat instanceof CommentChat)
-		{
-			return false;
-		}
-
-		return $this->chat->hasParent() && $this->chat->getParentChat() instanceof CollabChat;
 	}
 
 	protected function createMediaMessageEvent(string $eventName, string $category): ?MediaMessageEvent

@@ -77,6 +77,7 @@ final class NodeCatalogLayout
 			['AbsenceLeaveSickTrigger'],
 			['AbsenceVacationTrigger'],
 			['NewEmployeeTrigger'],
+			['StructurePositionChangedTrigger'],
 			['CrmAutomationTrigger', 'automation_TASK_STATUS'],
 			['TasksExpiredTrigger'],
 			['BookingCreatedTrigger'],
@@ -85,6 +86,7 @@ final class NodeCatalogLayout
 			['BookingCanceledTrigger'],
 		],
 		'booking' => [
+			['BookingComplexActivity'],
 			['BookingCreatedTrigger'],
 			['BookingUpdatedTrigger'],
 			['BookingStatusChangedTrigger'],
@@ -93,7 +95,6 @@ final class NodeCatalogLayout
 			['BookingAiCallTrigger', 'booking_ai_call_reminder'],
 			['BookingAiCallTrigger', 'booking_ai_call_delayed'],
 			['BookingAiCallTrigger', 'booking_ai_call_cancellation'],
-			['BookingComplexActivity'],
 			['BookingAddActivity'],
 			['BookingUpdateActivity'],
 			['BookingSetStatusActivity'],
@@ -214,6 +215,7 @@ final class NodeCatalogLayout
 		],
 		'hr' => [
 			['NewEmployeeTrigger'],
+			['StructurePositionChangedTrigger'],
 			['StartWorkTimeTrigger'],
 			['StopWorkTimeTrigger'],
 			['SaveDayPlanActivity'],
@@ -228,6 +230,7 @@ final class NodeCatalogLayout
 		],
 		'team_management' => [
 			['NewEmployeeTrigger'],
+			['StructurePositionChangedTrigger'],
 			['SaveDayPlanActivity'],
 			['GetReportActivity'],
 			['SaveReportActivity'],

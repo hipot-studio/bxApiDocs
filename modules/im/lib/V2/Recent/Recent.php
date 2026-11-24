@@ -108,7 +108,11 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 			}
 		}
 
-		$messages = $this->getMessagesForPopupData($messageIds);
+		$messages =
+			$this->isMessageReadNeeded($excludedList)
+				? $this->getMessagesForPopupData($messageIds)
+				: new MessageCollection()
+		;
 
 		return new PopupData([
 			MessagePopupItem::getInstanceMessages($messages, true),
@@ -380,6 +384,24 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 			'PINNED' => 'DESC',
 			'DATE_LAST_ACTIVITY' => 'DESC',
 		];
+	}
+
+	/**
+	 * The messages of the page feed two blocks: the messages themselves and the copilot one. A caller
+	 * that drops both - the short forms of a recent page - reads neither, so it must not pay for the
+	 * messages and their params. The blocks are compared by their rest name, the way
+	 * {@see PopupData} filters them out.
+	 *
+	 * @param string[]|PopupDataItem[] $excludedList
+	 */
+	private function isMessageReadNeeded(array $excludedList): bool
+	{
+		$excludedNames = array_map(static fn ($item): string => $item::getRestEntityName(), $excludedList);
+
+		return
+			!in_array(MessagePopupItem::getRestEntityName(), $excludedNames, true)
+			|| !in_array(Chat\Copilot\CopilotPopupItem::getRestEntityName(), $excludedNames, true)
+		;
 	}
 
 	protected function getMessagesForPopupData(array $messageIds): MessageCollection

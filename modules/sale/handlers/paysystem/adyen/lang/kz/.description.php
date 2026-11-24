@@ -1,7 +1,7 @@
 <?php
 $MESS["SALE_HPS_ADYEN_CHANGE_STATUS_PAY"] = "Төлемнің сәтті мәртебесін алған кезде тапсырысты автоматты түрде төлеу.";
 $MESS["SALE_HPS_ADYEN_HMAC_KEY"] = "HMAC key";
-$MESS["SALE_HPS_ADYEN_HMAC_KEY_DESC"] = "Сіздің сайтыңызды рұқсатсыз мәлімдемелерден қорғау үшін қолданылады.";
+$MESS["SALE_HPS_ADYEN_HMAC_KEY_DESC"] = "Сіздің сайтыңызды рұқсатсыз хабарландырулардан қорғау үшін қолданылады.";
 $MESS["SALE_HPS_ADYEN_IS_TEST"] = "Сынақ режимі";
 $MESS["SALE_HPS_ADYEN_LIVE_URL_PREFIX"] = "Live URL prefix";
 $MESS["SALE_HPS_ADYEN_LIVE_URL_PREFIX_DESC"] = "Сіздің аккаунт баптауларындағы \"Live URL prefix\"";

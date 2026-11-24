@@ -5,6 +5,7 @@ namespace Bitrix\Intranet\User\Grid;
 use Bitrix\Intranet\Entity;
 use Bitrix\Intranet\Internal\Integration\Humanresources\UserDepartmentProvider;
 use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
+use Bitrix\Intranet\Internal\Integration\Socialservices\UserQueryModifier as SocialservicesUserQueryModifier;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
@@ -177,6 +178,16 @@ final class UserGrid extends Grid
 		$query = UserTable::query();
 		$query->setSelect($params['select'])
 			->setDistinct(true);
+
+		if (
+			in_array('REGISTRATION_DATA', $this->getVisibleColumnsIds(), true)
+			&& $this->getSettings()->isCloud()
+			&& $this->getSettings()->isCurrentUserAdmin()
+			&& $this->getSettings()->isHtmlMode()
+		)
+		{
+			(new SocialservicesUserQueryModifier())->injectRegistrationData($query);
+		}
 
 		if ($this->isSystemUserPresetActive($params['filter'] ?? []))
 		{

@@ -44,7 +44,10 @@ class NodeCatalogItemDtoFactory
 			colorIndex: $description->getColorIndex(),
 			contentBlockColor: $description->getContentBlockColor(),
 			properties: $description->get('PROPERTIES'),
-			returnProperties: ReturnPropertiesResolver::resolve((string)$description->getClass()),
+			returnProperties: ReturnPropertiesResolver::resolve([
+				'Type' => $description->getClass(),
+				'Properties' => $description->get('PROPERTIES') ?? [],
+			]),
 			defaultSettings: $defaultSettings->toArray(),
 			hasAuxPorts: $description->getNodeSettings()?->ports?->aux !== null,
 			relationsAvailable: self::resolveRelationsAvailable($description),

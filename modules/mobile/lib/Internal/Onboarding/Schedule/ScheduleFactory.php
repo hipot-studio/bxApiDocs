@@ -3,6 +3,8 @@
 namespace Bitrix\Mobile\Internal\Onboarding\Schedule;
 
 use Bitrix\Mobile\Internal\Onboarding\Region\RegionConfig;
+use Bitrix\Mobile\Internal\Service\Marketing\Time\PortalCalendar;
+use Bitrix\Mobile\Internal\Service\Marketing\Time\TimeWindow;
 
 /**
  * Workday arithmetic of a region: the calendar rules of the campaign document for a
@@ -10,7 +12,7 @@ use Bitrix\Mobile\Internal\Onboarding\Region\RegionConfig;
  */
 class ScheduleFactory
 {
-	public static function forRegion(RegionConfig $regionConfig, ?SeriesCalendar $calendar = null): ScheduleInterface
+	public static function forRegion(RegionConfig $regionConfig, ?PortalCalendar $calendar = null): ScheduleInterface
 	{
 		return new WorkdaySchedule(
 			$regionConfig->isWorkdaysOnly(),
@@ -26,10 +28,10 @@ class ScheduleFactory
 	 * zone (`schedule.sendWindow.timezone`); the legacy day map has always read its dates in the
 	 * server zone, and moving its day boundary would move every day of its series.
 	 *
-	 * The timezone of the window decides here, not the mere fact of a campaign document, because
-	 * PushTimeCondition reads a `"server"` window on the server clock. A schedule counting its
-	 * days on the portal clock would then decide the day of a push by one clock and whether it
-	 * may go out by another - and the two part company on exactly the portals whose offset moves
+	 * The timezone of the window decides here, not the mere fact of a campaign document: a
+	 * `"server"` window is declared on the server clock, and a schedule counting its days on the
+	 * portal clock would then decide the day of a push by one clock and whether it may go out
+	 * by another - and the two part company on exactly the portals whose offset moves
 	 * the window across server midnight.
 	 *
 	 * Whoever asks the schedule for a date must ask this for the day boundary of the same
@@ -38,15 +40,15 @@ class ScheduleFactory
 	 */
 	public static function calendarForRegion(
 		RegionConfig $regionConfig,
-		?SeriesCalendar $calendar = null,
-	): ?SeriesCalendar
+		?PortalCalendar $calendar = null,
+	): ?PortalCalendar
 	{
 		if (!$regionConfig->isCampaignDriven() || !$regionConfig->isPortalTimezoneWindow())
 		{
 			return null;
 		}
 
-		return $calendar ?? new SeriesCalendar();
+		return $calendar ?? new PortalCalendar();
 	}
 
 	/**
@@ -54,13 +56,13 @@ class ScheduleFactory
 	 * offset 0, the anchor day itself. A legacy day map starts at day 1, so its dates keep
 	 * the placement they have always had whatever time of day the anchor falls on.
 	 */
-	private static function resolveSendWindow(RegionConfig $regionConfig): ?SendWindow
+	private static function resolveSendWindow(RegionConfig $regionConfig): ?TimeWindow
 	{
 		if (!$regionConfig->isCampaignDriven())
 		{
 			return null;
 		}
 
-		return SendWindow::tryFrom($regionConfig->getTimeSend(), $regionConfig->getSendWindowHours());
+		return TimeWindow::tryFrom($regionConfig->getTimeSend(), $regionConfig->getSendWindowHours());
 	}
 }

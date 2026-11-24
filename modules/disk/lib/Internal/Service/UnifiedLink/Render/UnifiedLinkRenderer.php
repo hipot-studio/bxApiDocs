@@ -182,6 +182,10 @@ class UnifiedLinkRenderer
 			shortLinkOpening: $this->shortLinkOpening,
 			client: $this->client,
 		);
+		if ($handler instanceof VibeofficeHtmlRenderableHandler && $this->shortLinkOpening === null)
+		{
+			$handler->setClassicLinkSource($this->externalLink);
+		}
 		if ($handler instanceof OpeningNoticeCodeAware)
 		{
 			$handler->setOpeningNoticeCode(null);
@@ -277,7 +281,8 @@ class UnifiedLinkRenderer
 
 	/**
 	 * The public page is for guests and external callers: a source mark names where the mode is taken from
-	 * and does not move an employee off the internal route.
+	 * and does not move an employee off the internal factory route. Vibeoffice shared admission retains the
+	 * explicit source separately from that route.
 	 */
 	protected function resolveExternalLinkForHandler(): ?ExternalLink
 	{

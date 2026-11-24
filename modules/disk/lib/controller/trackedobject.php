@@ -350,13 +350,6 @@ class TrackedObject extends BaseObject
 
 	public function generateExternalLinkAction(Disk\Document\TrackedObject $object)
 	{
-		if (!$this->checkExternalLinkFeature($object->getFile()))
-		{
-			$this->addError(new Error('Could not generate external link. Feature is disabled by tarif.'));
-
-			return null;
-		}
-
 		return $this->extendExternalLinkResponse(
 			$this->generateExternalLink($object->getFile()),
 			$object,

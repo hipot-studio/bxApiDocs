@@ -15,10 +15,12 @@ use Bitrix\Disk\Document\Vibeoffice\SavedContentSynchronizer;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
+use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\TrackedObjectManager;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internal\Service\SessionCommandFactory;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
@@ -40,6 +42,8 @@ class VibeofficeHtmlRenderableHandler implements
 	private ?string $openingNoticeCode = null;
 	private ?string $editTransitionUrl = null;
 	private ?ShortLinkOpening $shortLinkOpening = null;
+	private ?ExternalLink $classicLinkSource = null;
+	private bool $usesClassicSharedSource = false;
 	private ?int $requestedType = null;
 
 	public function __construct(
@@ -86,6 +90,11 @@ class VibeofficeHtmlRenderableHandler implements
 		return $this->shortLinkOpening;
 	}
 
+	public function setClassicLinkSource(?ExternalLink $externalLink): void
+	{
+		$this->classicLinkSource = $externalLink;
+	}
+
 	public function setEditTransitionUrl(?string $url): void
 	{
 		$this->editTransitionUrl = ($url === null || $url === '') ? null : $url;
@@ -114,7 +123,15 @@ class VibeofficeHtmlRenderableHandler implements
 
 	private function handle(int $type): HandlerOperationResult
 	{
+		if (!$this->documentSource->hasValidFile())
+		{
+			return HandlerOperationResult::createError(new \Bitrix\Main\ErrorCollection([
+				new \Bitrix\Main\Error('File not found in source.'),
+			]));
+		}
+
 		$this->requestedType = $type;
+		$this->usesClassicSharedSource = false;
 		if ($type === DocumentSession::TYPE_VIEW && $this->documentSource->getVersion() === null)
 		{
 			try
@@ -129,18 +146,70 @@ class VibeofficeHtmlRenderableHandler implements
 			}
 		}
 
-		$createInternalSessionCommand = $this->sessionCommandFactory->createCreateInternalSessionCommand($type);
-
-		try
+		$this->documentSessionManager->setLegacyUnifiedLinkAccessService(
+			$this->shortLinkOpening === null
+				? \Bitrix\Main\DI\ServiceLocator::getInstance()->get(
+					\Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService::class,
+				) : null,
+		);
+		$this->documentSessionManager->setShortLinkOpening(
+			$this->shortLinkOpening,
+			$type === DocumentSession::TYPE_EDIT ? 'edit' : 'view',
+		);
+		$this->documentSessionManager
+			->setUserId((int)CurrentUser::get()->getId())
+			->setSessionType($type)
+			->setSessionContext(\Bitrix\Disk\Document\Models\DocumentSessionContext::tryBuildByAttachedObject(
+				$this->documentSource->getAttachedObject(), $this->documentSource->getFileFromSource(),
+			))
+			->setFile($this->documentSource->getFile())
+			->setVersion($this->documentSource->getVersion())
+			->setAttachedObject($this->documentSource->getAttachedObject())
+		;
+		if ($this->documentSessionManager->requiresSharedAdmission())
 		{
-			/** @var DocumentSessionResult $sessionCreationResult */
-			$sessionCreationResult = $createInternalSessionCommand->run();
+			if ($this->classicLinkSource !== null && $this->shortLinkOpening === null)
+			{
+				$context = \Bitrix\Disk\Document\Models\DocumentSessionContext::tryBuildByAttachedObject(
+					$this->documentSource->getAttachedObject(), $this->documentSource->getFileFromSource(),
+				);
+				$this->documentSessionManager->setSessionContext(new \Bitrix\Disk\Document\Models\DocumentSessionContext(
+					$context->getObjectId(), $context->getAttachedObjectId(), (int)$this->classicLinkSource->getId(),
+				));
+				$this->usesClassicSharedSource = true;
+			}
+			$admission = $this->documentSessionManager->admitSharedEdit(
+				new \Bitrix\Disk\Document\Vibeoffice\OpeningBudget(
+					\Bitrix\Main\DI\ServiceLocator::getInstance()
+						->get('disk.vibeofficeConfiguration')->getOpenBudgetSeconds() * 1000,
+				),
+			);
+			$sessionCreationResult = new DocumentSessionResult();
+			if ($admission->isSuccess())
+			{
+				$sessionCreationResult->setDocumentSession($admission->getData()['session']);
+			}
+			else
+			{
+				$sessionCreationResult->addErrors($admission->getErrors());
+			}
 		}
-		catch (CommandException|CommandValidationException $e)
+		else
 		{
-			$this->exceptionHandler->writeToLog($e);
+			$createInternalSessionCommand = $this->sessionCommandFactory->createCreateInternalSessionCommand($type);
 
-			return HandlerOperationResult::createFromException($e);
+			try
+			{
+				/** @var DocumentSessionResult $sessionCreationResult */
+				$sessionCreationResult = $createInternalSessionCommand->run();
+			}
+			catch (CommandException|CommandValidationException $e)
+			{
+				$this->exceptionHandler->writeToLog($e);
+
+				return HandlerOperationResult::createFromException($e);
+			}
+
 		}
 
 		if (!$sessionCreationResult->isSuccess())
@@ -246,7 +315,7 @@ class VibeofficeHtmlRenderableHandler implements
 		$editTransitionUrl = $this->editTransitionUrl;
 		$this->editTransitionUrl = null;
 
-		return [
+		$params = [
 			'DOCUMENT_SESSION' => $documentSession,
 			'TRUSTED_OPENING' => [
 				'channel' => 'unified',
@@ -268,6 +337,18 @@ class VibeofficeHtmlRenderableHandler implements
 				: ShortLink::MODE_VIEW
 			,
 		];
+		if ($this->usesClassicSharedSource)
+		{
+			$params['CLASSIC_EXTERNAL_LINK'] = $this->classicLinkSource;
+			$params['TRUSTED_OPENING']['unifiedOptions']['additionalQueryParams'] = [
+				ExternalLinkContext::getParameterName() => ExternalLinkContext::create(
+					$this->classicLinkSource, $this->file,
+					(int)$this->documentSource->getAttachedObject()?->getId(), (int)$documentSession->getVersionId(),
+				),
+			];
+		}
+
+		return $params;
 	}
 
 	private function getCurrentUser(): CurrentUser

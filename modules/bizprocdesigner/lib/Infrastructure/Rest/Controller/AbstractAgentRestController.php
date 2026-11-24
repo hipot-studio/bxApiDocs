@@ -12,10 +12,12 @@ use Bitrix\BizprocDesigner\Internal\Entity\DocumentDescription;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\AgentBlockCollection;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\AgentConnectionCollection;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\WorkflowTemplateIdentifier;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\ContourCaller;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\AgentWorkflowValidationResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AgentTokenGuard;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AuthorizedTemplateSubject;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\DraftFingerprint;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\FramePostLayoutChecker;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\OperationAuthorizationGuard;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\UserAdminResolver;
@@ -33,6 +35,7 @@ use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
+use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Structure\FieldsStructure;
 use Bitrix\Rest\V3\Structure\SelectStructure;
 
@@ -72,36 +75,19 @@ abstract class AbstractAgentRestController extends RestController
 	}
 
 	/**
-	 * The binding is verified before any lookup, so a template the token is not bound to is refused the same
-	 * whether it exists or not: a 404 against a 403 would let a caller probe for foreign templates.
+	 * The template of the call, judged by the rights of the caller on it.
+	 *
+	 * One resolver for both authorizations, because the part that decides what a call may touch is the
+	 * same for both: manageableTemplate() below. What differs is only where the template comes from, and
+	 * that is settled first {@see self::effectiveTemplateId()}.
 	 *
 	 * @throws AccessDeniedException
 	 * @throws EntityNotFoundException
+	 * @throws RequiredFieldInRequestException
 	 */
-	protected function resolveAndAuthorize(int $templateId): WorkflowTemplateIdentifier
+	protected function resolveAndAuthorize(?int $templateId = null): WorkflowTemplateIdentifier
 	{
-		$this->assertTokenValidForTemplate($templateId);
-
-		return $this->manageableTemplate($templateId);
-	}
-
-	/**
-	 * For actions that carry no templateId of their own. No assertTokenValidForTemplate() here: reading the
-	 * binding answers for an active, non-expired token of ours and is itself the fresh check.
-	 *
-	 * @throws AccessDeniedException
-	 * @throws EntityNotFoundException
-	 */
-	protected function resolveAndAuthorizeBoundTemplate(): WorkflowTemplateIdentifier
-	{
-		$passwordId = $this->getServer()?->getPasswordId();
-		$boundTemplateId = AgentTokenGuard::forCurrentRequest()->getBoundTemplateId($passwordId);
-		if ($boundTemplateId === null)
-		{
-			throw new AccessDeniedException();
-		}
-
-		return $this->manageableTemplate($boundTemplateId);
+		return $this->manageableTemplate($this->effectiveTemplateId($templateId));
 	}
 
 	/**
@@ -136,43 +122,72 @@ abstract class AbstractAgentRestController extends RestController
 	}
 
 	/**
-	 * Push-path counterpart of {@see self::resolveAndAuthorize()} that authorizes the subject exactly once and
-	 * mints the {@see AuthorizedTemplateSubject} proof the draft service consumes instead of re-checking access.
+	 * Push-path counterpart of {@see self::resolveAndAuthorize()}: the same admission and the same rights,
+	 * authorized exactly once and minted into the {@see AuthorizedTemplateSubject} proof the draft service
+	 * consumes instead of re-checking access.
 	 *
 	 * @throws AccessDeniedException
 	 * @throws EntityNotFoundException
+	 * @throws RequiredFieldInRequestException
 	 */
-	protected function resolveAuthorizedSubject(int $templateId): AuthorizedTemplateSubject
+	protected function resolveAuthorizedSubject(?int $templateId = null): AuthorizedTemplateSubject
 	{
-		$this->assertTokenValidForTemplate($templateId);
-
-		return $this->authorizedSubjectFor($templateId);
+		return $this->authorizedSubjectFor($this->effectiveTemplateId($templateId));
 	}
 
 	/**
-	 * Bound-template counterpart of {@see self::resolveAuthorizedSubject()}, mirroring
-	 * {@see self::resolveAndAuthorizeBoundTemplate()}: reading the binding answers for an active,
-	 * non-expired token of ours and is itself the fresh check, so no separate token re-validation is needed.
+	 * Which template the call is about: who is calling, where the identifier comes from, and whether it has
+	 * to agree with a binding.
+	 *
+	 * Who is calling is settled FIRST, before the binding is read at all. Compute the effective id ahead of
+	 * that branch and {@see AgentTokenGuard} gets read under an application key too - which would take the
+	 * template out of somebody else's binding.
+	 *
+	 * An absent parameter under an application key is a 400 naming the field, not a 403. There is no oracle
+	 * in that: the name of a field the caller did not send says nothing about templates the caller may not
+	 * see. Zero is NOT absent - the comparison is against null, not falsy - because the availability probe
+	 * sends templateId 0 on purpose and has to reach the resolver and be answered with ENTITYNOTFOUND.
 	 *
 	 * @throws AccessDeniedException
-	 * @throws EntityNotFoundException
+	 * @throws RequiredFieldInRequestException
 	 */
-	protected function resolveAuthorizedSubjectForBoundTemplate(): AuthorizedTemplateSubject
+	private function effectiveTemplateId(?int $requested): int
 	{
-		$passwordId = $this->getServer()?->getPasswordId();
-		$boundTemplateId = AgentTokenGuard::forCurrentRequest()->getBoundTemplateId($passwordId);
-		if ($boundTemplateId === null)
+		$caller = ContourCaller::of($this->getServer());
+
+		if ($caller === ContourCaller::Unsupported)
 		{
 			throw new AccessDeniedException();
 		}
 
-		return $this->authorizedSubjectFor($boundTemplateId);
+		if ($caller === ContourCaller::Application)
+		{
+			if ($requested === null)
+			{
+				throw new RequiredFieldInRequestException('templateId');
+			}
+
+			return $requested;
+		}
+
+		$passwordId = $this->getServer()?->getPasswordId();
+		$effective = $requested ?? AgentTokenGuard::forCurrentRequest()->getBoundTemplateId($passwordId);
+		if ($effective === null)
+		{
+			throw new AccessDeniedException();
+		}
+
+		// Fresh, non-cacheable re-check of the token against the template actually asked for: the rest auth
+		// chain caches token validity for up to a day, so a revoked token still arrives here alive.
+		$this->assertTokenValidForTemplate($effective);
+
+		return $effective;
 	}
 
 	/**
-	 * Shared subject-minting core of {@see self::resolveAuthorizedSubject()} and
-	 * {@see self::resolveAuthorizedSubjectForBoundTemplate()}: exactly one {@see OperationAuthorizationGuard}
-	 * call per request, so the push path never re-authorizes the same subject twice.
+	 * Subject-minting core of {@see self::resolveAuthorizedSubject()}: exactly one
+	 * {@see OperationAuthorizationGuard} call per request, so the push path never re-authorizes the same
+	 * subject twice.
 	 *
 	 * @throws AccessDeniedException
 	 * @throws EntityNotFoundException
@@ -274,6 +289,7 @@ abstract class AbstractAgentRestController extends RestController
 	 *     hasDraft: bool,
 	 *     description: string,
 	 *     draftId: ?int,
+	 *     draftFingerprint: ?string,
 	 *     blocks: AgentBlockCollection,
 	 *     connections: AgentConnectionCollection,
 	 * }|null
@@ -295,6 +311,12 @@ abstract class AbstractAgentRestController extends RestController
 			'name' => $metadata[AgentOwnedMetadata::FIELD_NAME],
 			'description' => $metadata[AgentOwnedMetadata::FIELD_DESCRIPTION],
 			'draftId' => $identifier->draftId,
+			// Of the raw blob, never of the graph above it: the two are answered to the same caller, and the
+			// caller hands this value back to the publication, which compares it against the blob it is about
+			// to commit {@see DraftFingerprint}.
+			'draftFingerprint' => $identifier->draftId === null
+				? null
+				: DraftFingerprint::of($resolver->getDraftTemplateData($identifier->draftId)),
 			'blocks' => $agentTemplate->blocks,
 			'connections' => $agentTemplate->connections,
 		];

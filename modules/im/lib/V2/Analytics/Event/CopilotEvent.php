@@ -3,12 +3,15 @@
 namespace Bitrix\Im\V2\Analytics\Event;
 
 use Bitrix\Im\V2\Analytics\CopilotModesSnapshot;
+use Bitrix\Im\V2\Analytics\VoiceWidgetLabels;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Imbot\Bot\CopilotChatBot;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Json;
 
 class CopilotEvent extends Event
 {
@@ -131,6 +134,38 @@ class CopilotEvent extends Event
 	{
 		$this->applyV2FormatCommon();
 		$this->p4 = CopilotModesSnapshot::buildReduced($this->chat->getChatId());
+
+		return $this;
+	}
+
+	/**
+	 * Marks the event of a chat of the mobile voice widget: origin and requestSource join the JSON of p4,
+	 * the screen the widget was opened on replaces the section.
+	 */
+	public function applyVoiceWidgetLabels(VoiceWidgetLabels $labels): self
+	{
+		try
+		{
+			$p4 = $this->p4 !== null ? Json::decode($this->p4) : [];
+		}
+		catch (ArgumentException)
+		{
+			$p4 = [];
+		}
+
+		$p4 = is_array($p4) ? $p4 : [];
+		$p4['origin'] = VoiceWidgetLabels::ORIGIN;
+		if ($labels->requestSource !== null)
+		{
+			$p4['requestSource'] = $labels->requestSource;
+		}
+		$this->p4 = Json::encode($p4);
+
+		if ($labels->section !== null)
+		{
+			$this->setSection($labels->section);
+			$this->setSubSection($labels->subSection);
+		}
 
 		return $this;
 	}

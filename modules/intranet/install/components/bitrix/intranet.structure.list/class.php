@@ -6,6 +6,7 @@ class CIntranetStructureListComponent extends CBitrixComponent
 	const ADMIN_GROUP_ID = 1;
 	const MAX_EXEC_RESIZE_TIME = 3;
 	const LAST_ACTIVITY = 120;
+	const EXTRANET_VISIBILITY_CACHE_VERSION = 1;
 
 	/**
 	 * @var null|array
@@ -14,6 +15,10 @@ class CIntranetStructureListComponent extends CBitrixComponent
 	protected $arWhiteList = array();
 
 	protected $arFilter = array();
+	protected bool $isExtranetSite = false;
+	protected bool $isExtranetRestricted = false;
+	protected array $extranetAllowedUserIds = [];
+	protected string $extranetAccessMode = 'intranet';
 	/**
 	 * @var null|CPHPCache
 	 */
@@ -364,6 +369,28 @@ class CIntranetStructureListComponent extends CBitrixComponent
 		return array($cntStartCacheId, $cacheCount);
 	}
 
+	protected function initExtranetVisibilityContext(): void
+	{
+		$this->isExtranetSite = CModule::IncludeModule('extranet') && CExtranet::IsExtranetSite();
+		$this->isExtranetRestricted = $this->isExtranetSite && !CExtranet::IsExtranetAdmin();
+		$this->extranetAccessMode = $this->isExtranetSite ? 'extranet-admin' : 'intranet';
+		$this->extranetAllowedUserIds = [];
+
+		if ($this->isExtranetRestricted)
+		{
+			$this->extranetAccessMode = 'extranet-non-admin';
+			$this->extranetAllowedUserIds = array_merge(
+				CExtranet::GetMyGroupsUsers(SITE_ID),
+				CExtranet::GetPublicUsers(),
+			);
+
+			if (false !== ($key = array_search($this->getUser()->getID(), $this->extranetAllowedUserIds)))
+			{
+				unset($this->extranetAllowedUserIds[$key]);
+			}
+		}
+	}
+
 	/**
 	 * Init CPHPCache and return status of initialization
 	 * @param $cntStartCacheId
@@ -377,7 +404,7 @@ class CIntranetStructureListComponent extends CBitrixComponent
 
 		$this->cacheId = $this->getName() . '|' . SITE_ID;
 
-		if (CModule::IncludeModule('extranet') && CExtranet::IsExtranetSite())
+		if ($this->isExtranetSite)
 		{
 			$this->cacheId .= '|' . $this->getUser()->GetID() . '|' . $this->arParams['EXTRANET_TYPE'];
 		}
@@ -391,6 +418,15 @@ class CIntranetStructureListComponent extends CBitrixComponent
 		{
 			$this->cacheId .= "|" . $this->arParams['LIST_URL'];
 		}
+
+		$allowedUserIds = array_map('strval', $this->extranetAllowedUserIds);
+		sort($allowedUserIds, SORT_STRING);
+		$this->cacheId .= '|' . serialize([
+			'extranetVisibilityVersion' => static::EXTRANET_VISIBILITY_CACHE_VERSION,
+			'showDepartmentHead' => $this->arParams['SHOW_DEP_HEAD_ADDITIONAL'],
+			'accessMode' => $this->extranetAccessMode,
+			'allowedUserIds' => $this->isExtranetRestricted ? hash('sha256', serialize($allowedUserIds)) : '',
+		]);
 
 		$this->obCache = new CPHPCache;
 
@@ -433,6 +469,8 @@ class CIntranetStructureListComponent extends CBitrixComponent
 		{
 			CPageOption::SetOptionString("main", "nav_page_in_session", "N");
 		}
+
+		$this->initExtranetVisibilityContext();
 
 		$bFromCache = false;
 		if ($this->arParams['bCache'])
@@ -478,7 +516,11 @@ class CIntranetStructureListComponent extends CBitrixComponent
 				}
 
 				$managerId = CIntranetUtils::GetDepartmentManagerID($this->arFilter['UF_DEPARTMENT'][0]);
-				$appendManager = \CUser::getById($managerId)->fetch();
+				$appendManager = false;
+				if (!$this->isExtranetRestricted || in_array($managerId, $this->extranetAllowedUserIds))
+				{
+					$appendManager = \CUser::getById($managerId)->fetch();
+				}
 
 				if ($appendManager && $appendManager['ACTIVE'] == 'Y')
 				{
@@ -489,29 +531,21 @@ class CIntranetStructureListComponent extends CBitrixComponent
 			}
 
 			$bDisable = false;
-			if (CModule::IncludeModule('extranet'))
+			if ($this->isExtranetRestricted)
 			{
-				if (CExtranet::IsExtranetSite() && !CExtranet::IsExtranetAdmin())
+				if ($this->arParams['bCache'])
 				{
-					$arIDs = array_merge(CExtranet::GetMyGroupsUsers(SITE_ID), CExtranet::GetPublicUsers());
+					$this->getCacheManager()->registerTag('extranet_public');
+					$this->getCacheManager()->registerTag('extranet_user_'.$this->getUser()->getID());
+				}
 
-					if ($this->arParams['bCache'])
-					{
-						$this->getCacheManager()->registerTag('extranet_public');
-						$this->getCacheManager()->registerTag('extranet_user_'.$this->getUser()->getID());
-					}
-
-					if (false !== ($key = array_search($this->getUser()->getID(), $arIDs)))
-						unset($arIDs[$key]);
-
-					if (count($arIDs) > 0)
-					{
-						$this->arFilter['ID'] = implode('|', array_unique($arIDs));
-					}
-					else
-					{
-						$bDisable = true;
-					}
+				if (count($this->extranetAllowedUserIds) > 0)
+				{
+					$this->arFilter['ID'] = implode('|', array_unique($this->extranetAllowedUserIds));
+				}
+				else
+				{
+					$bDisable = true;
 				}
 			}
 

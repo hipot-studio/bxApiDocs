@@ -40,9 +40,13 @@ class Image extends Controller
 	 * Make request to AI Engine. The model will return one or more predicted completions.
 	 *
 	 * @param string $prompt Prompt to completion.
-	 * @param array $markers Marker for replacing in prompt ({key} => value).
-	 * @param array $parameters Additional params for tuning query.
-	 * @return array
+	 * @param string|null $engineCode Engine's code (by default the selected Engine of the category is used).
+	 * @param array $markers Image options: style, format, images_number.
+	 * @param array $parameters Context (see parent class) and params: bx_history, bx_history_group_id, bx_analytic.
+	 * @return array{result: mixed, queue: string|null}|array{} Empty array if the context or agreement check fails,
+	 *   or if the engine is not found (no error is added in that case). On an engine error the shape is returned
+	 *   with result = null and the error is added to the controller errors. A failed prompt translation adds
+	 *   its error but does not stop the generation (the original prompt is used).
 	 */
 	public function completionsAction(string $prompt, string $engineCode = null, array $markers = [], array $parameters = []): array
 	{
@@ -93,10 +97,11 @@ class Image extends Controller
 	}
 
 	/**
-	 * Get list of available params for images ai.
+	 * Returns image formats and styles available for the image Engine.
 	 *
-	 * @param array $parameters Additional params for tuning query.
-	 * @return array
+	 * @param string $engineCode Engine's code.
+	 * @param array $parameters Parameters with context. See parent class.
+	 * @return array{formats: array, styles: array}|array{} Empty array if the Engine is not found.
 	 */
 	public function getParamsAction(string $engineCode, array $parameters = []): array
 	{
@@ -167,7 +172,7 @@ class Image extends Controller
 	}
 
 	/**
-	 * @param Engine\Image $engine
+	 * @param IEngine|null $engine
 	 *
 	 * @return array
 	 */
@@ -188,11 +193,11 @@ class Image extends Controller
 		return $formats;
 	}
 
-
-		/**
-	 * Get translate for prompt
+	/**
+	 * Translates the prompt via YandexGPT; returns the original prompt if translation is unavailable.
+	 * Translation errors are added to the controller's errors.
 	 *
-	 * @param string|null $prompt
+	 * @param string $prompt
 	 *
 	 * @return string
 	 */

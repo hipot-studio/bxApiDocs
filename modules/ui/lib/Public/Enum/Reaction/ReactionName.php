@@ -28,6 +28,16 @@ enum ReactionName: string
 	case FACE_WITH_THERMOMETER = 'faceWithThermometer';
 	case FACEPALM = 'facepalm';
 	case POO = 'poo';
+	case SALUTE_FACE = 'saluteFace';
+	case SUNNY = 'sunny';
+	case NEW_MOON_FACE = 'newMoonFace';
+	case BROKEN_HEART = 'brokenHeart';
+	case NAIL_POLISH = 'nailPolish';
+	case MELTING_FACE = 'meltingFace';
+	case PLUS_ONE = 'plusOne';
+	case SMILING_FACE_WITH_TEAR = 'smilingFaceWithTear';
+	case WILTED_FLOWER = 'wiltedFlower';
+	case SMILING_FACE_WITH_HALO = 'smilingFaceWithHalo';
 	case FLEXED_BICEPS = 'flexedBiceps';
 	case CLAPPING_HANDS = 'clappingHands';
 	case RAISED_HAND = 'raisedHand';

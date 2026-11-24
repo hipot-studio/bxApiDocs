@@ -11,6 +11,7 @@ use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\ActivityVisibilityFi
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockDescriptionResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockSettingsResult;
+use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Entity\BlockType;
 use Bitrix\BizprocDesigner\Internal\Entity\BlockTypeCollection;
 use Bitrix\BizprocDesigner\Internal\Entity\BlockTypeDetail;
@@ -103,7 +104,10 @@ class BlockDescriptionService
 			// Apply the same placement guards as the REST catalog (AgentBlockCatalogService):
 			// deprecated activities and composite/incompatible-topology containers must not
 			// appear in either catalog, regardless of whether they have an AI description.
-			if (ActivityVisibilityFilter::isDeprecatedFromRaw($activity))
+			if (
+				ActivityVisibilityFilter::isDeprecatedFromRaw($activity)
+				|| !Feature::instance()->isActivityClassOffered((string)($activity['CLASS'] ?? ''))
+			)
 			{
 				continue;
 			}

@@ -113,26 +113,72 @@ class Key extends Controller
 
 		if ($appId > 0)
 		{
+			$userId = $this->prepareUserId();
+			$withAccessKey = !$select || in_array('ACCESS_KEY', $select, true);
 			$filter = $this->prepareFilter($filter);
 			$select = $this->prepareSelect($select);
 			$filter['=APP_ID'] = $appId;
+			if ($this->hasAccessKeyCondition($filter))
+			{
+				// keys of other authors are listed too, a condition on the value must not reveal theirs
+				$filter[] = ['=CREATED_BY' => $userId];
+			}
+
+			$querySelect = $select;
+			if ($withAccessKey)
+			{
+				$querySelect = array_unique([...$select, 'CREATED_BY', 'ACCESS_KEY']);
+			}
 
 			$res = KeyTable::getList(
 				[
 					'order' => $order ?: [],
 					'filter' => $filter,
-					'select' => $select,
+					'select' => $querySelect,
 					'offset' => $offset,
 					'limit' => $limit,
 				]
 			);
 			while ($item = $res->fetch())
 			{
+				if ($withAccessKey)
+				{
+					$item = $this->exposeOwnAccessKey($item, $select, $userId);
+				}
+
 				$result[] = $item;
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The value is given only for a key the caller has created, next to the selected fields.
+	 *
+	 * @param array $item Key row with CREATED_BY and ACCESS_KEY.
+	 * @param array $select Fields selected by the caller.
+	 * @param int $userId Calling user identifier.
+	 *
+	 * @return array
+	 */
+	private function exposeOwnAccessKey(array $item, array $select, int $userId): array
+	{
+		$accessKey = $item['ACCESS_KEY'];
+		$isOwn = $userId > 0 && (int)$item['CREATED_BY'] === $userId;
+
+		unset($item['ACCESS_KEY']);
+		if (!in_array('CREATED_BY', $select, true))
+		{
+			unset($item['CREATED_BY']);
+		}
+
+		if ($isOwn)
+		{
+			$item['ACCESS_KEY'] = $accessKey;
+		}
+
+		return $item;
 	}
 
 	/**
@@ -314,6 +360,26 @@ class Key extends Controller
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Checks whether a prepared filter has a condition on the key value with any operator.
+	 *
+	 * @param array $filter Prepared KeyTable filter.
+	 *
+	 * @return bool
+	 */
+	private function hasAccessKeyCondition(array $filter): bool
+	{
+		foreach (array_keys($filter) as $code)
+		{
+			if (preg_replace('/^\W{1,2}/', '', (string)$code) === 'ACCESS_KEY')
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

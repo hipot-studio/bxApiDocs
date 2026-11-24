@@ -207,6 +207,7 @@ class CriterionShipment extends ImportCriterionOneCCml2
 		$shipmentCollection = $entity->getCollection();
 		$order = $shipmentCollection->getOrder();
 		$basket = $order->getBasket();
+		$shipmentImport->initializeBasketCandidates($basket);
 		/** @var Sale\BasketItem $basketItem */
 		foreach ($basket as $basketItem)
 		{
@@ -224,9 +225,13 @@ class CriterionShipment extends ImportCriterionOneCCml2
 		{
 			foreach($items as $productXML_ID => $item)
 			{
-				if($basketItem = $parentImport::getBasketItemByItem($basket, $item))
+				if($basketItem = $shipmentImport->getNextBasketItem($basket, $item))
 				{
 					$fieldsItemsIndexList[$basketItem->getId()] = $item['QUANTITY'];
+				}
+				else
+				{
+					$bBasketItemsMatch = false;
 				}
 			}
 		}

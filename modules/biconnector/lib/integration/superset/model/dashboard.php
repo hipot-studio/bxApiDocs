@@ -325,16 +325,13 @@ final class Dashboard
 
 		$completed = ['shares_revoked'];
 
-		if ($this->ormObject->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+		if (!$this->unpublishRemote($externalId) && !$this->remoteAlreadyDraft($externalId))
 		{
-			if (!$this->unpublishRemote($externalId) && !$this->remoteAlreadyDraft($externalId))
-			{
-				return $result->addError(new Error(
-					'Error while changing publish property in superset',
-					'remote_unpublish_failed',
-					['completed' => $completed],
-				));
-			}
+			return $result->addError(new Error(
+				'Error while changing publish property in superset',
+				'remote_unpublish_failed',
+				['completed' => $completed],
+			));
 		}
 
 		$completed[] = 'remote_unpublished';
@@ -377,7 +374,7 @@ final class Dashboard
 			$externalId,
 			self::REMOTE_DRAFT_CHECK_TIMEOUT,
 		);
-		if ($response->hasErrors())
+		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
 		{
 			return false;
 		}

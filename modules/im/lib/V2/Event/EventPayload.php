@@ -159,6 +159,34 @@ class EventPayload
 		];
 	}
 
+	/**
+	 * A click on a button of any block. The click already carries everything the consumer needs about
+	 * the element itself; message, chat and user are expanded here into the shape bots expect.
+	 */
+	public function blockButtonClick(Message $message, array $click): array
+	{
+		$messageId = (int)($click['messageId'] ?? 0);
+		if ($message->getId() === $messageId)
+		{
+			$this->message = $message;
+		}
+
+		return [
+			'actionId' => $click['actionId'] ?? '',
+			'actionParams' => $click['actionParams'] ?? [],
+			'blockId' => $click['blockId'] ?? '',
+			'buttonId' => $click['buttonId'] ?? '',
+			'buttonType' => $click['buttonType'] ?? '',
+			'values' => $click['values'] ?? [],
+			'dialogId' => $click['dialogId'] ?? '',
+			'message' => $this->loadMessageRest($messageId),
+			'chat' => $this->loadChatRest((int)($click['chatId'] ?? 0)),
+			'user' => $this->loadUserRest((int)($click['userId'] ?? 0)),
+			'language' => $click['languageId'] ?? $this->getLanguage(),
+			'additionalMessages' => $this->loadAdditionalMessagesRest($messageId),
+		];
+	}
+
 	public function loadBotRest(int $botId): array
 	{
 		if ($botId <= 0)
@@ -175,6 +203,9 @@ class EventPayload
 		return $botItem->toRestFormat();
 	}
 
+	/**
+	 * The event receives the same stored block as an addressed response.
+	 */
 	public function loadMessageRest(int $messageId): array
 	{
 		if ($messageId <= 0)

@@ -78,4 +78,19 @@ class DocumentDescription implements Arrayable
 	{
 		return [$this->module, $this->entityType, $this->documentType];
 	}
+
+	/**
+	 * The inverse of {@see self::toBizprocComplexType()}, for the boundaries where bizproc hands the type
+	 * over as a positional triple - a controller argument, a stored row.
+	 *
+	 * @param array $complexType [module, entityType, documentType]
+	 */
+	public static function fromBizprocComplexType(array $complexType): self
+	{
+		return new self(
+			module: (string)($complexType[0] ?? ''),
+			entityType: (string)($complexType[1] ?? ''),
+			documentType: (string)($complexType[2] ?? ''),
+		);
+	}
 }

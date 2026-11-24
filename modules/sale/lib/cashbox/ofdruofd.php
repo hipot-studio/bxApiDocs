@@ -40,11 +40,11 @@ class OfdruOfd extends Ofd
 	public function generateCheckLink($data)
 	{
 		$url = $this->getUrl();
-		$url .= $this->getValueFromSettings('SELLER', 'INN').'/';
-		$url .= $data[Check::PARAM_REG_NUMBER_KKT].'/';
-		$url .= $data[Check::PARAM_FN_NUMBER].'/';
-		$url .= $data[Check::PARAM_FISCAL_DOC_NUMBER].'/';
-		$url .= $data[Check::PARAM_FISCAL_DOC_ATTR];
+		$url .= rawurlencode((string)$this->getValueFromSettings('SELLER', 'INN')).'/';
+		$url .= rawurlencode((string)$data[Check::PARAM_REG_NUMBER_KKT]).'/';
+		$url .= rawurlencode((string)$data[Check::PARAM_FN_NUMBER]).'/';
+		$url .= rawurlencode((string)$data[Check::PARAM_FISCAL_DOC_NUMBER]).'/';
+		$url .= rawurlencode((string)$data[Check::PARAM_FISCAL_DOC_ATTR]);
 
 		return $url;
 	}

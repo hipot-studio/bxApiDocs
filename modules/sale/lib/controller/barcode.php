@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sale\Controller;
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale;
@@ -10,8 +11,6 @@ Loc::loadMessages(__FILE__);
 
 class Barcode extends \Bitrix\Main\Engine\Controller
 {
-	const PERMISSION_READ = 'D';
-
 	public function isBarcodeExistAction(string $barcode, int $basketId, int $orderId, int $storeId)
 	{
 		if(!\Bitrix\Main\Loader::includeModule("sale"))
@@ -19,7 +18,7 @@ class Barcode extends \Bitrix\Main\Engine\Controller
 			throw new \Bitrix\Main\SystemException('Module Sale has not installed');
 		}
 
-		if(!$this->checkPermission(self::PERMISSION_READ))
+		if (!$this->checkReadAccess())
 		{
 			$this->addError(new Error(Loc::getMessage('SALE_CONTROLLER_BARCODE_ACCESS_DENIED')));
 			return false;
@@ -74,23 +73,15 @@ class Barcode extends \Bitrix\Main\Engine\Controller
 		return ['RESULT' => $result];
 	}
 
-	protected function checkPermission($permissionType)
+	private function checkReadAccess(): bool
 	{
-		$result =  self::getApplication()->GetGroupRight("sale") >= $permissionType;
+		$result = ServiceLocator::getInstance()->get('sale.moduleAccess')->canRead();
 
-		if(!$result)
+		if (!$result)
 		{
 			$this->addError(new Error('Access denied'));
 		}
 
 		return $result;
-	}
-
-	protected static function getApplication()
-	{
-		/** @global \CMain $APPLICATION */
-		global $APPLICATION;
-
-		return $APPLICATION;
 	}
 }

@@ -14,6 +14,7 @@ use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
 use Bitrix\BIConnector\Access\Service\TableGroupService;
 use Bitrix\BIConnector\Access\Table\TableAccessChecker;
+use Bitrix\BIConnector\Access\Table\TableVisibilityService;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
@@ -37,6 +38,8 @@ class DatasetImportV2Component extends CBitrixComponent
 	private const SYSTEM_PREVIEW_ROWS = 30;
 
 	private ?TableAccessChecker $tableAccessChecker = null;
+
+	private ?TableVisibilityService $tableVisibility = null;
 
 	/** @var array<int, array{id: int, name: string, type: string}>|null */
 	private ?array $editableTableGroups = null;
@@ -232,6 +235,13 @@ class DatasetImportV2Component extends CBitrixComponent
 		return $this->tableAccessChecker;
 	}
 
+	private function getTableVisibility(): TableVisibilityService
+	{
+		$this->tableVisibility ??= new TableVisibilityService();
+
+		return $this->tableVisibility;
+	}
+
 	/**
 	 * A table the user may not view is answered as a missing one, the way the section does not list it.
 	 */
@@ -310,7 +320,7 @@ class DatasetImportV2Component extends CBitrixComponent
 	}
 
 	/**
-	 * Groups the table is bound to, limited to those the user may view, as the table list shows them.
+	 * Groups the table is bound to, limited to those the user sees, as the table list shows them.
 	 *
 	 * @param string $tableCode
 	 *
@@ -330,7 +340,7 @@ class DatasetImportV2Component extends CBitrixComponent
 			$groupId = PermissionDictionary::getTableGroupIdFromPermission($group['id']);
 			if (
 				isset($tableGroupIds[$groupId])
-				&& $this->getTableAccessChecker()->canUseGroup(ActionDictionary::ACTION_BIC_TABLE_VIEW, $groupId)
+				&& $this->getTableVisibility()->isGroupVisible($groupId)
 			)
 			{
 				$result[] = [

@@ -11,6 +11,9 @@ use Bitrix\Main\Localization\Loc;
 class Language
 {
 	private const LANG_PHRASE_PREFIX = 'AI_CONTEXT_LANGUAGE_';
+	private const LANGUAGE_CODE_ALIASES = [
+		'pt' => 'br',
+	];
 	private const AVAILABLE_LANG_CODES = [
 		'af',
 		'sq',
@@ -108,7 +111,7 @@ class Language
 		// sort
 		$first = [];
 		$currentUserLang = self::getDefaultCode();
-		if ($availableLangs[$langCode][$currentUserLang])
+		if (isset($availableLangs[$langCode][$currentUserLang]))
 		{
 			$first[$currentUserLang] = $availableLangs[$langCode][$currentUserLang];
 			unset($availableLangs[$langCode][$currentUserLang]);
@@ -124,8 +127,10 @@ class Language
 	 */
 	public function __construct(string $code)
 	{
+		$code = self::LANGUAGE_CODE_ALIASES[$code] ?? $code;
+
 		$this->code =
-			in_array($code, self::AVAILABLE_LANG_CODES)
+			in_array($code, self::AVAILABLE_LANG_CODES, true)
 				? $code
 				: self::getDefaultCode()
 		;
@@ -158,6 +163,10 @@ class Language
 	 */
 	public function getName(?string $langCode = null): string
 	{
-		return self::getAvailable($langCode)[$this->code];
+		// A portal language outside the list (kz, by) has no phrase: fall back to its native name, then to the code.
+		return self::getAvailable($langCode)[$this->code]
+			?? Facade\Bitrix24::getLanguages()[$this->code]
+			?? $this->code
+		;
 	}
 }

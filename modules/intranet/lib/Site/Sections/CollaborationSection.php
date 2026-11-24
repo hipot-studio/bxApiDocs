@@ -2,6 +2,8 @@
 
 namespace Bitrix\Intranet\Site\Sections;
 
+use Bitrix\Intranet\Integration\Templates\Air\TopMenu;
+use Bitrix\Intranet\Internal\Integration\Disk\BoardCreateAction;
 use Bitrix\Intranet\Internal\Integration\Extranet\ExtranetService;
 use Bitrix\Intranet\Settings\Tools\Automation;
 use Bitrix\Intranet\Settings\Tools\BIConstructor;
@@ -93,7 +95,7 @@ class CollaborationSection
 				'URL' => $item['url'] ?? '',
 				'COUNTER_ID' => $menuData['counter_id'] ?? '',
 				'COUNTER' => $menuData['counter_num'] ?? 0,
-				'SUB_LINK' => $menuData['sub_link'] ?? '',
+				'SUB_LINK' => TopMenu::convertSubLink($menuData),
 				'ITEMS' => empty($menuData['sub_menu']) ? [] : $menuData['sub_menu'],
 				'ON_CLICK' => $item['onclick'] ?? '',
 			];
@@ -106,7 +108,7 @@ class CollaborationSection
 	{
 		$userId = (int)CurrentUser::get()->getId();
 		$cache = Cache::createInstance();
-		$cacheId = md5($userId . LANGUAGE_ID . SITE_ID . 'v2');
+		$cacheId = md5($userId . LANGUAGE_ID . SITE_ID . 'v3');
 		$cachePath = static::CACHE_PATH . '/' . substr(md5($userId), 0, 2) . '/' . $userId . '/';
 
 		if ($cache->initCache(static::CACHE_TTL, $cacheId, $cachePath))
@@ -460,7 +462,8 @@ class CollaborationSection
 			'available' => $available,
 			'url' => SITE_DIR . 'company/personal/user/' . CurrentUser::get()->getId() . '/disk/boards/',
 			'menuData' => [
-				'menu_item_id' => 'menu_boards',
+				'menu_item_id' => BoardCreateAction::MENU_ITEM_ID,
+				'sub_link_onclick' => BoardCreateAction::getOnClick(BoardCreateAction::ELEMENT_TOP_MENU),
 			],
 		];
 	}

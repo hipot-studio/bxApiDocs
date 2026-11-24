@@ -5,11 +5,11 @@ namespace Bitrix\BIConnector\Access\Component\PermissionSection;
 use Bitrix\Main\Result;
 
 /**
- * The sections one person works with: the screen draws these and saves these, and no others.
+ * A set of sections of the rights screen.
  *
- * The screen is one and the same for everybody, and what differs is its content: a person holding
- * the right of a single section sees that section alone, so the set answers both questions at once -
- * what to draw and what of an incoming payload may be written.
+ * The screen works with two of them: the sections of the portal, which are all drawn, and the sections
+ * the person may set up, which are the only ones saved and the ones that let him in. A shown section
+ * outside the second set is drawn read only.
  */
 final class SectionSet
 {
@@ -20,9 +20,20 @@ final class SectionSet
 	{
 	}
 
+	/**
+	 * Sections the current user may set up: what the screen saves and what opens it.
+	 */
 	public static function forCurrentUser(): self
 	{
 		return new self(SectionFactory::getAvailable());
+	}
+
+	/**
+	 * Sections the portal has, whoever is asking: what the screen draws.
+	 */
+	public static function forPortal(): self
+	{
+		return new self(SectionFactory::getSupported());
 	}
 
 	/**
@@ -62,8 +73,8 @@ final class SectionSet
 	/**
 	 * Whether the permission id belongs to a section of the set.
 	 *
-	 * An id of a section outside the set is an id of rows the person was never shown, so the save
-	 * of it is a save nobody asked for.
+	 * An id of a section outside the set is an id of rows drawn to the person read only, so the save
+	 * of it is a save he may not make.
 	 */
 	public function ownsPermissionId(int|string $permissionId): bool
 	{

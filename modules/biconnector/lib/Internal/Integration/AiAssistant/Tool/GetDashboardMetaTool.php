@@ -55,7 +55,9 @@ final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 			. 'discovery (use get_filter_values), or repeatedly in the same turn — the skeleton '
 			. 'is stable for the session, cache it in your reasoning. '
 			. 'A chart with `no_access: true` is closed by the access rights of the user: answer by the '
-			. 'other charts, say this one is not available to the user, and do not request its data.';
+			. 'other charts, say this one is not available to the user, and do not request its data. '
+			. 'Chart `error`, when present, contains {`code`, `message`}: the chart could not be loaded and has no stats. '
+			. 'Answer by the other charts and say this one failed.';
 	}
 
 	public function getInputSchema(): array

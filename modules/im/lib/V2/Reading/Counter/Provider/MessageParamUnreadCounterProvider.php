@@ -54,6 +54,40 @@ final class MessageParamUnreadCounterProvider
 
 		$overflowedChatIds = $this->filterOverflowedChatIds($userId, $chatIds);
 		$chatIdsToCount = array_values(array_diff($chatIds, $overflowedChatIds));
+
+		return $this->count($userId, $chatIds, $chatIdsToCount, $paramNames);
+	}
+
+	/**
+	 * For chats whose counters the caller has already read below the overflow threshold, so the overflow
+	 * lookup is not repeated. A chat at the threshold must not be passed here: it has no exact counter.
+	 *
+	 * @param int[] $chatIds
+	 * @param string[] $messageParamNames
+	 */
+	public function getForUserByChatIdsBelowOverflow(
+		int $userId,
+		array $chatIds,
+		array $messageParamNames,
+	): ChatsCounterMap
+	{
+		$paramNames = Normalizer::toUniqueTrimmedStrings($messageParamNames, Param::MAX_NAME_LENGTH);
+		$chatIds = Normalizer::toUniquePositiveIntegers($chatIds);
+		if ($userId <= 0 || empty($chatIds) || empty($paramNames))
+		{
+			return ChatsCounterMap::fromArray([]);
+		}
+
+		return $this->count($userId, $chatIds, $chatIds, $paramNames);
+	}
+
+	/**
+	 * @param int[] $chatIds
+	 * @param int[] $chatIdsToCount
+	 * @param string[] $paramNames
+	 */
+	private function count(int $userId, array $chatIds, array $chatIdsToCount, array $paramNames): ChatsCounterMap
+	{
 		$fetched = empty($chatIdsToCount) ? [] : $this->fetch($userId, $chatIdsToCount, $paramNames);
 
 		// Grouped rows come back in no defined order, so the key order is restored here: the returned

@@ -279,7 +279,19 @@ final class Storage extends Base
 			return null;
 		}
 
-		// is_numeric() passes numbers out of the int range too, and the typed lookup answers those with a TypeError.
+		if (
+			is_float($id)
+			&& (
+				$id < PHP_INT_MIN
+				|| $id > PHP_INT_MAX
+				|| (PHP_INT_SIZE > 4 && $id >= PHP_INT_MAX)
+				|| !is_finite($id)
+			)
+		)
+		{
+			throw new RestException("Could not find entity with id '{$id}'.", RestException::ERROR_NOT_FOUND);
+		}
+
 		$storage = $this->getStorageById((int)$id);
 		$securityContext = $storage->getCurrentUserSecurityContext();
 

@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Controller\Chat\Dto;
 
+use Bitrix\Im\V2\Analytics\VoiceWidgetLabels;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Main\DI\ServiceLocator;
 
 final class ChatCreateFieldsDto
@@ -36,6 +38,10 @@ final class ChatCreateFieldsDto
 		public readonly ?array $memberEntities,
 		public readonly ?int $parentChatId,
 		public readonly ?string $copilotMainRole,
+		public readonly ?VoiceWidgetLabels $copilotAnalytics,
+		public readonly ?bool $threadsEnabled,
+		public readonly ?string $manageThreadCreate,
+		public readonly ?string $manageThreadPost,
 	)
 	{
 	}
@@ -84,6 +90,12 @@ final class ChatCreateFieldsDto
 			memberEntities: $fields['memberEntities'] ?? null,
 			parentChatId: $parentChatId,
 			copilotMainRole: $fields['copilotMainRole'] ?? null,
+			copilotAnalytics: $type === Chat::IM_TYPE_COPILOT
+				? VoiceWidgetLabels::fromArray($fields['copilotAnalytics'] ?? null)
+				: null,
+			threadsEnabled: Normalizer::toNullableBool($fields['threadsEnabled'] ?? null),
+			manageThreadCreate: $fields['manageThreadCreate'] ?? null,
+			manageThreadPost: $fields['manageThreadPost'] ?? null,
 		);
 	}
 

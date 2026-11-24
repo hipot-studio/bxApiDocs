@@ -50,10 +50,7 @@ class CIntranetUserProfileComponent extends UserProfile
 			return;
 		}
 
-		$isAdminRights = (
-			(Loader::includeModule('bitrix24') && \CBitrix24::IsPortalAdmin(\Bitrix\Main\Engine\CurrentUser::get()->getId()))
-			|| \Bitrix\Main\Engine\CurrentUser::get()->isAdmin()
-		);
+		$isAdminRights = $this->isCurrentUserAdmin();
 
 		$this->arResult["IS_CURRENT_USER_ADMIN"] = $isAdminRights;
 
@@ -92,15 +89,12 @@ class CIntranetUserProfileComponent extends UserProfile
 			'secondaryBadge' => $profileView->getSecondaryBadge(),
 		];
 
-		if (!$isAdminRights)
+		if ($this->isProfileViewRestricted($this->arResult['User']))
 		{
-			if ($userEntity->isImGuest() || $this->isCurrentUserImGuest())
-			{
-				$this->arResult['Permissions']['view'] = false;
-				$this->includeComponentTemplate();
+			$this->arResult['Permissions']['view'] = false;
+			$this->includeComponentTemplate();
 
-				return;
-			}
+			return;
 		}
 
 		$currentUser = \Bitrix\Main\Engine\CurrentUser::get();
@@ -194,6 +188,7 @@ class CIntranetUserProfileComponent extends UserProfile
 
 		$this->arResult['ADDITIONAL_BLOCKS'] = $this->getAdditionalBlocks();
 		$this->arResult['IS_ADDITIONAL_BLOCK'] = !empty($this->arResult['ADDITIONAL_BLOCKS']);
+		$this->arResult['SHOW_REGISTRATION_DATA'] = $this->canViewRegistrationData();
 
 		$userService = \Bitrix\Intranet\Service\ServiceContainer::getInstance()->getUserService();
 		$access = UserAccessController::createByDefault();
@@ -236,18 +231,6 @@ class CIntranetUserProfileComponent extends UserProfile
 		{
 			$this->includeComponentTemplate();
 		}
-	}
-
-	private function isCurrentUserImGuest(): bool
-	{
-		global $USER;
-
-		$currentUser = new User(
-			id: (int)$USER->GetID(),
-			externalAuthId: $USER->GetParam('EXTERNAL_AUTH_ID') ?: null,
-		);
-
-		return $currentUser->isImGuest();
 	}
 
 	private function prepareOtpInfo(\Bitrix\Intranet\Entity\User $userEntity): void

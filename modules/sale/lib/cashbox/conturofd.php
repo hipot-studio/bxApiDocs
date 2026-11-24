@@ -40,9 +40,9 @@ class ConturOfd extends Ofd
 	public function generateCheckLink($data)
 	{
 		$url = $this->getUrl();
-		$url .= '/FN/'.$data[Check::PARAM_FN_NUMBER];
-		$url .= '/FD/'.$data[Check::PARAM_FISCAL_DOC_NUMBER];
-		$url .= '/FP/'.$data[Check::PARAM_FISCAL_DOC_ATTR];
+		$url .= '/FN/'.rawurlencode((string)$data[Check::PARAM_FN_NUMBER]);
+		$url .= '/FD/'.rawurlencode((string)$data[Check::PARAM_FISCAL_DOC_NUMBER]);
+		$url .= '/FP/'.rawurlencode((string)$data[Check::PARAM_FISCAL_DOC_ATTR]);
 
 		return $url;
 	}

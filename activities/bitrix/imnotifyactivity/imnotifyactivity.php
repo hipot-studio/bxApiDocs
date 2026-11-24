@@ -6,6 +6,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Localization\Loc;
 
 class CBPIMNotifyActivity extends \CBPActivity implements IBPConfigurableActivity
@@ -113,6 +114,90 @@ class CBPIMNotifyActivity extends \CBPActivity implements IBPConfigurableActivit
 		}
 
 		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
+	}
+
+	/**
+	 * Whether the author may write these settings: an ordinary employee sends notifications on his own
+	 * behalf only. Asked on the paths where the node settings come from the form, and deliberately apart
+	 * from ValidateProperties(), which publishing and importing of somebody else's template also call.
+	 *
+	 * @return array errors in the ValidateProperties() format
+	 */
+	public static function validateAuthoredProperties(array $properties, \CBPWorkflowTemplateUser $user): array
+	{
+		$authorId = (int)$user->getId();
+		if (!self::namesForeignEmployee($properties['MessageUserFrom'] ?? null, $authorId))
+		{
+			return [];
+		}
+
+		if ($user->isAdmin() || (new TemplateAccessService())->canConfigureRights($authorId))
+		{
+			return [];
+		}
+
+		return [[
+			'code' => 'ForeignSender',
+			'parameter' => 'MessageUserFrom',
+			'message' => Loc::getMessage('BPIMNA_FOREIGN_FROM'),
+		]];
+	}
+
+	/**
+	 * Whether the value names somebody except the author. Every element is inspected, not only a single one:
+	 * on execution CBPHelper::ExtractUsers($value, $documentId, true) takes the first element that resolves
+	 * and never looks at the rest, so a neighbour in the list does not make the sender undetermined.
+	 */
+	private static function namesForeignEmployee(mixed $value, int $authorId): bool
+	{
+		foreach (is_array($value) ? $value : [$value] as $item)
+		{
+			$employeeId = self::extractEmployeeId($item);
+			if ($employeeId !== null && $employeeId !== $authorId)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The id of the employee a single element names by itself, or null when the element names a group, a
+	 * department, the document author or an expression: whom those name is settled when the process runs.
+	 * A bare number is a group code in bizproc (CBPHelper::convertToExtendedGroups()), not an employee.
+	 *
+	 * The element is read the way its consumer reads it: `user_<id>` keeps whatever is appended to the
+	 * number, because intval() drops that tail on execution as well. Prefixes are read regardless of their
+	 * case although the consumer compares them case-sensitively — of the two sides of that difference this
+	 * one refuses more.
+	 */
+	private static function extractEmployeeId(mixed $item): ?int
+	{
+		if (!is_scalar($item))
+		{
+			return null;
+		}
+
+		$item = (string)$item;
+		if (stripos($item, 'user_') === 0)
+		{
+			$employeeId = (int)mb_substr($item, mb_strlen('user_'));
+
+			return $employeeId > 0 ? $employeeId : null;
+		}
+
+		if (\CBPActivity::isExpression($item))
+		{
+			return null;
+		}
+
+		if (preg_match('/^group_[is]?u(\d+)$/i', $item, $matches))
+		{
+			return (int)$matches[1];
+		}
+
+		return null;
 	}
 
 	public static function GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters,

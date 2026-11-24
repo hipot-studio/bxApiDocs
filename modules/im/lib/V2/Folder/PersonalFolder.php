@@ -119,6 +119,8 @@ class PersonalFolder extends BaseFolder
 			'hiddenBySystem' => $this->isHiddenBySystem(),
 			'hiddenByUser' => $visibility['hiddenByUser'],
 			'canHide' => $visibility['canHide'],
+			'canReadAll' => $this->canReadAll(),
+			'isMuted' => $this->isMuted(),
 			'description' => $this->getDescription(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
 			'definition' => (new ChatListDefinition($this->getChatIds(), $this->resolveDialogIdMap($option)))->toRestFormat(),

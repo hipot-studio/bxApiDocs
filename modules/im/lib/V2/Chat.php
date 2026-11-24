@@ -173,7 +173,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	// Keeping them in the Chat cache lets fill() rerun their side-effecting setters on
 	// cache-load and, if the cached value is stale, wipes the param from the shared
 	// Params singleton. Access is served lazily from Params.
-	private const CHAT_PARAM_BACKED_FIELDS = ['MANAGE_MESSAGES_AUTO_DELETE', 'MANAGE_GUEST_INVITES', 'MANAGE_DELETE'];
+	private const CHAT_PARAM_BACKED_FIELDS = [
+		'MANAGE_MESSAGES_AUTO_DELETE',
+		'MANAGE_GUEST_INVITES',
+		'MANAGE_DELETE',
+		'THREADS_ENABLED',
+		'MANAGE_THREAD_CREATE',
+		'MANAGE_THREAD_POST',
+	];
 
 	public const
 		MANAGE_RIGHTS_NONE = 'NONE',
@@ -181,6 +188,16 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		MANAGE_RIGHTS_OWNER = 'OWNER',
 		MANAGE_RIGHTS_MANAGERS = 'MANAGER'
 	;
+
+	/**
+	 * Thresholds a thread rule takes. NONE is not among them on purpose: "nobody" is said by the
+	 * switch of the chat, and a rule set to NONE would not come back when threads are turned on again.
+	 */
+	public const THREAD_MANAGE_RIGHTS = [
+		self::MANAGE_RIGHTS_MEMBER,
+		self::MANAGE_RIGHTS_MANAGERS,
+		self::MANAGE_RIGHTS_OWNER,
+	];
 
 	public const ROLE_OWNER = 'OWNER';
 	public const ROLE_MANAGER = 'MANAGER';
@@ -896,7 +913,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$sendingConfig = $sendingService->getConfig();
 
 		$sendingService->updateMessageUuid($message);
-		$this->processMessageAnalyticsOnAfterSend($message);
+		$this->processMessageAnalyticsOnAfterSend($message, $sendingConfig->getSendMessageAnalyticsType());
 
 		if ($sendingConfig->convertMode())
 		{
@@ -984,11 +1001,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return array_fill_keys(array_diff($blockFileIds, $attachmentFileIds), true);
 	}
 
-	protected function processMessageAnalyticsOnAfterSend(Message $message): void
+	protected function processMessageAnalyticsOnAfterSend(Message $message, string $sendMessageAnalyticsType): void
 	{
 		$messageAnalytics = (new MessageAnalytics($message));
 
-		$messageAnalytics->addSendMessage();
+		$messageAnalytics->addSendMessage($sendMessageAnalyticsType);
 		if ($message->hasMentionAll())
 		{
 			$messageAnalytics->addMentionAll();
@@ -1048,6 +1065,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			$parentChat->getRelationsByUserIds($raiseUserIds),
 			new DateTime(),
 			previewSource: $this->buildCollabPreviewSourcePiggyback($message),
+			addMissing: !($this instanceof Chat\CommentChat),
 		);
 
 		$this->markParentMessageAsUpdated($parentChat, $raiseUserIds);
@@ -1568,7 +1586,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$push = Im\V2\Message\PushFormat::formatStartRecordVoice($this);
 		if ($this->getType() === self::IM_TYPE_COMMENT)
 		{
-			Im\V2\Pull\CommentTagPublisher::addToStack($this, $push);
+			Im\V2\Service\Locator::getPullSender()->sendToCommentSubscribers($this, $push);
 		}
 		else
 		{
@@ -1912,6 +1930,24 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 				'get' => 'getManageDelete',  /** @see Chat::getManageDelete */
 				'set' => 'setManageDelete',  /** @see Chat::setManageDelete */
 				'default' => 'getDefaultManageDelete', /** @see Chat::getDefaultManageDelete */
+				'skipSave' => true,
+			],
+			'THREADS_ENABLED' => [
+				'get' => 'getThreadsEnabled',  /** @see Chat::getThreadsEnabled */
+				'set' => 'setThreadsEnabled',  /** @see Chat::setThreadsEnabled */
+				'default' => 'getDefaultThreadsEnabled', /** @see Chat::getDefaultThreadsEnabled */
+				'skipSave' => true,
+			],
+			'MANAGE_THREAD_CREATE' => [
+				'get' => 'getManageThreadCreate',  /** @see Chat::getManageThreadCreate */
+				'set' => 'setManageThreadCreate',  /** @see Chat::setManageThreadCreate */
+				'default' => 'getDefaultManageThreadCreate', /** @see Chat::getDefaultManageThreadCreate */
+				'skipSave' => true,
+			],
+			'MANAGE_THREAD_POST' => [
+				'get' => 'getManageThreadPost',  /** @see Chat::getManageThreadPost */
+				'set' => 'setManageThreadPost',  /** @see Chat::setManageThreadPost */
+				'default' => 'getDefaultManageThreadPost', /** @see Chat::getDefaultManageThreadPost */
 				'skipSave' => true,
 			],
 			'USERS' => [
@@ -2315,6 +2351,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		;
 	}
 
+	/**
+	 * The counter of the chat stands for a session waiting to be taken, not for unread messages.
+	 */
+	public function isNonAnsweredSession(): bool
+	{
+		return false;
+	}
+
 	protected function beforeSaveType(): Result
 	{
 		$check = new Result;
@@ -2435,6 +2479,40 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return Chat::getInstance($this->getParentChatId());
 	}
 
+	/**
+	 * Compact parent for pull payloads that name the parent by id alone. A handler of a thread event
+	 * gets the thread itself in the chat block, so the question "does the parent admit threads" has no
+	 * answer in the event and is otherwise taken from a local model the client may not have filled yet.
+	 * Held to what that decision needs: canHaveThreads is the very same field the full representations
+	 * carry, read off the parent, and the type tells the channel family apart.
+	 *
+	 * A discussion and nothing else: membership in a nested chat is no membership in its parent - the
+	 * member of a task chat who is not in the project is the everyday case - and the block describes
+	 * the parent. The handler that reads it is the one of a thread event, so nobody else needs it.
+	 *
+	 * @return array|null null for a chat that is no discussion, and for a parent that no longer exists
+	 */
+	public function getParentChatPullFormat(): ?array
+	{
+		if (!$this instanceof Chat\CommentChat)
+		{
+			return null;
+		}
+
+		$parentChat = $this->getParentChat();
+
+		if ($parentChat === null || $parentChat->getId() === null)
+		{
+			return null;
+		}
+
+		return [
+			'id' => $parentChat->getId(),
+			'type' => $parentChat->getExtendedType(),
+			'canHaveThreads' => $parentChat->allowsComments(),
+		];
+	}
+
 	public function canHaveChild(Chat $child): bool
 	{
 		// a short circuit, not a rule: the service refuses such a parent on its own, but only past the resolve
@@ -2451,10 +2529,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	}
 
 	/**
-	 * The same question narrowed to the child kind threads are made of. Kept private on purpose:
-	 * admissibility belongs to the parent-child pair, not to the chat, so there is no public reader.
+	 * Tells whether messages of this chat can carry discussions: the same structural question as
+	 * canHaveChild(), narrowed to the child kind threads are made of. Single place that decides the
+	 * set of thread-capable parents, so chat types answer it by the relation registry of the tree
+	 * and not by overriding it.
 	 */
-	private function canHaveCommentChild(): bool
+	public function allowsComments(): bool
 	{
 		// a short circuit, not a rule: the service refuses such a parent on its own, and this spares two
 		// ServiceLocator lookups and the resolve of the comment type on every chat of a list payload
@@ -2472,18 +2552,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			->get(Chat\Tree\Relation\TreeRelationService::class)
 			->canHaveChildOfType($this, $commentType)
 		;
-	}
-
-	/**
-	 * Tells whether messages of this chat can carry discussions.
-	 * Single place that decides the set of thread-capable parents: once the relation registry
-	 * of the chat tree lands, this predicate starts answering wider without changes at call sites.
-	 *
-	 * @return bool
-	 */
-	public function allowsComments(): bool
-	{
-		return false;
 	}
 
 	public function onBeforeAttachChild(Chat\GroupChat $childChat, int $userId): Result
@@ -3273,6 +3341,220 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function getDefaultManageDelete(): string
 	{
 		return self::MANAGE_RIGHTS_MEMBER;
+	}
+
+	public function setThreadsEnabled(bool $threadsEnabled): self
+	{
+		if (!$this->storesThreadSettings())
+		{
+			return $this;
+		}
+
+		$threadsEnabled === $this->getDefaultThreadsEnabled()
+			? $this->getChatParams()->deleteParam(Params::THREADS_ENABLED, false)
+			: $this->getChatParams()->addParamByName(Params::THREADS_ENABLED, $threadsEnabled, false)
+		;
+
+		return $this;
+	}
+
+	public function getThreadsEnabled(): bool
+	{
+		$threadsEnabled = $this->getChatParams()->get(Params::THREADS_ENABLED);
+
+		return isset($threadsEnabled) ? (bool)$threadsEnabled->getValue() : $this->getDefaultThreadsEnabled();
+	}
+
+	public function getDefaultThreadsEnabled(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * @param string $manageThreadCreate MEMBER|MANAGER|OWNER
+	 */
+	public function setManageThreadCreate(string $manageThreadCreate): self
+	{
+		return $this->setThreadManageRights(
+			Params::MANAGE_THREAD_CREATE,
+			$manageThreadCreate,
+			$this->getDefaultManageThreadCreate(),
+		);
+	}
+
+	public function getManageThreadCreate(): string
+	{
+		return $this->getThreadManageRights(Params::MANAGE_THREAD_CREATE, $this->getDefaultManageThreadCreate());
+	}
+
+	public function getDefaultManageThreadCreate(): string
+	{
+		return self::MANAGE_RIGHTS_MEMBER;
+	}
+
+	/**
+	 * @param string $manageThreadPost MEMBER|MANAGER|OWNER
+	 */
+	public function setManageThreadPost(string $manageThreadPost): self
+	{
+		return $this->setThreadManageRights(
+			Params::MANAGE_THREAD_POST,
+			$manageThreadPost,
+			$this->getDefaultManageThreadPost(),
+		);
+	}
+
+	public function getManageThreadPost(): string
+	{
+		return $this->getThreadManageRights(Params::MANAGE_THREAD_POST, $this->getDefaultManageThreadPost());
+	}
+
+	public function getDefaultManageThreadPost(): string
+	{
+		return self::MANAGE_RIGHTS_MEMBER;
+	}
+
+	/**
+	 * Whether the value is a threshold a thread rule takes. Lives next to the list itself so every
+	 * write path validates the input against the same answer; the case is free, because clients read
+	 * the rules back from getPermissions() in lower case and send them back as they got them.
+	 */
+	public static function isThreadManageRightsValid(string $rights): bool
+	{
+		return in_array(mb_strtoupper($rights), self::THREAD_MANAGE_RIGHTS, true);
+	}
+
+	/**
+	 * The chat whose thread settings rule here, or null where threads have no settings to read.
+	 * A thread keeps none of its own: a discussion lives by the rules of the chat it belongs to, so a
+	 * rule changed later reaches the discussions opened before it.
+	 */
+	public function getThreadSettingsChat(): ?Chat
+	{
+		return $this->ownsThreadSettings() ? $this : null;
+	}
+
+	/**
+	 * Whether the settings are the chat's own to keep: it admits threads at all and takes them.
+	 */
+	private function ownsThreadSettings(): bool
+	{
+		return $this->acceptsThreadSettings() && $this->allowsComments();
+	}
+
+	/**
+	 * The channel family takes no thread settings: its comments keep the rules they had, whatever a
+	 * setting would say, so a stored value would be a dead row and a lie in the interface.
+	 */
+	private function acceptsThreadSettings(): bool
+	{
+		return !($this instanceof Chat\ChannelChat);
+	}
+
+	/**
+	 * Whether a setting written now is one that will ever be read back. The reading side asks
+	 * ownsThreadSettings(), so the write asks the same: a chat the tree admits no discussion under would
+	 * otherwise keep a dead row and report a switch of a mechanic it does not have.
+	 *
+	 * Creation is the one case the two questions differ on. allowsComments() refuses a chat that does not
+	 * exist yet, so before the first save only the type barrier can be asked - and the values arriving
+	 * with the fields of im.v2.Chat.add keep reaching the params they are saved with.
+	 */
+	private function storesThreadSettings(): bool
+	{
+		return $this->isExist() ? $this->ownsThreadSettings() : $this->acceptsThreadSettings();
+	}
+
+	/**
+	 * Whether a thread can be opened on a message of this chat, and why not when it cannot.
+	 *
+	 * The access to the parent message is not part of it: the caller checks it first, so a refusal
+	 * here never tells the type of a chat the user cannot see.
+	 */
+	public function checkThreadCreateAccess(): Result
+	{
+		return $this->checkThreadActionAccess(Action::CreateThread, ChatError::CREATE_THREAD_ACCESS_DENIED);
+	}
+
+	/**
+	 * Whether the user can write into a discussion of this chat, and why not when they cannot. Asked
+	 * of the chat the discussion belongs to, the one whose rules and thresholds it lives by.
+	 */
+	public function checkThreadPostAccess(): Result
+	{
+		return $this->checkThreadActionAccess(Action::PostInThread, ChatError::POST_IN_THREAD_ACCESS_DENIED);
+	}
+
+	/**
+	 * The same answer canDo() gives, told apart by reason: the clients show a different text for a
+	 * portal without threads, a type that admits none, a chat with them turned off and a role too low.
+	 * canDo() weighs the very same conditions and stays the authority - it is asked last, and the
+	 * steps before it only name the one that refused.
+	 */
+	private function checkThreadActionAccess(Action $action, string $accessDeniedCode): Result
+	{
+		$result = new Result();
+
+		// the channel family keeps the rules its comments have always had, at any value of the flag
+		if (!$this->acceptsThreadSettings())
+		{
+			return $result;
+		}
+
+		if (!Im\V2\Application\Features::isChatThreadsAvailable())
+		{
+			return $result->addError(new ChatError(ChatError::THREADS_NOT_AVAILABLE));
+		}
+
+		if (!$this->allowsComments())
+		{
+			return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
+		}
+
+		$settingsChat = $this->getThreadSettingsChat();
+
+		if ($settingsChat === null || !$settingsChat->getThreadsEnabled())
+		{
+			return $result->addError(new ChatError(ChatError::THREADS_DISABLED));
+		}
+
+		if (!$this->canDo($action))
+		{
+			return $result->addError(new ChatError($accessDeniedCode));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Both thread rules are stored alike, and the default is stored as the absence of the parameter:
+	 * a chat left at its defaults keeps no rows of its own.
+	 *
+	 * The value outside the list is dropped instead of raising: this is the last barrier, and the
+	 * error belongs to the validation of the input, which has somewhere to return it.
+	 */
+	private function setThreadManageRights(string $paramName, string $rights, string $default): self
+	{
+		if (!self::isThreadManageRightsValid($rights) || !$this->storesThreadSettings())
+		{
+			return $this;
+		}
+
+		$rights = mb_strtoupper($rights);
+
+		$rights === $default
+			? $this->getChatParams()->deleteParam($paramName, false)
+			: $this->getChatParams()->addParamByName($paramName, $rights, false)
+		;
+
+		return $this;
+	}
+
+	private function getThreadManageRights(string $paramName, string $default): string
+	{
+		$rights = $this->getChatParams()->get($paramName);
+
+		return isset($rights) ? (string)$rights->getValue() : $default;
 	}
 
 	/**
@@ -4776,7 +5058,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function getPermissions(): array
 	{
-		return [
+		$permissions = [
 			'manageUsersAdd' => mb_strtolower($this->getManageUsersAdd()),
 			'manageUsersDelete' => mb_strtolower($this->getManageUsersDelete()),
 			'manageUi' => mb_strtolower($this->getManageUI()),
@@ -4787,6 +5069,18 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'manageDelete' => mb_strtolower($this->getManageDelete()),
 			'canPost' => mb_strtolower($this->getManageMessages()),
 		];
+
+		// the thread rules of a chat without thread settings are not defaults but nothing at all, and a
+		// thread gets the rules of its parent: the client would otherwise offer the input where the
+		// server refuses it
+		$threadSettingsChat = $this->getThreadSettingsChat();
+		if ($threadSettingsChat !== null)
+		{
+			$permissions['manageThreadCreate'] = mb_strtolower($threadSettingsChat->getManageThreadCreate());
+			$permissions['manageThreadPost'] = mb_strtolower($threadSettingsChat->getManageThreadPost());
+		}
+
+		return $permissions;
 	}
 
 	public function getPopupData(array $excludedList = []): PopupData
@@ -4836,8 +5130,15 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'isNew' => $this->isNew(),
 			'textFieldEnabled' => $this->getTextFieldEnabled()->get(),
 			'backgroundId' => $this->getBackground()->get(),
-			'canHaveThreads' => $this->canHaveCommentChild(),
+			'canHaveThreads' => $this->allowsComments(),
 		];
+
+		// the switch belongs to the chat that keeps it: a thread has no switch of its own, and clients
+		// decide on the section of settings by canHaveThreads
+		if ($this->ownsThreadSettings())
+		{
+			$commonFields['threadsEnabled'] = $this->getThreadsEnabled();
+		}
 
 		if ($option['CHAT_WITH_DATE_MESSAGE'] ?? false)
 		{
@@ -4867,7 +5168,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function toPullFormat(): array
 	{
-		return [
+		$result = [
 			'id' => $this->getId(),
 			'dialogId' => $this->getDialogId(),
 			'parent_chat_id' => $this->getParentChatId(),
@@ -4900,8 +5201,23 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'textFieldEnabled' => $this->getTextFieldEnabled()->get(),
 			'backgroundId' => $this->getBackground()->get(),
 			'guestCount' => $this->containsGuest() ? (new GuestCounter($this))->getGuestCount() : 0,
-			'canHaveThreads' => $this->canHaveCommentChild(),
+			'canHaveThreads' => $this->allowsComments(),
 		];
+
+		if ($this->ownsThreadSettings())
+		{
+			$result['threadsEnabled'] = $this->getThreadsEnabled();
+		}
+
+		// the key is absent, not null, for a chat without a parent: clients merge a pull block over the
+		// chat they already hold, and a null would erase what a nested chat knows about its parent
+		$parentChat = $this->getParentChatPullFormat();
+		if ($parentChat !== null)
+		{
+			$result['parentChat'] = $parentChat;
+		}
+
+		return $result;
 	}
 
 	public function getMultidialogData(): array
@@ -5195,6 +5511,22 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function needToSendPublicPull(): bool
 	{
 		return false;
+	}
+
+	/**
+	 * Renews the pull subscriptions the current user keeps on an opened chat. Base branch renews the
+	 * comment tag, so every thread-capable parent gets it without an override of its own; types with
+	 * a messages tag of their own add it on top and call the parent.
+	 * \CPullWatch::Add works as an upsert, so the first call subscribes and the rest extend the ttl.
+	 */
+	public function extendPullWatch(): void
+	{
+		if (!Main\Loader::includeModule('pull') || !$this->allowsComments())
+		{
+			return;
+		}
+
+		\CPullWatch::Add($this->getContext()->getUserId(), "IM_PUBLIC_COMMENT_{$this->getId()}", true);
 	}
 
 	public function canDo(Action $action, mixed $target = null): bool

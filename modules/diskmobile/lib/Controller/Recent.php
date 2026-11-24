@@ -52,14 +52,18 @@ class Recent extends BaseFileList
 
 		if (isset($page['items']))
 		{
-			$response['items'] = array_map([$this, 'trackedToItem'], $page['items']);
+			// disk leaves a bare position in place of a file gone between its two reads of the page
+			$response['items'] = array_map(
+				[$this, 'trackedToItem'],
+				array_values(array_filter($page['items'], 'is_array')),
+			);
 			$response = $this->withUsers($response);
 			$response = $this->withRealStorageIds($response);
 			$response = $this->withStorages($response);
 			$response['items'] = $this->withExternalLink($response['items']);
 		}
 
-		$tag = "disk_user_{$this->getCurrentUser()->getId()}_recents";
+		$tag = "disk_user_{$this->getCurrentUserId()}_recents";
 		$this->subscribeToPullEvents($response['items'], [ $tag ]);
 
 		return $response;
@@ -102,7 +106,7 @@ class Recent extends BaseFileList
 			$response['items'] = $this->withExternalLink($response['items']);
 		}
 
-		$tag = "disk_user_{$this->getCurrentUser()->getId()}_recents";
+		$tag = "disk_user_{$this->getCurrentUserId()}_recents";
 		$this->subscribeToPullEvents($response['items'], [ $tag ]);
 
 		return $response;

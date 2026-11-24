@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Internal\Operation\Builder\Dashboard;
 
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\ArgumentViolationFormatter;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard\DashboardJsonMetadataReader;
@@ -163,9 +164,7 @@ final class SetContentOperation
 		if ($hasFilters && !$timeRangeProvided)
 		{
 			return $result->addError(new Error(
-				'filters must contain at least one `time_range` filter with a non-empty '
-				. '`defaultValue`. Every dashboard needs a date filter; if the user did '
-				. 'not specify a period, default to "Last quarter".',
+				ArgumentViolationFormatter::PERIOD_MESSAGE,
 				FailureCode::InvalidArgument->value,
 			));
 		}
@@ -195,11 +194,7 @@ final class SetContentOperation
 		if ($hasCharts && !$timeRangeProvided && !DashboardJsonMetadataReader::hasTimeRange($jsonMetadata))
 		{
 			return $result->addError(new Error(
-				'Dashboard has no `time_range` filter configured. Every dashboard '
-				. 'must have a date filter before charts are attached. Pass '
-				. '`filters` with at least one `time_range` entry (use '
-				. '"Last quarter" as default if the user did not specify a '
-				. 'period).',
+				ArgumentViolationFormatter::PERIOD_MESSAGE,
 				// The remedy is in the arguments, so a REST caller is told it as a validation message.
 				FailureCode::InvalidArgument->value,
 			));

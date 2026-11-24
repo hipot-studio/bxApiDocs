@@ -5,6 +5,10 @@ namespace Bitrix\AI\Payload\JsonSchema;
 use Bitrix\AI\Payload\JsonSchema\Enum\SchemaType;
 use Bitrix\Main\SystemException;
 
+/**
+ * Builds JSON schema for strict structured output: every property is listed in `required`,
+ * a property that is not required becomes nullable instead.
+ */
 class JsonSchemaBuilder
 {
 	private array $schema;
@@ -80,11 +84,13 @@ class JsonSchemaBuilder
 	}
 
 	/**
+	 * Adds an array property whose items match any of the given schemas.
+	 *
 	 * @param string $name
 	 * @param JsonSchemaBuilder[] $itemSchema
 	 * @param bool $isRequired
 	 *
-	 * @return void
+	 * @return self
 	 */
 	public function addAnyOfProperty(
 		string $name,

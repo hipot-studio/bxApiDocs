@@ -815,7 +815,8 @@ class CBlogPost extends CAllBlogPost
 				$unreadImportantFilter = true;
 				unset($arFilter[$key]);
 			}
-			elseif (mb_strpos($k, "POST_PARAM_") === 0)
+			// The key becomes a SELECT alias as is, so only identifiers are allowed
+			elseif (preg_match('/^POST_PARAM_[A-Za-z0-9_]+$/D', $k))
 			{
 				$user_id = 0; $ii++; $pref = "BPP".$ii;
 				if (is_array($val))
@@ -830,41 +831,43 @@ class CBlogPost extends CAllBlogPost
 			}
 		}
 
-		if(isset($arFilter["GROUP_CHECK_PERMS"]))
+		if (isset($arFilter["GROUP_CHECK_PERMS"]))
 		{
-			if(is_array($arFilter["GROUP_CHECK_PERMS"]))
+			if (is_array($arFilter["GROUP_CHECK_PERMS"]))
 			{
-				foreach($arFilter["GROUP_CHECK_PERMS"] as $val)
+				foreach ($arFilter["GROUP_CHECK_PERMS"] as $val)
 				{
-					if(intval($val)>0)
+					$val = is_scalar($val) ? (int)$val : 0;
+					if ($val > 0 && !isset($arFields["POST_PERM_" . $val]))
 					{
-						$arFields["POST_PERM_".$val] = Array(
-								"FIELD" => "BUGP".$val.".PERMS",
-								"TYPE" => "string",
-								"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP".$val."
-											ON (P.BLOG_ID = BUGP".$val.".BLOG_ID
-												AND P.ID = BUGP".$val.".POST_ID
-												AND BUGP".$val.".USER_GROUP_ID = ".$val."
-												AND BUGP".$val.".PERMS_TYPE = '".BLOG_PERMS_POST."')"
-							);
-						$arSelectFields[] = "POST_PERM_".$val;
+						$arFields["POST_PERM_" . $val] = Array(
+							"FIELD" => "BUGP" . $val . ".PERMS",
+							"TYPE" => "string",
+							"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP" . $val . "
+									ON (P.BLOG_ID = BUGP" . $val . ".BLOG_ID
+										AND P.ID = BUGP" . $val . ".POST_ID
+										AND BUGP" . $val . ".USER_GROUP_ID = " . $val . "
+										AND BUGP" . $val . ".PERMS_TYPE = '" . BLOG_PERMS_POST . "')"
+						);
+						$arSelectFields[] = "POST_PERM_" . $val;
 					}
 				}
 			}
 			else
 			{
-				if(intval($arFilter["GROUP_CHECK_PERMS"])>0)
+				$groupId = is_scalar($arFilter["GROUP_CHECK_PERMS"]) ? (int)$arFilter["GROUP_CHECK_PERMS"] : 0;
+				if ($groupId > 0)
 				{
-					$arFields["POST_PERM_".$arFilter["GROUP_CHECK_PERMS"]] = Array(
-							"FIELD" => "BUGP.PERMS",
-							"TYPE" => "string",
-							"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP
-										ON (P.BLOG_ID = BUGP.BLOG_ID
-											AND P.ID = BUGP.POST_ID
-											AND BUGP.USER_GROUP_ID = ".$arFilter["GROUP_CHECK_PERMS"]."
-											AND BUGP.PERMS_TYPE = '".BLOG_PERMS_POST."')"
-						);
-					$arSelectFields[] = "POST_PERM_".$arFilter["GROUP_CHECK_PERMS"];
+					$arFields["POST_PERM_" . $groupId] = Array(
+						"FIELD" => "BUGP.PERMS",
+						"TYPE" => "string",
+						"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP
+								ON (P.BLOG_ID = BUGP.BLOG_ID
+									AND P.ID = BUGP.POST_ID
+									AND BUGP.USER_GROUP_ID = " . $groupId . "
+									AND BUGP.PERMS_TYPE = '" . BLOG_PERMS_POST . "')"
+					);
+					$arSelectFields[] = "POST_PERM_" . $groupId;
 				}
 			}
 			unset($arFilter["GROUP_CHECK_PERMS"]);

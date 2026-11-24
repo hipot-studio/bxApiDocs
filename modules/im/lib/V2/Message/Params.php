@@ -74,10 +74,16 @@ class Params extends Registry
 		STICKER_PARAMS = 'STICKER_PARAMS',
 		AI_ASSISTANT_MCP_AUTH_ID = 'AI_ASSISTANT_MCP_AUTH_ID',
 		COPILOT_REASONING = 'COPILOT_REASONING',
+		COPILOT_RESEARCH = 'COPILOT_RESEARCH',
 		COPILOT_AGENT_MODE = 'COPILOT_AGENT_MODE',
 		COPILOT_FORCE_SEARCH = 'COPILOT_FORCE_SEARCH',
 		COPILOT_PAGE_CONTEXT = 'COPILOT_PAGE_CONTEXT',
 		COPILOT_MCP_AUTH_ID = 'COPILOT_MCP_AUTH_ID',
+		COPILOT_ANALYTICS = 'COPILOT_ANALYTICS',
+		AI_REQUEST_TEMPLATE_ID = 'AI_REQUEST_TEMPLATE_ID',
+		AI_REQUEST_TEMPLATE_TYPE = 'AI_REQUEST_TEMPLATE_TYPE',
+		AI_REQUEST_TEMPLATE_VERSION = 'AI_REQUEST_TEMPLATE_VERSION',
+		AI_REQUEST_TEMPLATE_SECTION = 'AI_REQUEST_TEMPLATE_SECTION',
 		COPILOT_SIMPLE_REASONING_PLAN = 'COPILOT_SIMPLE_REASONING_PLAN',
 		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID',
 		AI_TASK_ID = 'AI_TASK_ID',
@@ -288,6 +294,11 @@ class Params extends Registry
 			'isHidden' => true,
 			'default' => false,
 		],
+		self::COPILOT_RESEARCH => [
+			'type' => Param::TYPE_BOOL,
+			'isHidden' => true,
+			'default' => false,
+		],
 		self::COPILOT_AGENT_MODE => [
 			'type' => Param::TYPE_BOOL,
 			'isHidden' => true,
@@ -301,6 +312,31 @@ class Params extends Registry
 		self::COPILOT_PAGE_CONTEXT => [
 			'className' => Message\Param\CopilotPageContext::class,
 			'type' => Param::TYPE_JSON,
+			'isHidden' => true,
+		],
+		// Labels of the mobile voice widget for the analytics of the request, see Analytics\VoiceWidgetLabels.
+		self::COPILOT_ANALYTICS => [
+			'className' => Message\Param\CopilotAnalytics::class,
+			'type' => Param::TYPE_JSON,
+			'isHidden' => true,
+		],
+		// The mark of the origin of the request: which record of the scenario library produced it and
+		// which section it was launched from. All four are for the assistant only, so they are hidden:
+		// isHidden keeps them out of both the REST output of the message and the push to the chat.
+		self::AI_REQUEST_TEMPLATE_ID => [
+			'type' => Param::TYPE_STRING,
+			'isHidden' => true,
+		],
+		self::AI_REQUEST_TEMPLATE_TYPE => [
+			'type' => Param::TYPE_STRING,
+			'isHidden' => true,
+		],
+		self::AI_REQUEST_TEMPLATE_VERSION => [
+			'type' => Param::TYPE_INT,
+			'isHidden' => true,
+		],
+		self::AI_REQUEST_TEMPLATE_SECTION => [
+			'type' => Param::TYPE_STRING,
 			'isHidden' => true,
 		],
 		self::COPILOT_MCP_AUTH_ID => [

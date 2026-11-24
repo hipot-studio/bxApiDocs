@@ -129,6 +129,10 @@ class BaseFileList extends Base
 	protected function withExternalLink(array $items): array
 	{
 		$controller = Main\Engine\ControllerBuilder::build(Disk\Controller\CommonActions::class, []);
+		if (!$controller instanceof Disk\Controller\CommonActions)
+		{
+			return $items;
+		}
 
 		$ids = $items ? array_column($items, 'id') : [];
 

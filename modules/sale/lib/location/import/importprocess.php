@@ -11,6 +11,7 @@ namespace Bitrix\Sale\Location\Import;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\IO;
 
@@ -92,6 +93,16 @@ final class ImportProcess extends Location\Util\Process
 				'SUBPERCENT_CALLBACK' => 'getSubpercentForStageDownloadFiles'
 			));
 
+			if ($options['REQUEST']['OPTIONS']['SOURCE'] === self::SOURCE_FILE)
+			{
+				$this->addStage(array(
+					'PERCENT' => 6,
+					'CODE' => 'CHECK_FILE_TYPES',
+					'CALLBACK' => 'stageCheckFileTypes',
+					'SUBPERCENT_CALLBACK' => 'getSubpercentForStageCheckFileTypes'
+				));
+			}
+
 			if($options['REQUEST']['OPTIONS']['DROP_ALL'])
 			{
 				$this->addStage(array(
@@ -165,11 +176,14 @@ final class ImportProcess extends Location\Util\Process
 			$options = [];
 		}
 		$options['ONLY_DELETE_ALL'] = (bool)($options['ONLY_DELETE_ALL'] ?? false);
-		$options['LANGUAGE_ID'] = trim((string)($options['LANGUAGE_ID'] ?? LANGUAGE_ID));
-		if ($options['LANGUAGE_ID'] === '')
+		$languageId = $options['LANGUAGE_ID'] ?? LANGUAGE_ID;
+		$languageId = is_string($languageId) ? trim($languageId) : '';
+		if (preg_match('/^[a-z]{2}$/D', $languageId) !== 1)
 		{
-			$options['LANGUAGE_ID'] = LANGUAGE_ID;
+			$portalLanguageId = is_string(LANGUAGE_ID) ? trim(LANGUAGE_ID) : '';
+			$languageId = preg_match('/^[a-z]{2}$/D', $portalLanguageId) === 1 ? $portalLanguageId : 'en';
 		}
+		$options['LANGUAGE_ID'] = $languageId;
 
 		$options['REQUEST'] ??= [];
 		if (is_object($options['REQUEST']) && method_exists($options['REQUEST'], 'toArray'))
@@ -422,6 +436,52 @@ final class ImportProcess extends Location\Util\Process
 		}
 
 		return round($pRange * ($currEp / count($this->data['settings']['bundles']['endpoints'])));
+	}
+
+	protected function stageCheckFileTypes()
+	{
+		$file = $this->data['LOCAL_PATH'].self::getFileNameByIndex(0);
+		if (!file_exists($file) || !is_readable($file))
+		{
+			throw new Main\SystemException('Cannot open file '.$file.' for reading');
+		}
+
+		$this->data['fileTypeCheck']['bytesRead'] ??= 0;
+		$this->data['current']['legacy'] ??= [];
+		$csv = new CSVReader();
+		$csv->LoadFile($file);
+
+		while ($this->checkQuota())
+		{
+			$block = $csv->ReadBlockLowLevel($this->data['fileTypeCheck']['bytesRead'], 100);
+			if ($csv->CheckFileIsLegacy())
+			{
+				$block = $this->convertBlock($block);
+			}
+			foreach ($block as $row)
+			{
+				if (isset($this->data['types']['allowed'][$row['TYPE_CODE'] ?? '']))
+				{
+					unset($this->data['fileTypeCheck']);
+					$this->nextStage();
+					return;
+				}
+			}
+
+			if (empty($block) || $this->data['fileTypeCheck']['bytesRead'] >= $this->data['files'][0]['size'])
+			{
+				$this->refuseFileImport('SALE_LOCATION_IMPORT_FILE_NO_MATCHING_TYPES');
+			}
+			$this->nextStep();
+		}
+	}
+
+	protected function getSubpercentForStageCheckFileTypes()
+	{
+		return $this->getSubPercentByTotalAndDone(
+			(int)$this->data['files'][0]['size'],
+			(int)($this->data['fileTypeCheck']['bytesRead'] ?? 0)
+		);
 	}
 
 	/////////////////////////////////////
@@ -1629,6 +1689,11 @@ final class ImportProcess extends Location\Util\Process
 		}
 		elseif($this->checkSource(self::SOURCE_FILE))
 		{
+			if (empty($existed))
+			{
+				$this->refuseFileImport('SALE_LOCATION_IMPORT_FILE_EMPTY_TYPES');
+			}
+
 			$codes = [];
 			if(!empty($existed) && is_array($existed))
 			{
@@ -1650,6 +1715,22 @@ final class ImportProcess extends Location\Util\Process
 
 		$this->data['types']['code2id'] = $existed;
 		$this->data['types_processed'] = true;
+	}
+
+	private function refuseFileImport(string $messageKey): void
+	{
+		$this->unLockProcess();
+
+		$messageLanguage = $this->getLanguageId();
+		Loc::loadLanguageFile(__FILE__, $messageLanguage);
+		$message = Loc::getMessage($messageKey, null, $messageLanguage);
+		if ($message === null)
+		{
+			Loc::loadLanguageFile(__FILE__, 'en');
+			$message = Loc::getMessage($messageKey, null, 'en');
+		}
+
+		throw new Main\SystemException($message);
 	}
 
 	protected function checkExternalServiceAllowed($code)

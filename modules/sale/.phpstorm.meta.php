@@ -15,6 +15,7 @@ namespace PHPSTORM_META
 		'sale.vatCalculator',
 		'sale.basketItemInputFactory',
 		'sale.priceRounder',
+		'sale.moduleAccess',
 	);
 
 	expectedArguments(\Bitrix\Main\DI\ServiceLocator::get(), 0, argumentsSet('bitrix_sale_serviceLocator_codes'));
@@ -32,5 +33,6 @@ namespace PHPSTORM_META
 		'sale.vatCalculator' => \Bitrix\Sale\Public\Service\VatCalculator::class,
 		'sale.basketItemInputFactory' => \Bitrix\Sale\Public\Factory\BasketItemInputFactory::class,
 		'sale.priceRounder' => \Bitrix\Sale\Public\Service\PriceRounder::class,
+		'sale.moduleAccess' => \Bitrix\Sale\Public\Service\ModuleAccess::class,
 	]));
 }

@@ -106,7 +106,7 @@ final class AllFolder extends SystemFolder
 			new SourceEntry(ChannelFolder::CODE, mandatory: false, inInitialConfig: true),
 			new SourceEntry(CollabFolder::CODE, mandatory: false, inInitialConfig: true),
 			new SourceEntry(MeetingRootFolder::CODE, mandatory: false, inInitialConfig: true),
-			new SourceEntry(VibecodeAppFolder::CODE, mandatory: false, inInitialConfig: false),
+			new SourceEntry(VibecodeAppFolder::CODE, mandatory: false, inInitialConfig: true),
 		];
 	}
 
@@ -150,6 +150,11 @@ final class AllFolder extends SystemFolder
 	public function getDefinition(): FolderDefinition
 	{
 		return new CompositeDefinition($this->sourceCodes ?? [], $this->getUserId());
+	}
+
+	public function canReadAll(): bool
+	{
+		return true;
 	}
 
 	/**

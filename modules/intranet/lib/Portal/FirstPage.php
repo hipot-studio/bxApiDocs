@@ -90,7 +90,7 @@ class FirstPage
 	private function getCacheUniqueId(): string
 	{
 		$cacheId = $this->getLegacyCacheUniqueId();
-		$effective = Manager::getEffectiveState(SITE_ID, (int)CurrentUser::get()->getId());
+		$effective = Manager::getMenuSettingsForUser(SITE_ID, (int)CurrentUser::get()->getId());
 		if ($effective === null)
 		{
 			return $cacheId;

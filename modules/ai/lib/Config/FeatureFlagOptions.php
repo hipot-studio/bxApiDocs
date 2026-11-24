@@ -39,6 +39,8 @@ final class FeatureFlagOptions
 		'bp_ai_processing_activity_disabled',
 		// Installation process marker.
 		'install_started',
+		// Irreversible monthly-pool cutover marker.
+		'~monthly_pool_activated',
 		// Debug logging modes.
 		'write_history_always',
 		'write_history_request',

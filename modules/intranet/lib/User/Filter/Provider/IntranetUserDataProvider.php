@@ -32,7 +32,6 @@ class IntranetUserDataProvider extends EntityDataProvider
 	private IntranetUserSettings $settings;
 	private UserQueryModifier $userQueryModifier;
 	private ?User $currentUser = null;
-	private ?UserOtpStatusService $otpStatusService = null;
 
 	public function __construct(IntranetUserSettings $settings)
 	{
@@ -591,27 +590,25 @@ class IntranetUserDataProvider extends EntityDataProvider
 
 	private function getOtpStatusService(): UserOtpStatusService
 	{
-		if ($this->otpStatusService === null)
-		{
-			$this->otpStatusService = new UserOtpStatusService();
-		}
-
-		return $this->otpStatusService;
+		return new UserOtpStatusService();
 	}
 
 	private function checkOtpStatusField(array &$filterValue): void
 	{
-		if (
-			empty($filterValue[IntranetUserSettings::OTP_STATUS_FIELD])
-			|| !$this->getSettings()->isFilterAvailable(IntranetUserSettings::OTP_STATUS_FIELD)
-		)
+		if (!$this->getSettings()->isFilterAvailable(IntranetUserSettings::OTP_STATUS_FIELD))
 		{
 			return;
 		}
 
-		$selectedStatuses = (array)$filterValue[IntranetUserSettings::OTP_STATUS_FIELD];
+		$selectedStatuses = $filterValue[IntranetUserSettings::OTP_STATUS_FIELD] ?? null;
 		unset($filterValue[IntranetUserSettings::OTP_STATUS_FIELD]);
 
+		if (empty($selectedStatuses))
+		{
+			return;
+		}
+
+		$selectedStatuses = (array)$selectedStatuses;
 		$otpSettings = new OtpSettings();
 		$mobilePush = MobilePush::createByDefault();
 		$otpUserProvider = new OtpUserProvider();
@@ -676,10 +673,24 @@ class IntranetUserDataProvider extends EntityDataProvider
 			$activeSubset = (new \Bitrix\Intranet\Repository\UserRepository())->getActiveConfirmedUserIds($needCheck);
 		}
 
-		$enableRequired = array_values(array_intersect(
+		$candidateIds = array_values(array_intersect(
 			array_diff($mandatory, $allActiveOtp),
 			$activeSubset,
 		));
+		$mandatoryExempted = [];
+		if (!empty($candidateIds))
+		{
+			$service = new UserOtpStatusService($otpSettings, $mobilePush, $otpUserProvider);
+			$statuses = $service->getStatusesByUserIds($candidateIds);
+			foreach ($statuses as $userId => $statusInfo)
+			{
+				if ($statusInfo->status === UserOtpStatus::MandatoryExempted)
+				{
+					$mandatoryExempted[] = $userId;
+				}
+			}
+		}
+		$enableRequired = array_values(array_diff($candidateIds, $mandatoryExempted));
 
 		$updateRequired = [];
 		if ($isMandatoryPush)
@@ -703,6 +714,7 @@ class IntranetUserDataProvider extends EntityDataProvider
 			UserOtpStatus::UpdateRequired->value => $updateRequired,
 			UserOtpStatus::UpdateRecommended->value => $updateRecommended,
 			UserOtpStatus::EnableRequired->value => $enableRequired,
+			UserOtpStatus::MandatoryExempted->value => $mandatoryExempted,
 		];
 	}
 
@@ -736,7 +748,8 @@ class IntranetUserDataProvider extends EntityDataProvider
 			$statusSets[UserOtpStatus::UpdateRecommended->value] ?? [],
 		);
 		$enableRequired = $statusSets[UserOtpStatus::EnableRequired->value] ?? [];
-		$disabledExclude = array_unique(array_merge($allActiveOtp, $enableRequired));
+		$mandatoryExempted = $statusSets[UserOtpStatus::MandatoryExempted->value] ?? [];
+		$disabledExclude = array_unique(array_merge($allActiveOtp, $enableRequired, $mandatoryExempted));
 
 		if (!empty($includeIds) && $hasDisabled)
 		{

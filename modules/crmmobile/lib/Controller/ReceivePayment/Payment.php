@@ -3,13 +3,13 @@
 namespace Bitrix\CrmMobile\Controller\ReceivePayment;
 
 use Bitrix\Crm\Binding\EntityBinding;
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Container;
 use Bitrix\CrmMobile\Controller\Salescenter\Product2BasketItemConverter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Result;
 use Bitrix\Sale\Label\Label;
 use Bitrix\Salescenter\Analytics\Dictionary\SubSectionDictionary;
 use Bitrix\SalesCenter\Controller\Order;
@@ -21,20 +21,25 @@ class Payment extends Base
 {
 	public function createPaymentAction(array $options): bool
 	{
-		$entity = Container::getInstance()->getFactory((int)$options['ownerTypeId'])->getItem((int)$options['ownerId']);
-
-		if (isset($options['selectedContact']))
+		$factory = Container::getInstance()->getFactory((int)$options['ownerTypeId']);
+		if (!$factory)
 		{
-			$bindContactResult = $this->bindContactToEntity($options['selectedContact']['id'], $entity);
-			if (!$bindContactResult->isSuccess())
-			{
-				$this->errorCollection->clear();
-				$errors = [
-					new Error(Loc::getMessage('RECEIVE_PAYMENT_SAVE_CONTACT_ERROR')),
-				];
-				$errors = $this->markErrorsAsPublic($errors);
-				$this->addErrors($errors);
-			}
+			$this->addErrors($this->markErrorsAsPublic([ErrorCode::getEntityTypeNotSupportedError()]));
+
+			return false;
+		}
+
+		$entity = $factory->getItem((int)$options['ownerId']);
+		if (!$entity)
+		{
+			$this->addErrors($this->markErrorsAsPublic([ErrorCode::getOwnerNotFoundError()]));
+
+			return false;
+		}
+
+		if (!$this->bindSelectedContactIfAllowed($options, $entity))
+		{
+			return false;
 		}
 
 		$products = Product2BasketItemConverter::convert($options['products']);
@@ -64,13 +69,38 @@ class Payment extends Base
 		return true;
 	}
 
-	private function bindContactToEntity(int $contactId, Item $entity): Result
+	private function bindSelectedContactIfAllowed(array $options, Item $entity): bool
 	{
-		$contactBinding = EntityBinding::prepareEntityBindings(\CCrmOwnerType::Contact, [$contactId]);
+		if (!isset($options['selectedContact']))
+		{
+			return true;
+		}
+
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdateItem($entity))
+		{
+			$this->addErrors($this->markErrorsAsPublic([ErrorCode::getAccessDeniedError()]));
+
+			return false;
+		}
+
+		$contactBinding = EntityBinding::prepareEntityBindings(
+			\CCrmOwnerType::Contact,
+			[(int)$options['selectedContact']['id']],
+		);
 		EntityBinding::markFirstAsPrimary($contactBinding);
 		$entity->bindContacts($contactBinding);
 
-		return $entity->save();
+		if (!$entity->save()->isSuccess())
+		{
+			$this->errorCollection->clear();
+			$errors = [
+				new Error(Loc::getMessage('RECEIVE_PAYMENT_SAVE_CONTACT_ERROR')),
+			];
+			$errors = $this->markErrorsAsPublic($errors);
+			$this->addErrors($errors);
+		}
+
+		return true;
 	}
 
 	public function resendMessageAction(array $options): bool
@@ -87,18 +117,9 @@ class Payment extends Base
 			return false;
 		}
 
-		if (isset($options['selectedContact']))
+		if (!$this->bindSelectedContactIfAllowed($options, $entity))
 		{
-			$bindContactResult = $this->bindContactToEntity($options['selectedContact']['id'], $entity);
-			if (!$bindContactResult->isSuccess())
-			{
-				$this->errorCollection->clear();
-				$errors = [
-					new Error(Loc::getMessage('RECEIVE_PAYMENT_SAVE_CONTACT_ERROR')),
-				];
-				$errors = $this->markErrorsAsPublic($errors);
-				$this->addErrors($errors);
-			}
+			return false;
 		}
 
 		$orderId = CrmManager::getOrderIdByEntity($entity);

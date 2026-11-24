@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\Dialog;
 use Bitrix\Im\Recent;
+use Bitrix\Im\V2\Chat\Archive\ArchiveService;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Folder\Pin\PinService;
@@ -258,7 +259,7 @@ class Chat extends BaseController
 			],
 			'extendPullWatch' => [
 				'+prefilters' => [
-					new ChatTypeFilter([OpenChat::class, OpenLineChat::class, ChannelChat::class, OpenCollabChat::class]),
+					new Filter\ExtendPullWatchTypeFilter(),
 				],
 			],
 			'pin' => [
@@ -674,10 +675,8 @@ class Chat extends BaseController
 	 */
 	public function extendPullWatchAction(\Bitrix\Im\V2\Chat $chat): ?array
 	{
-		if ($chat instanceof OpenChat || $chat instanceof OpenLineChat || $chat instanceof ChannelChat)
-		{
-			$chat->extendPullWatch();
-		}
+		// no second condition on purpose: the admissible set is decided once, by the prefilter
+		$chat->extendPullWatch();
 
 		return ['result' => true];
 	}

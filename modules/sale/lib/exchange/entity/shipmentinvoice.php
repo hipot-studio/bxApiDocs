@@ -65,7 +65,7 @@ class ShipmentInvoice extends ShipmentImport
 	 */
 	protected function getBasketItemByItem(BasketBase $basket, array $item)
 	{
-		return Invoice::getBasketItemByItem($basket, $item);
+		return Invoice::getBasketItemFromList($this->getBasketCandidatesForItem($item), $item);
 	}
 
 	/**

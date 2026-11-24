@@ -35,8 +35,14 @@ class Params extends Registry
 		USER_DELETE_MESSAGE_DISABLED = 'USER_DELETE_MESSAGE_DISABLED',
 		COPILOT_TITLE_IS_CUSTOM = 'COPILOT_TITLE_IS_CUSTOM',
 		IS_COPILOT_DRAFT = 'IS_COPILOT_DRAFT',
+		THREADS_ENABLED = 'THREADS_ENABLED',
+		MANAGE_THREAD_CREATE = 'MANAGE_THREAD_CREATE',
+		MANAGE_THREAD_POST = 'MANAGE_THREAD_POST',
+		FIRST_REPLY_COUNTED = 'FIRST_REPLY_COUNTED',
 		HISTORY_START_ID = 'HISTORY_START_ID',
-		SELF_HISTORY_START_ID = 'SELF_HISTORY_START_ID'
+		SELF_HISTORY_START_ID = 'SELF_HISTORY_START_ID',
+		// The chat was created by the mobile voice widget: the analytics of the chat carries its origin.
+		COPILOT_ORIGIN = 'COPILOT_ORIGIN'
 	;
 
 	public const CHAT_PARAMS = [
@@ -54,13 +60,21 @@ class Params extends Registry
 		self::USER_DELETE_MESSAGE_DISABLED,
 		self::COPILOT_TITLE_IS_CUSTOM,
 		self::IS_COPILOT_DRAFT,
+		self::THREADS_ENABLED,
+		self::MANAGE_THREAD_CREATE,
+		self::MANAGE_THREAD_POST,
+		self::FIRST_REPLY_COUNTED,
 		self::HISTORY_START_ID,
 		self::SELF_HISTORY_START_ID,
+		self::COPILOT_ORIGIN,
 	];
 
 	protected int $chatId;
 	protected string $paramName = '';
 	protected bool $isCreated = false;
+	// Свойство и раньше заводилось на лету в load()/unload(); с PHP 8.2 это депрекация, и она писалась в php-лог
+	// по записи на каждый вызов — 2,5 тысячи за ночной проход 22.09.2026.
+	protected bool $isLoaded = false;
 	protected array $droppedItems = [];
 	protected static ?array $eventParams = null;
 
@@ -99,7 +113,9 @@ class Params extends Registry
 			self::IS_COPILOT,
 			self::USER_DELETE_MESSAGE_DISABLED,
 			self::COPILOT_TITLE_IS_CUSTOM,
-			self::IS_COPILOT_DRAFT => (new Param())->setType(Param::TYPE_BOOL),
+			self::IS_COPILOT_DRAFT,
+			self::THREADS_ENABLED,
+			self::FIRST_REPLY_COUNTED => (new Param())->setType(Param::TYPE_BOOL),
 			self::HISTORY_START_ID,
 			self::SELF_HISTORY_START_ID => (new Param())->setType(Param::TYPE_INT),
 			default => (new Param())->setType(Param::TYPE_STRING),
@@ -349,7 +365,7 @@ class Params extends Registry
 		$entityCollectionClass = Param::getDataClass()::getCollectionClass();
 		$dataEntityCollection = new $entityCollectionClass;
 
-		$dropIds = [];
+		$dropNames = [];
 
 		$itemKeyToUnset = [];
 		foreach ($this as $item)
@@ -396,11 +412,19 @@ class Params extends Registry
 		{
 			if ($item instanceof Param)
 			{
-				if ($item->getPrimaryId())
-				{
-					$dropIds[] = $item->getPrimaryId();
-				}
+				$dropNames[] = $item->getName();
 			}
+		}
+		$dropIds = [];
+		if ($dropNames !== [])
+		{
+			$dropIds = ChatParamTable::query()
+				->setSelect(['ID'])
+				->where('CHAT_ID', $this->chatId)
+				->whereIn('PARAM_NAME', $dropNames)
+				->fetchCollection()
+				->getIdList()
+			;
 		}
 
 		$saveResult = $dataEntityCollection->save(true);
@@ -616,7 +640,7 @@ class Params extends Registry
 
 		if (!$withSave)
 		{
-			$this->getParams()->offsetUnset($paramName);
+			$this->offsetUnset($paramName);
 		}
 		elseif ($this->getChatId())
 		{

@@ -18,7 +18,12 @@ class Base extends Controller
 		];
 	}
 
-	protected function trackedToItem($trackedItem): array
+	protected function getCurrentUserId(): int
+	{
+		return (int)$this->getCurrentUser()?->getId();
+	}
+
+	protected function trackedToItem(array $trackedItem): array
 	{
 		$trackedObject = $trackedItem['trackedObject'];
 

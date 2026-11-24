@@ -9,7 +9,9 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientFactory;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientInterface;
+use Bitrix\Disk\Document\Vibeoffice\Models\PlatformSessionTable;
 use Bitrix\Disk\Driver;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
@@ -28,7 +30,7 @@ use Closure;
  *
  * The protocol has no close-session command. After a confirmed save, the drain revokes grants
  * of all local participants for the document key and then finalizes its local sessions together.
- * Participant revoke progress is persisted so a later agent run resumes after the last attempted user.
+ * Revoke progress is persisted so a later agent run resumes from the last completed participant page.
  */
 final class DrainService
 {
@@ -36,6 +38,8 @@ final class DrainService
 	private const AGENT_NAME = self::class . '::drainAgent();';
 	private const CURSOR_OPTION = 'vibeoffice_drain_last_session_id';
 	private const PARTICIPANT_PROGRESS_OPTION = 'vibeoffice_drain_participant_progress';
+	private const SHARED_REVOKE_CURSOR_OPTION = 'vibeoffice_drain_shared_revoke_cursor';
+	private const SHARED_REVOKE_PAGE_SIZE = 100;
 	/** No active vibeoffice session has an ID at or below this bound; rows above it are not checked yet. */
 	private const FLOOR_OPTION = 'vibeoffice_drain_floor_session_id';
 	private const CONFIGURATION_FAILURES_OPTION = 'vibeoffice_drain_config_failures';
@@ -99,11 +103,13 @@ final class DrainService
 	 *
 	 * The drain is a rollback-only procedure whose first step is {@see Configuration::disableOnPortal()},
 	 * so it must NEVER run while vibeoffice is live on the portal. There is no admin call site
-	 * that runs {@see self::drain()}; disabling vibeoffice is a plain option flip. Without
+	 * that runs {@see self::drain()}; disabling vibeoffice is a switch of the feature registry. Without
 	 * this agent a manual roll-back would leave the already-open sessions to lose their final
 	 * `document.saved`. This agent reconciles that state: once the portal flag is already
 	 * off, it finishes draining the sessions that are still active. It is a no-op while the flag
-	 * is on (normal operation).
+	 * is on (normal operation). The agent skips the disable step of {@see self::drain()}: whatever
+	 * turned the flag off (a rule, a requirement or the stored value), that decision of the
+	 * registry stays as it is. A run that leaves sessions undrained is logged and retried.
 	 *
 	 * Lazy lifecycle: the agent is (re)installed on demand by {@see self::register()} from the
 	 * successful open's background job, so it exists only on portals that actually used vibeoffice. When the
@@ -139,12 +145,13 @@ final class DrainService
 
 		// Flag already off and nothing left to drain: the portal is idle. Self-unregister before
 		// constructing a protocol client, which can fail on an unconfigured portal.
-		if (!$hasActiveSessions)
+		if (!$hasActiveSessions && !self::hasPendingSharedRevokes())
 		{
 			foreach (
 				[
 					self::CURSOR_OPTION,
 					self::PARTICIPANT_PROGRESS_OPTION,
+					self::SHARED_REVOKE_CURSOR_OPTION,
 					self::FLOOR_OPTION,
 					self::CONFIGURATION_FAILURES_OPTION,
 				] as $name
@@ -158,7 +165,11 @@ final class DrainService
 
 		try
 		{
-			(new self(null, $configuration))->drain();
+			$result = (new self(null, $configuration))->drainActiveSessions();
+			if (!$result->isSuccess())
+			{
+				self::logUndrainedRun($result);
+			}
 			if (Option::get(Driver::INTERNAL_MODULE_ID, self::CONFIGURATION_FAILURES_OPTION, '') !== '')
 			{
 				Option::delete(Driver::INTERNAL_MODULE_ID, ['name' => self::CONFIGURATION_FAILURES_OPTION]);
@@ -171,7 +182,7 @@ final class DrainService
 			// until the bounded number of failures in a row is reached.
 			$failures = (int)Option::get(Driver::INTERNAL_MODULE_ID, self::CONFIGURATION_FAILURES_OPTION, 0) + 1;
 			Option::set(Driver::INTERNAL_MODULE_ID, self::CONFIGURATION_FAILURES_OPTION, (string)$failures);
-			if ($failures >= self::MAX_CONFIGURATION_FAILURES)
+			if ($hasActiveSessions && $failures >= self::MAX_CONFIGURATION_FAILURES)
 			{
 				self::abandonActiveSessions();
 			}
@@ -249,6 +260,25 @@ final class DrainService
 		return $closed;
 	}
 
+	private static function logUndrainedRun(Result $result): void
+	{
+		$codes = array_unique(array_map(
+			static fn (Error $error): string => (string)$error->getCode(),
+			$result->getErrors(),
+		));
+
+		(new LoggerFactory())
+			->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false)
+			?->warning(
+				'Vibeoffice drain: {errors} errors ({codes}), the active sessions are retried on the next run.',
+				[
+					'errors' => count($result->getErrors()),
+					'codes' => implode(', ', $codes),
+				],
+			)
+		;
+	}
+
 	/**
 	 * Whether any vibeoffice session is still active, to avoid building a protocol client (and
 	 * re-running the drain) when there is nothing to do.
@@ -315,15 +345,36 @@ final class DrainService
 	 * Runs the full drain. Returns a {@see Result} aggregating any per-session errors
 	 * (the drain is best-effort across sessions: a failure on one session does not abort
 	 * the rest, but every unsaved-edit loss is surfaced as an error).
+	 *
+	 * A refused disable ends the drain before any session is touched: while the registry keeps vibeoffice
+	 * on, new opens still route to it, so the sessions are not the last ones yet.
 	 */
 	public function drain(): Result
 	{
+		// Step 1: stop routing new opens to vibeoffice.
+		try
+		{
+			$this->configuration->disableOnPortal();
+		}
+		catch (ConfigurationException $exception)
+		{
+			return (new Result())->addError(
+				new Error($exception->getMessage(), 'vibeoffice_feature_change_failed'),
+			);
+		}
+
+		return $this->drainActiveSessions();
+	}
+
+	/**
+	 * The drain of the sessions themselves, after the flag is off; the agent starts here.
+	 */
+	private function drainActiveSessions(): Result
+	{
 		$result = new Result();
 		$startedAt = ($this->clock)();
-
-		// Step 1: stop routing new opens to vibeoffice.
-		$this->configuration->disableOnPortal();
 		$this->pruneParticipantProgress();
+		$this->drainPendingSharedRevokes($result, $startedAt);
 
 		// Step 2: drain primary-key pages within the run budget without starting new work past it.
 		// No active session lies at or below the floor, so the cursor never goes under it.
@@ -387,8 +438,70 @@ final class DrainService
 		{
 			$this->saveCursor($lastSessionId);
 		}
+		if (self::hasPendingSharedRevokes())
+		{
+			$result->addError(new Error('Vibeoffice drain: shared grant revocation is pending.', 'drain_revoke_pending'));
+		}
 
 		return $result;
+	}
+
+	/** The revoke-state index answers completion independently of the local session status and floor. */
+	private static function hasPendingSharedRevokes(): bool
+	{
+		if (!SharedEditingUsage::hasBeenUsed() || !SharedEditingSchema::hasColumns()) { return false; }
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			return (bool)PlatformSessionTable::query()->setSelect(['ID'])
+				->where('ACCESS_REVOKE_STATE', 1)->setLimit(1)->fetch();
+		}
+		finally { $pool->useMasterOnly(false); }
+	}
+
+	/** A fixed primary-key page keeps retries fair even when an earlier subject never acknowledges. */
+	private function drainPendingSharedRevokes(Result $result, float $startedAt): void
+	{
+		if (!$this->hasTimeBudget($startedAt) || !self::hasPendingSharedRevokes()) { return; }
+		$cursor = max(0, (int)Option::get('disk', self::SHARED_REVOKE_CURSOR_OPTION, '0'));
+		$query = PlatformSessionTable::query()->setSelect(SharedEditingSchema::sessionFields())
+			->setOrder(['ID' => 'ASC'])->setLimit(self::SHARED_REVOKE_PAGE_SIZE);
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			$rows = (clone $query)->where('ID', '>', $cursor)->fetchAll();
+			if (!$rows && $cursor > 0)
+			{
+				$cursor = 0;
+				$rows = (clone $query)->where('ID', '>', 0)->fetchAll();
+			}
+		}
+		finally { $pool->useMasterOnly(false); }
+		$visited = [];
+		foreach ($rows as $row)
+		{
+			if (!$this->hasTimeBudget($startedAt)) { break; }
+			$cursor = (int)$row['ID'];
+			if ((int)$row['ACCESS_REVOKE_STATE'] !== 1) { continue; }
+			$session = DocumentSession::loadById((int)$row['DOCUMENT_SESSION_ID']);
+			if ($session && SharedSessionScope::matchesBinding($session, $row))
+			{
+				if (isset($visited[$row['HOST_DOC_KEY']])) { continue; }
+				$visited[$row['HOST_DOC_KEY']] = true;
+				// Inactive API carriers still own unsaved content: retain the normal save-before-revoke path.
+				$this->drainSession($session, $result, $startedAt);
+			}
+			else
+			{
+				// Missing or unknown receipts cannot confirm a revoke; the final debt probe keeps the drain open.
+				$deadline = hrtime(true) / 1e9 + max(0, self::RUN_TIME_BUDGET_SECONDS - (($this->clock)() - $startedAt));
+				$retry = (new AccessRevocation(protocolClient: $this->protocolClient))->processBinding($cursor, $deadline);
+				$result->addErrors($retry->getErrors());
+			}
+		}
+		Option::set('disk', self::SHARED_REVOKE_CURSOR_OPTION, (string)$cursor);
 	}
 
 	private function hasTimeBudget(float $startedAt): bool
@@ -413,6 +526,14 @@ final class DrainService
 		$keysToRevoke = [];
 		foreach (array_keys($sessionsByKey) as $docKey)
 		{
+			$repository = new DocumentStateRepository($this->configuration);
+			$state = $repository->getByKey($docKey);
+			if ($state && SharedSessionScope::version($state) === 1 && !$repository->isInCurrentNamespace($state))
+			{
+				$result->addError(new Error('Vibeoffice drain: the shared room belongs to a previous platform.',
+					'vibeoffice_namespace_changed'));
+				return false;
+			}
 			if (!$this->hasTimeBudget($startedAt))
 			{
 				$result->addError(new Error('Vibeoffice drain: run budget exhausted.', 'drain_budget_exhausted'));
@@ -426,7 +547,8 @@ final class DrainService
 				$result->addErrors($saveResult->getErrors());
 				$saved = false;
 			}
-			elseif ($saveResult->getData()['requiresRevoke'])
+			elseif ($saveResult->getData()['requiresRevoke']
+				|| SharedSessionScope::version((new DocumentStateRepository())->getByKey($docKey) ?? []) === 1)
 			{
 				$keysToRevoke[] = $docKey;
 			}
@@ -496,8 +618,8 @@ final class DrainService
 
 	/**
 	 * Revokes the grants of every participant of the document key. Participants are the
-	 * distinct user ids of the scope, including registered sessions with another local hash. Best-effort:
-	 * a failed revoke is non-fatal (the platform still closes the session on deactivation).
+	 * distinct subjects of the scope, including registered sessions with another local hash.
+	 * Shared grants require confirmation; legacy grants remain best-effort on deactivation.
 	 *
 	 * Progress is written once per document instead of once per participant: an option write
 	 * drops the whole option cache of the module.
@@ -509,6 +631,12 @@ final class DrainService
 		float $startedAt,
 	): bool
 	{
+		$repository = new DocumentStateRepository();
+		$scope = SharedSessionScope::version($repository->getByKey($docKey) ?? []);
+		if ($scope !== 0)
+		{
+			return $scope === 1 && $this->revokeSharedGrants($repository, $documentHash, $docKey, $startedAt);
+		}
 		$processedUserIds = array_fill_keys($this->getParticipantProgress($documentHash, $docKey), true);
 		$userIds = $this->getParticipantUserIds($docKey, $participants);
 		$revoked = false;
@@ -540,6 +668,99 @@ final class DrainService
 		}
 
 		return true;
+	}
+
+	/** Shared subjects include anonymous visitors; only the exact acknowledged revoke ends their grant. */
+	private function revokeSharedGrants(
+		DocumentStateRepository $repository,
+		string $documentHash,
+		string $docKey,
+		float $startedAt,
+	): bool
+	{
+		// A separate scope cannot interpret a previous version's numeric user IDs as registry progress.
+		$progressKey = $docKey . ':shared-revoke';
+		$cursor = $initialCursor = max(0, (int)($this->getParticipantProgress($documentHash, $progressKey)[0] ?? 0));
+		$revocation = new AccessRevocation($repository, $this->protocolClient);
+		try
+		{
+			do
+			{
+				if (!$this->hasTimeBudget($startedAt)) { return false; }
+				$deadline = hrtime(true) / 1e9 + max(0, self::RUN_TIME_BUDGET_SECONDS - (($this->clock)() - $startedAt));
+				$prepared = $repository->withLockedDocument($docKey, function (array $state) use ($repository, $cursor): Result {
+					if (SharedSessionScope::version($state) !== 1)
+					{
+						return (new Result())->addError(new Error('Unknown shared revoke scope.', 'drain_revoke_pending'));
+					}
+					$rows = DocumentStateRepository::fetchAllForUpdate(PlatformSessionTable::query()
+						->setSelect(SharedEditingSchema::sessionFields())->where('HOST_DOC_KEY', $state['HOST_DOC_KEY'])
+						->where('ID', '>', $cursor)->setOrder(['ID' => 'ASC'])->setLimit(100));
+					$sessionIds = array_values(array_unique(array_filter(
+						array_map(static fn(array $row): int => (int)($row['DOCUMENT_SESSION_ID'] ?? 0), $rows),
+						static fn(int $id): bool => $id > 0,
+					)));
+					if ($sessionIds !== [])
+					{
+						sort($sessionIds, SORT_NUMERIC);
+						$localRows = DocumentStateRepository::fetchAllForUpdate(DocumentSessionTable::query()
+							->setSelect(['ID', 'CONTEXT'])->whereIn('ID', $sessionIds)->setOrder(['ID' => 'ASC']));
+						foreach ($localRows as $localRow)
+						{
+							$localSession = DocumentSession::buildFromArray($localRow);
+							if (!DocumentSessionManager::hasAbandonedSavePending($localSession))
+							{
+								continue;
+							}
+							$clearedContext = DocumentSessionManager::withAbandonedSavePending(
+								is_string($localRow['CONTEXT'] ?? null) ? $localRow['CONTEXT'] : null,
+								false,
+							);
+							if ($clearedContext === null)
+							{
+								return (new Result())->addError(new Error('Could not clear abandoned save debt.', 'drain_revoke_pending'));
+							}
+							$cleared = DocumentSessionTable::update((int)$localRow['ID'], ['CONTEXT' => $clearedContext]);
+							if (!$cleared->isSuccess())
+							{
+								return (new Result())->addErrors($cleared->getErrors());
+							}
+						}
+					}
+					$registry = new SessionRegistry($repository);
+					$ids = [];
+					foreach ($rows as $row)
+					{
+						if ((int)$row['ACCESS_REVOKE_STATE'] === 2
+							&& in_array($row['STATUS'], [PlatformSessionTable::STATUS_TERMINATED, PlatformSessionTable::STATUS_REFUSED], true))
+						{
+							continue;
+						}
+						$result = $registry->markRevokeLocked($row);
+						if (!$result->isSuccess()) { return $result; }
+						if ($result->getData()['pending']) { $ids[] = (int)$row['ID']; }
+					}
+					return (new Result())->setData(['ids' => $ids, 'count' => count($rows),
+						'lastId' => $rows ? (int)end($rows)['ID'] : $cursor]);
+				}, deadline: $deadline);
+				if (!$prepared->isSuccess()) { return false; }
+				$confirmed = true;
+				foreach ($prepared->getData()['ids'] as $id)
+				{
+					if (!$this->hasTimeBudget($startedAt)) { return false; }
+					$result = $revocation->processBinding($id, $deadline);
+					$confirmed = $confirmed && $result->isSuccess() && ($result->getData()['confirmed'] ?? false);
+				}
+				if (!$confirmed) { return false; }
+				$cursor = $prepared->getData()['lastId'];
+			}
+			while ($prepared->getData()['count'] === 100);
+			return true;
+		}
+		finally
+		{
+			if ($cursor !== $initialCursor) { $this->saveParticipantProgress($documentHash, $progressKey, [$cursor]); }
+		}
 	}
 
 	/** @param DocumentSession[] $participants */
@@ -717,6 +938,13 @@ final class DrainService
 		}
 
 		$activeHashes = [];
+		foreach ($progress as $hash => $scopes)
+		{
+			foreach (array_keys($this->getDocumentProgress($progress, $hash)) as $key)
+			{
+				if (str_ends_with($key, ':shared-revoke')) { $activeHashes[$hash] = true; }
+			}
+		}
 		foreach (array_chunk(array_keys($progress), 100) as $hashes)
 		{
 			$rows = DocumentSessionTable::query()
@@ -770,13 +998,47 @@ final class DrainService
 	 */
 	private function getSessionsByHash(string $externalHash): array
 	{
-		return DocumentSession::getModelList([
-			'select' => ['ID', 'USER_ID', 'EXTERNAL_HASH', 'CONTEXT'],
+		$sessions = DocumentSession::getModelList([
+			'select' => ['*'],
 			'filter' => [
 				'=EXTERNAL_HASH' => $externalHash,
 				'=SERVICE' => DocumentService::Vibeoffice->value,
 			],
 			'order' => ['ID' => 'ASC'],
 		]);
+		$selected = $seen = [];
+		foreach ($sessions as $session)
+		{
+			$key = HostDocumentKey::resolve($session);
+			if (isset($seen[$key]))
+			{
+				continue;
+			}
+			$seen[$key] = true;
+			$state = (new DocumentStateRepository())->getByKey($key);
+			if ($state && SharedSessionScope::version($state) !== 0)
+			{
+				if (SharedSessionScope::version($state) === 1)
+				{
+					$resolver = new Webhook\WebhookScopeResolver();
+					foreach ($resolver->iterateSessions($key, $state) as $member)
+					{
+						$selected[(int)$member->getId()] = $member;
+					}
+				}
+			}
+			else
+			{
+				foreach ($sessions as $member)
+				{
+					if (HostDocumentKey::resolve($member) === $key)
+					{
+						$selected[(int)$member->getId()] = $member;
+					}
+				}
+			}
+		}
+
+		return array_values($selected);
 	}
 }

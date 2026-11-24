@@ -307,10 +307,10 @@ class CashboxOrangeData
 	protected function buildPositionAgentInfo(): array
 	{
 		/**
-		 * tag 1222, 6 - another agent
+		 * tag 1222 is a 7-bit mask where only one bit may be set, 64 - another agent
 		 */
 		return [
-			'agentType' => 6,
+			'agentType' => 64,
 		];
 	}
 

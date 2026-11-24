@@ -4,15 +4,20 @@
 namespace Bitrix\Sale\Controller;
 
 
+use Bitrix\Crm;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\RandomSequence;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Sale\Helpers\Order\Builder\BuildingException;
 use Bitrix\Sale\PaySystem\Manager;
 use Bitrix\Sale\Registry;
 use Bitrix\Sale;
+use Bitrix\Sale\Controller\Access\OrderDeleteAccess;
 use Bitrix\Sale\Rest\Synchronization\Loader\Factory;
 use Bitrix\Sale\Rest\Synchronization\LoggerDiag;
 use Bitrix\Sale\Result;
@@ -38,6 +43,13 @@ class Order extends Controller
 					$order = $orderClass::load($id);
 					if ($order instanceof Sale\OrderBase)
 					{
+						if (!$this->canViewOrder($order))
+						{
+							$this->addError(new Error('Access Denied', 200040300010));
+
+							return null;
+						}
+
 						return $order;
 					}
 				}
@@ -47,6 +59,47 @@ class Order extends Controller
 				return null;
 			}
 		);
+	}
+
+	private function canViewOrder(Sale\OrderBase $order): bool
+	{
+		$userId = (int)$this->getCurrentUser()?->getId();
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		// CRM orders are protected by CRM permissions; sale status permissions are usually not configured there.
+		if (ModuleManager::isModuleInstalled('crm'))
+		{
+			return Loader::includeModule('crm') && $this->canReadCrmOrder($userId, $order);
+		}
+
+		$registry = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
+
+		/** @var Sale\OrderStatus $orderStatusClass */
+		$orderStatusClass = $registry->getOrderStatusClassName();
+		$allowedStatuses = $orderStatusClass::getStatusesUserCanDoOperations($userId, ['view']);
+
+		return in_array((string)$order->getField('STATUS_ID'), array_map('strval', $allowedStatuses), true);
+	}
+
+	private function canReadCrmOrder(int $userId, Sale\OrderBase $order): bool
+	{
+		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions($userId);
+		if (\CCrmSaleHelper::isWithOrdersMode())
+		{
+			return $userPermissions->item()->canRead(\CCrmOwnerType::Order, (int)$order->getId());
+		}
+
+		// Without orders mode CRM grants access to an order through its bound entity, as for payments and shipments.
+		$binding = $order instanceof Crm\Order\Order ? $order->getEntityBinding() : null;
+		if ($binding === null)
+		{
+			return $userPermissions->entityType()->canReadItems(\CCrmOwnerType::Deal);
+		}
+
+		return $userPermissions->item()->canRead($binding->getOwnerTypeId(), $binding->getOwnerId());
 	}
 
 	//region Actions
@@ -294,6 +347,14 @@ class Order extends Controller
 
 	public function deleteAction(\Bitrix\Sale\Order $order)
 	{
+		$accessResult = $this->checkOrderDeleteAccess($order);
+		if (!$accessResult->isSuccess())
+		{
+			$this->addErrors($accessResult->getErrors());
+
+			return null;
+		}
+
 		$r = $order->delete($order->getId());
 		if($r->isSuccess())
 			$r = $order->save();
@@ -311,6 +372,30 @@ class Order extends Controller
 		}
 
 		return true;
+	}
+
+	private function checkOrderDeleteAccess(Sale\OrderBase $order): Result
+	{
+		$result = $this->checkDeletePermissionEntity();
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		if (!$this->createOrderDeleteAccess()->canDelete($order))
+		{
+			$result->addError(new Error('Access Denied', 200040300020));
+		}
+
+		return $result;
+	}
+
+	protected function createOrderDeleteAccess(): OrderDeleteAccess
+	{
+		return new OrderDeleteAccess(
+			$this->isCrmModuleInstalled() && Loader::includeModule('crm'),
+			(int)CurrentUser::get()->getId()
+		);
 	}
 
 	public function getDeliveryIdListAction(\Bitrix\Sale\Order $order)

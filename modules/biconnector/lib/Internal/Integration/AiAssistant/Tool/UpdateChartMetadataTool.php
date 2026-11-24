@@ -148,7 +148,7 @@ final class UpdateChartMetadataTool extends BaseBiTool
 		{
 			throw new McpException(
 				'Nothing to update. Provide at least one of `name` or `description`. '
-				. 'To modify the chart configuration use `replace_chart_config` instead.'
+				. 'To modify the chart configuration use `replace_chart_config` instead.',
 			);
 		}
 
@@ -182,7 +182,7 @@ final class UpdateChartMetadataTool extends BaseBiTool
 		}
 
 		$chartData = $lookup->getData()['entity'];
-		if (!is_array($chartData['dashboards'] ?? []))
+		if (!is_array($chartData['dashboards'] ?? null))
 		{
 			throw self::unavailableBiException([], ['stage' => 'chart_lookup.dashboards', 'chart_id' => $chartId]);
 		}
@@ -192,6 +192,7 @@ final class UpdateChartMetadataTool extends BaseBiTool
 		$this->assertChartEditableByDashboards(
 			$userId,
 			$chartData['dashboards'] ?? [],
+			is_array($chartData['owners'] ?? null) ? $chartData['owners'] : [],
 		);
 
 		$confirm = ($args['confirm'] ?? false) === true;

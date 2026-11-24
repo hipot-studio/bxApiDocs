@@ -32,6 +32,12 @@ interface Folder extends AccessCheckable, RestEntity, ActiveRecord
 	public function displaysNestedInRoot(): bool;
 
 	/**
+	 * Whether the user may read all chats of the folder at once. Does not depend on the user:
+	 * the caller checks availability of a system folder via `SystemFolder::isAvailable()`.
+	 */
+	public function canReadAll(): bool;
+
+	/**
 	 * Whether this is the primary root folder of the portal - the one root folder that carries the
 	 * chat's overall pinned flag. Exactly one folder answers `true`, and which one it is depends on
 	 * the portal option behind {@see \Bitrix\Im\V2\Application\Features::isChatFolderAllAvailable}.

@@ -11,6 +11,7 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Closure;
+use Throwable;
 
 final class ConnectionService
 {
@@ -55,6 +56,11 @@ final class ConnectionService
 			{
 				return $box;
 			}
+			$override = $this->guard->checkNoLocalOverride();
+			if (!$override->isSuccess())
+			{
+				return $override;
+			}
 			$managed = $this->configuration->getManagedState();
 			if ($managed === null)
 			{
@@ -62,6 +68,19 @@ final class ConnectionService
 			}
 			$registration = $this->documents->getStoredCloudRegistrationData();
 			if ($registration === null || !$this->configuration->hasReadableCredentials())
+			{
+				return $this->error('vibeoffice_restore_required');
+			}
+			try
+			{
+				$policy = (new Vibeoffice\Webhook\SignaturePolicyRepository())->getCurrent();
+				if ($policy !== null && (int)$policy['RECEIVE_MIN'] === 2
+					&& $policy['HOST_ID'] !== ($managed['hostId'] ?? null))
+				{
+					return $this->error('vibeoffice_restore_required');
+				}
+			}
+			catch (Throwable)
 			{
 				return $this->error('vibeoffice_restore_required');
 			}
@@ -81,12 +100,32 @@ final class ConnectionService
 			{
 				return $this->error('vibeoffice_restore_required');
 			}
-			$this->configuration->replaceManagedCredentials([
-				'server' => $vibeoffice['server'],
-				'keyId' => $vibeoffice['keyId'],
-				'apiSecret' => $vibeoffice['apiSecret'],
-				'webhookSecret' => $this->configuration->getWebhookSecret(),
-			], true, ['keyConfirmed' => false]);
+			$publish = function () use ($vibeoffice): array {
+				$snapshot = $this->configuration->replaceManagedCredentials([
+					'server' => $vibeoffice['server'],
+					'keyId' => $vibeoffice['keyId'],
+					'apiSecret' => $vibeoffice['apiSecret'],
+				], true, ['keyConfirmed' => false], preserveWebhookSecret: true);
+
+				return $this->publicationKeys($snapshot);
+			};
+			if ($policy === null)
+			{
+				$publish();
+			}
+			else
+			{
+				try
+				{
+					(new Vibeoffice\Webhook\SignaturePolicyRepository())->publishCredentials(
+						$vibeoffice['hostId'], $publish,
+					);
+				}
+				catch (Throwable)
+				{
+					return $this->error('vibeoffice_restore_required');
+				}
+			}
 
 			return $this->stateResult();
 		});
@@ -170,13 +209,25 @@ final class ConnectionService
 		}
 		$data = $result->getData();
 		$vibeoffice = $data['vibeoffice'];
-		if ($readable && $managed !== null && ($managed['hostId'] ?? null) !== $vibeoffice['hostId'] && !$quietChecked)
+		try
+		{
+			$policy = (new Vibeoffice\Webhook\SignaturePolicyRepository())->getCurrent();
+		}
+		catch (Throwable)
+		{
+			return $this->error('vibeoffice_restore_required');
+		}
+		$hostChanged = ($managed !== null && ($managed['hostId'] ?? null) !== $vibeoffice['hostId'])
+			|| ($policy !== null && $policy['HOST_ID'] !== $vibeoffice['hostId']);
+		$requiresQuiet = $readable || isset($vibeoffice['webhookSignature']) || $policy !== null;
+		if ($hostChanged && $requiresQuiet && !$quietChecked)
 		{
 			$quiet = $this->guard->checkQuiet();
 			if (!$quiet->isSuccess())
 			{
 				return $quiet;
 			}
+			$quietChecked = true;
 		}
 		if (!isset($vibeoffice['apiSecret']) && !isset($vibeoffice['webhookSecret']))
 		{
@@ -187,27 +238,111 @@ final class ConnectionService
 				return $this->error('vibeoffice_restore_required');
 			}
 
+			$binding = $this->bindWebhookSignature($vibeoffice);
+			if (!$binding->isSuccess())
+			{
+				return $binding;
+			}
+
 			return $this->stateResult();
 		}
 		if (!isset($vibeoffice['apiSecret'], $vibeoffice['webhookSecret'], $data['client'], $data['documentServer']))
 		{
 			return $this->error('vibeoffice_documentproxy_unavailable');
 		}
-		$this->documents->storeCloudRegistration($data['client']);
-		$this->configuration->replaceManagedCredentials([
-			'server' => $vibeoffice['server'],
-			'keyId' => $vibeoffice['keyId'],
-			'apiSecret' => $vibeoffice['apiSecret'],
-			'webhookSecret' => $vibeoffice['webhookSecret'],
-		], $readable && !$discardPrevious, [
-			'hostId' => $vibeoffice['hostId'],
-			'domain' => $domain,
-			'keyConfirmed' => false,
-			'activated' => (bool)($managed['activated'] ?? false),
-			'documentServerHost' => $data['documentServer']['host'],
-		]);
+		$tenantChanged = $managed !== null && ($managed['hostId'] ?? null) !== $vibeoffice['hostId'];
+		$confirmedSwitch = $restore && $tenantChanged && $quietChecked;
+		if ($tenantChanged && in_array($vibeoffice['webhookSecret'], [
+			$this->configuration->getWebhookSecret(), $this->configuration->getPreviousWebhookSecret(),
+		], true))
+		{
+			return $this->error('vibeoffice_restore_required');
+		}
+		$publish = function () use (
+			$data, $vibeoffice, $readable, $discardPrevious, $domain, $managed,
+		): array {
+			$this->documents->storeCloudRegistration($data['client']);
+			$snapshot = $this->configuration->replaceManagedCredentials([
+				'server' => $vibeoffice['server'],
+				'keyId' => $vibeoffice['keyId'],
+				'apiSecret' => $vibeoffice['apiSecret'],
+				'webhookSecret' => $vibeoffice['webhookSecret'],
+			], $readable && !$discardPrevious, [
+				'hostId' => $vibeoffice['hostId'],
+				'domain' => $domain,
+				'keyConfirmed' => false,
+				'activated' => (bool)($managed['activated'] ?? false),
+				'documentServerHost' => $data['documentServer']['host'],
+			]);
+
+			return $this->publicationKeys($snapshot);
+		};
+		$binding = $this->bindWebhookSignature($vibeoffice, $confirmedSwitch, $publish, $quietChecked);
+		if (!$binding->isSuccess())
+		{
+			return $binding;
+		}
 
 		return $this->stateResult();
+	}
+
+	private function bindWebhookSignature(
+		array $vibeoffice, bool $confirmedSwitch = false,
+		?callable $publishCredentials = null, bool $quietChecked = false,
+	): Result
+	{
+		$status = $vibeoffice['webhookSignature'] ?? null;
+		try
+		{
+			$repository = new Vibeoffice\Webhook\SignaturePolicyRepository();
+			$current = $repository->getCurrent();
+			if ($current !== null)
+			{
+				if ($status === null)
+				{
+					$repository->refreshLegacy($vibeoffice['hostId'], $publishCredentials);
+
+					return new Result();
+				}
+				if ($status !== null && (($current['HOST_ID'] === $status['host_id']
+					&& $current['PLATFORM_ID'] !== $status['platform_instance_id'])
+					|| ($current['HOST_ID'] !== $status['host_id'] && !$confirmedSwitch)))
+				{
+					return $this->error('vibeoffice_restore_required');
+				}
+				if ($status !== null && $current['HOST_ID'] !== $status['host_id'] && !$quietChecked)
+				{
+					$quiet = $this->guard->checkQuiet();
+					if (!$quiet->isSuccess())
+					{
+						return $quiet;
+					}
+				}
+			}
+			if ($status !== null)
+			{
+				$repository->bind($status, $publishCredentials);
+			}
+		}
+		catch (Throwable)
+		{
+			return $this->error('vibeoffice_restore_required');
+		}
+		if ($status === null && $publishCredentials !== null)
+		{
+			$publishCredentials();
+		}
+
+		return new Result();
+	}
+
+	private function publicationKeys(array $snapshot): array
+	{
+		return [
+			'current' => $snapshot['credentials']['webhookSecret'],
+			'previous' => $snapshot['previous']['webhookSecret'] ?? null,
+			'previousUntil' => $snapshot['previous']['expiresAt'] ?? 0,
+		];
 	}
 
 	private function client(string $serviceUrl): RegistrationClient

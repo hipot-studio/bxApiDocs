@@ -51,7 +51,7 @@ interface IPayload
 	 *
 	 * @param Role $role Role instance.
 	 * @param bool $append If true, content of Role will be appended, otherwise Role will be replaced.
-	 * @return self
+	 * @return static
 	 */
 	public function setRole(Role $role, bool $append = false): static;
 

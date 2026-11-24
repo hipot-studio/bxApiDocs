@@ -14,6 +14,7 @@ use Bitrix\Im\V2\Reading\Counter\CountersProvider;
 use Bitrix\Im\V2\Reading\Counter\Provider\UnreadPositionProvider;
 use Bitrix\Im\V2\Reading\View\ViewProvider;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
@@ -1087,8 +1088,12 @@ class Chat
 		}
 		else if (isset($find))
 		{
-			$helper = Application::getConnection()->getSqlHelper();
-			if (Model\ChatIndexTable::getEntity()->fullTextIndexEnabled('SEARCH_CONTENT'))
+			if ($field === '*INDEX.SEARCH_CONTENT' && !static::isFulltextIndexAvailable('SEARCH_CONTENT'))
+			{
+				$field = static::isFulltextIndexAvailable('SEARCH_TITLE') ? '*INDEX.SEARCH_TITLE' : null;
+			}
+
+			if ($field !== null)
 			{
 				$find = trim($find);
 				$find = \Bitrix\Main\Search\Content::prepareStringToken($find);
@@ -1104,12 +1109,15 @@ class Chat
 			}
 			else
 			{
+				$find = \Bitrix\Im\Internals\ChatIndex::clearText($find);
 				if (mb_strlen($find) < 3)
 				{
 					return null;
 				}
 
-				$filter['%=INDEX.SEARCH_TITLE'] = $helper->forSql($find).'%';
+				$find = \Bitrix\Main\Search\Content::prepareStringToken($find);
+				$find = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $find);
+				$filter['%=INDEX.SEARCH_TITLE'] = $find . '%';
 			}
 		}
 
@@ -1223,6 +1231,40 @@ class Chat
 			'filter' => $filter,
 			'runtime' => $runtime
 		];
+	}
+
+	/**
+	 * Old MySQL portals may lack the fulltext indexes of b_im_chat_index: their creation errors were ignored
+	 * by the installer and updaters. PostgreSQL evaluates to_tsvector without the index, so MATCH works there anyway.
+	 *
+	 * @param string $column SEARCH_CONTENT or SEARCH_TITLE.
+	 */
+	protected static function isFulltextIndexAvailable(string $column): bool
+	{
+		$connection = Application::getConnection();
+		if ($connection->getType() !== 'mysql')
+		{
+			return true;
+		}
+
+		$optionName = mb_strtolower($column) . '_fulltext_index_created';
+		if (Option::get('im', $optionName, 'N') === 'Y')
+		{
+			return true;
+		}
+
+		$result = $connection->query(
+			"SHOW INDEX FROM b_im_chat_index WHERE Index_type = 'FULLTEXT'"
+			. " AND Column_name = '" . $connection->getSqlHelper()->forSql($column) . "'"
+		);
+		if (!$result->fetch())
+		{
+			return false;
+		}
+
+		Option::set('im', $optionName, 'Y');
+
+		return true;
 	}
 
 	public static function toJson($array)

@@ -18,7 +18,18 @@ class Sender extends MicroService\BaseSender
 	public const ERROR_MALFORMED_RESPONSE = 'MALFORMED_RESPONSE';
 	public const ERROR_HTTPS_REQUIRED = 'HTTPS_REQUIRED';
 
-	private const API_VERSION = 2;
+	public const FIELD_OPERATION_ID = 'operationId';
+	public const FIELD_GENERATION = 'generation';
+	public const FIELD_PARAMS_HASH = 'paramsHash';
+
+	private const API_VERSION = 3;
+
+	private const INTENT_PROTOCOL_FIELDS = [
+		self::FIELD_OPERATION_ID,
+		self::FIELD_GENERATION,
+		self::FIELD_PARAMS_HASH,
+	];
+
 	private array $singleUseHttpClientParams = [];
 	private bool $secureRequest = false;
 	private bool $requestDispatched = false;
@@ -112,6 +123,12 @@ class Sender extends MicroService\BaseSender
 		{
 			$request['BX_PORTAL_ID'] = $portalId;
 		}
+
+		foreach (self::collectIntentProtocolFields($parameters) as $field => $value)
+		{
+			$request[$field] = $value;
+		}
+
 		$request['BX_HASH'] = Client::signRequest($request);
 
 		$httpClient = $this->buildHttpClient();
@@ -119,6 +136,21 @@ class Sender extends MicroService\BaseSender
 		$result = $httpClient->query(HttpClient::HTTP_POST, $url, $request);
 
 		return $this->buildResult($httpClient, $result);
+	}
+
+	private static function collectIntentProtocolFields(array $parameters): array
+	{
+		$fields = [];
+		foreach (self::INTENT_PROTOCOL_FIELDS as $field)
+		{
+			$value = $parameters[$field] ?? null;
+			if (is_scalar($value))
+			{
+				$fields[$field] = (string)$value;
+			}
+		}
+
+		return $fields;
 	}
 
 	public function performMultipartRequest($action, array $parameters = [], ?Dto\User $user = null): Result
@@ -203,7 +235,7 @@ class Sender extends MicroService\BaseSender
 
 		if ($response !==  "")
 		{
-			$parseResult = self::tryBuildResponseResult($response, $this->secureRequest) ?? self::createMalformedResponseResult();
+			$parseResult = self::tryBuildResponseResult($response) ?? self::createMalformedResponseResult();
 
 			$result->addErrors($parseResult->getErrors());
 
@@ -215,7 +247,7 @@ class Sender extends MicroService\BaseSender
 		return $result;
 	}
 
-	private static function tryBuildResponseResult(string $response, bool $keepErrorData): ?Result
+	private static function tryBuildResponseResult(string $response): ?Result
 	{
 		try
 		{
@@ -226,15 +258,15 @@ class Sender extends MicroService\BaseSender
 			return null;
 		}
 
-		if (($parsedResponse["status"] ?? null) === "error")
-		{
-			return self::buildServiceErrorResult(
-				$parsedResponse["errors"] ?? null,
-				$keepErrorData ? ($parsedResponse["data"] ?? null) : null,
-			);
-		}
+		$result = ($parsedResponse["status"] ?? null) === "error"
+			? self::buildServiceErrorResult($parsedResponse["errors"] ?? null)
+			: new Result()
+		;
 
-		$result = new Result();
+		if ($result === null)
+		{
+			return null;
+		}
 
 		if (is_array($parsedResponse["data"] ?? null))
 		{
@@ -244,13 +276,9 @@ class Sender extends MicroService\BaseSender
 		return $result;
 	}
 
-	private static function buildServiceErrorResult(mixed $serviceErrors, mixed $serviceData): ?Result
+	private static function buildServiceErrorResult(mixed $serviceErrors): ?Result
 	{
 		$result = new Result();
-		if (is_array($serviceData))
-		{
-			$result->setData($serviceData);
-		}
 
 		foreach (is_array($serviceErrors) ? $serviceErrors : [] as $serviceError)
 		{

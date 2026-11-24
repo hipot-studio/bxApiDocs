@@ -4,15 +4,25 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Document\Vibeoffice;
 
+use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\Document\DocumentEditorUser;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
+use Bitrix\Disk\Document\OnlyOffice\Editor\ConfigBuilder;
 use Bitrix\Disk\Document\SessionManager;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\FileTable;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\UserTable;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Result;
@@ -28,6 +38,7 @@ final class DocumentSessionManager extends SessionManager
 
 	/** Seconds to wait for the per-session CONTEXT lock. */
 	private const CONTEXT_LOCK_TIMEOUT = 5;
+	private const SESSION_LOOKUP_BATCH_SIZE = 16;
 	private const EDIT_SESSION_LOCK_PREFIX = 'disk_vo_edit_';
 
 	/**
@@ -39,7 +50,10 @@ final class DocumentSessionManager extends SessionManager
 	 */
 	public const CONTEXT_VO_CONTENT_VERSION_KEY = 'contentVersion';
 
-	/** Immutable file-version boundary captured when the local generation is bound. */
+	/** Fresh original content version recorded after a successful live EDIT platform open. */
+	public const CONTEXT_VO_OPENED_CONTENT_VERSION_KEY = 'openedContentVersion';
+
+	/** Latest saved-version ID captured at binding, used only as a legacy receipt boundary. */
 	public const CONTEXT_VO_SAVED_VERSION_ID_KEY = 'savedVersionId';
 
 	/**
@@ -77,6 +91,9 @@ final class DocumentSessionManager extends SessionManager
 	 */
 	public const CONTEXT_VO_OPEN_ATTEMPT_FLOOR_KEY = 'openAttemptFloor';
 
+	/** Durable marker for an abandoned v1 session whose drain save has not been resolved yet. */
+	public const CONTEXT_VO_ABANDONED_SAVE_PENDING_KEY = 'abandonedSavePending';
+
 	protected DocumentService|null $service = DocumentService::Vibeoffice;
 	private ?EditSessionAdmission $editSessionAdmission = null;
 	private DocumentStateRepository $stateRepository;
@@ -85,6 +102,10 @@ final class DocumentSessionManager extends SessionManager
 	private array $ownedRows = [];
 	private array $selectionErrors = [];
 	private bool $sessionCreated = false;
+	private ?ShortLinkOpening $shortLinkOpening = null;
+	private ?string $shortLinkAllowedMode = null;
+	private ?UnifiedLinkAccessService $legacyUnifiedLinkAccessService = null;
+	private ?string $requiredOwnEditAuthorization = null;
 
 	public function __construct(
 		?EditSessionAdmission $editSessionAdmission = null,
@@ -95,6 +116,136 @@ final class DocumentSessionManager extends SessionManager
 
 		$this->editSessionAdmission = $editSessionAdmission;
 		$this->stateRepository = $stateRepository ?? new DocumentStateRepository();
+	}
+
+	public function setShortLinkOpening(?ShortLinkOpening $opening, ?string $allowedMode = null): self
+	{
+		$this->shortLinkOpening = $opening;
+		$this->shortLinkAllowedMode = $allowedMode;
+
+		return $this;
+	}
+
+	public function getShortLinkOpening(): ?ShortLinkOpening
+	{
+		return $this->shortLinkOpening;
+	}
+
+	/** The generic unified entry supplies its native checker, never a permission snapshot. */
+	public function setLegacyUnifiedLinkAccessService(?UnifiedLinkAccessService $service): self
+	{
+		$this->legacyUnifiedLinkAccessService = $service;
+
+		return $this;
+	}
+
+	public function setRequiredOwnEditAuthorization(?string $requiredAuthorization): self
+	{
+		$this->requiredOwnEditAuthorization = $requiredAuthorization;
+
+		return $this;
+	}
+
+	/**
+	 * Restores the source channel and authorization constraints from a previously admitted session
+	 * when reopening or restoring an edit session. Returns false when the previous session's
+	 * short-link source is no longer resolvable and must not degrade into another channel.
+	 */
+	public function configureFromPreviousSession(
+		DocumentSession $previousSession,
+		UnifiedLinkAccessService $unifiedLinkAccessService,
+	): bool
+	{
+		$binding = SessionRegistry::findMatchingBinding($previousSession);
+		if ($binding === null)
+		{
+			$objectId = (int)$previousSession->getObjectId();
+			$state = $this->stateRepository->getByKey(HostDocumentKey::resolve($previousSession));
+			if ($objectId <= 0
+				|| ($state !== null && SharedSessionScope::version($state) !== 0)
+				|| $this->stateRepository->hasSharedEditMarker($objectId)
+				|| SessionRegistry::hasSharedBindingRecord($previousSession))
+			{
+				return false;
+			}
+			if ($this->file?->supportsUnifiedLink())
+			{
+				$this->setLegacyUnifiedLinkAccessService($unifiedLinkAccessService);
+			}
+
+			return true;
+		}
+
+		$sourceType = $binding['ACCESS_SOURCE_TYPE'] ?? null;
+		$access = SharedSessionScope::access($binding);
+		$confirmations = is_array($access['context']['confirmationFingerprints'] ?? null)
+			? $access['context']['confirmationFingerprints']
+			: [];
+
+		if ($sourceType === 'unified')
+		{
+			$linkId = (int)($binding['ACCESS_SOURCE_ID'] ?? 0);
+			$link = $linkId > 0 ? \Bitrix\Disk\ExternalLink::loadById($linkId) : null;
+			$opening = $link ? ShortLinkOpening::resolve((string)$link->getShortCode()) : null;
+			if ($opening === null || (int)$opening->getExternalLink()->getId() !== $linkId)
+			{
+				return false;
+			}
+			$this->setShortLinkOpening($opening, 'edit');
+		}
+
+		$requiredAuthorization = SessionRegistry::requiredOwnEditAuthorization($previousSession);
+		$this->setRequiredOwnEditAuthorization($requiredAuthorization);
+		$useUnifiedLink = match ($sourceType)
+		{
+			'internal', 'unified' => $requiredAuthorization === 'internal-unified',
+			'external' => array_key_exists('classicLink', $confirmations),
+			default => false,
+		};
+		if ($useUnifiedLink)
+		{
+			$this->setLegacyUnifiedLinkAccessService($unifiedLinkAccessService);
+		}
+
+		return true;
+	}
+
+	public function requiresSharedAdmission(): bool
+	{
+		return $this->service === DocumentService::Vibeoffice && $this->isLiveEditCreation()
+			&& Feature::isSharedEditingEnabled();
+	}
+
+	/** The caller must enter before taking the legacy session lock. */
+	public function admitSharedEdit(OpeningBudget $budget): Result
+	{
+		$this->refreshLiveFile();
+		if (!$this->requiresSharedAdmission() || $this->sessionContext === null)
+		{
+			return (new Result())->addError(new Error('Invalid editing admission.', 'vibeoffice_access_denied'));
+		}
+		if ($this->shortLinkOpening !== null)
+		{
+			$this->sessionContext = new DocumentSessionContext(
+				$this->sessionContext->getObjectId(), $this->sessionContext->getAttachedObjectId(),
+				(int)$this->shortLinkOpening->getExternalLink()->getId(),
+			);
+		}
+		$checker = new SharedEditingAccess();
+		$verified = $checker->verify(
+			$this->sessionContext, $this->shortLinkOpening, $this->shortLinkAllowedMode,
+			$this->legacyUnifiedLinkAccessService, $this->requiredOwnEditAuthorization,
+		);
+		if (!$verified->isSuccess())
+		{
+			return $verified;
+		}
+		$access = $verified->getData();
+
+		return $this->stateRepository->admitSharedEdit(
+			$this->buildAdmissionFields(), $access,
+			static fn(File $file): Result => $checker->revalidate($file, $access), $budget,
+		);
 	}
 
 	public function prepareExternalHash(): string
@@ -109,7 +260,7 @@ final class DocumentSessionManager extends SessionManager
 	/** Internal selection receipt; ownership belongs only to a successfully created VIEW. */
 	public function findOrCreateSessionWithOwnership(bool $exactUser = false): Result
 	{
-		$session = $this->findOrCreateSession($exactUser);
+		$session = $this->selectSession($exactUser, matchViewContext: false);
 		$result = (new Result())->setData([
 			'session' => $session,
 			'selection' => $session === null ? 'none' : ($this->sessionCreated ? 'new' : 'reused'),
@@ -140,7 +291,16 @@ final class DocumentSessionManager extends SessionManager
 		];
 	}
 
-	public function findOrCreateSession($exactUser = false): ?DocumentSession
+	public function findOrCreateSession($exactUser = false, ?int $viewEditorMode = null): ?DocumentSession
+	{
+		return $this->selectSession($exactUser, $viewEditorMode);
+	}
+
+	private function selectSession(
+		bool $exactUser,
+		?int $viewEditorMode = null,
+		bool $matchViewContext = true,
+	): ?DocumentSession
 	{
 		$this->ownedRows = [];
 		$this->sessionCreated = false;
@@ -150,7 +310,7 @@ final class DocumentSessionManager extends SessionManager
 
 		if ($this->sessionType !== DocumentSession::TYPE_EDIT)
 		{
-			return $this->findOrCreatePinnedSession($exactUser);
+			return $this->findOrCreatePinnedSession($exactUser, $viewEditorMode, $matchViewContext);
 		}
 
 		$requestedSessionType = $this->sessionType;
@@ -168,7 +328,7 @@ final class DocumentSessionManager extends SessionManager
 
 		try
 		{
-			return $this->findOrCreatePinnedSession($exactUser);
+			return $this->findOrCreatePinnedSession($exactUser, $viewEditorMode, $matchViewContext);
 		}
 		finally
 		{
@@ -176,15 +336,37 @@ final class DocumentSessionManager extends SessionManager
 		}
 	}
 
-	private function findOrCreatePinnedSession(bool $exactUser): ?DocumentSession
+	private function findOrCreatePinnedSession(
+		bool $exactUser,
+		?int $viewEditorMode,
+		bool $matchViewContext,
+	): ?DocumentSession
 	{
-		$session = $this->findSession($exactUser);
+		$file = $this->file ?: $this->attachedObject?->getFile();
+		$matchEditContext = $this->getEffectiveSessionType() === DocumentSession::TYPE_EDIT
+			&& $this->sessionContext !== null;
+		if ($matchEditContext)
+		{
+			$session = $this->findOwnSessionInContext(
+				$this->buildFilter(),
+				fn(DocumentSession $session): bool => $this->isInRequestedContext($session)
+					&& (!$file || $this->stateRepository->isCurrentGeneration($session, $file)),
+			) ?? $this->findSession($exactUser);
+		}
+		elseif ($matchViewContext && $this->getEffectiveSessionType() === DocumentSession::TYPE_VIEW)
+		{
+			$session = $this->findViewSessionInContext($exactUser, $viewEditorMode);
+		}
+		else
+		{
+			$session = $this->findSession($exactUser);
+		}
+
 		if (!$session)
 		{
 			return $this->addSession();
 		}
 
-		$file = $this->file ?: $this->attachedObject?->getFile();
 		if ($file && !$this->stateRepository->isCurrentGeneration($session, $file))
 		{
 			return $this->addSession();
@@ -193,7 +375,7 @@ final class DocumentSessionManager extends SessionManager
 		if ($session->isNonActive())
 		{
 			return $this->createPinnedSession(
-				fn() => $session->cloneWithNewHash($this->getUserId(), $this->sessionContext),
+				fn() => $this->createOwnSession($session, false),
 				errorSource: $session,
 			);
 		}
@@ -201,12 +383,147 @@ final class DocumentSessionManager extends SessionManager
 		if (!$session->belongsToUser($this->getUserId()))
 		{
 			return $this->createPinnedSession(
-				fn() => $session->forkForUser($this->getUserId(), $this->sessionContext),
+				fn() => $this->createOwnSession($session, true),
 				$session,
 			);
 		}
 
+		if ($matchEditContext && !$this->isInRequestedContext($session))
+		{
+			return $this->forkEditSessionIntoRequestedContext($session);
+		}
+
 		return $session;
+	}
+
+	private function forkEditSessionIntoRequestedContext(DocumentSession $session): ?DocumentSession
+	{
+		$fork = $this->createPinnedSession(
+			fn() => $session->forkForUser($this->getUserId(), $this->sessionContext),
+			$session,
+		);
+		// The platform grant belongs to the user and the document and is shared with the fork: it is not revoked.
+		if ($fork && $this->hasLostEditRights($session))
+		{
+			$session->delete();
+		}
+
+		return $fork;
+	}
+
+	private function hasLostEditRights(DocumentSession $session): bool
+	{
+		$file = $session->getFile();
+		$securityContext = $file?->getStorage()?->getSecurityContext($session->getUserId());
+		if (!$file instanceof File || $securityContext === null)
+		{
+			return false;
+		}
+
+		try
+		{
+			if ($session->canEdit($securityContext))
+			{
+				return false;
+			}
+			$attachedObject = $session->getContext()?->getAttachedObject();
+		}
+		catch (\Bitrix\Main\ArgumentException|\TypeError)
+		{
+			return false;
+		}
+
+		if ($file->supportsUnifiedLink())
+		{
+			$unifiedLinkAccessLevel = ServiceLocator::getInstance()
+				->get(UnifiedLinkAccessService::class)
+				->check($file, $attachedObject, $session->getUserId())
+			;
+			if ($unifiedLinkAccessLevel->value >= UnifiedLinkAccessLevel::Edit->value)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function findOwnSessionInContext(array $filter, callable $isInContext): ?DocumentSession
+	{
+		do
+		{
+			$sessions = DocumentSession::getModelList([
+				'filter' => $filter,
+				'order' => ['ID' => 'DESC'],
+				'limit' => self::SESSION_LOOKUP_BATCH_SIZE,
+			]);
+			foreach ($sessions as $session)
+			{
+				if ($isInContext($session))
+				{
+					return $session;
+				}
+				$filter['<ID'] = $session->getId();
+			}
+		}
+		while (count($sessions) === self::SESSION_LOOKUP_BATCH_SIZE);
+
+		return null;
+	}
+
+	private function findViewSessionInContext(bool $exactUser, ?int $editorMode): ?DocumentSession
+	{
+		$filter = $this->buildFilter();
+		$session = $this->findOwnSessionInContext(
+			$filter,
+			fn(DocumentSession $session): bool => $this->isCompatibleViewSession($session, $editorMode),
+		);
+		if ($session)
+		{
+			return $session;
+		}
+
+		if ($exactUser)
+		{
+			return null;
+		}
+
+		// A session owned by another user is forked with the requested context.
+		unset($filter['USER_ID'], $filter['<ID']);
+		$filter['!=USER_ID'] = $this->getUserId();
+		$sessions = DocumentSession::getModelList([
+			'filter' => $filter,
+			'order' => ['ID' => 'DESC'],
+			'limit' => 1,
+		]);
+
+		return $sessions[0] ?? null;
+	}
+
+	private function isCompatibleViewSession(DocumentSession $session, ?int $editorMode): bool
+	{
+		return $this->isInRequestedContext($session)
+			&& ($editorMode === null || $editorMode === (
+				self::extractVoMetadata($session)[self::CONTEXT_VO_EDITOR_MODE_KEY] ?? ConfigBuilder::VISUAL_MODE_USUAL
+			));
+	}
+
+	private function isInRequestedContext(DocumentSession $session): bool
+	{
+		$requestedContext = $this->sessionContext;
+		try
+		{
+			$context = $session->getContext();
+		}
+		catch (\Bitrix\Main\ArgumentException|\TypeError)
+		{
+			return false;
+		}
+
+		return $requestedContext !== null && $context !== null
+			&& $requestedContext->getObjectId() === $context->getObjectId()
+			&& $requestedContext->getAttachedObjectId() === $context->getAttachedObjectId()
+			&& $requestedContext->getExternalLinkId() === $context->getExternalLinkId();
 	}
 
 	private function createPinnedSession(
@@ -218,7 +535,7 @@ final class DocumentSessionManager extends SessionManager
 		$errorSource ??= $source;
 		$previousErrors = $this->getErrors();
 		$previousSourceErrors = $errorSource?->getErrors() ?? [];
-		$result = $this->stateRepository->createSession($factory, $source);
+		$result = $this->stateRepository->createSession($factory, $source, $this->getCreationScope($errorSource));
 		if (!$result->isSuccess())
 		{
 			$this->errorCollection->add(array_filter(
@@ -317,13 +634,184 @@ final class DocumentSessionManager extends SessionManager
 		return $filter;
 	}
 
+	/** The legacy factory must not insert a local row before waiting for the real file. */
+	private function getCreationScope(?DocumentSession $source): ?array
+	{
+		$type = $this->getEffectiveSessionType() ?? $source?->getType();
+		$versionId = $this->version?->getId() ?? $source?->getVersionId();
+		if ($type !== DocumentSession::TYPE_EDIT || (int)$versionId !== 0
+			|| ($this->attachedObject && $this->attachedObject->isSpecificVersion()))
+		{
+			return null;
+		}
+		$file = $this->file ?: $this->attachedObject?->getFile();
+		$objectId = (int)($file?->getRealObjectId() ?? $source?->getObjectId());
+		if ($objectId <= 0)
+		{
+			return null;
+		}
+		$context = $this->sessionContext ?? $source?->getContext();
+
+		return [
+			'OBJECT_ID' => $objectId,
+			'VERSION_ID' => 0,
+			'SESSION_TYPE' => DocumentSession::TYPE_EDIT,
+			'EXTERNAL_LINK_ID' => (int)$context?->getExternalLinkId(),
+		];
+	}
+
+	/** @return array{fields: array, hasUploadCleanupMarker: ?bool} */
+	public function buildAdmissionFields(): array
+	{
+		$fields = $this->buildFields();
+		$fields['CONTEXT'] = $this->sessionContext->toJson();
+		$fields['EXTERNAL_LINK_ID'] = $this->sessionContext->getExternalLinkId();
+		$fields['SERVICE'] = $this->service->value;
+		$file = $this->file ?: $this->attachedObject?->getFile();
+		$fields['OWNER_ID'] = $this->resolveCreationOwner($file, null);
+
+		return [
+			'fields' => $fields,
+			'hasUploadCleanupMarker' => $file?->getRealObject()->getUploadCleanupMarkerPresenceHint(),
+		];
+	}
+
+	private function resolveCreationOwner(?File $file, ?int $inheritedOwnerId): ?int
+	{
+		if ($file === null || $this->sessionContext === null)
+		{
+			return null;
+		}
+		if ($this->legacyUnifiedLinkAccessService !== null
+			&& $this->shortLinkOpening === null && $this->sessionContext->getExternalLinkId() === null
+			&& $this->service === DocumentService::Vibeoffice && $this->isLiveEditCreation()
+			&& !Feature::isSharedEditingEnabled())
+		{
+			return $this->resolveLegacyUnifiedOwner($file, $inheritedOwnerId);
+		}
+		$checker = new SharedEditingAccess();
+		$verified = $checker->verify(
+			$this->sessionContext, $this->shortLinkOpening, $this->shortLinkAllowedMode,
+			$this->legacyUnifiedLinkAccessService,
+		);
+		if (!$verified->isSuccess())
+		{
+			return null;
+		}
+
+		return $checker->resolveOwner($file, $verified->getData(), $inheritedOwnerId);
+	}
+
+	private function resolveLegacyUnifiedOwner(File $file, ?int $inheritedOwnerId): ?int
+	{
+		$file = File::loadById((int)$file->getRealObjectId());
+		$userId = (int)CurrentUser::get()->getId();
+		if (!$file || $file->isDeleted() || $userId <= 0 || (int)$this->getUserId() !== $userId
+			|| !UserTable::getById($userId)->fetch()
+			|| $this->sessionContext->getObjectId() !== (int)$file->getRealObjectId())
+		{
+			return null;
+		}
+		$attachedId = $this->sessionContext->getAttachedObjectId();
+		$attached = $attachedId !== null ? AttachedObject::loadById($attachedId) : null;
+		if ($attachedId !== null && (!$attached || $attached->isSpecificVersion()
+			|| (int)$attached->getFile()?->getRealObjectId() !== (int)$file->getRealObjectId()))
+		{
+			return null;
+		}
+		if (!$this->legacyUnifiedLinkAccessService->check($file, $attached, userId: $userId)->canEdit())
+		{
+			return null;
+		}
+
+		$session = DocumentSession::buildFromArray([
+			'OBJECT_ID' => (int)$file->getRealObjectId(), 'VERSION_ID' => null,
+			'USER_ID' => $userId, 'TYPE' => DocumentSession::TYPE_EDIT,
+			'CONTEXT' => $this->sessionContext->toJson(), 'SERVICE' => DocumentService::Vibeoffice->value,
+		]);
+		$opener = DocumentEditorUser::isCurrentUserDocumentEditor() ? null : $userId;
+		foreach (array_unique([$opener, $file->getCreatedBy(), $inheritedOwnerId]) as $id)
+		{
+			$id = (int)$id;
+			if ($id <= 0 || !UserTable::getById($id)->fetch())
+			{
+				continue;
+			}
+			$security = $file->getStorage()?->getProxyType()->getSecurityContextByUser($id);
+			if ($security && ($file->canRead($security) || $session->canRead($security)))
+			{
+				return $id;
+			}
+		}
+
+		return null;
+	}
+
+	private function isLiveEditCreation(?DocumentSession $source = null): bool
+	{
+		return ($this->getEffectiveSessionType() ?? $source?->getType()) === DocumentSession::TYPE_EDIT
+			&& (int)($this->version?->getId() ?? $source?->getVersionId()) === 0
+			&& !$this->attachedObject?->isSpecificVersion();
+	}
+
 	public function addSession(): ?DocumentSession
 	{
-		return $this->createPinnedSession(fn() => parent::addSession());
+		return $this->createPinnedSession(function (): ?DocumentSession {
+			if (!$this->isLiveEditCreation())
+			{
+				return parent::addSession();
+			}
+			$payload = $this->buildAdmissionFields();
+
+			return $this->addOwnedSession($payload);
+		});
+	}
+
+	private function addOwnedSession(array $payload): ?DocumentSession
+	{
+		if ((int)($payload['fields']['OWNER_ID'] ?? 0) <= 0)
+		{
+			$this->errorCollection->addOne(new \Bitrix\Disk\Internals\Error\Error(
+				'The editing owner is unavailable.', 'vibeoffice_owner_unavailable',
+			));
+
+			return null;
+		}
+
+		return DocumentSession::add($payload['fields'], $this->errorCollection, $payload['hasUploadCleanupMarker']);
+	}
+
+	private function createOwnSession(DocumentSession $source, bool $keepHash): ?DocumentSession
+	{
+		if (!$this->isLiveEditCreation($source))
+		{
+			return $keepHash
+				? $source->forkForUser($this->getUserId(), $this->sessionContext)
+				: $source->cloneWithNewHash($this->getUserId(), $this->sessionContext);
+		}
+		$payload = $this->buildAdmissionFields();
+		$payload['fields']['TYPE'] ??= $source->getType();
+		if ($payload['fields']['OWNER_ID'] === null)
+		{
+			$payload['fields']['OWNER_ID'] = $this->resolveCreationOwner(
+				$this->file ?: $this->attachedObject?->getFile(), $source->getOwnerId(),
+			);
+		}
+		$payload['fields']['IS_EXCLUSIVE'] = $source->isExclusive();
+		if ($keepHash)
+		{
+			$payload['fields']['EXTERNAL_HASH'] = $source->getExternalHash();
+		}
+		else
+		{
+			unset($payload['fields']['EXTERNAL_HASH']);
+		}
+
+		return $this->addOwnedSession($payload);
 	}
 
 	/**
-	 * Persists one consistent snapshot of the file content version and latest immutable version ID.
+	 * Pins the content counter and latest saved-version ID as receipt boundaries at opening.
 	 */
 	public function persistContentVersionSnapshot(DocumentSession $documentSession, ?File $file = null): bool
 	{
@@ -356,7 +844,7 @@ final class DocumentSessionManager extends SessionManager
 		]);
 	}
 
-	/** Returns the immutable latest version ID of a real file, or zero before its first version. */
+	/** Returns the latest saved-version ID of a real file, or zero before its first version. */
 	public static function getLatestSavedVersionId(int $objectId): int
 	{
 		$row = VersionTable::query()
@@ -382,11 +870,29 @@ final class DocumentSessionManager extends SessionManager
 		;
 
 		return $this->createPinnedSession(function () use ($documentSession, $userId): ?DocumentSession {
-			$fork = $documentSession->cloneWithNewHash($userId, $documentSession->getContext());
-			$mode = self::extractVoMetadata($documentSession)[self::CONTEXT_VO_EDITOR_MODE_KEY] ?? null;
-			if ($fork && $mode !== null && !$this->persistSessionMetadata($fork, [self::CONTEXT_VO_EDITOR_MODE_KEY => $mode]))
+			if ($this->isLiveEditCreation($documentSession))
 			{
-				return null;
+				$this->setUserId($userId)->setSessionContext(
+					$documentSession->getContext() ?? DocumentSessionContext::buildByFile($this->file),
+				);
+				$this->setAttachedObject($this->sessionContext->getAttachedObject());
+				$fork = $this->createOwnSession($documentSession, false);
+			}
+			else
+			{
+				$fork = $documentSession->cloneWithNewHash($userId, $documentSession->getContext());
+			}
+			$mode = self::extractVoMetadata($documentSession)[self::CONTEXT_VO_EDITOR_MODE_KEY] ?? null;
+			if ($fork && $mode !== null)
+			{
+				$metadata = [self::CONTEXT_VO_EDITOR_MODE_KEY => $mode];
+				$written = $this->isLiveEditCreation($documentSession)
+					? $this->mergeVoMetadataLocked($fork, static fn(array $vo): array => array_merge($vo, $metadata))
+					: $this->persistSessionMetadata($fork, $metadata);
+				if (!$written)
+				{
+					return null;
+				}
 			}
 
 			return $fork;
@@ -485,7 +991,12 @@ final class DocumentSessionManager extends SessionManager
 	 * Records the origin (or its omission) an open attempt declares. The snapshot of a token is
 	 * immutable: a repeated call for a known token keeps the stored value.
 	 */
-	public function persistClientOriginSnapshot(DocumentSession $session, string $openToken, ?string $origin): bool
+	public function persistClientOriginSnapshot(
+		DocumentSession $session,
+		string $openToken,
+		?string $origin,
+		bool $sessionRowLocked = false,
+	): bool
 	{
 		if ($openToken === '')
 		{
@@ -506,7 +1017,7 @@ final class DocumentSessionManager extends SessionManager
 			$existingVo[self::CONTEXT_VO_CLIENT_ORIGINS_KEY] = $origins;
 
 			return $existingVo;
-		});
+		}, sessionRowLocked: $sessionRowLocked);
 	}
 
 	/**
@@ -515,37 +1026,130 @@ final class DocumentSessionManager extends SessionManager
 	 *
 	 * @param callable(array): ?array $transition
 	 */
-	public function persistOpenAttemptTransition(DocumentSession $session, callable $transition): bool
+	public function persistOpenAttemptTransition(
+		DocumentSession $session,
+		callable $transition,
+		?string &$failureReason = null,
+		bool $sessionRowLocked = false,
+	): bool
 	{
-		return $this->mergeVoMetadata($session, $transition);
+		return $this->mergeVoMetadata($session, $transition, $failureReason, $sessionRowLocked);
+	}
+
+	/** The caller has already locked the local row after its real file. No transaction or mutex is added. */
+	public function mergeVoMetadataLocked(DocumentSession $session, callable $merge): bool
+	{
+		if (!DocumentStateRepository::hasOpenTransaction() || !DocumentStateRepository::holdsAnyLock()
+			|| !$session->getId() || $session->getService() !== DocumentService::Vibeoffice)
+		{
+			return false;
+		}
+		$raw = $this->readFreshContextRaw((int)$session->getId());
+		if ($raw === null)
+		{
+			return false;
+		}
+		return $this->writeVoMetadata((int)$session->getId(), $raw, $merge);
+	}
+
+	private function writeVoMetadata(int $sessionId, string $raw, callable $merge, ?string &$failureReason = null): bool
+	{
+		$context = $this->decodeContext($raw);
+		$existing = is_array($context[self::CONTEXT_VO_KEY] ?? null) ? $context[self::CONTEXT_VO_KEY] : [];
+		$vo = $merge($existing);
+		if (!is_array($vo) || (isset($existing[HostDocumentKey::CONTEXT_KEY])
+			&& ($vo[HostDocumentKey::CONTEXT_KEY] ?? null) !== $existing[HostDocumentKey::CONTEXT_KEY]))
+		{
+			return false;
+		}
+		$context[self::CONTEXT_VO_KEY] = $vo;
+
+		if (isset($vo[SharedOpenRequest::CONTEXT_KEY]))
+		{
+			if (!is_array($vo[SharedOpenRequest::CONTEXT_KEY]))
+			{
+				return false;
+			}
+			$context[self::CONTEXT_VO_KEY][SharedOpenRequest::CONTEXT_KEY] = array_intersect_key(
+				$vo[SharedOpenRequest::CONTEXT_KEY], $vo[self::CONTEXT_VO_OPEN_ATTEMPTS_KEY] ?? [],
+			);
+		}
+		$encoded = Json::encode($context);
+		if (isset($vo[SharedOpenRequest::CONTEXT_KEY]) && strlen($encoded) > SharedOpenRequest::MAX_CONTEXT_BYTES)
+		{
+			return false;
+		}
+		$result = DocumentSessionTable::update($sessionId, ['CONTEXT' => $encoded]);
+		if (!$result->isSuccess())
+		{
+			$failureReason = 'registry_write_failed';
+		}
+		return $result->isSuccess();
 	}
 
 	/**
-	 * Read-modify-write of the vo sub-key on the freshest CONTEXT, under the per-session lock and
-	 * inside the caller's transaction when there is one. The merge returns null to refuse the write.
+	 * Read-modify-write of the vo sub-key on the freshest CONTEXT. A caller that already holds the row
+	 * must skip the named lock, since a different connection can hold it while waiting for the row.
+	 * The merge returns null to refuse the write.
 	 *
 	 * @param callable(array): ?array $merge
 	 */
-	private function mergeVoMetadata(DocumentSession $documentSession, callable $merge): bool
+	private function mergeVoMetadata(
+		DocumentSession $documentSession,
+		callable $merge,
+		?string &$failureReason = null,
+		bool $sessionRowLocked = false,
+	): bool
 	{
+		$failureReason = null;
 		$sessionId = (int)$documentSession->getId();
 		if (!$sessionId)
 		{
+			$failureReason = 'context_unavailable';
+
 			return false;
 		}
 
 		$connection = Application::getConnection();
-		$lockName = self::getSessionContextLockName($sessionId);
-		$locked = $connection->lock($lockName, self::CONTEXT_LOCK_TIMEOUT);
-		if (!$locked)
+		$key = HostDocumentKey::resolve($documentSession);
+		$underDocument = DocumentStateRepository::isDocumentLocked($key)
+			&& DocumentStateRepository::hasOpenTransaction();
+		if ($underDocument)
 		{
+			$row = DocumentStateRepository::fetchForUpdate(
+				DocumentSessionTable::query()->setSelect(['*'])->where('ID', $sessionId),
+			);
+			$fresh = $row ? DocumentSession::buildFromArray($row) : null;
+			$state = (new DocumentStateRepository())->getByKey($key);
+			if (!$fresh || !$state || HostDocumentKey::resolve($fresh) !== $key
+				|| (int)$fresh->getObjectId() !== (int)$state['OBJECT_ID']
+				|| $fresh->getService() !== DocumentService::Vibeoffice)
+			{
+				$failureReason = 'context_unavailable';
+
+				return false;
+			}
+			return $this->writeVoMetadata($sessionId, (string)$row['CONTEXT'], $merge, $failureReason);
+		}
+		$inTransaction = $this->hasTransaction();
+		if ($sessionRowLocked && !$inTransaction)
+		{
+			$failureReason = 'context_unavailable';
+
+			return false;
+		}
+		$lockName = $sessionRowLocked ? null : self::getSessionContextLockName($sessionId);
+		if ($lockName !== null && !$connection->lock($lockName, self::CONTEXT_LOCK_TIMEOUT))
+		{
+			$failureReason = 'context_lock_failed';
+
 			return false;
 		}
 
 		$ownsTransaction = false;
 		try
 		{
-			if (!$this->hasTransaction())
+			if (!$inTransaction)
 			{
 				$connection->startTransaction();
 				$ownsTransaction = true;
@@ -553,28 +1157,18 @@ final class DocumentSessionManager extends SessionManager
 			$rawContext = $this->readFreshContextRaw($sessionId);
 			if ($rawContext === null)
 			{
+				$failureReason = 'context_unavailable';
+
 				return false;
 			}
-			$context = $this->decodeContext($rawContext);
-
-			$existingVo = is_array($context[self::CONTEXT_VO_KEY] ?? null) ? $context[self::CONTEXT_VO_KEY] : [];
-			$vo = $merge($existingVo);
-			if ($vo === null)
-			{
-				return false;
-			}
-			$context[self::CONTEXT_VO_KEY] = $vo;
-
-			$result = DocumentSessionTable::update($sessionId, [
-				'CONTEXT' => Json::encode($context),
-			]);
-			if ($result->isSuccess() && $ownsTransaction)
+			$written = $this->writeVoMetadata($sessionId, $rawContext, $merge, $failureReason);
+			if ($written && $ownsTransaction)
 			{
 				$connection->commitTransaction();
 				$ownsTransaction = false;
 			}
 
-			return $result->isSuccess();
+			return $written;
 		}
 		finally
 		{
@@ -587,7 +1181,10 @@ final class DocumentSessionManager extends SessionManager
 			}
 			finally
 			{
-				$connection->unlock($lockName);
+				if ($lockName !== null)
+				{
+					$connection->unlock($lockName);
+				}
 			}
 		}
 	}
@@ -626,6 +1223,34 @@ final class DocumentSessionManager extends SessionManager
 		$vo = $context[self::CONTEXT_VO_KEY] ?? null;
 
 		return is_array($vo) ? $vo : [];
+	}
+
+	public static function hasAbandonedSavePending(DocumentSession $documentSession): bool
+	{
+		return (self::extractVoMetadata($documentSession)[self::CONTEXT_VO_ABANDONED_SAVE_PENDING_KEY] ?? false) === true;
+	}
+
+	public static function withAbandonedSavePending(?string $raw, bool $pending): ?string
+	{
+		$context = self::decodeContext($raw);
+		$vo = is_array($context[self::CONTEXT_VO_KEY] ?? null) ? $context[self::CONTEXT_VO_KEY] : [];
+		if ($pending)
+		{
+			$vo[self::CONTEXT_VO_ABANDONED_SAVE_PENDING_KEY] = true;
+		}
+		else
+		{
+			unset($vo[self::CONTEXT_VO_ABANDONED_SAVE_PENDING_KEY]);
+		}
+		$context[self::CONTEXT_VO_KEY] = $vo;
+		try
+		{
+			return Json::encode($context);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
 	}
 
 	/**

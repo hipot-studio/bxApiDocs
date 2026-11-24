@@ -202,6 +202,7 @@ final class GetChartDataOperation
 		}
 
 		$matchedCharts = [];
+		$failedCharts = [];
 		$noAccess = [];
 		foreach ($requestedChartIds as $chartId)
 		{
@@ -223,29 +224,29 @@ final class GetChartDataOperation
 				continue;
 			}
 
-			if (isset($chart['error']) && is_string($chart['error']) && $chart['error'] !== '')
+			$error = Refusal::chartError($chart, [
+				'stage' => 'get_chart_data.chart_error', 'dashboard_id' => $dashboardId,
+				'user_id' => $userId, 'chart_id' => $chartId,
+			]);
+			if ($error !== null)
 			{
-				return Refusal::unavailableDashboard(
-					[new Error($chart['error'])],
-					[
-						'stage' => 'get_chart_data.chart_error',
-						'dashboard_id' => $dashboardId,
-						'user_id' => $userId,
-						'chart_id' => $chartId,
-						'chart_name' => $chart['name'] ?? $chart['slice_name'] ?? '',
-					],
-				);
+				$failedCharts[] = [
+					'id' => $chartId,
+					'name' => (string)($chart['name'] ?? $chart['slice_name'] ?? ''),
+					'error' => $error,
+				];
+				continue;
 			}
 
 			$matchedCharts[] = $chart;
 		}
 
-		if (empty($matchedCharts) && !empty($noAccess))
+		if (empty($matchedCharts) && empty($failedCharts) && !empty($noAccess))
 		{
 			return Refusal::error(FailureCode::AccessDenied, ActAsFailure::CHARTS_ACCESS_DENIED_MESSAGE);
 		}
 
-		if (empty($matchedCharts))
+		if (empty($matchedCharts) && empty($failedCharts))
 		{
 			return Refusal::error(
 				FailureCode::InvalidArgument,
@@ -277,6 +278,10 @@ final class GetChartDataOperation
 			'filter_coverage' => $rawData['filter_coverage'] ?? [],
 		]);
 
+		if (!empty($failedCharts))
+		{
+			$result['failed_charts'] = $failedCharts;
+		}
 		if (!empty($missing))
 		{
 			$result['missing_chart_ids'] = $missing;

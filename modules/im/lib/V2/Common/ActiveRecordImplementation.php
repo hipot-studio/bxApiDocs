@@ -584,7 +584,10 @@ trait ActiveRecordImplementation
 			}
 			else
 			{
-				$value = $this->{$field['field']};
+				// У части описаний нет ни 'field', ни 'get' — значение и раньше выходило null, но каждый такой
+				// вызов писал в php-лог два предупреждения (нет ключа 'field' и нет свойства с пустым именем).
+				// За ночной проход 22.09.2026 это 10 тысяч записей, из-за которых лог ротировался и прятал фаталы.
+				$value = $this->{$field['field'] ?? ''} ?? null;
 			}
 
 			if (is_object($value) && !($value instanceof DateTime))

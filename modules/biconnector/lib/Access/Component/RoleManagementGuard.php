@@ -15,9 +15,9 @@ use Bitrix\BIConnector\Access\Role\RoleUtil;
  * The screen is one for everybody, and the rows of the axes are zoned by the sections of the person.
  * The roles are not: they are common to all the sections, so a person holding the right of a single
  * axis edits the rights inside the existing roles and does not create, rename, delete them or change
- * who is in them. The matrix of ui.accessrights.v2 has no way to hide these controls, so his screen
- * does offer them; a request that actually changes a role is therefore refused as a whole, and a
- * request that carries the roles as they are stored goes through.
+ * who is in them. His screen hides these controls, and this guard is what holds for a request that
+ * comes past the screen: a request that actually changes a role is refused as a whole, and a request
+ * that carries the roles as they are stored goes through.
  *
  * The portal administrator passes the check of the general right itself, so he is not named apart.
  */
@@ -79,6 +79,7 @@ final class RoleManagementGuard
 			PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
 			PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS,
 			PermissionDictionary::BIC_SECTION_EDIT_DASHBOARD_RIGHTS,
+			PermissionDictionary::BIC_SETTINGS_EDIT_ROW_RULES,
 		];
 	}
 

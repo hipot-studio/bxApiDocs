@@ -17,6 +17,8 @@ enum AvailableMethodList: string
 	case ACTIVE_CALLS = 'activeCalls';
 	case ANCHORS = 'anchors';
 	case CHATS_LIST = 'chatsList';
+	case RECENT_SHAPE = 'recentShape';
+	case PORTAL_RECENT_LIST = 'portalRecentList';
 	case COPILOT_LIST = 'copilotList';
 	case CHANNEL_LIST = 'channelList';
 	case COLLAB_LIST = 'collabList';
@@ -26,4 +28,5 @@ enum AvailableMethodList: string
 	case NESTED_LIST = 'nestedList';
 	case FOLDER_LIST = 'folderList';
 	case FOLDER_RECENT_LIST = 'folderRecentList';
+	case FOLDER_RECENT_SHAPE = 'folderRecentShape';
 }

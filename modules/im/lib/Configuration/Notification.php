@@ -118,7 +118,7 @@ class Notification extends Base
 				->whereExpr("COALESCE(%s, '$value') = 'Y'", ['OPTION_STATE.VALUE'])
 				->where('USER_ID', $userId)
 				->where('USER.ACTIVE', 'Y')
-				->where('USER.IS_REAL_USER', 'Y')
+				->where('USER.REAL_USER', 'expr', true)
 				->fetch()
 		;
 
@@ -246,7 +246,7 @@ class Notification extends Base
 				->whereExpr("COALESCE(%s, '$value') = 'Y'", ['OPTION_STATE.VALUE'])
 				->whereIn('USER_ID', $userListChunk)
 				->where('USER.ACTIVE', 'Y')
-				->where('USER.IS_REAL_USER', 'Y');
+				->where('USER.REAL_USER', 'expr', true);
 
 		$filteredUsers = [];
 		foreach ($query->exec() as $user)

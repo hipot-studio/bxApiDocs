@@ -16,17 +16,13 @@ class DiskFileEditorHtmlComponent extends CBitrixComponent
 			? $this->arParams['SOURCE']
 			: []
 		;
-		$this->arResult['SDK_PACKAGE'] = is_array($this->arParams['SDK_PACKAGE'] ?? null)
-			? $this->arParams['SDK_PACKAGE']
-			: []
-		;
-
 		$this->arResult['HEADER_COMPOSITION'] = is_array($this->arParams['HEADER_COMPOSITION'] ?? null)
 			? $this->arParams['HEADER_COMPOSITION']
 			: []
 		;
 		$this->arResult['PORTAL_URL'] = (string)($this->arParams['PORTAL_URL'] ?? '');
 		$this->arResult['BUSY_URL'] = (string)($this->arParams['BUSY_URL'] ?? '');
+		$this->arResult['FILE_CHAT_ID'] = (int)($this->arParams['FILE_CHAT_ID'] ?? 0);
 
 		$GLOBALS['APPLICATION']->SetTitle($this->arResult['NAME']);
 		$GLOBALS['APPLICATION']->AddHeadString(

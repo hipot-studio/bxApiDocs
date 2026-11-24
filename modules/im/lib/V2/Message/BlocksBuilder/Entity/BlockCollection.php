@@ -19,7 +19,7 @@ class BlockCollection extends Registry implements \JsonSerializable
 
 		foreach ($this as $block)
 		{
-			$result[] = self::addServiceFlag($block, $block->jsonSerialize());
+			$result[] = self::addSharedFields($block, $block->jsonSerialize());
 		}
 
 		return $result;
@@ -31,7 +31,7 @@ class BlockCollection extends Registry implements \JsonSerializable
 
 		foreach ($this as $block)
 		{
-			$result[] = self::addServiceFlag($block, $block->toArray());
+			$result[] = self::addSharedFields($block, $block->toArray());
 		}
 
 		return $result;
@@ -50,7 +50,7 @@ class BlockCollection extends Registry implements \JsonSerializable
 			return null;
 		}
 
-		return self::addServiceFlag($block, $block->jsonSerialize());
+		return self::addSharedFields($block, $block->jsonSerialize());
 	}
 
 	public function getPayloadText(): string
@@ -85,9 +85,38 @@ class BlockCollection extends Registry implements \JsonSerializable
 	}
 
 	/**
-	 * The flag belongs to every block type, so it is merged here instead of being repeated in each
-	 * block serialization. Blocks without the flag keep their payload untouched.
+	 * Fields that belong to every block type are merged here instead of being repeated in each block
+	 * serialization. Blocks without them keep their payload untouched.
 	 */
+	protected static function addSharedFields(AbstractBlock $block, array $blockPayload): array
+	{
+		return self::addFooter($block, self::addServiceFlag($block, $blockPayload));
+	}
+
+	/**
+	 * The gap rides along with the footer and only with it: a step named on a block that draws no
+	 * footer has nothing to space apart, and keeping it in the payload would leave the clients
+	 * holding a value they can do nothing with.
+	 */
+	protected static function addFooter(AbstractBlock $block, array $blockPayload): array
+	{
+		$footer = $block->getFooter()->toArray();
+		if ($footer === null)
+		{
+			return $blockPayload;
+		}
+
+		$blockPayload[Field::Footer->value] = $footer;
+
+		$spacing = $block->getFooterSpacing();
+		if ($spacing !== null)
+		{
+			$blockPayload[Field::FooterSpacing->value] = $spacing;
+		}
+
+		return $blockPayload;
+	}
+
 	protected static function addServiceFlag(AbstractBlock $block, array $blockPayload): array
 	{
 		if ($block->isService())

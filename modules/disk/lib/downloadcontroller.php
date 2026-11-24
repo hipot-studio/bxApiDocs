@@ -218,8 +218,38 @@ class DownloadController extends Internals\Controller
 
 	protected function processActionDownloadFile()
 	{
+		$result = (new Document\Vibeoffice\SavedDownloadSynchronizer())->synchronize($this->file);
+		if (!$result->isSuccess())
+		{
+			$this->sendDownloadUnavailableResponse();
+
+			return;
+		}
+		if ($result->getData()['synchronized'])
+		{
+			$file = File::loadById((int)$this->file->getId(), ['STORAGE']);
+			if (!$file || (int)$file->getRealObjectId() !== (int)$this->file->getRealObjectId()
+				|| ($file instanceof FileLink && !$file->getRealObject()))
+			{
+				$this->sendDownloadUnavailableResponse();
+
+				return;
+			}
+			$this->file = $file;
+			$this->checkPermissions(true);
+		}
+
 		$fileData = $this->file->getFile();
 		\CFile::viewByUser($fileData, array('force_download' => true, 'cache_time' => Configuration::DEFAULT_CACHE_TIME, 'attachment_name' => $this->file->getName()));
+	}
+
+	private function sendDownloadUnavailableResponse(): void
+	{
+		\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus('503 Service Unavailable');
+		$this->errorCollection[] = new Error(
+			Loc::getMessage('DISK_DOWNLOAD_CONTROLLER_ERROR_COULD_NOT_FIND_FILE'), self::ERROR_COULD_NOT_FIND_FILE,
+		);
+		$this->sendJsonErrorResponse();
 	}
 
 	protected function processActionShowViewHtml($pathToView, $mode = '', $print = '', $preview = '', $sizeType = '', $printUrl = '', $autostart = 'Y')

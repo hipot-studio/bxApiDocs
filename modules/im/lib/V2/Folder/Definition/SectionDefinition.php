@@ -27,6 +27,20 @@ final class SectionDefinition implements FolderDefinition
 		];
 	}
 
+	public function getRecentSection(): ?string
+	{
+		return $this->recentSection;
+	}
+
+	/**
+	 * The nesting frame of the composition: `null` reaches every level, `0` the root list, a number
+	 * the chats of that parent ({@see \Bitrix\Im\V2\Folder\BaseFolder::getRecentParentScope()}).
+	 */
+	public function getParentChatId(): ?int
+	{
+		return $this->parentChatId;
+	}
+
 	public function toSelection(): Selection
 	{
 		return new Selection(new SelectionBranch(

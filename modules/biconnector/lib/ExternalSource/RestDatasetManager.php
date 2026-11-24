@@ -140,6 +140,8 @@ final class RestDatasetManager extends DatasetManager
 		$fieldsToUpdate = array_filter($fieldsToUpdate, static function ($field) use ($currentFields) {
 			return isset($field['ID']) && $currentFields->getByPrimary($field['ID']) !== null;
 		});
+		$fieldsToDelete = array_map('intval', $fieldsToDelete);
+		$fieldsToDelete = array_values(array_intersect($fieldsToDelete, $currentFields->getIdList()));
 
 		$db = Application::getInstance()->getConnection();
 		$db->startTransaction();
@@ -148,10 +150,19 @@ final class RestDatasetManager extends DatasetManager
 		{
 			/** @var Internal\ExternalDatasetField $currentField */
 			$currentField = $currentFields->getByPrimary($fieldToUpdate['ID']);
+			$isChanged = false;
 			if (isset($fieldToUpdate['VISIBLE']) && $fieldToUpdate['VISIBLE'] !== $currentField->getVisible())
 			{
-				// update only VISIBLE field
 				$currentField->setVisible((bool)$fieldToUpdate['VISIBLE']);
+				$isChanged = true;
+			}
+			if (array_key_exists('DESCRIPTION', $fieldToUpdate))
+			{
+				$currentField->setDescription($fieldToUpdate['DESCRIPTION']);
+				$isChanged = true;
+			}
+			if ($isChanged)
+			{
 				$saveFieldResult = $currentField->save();
 				if (!$saveFieldResult->isSuccess())
 				{
@@ -171,7 +182,10 @@ final class RestDatasetManager extends DatasetManager
 
 		if ($fieldsToDelete)
 		{
-			Internal\ExternalDatasetFieldTable::deleteByFilter(['=ID' => $fieldsToDelete]);
+			Internal\ExternalDatasetFieldTable::deleteByFilter([
+				'=ID' => $fieldsToDelete,
+				'=DATASET_ID' => $datasetId,
+			]);
 		}
 
 		if ($result->isSuccess())

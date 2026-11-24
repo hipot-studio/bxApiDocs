@@ -3,16 +3,10 @@
 namespace Bitrix\Mobile\Internal\Onboarding\Region;
 
 use Bitrix\Main\Config\Feature;
-use Bitrix\Main\Error;
-use Bitrix\Main\Result;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Mobile\Public\Feature\OnboardingPushFlag;
-use Bitrix\Mobile\Internal\Onboarding\Checkers\PortalAgeChecker;
-use Bitrix\Mobile\Internal\Onboarding\Conditions\PushSendConditionChain;
 use Bitrix\Mobile\Internal\Onboarding\Config\CampaignConfigProvider;
 use Bitrix\Mobile\Internal\Onboarding\Config\ScheduleConfig;
 use Bitrix\Mobile\Internal\Onboarding\PushType;
-use Bitrix\Mobile\Internal\Onboarding\Schedule\SeriesCalendar;
 use Bitrix\Mobile\Internal\Onboarding\Schedule\SeriesRhythm;
 use Closure;
 
@@ -22,11 +16,14 @@ use Closure;
  * Campaign-driven (setCampaignConfig): every value - send window, portal age gate,
  * series day offsets, whether the campaign is on - is read from the campaign
  * document through CampaignConfigProvider, and the series itself is resolved by the
- * activation engine. This is the RU flavour; the day map stays empty.
+ * rules of the campaign. This is the RU flavour; the day map stays empty.
  *
  * Legacy (onDay/setTimeSend/setMaxPortalAgeDays): the values live in the region
  * descriptor and the series is the fixed "offset -> push type" day map. Kept
  * temporarily for the regions that have not moved to the campaign document yet.
+ *
+ * The descriptor only declares: whether a portal meets what it declares is asked by the
+ * pipeline (OnboardingService).
  */
 class RegionConfig
 {
@@ -35,7 +32,6 @@ class RegionConfig
 	private string $timeSend = '08:00';
 	private int $maxPortalAgeDays = 7;
 	private bool $isEnabled = true;
-	private ?PortalAgeChecker $portalAgeChecker = null;
 	private ?CampaignConfigProvider $campaignConfig = null;
 	/**
 	 * @var array<int, DayConfig>
@@ -253,36 +249,5 @@ class RegionConfig
 	public function getCode(): string
 	{
 		return $this->code;
-	}
-
-	public function setPortalAgeChecker(PortalAgeChecker $portalAgeChecker): self
-	{
-		$this->portalAgeChecker = $portalAgeChecker;
-
-		return $this;
-	}
-
-	public function isValid(): bool
-	{
-		return $this->validate()->isSuccess();
-	}
-
-	/**
-	 * @return Error[]
-	 */
-	public function getErrors(): array
-	{
-		return $this->validate()->getErrors();
-	}
-
-	/**
-	 * $now is the moment the send window is judged at; null means now on the wall clock.
-	 * Everything else the chain asks about is a state of the portal, not of the moment.
-	 */
-	public function validate(?DateTime $now = null, ?SeriesCalendar $calendar = null): Result
-	{
-		return PushSendConditionChain::createChain($this->portalAgeChecker, $now?->getTimestamp(), $calendar)
-			->check($this)
-		;
 	}
 }

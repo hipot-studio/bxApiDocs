@@ -4,6 +4,8 @@ use Bitrix\Im\Common;
 use Bitrix\Im\Configuration\General;
 use Bitrix\Im\Configuration\Manager;
 use Bitrix\Im\Configuration\Notification;
+use Bitrix\Im\V2\Settings\Entity;
+use Bitrix\Im\V2\Settings\Sound\VolumeLevels;
 
 class CIMSettings
 {
@@ -58,6 +60,15 @@ class CIMSettings
 			];
 		}
 
+		return self::getNotMigratedSettings($userId);
+	}
+
+	/**
+	 * Reads the settings of a user whose preset has not been migrated yet: the old chat and the
+	 * mobile web version still go through here and get the sound levels derived by checkValues.
+	 */
+	public static function getNotMigratedSettings(int $userId): array
+	{
 		$arSettings[self::SETTINGS] = CUserOptions::GetOption('im', self::SETTINGS, [], $userId);
 		$arSettings[self::NOTIFY] = CUserOptions::GetOption('im', self::NOTIFY, [], $userId);
 
@@ -74,8 +85,6 @@ class CIMSettings
 		{
 			return false;
 		}
-
-		global $USER_FIELD_MANAGER;
 
 		$userId = $userId === false ? null : $userId;
 		$userId = Common::getUserId($userId);
@@ -100,11 +109,24 @@ class CIMSettings
 			return Manager::setUserSettings($userId, $newFormatSettings)->isSuccess();
 		}
 
+		return self::setNotMigratedSettings($userId, $type, $value);
+	}
+
+	/**
+	 * Writes the settings of a user whose preset has not been migrated yet: the whole set replaces
+	 * the stored one, so the legacy sound flag is translated into the sound keys it means before
+	 * the write, exactly as the migrated path does it in Configuration\Manager.
+	 */
+	public static function setNotMigratedSettings(int $userId, string $type, array $value): bool
+	{
+		global $USER_FIELD_MANAGER;
+
+		[$value, $changed] = self::prepareLegacySoundWrite($userId, $type, $value);
+
 		if (isset($value[self::STATUS]))
 		{
 			CIMStatus::Set($userId, ['STATUS' => $value[self::STATUS]]);
 		}
-		Manager::sendPullGeneralSettingsUpdate($userId, $value);
 
 		$arDefault = self::GetDefaultSettings($type);
 		foreach ($value as $key => $val)
@@ -125,7 +147,43 @@ class CIMSettings
 			$USER_FIELD_MANAGER->Update("USER", $userId, ['UF_IM_SEARCH' => $value[self::PRIVACY_SEARCH]]);
 		}
 
+		Manager::sendPullGeneralSettingsUpdate($userId, $changed);
+
 		return true;
+	}
+
+	/**
+	 * The old surfaces know the legacy sound flag only and send the levels back as they read them,
+	 * so their write of that flag decides the sound state alone. A write that replaces the whole
+	 * stored set has to carry over everything the flag does not change, but only the translation
+	 * of the flag is a change, and only it is worth telling the other clients about.
+	 *
+	 * @return array{0: array, 1: array} the set to store and the set the write changes
+	 */
+	private static function prepareLegacySoundWrite(int $userId, string $type, array $value): array
+	{
+		if ($type !== self::SETTINGS || !array_key_exists(Entity\General::ENABLE_SOUND, $value))
+		{
+			return [$value, $value];
+		}
+
+		$stored = CUserOptions::GetOption('im', self::SETTINGS, [], $userId);
+		$carried = array_intersect_key($stored, array_flip(VolumeLevels::soundKeys()));
+
+		$value = VolumeLevels::fromLegacySettingsWrite($value, self::getNotMigratedSettings($userId)[self::SETTINGS]);
+		$soundIsWritten = array_intersect_key($value, array_flip(VolumeLevels::soundKeys())) !== [];
+
+		// A flag that changed nothing leaves the stored one in place: the levels that were never
+		// stored are derived from it. A flag that did change is replaced by the written levels.
+		if (!$soundIsWritten && array_key_exists(Entity\General::ENABLE_SOUND, $stored))
+		{
+			// As a bool, or the write drops it as equal to the default.
+			$carried[Entity\General::ENABLE_SOUND] =
+				VolumeLevels::isLegacySoundEnabled($stored[Entity\General::ENABLE_SOUND])
+			;
+		}
+
+		return [array_replace($carried, $value), $value];
 	}
 
 	public static function SetSetting($type, $value, $userId = false)
@@ -160,6 +218,10 @@ class CIMSettings
 			return Manager::setUserSetting($userId, $type, $newFormatSettings)->isSuccess();
 		}
 
+		// Storing here merges the set key by key, so nothing has to be carried over.
+		[, $changed] = self::prepareLegacySoundWrite($userId, $type, $value);
+		$value = $changed;
+
 		$arSettings = CUserOptions::GetOption('im', $type, [], $userId);
 		foreach ($value as $key => $val)
 		{
@@ -170,7 +232,6 @@ class CIMSettings
 		{
 			CIMStatus::Set($userId, ['STATUS' => $value[self::STATUS]]);
 		}
-		Manager::sendPullGeneralSettingsUpdate($userId, $value);
 
 		$arDefault = self::GetDefaultSettings($type);
 		foreach ($arSettings as $key => $val)
@@ -189,6 +250,8 @@ class CIMSettings
 		{
 			$USER_FIELD_MANAGER->Update("USER", $userId, ['UF_IM_SEARCH' => $value[self::PRIVACY_SEARCH]]);
 		}
+
+		Manager::sendPullGeneralSettingsUpdate($userId, $changed);
 
 		return true;
 	}
@@ -311,6 +374,10 @@ class CIMSettings
 		$defaultSettings = self::GetDefaultSettings($type);
 		if ($type === self::SETTINGS)
 		{
+			// Sound levels are derived from what is actually stored, so they are filled in
+			// before the defaults hide the difference between a missing and a stored key.
+			$value = VolumeLevels::fill($value);
+
 			foreach($defaultSettings as $key => $default)
 			{
 				if ($key === 'status')
@@ -358,9 +425,9 @@ class CIMSettings
 				{
 					$checkedValues[$key] = true;
 				}
-				else if ($key === 'enableSound' && $value[$key] === 'N') // for legacy
+				else if (VolumeLevels::isSoundKey($key))
 				{
-					$checkedValues[$key] = false;
+					$checkedValues[$key] = $value[$key];
 				}
 				else if ($key === 'backgroundImage')
 				{

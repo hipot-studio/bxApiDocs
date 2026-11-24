@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Document\Vibeoffice;
 
+use Bitrix\Disk\Config\Feature\VibeofficeFlag;
 use Bitrix\Disk\Driver;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Application;
+use Bitrix\Main\Config;
+use Bitrix\Main\Config\ConfigurationException;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\IO\File;
 use Bitrix\Main\Web\Json;
@@ -57,16 +62,23 @@ final class Configuration
 	 * ALG-DRAIN): once cleared, {@see VibeofficeHandler::isEnabled()} returns false and the
 	 * dispatch intercept stops forwarding to this handler, while drain still finishes the
 	 * already-open sessions.
+	 *
+	 * @throws ConfigurationException when the value is not stored or a rule of the registry keeps VibeOffice on.
 	 */
 	public function disableOnPortal(): void
 	{
-		Option::set(Driver::INTERNAL_MODULE_ID, 'disk_vibeoffice_enabled', 'N');
+		$this->switchOnPortal(false);
 	}
 
-	/** Enables Vibeoffice for new document opens on the portal. */
+	/**
+	 * Enables Vibeoffice for new document opens on the portal.
+	 *
+	 * @throws ConfigurationException when the value of the flag is not stored. While the legacy option is honoured,
+	 * a rule of the registry cannot keep VibeOffice off after this call.
+	 */
 	public function enableOnPortal(): void
 	{
-		Option::set(Driver::INTERNAL_MODULE_ID, 'disk_vibeoffice_enabled', 'Y');
+		$this->switchOnPortal(true);
 	}
 
 	/** Returns connection metadata without credential material. */
@@ -94,25 +106,25 @@ final class Configuration
 	}
 
 	/** Publishes credentials and supplied metadata together under the administrator operation lock. */
-	public function replaceManagedCredentials(array $credentials, bool $keepPrevious, array $state = []): void
+	public function replaceManagedCredentials(
+		array $credentials, bool $keepPrevious, array $state = [], bool $preserveWebhookSecret = false,
+	): array
 	{
-		$current = [];
+		[$managed, $current] = $this->getPublicationSource();
 		$replacement = [];
 		foreach (self::CREDENTIAL_KEYS as $key => $managedKey)
 		{
-			$value = $credentials[$managedKey] ?? null;
+			$value = $preserveWebhookSecret && $managedKey === 'webhookSecret'
+				? $current[$managedKey] : ($credentials[$managedKey] ?? null)
+			;
 			if (!is_string($value) || $value === '')
 			{
 				throw new ArgumentException('Incomplete Vibeoffice credentials.', 'credentials');
 			}
 			$replacement[$managedKey] = $value;
-			$current[$managedKey] = $this->getValue($key, 'disk_vibeoffice_' . $key);
 		}
 
-		$managed = array_replace(
-			$this->getManagedValues() ?? [],
-			array_intersect_key($state, array_flip(self::STATE_KEYS)),
-		);
+		$managed = array_replace($managed, array_intersect_key($state, array_flip(self::STATE_KEYS)));
 		$managed['previous'] = null;
 		if ($keepPrevious && !in_array(null, $current, true) && !in_array('', $current, true))
 		{
@@ -125,6 +137,8 @@ final class Configuration
 		}
 		$managed['credentials'] = $replacement;
 		$this->storeManagedValues($managed);
+
+		return $managed;
 	}
 
 	/** Returns the previous API secret while its acceptance window is open. */
@@ -143,6 +157,24 @@ final class Configuration
 	public function hasLocalCredentialOverride(): bool
 	{
 		return array_intersect_key($this->localValues ?? [], self::CREDENTIAL_KEYS) !== [];
+	}
+
+	/** Detects credential overrides on every portal site before publishing global options. */
+	public function hasSiteCredentialOverride(): bool
+	{
+		$sites = \Bitrix\Main\SiteTable::query()->setSelect(['LID'])->exec();
+		while ($site = $sites->fetch())
+		{
+			foreach (array_keys(self::CREDENTIAL_KEYS) as $key)
+			{
+				if (Option::getRealValue('disk', 'disk_vibeoffice_' . $key, $site['LID']) !== null)
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/** Checks whether all four effective credential values are present. */
@@ -367,6 +399,40 @@ final class Configuration
 		return Option::get(Driver::INTERNAL_MODULE_ID, $optionName, null);
 	}
 
+	/**
+	 * Stores the value of {@see VibeofficeFlag}, then mirrors it to the legacy option the portal still honours and
+	 * checks the result the portal gets. A value of the flag that is not stored leaves the option as it was. A value
+	 * that is stored but overruled by a rule stays as the intent of the registry: the rules are not touched here.
+	 */
+	private function switchOnPortal(bool $enabled): void
+	{
+		Config\Feature::clearCache();
+		if ($enabled)
+		{
+			Config\Feature::enable(VibeofficeFlag::class);
+		}
+		else
+		{
+			Config\Feature::disable(VibeofficeFlag::class);
+		}
+		Config\Feature::clearCache();
+
+		$stored = Config\Feature\FeatureFlagTable::getByPrimary(VibeofficeFlag::class, ['select' => ['ENABLED']])
+			->fetchObject()
+			?->getEnabled()
+		;
+		if ($stored === $enabled)
+		{
+			Option::set(Driver::INTERNAL_MODULE_ID, Feature::LEGACY_OPTION, $enabled ? 'Y' : 'N');
+		}
+		if ($stored !== $enabled || Feature::isEnabledOnPortal() !== $enabled)
+		{
+			throw new ConfigurationException(
+				'VibeOffice is not ' . ($enabled ? 'enabled' : 'disabled') . ' on the portal by the feature registry.',
+			);
+		}
+	}
+
 	private function getManagedValues(): ?array
 	{
 		$value = Option::get(Driver::INTERNAL_MODULE_ID, self::MANAGED_OPTION, '');
@@ -402,6 +468,63 @@ final class Configuration
 		}
 
 		return $previous;
+	}
+
+	private function getPublicationSource(): array
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			$names = [self::MANAGED_OPTION];
+			foreach (array_keys(self::CREDENTIAL_KEYS) as $key)
+			{
+				$names[] = 'disk_vibeoffice_' . $key;
+			}
+			$query = new SqlExpression('SELECT NAME, VALUE FROM b_option WHERE MODULE_ID = ?s AND NAME IN (?@)',
+				'disk', $names);
+			$values = array_column(Application::getConnection()->query($query->compile())->fetchAll(), 'VALUE', 'NAME');
+			$site = Application::getInstance()->getContext()?->getSite();
+			if (is_string($site) && $site !== '')
+			{
+				$query = new SqlExpression(
+					'SELECT NAME, VALUE FROM b_option_site WHERE MODULE_ID = ?s AND SITE_ID = ?s AND NAME IN (?@)',
+					'disk', $site, $names,
+				);
+				try
+				{
+					$values = array_replace($values, array_column(
+						Application::getConnection()->query($query->compile())->fetchAll(), 'VALUE', 'NAME',
+					));
+				}
+				catch (\Bitrix\Main\DB\SqlQueryException)
+				{
+				}
+			}
+			$managed = [];
+			try
+			{
+				$value = Json::decode($values[self::MANAGED_OPTION] ?? 'null');
+				$managed = is_array($value) ? $value : [];
+			}
+			catch (ArgumentException)
+			{
+			}
+			$current = [];
+			foreach (self::CREDENTIAL_KEYS as $key => $managedKey)
+			{
+				$local = $this->getLocalValues($key);
+				$stored = $managed['credentials'][$managedKey] ?? null;
+				$current[$managedKey] = $local !== null ? (string)$local
+					: (is_string($stored) ? $stored : ($values['disk_vibeoffice_' . $key] ?? null));
+			}
+
+			return [$managed, $current];
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
 	}
 
 	private function storeManagedValues(array $managed): void

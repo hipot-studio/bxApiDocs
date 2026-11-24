@@ -208,6 +208,20 @@ class UserDataProvider extends DataProvider
 				->setSort('PERSONAL_MOBILE')
 		;
 
+		if (
+			$this->getSettings()->isCloud()
+			&& $this->getSettings()->isCurrentUserAdmin()
+			&& $this->getSettings()->isHtmlMode()
+		)
+		{
+			$result[]
+				= $this->createColumn('REGISTRATION_DATA')
+					->setSelect(['ID'])
+					->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_REGISTRATION_DATA'))
+					->setDefault(false)
+			;
+		}
+
 		$result[] =
 			$this->createColumn('LAST_ACTIVITY_DATE')
 				->setSelect(['LAST_ACTIVITY_DATE', 'ACTIVE', 'CONFIRM_CODE', 'ID'])

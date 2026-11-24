@@ -548,6 +548,12 @@ class CAllBlog
 					if (isset($arFields[$fkey]["WHERE_ONLY"]) && $arFields[$fkey]["WHERE_ONLY"] == "Y")
 						continue;
 
+					// Field keys become SELECT aliases as is, so only identifiers are allowed
+					if (!preg_match('/^[A-Za-z0-9_]+$/D', $fkey))
+					{
+						continue;
+					}
+
 					if ($strSqlSelect <> '')
 						$strSqlSelect .= ", ";
 
@@ -585,7 +591,7 @@ class CAllBlog
 				{
 					$val = mb_strtoupper($val);
 					$key = mb_strtoupper($key);
-					if (array_key_exists($val, $arFields))
+					if (array_key_exists($val, $arFields) && preg_match('/^[A-Za-z0-9_]+$/D', $val))
 					{
 						if ($strSqlSelect <> '')
 							$strSqlSelect .= ", ";

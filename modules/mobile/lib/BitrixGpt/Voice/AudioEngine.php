@@ -12,6 +12,7 @@ class AudioEngine
 {
 	public const CONTEXT = 'bitrixgpt_voice_transcribe';
 	private const MAX_TRANSCRIPT_BYTES = 65535;
+	private const ANALYTICS_SECTION = 'voice_widget';
 
 	public function __construct(
 		private readonly string $publicHostUrl,
@@ -62,6 +63,8 @@ class AudioEngine
 		$engine
 			->setHistoryState(false)
 			->setCache(false)
+			// The generate event of the transcription is reported as the one of the voice widget.
+			->setAnalyticData(['c_section' => self::ANALYTICS_SECTION])
 			->setPayload((new AI\Payload\Audio($this->getFileUrl($file['SRC']), 'm4a'))->setMarkers(['type' => 'audio/mp4']))
 			->onSuccess(function (AI\Result $response, ?string $queue = null) use ($result): void {
 				$this->setResponse($result, $response, $queue);

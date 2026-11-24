@@ -17,7 +17,20 @@ final class BitrixGptVoice extends Controller
 {
 	public function checkRecordingAction(Availability $availability): ?array
 	{
-		return $this->respond($availability->checkRecording((int)$this->getCurrentUser()->getId()));
+		if (!Loader::includeModule('ui'))
+		{
+			$this->addError(new Error('Voice widget is unavailable.', 'AI_UNAVAILABLE'));
+
+			return null;
+		}
+
+		$result = $availability->checkRecording((int)$this->getCurrentUser()->getId());
+		if ($result->isSuccess())
+		{
+			$result->setData($result->getData() + ['uploadChunkSize' => AudioUpload::getChunkSize()]);
+		}
+
+		return $this->respond($result);
 	}
 
 	/**
@@ -88,6 +101,29 @@ final class BitrixGptVoice extends Controller
 	}
 
 	/**
+	 * Starts recognition of the authenticated user's audio uploaded through the UI
+	 * FileUploader chunked protocol, once the upload token is complete.
+	 *
+	 * @return array|null Queue hash or direct text with the request's upload token, or an action error.
+	 */
+	public function transcribeUploadAction(
+		Transcription $transcription,
+		Availability $availability,
+		string $uploadToken,
+	): ?array
+	{
+		$userId = (int)$this->getCurrentUser()->getId();
+		if (!$availability->isAvailable($userId))
+		{
+			$this->addError(new Error('Voice widget is disabled.', 'FEATURE_DISABLED'));
+
+			return null;
+		}
+
+		return $this->respond($transcription->transcribeUploaded($userId, $uploadToken));
+	}
+
+	/**
 	 * Releases a finished audio upload using its user-bound signed token.
 	 *
 	 * @param string $uploadToken
@@ -102,7 +138,7 @@ final class BitrixGptVoice extends Controller
 			return null;
 		}
 
-		return $this->respond((new AudioUpload((int)$this->getCurrentUser()->getId()))->remove($uploadToken));
+		return $this->respond(AudioUpload::forUser((int)$this->getCurrentUser()->getId())->remove($uploadToken));
 	}
 
 	private function respond(Result $result): ?array

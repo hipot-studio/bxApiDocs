@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Integration\Crm;
 
 use Bitrix\Crm\StatusTable;
+use Bitrix\BIConnector\DataSource\FieldKind;
 use Bitrix\Main\Localization\Loc;
 
 class Deal
@@ -89,6 +90,7 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'D.CREATED_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'CREATED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -111,6 +113,7 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'D.MODIFY_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'MODIFIED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -133,6 +136,7 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'D.ASSIGNED_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -154,6 +158,8 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'DA.VALUE_STR',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DEPARTMENT,
+					FieldKind::KEY_OWNER => 'ASSIGNED_BY_ID',
 					'TABLE_ALIAS' => 'DA',
 					'JOIN' => 'INNER JOIN b_biconnector_dictionary_data DA ON DA.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_DEPARTMENT . ' AND DA.VALUE_ID = D.ASSIGNED_BY_ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_biconnector_dictionary_data DA ON DA.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_DEPARTMENT . ' AND DA.VALUE_ID = D.ASSIGNED_BY_ID',
@@ -314,6 +320,7 @@ class Deal
 					'IS_METRIC' => 'N',
 					'FIELD_NAME' => 'D.STAGE_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				'STAGE_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -409,6 +416,7 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'D.TYPE_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				'TYPE_NAME' => [
 					'IS_METRIC' => 'N',
@@ -443,6 +451,7 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'D.CURRENCY_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				//OPPORTUNITY_ACCOUNT DECIMAL(18,2) DEFAULT NULL,
 				'OPPORTUNITY_ACCOUNT' => [
@@ -527,6 +536,7 @@ class Deal
 					'AGGREGATION_TYPE' => 'NO_AGGREGATION',
 					'FIELD_NAME' => 'D.SOURCE_ID',
 					'FIELD_TYPE' => 'string',
+					FieldKind::KEY_KIND => FieldKind::DICTIONARY,
 				],
 				'SOURCE_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -575,6 +585,7 @@ class Deal
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'D.MOVED_BY_ID',
 					'FIELD_TYPE' => 'int',
+					FieldKind::KEY_KIND => FieldKind::EMPLOYEE,
 				],
 				'MOVED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'

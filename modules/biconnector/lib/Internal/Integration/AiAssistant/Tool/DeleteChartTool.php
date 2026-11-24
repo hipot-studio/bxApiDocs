@@ -163,7 +163,7 @@ final class DeleteChartTool extends BaseBiTool
 		$chartData = $lookup->getData()['entity'];
 
 		$name = (string)($chartData['slice_name'] ?? $chartData['chart_name'] ?? '');
-		$dashboards = $chartData['dashboards'] ?? [];
+		$dashboards = $chartData['dashboards'] ?? null;
 		if (!is_array($dashboards))
 		{
 			throw self::unavailableBiException([], ['stage' => 'delete_chart.load', 'chart_id' => $chartId]);
@@ -171,7 +171,9 @@ final class DeleteChartTool extends BaseBiTool
 
 		// Object-level scope: only a user who can edit one of the chart's consumer
 		// dashboards may delete it (matches the web UI).
-		$this->assertChartEditableByDashboards($userId, $dashboards);
+		$this->assertChartEditableByDashboards(
+			$userId, $dashboards, is_array($chartData['owners'] ?? null) ? $chartData['owners'] : [],
+		);
 
 		$confirm = ($args['confirm'] ?? false) === true;
 		if (!$confirm)

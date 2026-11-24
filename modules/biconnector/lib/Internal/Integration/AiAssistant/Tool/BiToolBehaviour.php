@@ -2,6 +2,9 @@
 
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ChartAuthorAccess;
 use Bitrix\AiAssistant\Exceptions\AccessDeniedException;
 use Bitrix\AiAssistant\Exceptions\DefinitionException;
 use Bitrix\AiAssistant\Exceptions\McpException;
@@ -22,12 +25,13 @@ use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpac
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\RateLimit\BiToolsRateLimiter;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\DashboardGuard;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
+use Bitrix\BIConnector\Internal\Operation\Builder\Refusal;
+use Bitrix\BIConnector\Rest\SqlLabErrorMapper;
 use Bitrix\BIConnector\Superset\DomainLinkService;
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -141,6 +145,14 @@ trait BiToolBehaviour
 		return Feature::isTablePermissionsEnabled() ? self::requireSupersetUser($userId) : null;
 	}
 
+	protected function assertAiToolsEnabled(): void
+	{
+		if (!Feature::isBitrixGptBiConstructorEnabled())
+		{
+			throw new McpException('BI tools are not available on this portal.');
+		}
+	}
+
 	protected static function isBiAvailable(): bool
 	{
 		if (!Feature::isBitrixGptBiConstructorEnabled())
@@ -196,8 +208,27 @@ trait BiToolBehaviour
 	 * @param array $chartDashboards Raw Superset dashboards from the chart payload.
 	 * @throws McpException When the user cannot edit any consumer dashboard.
 	 */
-	protected function assertChartEditableByDashboards(int $userId, array $chartDashboards): void
+	protected function assertChartEditableByDashboards(
+		int $userId, array $chartDashboards, array $owners = [],
+	): void
 	{
+		if ($chartDashboards === [])
+		{
+			$access = new ChartAuthorAccess(
+				fn(int $id): AccessController => $this->getAccessController($id),
+			);
+			$result = $access->check($owners, new Actor(
+				$userId,
+				Channel::Mcp,
+			));
+			if (!$result->isSuccess())
+			{
+				throw $this->toMcpException($result);
+			}
+
+			return;
+		}
+
 		$accessController = $this->getAccessController($userId);
 
 		$externalIds = [];
@@ -208,8 +239,13 @@ trait BiToolBehaviour
 				continue;
 			}
 
-			$externalId = (int)($dashboard['id'] ?? 0);
-			if ($externalId > 0)
+			$rawId = $dashboard['id'] ?? null;
+			if (!is_int($rawId) && !is_string($rawId))
+			{
+				continue;
+			}
+			$externalId = (int)$rawId;
+			if ($externalId > 0 && (string)$externalId === (string)$rawId)
 			{
 				$externalIds[$externalId] = $externalId;
 			}
@@ -405,9 +441,7 @@ trait BiToolBehaviour
 				['stage' => 'load_dashboard.status', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 
-			$message = self::appendDebugDetail(self::UNAVAILABLE_DASHBOARD_MESSAGE, $detail);
-
-			return $result->addError(new Error($message, 'dashboard_unavailable'));
+			return $result->addError(new Error(self::UNAVAILABLE_DASHBOARD_MESSAGE, 'dashboard_unavailable'));
 		}
 
 		if (!$dashboard->getExternalId())
@@ -418,9 +452,7 @@ trait BiToolBehaviour
 				['stage' => 'load_dashboard.no_external_id', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 
-			$message = self::appendDebugDetail(self::UNAVAILABLE_DASHBOARD_MESSAGE, $detail);
-
-			return $result->addError(new Error($message, 'dashboard_unavailable'));
+			return $result->addError(new Error(self::UNAVAILABLE_DASHBOARD_MESSAGE, 'dashboard_unavailable'));
 		}
 
 		return $result->setData(['dashboard' => $dashboard]);
@@ -496,9 +528,7 @@ trait BiToolBehaviour
 			],
 		);
 
-		$message = self::appendDebugDetail('BI is temporarily unavailable. Try again later.', $detail);
-
-		return $result->addError(new Error($message, 'bi_unavailable'));
+		return $result->addError(new Error('BI is temporarily unavailable. Try again later.', 'bi_unavailable'));
 	}
 
 	/**
@@ -537,9 +567,8 @@ trait BiToolBehaviour
 	}
 
 	/**
-	 * Translate a failed Integrator response for the agent. A `400` carries its
-	 * reason through: what has to change is the request itself, so answering
-	 * "try again later" both hides the cause and advises the wrong action.
+	 * Translate a failed Integrator response for the agent. A `400` remains a request refusal,
+	 * and its recognized message is preserved.
 	 * Everything else (transport, instance status, upstream failure) stays
 	 * masked by {@see unavailableDashboardException()}. `403`/`404` are masked
 	 * too: access and existence are decided locally before any Integrator call,
@@ -596,11 +625,7 @@ trait BiToolBehaviour
 	}
 
 	/**
-	 * Whether a `400` text is a refusal formulated by the API rather than an
-	 * arbitrary response body. Anything the remote side did not phrase for the
-	 * agent, be it a proxy error page or an unparsed body wrapped by the
-	 * Integrator, lands verbatim in the model context, so it is both noise and an indirect
-	 * prompt-injection channel, and gets masked instead.
+	 * Preserve the previous classification of `400` responses, without trusting their text for output.
 	 */
 	private static function isRecognizedRefusal(string $message): bool
 	{
@@ -609,7 +634,7 @@ trait BiToolBehaviour
 			return false;
 		}
 
-		if (str_contains($message, '<'))
+		if (strpbrk($message, "<\r\n") !== false)
 		{
 			return false;
 		}
@@ -659,20 +684,11 @@ trait BiToolBehaviour
 	{
 		AiToolsLogger::logWarning($errors, $context);
 
-		if (self::isDebugLogEnabled())
-		{
-			$details = implode('; ', array_map(static fn(Error $e): string => $e->getMessage(), $errors));
-			$message .= ' | bi_debug: ' . $details . ' | ctx: ' . json_encode($context, JSON_UNESCAPED_UNICODE);
-		}
-
 		return new McpException($message);
 	}
 
 	/**
-	 * SQL Lab errors (syntax, timeout, table access reported by Superset) are
-	 * user-actionable: the agent is expected to fix and retry its query. Unlike
-	 * {@see self::unavailableDashboardException()} the real Superset message is
-	 * surfaced to the agent, while still being logged.
+	 * SQL Lab preserves query diagnostics; infrastructure failures keep their fixed phrases.
 	 *
 	 * @param \Bitrix\Main\Error[] $errors
 	 */
@@ -693,11 +709,7 @@ trait BiToolBehaviour
 			AiToolsLogger::logErrors($errors, $context);
 		}
 
-		$message = implode('; ', array_map(static fn(Error $e): string => self::describeSqlLabError($e), $errors));
-		if ($message === '')
-		{
-			$message = 'SQL execution failed and Superset returned no error text. Check the query syntax and table/column names, then retry.';
-		}
+		$message = (new SqlLabErrorMapper())->mapErrors($errors)['error_description'];
 
 		return new McpException($message);
 	}
@@ -726,22 +738,6 @@ trait BiToolBehaviour
 	}
 
 	/**
-	 * The public error code comes with a stable message; the verbatim Superset text travels
-	 * in customData and only the AI channel unwraps it.
-	 */
-	private static function describeSqlLabError(Error $error): string
-	{
-		$customData = $error->getCustomData();
-		$detail = is_array($customData) ? ($customData['detail'] ?? null) : null;
-		if (!is_string($detail) || $detail === '')
-		{
-			return $error->getMessage();
-		}
-
-		return $error->getMessage() . ': ' . $detail;
-	}
-
-	/**
 	 * @param \Bitrix\Main\Error[] $errors
 	 */
 	private static function actAsFailedException(string $message, array $errors, array $context): McpException
@@ -749,21 +745,6 @@ trait BiToolBehaviour
 		AiToolsLogger::logErrors($errors, $context);
 
 		return new McpException($message);
-	}
-
-	private static function isDebugLogEnabled(): bool
-	{
-		return Option::get('biconnector', 'bgpt_bi_expand_log', 'N') === 'Y';
-	}
-
-	private static function appendDebugDetail(string $message, string $detail): string
-	{
-		if (self::isDebugLogEnabled())
-		{
-			$message .= ' | bi_debug: ' . $detail;
-		}
-
-		return $message;
 	}
 
 	/**

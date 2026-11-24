@@ -4,15 +4,19 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\DocumentHeader;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\Models;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\HtmlEditor\SourceResolver;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\MarkdownEditor\Readiness;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ShortLinkOpening;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
@@ -92,6 +96,32 @@ class OpeningContextFactory
 			accessLevel: $accessLevel ?? $this->getUnifiedLinkAccessService()->check($file, userId: $userId),
 			offersObjectSharing: true,
 			allowsEditing: true,
+		));
+	}
+
+	/**
+	 * The opening of a Markdown file by its page, which edits the file in place for a visitor holding the
+	 * right to (TPL-04). Whether that visitor may enter editing now, and why not, is the verdict the page
+	 * was built on {@see \Bitrix\Disk\Internal\Service\MarkdownEditor\ReadinessService::assess()}, so the
+	 * header and the state of the page cannot disagree. Without the right the opening is the read-only one
+	 * of {@see fromFile()}.
+	 */
+	public function fromMarkdownFile(
+		File $file,
+		int $userId,
+		string $downloadUrl,
+		UnifiedLinkAccessLevel $accessLevel,
+		Readiness $readiness,
+	): OpeningContext
+	{
+		return $this->describeOrRefuse($file, fn(): OpeningContext => $this->describeViewing(
+			file: $file,
+			userId: $userId,
+			downloadUrl: $downloadUrl,
+			accessLevel: $accessLevel,
+			offersObjectSharing: true,
+			allowsEditing: true,
+			readiness: $readiness,
 		));
 	}
 
@@ -204,6 +234,9 @@ class OpeningContextFactory
 	/**
 	 * The public page of a file, served to whoever holds the link - an anonymous visitor included. An
 	 * authenticated visitor may open the access popup; an anonymous visitor is told nothing of the portal.
+	 *
+	 * A Markdown page of a link with the right to edit edits the file in place (TPL-04) by the verdict it was
+	 * built on, as {@see fromMarkdownFile()} does.
 	 */
 	public function fromExternalLink(
 		File $file,
@@ -212,6 +245,7 @@ class OpeningContextFactory
 		int $userId,
 		string $downloadUrl,
 		?ShortLinkOpening $shortLinkOpening = null,
+		?Readiness $readiness = null,
 	): OpeningContext
 	{
 		return $this->describeOrRefuse($file, function () use (
@@ -221,6 +255,7 @@ class OpeningContextFactory
 			$userId,
 			$downloadUrl,
 			$shortLinkOpening,
+			$readiness,
 		): OpeningContext {
 			$accessLevel = $this->getUnifiedLinkAccessService()->check(
 				$file,
@@ -241,6 +276,7 @@ class OpeningContextFactory
 				externalLink: $externalLink,
 				hasPublicLinkAccess: $accessLevel->canRead(),
 				shortLinkOpening: $shortLinkOpening,
+				readiness: $readiness,
 			);
 		});
 	}
@@ -286,6 +322,7 @@ class OpeningContextFactory
 		?ShortLinkOpening $shortLinkOpening = null,
 		bool $offersRevisionLink = false,
 		bool $isViewMode = true,
+		?Readiness $readiness = null,
 	): OpeningContext
 	{
 		// The storage is asked for the rights of the object only where the surface offers them at all.
@@ -293,6 +330,7 @@ class OpeningContextFactory
 		// An object whose rights could not be resolved offers nothing of itself either: there is no
 		// access of its own to control and nothing for the popup of it to be filled from.
 		$offersObject = $offersObjectSharing && $securityContext !== null;
+		$editsInPlace = $readiness !== null && $readiness->hasRight;
 
 		return new OpeningContext(
 			file: $file,
@@ -300,7 +338,7 @@ class OpeningContextFactory
 			isViewMode: $isViewMode,
 			isBoard: false,
 			canRead: $accessLevel->canRead(),
-			canEdit: $allowsEditing && $accessLevel->canEdit()
+			canEdit: $editsInPlace ? $readiness->canEdit : $allowsEditing && $accessLevel->canEdit()
 				&& (
 					!HtmlViewerPolicy::isViewableFile($file)
 					|| (
@@ -318,9 +356,11 @@ class OpeningContextFactory
 			externalLink: $externalLink,
 			name: $name,
 			downloadUrl: $downloadUrl,
+			editRefusal: $editsInPlace ? static fn(): ?Error => $readiness->refusal : null,
 			hasPublicLinkAccess: $hasPublicLinkAccess,
 			shortLinkOpening: $shortLinkOpening,
 			offersRevisionLink: $offersRevisionLink,
+			editsInPlace: $editsInPlace,
 		);
 	}
 
@@ -399,6 +439,16 @@ class OpeningContextFactory
 		$accessType = $this->accessTypeOf($documentSession, $sessionContext);
 		$attachedObject = $this->getAttachedObject($sessionContext);
 		$externalLink = $this->getExternalLink($sessionContext);
+
+		if ($userId <= 0 && $accessType === OpeningContext::ACCESS_TYPE_UNIFIED && $sessionContext !== null)
+		{
+			$linkObject = $externalLink?->getObject();
+			if (!$linkObject instanceof File)
+			{
+				return $this->describeGuestOfFolderLink($documentSession, $file, $userId, $externalLink, $linkObject);
+			}
+		}
+
 		$securityContext = $this->getSecurityContext($file, $userId);
 		$isStaffShortOpening = $this->isStaffShortOpening($shortLinkOpening, $userId, $accessType);
 		$rights = $isStaffShortOpening
@@ -469,6 +519,89 @@ class OpeningContextFactory
 			&& $userId > 0
 			&& $accessType === OpeningContext::ACCESS_TYPE_INTERNAL
 		;
+	}
+
+	/**
+	 * A guest of the page of a folder link is let in by that very link and by nothing else: neither the own
+	 * link of the file nor a link of another ancestor raises or replaces it, and a link which is gone, expired,
+	 * waits for its password or no longer holds the file refuses the opening. Whatever the right of the link,
+	 * the guest reads and nothing more - no editing, no object of the portal, no downloading from the header.
+	 *
+	 * @param BaseObject|null $linkObject null when the link of the session is gone
+	 */
+	private function describeGuestOfFolderLink(
+		Models\DocumentSession $documentSession,
+		File $file,
+		int $userId,
+		?ExternalLink $externalLink,
+		?BaseObject $linkObject,
+	): OpeningContext
+	{
+		if (
+			$externalLink === null
+			|| !$linkObject instanceof Folder
+			|| !$this->isFolderLinkServingFile($externalLink, $linkObject, $file, $userId)
+		)
+		{
+			return $this->refuseOpening($file, OpeningContext::ACCESS_TYPE_UNIFIED);
+		}
+
+		$editorService = $documentSession->getService();
+
+		return new OpeningContext(
+			file: $file,
+			accessType: OpeningContext::ACCESS_TYPE_UNIFIED,
+			isViewMode: true,
+			isBoard: $editorService === Models\DocumentService::FlipChart,
+			canRead: true,
+			canEdit: false,
+			canRename: false,
+			canShare: false,
+			canChangeRights: false,
+			offersObjectSharing: false,
+			versionId: $documentSession->isVersion() ? (int)$documentSession->getVersionId() : null,
+			editorService: $editorService,
+			externalLink: $externalLink,
+			hasPublicLinkAccess: true,
+		);
+	}
+
+	/**
+	 * The file must lie in the real tree of the folder: a connected folder inside it keeps its files in another
+	 * storage, out of the reach of the link.
+	 */
+	protected function isFolderLinkServingFile(
+		ExternalLink $externalLink,
+		Folder $folder,
+		File $file,
+		int $userId,
+	): bool
+	{
+		if ($folder->isDeleted() || $file->isDeleted())
+		{
+			return false;
+		}
+
+		$canReadByLink = $this->getUnifiedLinkAccessService()->check(
+			$folder,
+			userId: $userId,
+			externalLink: $externalLink,
+		)->canRead();
+		if (!$canReadByLink)
+		{
+			return false;
+		}
+
+		$path = ObjectPathTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=OBJECT_ID' => (int)$file->getId(),
+				'=PARENT_ID' => (int)$folder->getRealObjectId(),
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return $path !== false;
 	}
 
 	private function hasPublicLinkAccess(
@@ -568,11 +701,18 @@ class OpeningContextFactory
 		);
 	}
 
-	private function refuseOpening(File $file): OpeningContext
+	/**
+	 * @param string $accessType the type the opening was entered by, kept by a refusal as well: the roster of
+	 *     the page is stored under it {@see \Bitrix\Disk\Internal\Component\DocumentHeaderPage::buildPresenceConfig()}
+	 */
+	private function refuseOpening(
+		File $file,
+		string $accessType = OpeningContext::ACCESS_TYPE_INTERNAL,
+	): OpeningContext
 	{
 		return new OpeningContext(
 			file: $file,
-			accessType: OpeningContext::ACCESS_TYPE_INTERNAL,
+			accessType: $accessType,
 			isViewMode: true,
 			isBoard: false,
 			canRead: false,

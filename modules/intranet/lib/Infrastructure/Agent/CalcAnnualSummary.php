@@ -3,11 +3,10 @@
 namespace Bitrix\Intranet\Infrastructure\Agent;
 
 use Bitrix\Intranet\Internal\Repository\AnnualSummaryRepository;
-use Bitrix\Intranet\Internal\Entity\AnnualSummary\SummaryInterface;
 use Bitrix\Intranet\Public\Event\OnInitSummaryProvidersEvent;
 use Bitrix\Intranet\Public\Provider\AnnualSummary\SummaryProviderInterface;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Entity\EntityCollection;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -99,21 +98,39 @@ class CalcAnnualSummary extends Stepper
 	}
 
 	/**
-	 * @return SummaryInterface[]
+	 * @return SummaryProviderInterface[]
 	 */
 	private function getProviders(): array
 	{
+		$disabledProviderIds = json_decode(Option::get('intranet', 'annual_summary_disabled_provider_ids', '[]'));
+		if (!is_array($disabledProviderIds) || !array_is_list($disabledProviderIds))
+		{
+			$disabledProviderIds = [];
+		}
+		foreach ($disabledProviderIds as $id)
+		{
+			if (!is_string($id))
+			{
+				$disabledProviderIds = [];
+
+				break;
+			}
+		}
+
 		/** @var SummaryProviderInterface[] $providers */
 		$providers = [];
 		$event = new OnInitSummaryProvidersEvent($this->from, $this->to);
 		$event->send();
-		
+
 		foreach ($event->getResults() as $result)
 		{
 			if ($result->getType() === EventResult::SUCCESS)
 			{
 				$provider = $result->getParameters()['provider'] ?? [];
-				if ($provider instanceof SummaryProviderInterface)
+				if (
+					$provider instanceof SummaryProviderInterface
+					&& !in_array($provider->getId(), $disabledProviderIds, true)
+				)
 				{
 					$providers[$provider->getId()] = $provider;
 				}

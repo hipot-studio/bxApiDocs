@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu;
 
+use Bitrix\Intranet\Internal\Integration\Disk\BoardCreateAction;
 use Bitrix\Intranet\Internal\Integration\Vibecodeconnector\LeftMenuItemProvider;
 use Bitrix\Intranet\Integration\Templates\Air\AirTemplate;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
@@ -32,6 +33,7 @@ class Menu
 		{
 			$params = isset($itemData['PARAMS']) && is_array($itemData['PARAMS']) ? $itemData['PARAMS'] : [];
 			$params = array_change_key_case($params, CASE_LOWER);
+			$params = BoardCreateAction::applyToLeftMenuParams($params);
 
 			if (
 				$itemData['DEPTH_LEVEL'] !== 1
@@ -82,6 +84,17 @@ class Menu
 			if ($item !== null)
 			{
 				$this->setItem($item);
+			}
+		}
+
+		if ($userId !== null && $userId === (int)\Bitrix\Main\Engine\CurrentUser::get()->getId()
+			&& Loader::includeModule('hrmconnector')
+			&& class_exists(\Bitrix\Hrmconnector\Public\Provider\ApprovalDashboard::class))
+		{
+			$itemData = (new \Bitrix\Hrmconnector\Public\Provider\ApprovalDashboard())->getMenuItemForCurrentUser();
+			if ($itemData !== null)
+			{
+				$this->setItem(new MenuItem\ItemSystem($itemData));
 			}
 		}
 

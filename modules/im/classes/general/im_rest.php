@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Link\File\SubtypeGroup;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\Im\V2\TariffLimit\Limit;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -2222,6 +2223,7 @@ class CIMRestService extends IRestService
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 		$order = self::getFileOrder($arParams);
 		self::checkFileOrderScope($arParams, $order);
+		$hasAnchor = self::hasFileAnchor($arParams, $order);
 		$lastDate = self::getFileCursorDate($arParams, $order);
 
 		$filter = [
@@ -2268,6 +2270,13 @@ class CIMRestService extends IRestService
 		if ($startId > 0)
 		{
 			$filter['START_ID'] = $startId;
+		}
+
+		if ($hasAnchor)
+		{
+			$anchor = self::getFileAnchor($arParams, $chat, $startId);
+			$filter['LAST_DATE'] = $anchor->getDateCreate();
+			$filter['LAST_ID'] = $anchor->getPrimaryId();
 		}
 
 		$files = FileCollection::find($filter, $order, $limit, new \Bitrix\Im\V2\Service\Context());
@@ -7913,6 +7922,99 @@ class CIMRestService extends IRestService
 		}
 
 		return new DateTime($options['LAST_DATE'], DateTimeInterface::RFC3339);
+	}
+
+	/**
+	 * The anchor names the record a page of the date order starts right after. Its form is checked without the
+	 * database and ahead of the access to the chat, so a refusal of the form tells nothing about the records.
+	 */
+	private static function hasFileAnchor(array $options, array $order): bool
+	{
+		$hasMessageId = isset($options['ANCHOR_MESSAGE_ID']);
+		$hasFileId = isset($options['ANCHOR_FILE_ID']);
+
+		if (!$hasMessageId && !$hasFileId)
+		{
+			return false;
+		}
+
+		if ($hasMessageId !== $hasFileId)
+		{
+			throw new \Bitrix\Rest\RestException(
+				'ANCHOR_MESSAGE_ID and ANCHOR_FILE_ID must be given together',
+				'FILE_ANCHOR_INCOMPLETE',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		if (
+			!self::isFileAnchorIdValid($options['ANCHOR_MESSAGE_ID'])
+			|| !self::isFileAnchorIdValid($options['ANCHOR_FILE_ID'])
+		)
+		{
+			throw new \Bitrix\Rest\RestException(
+				'ANCHOR_MESSAGE_ID and ANCHOR_FILE_ID must be positive integers',
+				'FILE_ANCHOR_INVALID',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		if (!isset($order['DATE_CREATE']))
+		{
+			throw new \Bitrix\Rest\RestException(
+				'ANCHOR_MESSAGE_ID and ANCHOR_FILE_ID are accepted only together with ORDER.DATE_CREATE',
+				'FILE_ANCHOR_WITHOUT_DATE_ORDER',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		if (isset($options['LAST_ID']) || isset($options['LAST_DATE']))
+		{
+			throw new \Bitrix\Rest\RestException(
+				'ANCHOR_MESSAGE_ID and ANCHOR_FILE_ID are not accepted together with LAST_ID or LAST_DATE',
+				'FILE_ANCHOR_WITH_CURSOR',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		return true;
+	}
+
+	private static function isFileAnchorIdValid(mixed $value): bool
+	{
+		return
+			(is_int($value) || is_string($value))
+			&& preg_match('/^[0-9]+$/D', (string)$value) === 1
+			&& (int)$value > 0
+		;
+	}
+
+	/**
+	 * One refusal answers every anchor the reader may not start from: a pair that is no record, a record of
+	 * another chat, one below the personal boundary of the reader or beyond the tariff limit of the history.
+	 */
+	private static function getFileAnchor(array $options, \Bitrix\Im\V2\Chat $chat, int $startId): FileItem
+	{
+		$anchor = FileItem::getByMessageIdAndDiskFileId(
+			(int)$options['ANCHOR_MESSAGE_ID'],
+			(int)$options['ANCHOR_FILE_ID']
+		);
+
+		if (
+			$anchor === null
+			|| $anchor->getChatId() !== $chat->getChatId()
+			|| ($startId > 0 && $anchor->getMessageId() < $startId)
+			|| !Limit::getInstance()->hasAccessByDate((new FileCollection())->add($anchor), $anchor->getDateCreate())
+		)
+		{
+			throw new \Bitrix\Rest\RestException(
+				'The anchor record is not found in this chat',
+				'FILE_ANCHOR_NOT_FOUND',
+				\CRestServer::STATUS_NOT_FOUND
+			);
+		}
+
+		return $anchor;
 	}
 
 	private static function getRawParam(string $paramName)

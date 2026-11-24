@@ -4,7 +4,6 @@ namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Controller\DataProviders\ChildrenDataProvider;
-use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Command\BaseObject\AddSubFolderCommand;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
@@ -189,13 +188,6 @@ class Folder extends BaseObject
 
 	public function generateExternalLinkAction(Disk\Folder $folder)
 	{
-		if (!Bitrix24Manager::isFeatureEnabled('disk_manual_external_link'))
-		{
-			$this->addError(new Error('Could not generate external link. Feature is disabled by tarif.'));
-
-			return null;
-		}
-
 		return $this->generateExternalLink($folder);
 	}
 

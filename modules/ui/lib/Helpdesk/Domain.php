@@ -52,7 +52,7 @@ class Domain
 	{
 		return match ($languageCode)
 		{
-			'ru', 'by', 'kz' => static::HELPDESK_DOMAIN['ru'],
+			'ru', 'by', 'kz', 'uz' => static::HELPDESK_DOMAIN['ru'],
 			'de' => static::HELPDESK_DOMAIN['de'],
 			'br' => static::HELPDESK_DOMAIN['br'],
 			'fr' => static::HELPDESK_DOMAIN['fr'],

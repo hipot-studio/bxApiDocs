@@ -3,6 +3,7 @@
 namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityPortRole;
+use Bitrix\Bizproc\Integration\AiAssistant\ConditionSettingNames;
 use Bitrix\Bizproc\Internal\AI\Agent\Generator\TemplateBuilder\ActivityRegistry;
 use Bitrix\Bizproc\Public\Entity\Activity\SetupTemplateActivity\SetupBlocksParseResult;
 use Bitrix\Bizproc\Public\Entity\Activity\SetupTemplateActivity\SetupConstantDeclaration;
@@ -152,6 +153,22 @@ final class AgentBlocksValidator
 	private array $blockLoopbackInputPortsMap = [];
 
 	/**
+	 * @var array<string, list<string>> outputs each complex node of the graph declares by its own `output`
+	 *      constructions, per block id. Kept apart from {@see self::$blockPortsMap}, whose output side carries the
+	 *      auxiliary ports of the node beside them: those are no part of the comparison the exemption of a portless
+	 *      link rests on ({@see ValidationContext::carriesBlockOutputs()}).
+	 */
+	private array $complexOutputPorts = [];
+
+	/**
+	 * @var array<string, bool> the verdict of {@see ValidationContext::carriesBlockOutputs()} for this pass, by the
+	 *      identity it was asked about. The question is put once per portless link, while its answer depends on
+	 *      nothing the walk over the connections changes: a node many links leave pays one reading of the
+	 *      projections rather than one per link.
+	 */
+	private array $complexOutputExemptions = [];
+
+	/**
 	 * The loop nodes whose body is expressed on the OUTPUT side alone, which is the shape the input-based
 	 * closure check cannot see ({@see AgentConnectionsValidator::validateLoopClosure()}): While carries the
 	 * LoopBody role on its output o0 and closes the body back into its ordinary entry input, while ForEach owns
@@ -259,6 +276,32 @@ final class AgentBlocksValidator
 	private array $warnings = [];
 
 	/**
+	 * Asked for the routing model of the graph, built on first use and shared by every pass that needs it. It
+	 * memoises descriptions of activity TYPES rather than anything of the graph in hand, so one instance answers
+	 * for every run of the validator and a second one would only read the same descriptions again.
+	 */
+	private ?ActivityRegistry $activityRegistry = null;
+
+	/**
+	 * Installed condition kinds of the document type this run judges, memoised per run.
+	 *
+	 * @var list<string>|null
+	 */
+	private ?array $conditionSettingNames = null;
+
+	/**
+	 * What each accepted block is in the routing of the graph, keyed by block id: whether it only sorts the flow
+	 * and whether a condition could be moved into it ({@see BranchNodeMatcher}).
+	 *
+	 * Collected on the main pass rather than asked for afterwards, because the answer rests on the description of
+	 * the block, and reading a description again would read the activity catalog again - the very count the
+	 * invariant `block-catalog-reads` of the knowledge layer pins.
+	 *
+	 * @var array<string, array{id: string, path: string, type: string, isBranch: bool, isTarget: bool}>
+	 */
+	private array $routingNodes = [];
+
+	/**
 	 * Storage the published version already names, indexed once per validator like the restricted names are: every
 	 * field it reads is settled at construction, and re-indexing a code per node would repeat a regexp for each of
 	 * the 256 blocks an entry may carry.
@@ -326,6 +369,8 @@ final class AgentBlocksValidator
 		$this->blockIds = [];
 		$this->frameBlockIds = [];
 		$this->blockPortsMap = [];
+		$this->complexOutputPorts = [];
+		$this->complexOutputExemptions = [];
 		$this->blockLoopbackInputPortsMap = [];
 		$this->outputSideLoopNodes = [];
 		$this->blockDescriptionCache = null;
@@ -347,6 +392,8 @@ final class AgentBlocksValidator
 		$this->storageColumns = null;
 		$this->routesOutsideConnections = false;
 		$this->warnings = [];
+		$this->routingNodes = [];
+		$this->conditionSettingNames = null;
 		$this->validBlocks = new AgentBlockCollection();
 
 		if (!is_array($blocks))
@@ -450,6 +497,7 @@ final class AgentBlocksValidator
 				}
 
 				$blockDetail = $blockValidator->getValidBlockDetail();
+				$this->collectRoutingNode($validBlock, $blockDetail, $documentType, "{$path}.{$key}");
 				if ($blockDetail !== null)
 				{
 					if ($validBlock->rules !== null)
@@ -459,10 +507,12 @@ final class AgentBlocksValidator
 						// fall back to its "unknown ports -> skip check" bypass and let the agent reference a
 						// non-existent dynamic port. Aux (tool) ports are source endpoints too, so they join
 						// the output set. Complex nodes have no loop-back inputs.
+						$outputPortIds = $validBlock->rules->getOutputPortIds();
+						$this->complexOutputPorts[$validBlock->id] = $outputPortIds;
 						$this->blockPortsMap[$validBlock->id] = [
 							'input' => $validBlock->rules->getInputPortIds(),
 							'output' => [
-								...$validBlock->rules->getOutputPortIds(),
+								...$outputPortIds,
 								...$validBlock->rules->getAuxPortIds(),
 							],
 							'dynamic' => true,
@@ -493,6 +543,8 @@ final class AgentBlocksValidator
 		$result->addErrors($this->validateStorageOrder($connections)->getErrors());
 		$this->collectStartTriggerRisk();
 		$this->collectLoopRisks($connections);
+		$this->collectBranchConditionRisks($connections);
+		$this->collectUnnamedComplexOutputRisks($connections);
 
 		return $result;
 	}
@@ -1091,7 +1143,7 @@ final class AgentBlocksValidator
 	private function collectStartTriggerRisk(): void
 	{
 		$hasBlocks = false;
-		$registry = new ActivityRegistry();
+		$registry = $this->activityRegistry();
 		foreach ($this->validBlocks as $block)
 		{
 			/** @var AgentBlock $block */
@@ -1111,6 +1163,219 @@ final class AgentBlocksValidator
 			'the graph carries no trigger, so no event can start this process: a run finds no start trigger and'
 			. ' ends at once',
 			GraphErrorCode::StartTriggerMissing,
+		);
+	}
+
+	/**
+	 * What the block is in the routing of the graph, read off its own description on the main pass
+	 * ({@see self::$routingNodes} says why it is read here and not afterwards).
+	 */
+	private function collectRoutingNode(
+		AgentBlock $block,
+		?BlockTypeDetail $blockDetail,
+		DocumentDescription $documentType,
+		string $path,
+	): void
+	{
+		$this->routingNodes[$block->id] = [
+			'id' => $block->id,
+			'path' => $path,
+			'type' => $block->type,
+			'isBranch' => BranchNodeMatcher::isBranch(
+				$block,
+				$blockDetail,
+				fn(): array => $this->conditionSettingNames($documentType),
+				fn(string $type): bool => $this->activityRegistry()->isTrigger($type),
+			),
+			'isTarget' => BranchNodeMatcher::isConditionTarget($blockDetail),
+		];
+	}
+
+	/**
+	 * Installed condition kinds of this document type, asked once per run: the answer is the same for every block
+	 * of one entry, and the source memoises it per type anyway.
+	 *
+	 * Asked for lazily, because resolving them walks the whole activity catalog and only the shape of a block that
+	 * might branch leaves the answer to them ({@see BranchNodeMatcher::isBranch()}): an entry of complex nodes, and
+	 * an entry whose blocks sort nowhere, never pays for the walk.
+	 *
+	 * @return list<string>
+	 */
+	private function conditionSettingNames(DocumentDescription $documentType): array
+	{
+		return $this->conditionSettingNames ??= ConditionSettingNames::all($documentType->toBizprocComplexType());
+	}
+
+	/** {@see self::$activityRegistry} says why one instance serves every pass. */
+	private function activityRegistry(): ActivityRegistry
+	{
+		return $this->activityRegistry ??= new ActivityRegistry();
+	}
+
+	/**
+	 * A branch block whose conditions could have been the rules of the node it leads into, named as a risk rather
+	 * than refused: the graph runs as written, and which of the two shapes is right is the author's to decide.
+	 *
+	 * The risk is named only where moving the conditions changes nothing but the shape - every direct target of
+	 * the branch takes conditions, they are all of one type, and none of them branches itself. A branch leading
+	 * into different blocks is doing what a branch is for; one leading into another branch has nothing to hand
+	 * over, because its target decides nothing by itself; and a target that takes no condition is no place to
+	 * move one into.
+	 *
+	 * A block the server itself wrote - the published version, or the graph `template.get` handed over - is left
+	 * alone: the agent is being asked about a decision somebody else made, and the instruction has it ask its
+	 * user rather than rewrite such a block.
+	 *
+	 * Connections are read exactly as {@see self::loopBodyEntryPoints()} reads them. The source port takes no
+	 * part in the answer: a link leaves the branch whatever port it leaves by, so the default of an omitted
+	 * `sourcePortId` ({@see AgentPortDefault::SOURCE_PORT_ID}) cannot change which blocks the branch reaches.
+	 *
+	 * @param mixed $connections connections as submitted
+	 */
+	private function collectBranchConditionRisks(mixed $connections): void
+	{
+		if (!is_array($connections) || $this->routingNodes === [])
+		{
+			return;
+		}
+
+		$destinations = [];
+		foreach ($connections as $connection)
+		{
+			if (!is_array($connection))
+			{
+				continue;
+			}
+
+			$source = $connection['sourceBlockId'] ?? null;
+			$destination = $connection['destinationBlockId'] ?? null;
+			if (is_string($source) && $source !== '' && is_string($destination) && $destination !== '')
+			{
+				$destinations[$source][$destination] = true;
+			}
+		}
+
+		foreach ($this->routingNodes as $node)
+		{
+			if (!$node['isBranch'] || !isset($destinations[$node['id']]))
+			{
+				continue;
+			}
+
+			$targetTypes = [];
+			foreach (array_keys($destinations[$node['id']]) as $destinationId)
+			{
+				$target = $this->routingNodes[$destinationId] ?? null;
+				if ($target === null || !$target['isTarget'] || $target['isBranch'])
+				{
+					continue 2;
+				}
+
+				$targetTypes[mb_strtolower($target['type'])] = true;
+			}
+
+			if (count($targetTypes) !== 1 || $this->context?->carriesBlockIdentity($node['id'], $node['type']))
+			{
+				continue;
+			}
+
+			$this->warnings[] = GraphError::at(
+				$node['path'],
+				"{$node['path']} the conditions of this branch block could be rules of the complex node it leads"
+				. ' into, and the block itself dropped: a complex node decides by the conditions in the rules of'
+				. ' its own inputs',
+				GraphErrorCode::BranchConditionMovable,
+			);
+		}
+	}
+
+	/**
+	 * A connection leaving a complex node without naming its output, named as a risk rather than refused: the
+	 * graph is written and runs, and what the port costs is the tie between the connection and the rule that
+	 * declared the output. Without it the connection is addressed to the `o0` default
+	 * ({@see AgentPortDefault::SOURCE_PORT_ID}), so rules declaring their outputs differently move it to another
+	 * rule silently.
+	 *
+	 * Judged on the connections AS SUBMITTED, which is the only moment it can be judged at: the forward converter
+	 * substitutes the default on the way into the draft
+	 * ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAssistantDraftConverterService}) and
+	 * the reverse one strips a port equal to it on the way back, so neither the written graph nor the one
+	 * `template.get` answers with tells a named output from an omitted one.
+	 *
+	 * Where the default output is not declared at all the connections validator refuses the link outright
+	 * ({@see AgentConnectionsValidator::validateConnectionPort()}), and the risk is not named over a refusal: one
+	 * port is judged once. A port written as an empty string is that same refusal and no omission, so it is left
+	 * to the validator too.
+	 *
+	 * A node the server itself wrote - the published version, or the graph `template.get` handed over - is left
+	 * alone while its ways out are the ones the server wrote it with: the identity AND the very set of outputs its
+	 * rules declare ({@see ValidationContext::carriesBlockOutputs()}, ADR § 6 Q4). Identity alone was the measure
+	 * until the revision of 2026-09-25, and it let a way out be added to an old node while every link of it stayed
+	 * silent. The exemption is read off the SOURCE of the connection, because the baseline projection compares
+	 * blocks and excludes connections from the comparison, so a connection carries no identity of its own. Once the
+	 * set is rewritten, every portless link of that node is named, the ones read back included: the reverse read
+	 * strips a port equal to the default, so a link off `template.get` is not told from one written without a port.
+	 *
+	 * @param mixed $connections connections as submitted
+	 */
+	private function collectUnnamedComplexOutputRisks(mixed $connections): void
+	{
+		if (!is_array($connections))
+		{
+			return;
+		}
+
+		foreach ($connections as $key => $connection)
+		{
+			if (!is_array($connection) || ($connection['sourcePortId'] ?? null) !== null)
+			{
+				continue;
+			}
+
+			$sourceBlockId = $connection['sourceBlockId'] ?? null;
+			if (!is_string($sourceBlockId) || empty($this->blockPortsMap[$sourceBlockId]['dynamic']))
+			{
+				continue;
+			}
+
+			$outputs = $this->blockPortsMap[$sourceBlockId]['output'] ?? [];
+			if (!in_array(AgentPortDefault::SOURCE_PORT_ID, $outputs, true))
+			{
+				continue;
+			}
+
+			if ($this->carriesUnchangedComplexOutputs($sourceBlockId))
+			{
+				continue;
+			}
+
+			$path = "connections.{$key}";
+			$this->warnings[] = GraphError::at(
+				$path,
+				"{$path} leaves a complex node without naming its output, so it is addressed to the '"
+				. AgentPortDefault::SOURCE_PORT_ID . "' default rather than to the rule that declared the output:"
+				. ' name in sourcePortId the portId of the output construction of that rule',
+				GraphErrorCode::ComplexOutputUnnamed,
+				blockId: $sourceBlockId,
+			);
+		}
+	}
+
+	/**
+	 * The second step of the exemption above: whether the graph the server wrote carries this very node declaring
+	 * the very outputs it declares here ({@see ValidationContext::carriesBlockOutputs()}). Kept per identity for
+	 * the run, because every portless link of one node asks it over again and the projections answer the same
+	 * thing every time.
+	 */
+	private function carriesUnchangedComplexOutputs(string $blockId): bool
+	{
+		$blockType = $this->routingNodes[$blockId]['type'] ?? null;
+		$identity = strlen($blockId) . ':' . $blockId . '|' . mb_strtolower((string)$blockType);
+
+		return $this->complexOutputExemptions[$identity] ??= (bool)$this->context?->carriesBlockOutputs(
+			$blockId,
+			$blockType,
+			$this->complexOutputPorts[$blockId] ?? [],
 		);
 	}
 

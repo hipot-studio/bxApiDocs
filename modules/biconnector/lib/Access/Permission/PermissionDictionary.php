@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\Main\Access\Permission;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\UI\Public\Enum\IconSet\Outline;
 
 final class PermissionDictionary extends Permission\PermissionDictionary
 {
@@ -29,6 +30,7 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const BIC_SHARE_CONTROL = 11;
 
 	public const BIC_SECTION_EDIT_DASHBOARD_RIGHTS = 12;
+	public const BIC_SETTINGS_EDIT_ROW_RULES = 15;
 
 	public const BIC_DASHBOARD = 100;
 	public const BIC_DASHBOARD_VIEW = 101;
@@ -166,14 +168,42 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		return "G{$groupId}";
 	}
 
+	/**
+	 * @param string $permission
+	 *
+	 * @return int Id of the group; 0 when the identifier is not a dashboard group.
+	 */
 	public static function getDashboardGroupIdFromPermission(string $permission): int
 	{
-		return (int)str_replace('G', '', $permission);
+		if (!self::isDashboardGroupPermission($permission))
+		{
+			return 0;
+		}
+
+		return (int)substr($permission, 1);
 	}
 
+	/**
+	 * Only the identifier getDashboardGroupPermissionId() builds: a G anywhere else, a cell of a table among
+	 * them, is no group. A placeholder of a new group is recognized by its own prefix.
+	 *
+	 * @param string $permission
+	 *
+	 * @return bool
+	 */
 	public static function isDashboardGroupPermission(string $permission): bool
 	{
-		return str_contains($permission, 'G');
+		return preg_match(self::getDashboardGroupPermissionPattern(), $permission) === 1;
+	}
+
+	/**
+	 * The pattern lives in a method for the same reason as the pattern of the table groups.
+	 *
+	 * @return string
+	 */
+	private static function getDashboardGroupPermissionPattern(): string
+	{
+		return '/^G(0|[1-9]\d*)$/D';
 	}
 
 	public static function getTableGroupPermissionId(int $groupId): string
@@ -206,6 +236,198 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public static function isTableGroupPermission(string $permission): bool
 	{
 		return preg_match(self::getTableGroupPermissionPattern(), $permission) === 1;
+	}
+
+	public static function getTableCellPermissionId(string $tableCode): string
+	{
+		return self::getTableCellPermissionPrefix() . $tableCode;
+	}
+
+	/**
+	 * @param string $permissionId
+	 *
+	 * @return string|null Code of the table; null when the identifier is not a cell of a role and a table.
+	 */
+	public static function getTableCodeFromCellPermission(string $permissionId): ?string
+	{
+		if (!self::isTableCellPermission($permissionId))
+		{
+			return null;
+		}
+
+		return substr($permissionId, strlen(self::getTableCellPermissionPrefix()));
+	}
+
+	/**
+	 * The check is case-sensitive: the database compares identifiers without case, so the readers of the rows
+	 * check every row again with this method.
+	 *
+	 * @param string $permissionId
+	 *
+	 * @return bool
+	 */
+	public static function isTableCellPermission(string $permissionId): bool
+	{
+		$prefix = self::getTableCellPermissionPrefix();
+
+		return strlen($permissionId) > strlen($prefix) && str_starts_with($permissionId, $prefix);
+	}
+
+	/**
+	 * Whether the database may take the identifier for a cell: it compares identifiers without case on MySQL.
+	 * A right of the request that collides with a cell is dropped, or its deletion would reach the cell.
+	 *
+	 * @param string $permissionId
+	 *
+	 * @return bool
+	 */
+	public static function collidesWithTableCellPermission(string $permissionId): bool
+	{
+		$prefix = self::getTableCellPermissionPrefix();
+
+		return strlen($permissionId) > strlen($prefix) && strncasecmp($permissionId, $prefix, strlen($prefix)) === 0;
+	}
+
+	/**
+	 * The prefix lives in a method, not in a constant, for the same reason as the pattern of the table groups.
+	 *
+	 * @return string
+	 */
+	private static function getTableCellPermissionPrefix(): string
+	{
+		return 'TT';
+	}
+
+	/**
+	 * Value of a table row that holds no rights of its own and follows the rights of its group.
+	 * A method, not a constant, for the same reason as getTableGroupPermissionPattern().
+	 *
+	 * @return string
+	 */
+	public static function getTableInheritValue(): string
+	{
+		return '-1';
+	}
+
+	/**
+	 * Id of the row of a table under the row of its group in the permission matrix.
+	 * The matrix keys values by the id of a row, so a table in two groups gets two rows.
+	 *
+	 * @param int $groupId
+	 * @param string $tableCode
+	 *
+	 * @return string
+	 */
+	public static function getTableRowPermissionId(int $groupId, string $tableCode): string
+	{
+		return "T{$groupId}:{$tableCode}";
+	}
+
+	/**
+	 * @param string $permission
+	 *
+	 * @return array{groupId: int, tableCode: string}|null
+	 */
+	public static function parseTableRowPermissionId(string $permission): ?array
+	{
+		if (preg_match('/^T(0|[1-9]\d*):(.+)$/sD', $permission, $matches) !== 1)
+		{
+			return null;
+		}
+
+		$tableCode = $matches[2];
+		// the code column of the table bindings holds 250 characters
+		if (mb_strlen($tableCode) > 250)
+		{
+			return null;
+		}
+
+		return [
+			'groupId' => (int)$matches[1],
+			'tableCode' => $tableCode,
+		];
+	}
+
+	public static function isTableRowPermission(string $permission): bool
+	{
+		return self::parseTableRowPermissionId($permission) !== null;
+	}
+
+	/**
+	 * Row of a table under the row of its group. An empty value means the table follows the group,
+	 * a mass action of the role column brings the table back to that state.
+	 *
+	 * @param int $groupId
+	 * @param string $tableCode
+	 * @param string $title
+	 * @param bool $isValueClickable The cell is edited by the popup of the module instead of the built-in one.
+	 *
+	 * @return array
+	 */
+	public static function getTableRowPermission(
+		int $groupId,
+		string $tableCode,
+		string $title,
+		bool $isValueClickable,
+	): array
+	{
+		$separator = '|';
+		$permissionCodes = self::getTablePermissionCodes();
+		$inheritValue = self::getTableInheritValue();
+
+		$variables = [
+			[
+				'id' => $inheritValue,
+				'title' => Loc::getMessage('BIC_TABLE_INHERIT'),
+				'isUseGroupHeadValuesInHint' => true,
+				'secondary' => true,
+				'conflictsWith' => ['0', ...$permissionCodes],
+			],
+		];
+		foreach (self::getTablePermissionVariables() as $variable)
+		{
+			unset($variable['useAsNothingSelectedInSubsection'], $variable['useAsEmpty']);
+			if ($variable['id'] === '0')
+			{
+				$variable['conflictsWith'] = [$inheritValue, ...$permissionCodes];
+			}
+
+			$variables[] = $variable;
+		}
+
+		return [
+			'id' => self::getTableRowPermissionId($groupId, $tableCode),
+			'type' => self::TYPE_DEPENDENT_VARIABLES,
+			'title' => $title,
+			'subtitle' => $tableCode,
+			'group' => self::getTableGroupPermissionId($groupId),
+			'groupHead' => false,
+			'variables' => $variables,
+			'emptyValue' => [$inheritValue],
+			'nothingSelectedValue' => ['0'],
+			'minValue' => ['0'],
+			'maxValue' => $permissionCodes,
+			'setEmptyOnSetMinMaxValueInColumn' => true,
+			'selectedVariablesAliases' => [
+				'separator' => $separator,
+				implode($separator, $permissionCodes) => Loc::getMessage('BIC_TABLE_ACCESS_ALL'),
+			],
+			// the own rights of the table are the variables outside the preset, ui shows them as a tab of its own
+			'presets' => [
+				[
+					'id' => $inheritValue,
+					'title' => Loc::getMessage('BIC_TABLE_INHERIT'),
+					'icon' => Outline::FOLDER->value,
+					// ui renders the description as html
+					'description' => htmlspecialcharsbx((string)Loc::getMessage('BIC_TABLE_INHERIT_DESCRIPTION')),
+					'showGroupHeadItems' => true,
+					'variableIds' => [$inheritValue],
+				],
+			],
+			'isClickable' => false,
+			'isDeletable' => false,
+			'isValueClickable' => $isValueClickable,
+		];
 	}
 
 	/**

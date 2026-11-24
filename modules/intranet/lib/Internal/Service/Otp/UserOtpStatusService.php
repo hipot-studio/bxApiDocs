@@ -77,17 +77,29 @@ class UserOtpStatusService
 			return UserOtpStatus::Enabled;
 		}
 
-		if ($isMandatoryForUser)
+		if ($this->isMandatoryExempted($otpInfo, $isActiveUser, $isMandatoryForUser))
 		{
-			if ($otpInfo->isMandatorySkipped && $otpInfo->dateDeactivate === null)
-			{
-				return UserOtpStatus::Disabled;
-			}
+			return UserOtpStatus::MandatoryExempted;
+		}
 
+		if ($this->isMandatory && $isMandatoryForUser)
+		{
 			return UserOtpStatus::EnableRequired;
 		}
 
 		return UserOtpStatus::Disabled;
+	}
+
+	private function isMandatoryExempted(UserOtp $otpInfo, bool $isActiveUser, bool $isMandatoryForUser): bool
+	{
+		return $this->otpSettings->isAvailable()
+			&& $isActiveUser
+			&& $this->isMandatory
+			&& $isMandatoryForUser
+			&& !$otpInfo->isActive
+			&& $otpInfo->isMandatorySkipped === true
+			&& $otpInfo->dateDeactivate === null
+		;
 	}
 
 	/**
@@ -205,6 +217,7 @@ class UserOtpStatusService
 		if ($this->isMandatory)
 		{
 			$statuses[] = UserOtpStatus::EnableRequired;
+			$statuses[] = UserOtpStatus::MandatoryExempted;
 		}
 
 		$statuses[] = UserOtpStatus::Disabled;
@@ -239,7 +252,29 @@ class UserOtpStatusService
 			return 0;
 		}
 
-		return count($this->userRepository->getActiveConfirmedUserIds($needAttention));
+		$activeUserIds = $this->userRepository->getActiveConfirmedUserIds($needAttention);
+		if (empty($activeUserIds))
+		{
+			return 0;
+		}
+
+		$otpByUserId = $this->otpUserProvider->getOtpDataByUserIds($activeUserIds);
+		$count = 0;
+		foreach ($activeUserIds as $userId)
+		{
+			$otpInfo = $otpByUserId[$userId] ?? new UserOtp(
+				userId: $userId,
+				isActive: false,
+				isInitialized: false,
+			);
+
+			if ($this->getStatus($otpInfo, isActiveUser: true, isMandatoryForUser: true) !== UserOtpStatus::MandatoryExempted)
+			{
+				$count++;
+			}
+		}
+
+		return $count;
 	}
 
 	private function getAllMandatoryUserIds(): array

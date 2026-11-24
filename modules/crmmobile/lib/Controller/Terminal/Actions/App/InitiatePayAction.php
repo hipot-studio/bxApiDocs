@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Bitrix\CrmMobile\Controller\Terminal\Actions\App;
 
 use Bitrix\Sale\Controller\Action\Entity;
+use Bitrix\Sale\Services\PaySystem\Restrictions\Manager as RestrictionManager;
 use Bitrix\CrmMobile\Controller\Action;
 
 class InitiatePayAction extends Action
@@ -12,6 +13,7 @@ class InitiatePayAction extends Action
 	final public function run(int $paymentId, int $paySystemId, string $accessCode): ?array
 	{
 		$action = new Entity\InitiatePayAction($this->name, $this->controller, $this->config);
+		$action->setRestrictionMode(RestrictionManager::MODE_MANAGER);
 		$result = $action->run([
 			'PAYMENT_ID' => $paymentId,
 			'PAY_SYSTEM_ID' => $paySystemId,

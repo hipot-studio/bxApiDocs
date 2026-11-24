@@ -6,11 +6,9 @@ use Bitrix\Mail\MailboxTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Mobile\Feature\MyCompanyFeature;
-use Bitrix\Mobile\Internal\Integration\Bitrix24\License;
-use Bitrix\Mobile\Internal\Integration\Main\EarliestUserRegistration;
-use Bitrix\Mobile\Internal\Onboarding\Checkers\PortalAgeChecker;
 use Bitrix\Mobile\Menu\MyCompany\MyCompanyProvider;
 use Bitrix\Mobile\Menu\Promo\EmployeeThreshold;
+use Bitrix\Mobile\Public\Provider\PortalProvider;
 use Bitrix\Mobile\Tourist;
 use Bitrix\Main\Loader;
 
@@ -45,33 +43,7 @@ class AhaMoment
 			return $mailListAhaMoment;
 		}
 
-		return $this->getInvitationAhaMoment();
-	}
-
-	/**
-	 * Unaccepted invitations of the portal. The moment carries no tourist event on purpose: it is a
-	 * reminder and keeps coming back while the invitations are still unaccepted.
-	 */
-	private function getInvitationAhaMoment(): ?array
-	{
-		if (!Loader::includeModule('intranetmobile'))
-		{
-			return null;
-		}
-
-		$invitation = (new \Bitrix\IntranetMobile\Invitation\InvitationAhaMoment())
-			->getUnacceptedInvitesAhaMoment()
-		;
-		if ($invitation === null)
-		{
-			return null;
-		}
-
-		return [
-			'type' => 'invitation',
-			'title' => $invitation->title,
-			'description' => $invitation->description,
-		];
+		return null;
 	}
 
 	private function getMyCompanyAhaMoment(MyCompanyProvider $section, bool $canInvite): ?array
@@ -123,20 +95,18 @@ class AhaMoment
 			&& isset($events[self::USERS_FLOATING_BANNER_SHOWN_EVENT]);
 	}
 
+	/**
+	 * The creation date the cohort of the section is decided by: the one the cloud portal states, and
+	 * outside the cloud, where the portal states none, the registration of its earliest user.
+	 */
 	protected function getPortalCreatedAt(): ?DateTime
 	{
-		if (!(new License())->isCloud())
-		{
-			return (new EarliestUserRegistration())->get();
-		}
+		$portal = new PortalProvider();
 
-		$portalAgeChecker = new PortalAgeChecker();
-		if (!$portalAgeChecker->isPortalDateKnown())
-		{
-			return null;
-		}
-
-		return $portalAgeChecker->getPortalCreatedAt();
+		return $portal->isCloud()
+			? $portal->getCreatedAt()
+			: $portal->getEarliestUserRegisteredAt()
+		;
 	}
 
 	protected function getTouristEvents(): array
@@ -206,7 +176,7 @@ class AhaMoment
 
 	private function isCallListAhaMomentShown(): bool
 	{
-		$events = Tourist::getEvents();
+		$events = $this->getTouristEvents();
 
 		return isset($events[self::CALL_LIST_EVENT]);
 	}
@@ -233,7 +203,7 @@ class AhaMoment
 
 	private function isMailListAhaMomentShown(): bool
 	{
-		$events = Tourist::getEvents();
+		$events = $this->getTouristEvents();
 
 		return isset($events[self::MAIL_LIST_EVENT]);
 	}

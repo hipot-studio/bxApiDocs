@@ -5,6 +5,8 @@ namespace Bitrix\Disk;
 use Bitrix\Disk;
 use Bitrix\Disk\Document\Online\UserInfoToken;
 use Bitrix\Disk\Internal\Enum\WriteOperationContext;
+use Bitrix\Disk\Internal\Service\HtmlEditor\AiLockService;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\Quota\PersonalQuotaService;
 use Bitrix\Disk\Internal\Service\Quota\StorageUsageCounter;
 use Bitrix\Disk\Internal\Service\Restrictions\ContentHeadReader;
@@ -44,6 +46,7 @@ use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\ExpressionField;
@@ -92,6 +95,7 @@ class File extends BaseObject
 	protected array $fileTypeFixes = [
 		TypeFile::UNKNOWN => [
 			'xlsm' => TypeFile::DOCUMENT,
+			'odp' => TypeFile::DOCUMENT,
 		],
 	];
 
@@ -1151,40 +1155,35 @@ class File extends BaseObject
 	)
 	{
 		$this->errorCollection->clear();
-		$oldSize = (int)$this->getSize();
-
-		if (!$this->checkFormatPolicy($options, self::resolveVersionPolicyActorId($updatedBy, $options), $file))
+		$isHtml = HtmlViewerPolicy::isViewableFile($this);
+		$prepared = $isHtml ? null : $this->prepareContentUpdate($file, $updatedBy, $options);
+		if (!$isHtml && $prepared === null)
 		{
 			return false;
 		}
-
-		static::checkRequiredInputParams($file, array(
-			'ID', 'FILE_SIZE'
-		));
-
-		$objectLock = null;
-		if(Configuration::isEnabledObjectLock())
+		if (!$isHtml)
 		{
-			$objectLock = $this->getLock();
-			if($objectLock && $objectLock->isExclusive() && !$objectLock->canUnlock($updatedBy))
-			{
-				$this->errorCollection[] = new Error(Loc::getMessage('DISK_FILE_MODEL_ERROR_EXCLUSIVE_LOCK'), self::ERROR_EXCLUSIVE_LOCK);
-				return false;
-			}
+			$this->prevFileId = $this->fileId;
 		}
 
-		//todo inc in DB by expression
-		$updateData = array(
-			'GLOBAL_CONTENT_VERSION' => (int)$this->getGlobalContentVersion() + 1,
-			'FILE_ID' => $file['ID'],
-			'ETAG' => empty($file['ETAG'])? $this->generateEtag() : $file['ETAG'], //each time we update etag field. It is random string
-			'SIZE' => $file['FILE_SIZE'],
-			'UPDATE_TIME' => empty($file['UPDATE_TIME'])? new DateTime() : $file['UPDATE_TIME'],
-			'UPDATED_BY' => $updatedBy,
-		);
+		$mutation = function () use ($file, $updatedBy, $options, $isHtml, $prepared): bool {
+			if ($isHtml && !$this->lockContentForWrite())
+			{
+				$this->formatPolicyChecked = false;
 
-		$this->prevFileId = $this->fileId;
-		$mutation = function () use ($updateData, $file, $updatedBy, $objectLock, $oldSize): bool {
+				return false;
+			}
+			$prepared = $isHtml ? $this->prepareContentUpdate($file, $updatedBy, $options) : $prepared;
+			if ($prepared === null)
+			{
+				return false;
+			}
+			[$oldSize, $objectLock, $updateData] = $prepared;
+
+			if ($isHtml)
+			{
+				$this->prevFileId = $this->fileId;
+			}
 			$success = $this->update($updateData);
 
 			if(!$success)
@@ -1256,9 +1255,19 @@ class File extends BaseObject
 			return false;
 		}
 
+		$writtenContentVersion = (int)$this->getGlobalContentVersion();
+		$writtenUpdatedBy = (int)$this->getUpdatedBy();
+		$mutationConnection = $auditTransaction?->getConnection() ?? Application::getConnection();
+
 		// The hook may run after the flag is reset, so the decision is taken here, not inside it.
 		$skipRecentlyUsed = $this->skipRecentlyUsed;
-		$afterCommit = function () use ($updatedBy, $skipRecentlyUsed): void {
+		$afterCommit = function () use (
+			$updatedBy,
+			$skipRecentlyUsed,
+			$writtenContentVersion,
+			$writtenUpdatedBy,
+			$mutationConnection,
+		): void {
 			$driver = Driver::getInstance();
 			if (!$skipRecentlyUsed && $this->getStorage()->isUseInternalRights())
 			{
@@ -1281,17 +1290,23 @@ class File extends BaseObject
 
 			$driver->getIndexManager()->scheduleBoardIndex($this, (int)$this->getGlobalContentVersion());
 
+			$objectPayload = [
+				'id' => (int)$this->getId(),
+				'name' => $this->getName(),
+				'parentId' => (int)$this->getParentId(),
+				'updatedBy' => (int)$this->getUpdatedBy(),
+			];
+			if (self::canExposeCommittedContentVersion($mutationConnection))
+			{
+				$objectPayload['globalContentVersion'] = $writtenContentVersion;
+				$objectPayload['updatedBy'] = $writtenUpdatedBy;
+			}
 			$objectEvent = $this->makeObjectEvent(
 				'contentUpdated',
 				[
-					'object' => [
-						'id' => (int)$this->getId(),
-						'name' => $this->getName(),
-						'parentId' => (int)$this->getParentId(),
-						'updatedBy' => (int)$this->getUpdatedBy(),
-					],
+					'object' => $objectPayload,
 					'updatedBy' => [
-						'infoToken' => UserInfoToken::generateTimeLimitedToken($this->getUpdatedBy(), $this->getId()),
+						'infoToken' => UserInfoToken::generateTimeLimitedToken($objectPayload['updatedBy'], $this->getId()),
 					]
 				]
 			);
@@ -1331,6 +1346,104 @@ class File extends BaseObject
 		else
 		{
 			$afterCommit();
+		}
+
+		return true;
+	}
+
+	private static function canExposeCommittedContentVersion(Connection $connection): bool
+	{
+		if (
+			!($connection instanceof Main\DB\MysqlCommonConnection)
+			&& !($connection instanceof Main\DB\PgsqlConnection)
+		)
+		{
+			return false;
+		}
+
+		try
+		{
+			return !AuditTransaction::isActive($connection) && !$connection->isTransactionActive();
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	private function prepareContentUpdate(array $file, $updatedBy, array $options): ?array
+	{
+		$oldSize = (int)$this->getSize();
+		if (!$this->checkFormatPolicy($options, self::resolveVersionPolicyActorId($updatedBy, $options), $file))
+		{
+			return null;
+		}
+
+		static::checkRequiredInputParams($file, ['ID', 'FILE_SIZE']);
+
+		$objectLock = null;
+		if (Configuration::isEnabledObjectLock())
+		{
+			$objectLock = $this->getLock();
+			if ($objectLock && $objectLock->isExclusive() && !$objectLock->canUnlock($updatedBy))
+			{
+				$this->errorCollection[] = new Error(
+					Loc::getMessage('DISK_FILE_MODEL_ERROR_EXCLUSIVE_LOCK'),
+					self::ERROR_EXCLUSIVE_LOCK,
+				);
+
+				return null;
+			}
+		}
+
+		return [$oldSize, $objectLock, [
+			'GLOBAL_CONTENT_VERSION' => (int)$this->getGlobalContentVersion() + 1,
+			'FILE_ID' => $file['ID'],
+			'ETAG' => empty($file['ETAG']) ? $this->generateEtag() : $file['ETAG'],
+			'SIZE' => $file['FILE_SIZE'],
+			'UPDATE_TIME' => empty($file['UPDATE_TIME']) ? new DateTime() : $file['UPDATE_TIME'],
+			'UPDATED_BY' => $updatedBy,
+		]];
+	}
+
+	private function lockContentForWrite(): bool
+	{
+		if (!HtmlViewerPolicy::isViewableFile($this))
+		{
+			return true;
+		}
+
+		$objectId = (int)$this->getRealObjectId();
+		$table = ObjectTable::getTableName();
+		$row = Application::getConnection()->query(
+			"SELECT ID, NAME, TYPE_FILE, FILE_ID, SIZE, GLOBAL_CONTENT_VERSION"
+			. " FROM {$table} WHERE ID = {$objectId} FOR UPDATE",
+		)->fetch();
+		if (!$row)
+		{
+			return false;
+		}
+		$this->setAttributes($row);
+		$this->extension = null;
+		if (!HtmlViewerPolicy::isViewableFile($this))
+		{
+			return true;
+		}
+		try
+		{
+			if ((new AiLockService())->getSnapshot($objectId) !== null)
+			{
+				$this->errorCollection[] = new Error(AiLockService::ERROR_LOCKED, AiLockService::ERROR_LOCKED);
+
+				return false;
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+			$this->errorCollection[] = new Error(AiLockService::ERROR_UNAVAILABLE, AiLockService::ERROR_UNAVAILABLE);
+
+			return false;
 		}
 
 		return true;
@@ -1421,6 +1534,12 @@ class File extends BaseObject
 	): ?Version
 	{
 		$this->errorCollection->clear();
+		if (!$this->lockContentForWrite())
+		{
+			$this->formatPolicyChecked = false;
+
+			return null;
+		}
 
 		$commentAttachedObjects = $options['commentAttachedObjects'] ?? true;
 		$disableAutoBizProc = !empty($options['disableAutoBizProc']);
@@ -2534,8 +2653,11 @@ class File extends BaseObject
 
 		if(!isset($parameters['order']))
 		{
+			// CREATE_TIME has a precision of a second: versions created within one second are
+			// told apart by their ids, otherwise the newest one is left to the database.
 			$parameters['order'] = array(
 				'CREATE_TIME' => 'DESC',
+				'ID' => 'DESC',
 			);
 		}
 

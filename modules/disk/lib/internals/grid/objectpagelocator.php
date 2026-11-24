@@ -5,8 +5,6 @@ namespace Bitrix\Disk\Internals\Grid;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\SecurityContext;
-use Bitrix\Main\Application;
-use Bitrix\Main\DB\PgsqlConnection;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
@@ -117,9 +115,8 @@ final class ObjectPageLocator
 
 	private function isNullFirst(bool $descending): bool
 	{
-		// MySQL puts NULL first in ascending order, PostgreSQL puts it last
-		$nullIsSmallest = !(Application::getConnection() instanceof PgsqlConnection);
-
-		return $nullIsSmallest !== $descending;
+		// the ORM orders NULL as the smallest value on every database: PgsqlSqlHelper adds NULLS FIRST to ASC
+		// and NULLS LAST to DESC, the way MySQL orders it by default
+		return !$descending;
 	}
 }

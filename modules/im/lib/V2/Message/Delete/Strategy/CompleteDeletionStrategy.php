@@ -6,7 +6,6 @@ use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatError;
-use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Link\Calendar\CalendarCollection;
 use Bitrix\Im\V2\Link\Calendar\CalendarService;
 use Bitrix\Im\V2\Link\Task\TaskCollection;
@@ -153,17 +152,6 @@ class CompleteDeletionStrategy extends DeletionStrategy
 				. implode(', ', $this->messages->getIds())
 				. " ) "
 			);
-		}
-
-		$resultGetComments = CommentChat::getChatsByMessages($this->messages);
-		if (!$resultGetComments->isSuccess())
-		{
-			return;
-		}
-
-		foreach ($resultGetComments->getResult() as $chat)
-		{
-			$chat?->deleteChat();
 		}
 	}
 

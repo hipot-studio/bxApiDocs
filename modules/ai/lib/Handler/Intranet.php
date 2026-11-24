@@ -16,7 +16,7 @@ use Bitrix\Main\Loader;
 class Intranet
 {
 	/**
-	 * Called after system user totally delete.
+	 * Adds the AI settings page provider to Intranet settings, except for the `cn` zone.
 	 *
 	 * @param Event $event
 	 * @return void

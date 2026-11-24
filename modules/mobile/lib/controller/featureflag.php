@@ -7,6 +7,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Loader;
+use Bitrix\Im\V2\Controller\Copilot\Chat;
 use Bitrix\Mobile\Config\Feature as MobileFeature;
 use Bitrix\Mobile\Feature\FeedbackRouterFeature;
 use Bitrix\Mobile\Feature\SecuritySettingsFeature;
@@ -20,7 +21,9 @@ use Bitrix\Mobile\Feature\WhatsNewFeature;
 use Bitrix\Mobile\Public\Features\BitrixAnswersPersistentScreenFeature;
 use Bitrix\Mobile\Public\Features\BitrixGptVoiceFeature;
 use Bitrix\Mobile\Public\Features\ManagedTabPresetsFeature;
+use Bitrix\Mobile\Public\Features\DeviceStorageInfoFeature;
 use Bitrix\Mobile\Public\Features\TextEditorFeature;
+use Bitrix\Mobile\Public\Features\UploadIdleWatchdogFeature;
 use Bitrix\TasksMobile\Feature\ChecklistOnCompleteFeature;
 use Bitrix\TasksMobile\Public\Features\TaskEmailFeature;
 use Bitrix\TimemanMobile\Public\Features\WorkReportsFeature;
@@ -67,9 +70,12 @@ final class FeatureFlag extends JsonController
 			'TariffMenuPurchaseCtaFeature' => (new TariffMenuPurchaseCtaFeature())->isEnabled(),
 			'TariffMenuDemoModeFeature' => (new TariffMenuDemoModeFeature())->isEnabled(),
 			'TextEditorFeature' => Feature::isEnabled(TextEditorFeature::class),
+			'DeviceStorageInfoFeature' => Feature::isEnabled(DeviceStorageInfoFeature::class),
 			'TaskEmailFeature' => Loader::includeModule('tasksmobile')
 				&& Feature::isEnabled(TaskEmailFeature::class),
 			'BitrixAnswersPersistentScreenFeature' => Feature::isEnabled(BitrixAnswersPersistentScreenFeature::class),
+			'UploadIdleWatchdogFeature' => Feature::isEnabled(UploadIdleWatchdogFeature::class),
+			'BitrixGptVoiceChatByKey' => Loader::includeModule('im') && class_exists(Chat::class),
 		];
 	}
 }

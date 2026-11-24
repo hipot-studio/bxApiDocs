@@ -13,18 +13,28 @@ class CountersCache
 	// Bumped to v11: the cached counters are split by recent section, now derived from the type
 	// literal minus exclusions. Entries written by v10 hold the old split and a module update does
 	// not clear them, so they would keep serving it until the TTL expires.
-	private const CACHE_DIR = '/bx/im/counter/v11/';
+	// Bumped to v12: ChatCounter gained isNonAnswered, and the entries serialized by v11 wake up without it.
+	private const CACHE_DIR = '/bx/im/counter/v12/';
 	private const CACHE_KEY_PREFIX = 'user_counters_';
 	private const CACHE_TTL = 86400;
 
 	protected array $inMemoryCache = [];
 	protected array $inMemoryPointCache = [];
+	/**
+	 * Users whose snapshot the storage did not have: a point read asks once per chat, so a miss looked up
+	 * again would cost one storage round trip per chat. Every write of this instance forgets the miss.
+	 */
+	protected array $inMemoryMisses = [];
 
 	public function get(int $userId): ?UserCounters
 	{
 		if (isset($this->inMemoryCache[$userId]))
 		{
 			return $this->inMemoryCache[$userId];
+		}
+		if (isset($this->inMemoryMisses[$userId]))
+		{
+			return null;
 		}
 
 		$cache = Cache::createInstance();
@@ -34,6 +44,7 @@ class CountersCache
 		{
 			return $this->inMemoryCache[$userId] = $counters;
 		}
+		$this->inMemoryMisses[$userId] = true;
 
 		return null;
 	}
@@ -41,6 +52,7 @@ class CountersCache
 	public function set(int $userId, UserCounters $counters): void
 	{
 		$this->inMemoryCache[$userId] = $counters;
+		unset($this->inMemoryMisses[$userId]);
 		$cache = Cache::createInstance();
 		$cache->startDataCache(self::CACHE_TTL, $this->getCacheKey($userId), self::CACHE_DIR);
 		$cache->endDataCache($counters);
@@ -68,7 +80,7 @@ class CountersCache
 	{
 		$cache = Cache::createInstance();
 		$cache->clean($this->getCacheKey($userId), self::CACHE_DIR);
-		unset($this->inMemoryCache[$userId], $this->inMemoryPointCache[$userId]);
+		unset($this->inMemoryCache[$userId], $this->inMemoryPointCache[$userId], $this->inMemoryMisses[$userId]);
 
 		CounterService::clearLegacyCache($userId);
 	}
@@ -77,6 +89,7 @@ class CountersCache
 	{
 		$this->inMemoryCache = [];
 		$this->inMemoryPointCache = [];
+		$this->inMemoryMisses = [];
 		$cache = Cache::createInstance();
 		$cache->cleanDir(self::CACHE_DIR);
 

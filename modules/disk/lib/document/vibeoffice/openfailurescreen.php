@@ -44,6 +44,12 @@ final class OpenFailureScreen
 				$screen['description'] = self::PHRASE_PREFIX . 'OPEN_EXPIRED_DESCR';
 				$screen['actions'] = ['retry'];
 			}
+			elseif ($failureKind === SessionRegistry::ERROR_CODE_OPEN_UNRESOLVED)
+			{
+				$screen['title'] = self::PHRASE_PREFIX . 'OPEN_UNRESOLVED_TITLE';
+				$screen['description'] = self::PHRASE_PREFIX . 'OPEN_UNRESOLVED_DESCR';
+				$screen['actions'] = ['retry'];
+			}
 		}
 
 		return $screen;

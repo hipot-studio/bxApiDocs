@@ -3,8 +3,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Reading;
 
+use Bitrix\Im\Model\AnchorTable;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\Model\MessageUnreadTable;
+use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Anchor;
 use Bitrix\Im\V2\Async\Promise\BackgroundJobPromise;
@@ -21,6 +24,7 @@ use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation\LastIdUpdater;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Im\V2\Sync;
 
 class Reader
@@ -174,7 +178,7 @@ class Reader
 		$endMessage = $messages[$maxId];
 		$previousLastId = $chat->getRelationByUserId($userId)?->getLastId() ?? 0;
 
-		$this->counterUpdater->delete()->toMessage($endMessage, $userId)->execute();
+		$counterDeleteResult = $this->counterUpdater->delete()->toMessage($endMessage, $userId)->execute();
 		$counter = $this->counterProvider->getForUser($chat->getChatId(), $userId);
 
 		$viewedMessages = $this->viewUpdater->add($messages->withContextUser($userId)->fillViewed(), $userId);
@@ -184,8 +188,26 @@ class Reader
 
 		$this->recentReader->updateDateUpdate($userId, $chat->getChatId());
 
-		// Must run after the counter delete / LAST_ID update above so the resolver sees the post-read unread state.
-		$this->recentReader->recomputeCollabPreviewSourceOnRead($chat, $userId);
+		// Must run after the counter delete / LAST_ID update above so the resolver sees the post-read unread
+		// state. An idle repeated hit moves nothing the resolver reads, so it would return what the previous
+		// recompute already stored - and that resolver pass is the part of the hit that grows with the number
+		// of the collab's children.
+		// The guard is therefore the convergence rule of the uniform send-time pointer as well
+		// (\Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback): a recipient the shared pointer
+		// does not fit keeps it until the first hit that changes their read state, not until any read.
+		// The cleared counter is a term of its own, not a consequence of the other two: the cursor and the
+		// view records describe what the hit was asked to read, while the counter rows are what the resolver
+		// reads. A hit carrying only an own message views nothing (own messages never become view records)
+		// and moves no cursor, yet its delete clears every counter row up to that message.
+		$isReadStateChanged =
+			$maxId > $previousLastId
+			|| !empty($viewedMessages->getIds())
+			|| $counterDeleteResult->hasDeleted()
+		;
+		if ($isReadStateChanged)
+		{
+			$this->recentReader->recomputeCollabPreviewSourceOnRead($chat, $userId);
+		}
 
 		\CIMNotify::DeleteBySubTag("IM_MESS_{$chat->getChatId()}_{$userId}", false, false);
 
@@ -250,20 +272,37 @@ class Reader
 		(new Message\Event\AfterReadAllChatsEvent($userId))->send();
 	}
 
-	public function readAllByRecentSection(string $recentSection, int $userId, ?int $parentId): void
+	/**
+	 * @param UnreadSources|null $sources what {@see self::findUnreadSources()} found for the user: a caller
+	 *        reading several sections probes once and passes it to each of them; null looks up every store
+	 */
+	public function readAllByRecentSection(
+		string $recentSection,
+		int $userId,
+		?int $parentId,
+		?UnreadSources $sources = null,
+	): void
 	{
+		$sources ??= UnreadSources::all();
 		$scope = $this->chatTreeScopeFactory->forRecentSection($recentSection, $parentId);
-		if (!$scope->isPossible())
+		if ($sources->isEmpty() || !$scope->isPossible())
 		{
 			return;
 		}
 
-		$counterResult = $this->counterUpdater->delete()->byTreeScope($scope)->forUser($userId)->execute();
-		$counterChatIds = Normalize::uniquePositiveIntegers($counterResult->getChatIds() ?? []);
-		$this->lastIdUpdater->updateByChatIds($counterChatIds, $userId);
+		$counterChatIds = [];
+		if ($sources->counters)
+		{
+			$counterResult = $this->counterUpdater->delete()->byTreeScope($scope)->forUser($userId)->execute();
+			$counterChatIds = Normalize::uniquePositiveIntegers($counterResult->getChatIds() ?? []);
+			$this->lastIdUpdater->updateByChatIds($counterChatIds, $userId);
+		}
 
-		$recentChatIds = $this->recentReader->readByTreeScope($userId, $scope);
-		$anchorChatIds = $this->anchorReadService->readByTreeScope($scope, $userId)->getResult() ?? [];
+		$recentChatIds = $sources->recent ? $this->recentReader->readByTreeScope($userId, $scope) : [];
+		$anchorChatIds = $sources->anchors
+			? ($this->anchorReadService->readByTreeScope($scope, $userId)->getResult() ?? [])
+			: []
+		;
 
 		$affectedChatIds = $this->collectAffectedChatIds($counterChatIds, $recentChatIds, $anchorChatIds);
 		if (empty($affectedChatIds))
@@ -275,6 +314,25 @@ class Reader
 		$this->sendAfterReadChatsByTypeBatchEvents($userId, $affectedChatIds);
 	}
 
+	/**
+	 * One indexed lookup per store by the user, each stopping at the first row.
+	 */
+	public function findUnreadSources(int $userId): UnreadSources
+	{
+		if ($userId <= 0)
+		{
+			return new UnreadSources(false, false, false);
+		}
+
+		return new UnreadSources(
+			counters: $this->hasAnyRow(MessageUnreadTable::query()->setSelect(['CHAT_ID'])->where('USER_ID', $userId)),
+			recent: $this->hasAnyRow(
+				RecentTable::query()->setSelect(['ITEM_CID'])->where('USER_ID', $userId)->where('UNREAD', 'Y')
+			),
+			anchors: $this->hasAnyRow(AnchorTable::query()->setSelect(['CHAT_ID'])->where('USER_ID', $userId)),
+		);
+	}
+
 	public function readChildren(Chat $chat, int $userId): void
 	{
 		// most chats have no children: skip the subtree queries below
@@ -283,8 +341,21 @@ class Reader
 			return;
 		}
 
-		$scope = $this->chatTreeScopeFactory->forParent($chat->getId());
+		$this->readChildrenInScope($chat, $userId, $this->chatTreeScopeFactory->forParent($chat->getId()));
+	}
 
+	/**
+	 * Reads the threads of a chat and only them, unlike {@see Reader::readChildren} which takes the whole
+	 * subtree: "read all" of the thread list must not clear the unread of nested chats living their own life
+	 * under the same parent: the channels and task chats of a project keep their counters.
+	 */
+	public function readCommentChildren(Chat $chat, int $userId): void
+	{
+		$this->readChildrenInScope($chat, $userId, $this->chatTreeScopeFactory->forCommentChildren($chat->getId()));
+	}
+
+	private function readChildrenInScope(Chat $chat, int $userId, ChatTreeScope $scope): void
+	{
 		$counterResult = $this->counterUpdater->delete()->byTreeScope($scope)->forUser($userId)->execute();
 		$counterChatIds = Normalize::uniquePositiveIntegers($counterResult->getChatIds() ?? []);
 
@@ -305,8 +376,13 @@ class Reader
 			return;
 		}
 
-		(new Pull\ReadChildren($chat, $userId))->send();
+		(new Pull\ReadChildren($chat, $userId, $scope))->send();
 		$this->sendAfterReadChatsByTypeBatchEvents($userId, $affectedChatIds);
+	}
+
+	private function hasAnyRow(Query $query): bool
+	{
+		return is_array($query->setLimit(1)->fetch());
 	}
 
 	private function hasChildren(int $chatId): bool

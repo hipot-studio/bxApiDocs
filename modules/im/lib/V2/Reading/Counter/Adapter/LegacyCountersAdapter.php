@@ -187,6 +187,7 @@ final class LegacyCountersAdapter
 	private function processRegularChatCounter(ChatCounter $counter, array &$result): void
 	{
 		$chatId = $counter->chatId;
+		$displayCounter = $counter->counter > 0 ? $counter->counter : ($counter->isNonAnswered ? 1 : 0);
 
 		$inChat = false;
 		$inCopilot = false;
@@ -262,47 +263,50 @@ final class LegacyCountersAdapter
 			{
 				$result['CHAT_MUTED'][$chatId] = $counter->counter;
 			}
-			return;
+			if (!$counter->isNonAnswered)
+			{
+				return;
+			}
+
+			$displayCounter = 1;
 		}
 
-		if ($counter->counter > 0)
+		if ($displayCounter > 0)
 		{
-			$count = $counter->counter;
-
 			if ($inChat)
 			{
-				$result['CHAT'][$chatId] = $count;
-				$result['TYPE']['CHAT'] += $count;
+				$result['CHAT'][$chatId] = $displayCounter;
+				$result['TYPE']['CHAT'] += $displayCounter;
 			}
 			if ($inCopilot)
 			{
-				$result['COPILOT'][$chatId] = $count;
-				$result['TYPE']['COPILOT'] += $count;
+				$result['COPILOT'][$chatId] = $displayCounter;
+				$result['TYPE']['COPILOT'] += $displayCounter;
 			}
 			if ($inCollab)
 			{
-				$result['COLLAB'][$chatId] = $count;
-				$result['TYPE']['COLLAB'] += $count;
+				$result['COLLAB'][$chatId] = $displayCounter;
+				$result['TYPE']['COLLAB'] += $displayCounter;
 			}
 			if ($inLines)
 			{
-				$result['LINES'][$chatId] = $count;
-				$result['TYPE']['LINES'] += $count;
+				$result['LINES'][$chatId] = $displayCounter;
+				$result['TYPE']['LINES'] += $displayCounter;
 			}
 			if ($inTasksTask)
 			{
-				$result['TASKS_TASK'][$chatId] = $count;
-				$result['TYPE']['TASKS_TASK'] += $count;
+				$result['TASKS_TASK'][$chatId] = $displayCounter;
+				$result['TYPE']['TASKS_TASK'] += $displayCounter;
 			}
 			if ($inVibecodeApp)
 			{
-				$result['VIBECODE_APP'][$chatId] = $count;
-				$result['TYPE']['VIBECODE_APP'] += $count;
+				$result['VIBECODE_APP'][$chatId] = $displayCounter;
+				$result['TYPE']['VIBECODE_APP'] += $displayCounter;
 			}
 
 			if ($inChat || $inLines || $inTasksTask)
 			{
-				$result['TYPE']['MESSENGER'] += $count;
+				$result['TYPE']['MESSENGER'] += $displayCounter;
 			}
 
 			return;

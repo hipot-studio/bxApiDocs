@@ -16,16 +16,16 @@ abstract class BaseImTool extends ToolContract
 	 * Tool-level gate. ToolManager::callTool() and Mcp::indexAction() (module aiassistant)
 	 * resolve tools from the cached DefinitionDto::tools map and consult tool-level
 	 * canList()/canRun(), so a tool coming from a stale 24h registry cache must still
-	 * be gated by the same option as its scope in ImToolSet::getUsesTools().
+	 * be gated by the same feature flag as its scope in ImToolSet::getUsesTools().
 	 */
 	public function canList(int $userId): bool
 	{
-		return $this->getScope()->isEnabled();
+		return $this->getScope()->isEnabled($userId);
 	}
 
 	public function canRun(int $userId): bool
 	{
-		return $this->getScope()->isEnabled();
+		return $this->getScope()->isEnabled($userId);
 	}
 
 	protected function execute(int $userId, ...$args): string

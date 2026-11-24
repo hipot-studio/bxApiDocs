@@ -11,6 +11,7 @@ use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockContextRejectedExc
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockContextResolutionFailedException;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockTypeNotFoundException;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Request\BlockGetRequest;
+use Bitrix\BizprocDesigner\Infrastructure\Rest\Request\BlockListRequest;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockContextRejectionResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockDescriptionResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockSettingsResult;
@@ -19,31 +20,32 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
-use Bitrix\Rest\V3\Interaction\Request\ListRequest;
+use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 
 /**
  * REST V3 controller for the agent-facing block catalog.
  *
- * bizprocdesigner.catalog.block.list - block types the bound template can be built from.
+ * bizprocdesigner.catalog.block.list - block types the template of the call can be built from.
  * bizprocdesigner.catalog.block.get - one block of that catalog, read in full.
  */
 #[DtoType(BlockTypeDto::class)]
 final class Block extends AbstractAgentRestController
 {
 	/**
-	 * Returns the block types available for the template the calling token is bound to.
+	 * Returns the block types available for the template the call names.
 	 *
 	 * @restMethod bizprocdesigner.catalog.block.list
 	 * @throws AccessDeniedException
 	 * @throws BlockCatalogUnavailableException
 	 * @throws EntityNotFoundException
 	 * @throws LoaderException
+	 * @throws RequiredFieldInRequestException
 	 */
-	public function listAction(ListRequest $request): ListResponse
+	public function listAction(BlockListRequest $request): ListResponse
 	{
-		$identifier = $this->resolveAndAuthorizeBoundTemplate();
+		$identifier = $this->resolveAndAuthorize($request->templateId);
 
 		$result = (new AgentBlockCatalogService())->getBlocksWithDescription($identifier->documentDescription);
 
@@ -77,10 +79,11 @@ final class Block extends AbstractAgentRestController
 	 * @throws BlockTypeNotFoundException
 	 * @throws EntityNotFoundException
 	 * @throws LoaderException
+	 * @throws RequiredFieldInRequestException
 	 */
 	public function getAction(BlockGetRequest $request): GetResponse
 	{
-		$identifier = $this->resolveAndAuthorizeBoundTemplate();
+		$identifier = $this->resolveAndAuthorize($request->templateId);
 
 		$result = (new AgentBlockCatalogService())->getBlockSettings(
 			$identifier->documentDescription,

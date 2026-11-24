@@ -35,13 +35,16 @@ trait RussianMessageFallback
 	/**
 	 * A phrase of the same file, read in the language the message is being built in and falling back to ru
 	 * the same way the message itself does.
+	 *
+	 * $replace is for a phrase with a variable part of its own. It is applied on BOTH reads, or a phrase
+	 * that fell back to ru would answer with the placeholder still written out in it.
 	 */
-	protected function messagePhrase(string $code): string
+	protected function messagePhrase(string $code, ?array $replace = null): string
 	{
 		$phraseFile = (new \ReflectionClass($this->getClassWithPhrase()))->getFileName();
 
 		Loc::loadLanguageFile($phraseFile, $this->messageLanguage);
-		$message = Loc::getMessage($code, null, $this->messageLanguage);
+		$message = Loc::getMessage($code, $replace, $this->messageLanguage);
 		if ($message !== null)
 		{
 			return $message;
@@ -49,7 +52,7 @@ trait RussianMessageFallback
 
 		Loc::loadLanguageFile($phraseFile, 'ru');
 
-		return (string)Loc::getMessage($code, null, 'ru');
+		return (string)Loc::getMessage($code, $replace, 'ru');
 	}
 
 	private function resolveMessageLanguage(string $languageCode): string

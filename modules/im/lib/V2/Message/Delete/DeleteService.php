@@ -22,12 +22,12 @@ use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Im\V2\Pull\CommentTagPublisher;
 use Bitrix\Pull\Event;
 
 class DeleteService
@@ -165,15 +165,31 @@ class DeleteService
 		$this->assignToGroups();
 		$this->fillMessagesForEvent();
 
+		$completeDeletionResult = null;
+
 		foreach (DeletionMode::cases() as $deletionMode)
 		{
-			Message\Delete\Strategy\DeletionStrategy::getInstance(
-				$this->getMessageCollectionByMode($deletionMode),
-				$deletionMode
-			)
+			$messagesOfMode = $this->getMessageCollectionByMode($deletionMode);
+			$strategyResult = Message\Delete\Strategy\DeletionStrategy::getInstance($messagesOfMode, $deletionMode)
 				->setContext($this->getContext())
 				->delete()
 			;
+
+			// a mode with nothing to delete resolves a NullChat and always reports CHAT_NOT_FOUND, so it is
+			// neither a refusal that blocks the cascade below nor a success that lets it through
+			if ($deletionMode === DeletionMode::Complete && $messagesOfMode->count() > 0)
+			{
+				$completeDeletionResult = $strategyResult;
+			}
+		}
+
+		// past the strategies and only on the success of the very mode the cascade belongs to: a
+		// discussion destroyed ahead of a strategy that then refuses the deletion would be gone while the
+		// post it hangs on is still there, while a mixed batch whose soft half failed says nothing about
+		// the posts that did go for good - and their discussions must not survive them
+		if ($completeDeletionResult !== null && $completeDeletionResult->isSuccess())
+		{
+			$this->deleteChildCommentChats();
 		}
 
 		$this->needUpdateRecent = $this->chat->getLastMessageId() !== $chatLastMessageId;
@@ -282,6 +298,43 @@ class DeleteService
 		);
 
 		return $collection;
+	}
+
+	/**
+	 * A comment chat does not outlive the message it hangs on once that message is gone for good. A soft
+	 * deletion leaves the message in place as a placeholder, so the discussion under it stays too: the
+	 * cascade is destructive and irreversible, it takes the replies of other people with it, and the
+	 * right to soft-delete a message of one's own is the lowest right of a chat there is.
+	 */
+	private function deleteChildCommentChats(): void
+	{
+		$deletedMessages = $this->getMessagesBeingCompletelyDeleted();
+
+		if ($deletedMessages->count() === 0)
+		{
+			return;
+		}
+
+		$chatsResult = Chat\CommentChat::getChatsByMessages($deletedMessages);
+
+		if (!$chatsResult->isSuccess())
+		{
+			return;
+		}
+
+		// a set of messages without comment chats leaves the result empty, not an empty array
+		foreach ($chatsResult->getResult() ?? [] as $commentChat)
+		{
+			$commentChat?->deleteChat();
+		}
+	}
+
+	private function getMessagesBeingCompletelyDeleted(): MessageCollection
+	{
+		return $this->messages->filter(
+			fn (Message $message) => ($this->messagesDeletionModes[$message->getId()] ?? DeletionMode::None)
+				=== DeletionMode::Complete
+		);
 	}
 
 	protected function defineMessageType(Message $message): MessageType
@@ -454,7 +507,7 @@ class DeleteService
 
 			if ($this->chat->getType() === Chat::IM_TYPE_COMMENT)
 			{
-				CommentTagPublisher::addToStack($this->chat, $pullMessage);
+				Locator::getPullSender()->sendToCommentSubscribers($this->chat, $pullMessage);
 			}
 
 			if ($this->chat->needToSendPublicPull())
@@ -538,6 +591,14 @@ class DeleteService
 			'counterType' => $this->chat->getCounterType(),
 			'recentConfig' => $this->chat->getRecentConfig()->toPullFormat(),
 		];
+
+		// EVENT-01: the event is built past the deletion, so the discussion names the number of replies
+		// it is left with. A soft deletion keeps the reply and the number alike - the discussion still
+		// shows the reply as a placeholder - but the complete path open to a superadmin lowers both.
+		if ($this->chat instanceof Chat\CommentChat)
+		{
+			$params['replyCount'] = $this->chat->getReplyCount();
+		}
 
 		foreach ($this->messages as $message)
 		{

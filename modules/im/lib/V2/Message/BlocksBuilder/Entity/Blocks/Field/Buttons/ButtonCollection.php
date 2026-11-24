@@ -54,6 +54,19 @@ class ButtonCollection extends Registry implements \JsonSerializable
 		return $id;
 	}
 
+	public function getById(string $id): ?Button
+	{
+		foreach ($this as $button)
+		{
+			if ($button->getId() === $id)
+			{
+				return $button;
+			}
+		}
+
+		return null;
+	}
+
 	public function jsonSerialize(): ?array
 	{
 		$result = [];

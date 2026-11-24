@@ -17,4 +17,12 @@ use Bitrix\Rest\V3\Structure\FieldsStructure;
 final class TemplateValidateRequest extends Request
 {
 	public FieldsStructure $fields;
+
+	/**
+	 * The template the graph is judged against: the document it runs on decides which blocks and fields
+	 * are legal, so a dry run is answered per template just as a write is. Optional under a token of the
+	 * contour, where the template comes from the binding; the only thing that names a template under an
+	 * application key.
+	 */
+	public ?int $templateId = null;
 }

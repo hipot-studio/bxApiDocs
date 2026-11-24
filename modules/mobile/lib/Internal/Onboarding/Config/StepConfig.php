@@ -2,8 +2,6 @@
 
 namespace Bitrix\Mobile\Internal\Onboarding\Config;
 
-use Bitrix\Mobile\Internal\Onboarding\Checkers\Gate\GateCondition;
-
 /**
  * Values of one step of the `steps` section of the campaign document: the attempt
  * limit of the step, the gate condition it is subordinated to, the send- and click-analytics
@@ -18,9 +16,9 @@ use Bitrix\Mobile\Internal\Onboarding\Checkers\Gate\GateCondition;
  * without a bound. Both the send decision and the content lookup read it here, so they
  * cannot drift apart.
  *
- * The gate is a token of GateCondition, resolved to an implementation by StepGateFactory.
- * An unknown token reads as null, and the factory then applies its own default rather
- * than leaving the step ungated.
+ * The gate is a token of GateCondition, turned into conditions by the rules of the campaign
+ * (CampaignRuleSet). An unknown token reads as null, and the rules then apply their own
+ * default rather than leaving the step ungated.
  *
  * The deeplink is carried for tooling and diagnostics only: the action a push actually
  * opens stays in code (ActionTypeProvider), so the document cannot introduce one.

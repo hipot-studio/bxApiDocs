@@ -40,8 +40,13 @@ class DiskFileViewerMarkdownComponent extends CBitrixComponent
 					'isLocked' => (bool)($lock['isLocked'] ?? false),
 					'lockedBy' => isset($lock['lockedBy']) ? (int)$lock['lockedBy'] : null,
 				],
+				// The editing of the page (DTO-02), passed on as the page service built it.
+				'editRefusal' => is_array($documentState['editRefusal'] ?? null) ? $documentState['editRefusal'] : null,
+				'edit' => is_array($documentState['edit'] ?? null) ? $documentState['edit'] : null,
+				'pullTag' => is_string($documentState['pullTag'] ?? null) ? $documentState['pullTag'] : null,
 			],
 			'mode' => 'view',
+			'theme' => $this->getPortalTheme(),
 		];
 
 		// Wrapper prints <title> via ShowTitle(); feed it the file name instead of a client-side script.
@@ -55,6 +60,36 @@ class DiskFileViewerMarkdownComponent extends CBitrixComponent
 		);
 
 		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * The base theme of the portal of the current user ('dark' or 'light'): the shell of the page is
+	 * always light, while the editor follows the portal (AC-010).
+	 */
+	private function getPortalTheme(): string
+	{
+		global $USER;
+
+		$userId = ($USER instanceof \CUser && $USER->isAuthorized()) ? (int)$USER->getId() : 0;
+		if (
+			$userId <= 0
+			|| !\Bitrix\Main\Loader::includeModule('intranet')
+			|| !class_exists(\Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker::class)
+		)
+		{
+			return 'light';
+		}
+
+		try
+		{
+			$picker = new \Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker('bitrix24', SITE_ID, $userId);
+
+			return $picker->getCurrentBaseThemeId() === 'dark' ? 'dark' : 'light';
+		}
+		catch (\Throwable)
+		{
+			return 'light';
+		}
 	}
 
 	/**

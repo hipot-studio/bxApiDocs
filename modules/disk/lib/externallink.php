@@ -3,6 +3,9 @@
 namespace Bitrix\Disk;
 
 use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\Document\Vibeoffice\AccessRevocation;
+use Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository;
+use Bitrix\Disk\Document\Vibeoffice\SqlDeadlineScope;
 use Bitrix\Disk\Internal\Enum\ExternalLinkScenario;
 use Bitrix\Disk\Internal\Service\Audit\AuditPublicLinkEventProducer;
 use Bitrix\Disk\Internal\Service\Audit\AuditTransaction;
@@ -40,6 +43,8 @@ final class ExternalLink extends Internals\Model
 
 	private const SHORT_CODE_BYTES = 16;
 	private const SHORT_CODE_RESERVE_ATTEMPTS = 3;
+	private const IMMEDIATE_REVOKE_SECONDS = 2.0;
+	private const IMMEDIATE_REVOKE_LIMIT = 10;
 
 	/** @var int */
 	protected $objectId;
@@ -673,7 +678,7 @@ final class ExternalLink extends Internals\Model
 			}
 
 			return $updated;
-		});
+		}, fn(): bool => $this->getDeathTime() !== null);
 	}
 
 	public function revokePassword()
@@ -750,7 +755,8 @@ final class ExternalLink extends Internals\Model
 			}
 
 			return $updated;
-		});
+		}, fn(): bool => $this->getDeathTime() === null
+			|| $dateTime->getTimestamp() < $this->getDeathTime()->getTimestamp());
 	}
 
 	/**
@@ -861,7 +867,7 @@ final class ExternalLink extends Internals\Model
 			}
 
 			return $updated;
-		});
+		}, fn(): bool => $this->getAccessRight() === self::ACCESS_RIGHT_EDIT && $right !== self::ACCESS_RIGHT_EDIT);
 	}
 
 	private function canChangeSettings(): bool
@@ -949,7 +955,7 @@ final class ExternalLink extends Internals\Model
 
 		if ($auditTransaction !== null)
 		{
-			$deleted = $this->runAuditCoveredMutation($mutation);
+			$deleted = $this->runAuditCoveredMutation($mutation, static fn(): bool => true);
 			if ($deleted && $this->getType() === self::TYPE_MANUAL)
 			{
 				$auditTransaction->addAfterCommit($afterCommit);
@@ -960,7 +966,7 @@ final class ExternalLink extends Internals\Model
 
 		$transactionResult = (new AuditTransaction(Application::getConnection()))->execute(
 			function (AuditTransaction $transaction) use ($mutation, $afterCommit): AuditTransactionOutcome {
-				$deleted = $mutation();
+				$deleted = $this->runAuditCoveredMutation($mutation, static fn(): bool => true);
 				if (!$deleted)
 				{
 					return AuditTransactionOutcome::failure(false);
@@ -985,9 +991,63 @@ final class ExternalLink extends Internals\Model
 		return false;
 	}
 
-	private function runAuditCoveredMutation(callable $callback): bool
+	private function runAuditCoveredMutation(callable $callback, ?callable $revokeWhen = null): bool
 	{
-		return AuditTransaction::run($callback);
+		return AuditTransaction::run(function (AuditTransaction $owner) use ($callback, $revokeWhen): bool {
+			if ($revokeWhen === null)
+			{
+				return $callback();
+			}
+			$realObjectId = (int)($this->getObject()?->getRealObjectId() ?? $this->getObjectId());
+			DocumentStateRepository::fetchForUpdate(Internals\ObjectTable::query()
+				->setSelect(['ID'])->where('ID', $realObjectId));
+			$source = DocumentStateRepository::fetchForUpdate(ExternalLinkTable::query()
+				->setSelect(['*'])->where('ID', $this->getId()));
+			if (!$source)
+			{
+				return false;
+			}
+			$this->setAttributes($source);
+			$ids = [];
+			if ($revokeWhen())
+			{
+				$marked = (new AccessRevocation())->markExternalSourceLocked(
+					$realObjectId,
+					(int)$this->getId(),
+					$this->getObject() instanceof Folder,
+				);
+				if (!$this->applyAuditResult($marked))
+				{
+					return false;
+				}
+				$ids = $marked->getData()['registryIds'];
+			}
+			if (!$callback())
+			{
+				return false;
+			}
+			if ($ids !== [])
+			{
+				$owner->addAfterConfirmedCommit(static function () use ($ids): void {
+					$deadline = hrtime(true) / 1e9 + self::IMMEDIATE_REVOKE_SECONDS;
+					SqlDeadlineScope::run($deadline, static function () use ($ids, $deadline): \Bitrix\Main\Result {
+						$revocation = new AccessRevocation();
+						foreach (array_slice($ids, 0, self::IMMEDIATE_REVOKE_LIMIT) as $id)
+						{
+							if (hrtime(true) / 1e9 >= $deadline)
+							{
+								break;
+							}
+							$revocation->processBinding($id, $deadline);
+						}
+
+						return new \Bitrix\Main\Result();
+					});
+				});
+			}
+
+			return true;
+		});
 	}
 
 	private function applyAuditResult(\Bitrix\Main\Result $result): bool

@@ -18,6 +18,7 @@ abstract class AbstractVibeProvider
 	protected const DEFAULT_SORT = 100;
 
 	private VibeContextDto $context;
+	private ?Portal $portal = null;
 
 	public function __construct(VibeContextDto $context)
 	{
@@ -78,14 +79,24 @@ abstract class AbstractVibeProvider
 	}
 
 	// region Access
+	protected function getPortal(): Portal
+	{
+		return $this->portal ??= $this->createPortal();
+	}
+
+	protected function createPortal(): Portal
+	{
+		return new Portal();
+	}
+
 	public function canEdit(): bool
 	{
-		$checker = new Portal();
+		$checker = $this->getPortal();
 
 		return
 			$this->canView()
 			&& ($checker->isIntranetAdmin() || $this->hasExplicitVibeRight(Rights::ADDITIONAL_RIGHTS['admin']))
-			&& $checker->checkFeature(Portal::VIBE_FEATURE)
+			&& $checker->isVibeFeatureAvailable()
 		;
 	}
 
@@ -96,12 +107,12 @@ abstract class AbstractVibeProvider
 			return true;
 		}
 
-		$checker = new Portal();
+		$checker = $this->getPortal();
 
 		return
 			$this->canView()
 			&& $this->hasExplicitVibeRight(Rights::ADDITIONAL_RIGHTS['create'])
-			&& $checker->checkFeature(Portal::VIBE_FEATURE)
+			&& $checker->isVibeFeatureAvailable()
 		;
 	}
 
@@ -123,7 +134,7 @@ abstract class AbstractVibeProvider
 
 	public function canView(): bool
 	{
-		$checker = new Portal();
+		$checker = $this->getPortal();
 
 		if (!$checker->isIntranet())
 		{

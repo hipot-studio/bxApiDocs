@@ -21,7 +21,13 @@ final class ConflictCopyService
 	public const ERROR_STALE_COPY = 'vibeoffice_conflict_copy_stale';
 
 	/** The caller owns the document transaction and commits the copy together with the receipt. */
-	public function save(File $original, array $stagedFile, int $ownerId, ?int $existingCopyId): Result
+	public function save(
+		File $original,
+		array $stagedFile,
+		int $ownerId,
+		?int $existingCopyId,
+		bool $disableJoin = true,
+	): Result
 	{
 		if ($ownerId <= 0)
 		{
@@ -47,7 +53,7 @@ final class ConflictCopyService
 			{
 				return $this->failure('The conflict copy is no longer writable.', self::ERROR_STALE_COPY);
 			}
-			$version = $copy->addVersion($stagedFile, $ownerId, true, ['commentAttachedObjects' => false]);
+			$version = $copy->addVersion($stagedFile, $ownerId, $disableJoin, ['commentAttachedObjects' => false]);
 			if (!$version || (int)$copy->getFileId() !== (int)$stagedFile['ID'])
 			{
 				return $this->failure('Could not save the conflict copy version.');

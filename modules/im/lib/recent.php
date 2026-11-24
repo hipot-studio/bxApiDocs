@@ -28,6 +28,7 @@ use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Pull\Event\ChatPin;
 use Bitrix\Im\V2\Pull\Event\RecentUpdate;
+use Bitrix\Im\V2\Pull\Event\RecentUpdateMeta;
 use Bitrix\Im\V2\Reading\Counter\CountersProvider;
 use Bitrix\Im\V2\Reading\Counter\Entity\ChatsCounterMap;
 use Bitrix\Im\V2\Reading\RecentReader;
@@ -52,6 +53,15 @@ Loc::loadMessages(__FILE__);
 
 class Recent
 {
+	/**
+	 * Option of getList(): aligns the membership of the SHORT_INFO output with the full mode - the row of an
+	 * inactive companion survives, the Copilot bot row and a group row without a message do not, and neither
+	 * the INVITED block, nor birthdayList, nor the `copilot` block of the answer is built. The short message of
+	 * a row also carries STATUS of the last message, read from the same MESSAGE join. Works only together
+	 * with SHORT_INFO and only when the caller passes 'Y'. Consumers probe this constant to detect support.
+	 */
+	public const SHAPE_OPTION = 'SHAPE';
+
 	public const MAX_RAISE_DEPTH = 2;
 
 	static private bool $limitError = false;
@@ -271,6 +281,7 @@ class Recent
 		$withoutCommonUsers = !$viewCommonUsers || $onlyOpenlinesOption === 'Y';
 		$unreadOnly = isset($options['UNREAD_ONLY']) && $options['UNREAD_ONLY'] === 'Y';
 		$shortInfo = isset($options['SHORT_INFO']) && $options['SHORT_INFO'] === 'Y';
+		$shape = $shortInfo && ($options[self::SHAPE_OPTION] ?? null) === 'Y';
 		$parseText = $options['PARSE_TEXT'] ?? null;
 		$withCounters = ($options['WITH_COUNTERS'] ?? 'Y') === 'Y';
 
@@ -288,6 +299,7 @@ class Recent
 			'WITHOUT_COMMON_USERS' => $withoutCommonUsers,
 			'UNREAD_ONLY' => $unreadOnly,
 			'SHORT_INFO' => $shortInfo,
+			'SHAPE' => $shape,
 		]);
 
 		if ($onlyCopilotOption === 'Y')
@@ -444,7 +456,7 @@ class Recent
 		$collabPreviewEntries = [];
 
 		$rows = $orm->fetchAll();
-		$rows = self::prepareRows($rows, $userId, $shortInfo, $withCounters);
+		$rows = self::prepareRows($rows, $userId, $shortInfo, $withCounters, $shape);
 		foreach ($rows as $row)
 		{
 			$counter++;
@@ -468,6 +480,7 @@ class Recent
 				'WITHOUT_COMMON_USERS' => $withoutCommonUsers,
 				'GET_ORIGINAL_TEXT' => $options['GET_ORIGINAL_TEXT'] ?? null,
 				'SHORT_INFO' => $shortInfo,
+				'SHAPE' => $shape,
 				'PARSE_TEXT' => $parseText,
 				'WITH_COUNTERS' => $withCounters,
 			]);
@@ -476,7 +489,7 @@ class Recent
 				continue;
 			}
 
-			if ($row['ITEM_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT)
+			if (!$shape && $row['ITEM_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT)
 			{
 				$copilotData['chats'][$item['ID']] = (int)$item['CHAT_ID'];
 			}
@@ -532,13 +545,17 @@ class Recent
 			[
 				'GET_ORIGINAL_TEXT' => $options['GET_ORIGINAL_TEXT'] ?? null,
 				'PARSE_TEXT' => $parseText,
+				'SHAPE' => $shape,
 			],
 			$shortInfo,
 			$collabOwnMessages,
 			$collabOwnIds
 		);
 
-		$copilotData = self::prepareCopilotData($copilotData, $userId, $shortInfo);
+		if (!$shape)
+		{
+			$copilotData = self::prepareCopilotData($copilotData, $userId, $shortInfo);
+		}
 
 		if ($showOpenlines && !$onlyCopilotOption && Loader::includeModule('imopenlines'))
 		{
@@ -577,11 +594,16 @@ class Recent
 				'items' => $result,
 				'hasMorePages' => $ormParams['limit'] == $counter, // TODO remove this later
 				'hasMore' => $ormParams['limit'] == $counter,
-				'copilot' => !empty($copilotData) ? $copilotData : null,
-				'messagesAutoDeleteConfigs' => $messagesAutoDeleteConfigs,
 			];
 
-			if (!isset($options['LAST_MESSAGE_DATE']) && !$unreadOnly)
+			if (!$shape)
+			{
+				$objectToReturn['copilot'] = !empty($copilotData) ? $copilotData : null;
+			}
+
+			$objectToReturn['messagesAutoDeleteConfigs'] = $messagesAutoDeleteConfigs;
+
+			if (!$shape && !isset($options['LAST_MESSAGE_DATE']) && !$unreadOnly)
 			{
 				$objectToReturn['birthdayList'] = \Bitrix\Im\Integration\Intranet\User::getBirthdayForToday();
 			}
@@ -1043,6 +1065,7 @@ class Recent
 		$withoutCommonUsers = $params['WITHOUT_COMMON_USERS'] === true || !$isIntranet;
 		$unreadOnly = isset($params['UNREAD_ONLY']) && $params['UNREAD_ONLY'] === true;
 		$shortInfo = isset($params['SHORT_INFO']) && $params['SHORT_INFO'] === true;
+		$shape = isset($params['SHAPE']) && $params['SHAPE'] === true;
 		$chatIds = $params['CHAT_IDS'] ?? null;
 
 		$shortInfoFields = [
@@ -1122,10 +1145,18 @@ class Recent
 			$shortInfoFields['MESSAGE_CODE'] = 'CODE.PARAM_VALUE';
 		}
 
+		if ($shape)
+		{
+			// A new MESSAGE join in the short query instead of a separate query for the status. It stays cheap
+			// while MESSAGE is joined after the chats: a primary key lookup only for the rows past the filters.
+			// The join order follows the order of the select fields.
+			$shortInfoFields['CHAT_LAST_MESSAGE_STATUS_BOOL'] = 'MESSAGE.NOTIFY_READ';
+		}
+
 		$select = $shortInfo ? $shortInfoFields : array_merge($shortInfoFields, $additionalInfoFields);
 		$runtime = $shortRuntime;
 
-		if (!$withoutCommonUsers)
+		if (!$withoutCommonUsers && !$shape)
 		{
 			$select['INVITATION_ORIGINATOR_ID'] = 'INVITATION.ORIGINATOR_ID';
 		}
@@ -1136,7 +1167,7 @@ class Recent
 			$select['LINES_DATE_CREATE'] = 'LINES.DATE_CREATE';
 		}
 
-		if (!$withoutCommonUsers)
+		if (!$withoutCommonUsers && !$shape)
 		{
 			$runtime[] = new \Bitrix\Main\Entity\ReferenceField(
 				'INVITATION',
@@ -1201,6 +1232,7 @@ class Recent
 		$generalChatId = (int)$options['GENERAL_CHAT_ID'];
 		$withoutCommonUsers = isset($options['WITHOUT_COMMON_USERS']) && $options['WITHOUT_COMMON_USERS'] === true;
 		$shortInfo = isset($options['SHORT_INFO']) && $options['SHORT_INFO'];
+		$shape = isset($options['SHAPE']) && $options['SHAPE'];
 		$withCounters = $options['WITH_COUNTERS'] ?? true;
 
 		$isUser = $row['ITEM_TYPE'] == IM_MESSAGE_PRIVATE;
@@ -1208,6 +1240,13 @@ class Recent
 		$row['MESSAGE_ID'] ??= null;
 
 		if (!$isUser && ((!$row['MESSAGE_ID'] && !$shortInfo) || !$row['RELATION_ID'] || !$row['CHAT_ID']))
+		{
+			return null;
+		}
+
+		// Repeats the full-mode drop of a group row without a last message: MESSAGE.ID is out of the short
+		// select, so the row's own ITEM_MID pointer stands in for it.
+		if ($shape && !$isUser && !$row['ITEM_MID'])
 		{
 			return null;
 		}
@@ -1225,7 +1264,7 @@ class Recent
 			}
 
 			$row['INVITATION_ORIGINATOR_ID'] ??= null;
-			if (!$row['USER_LAST_ACTIVITY_DATE'] && $row['INVITATION_ORIGINATOR_ID'])
+			if (!$shape && !$row['USER_LAST_ACTIVITY_DATE'] && $row['INVITATION_ORIGINATOR_ID'])
 			{
 				$item['INVITED'] = [
 					'ORIGINATOR_ID' => (int)$row['INVITATION_ORIGINATOR_ID'],
@@ -1274,7 +1313,7 @@ class Recent
 
 		if ($item['USER']['ID'] > 0)
 		{
-			$user = self::formatUser($row, $item, $shortInfo);
+			$user = self::formatUser($row, $item, $shortInfo, $shape);
 
 			if ($user === null)
 			{
@@ -1320,6 +1359,10 @@ class Recent
 				'ID' => (int)($row['ITEM_MID'] ?? 0),
 				'DATE' => $row['DATE_MESSAGE'] ?: $row['DATE_LAST_ACTIVITY'],
 			];
+			if (!empty($options['SHAPE']))
+			{
+				$shortMessage['STATUS'] = $row['CHAT_LAST_MESSAGE_STATUS'] ?? \IM_MESSAGE_STATUS_RECEIVED;
+			}
 			if ($messageChatId !== null)
 			{
 				$shortMessage['CHAT_ID'] = $messageChatId;
@@ -1606,7 +1649,7 @@ class Recent
 		return (new Converter(Converter::TO_SNAKE | Converter::TO_UPPER | Converter::KEYS))->process($config);
 	}
 
-	private static function formatUser(array $row, array $item, bool $shortInfo): ?array
+	private static function formatUser(array $row, array $item, bool $shortInfo, bool $shape = false): ?array
 	{
 		$userObject = \Bitrix\Im\V2\Entity\User\User::getInstance($item['USER']['ID']);
 		if ($userObject instanceof NullUser)
@@ -1618,6 +1661,38 @@ class Recent
 
 		if ($shortInfo)
 		{
+			if ($shape)
+			{
+				// The full mode recognizes the Copilot row by BOT_DATA.code, which the short user format
+				// does not carry; the companion id already in the row answers the same question without
+				// an extra field or join.
+				$isCopilotBot = $item['TYPE'] === 'user'
+					&& Loader::includeModule('imbot')
+					&& (int)$item['USER']['ID'] === CopilotChatBot::getBotId()
+				;
+
+				if ($isCopilotBot)
+				{
+					return null;
+				}
+
+				// Same drop as the full mode; prepareRows reads counters for inactive companions only.
+				if (
+					$item['TYPE'] === 'user'
+					&& !$userObject->isActive()
+					&& (int)$row['COUNTER'] <= 0
+					&& !$item['UNREAD']
+					&& !$userObject->isBot()
+					&& !$userObject->isConnector()
+					&& !$userObject->isNetwork()
+				)
+				{
+					return null;
+				}
+
+				return $user;
+			}
+
 			if (!$userObject->isActive())
 			{
 				return null;
@@ -1927,7 +2002,8 @@ class Recent
 		RelationCollection $relations,
 		?DateTime $lastActivity = null,
 		int $depth = 0,
-		?CollabPreviewSourcePiggyback $previewSource = null
+		?CollabPreviewSourcePiggyback $previewSource = null,
+		bool $addMissing = true,
 	): void
 	{
 		$userIds = $relations->getUserIds();
@@ -1938,43 +2014,56 @@ class Recent
 		$message = new Message($chat->getLastMessageId());
 		$dateMessage = $message->getDateCreate() ?? new DateTime();
 		$dateCreate = $lastActivity ?? $dateMessage;
-		$fields = [];
 
-		// When this raised level is the collab parent the message belongs to, piggyback the preview-source
-		// pointer onto the same MERGE: into both the insert fields and the update set (the collab row almost
-		// always already exists, so the update set is what maintains the pointer on send).
+		// Persist the preview-source pointer together with activity dates at the collab parent level.
 		$previewUpdate = [];
 		if ($previewSource !== null && $previewSource->appliesTo((int)$chat->getId()))
 		{
 			$previewUpdate = $previewSource->getColumns() ?? [];
 		}
 
-		foreach ($relations as $relation)
+		$updateFields = ['DATE_LAST_ACTIVITY' => $dateCreate, 'DATE_UPDATE' => $dateCreate] + $previewUpdate;
+		$raisedUserIds = $userIds;
+		if ($addMissing)
 		{
-			$userId = $relation->getUserId();
-			if ($userId)
+			$fields = [];
+			foreach ($relations as $relation)
 			{
-				$fields[] = [
-					'USER_ID' => $userId,
-					'ITEM_TYPE' => $chat->getType(),
-					'ITEM_ID' => $chat->getId(), // Todo: invalid ITEM_ID for PrivateChat
-					'ITEM_MID' => $chat->getLastMessageId(),
-					'ITEM_CID' => $chat->getId(),
-					'ITEM_RID' => $relation->getId(),
-					'DATE_MESSAGE' => $dateMessage,
-					'DATE_UPDATE' => $dateCreate,
-					'DATE_LAST_ACTIVITY' => $dateCreate,
-				] + $previewUpdate;
+				$userId = $relation->getUserId();
+				if ($userId)
+				{
+					$fields[] = [
+						'USER_ID' => $userId,
+						'ITEM_TYPE' => $chat->getType(),
+						'ITEM_ID' => $chat->getId(), // Todo: invalid ITEM_ID for PrivateChat
+						'ITEM_MID' => $chat->getLastMessageId(),
+						'ITEM_CID' => $chat->getId(),
+						'ITEM_RID' => $relation->getId(),
+						'DATE_MESSAGE' => $dateMessage,
+						'DATE_UPDATE' => $dateCreate,
+						'DATE_LAST_ACTIVITY' => $dateCreate,
+					] + $previewUpdate;
+				}
+			}
+
+			static::merge($fields, $updateFields);
+		}
+		else
+		{
+			$raisedUserIds = [];
+			foreach (array_chunk($userIds, 300) as $userIdsChunk)
+			{
+				$filter = ['=ITEM_CID' => $chat->getId(), '@USER_ID' => $userIdsChunk];
+				RecentTable::updateByFilter($filter, $updateFields);
+				$rows = RecentTable::getList(['select' => ['USER_ID'], 'filter' => $filter]);
+				while ($row = $rows->fetch())
+				{
+					$raisedUserIds[] = (int)$row['USER_ID'];
+				}
 			}
 		}
 
-		static::merge(
-			$fields,
-			['DATE_LAST_ACTIVITY' => $dateCreate, 'DATE_UPDATE' => $dateCreate] + $previewUpdate
-		);
-
-		// raiseChat writes RecentTable directly via multiplyMerge and bypasses addRecent, so the
-		// request-scoped RecentItemCache would keep stale RecentItems for the affected users/chat.
+		// Direct RecentTable writes bypass addRecent and must invalidate the request-scoped cache.
 		$recentItemCache = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Recent\Internal\RecentItemCache::class);
 		foreach ($userIds as $affectedUserId)
 		{
@@ -1998,13 +2087,21 @@ class Recent
 				: null
 		;
 
-		(new RecentUpdate($chat, $userIds, $dateCreate, $levelPreviewHint))->send();
+		if (!empty($raisedUserIds))
+		{
+			(new RecentUpdate($chat, $raisedUserIds, $dateCreate, $levelPreviewHint))->send();
+		}
+		$metaUserIds = array_values(array_diff($userIds, $raisedUserIds));
+		if (!empty($metaUserIds))
+		{
+			(new RecentUpdateMeta($chat, $metaUserIds))->send();
+		}
 
 		if ($chat->hasParent() && $depth < self::MAX_RAISE_DEPTH)
 		{
 			$parentChat = $chat->getParentChat();
 			$parentRelations = $parentChat->getRelationsByUserIds($userIds);
-			static::raiseChat($parentChat, $parentRelations, $lastActivity, $depth + 1, $previewSource);
+			static::raiseChat($parentChat, $parentRelations, $lastActivity, $depth + 1, $previewSource, $addMissing);
 		}
 	}
 
@@ -2333,6 +2430,11 @@ class Recent
 						'fakeCounter' => 1
 					]
 				);
+				if (is_array($data))
+				{
+					// The counter says how many, the flag says what of: a session still waiting to be taken.
+					$data['isNonAnswered'] = true;
+				}
 			}
 			Event::add($userId, [
 				'module_id' => 'im',
@@ -2351,7 +2453,13 @@ class Recent
 		$cache->cleanDir('/bx/imc/recent'.($userId ? Common::getCacheUserPostfix($userId) : ''));
 	}
 
-	protected static function prepareRows(array $rows, int $userId, bool $shortInfo = false, bool $withCounters = true): array
+	protected static function prepareRows(
+		array $rows,
+		int $userId,
+		bool $shortInfo = false,
+		bool $withCounters = true,
+		bool $shape = false
+	): array
 	{
 		[$messageIds, $chatIds] = self::getKeysForFetchAdditionalEntities($rows);
 		$counters = ChatsCounterMap::fromArray([]);
@@ -2359,7 +2467,7 @@ class Recent
 		{
 			$counters = ServiceLocator::getInstance()->get(CountersProvider::class)->getForUserByChatIds($userId, $chatIds);
 		}
-		elseif (!$shortInfo)
+		elseif (!$shortInfo || $shape)
 		{
 			$inactiveChatIds = self::getInactiveChatIds($rows);
 			$counters =

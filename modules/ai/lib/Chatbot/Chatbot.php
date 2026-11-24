@@ -14,6 +14,10 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
 
+/**
+ * Base class of a scenario chatbot. A subclass defines MODULE_ID and BOT_CODE, is registered via register()
+ * and reacts to chat events in onChatStart() and onMessageAdd(); answers are sent with sendAnswer().
+ */
 abstract class Chatbot
 {
 	protected const MODULE_ID = 'ai';
@@ -66,6 +70,11 @@ abstract class Chatbot
 	}
 
 	/**
+	 * Called once when a new chat is created; sends a greeting by default.
+	 *
+	 * @param int $chatId
+	 * @param array $parameters Init parameters passed by the client to ai.chat.init.
+	 * @return void
 	 * @throws SystemException
 	 * @throws LoaderException
 	 */
@@ -95,11 +104,23 @@ abstract class Chatbot
 		$chatService->setChatInputStatus($chatId, $inputStatus);
 	}
 
+	/**
+	 * Called after a user message is added; not called for messages of the chatbot itself.
+	 *
+	 * @param MessageDto $message
+	 * @param array|null $command [command, commandData] of the clicked button, null for a text message.
+	 * @return void
+	 */
 	public function onMessageAdd(MessageDto $message, ?array $command = null): void
 	{
-		//$this->sendAnswer($message->chatId, new DefaultMessage('answer'));
 	}
 
+	/**
+	 * Called after the chatbot answer is added by sendAnswer().
+	 *
+	 * @param MessageDto $message
+	 * @return void
+	 */
 	public function onAnswerAdd(MessageDto $message): void
 	{
 	}
@@ -153,6 +174,12 @@ abstract class Chatbot
 		return $chatbotService;
 	}
 
+	/**
+	 * Switches an existing chat to this chatbot.
+	 *
+	 * @param int $chatId
+	 * @return bool
+	 */
 	public function applyToChat(int $chatId): bool
 	{
 		return $this->getChatService()->changeChatbot($chatId, static::BOT_CODE);

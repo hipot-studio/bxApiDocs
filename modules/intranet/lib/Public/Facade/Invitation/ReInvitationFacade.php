@@ -64,7 +64,7 @@ class ReInvitationFacade extends InvitationFacade
 
 		if ($invitationType === InvitationType::EMAIL)
 		{
-			$this->sendInviteMessage($messageFactory->createEmailEvent());
+			$this->sendInviteMessage($messageFactory->createEmailEvent(), checkDelivery: true);
 		}
 		elseif ($invitationType === InvitationType::PHONE)
 		{
@@ -72,11 +72,26 @@ class ReInvitationFacade extends InvitationFacade
 		}
 	}
 
-	private function sendInviteMessage(\Bitrix\Intranet\Contract\SendableContract $message): void
+	private function sendInviteMessage(
+		\Bitrix\Intranet\Contract\SendableContract $message,
+		bool $checkDelivery = false,
+	): void
 	{
 		try
 		{
-			$message->sendImmediately();
+			if ($checkDelivery)
+			{
+				if (!$message->sendImmediatelyWithResult())
+				{
+					throw new InvitationFailedException(
+						new ErrorCollection([new Error('Invitation email delivery failed.', 'delivery_unavailable')]),
+					);
+				}
+			}
+			else
+			{
+				$message->sendImmediately();
+			}
 		}
 		catch (ErrorCollectionException $exception)
 		{

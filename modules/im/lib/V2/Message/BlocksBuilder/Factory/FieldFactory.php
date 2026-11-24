@@ -11,6 +11,8 @@ use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Elements;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FileId;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FileIds;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Fold;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Footer;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FooterSpacing;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Icon;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Id;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\ImageUrl;
@@ -51,6 +53,8 @@ class FieldFactory
 			Field::Background => Background::getInstance(),
 			Field::Progress => Progress::getInstance(),
 			Field::IsService => Service::getInstance(),
+			Field::Footer => Footer::getInstance(),
+			Field::FooterSpacing => FooterSpacing::getInstance(),
 			default => null,
 		};
 	}

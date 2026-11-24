@@ -4,25 +4,48 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Document\Vibeoffice\Clients;
 
+use Bitrix\Disk\Document\Vibeoffice\Logging\DiagnosticContext;
+
 /**
  * Counts calls inside one logical platform operation without retaining a target.
  */
 final class ProtocolCallContext
 {
 	private ?string $operation = null;
+	private ?string $traceId = null;
 	/** @var array<string, int> */
 	private array $attempts = [];
+
+	public function __construct(private readonly ?\Closure $traceIdFactory = null)
+	{}
+
+	public function getTraceId(): ?string
+	{
+		return $this->traceId;
+	}
 
 	public function beginOperation(string $method): void
 	{
 		$this->operation = $method;
 		$this->attempts = [];
+		$this->traceId = null;
+		try
+		{
+			$this->traceId = $this->traceIdFactory === null
+				? DiagnosticContext::createTraceId()
+				: ($this->traceIdFactory)();
+		}
+		catch (\Throwable)
+		{
+			// Correlation must not prevent a platform operation.
+		}
 	}
 
 	public function endOperation(): void
 	{
 		$this->operation = null;
 		$this->attempts = [];
+		$this->traceId = null;
 	}
 
 	public function beginOpenAttempt(): int

@@ -16,11 +16,14 @@ class ActionAccessPolicyRegistry
 		private readonly DefaultPolicy $defaultPolicy,
 		ReadChatPolicy $readChatPolicy,
 		UnpinChatPolicy $unpinChatPolicy,
+		ThreadActionPolicy $threadActionPolicy,
 	)
 	{
 		$this->policies = [
 			Action::UnpinChat->value => $unpinChatPolicy,
 			Action::ReadChat->value => $readChatPolicy,
+			Action::CreateThread->value => $threadActionPolicy,
+			Action::PostInThread->value => $threadActionPolicy,
 		];
 	}
 

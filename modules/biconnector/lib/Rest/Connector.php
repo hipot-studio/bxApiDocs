@@ -5,6 +5,10 @@ namespace Bitrix\BIConnector\Rest;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\SourceSettingType;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
+use Bitrix\BIConnector\Public\Features\ConnectorAgentSkill;
+use Bitrix\BIConnector\Public\Provider\ConnectorSkillProvider;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
@@ -41,6 +45,10 @@ class Connector extends Base
 	{
 		return [
 			self::SCOPE => [
+				'biconnector.connector.skill.get' => [
+					'callback' => [__CLASS__, 'skillGet'],
+					'options' => [],
+				],
 				'biconnector.connector.add' => [
 					'callback' => [__CLASS__, 'add'],
 					'options' => [],
@@ -65,8 +73,51 @@ class Connector extends Base
 					'callback' => [__CLASS__, 'list'],
 					'options' => [],
 				],
-			]
+			],
 		];
+	}
+
+	public static function skillGet(array $params, $n, \CRestServer $server): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if (
+			$userId <= 0
+			|| !in_array(self::SCOPE, $server->getAuthScope(), true)
+			|| !(new FlagGate())->isEnabled(ConnectorAgentSkill::class, $userId)
+		)
+		{
+			return ['error' => [
+				'error' => 'ACCESS_DENIED',
+				'error_description' => 'An authenticated user, BI scope and the connector skill feature are required.',
+			]];
+		}
+		if (
+			(array_key_exists('section', $params) && $params['section'] !== null && !is_string($params['section']))
+			|| (array_key_exists('language', $params) && !is_string($params['language']))
+		)
+		{
+			return ['error' => [
+				'error' => 'VALIDATION_INVALID_FIELD_TYPE',
+				'error_description' => 'Section must be a string or null; language must be a string.',
+			]];
+		}
+		$result = (new ConnectorSkillProvider())->get(
+			$params['section'] ?? null,
+			$params['language'] ?? 'en',
+			$userId,
+			!empty($server->getClientId()),
+		);
+		if (!$result->isSuccess())
+		{
+			$error = $result->getErrors()[0];
+
+			return ['error' => [
+				'error' => $error->getCode(),
+				'error_description' => $error->getMessage(),
+			]];
+		}
+
+		return ['item' => $result->getData()];
 	}
 
 	protected static function getFields(): array

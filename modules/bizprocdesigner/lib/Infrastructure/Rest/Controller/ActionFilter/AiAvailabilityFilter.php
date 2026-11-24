@@ -15,12 +15,12 @@ use Bitrix\Main\EventResult;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
-use Bitrix\Rest\V3\Exception\AccessDeniedException;
+use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\FeatureUnavailableException;
 
 final class AiAvailabilityFilter extends Base
 {
 	/**
-	 * @throws AccessDeniedException
+	 * @throws FeatureUnavailableException
 	 * @throws ArgumentException
 	 * @throws CircularDependencyException
 	 * @throws ObjectNotFoundException
@@ -31,14 +31,17 @@ final class AiAvailabilityFilter extends Base
 	{
 		$userId = (int)CurrentUser::get()->getId();
 
+		// Both branches answer about the feature and neither about rights on a template, so both carry
+		// the code of the feature: a caller that cannot tell them apart keeps asking a portal that will
+		// never answer {@see FeatureUnavailableException}.
 		if (!(new AiAvailabilityService())->isAvailableForUser($userId))
 		{
-			throw new AccessDeniedException();
+			throw new FeatureUnavailableException();
 		}
 
 		if (!Feature::instance()->isExternalAiAgentAccessible())
 		{
-			throw new AccessDeniedException();
+			throw new FeatureUnavailableException();
 		}
 
 		return null;

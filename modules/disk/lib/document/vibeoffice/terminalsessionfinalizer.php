@@ -7,11 +7,14 @@ namespace Bitrix\Disk\Document\Vibeoffice;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
+use Bitrix\Disk\Document\Vibeoffice\Logging\DatabaseFailureResult;
+use Bitrix\Disk\Document\Vibeoffice\Models\DocumentStateTable;
 use Bitrix\Disk\Document\Vibeoffice\Models\PlatformSessionTable;
 use Bitrix\Main\Application;
 use Bitrix\Disk\Document\Vibeoffice\Logging\LoggerProvider;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\DateTime;
 use Throwable;
 
 final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterface
@@ -181,7 +184,8 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 		$registry = new SessionRegistry($this->repository);
 		if ($receipt['openToken'] !== null)
 		{
-			$binding = DocumentStateRepository::fetchForUpdate(PlatformSessionTable::query()->setSelect(['*'])
+			$binding = DocumentStateRepository::fetchForUpdate(PlatformSessionTable::query()
+				->setSelect(SharedEditingSchema::sessionFields())
 				->where('OPEN_TOKEN', $receipt['openToken']));
 			if ($binding)
 			{
@@ -412,18 +416,69 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 	{
 		return $this->finalize(
 			static function () use ($externalHash): Result {
-				$rows = DocumentSessionTable::query()
-					->setSelect(['ID'])
-					->where('EXTERNAL_HASH', $externalHash)
-					->where('SERVICE', DocumentService::Vibeoffice->value)
-					->where('STATUS', DocumentSessionTable::STATUS_ACTIVE)
-					->fetchAll()
-				;
+				$rows = DocumentStateRepository::fetchAllForUpdate(
+					DocumentSessionTable::query()
+						->setSelect(['*'])
+						->where('EXTERNAL_HASH', $externalHash)
+						->where('SERVICE', DocumentService::Vibeoffice->value)
+						->where('STATUS', DocumentSessionTable::STATUS_ACTIVE)
+						->setOrder(['ID' => 'ASC']),
+				);
+				$hasSharedColumns = SharedEditingSchema::hasColumns();
+				$registry = $hasSharedColumns ? new SessionRegistry() : null;
+				$states = [];
 				$sessionIds = [];
 				foreach ($rows as $row)
 				{
 					$id = (int)$row['ID'];
-					$update = DocumentSessionTable::update($id, ['STATUS' => DocumentSessionTable::STATUS_NON_ACTIVE]);
+					$session = DocumentSession::buildFromArray($row);
+					$hasSharedBinding = false;
+					if ($hasSharedColumns)
+					{
+						$bindings = DocumentStateRepository::fetchAllForUpdate(
+							PlatformSessionTable::query()
+								->setSelect(['*'])
+								->where('DOCUMENT_SESSION_ID', $id)
+								->setOrder(['ID' => 'ASC']),
+						);
+						foreach ($bindings as $binding)
+						{
+							$hostDocKey = (string)($binding['HOST_DOC_KEY'] ?? '');
+							if ($hostDocKey === '' || ($binding['STATUS'] ?? '') === PlatformSessionTable::STATUS_REFUSED)
+							{
+								continue;
+							}
+							$states[$hostDocKey] ??= DocumentStateTable::query()
+								->setSelect(['EDIT_SCOPE_VERSION'])
+								->where('HOST_DOC_KEY', $hostDocKey)
+								->fetch() ?: [];
+							if (SharedSessionScope::version($states[$hostDocKey]) === 1
+								&& SharedSessionScope::matchesBinding($session, $binding))
+							{
+								$hasSharedBinding = true;
+								SharedEditingUsage::markUsed();
+								$marked = $registry->markRevokeLocked($binding);
+								if (!$marked->isSuccess())
+								{
+									return (new Result())->addErrors($marked->getErrors());
+								}
+							}
+						}
+					}
+					$updateFields = ['STATUS' => DocumentSessionTable::STATUS_NON_ACTIVE];
+					if ($hasSharedBinding)
+					{
+						$updatedContext = DocumentSessionManager::withAbandonedSavePending(
+							is_string($row['CONTEXT'] ?? null) ? $row['CONTEXT'] : null,
+							true,
+						);
+						if ($updatedContext === null)
+						{
+							return (new Result())->addError(new Error('Could not persist abandoned save debt.'));
+						}
+						$updateFields['CONTEXT'] = $updatedContext;
+					}
+					$update = DocumentSessionTable::update($id, $updateFields);
 					if (!$update->isSuccess())
 					{
 						return (new Result())->addErrors($update->getErrors());
@@ -441,8 +496,6 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 	 */
 	private function finalize(callable $mutation): Result
 	{
-		$result = new Result();
-
 		$connection = Application::getConnection();
 		$transactionStarted = false;
 
@@ -472,10 +525,9 @@ final class TerminalSessionFinalizer implements TerminalSessionFinalizerInterfac
 				$connection->rollbackTransaction();
 			}
 
-			return $result->addError(new Error(
-				$exception->getMessage(),
-				'terminal_session_finalize_failed',
-			));
+			return DatabaseFailureResult::fromException(
+				$exception, new Error($exception->getMessage(), 'terminal_session_finalize_failed'),
+			);
 		}
 	}
 }

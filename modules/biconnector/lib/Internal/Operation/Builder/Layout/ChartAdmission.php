@@ -5,9 +5,9 @@ namespace Bitrix\BIConnector\Internal\Operation\Builder\Layout;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Dashboard\DashboardJsonMetadataReader;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\ChartAuthorAccess;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\DashboardGuard;
 use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\SetContentOperation;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
@@ -40,14 +40,10 @@ final class ChartAdmission
 		}
 
 		$integrator = IntegratorFactory::getInstance();
+		$authorAccess = new ChartAuthorAccess();
 		foreach (array_unique($chartIds) as $chartId)
 		{
 			$response = $integrator->getChartById($chartId, $identityResult->getData()['user']);
-			$reason = (string)($response->getErrors()[0] ?? null)?->getCode();
-			if ($reason === 'ai_tools_disabled')
-			{
-				return $this->unavailable($response, $actor, $chartId, $reason);
-			}
 			if (in_array($response->getStatus(), [
 				IntegratorResponse::STATUS_NOT_FOUND,
 				IntegratorResponse::STATUS_NO_ACCESS,
@@ -57,7 +53,7 @@ final class ChartAdmission
 			}
 			if ($response->hasErrors() || $response->getStatus() >= 400)
 			{
-				return $this->unavailable($response, $actor, $chartId, $reason ?: 'superset_unavailable');
+				return $this->unavailable($response, $actor, $chartId);
 			}
 
 			$chart = $response->getData();
@@ -65,16 +61,16 @@ final class ChartAdmission
 				!is_array($chart)
 				|| !is_array($chart['dashboards'] ?? null)
 				|| !array_is_list($chart['dashboards'])
-				|| !is_array($chart['owners'] ?? null)
-				|| !array_is_list($chart['owners'])
 			)
 			{
 				return $this->refuse('chart_not_accessible');
 			}
 
 			$accessible = $chart['dashboards'] === []
-				? $this->isOwner($chart['owners'], $actor)
-				: $this->hasViewableDashboard($chart['dashboards'], $actor);
+				? $authorAccess->mayManageOrphan(
+					is_array($chart['owners'] ?? null) ? $chart['owners'] : [], $actor,
+				)
+				: $this->hasEditableDashboard($chart['dashboards'], $actor);
 			if (!$accessible)
 			{
 				return $this->refuse('chart_not_accessible');
@@ -126,13 +122,14 @@ final class ChartAdmission
 		return $jsonMetadata;
 	}
 
-	private function hasViewableDashboard(array $dashboards, Actor $actor): bool
+	private function hasEditableDashboard(array $dashboards, Actor $actor): bool
 	{
 		$externalIds = [];
 		foreach ($dashboards as $dashboard)
 		{
-			$id = is_array($dashboard) ? (int)($dashboard['id'] ?? 0) : 0;
-			if ($id > 0)
+			$rawId = is_array($dashboard) ? ($dashboard['id'] ?? null) : null;
+			$id = is_int($rawId) || is_string($rawId) ? (int)$rawId : 0;
+			if ($id > 0 && (string)$id === (string)$rawId)
 			{
 				$externalIds[$id] = $id;
 			}
@@ -144,39 +141,34 @@ final class ChartAdmission
 			}
 		};
 
-		return $this->guard->hasViewableCandidates($mappedChunks(), $actor);
+		return $this->guard->hasEditableCandidates($mappedChunks(), $actor);
 	}
 
 	/** @return \Generator<int> */
 	private function getMappedIds(array $chunk): \Generator
 	{
-		$rows = SupersetDashboardTable::query()->setSelect(['ID'])->whereIn('EXTERNAL_ID', $chunk)->exec();
+		$rows = SupersetDashboardTable::query()->setSelect(['ID', 'EXTERNAL_ID'])->whereIn('EXTERNAL_ID', $chunk)->exec();
+		$matches = [];
 		while ($row = $rows->fetch())
 		{
-			yield (int)$row['ID'];
+			$matches[(int)$row['EXTERNAL_ID']][] = (int)$row['ID'];
+		}
+		foreach ($matches as $ids)
+		{
+			if (count($ids) === 1)
+			{
+				yield $ids[0];
+			}
 		}
 	}
 
-	private function isOwner(array $owners, Actor $actor): bool
-	{
-		$row = SupersetUserTable::query()
-			->setSelect(['CLIENT_ID'])
-			->where('USER_ID', $actor->userId)
-			->setLimit(1)
-			->fetch()
-		;
-		$clientId = (string)($row['CLIENT_ID'] ?? '');
-
-		return $clientId !== '' && in_array($clientId, $owners, true);
-	}
-
-	private function unavailable(IntegratorResponse $response, Actor $actor, int $chartId, string $reason): Result
+	private function unavailable(IntegratorResponse $response, Actor $actor, int $chartId): Result
 	{
 		return Refusal::unavailableBi($response->getErrors(), [
 			'stage' => 'layout.chart_admission',
 			'user_id' => $actor->userId,
 			'chart_id' => $chartId,
-		])->setData(['reason' => $reason]);
+		])->setData(['reason' => 'superset_unavailable']);
 	}
 
 	private function refuse(string $reason): Result

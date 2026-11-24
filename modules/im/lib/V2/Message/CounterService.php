@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Message;
 
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Common\ContextCustomer;
 
 use Bitrix\Im\V2\Reading\Counter\Adapter\LegacyCountersAdapter;
@@ -9,8 +10,11 @@ use Bitrix\Im\V2\Reading\Counter\CountersProvider;
 use Bitrix\Im\V2\Reading\Counter\CountersService;
 use Bitrix\Im\V2\Reading\Counter\Infrastructure\Agent\DeleteExpiredAgent;
 use Bitrix\Im\V2\Reading\Counter\Infrastructure\Agent\DeleteFiredUserAgent;
+use Bitrix\Im\V2\Folder\Mute\MuteProvider;
+use Bitrix\Im\V2\Reading\Counter\Entity\UserCounters;
 use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
+use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DI\ServiceLocator;
@@ -110,12 +114,30 @@ class CounterService
 
 	protected function buildCounters(): array
 	{
+		$userId = $this->getContext()->getUserId();
 		$collector = ServiceLocator::getInstance()->get(UserCountersCollector::class);
-		$userCounters = $collector->get($this->getContext()->getUserId());
+		$userCounters = static::applyFolderMute($collector->get($userId), $userId);
 
 		$adapter = ServiceLocator::getInstance()->get(LegacyCountersAdapter::class);
 
 		return $adapter->toArray($userCounters);
+	}
+
+	/**
+	 * The processed representation of the counters (TPL-01): the legacy path has no client that knows
+	 * about the rules of the folders, so the rows reach it already muted by them. Applied inside
+	 * buildCounters() and not around it: the result of this method is what the legacy cache stores
+	 * ({@see self::savePreparedCountersInCache()}).
+	 */
+	protected static function applyFolderMute(UserCounters $userCounters, int $userId): UserCounters
+	{
+		$locator = ServiceLocator::getInstance();
+
+		return $userCounters->withFolderMuteApplied(
+			$locator->get(MuteProvider::class)->getForUser($userId),
+			$locator->get(RecentConfigManager::class),
+			$locator->get(TypeRegistry::class),
+		);
 	}
 
 	public static function onAfterUserUpdate(array $fields): void

@@ -49,11 +49,6 @@ final class DashboardGroupSection extends BaseSection
 			return true;
 		}
 
-		if (PermissionDictionary::isTableGroupPermission($permissionId))
-		{
-			return false;
-		}
-
 		return PermissionDictionary::isDashboardGroupPermission($permissionId);
 	}
 

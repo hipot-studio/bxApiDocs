@@ -14,12 +14,15 @@ use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\ConditionExp
 use Bitrix\BizprocDesigner\Infrastructure\Enum\ConstructionType;
 use Bitrix\BizprocDesigner\Internal\Command\AbstractCommand;
 
+use Bitrix\BizprocDesigner\Internal\Service\Activity\AuthoredPropertiesValidator;
 use Bitrix\BizprocDesigner\Internal\Service\Activity\ReadableExpressionContextFactory;
 use Bitrix\BizprocDesigner\Internal\Trait\ActivitySettingsDecoder;
 use Bitrix\BizprocDesigner\Internal\Trait\ConditionValueResolver;
 use Bitrix\BizprocDesigner\Internal\Trait\NodeActionResolver;
 use Bitrix\BizprocDesigner\Public\Command\Activity;
 use Bitrix\BizprocDesigner\Public\Service\Activity\TriggerUpgradeResolver;
+use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
@@ -32,6 +35,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 	use NodeActionResolver;
 
 	private ?ReadableExpressionContextFactory $readableExpressionContextFactory = null;
+	private ?AuthoredPropertiesValidator $authoredPropertiesValidator = null;
+
+	/** Activity type => the title the registry gives it, resolved once per request. */
+	private static array $activityTitles = [];
 
 	/**
 	 * @param array $templateSlice Scheme slice used to build the action property map, with the host node first.
@@ -73,7 +80,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 	{
 		foreach ($this->extractActionExpressionList($resultPortRule) as $addressedExpression)
 		{
-			$result = $this->normalizeActionExpression($addressedExpression['expression']);
+			$result = $this->normalizeActionExpression(
+				$addressedExpression['expression'],
+				$addressedExpression['constructionType'] === ConstructionType::ACTION,
+			);
 			if (!$result->isSuccess())
 			{
 				return $this->addressFailure($result, $addressedExpression['constructionId']);
@@ -88,7 +98,7 @@ class SaveSingleRuleCommand extends AbstractCommand
 	 * of the construction takes. The address of a failure belongs to the traversal above, so neither this
 	 * step nor the routes it takes know which construction they are working on.
 	 */
-	private function normalizeActionExpression(ActionExpressionDto $actionExpression): Result
+	private function normalizeActionExpression(ActionExpressionDto $actionExpression, bool $isAction): Result
 	{
 		if (empty($actionExpression->rawActivityData))
 		{
@@ -107,6 +117,16 @@ class SaveSingleRuleCommand extends AbstractCommand
 		if (!$documentModuleResult->isSuccess())
 		{
 			return $documentModuleResult;
+		}
+
+		// Both routes below read the title out of the submitted form, so the fallback is applied before
+		// either of them is taken. A FILTER construction is left alone: it is titled by its own form.
+		if ($isAction)
+		{
+			$actionExpression->rawActivityData = $this->fillMissingTitle(
+				$actionExpression->rawActivityData,
+				$actionExpression->activityData,
+			);
 		}
 
 		// Node-action-backed ACTION: internalise field values through the backing node-action's
@@ -157,7 +177,7 @@ class SaveSingleRuleCommand extends AbstractCommand
 	 * traversal is answered with the address of that construction.
 	 *
 	 * @param PortRuleDto $portRuleDto
-	 * @return list<array{constructionId: string, expression: ActionExpressionDto}>
+	 * @return list<array{constructionId: string, constructionType: ConstructionType, expression: ActionExpressionDto}>
 	 */
 	private function extractActionExpressionList(PortRuleDto $portRuleDto): array
 	{
@@ -185,6 +205,7 @@ class SaveSingleRuleCommand extends AbstractCommand
 
 				$actionExpressionList[] = [
 					'constructionId' => $construction->id,
+					'constructionType' => $construction->constructionType,
 					'expression' => $expression,
 				];
 			}
@@ -229,6 +250,17 @@ class SaveSingleRuleCommand extends AbstractCommand
 			'activated' => $isActivated,
 			'title' => $title,
 		] = $internalizeResult->getData();
+
+		// The author of the form is asked about only here and on the route writing the whole node: the
+		// question is about a submitted card, and both wrappers are taken only for a non-empty
+		// rawActivityData. It stays outside the validation gate of internalizeNodeActionProperties(): a
+		// deactivated node is written all the same, so making the check depend on Activated would leave a
+		// two-step way around it.
+		$authoredResult = $this->authoredPropertiesValidator()->validateActivity($activityType, $properties);
+		if (!$authoredResult->isSuccess())
+		{
+			return $authoredResult;
+		}
 
 		$actionExpression->rawActivityData = null;
 		$actionExpression->activityData = [
@@ -389,6 +421,28 @@ class SaveSingleRuleCommand extends AbstractCommand
 	{
 		if (empty($expression->rawActivityData))
 		{
+			// Actions without form fields (for example DeleteDocumentActivity) still carry a meaningful
+			// document. Materialise their minimal activity data so the converter can create the child.
+			$defaultProperties = $this->getNodeActionDefaultProperties($expression->actionId ?? '');
+			if (
+				$expression->actionId !== null
+				&& $expression->document !== null
+				&& $expression->document !== ''
+				&& empty($expression->activityData)
+				&& $defaultProperties !== null
+			)
+			{
+				$expression->activityData = [
+					'Name' => ServiceLocator::getInstance()
+						->get('bizproc.service.activity.nameGenerator')
+						->generate(),
+					'Type' => $expression->actionId,
+					'Activated' => 'Y',
+					'Properties' => $defaultProperties,
+					'Document' => $expression->document,
+				];
+			}
+
 			return $this->revalidateNormalizedNodeAction($expression->activityData);
 		}
 
@@ -446,6 +500,48 @@ class SaveSingleRuleCommand extends AbstractCommand
 		$expression->activityData = $activityData;
 
 		return new Result();
+	}
+
+	private function getNodeActionDefaultProperties(string $activityType): ?array
+	{
+		if (!$this->isNodeActionBackingType($activityType))
+		{
+			return null;
+		}
+
+		$propertiesMap = \CBPActivity::createConfigurator(
+			$activityType,
+			[],
+			$this->documentType,
+			$this->getPropertiesMapContext(),
+		)->getPropertiesMap();
+		if ($propertiesMap === [])
+		{
+			return null;
+		}
+
+		$properties = [];
+		foreach ($propertiesMap as $propertyKey => $fieldProperties)
+		{
+			if (
+				($fieldProperties['Required'] ?? false)
+				&& (
+					!array_key_exists('Default', $fieldProperties)
+					|| \CBPHelper::isEmptyValue($fieldProperties['Default'])
+				)
+			)
+			{
+				return null;
+			}
+
+			if (array_key_exists('Default', $fieldProperties))
+			{
+				$fieldName = (string)($fieldProperties['FieldName'] ?? $propertyKey);
+				$properties[$fieldName] = $fieldProperties['Default'];
+			}
+		}
+
+		return $properties;
 	}
 
 	/**
@@ -622,10 +718,84 @@ class SaveSingleRuleCommand extends AbstractCommand
 	{
 		return new ActionExpressionDto(
 			actionId: null,
-			rawActivityData: $expression->rawActivityData,
+			rawActivityData: $this->keepNodeActionTitle($expression),
 			activityData: $expression->activityData,
 			document: null,
 		);
+	}
+
+	/**
+	 * The title the child activity of a node-action-backed construction keeps.
+	 *
+	 * A host-merged construction is left alone: it becomes no child activity of its own, and its title is
+	 * host metadata the merge drops ({@see \Bitrix\BizprocDesigner\Internal\Service\Activity\BaseSettingsPayload}).
+	 */
+	private function keepNodeActionTitle(BaseSettingsExpressionDto $expression): ?array
+	{
+		if ($expression->actionId === null)
+		{
+			return $expression->rawActivityData;
+		}
+
+		return $this->fillMissingTitle($expression->rawActivityData, $expression->activityData);
+	}
+
+	/**
+	 * The title an activity keeps when the form of its construction submits none.
+	 *
+	 * No nested form of the panel carries a title row: a node is titled on the first level of the panel and
+	 * an action by the action it is (`options[hideTitle]`). The save path meanwhile writes Properties.Title
+	 * of every activity from the submitted one
+	 * ({@see \Bitrix\BizprocDesigner\Public\Command\Activity\Settings\SaveCommandHandler}), so without
+	 * this every save would leave the activity untitled. The saved title wins, and an activity saved for the
+	 * first time takes the name the activity registry gives its action - the very title the editor seeds an
+	 * action construction with (buildDefaultActionExpression). A form that does send a title is never
+	 * overruled: that is what a rule saved by a previous build sends back.
+	 */
+	private function fillMissingTitle(?array $rawActivityData, ?array $activityData): ?array
+	{
+		if ($rawActivityData === null || array_key_exists('title', $rawActivityData))
+		{
+			return $rawActivityData;
+		}
+
+		$savedTitle = (string)(($activityData['Properties'] ?? [])['Title'] ?? '');
+		$rawActivityData['title'] = $savedTitle === ''
+			? $this->resolveActivityTitle((string)($rawActivityData['activityType'] ?? ''))
+			: $savedTitle
+		;
+
+		return $rawActivityData;
+	}
+
+	/**
+	 * Name the activity registry gives the class, or an empty string for a class it does not know.
+	 *
+	 * Answered once per class for the whole request, not per command: the controller builds a command of its
+	 * own for every port of a complex node ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex}),
+	 * so a cache held by the instance would ask again on each port. The registry rebuilds the description of a
+	 * REST activity on each call - the memoization of the searcher covers file activities alone
+	 * ({@see \Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher::searchByCode()}) - and it cannot change
+	 * while a template is being saved, so the first answer stands for the request.
+	 */
+	private function resolveActivityTitle(string $activityType): string
+	{
+		if ($activityType === '')
+		{
+			return '';
+		}
+
+		if (array_key_exists($activityType, self::$activityTitles))
+		{
+			return self::$activityTitles[$activityType];
+		}
+
+		Loader::requireModule('bizproc');
+
+		$title = (string)(\CBPRuntime::getRuntime()->getActivityDescription($activityType)['NAME'] ?? '');
+		self::$activityTitles[$activityType] = $title;
+
+		return $title;
 	}
 
 	/**
@@ -650,6 +820,11 @@ class SaveSingleRuleCommand extends AbstractCommand
 			return null;
 		}
 
+		// The title is restored here exactly as on the route of the shared pipeline
+		// ({@see self::keepNodeActionTitle()}): both write the child of the construction, and the form of
+		// the block sends no title of its own. A host-merged construction is left alone on either route.
+		$rawActivityData = $this->keepNodeActionTitle($expression) ?? $rawActivityData;
+
 		$internalizeResult = $this->internalizeNodeActionProperties($activityType, $rawActivityData);
 		if ($internalizeResult === null)
 		{
@@ -664,7 +839,21 @@ class SaveSingleRuleCommand extends AbstractCommand
 		[
 			'properties' => $properties,
 			'activated' => $isActivated,
+			'title' => $title,
 		] = $internalizeResult->getData();
+
+		// {@see self::extractNodeActionAction()} for why the author is asked here and why the question is
+		// independent of Activated.
+		$authoredResult = $this->authoredPropertiesValidator()->validateActivity($activityType, $properties);
+		if (!$authoredResult->isSuccess())
+		{
+			return $authoredResult;
+		}
+
+		if (array_key_exists('title', $rawActivityData))
+		{
+			$properties['Title'] = $title;
+		}
 
 		$expression->rawActivityData = null;
 		$expression->activityData = [
@@ -853,12 +1042,22 @@ class SaveSingleRuleCommand extends AbstractCommand
 		return $result;
 	}
 
+	/**
+	 * The shape the settings controller builds the context with
+	 * ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity::getSettingsControlsAction()}).
+	 * The site belongs to the request, not to the scheme, so it travels without a slice too: built over
+	 * another site, a site-dependent map refuses a correctly chosen value as one outside its list.
+	 */
 	private function getPropertiesMapContext(): array
 	{
-		return $this->templateSlice === [] ? [] : [
-			'Template' => $this->templateSlice,
-			'WorkflowDocumentType' => $this->documentType,
-		];
+		$context = ['SiteId' => (string)Context::getCurrent()->getSite()];
+		if ($this->templateSlice !== [])
+		{
+			$context['Template'] = $this->templateSlice;
+			$context['WorkflowDocumentType'] = $this->documentType;
+		}
+
+		return $context;
 	}
 
 	/**
@@ -1070,6 +1269,11 @@ class SaveSingleRuleCommand extends AbstractCommand
 	private function readableExpressionContextFactory(): ReadableExpressionContextFactory
 	{
 		return $this->readableExpressionContextFactory ??= new ReadableExpressionContextFactory();
+	}
+
+	private function authoredPropertiesValidator(): AuthoredPropertiesValidator
+	{
+		return $this->authoredPropertiesValidator ??= new AuthoredPropertiesValidator();
 	}
 
 	private function canCreateWorkflow(array $documentType): bool

@@ -65,10 +65,14 @@ abstract class Payload
 
 	/**
 	 * Sets Role instance for Payload.
+	 * If the resulting role is custom, it is replaced by the universal one when the current user has no access to it;
+	 * otherwise it gets the library system role's instruction and the instruction of the passed Role goes
+	 * to the `custom_role` marker (with $append = false that is the custom role's own instruction).
 	 *
 	 * @param Role|null $role Role instance.
-	 * @param bool $append If true, content of Role will be appended, otherwise Role will be replaced.
-	 * @return self
+	 * @param bool $append If true, instruction of Role will be appended to the current Role's one,
+	 *   otherwise Role will be replaced.
+	 * @return static
 	 */
 	public function setRole(?Role $role, bool $append = false): static
 	{

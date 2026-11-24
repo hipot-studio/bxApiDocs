@@ -7,7 +7,6 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Document\Flipchart\BoardSessionTerminationService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
-use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Entity\Audit\AuditChannel;
 use Bitrix\Disk\Internal\Enum\ExternalLinkDisableReason;
 use Bitrix\Disk\Internal\Service\Audit\AuditOperationContext;
@@ -15,6 +14,7 @@ use Bitrix\Disk\Internal\Service\Audit\AuditOperationContextStack;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Public\Provider\ExternalLinkTariffProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Main\Analytics\AnalyticsEvent;
@@ -29,6 +29,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 {
 	protected ExternalLinkProvider $externalLinkProvider;
 	protected ExternalLinkAccessService $externalLinkAccessService;
+	protected ExternalLinkTariffProvider $externalLinkTariffProvider;
 
 	public function __construct(?Request $request = null)
 	{
@@ -36,6 +37,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
 		$this->externalLinkAccessService = ServiceLocator::getInstance()->get(ExternalLinkAccessService::class);
+		$this->externalLinkTariffProvider = ServiceLocator::getInstance()->get(ExternalLinkTariffProvider::class);
 	}
 
 	protected function get(Disk\BaseObject $object)
@@ -295,6 +297,18 @@ abstract class BaseObject extends Internals\Engine\Controller
 		$extLink = $this->getExternalLinkObject($object);
 		if (!$extLink)
 		{
+			if (!$this->externalLinkTariffProvider->isManualLinkCreationAllowed($object))
+			{
+				$this->errorCollection[] = new Error(
+					message: Loc::getMessage('DISK_ERROR_MESSAGE_EXTERNAL_LINK_DISABLED_BY_TARIFF'),
+					customData: [
+						'reason' => ExternalLinkDisableReason::Feature,
+					],
+				);
+
+				return null;
+			}
+
 			$extLink = $object->getRealObject()->addExternalLink([
 				'CREATED_BY' => $this->getCurrentUser()->getId(),
 				'TYPE' => ExternalLink::TYPE_MANUAL,
@@ -446,13 +460,5 @@ abstract class BaseObject extends Internals\Engine\Controller
 		return [
 			'operations' => $operations,
 		];
-	}
-
-	protected function checkExternalLinkFeature(Disk\File $file): bool
-	{
-		$isBoardType = (int)$file->getTypeFile() === TypeFile::FLIPCHART;
-		$featureName = $isBoardType ? 'disk_board_external_link' : 'disk_manual_external_link';
-
-		return Bitrix24Manager::isFeatureEnabled($featureName);
 	}
 }

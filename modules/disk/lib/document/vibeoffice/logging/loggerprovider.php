@@ -14,6 +14,7 @@ final class LoggerProvider extends AbstractLogger
 	private const EVENTS = [
 		'disk.vibeoffice.open' => [
 			'vibeoffice open', 'vibeoffice editor failure', 'vibeoffice editor recovered',
+			'vibeoffice editor recovery risk', 'vibeoffice editor loading diagnostic',
 		],
 		'disk.vibeoffice.webhook' => ['vibeoffice webhook received', 'vibeoffice webhook diagnostic'],
 		'disk.vibeoffice.state' => 'vibeoffice state',

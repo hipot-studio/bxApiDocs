@@ -32,6 +32,7 @@ use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\SaveSingleRuleComma
 use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ValidateSingleRuleCommand;
 use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Entity\ActivityData;
+use Bitrix\BizprocDesigner\Internal\Service\Activity\AuthoredPropertiesValidator;
 use Bitrix\BizprocDesigner\Internal\Service\Activity\NodeConditionDocumentResolver;
 use Bitrix\BizprocDesigner\Internal\Service\Activity\UnifiedPanelSurfaceAvailability;
 use Bitrix\BizprocDesigner\Internal\Service\Activity\BaseSettingsPayload;
@@ -1203,6 +1204,21 @@ class Complex extends \Bitrix\Main\Engine\JsonController
 		if (!$mergedAccessResult->isSuccess())
 		{
 			$this->addErrors($mergedAccessResult->getErrors());
+
+			return null;
+		}
+
+		// The border of the authored restriction, and the only place on this route where it can stand: the
+		// properties of the node arrive here whole from the client - already normalised, with rawActivityData
+		// spent - and nothing ties them to a save of a card having happened on the server. Asked of the
+		// converted node, because a host-merged block becomes a property of the node itself while an action
+		// construction becomes an element of its Children, and the walk has to see both. Not moved into
+		// ConvertRuleCommand on purpose: the same command converts a draft of the AI assistant, which is no
+		// authored submission of a form.
+		$authoredResult = (new AuthoredPropertiesValidator())->validateTree($convertedActivity);
+		if (!$authoredResult->isSuccess())
+		{
+			$this->addErrors($authoredResult->getErrors());
 
 			return null;
 		}

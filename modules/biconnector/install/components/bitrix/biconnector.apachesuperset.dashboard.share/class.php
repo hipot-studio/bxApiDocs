@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Internal\Services\Share\GuestAccessState;
 use Bitrix\BIConnector\Superset\Dashboard\SharePullService;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main\DI\ServiceLocator;
@@ -25,11 +26,11 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$this->arResult['LANGUAGE_ID'] = CultureFormatter::getLanguageCode();
 
 		// A public link is a dashboard too, so a finished term closes it as well. A guest has no section to be
-		// sent to, so the answer is the same screen the component gives to a link that no longer works.
+		// sent to, and a term is a state of the portal rather than of the link: the answer is the screen of a
+		// report that does not open, not the one of a link that is dead.
 		if (SelfHostedLicenseLock::isDashboardLocked())
 		{
-			$this->arResult['STATUS'] = 'ERROR';
-			$this->includeComponentTemplate();
+			$this->refuse('ERROR', GuestAccessState::ReportUnavailable);
 
 			return;
 		}
@@ -38,8 +39,7 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$share = $shareProvider->getByToken($token);
 		if (!$share)
 		{
-			$this->arResult['STATUS'] = 'NOT_FOUND';
-			$this->includeComponentTemplate();
+			$this->refuse('NOT_FOUND', GuestAccessState::LinkInvalid);
 
 			return;
 		}
@@ -47,8 +47,7 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$banRepository = ServiceLocator::getInstance()->get('biconnector.repository.shareBan');
 		if (!$share->isValid() || $banRepository->isBanned($share->getDashboardId()))
 		{
-			$this->arResult['STATUS'] = 'ERROR';
-			$this->includeComponentTemplate();
+			$this->refuse('ERROR', GuestAccessState::LinkInvalid);
 
 			return;
 		}
@@ -56,8 +55,7 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$creatorId = $share->getCreatedById();
 		if (!AccessController::getInstance($creatorId)->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
 		{
-			$this->arResult['STATUS'] = 'ERROR';
-			$this->includeComponentTemplate();
+			$this->refuse('ERROR', GuestAccessState::LinkInvalid);
 
 			return;
 		}
@@ -65,16 +63,14 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$dashboard = SupersetDashboardTable::getById($share->getDashboardId())->fetchObject();
 		if (!$dashboard)
 		{
-			$this->arResult['STATUS'] = 'NOT_FOUND';
-			$this->includeComponentTemplate();
+			$this->refuse('NOT_FOUND', GuestAccessState::LinkInvalid);
 
 			return;
 		}
 
 		if ($dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
 		{
-			$this->arResult['STATUS'] = 'NOT_FOUND';
-			$this->includeComponentTemplate();
+			$this->refuse('NOT_FOUND', GuestAccessState::LinkInvalid);
 
 			return;
 		}
@@ -84,6 +80,17 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$this->arResult['PULL_CONFIG'] = SharePullService::getPullConfig($token);
 
 		$this->arResult['STATUS'] = 'PASSWORD_REQUIRED';
+		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * A guest is shown one of two screens, and the state tells which one: the status alone does not, because
+	 * both a dead link and a temporary failure can arrive with the same status.
+	 */
+	private function refuse(string $status, GuestAccessState $state): void
+	{
+		$this->arResult['STATUS'] = $status;
+		$this->arResult['STATE'] = $state->value;
 		$this->includeComponentTemplate();
 	}
 }

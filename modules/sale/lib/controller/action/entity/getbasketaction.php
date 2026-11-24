@@ -8,7 +8,7 @@ use Bitrix\Sale;
 /**
  * Class GetBasketAction
  * @package Bitrix\Sale\Controller\Action\Entity
- * @example BX.ajax.runAction("sale.entity.getBasket", { data: { fields: { siteId:'s1', fuserId:1 }}});
+ * @example BX.ajax.runAction("sale.entity.getBasket", { data: { fields: { siteId:'s1' }}});
  * @internal
  */
 final class GetBasketAction extends Sale\Controller\Action\BaseAction
@@ -42,6 +42,8 @@ final class GetBasketAction extends Sale\Controller\Action\BaseAction
 
 	public function run(array $fields)
 	{
+		$fields['FUSER_ID'] = Sale\Fuser::getId();
+
 		$checkParamsResult = $this->checkParams($fields);
 		if (!$checkParamsResult->isSuccess())
 		{
@@ -50,6 +52,18 @@ final class GetBasketAction extends Sale\Controller\Action\BaseAction
 		}
 
 		$fuserId = $fields['FUSER_ID'];
+		if (!$this->isFuserOwnedByCurrentUser($fuserId))
+		{
+			$this->addError(
+				new Main\Error(
+					'Access Denied',
+					Sale\Controller\ErrorEnumeration::GET_BASKET_ACTION_ACCESS_DENIED
+				)
+			);
+
+			return null;
+		}
+
 		$basket = $this->getBasketByFuserId($fuserId, $fields['SITE_ID']);
 
 		$registry = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
@@ -62,6 +76,17 @@ final class GetBasketAction extends Sale\Controller\Action\BaseAction
 			'BASKET_ITEMS' => Sale\Helpers\Controller\Action\Entity\Order::getOrderProductsByBasket($basket),
 			'ORDER_PRICE_TOTAL' => Sale\Helpers\Controller\Action\Entity\Order::getTotal($order),
 		];
+	}
+
+	/**
+	 * Fuser::getId() trusts a numeric SALE_UID cookie when fuser id encoding is disabled,
+	 * so the resolved fuser may belong to another registered user.
+	 */
+	private function isFuserOwnedByCurrentUser(int $fuserId): bool
+	{
+		$ownerId = Sale\Fuser::getUserIdById($fuserId);
+
+		return $ownerId === 0 || $ownerId === (int)$this->getCurrentUser()?->getId();
 	}
 
 	private function getBasketByFuserId($fuserId, $siteId): Sale\BasketBase

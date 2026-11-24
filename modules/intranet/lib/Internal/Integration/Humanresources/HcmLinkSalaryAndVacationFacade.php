@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Internal\Integration\Humanresources;
 
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\Intranet\User;
 use Bitrix\Main\Loader;
 
 class HcmLinkSalaryAndVacationFacade
@@ -24,7 +25,7 @@ class HcmLinkSalaryAndVacationFacade
 
 			if (isset($settings['show']))
 			{
-				return $settings['show'] === true;
+				return $settings['show'] === true && (new User($userId))->isIntranet();
 			}
 		}
 

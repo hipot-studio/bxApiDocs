@@ -14,7 +14,7 @@ class CounterServiceLegacy extends CounterService
 	{
 		$userId = $this->getContext()->getUserId();
 		$collector = ServiceLocator::getInstance()->get(UserCountersCollector::class);
-		$userCounters = $collector->get($userId);
+		$userCounters = static::applyFolderMute($collector->get($userId), $userId);
 
 		$adapter = ServiceLocator::getInstance()->get(LegacyCountersAdapter::class);
 

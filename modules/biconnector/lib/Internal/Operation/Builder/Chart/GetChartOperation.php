@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Internal\Operation\Builder\Chart;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Chart\ChartParamsBuilder;
 use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
 use Bitrix\BIConnector\Internal\Operation\Builder\EntityLookup;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
@@ -124,6 +125,7 @@ final class GetChartOperation
 			'name' => (string)($data['slice_name'] ?? $data['chart_name'] ?? ''),
 			'description' => (string)($data['description'] ?? ''),
 			'viz_type' => (string)($data['viz_type'] ?? ''),
+			'vizType' => ChartParamsBuilder::vizTypeAlias((string)($data['viz_type'] ?? '')),
 			'dataset_id' => (int)($data['datasource_id'] ?? $data['dataset_id'] ?? 0),
 			'datasource_type' => (string)($data['datasource_type'] ?? 'table'),
 			'params' => self::trimParams($data['params'] ?? null),

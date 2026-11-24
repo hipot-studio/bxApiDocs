@@ -27,4 +27,5 @@ enum Category: string
 	case TASKS_RESULTS = 'tasks_results';
 	case NOTE = 'note';
 	case READONLY_NOTE = 'readonly_note';
+	case BIZPROCDESIGNER = 'bizprocdesigner';
 }

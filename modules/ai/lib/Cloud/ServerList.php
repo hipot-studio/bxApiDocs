@@ -23,9 +23,12 @@ final class ServerList
 	}
 
 	/**
-	 * Get the list of allowed servers.
-	 * @return array
-	 * @throws ArgumentException
+	 * Get the list of allowed servers: the `proxyServers` option if it is set, otherwise the list
+	 * for the portal's region from the server list endpoint; empty if the endpoint is not configured.
+	 * @return array Entries like ['proxy' => string, 'region' => ?string]; the `proxyServers` option is returned as is.
+	 * @throws ArgumentException If the endpoint response is not valid JSON.
+	 * @throws \RuntimeException If the server list endpoint is unavailable (no response or non-200 status),
+	 * the decoded response is empty, or the server list in it is missing or empty.
 	 */
 	public function getAllowedServers(): array
 	{
@@ -90,6 +93,7 @@ final class ServerList
 	 * @param array|null $allowedServers entries like ['proxy' => string] or bare strings; null loads the live list
 	 * @return bool
 	 * @throws ArgumentException
+	 * @throws \RuntimeException If the list is loaded and the server list endpoint fails.
 	 */
 	public function isAllowedServer(string $serviceUrl, ?array $allowedServers = null): bool
 	{
@@ -132,6 +136,7 @@ final class ServerList
 	 * @param array|null $allowedServers Preloaded server list; null loads it lazily.
 	 * @return string|null
 	 * @throws ArgumentException
+	 * @throws \RuntimeException If the list is loaded and the server list endpoint fails.
 	 */
 	public function getMostSuitableServer(?array $allowedServers = null): ?string
 	{

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\UnifiedLink;
 
 use Bitrix\Disk\Document\Models\DocumentSession;
+use Bitrix\Disk\Document\Vibeoffice\DocumentStateRepository;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
@@ -15,6 +16,9 @@ use Bitrix\Disk\Internal\Repository\Interface\ExternalLinkRepositoryInterface;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkOpenPolicy;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordService;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internals\ExternalLinkTable;
+use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\User;
@@ -65,7 +69,70 @@ final class ShortLinkOpening
 			return null;
 		}
 
-		$externalLink = ExternalLink::load(['=CODE' => $code]);
+		$fresh = DocumentStateRepository::shouldBypassRepeatableRead();
+		$lockedObjects = [];
+		if ($fresh)
+		{
+			$discoveredLinks = DocumentStateRepository::discoverRowsForFreshRead(
+				ExternalLinkTable::query()
+					->setSelect(['ID', 'OBJECT_ID'])
+					->where('CODE', $code)
+					->setOrder(['ID' => 'ASC']),
+			);
+			if ($discoveredLinks === null)
+			{
+				return null;
+			}
+			$discoveredObjectIds = [];
+			foreach ($discoveredLinks as $linkRow)
+			{
+				$objectId = (int)($linkRow['OBJECT_ID'] ?? 0);
+				if ($objectId > 0)
+				{
+					$discoveredObjectIds[$objectId] = $objectId;
+				}
+			}
+			if ($discoveredObjectIds === [])
+			{
+				return null;
+			}
+			$discoveredObjects = DocumentStateRepository::discoverRowsForFreshRead(
+				ObjectTable::query()
+					->setSelect(['ID', 'REAL_OBJECT_ID'])
+					->whereIn('ID', array_values($discoveredObjectIds))
+					->setOrder(['ID' => 'ASC']),
+			);
+			if ($discoveredObjects === null)
+			{
+				return null;
+			}
+			$candidateObjectIds = $discoveredObjectIds;
+			foreach ($discoveredObjects as $objectRow)
+			{
+				$id = (int)($objectRow['ID'] ?? 0);
+				$realId = (int)($objectRow['REAL_OBJECT_ID'] ?? 0);
+				if ($id > 0)
+				{
+					$candidateObjectIds[$id] = $id;
+				}
+				if ($realId > 0)
+				{
+					$candidateObjectIds[$realId] = $realId;
+				}
+			}
+			ksort($candidateObjectIds, SORT_NUMERIC);
+			foreach (DocumentStateRepository::lockObjectsForShare(array_values($candidateObjectIds), ['*']) as $objectRow)
+			{
+				$lockedObjects[(int)$objectRow['ID']] = $objectRow;
+			}
+
+			$row = DocumentStateRepository::fetchForShare(ExternalLinkTable::query()->setSelect(['*'])->where('CODE', $code));
+			$externalLink = $row ? ExternalLink::buildFromArray($row) : null;
+		}
+		else
+		{
+			$externalLink = ExternalLink::load(['=CODE' => $code]);
+		}
 		if (
 			!$externalLink instanceof ExternalLink
 			// The collation of the column may ignore the case, the code never does.
@@ -77,7 +144,22 @@ final class ShortLinkOpening
 			return null;
 		}
 
-		$file = $externalLink->getObject();
+		if ($fresh)
+		{
+			$row = $lockedObjects[(int)$externalLink->getObjectId()] ?? null;
+			$file = $row ? \Bitrix\Disk\BaseObject::buildFromArray($row) : null;
+			if ($file instanceof File && $file->isLink())
+			{
+				$row = $lockedObjects[(int)$file->getRealObjectId()] ?? null;
+				$real = $row ? \Bitrix\Disk\BaseObject::buildFromArray($row) : null;
+				if (!$real instanceof File || $real->isDeleted() || $real->isLink()) { return null; }
+				$file->primeRealObject($real);
+			}
+		}
+		else
+		{
+			$file = $externalLink->getObject();
+		}
 		if (!$file instanceof File || $file->isDeleted() || $file->isRoot())
 		{
 			return null;
@@ -93,7 +175,19 @@ final class ShortLinkOpening
 		if ($externalLink->isSpecificVersion())
 		{
 			// A removed revision is not replaced by the current one.
-			$version = Version::loadById((int)$externalLink->getVersionId());
+			if ($fresh)
+			{
+				$versionRow = DocumentStateRepository::fetchForShare(
+					VersionTable::query()
+						->setSelect(['*'])
+						->where('ID', (int)$externalLink->getVersionId()),
+				);
+				$version = $versionRow ? Version::buildFromArray($versionRow) : null;
+			}
+			else
+			{
+				$version = Version::loadById((int)$externalLink->getVersionId());
+			}
 			if (!$version instanceof Version || (int)$version->getObjectId() !== (int)$file->getRealObjectId())
 			{
 				return null;
@@ -158,51 +252,89 @@ final class ShortLinkOpening
 	 *
 	 * @param string|null $allowedMode The mode the entry allowed an employee; a guest has the mode of the link.
 	 * @param int $userId The employee; 0 is the user of the current request.
+	 * @param (\Closure(string): void)|null $onRefusal Receives the first refusal reason.
 	 */
 	public function revalidateForEditor(
 		DocumentSession $documentSession,
 		?string $allowedMode,
 		bool $isGuest,
 		int $userId = 0,
+		?\Closure $onRefusal = null,
 	): ?self
 	{
-		$fresh = self::resolve($this->getCode());
-		if (
-			$fresh === null
-			|| (int)$fresh->externalLink->getId() !== (int)$this->externalLink->getId()
-			|| (int)$documentSession->getObject()?->getRealObjectId() !== (int)$fresh->file->getRealObjectId()
-			|| (int)$documentSession->getVersionId() !== (int)$fresh->version?->getId()
-		)
-		{
-			return null;
-		}
+		return DocumentStateRepository::withPreLockedObjects(
+			[(int)$this->file->getId(), (int)$this->file->getRealObjectId(), (int)$documentSession->getObjectId()],
+			[(int)$this->externalLink->getId()],
+			[$this->getCode()],
+			[],
+			true,
+			function () use ($documentSession, $allowedMode, $isGuest, $userId, $onRefusal): ?self {
+				$fresh = self::resolve($this->getCode());
+				if ($fresh === null || (int)$fresh->externalLink->getId() !== (int)$this->externalLink->getId())
+				{
+					$onRefusal?->__invoke('short_link_unavailable');
 
-		if ($isGuest)
-		{
-			$passwordConfirmed = !$fresh->externalLink->hasPassword()
-				|| ServiceLocator::getInstance()->get(ExternalLinkPasswordService::class)->isConfirmed(
-					$fresh->externalLink,
-				)
-			;
-			$mayOpen = $passwordConfirmed && (!$documentSession->isEdit() || $fresh->allowsEditBySource());
+					return null;
+				}
 
-			return $mayOpen ? $fresh : null;
-		}
+				$object = $documentSession->getObject();
+				$reason = match (true)
+				{
+					!$object => 'file_missing',
+					(int)$object->getRealObjectId() !== (int)$fresh->file->getRealObjectId()
+						=> 'short_link_file_mismatch',
+					(int)$documentSession->getVersionId() !== (int)$fresh->version?->getId()
+						=> 'short_link_version_mismatch',
+					default => null,
+				};
+				if ($reason !== null)
+				{
+					$onRefusal?->__invoke($reason);
 
-		// The check of the source asks the password by the rule of the access factory.
-		$effectiveAccessLevel = $fresh->getEffectiveAccessLevel($userId > 0 ? $userId : self::currentUserId());
-		if (
-			$effectiveAccessLevel === null
-			|| (
-				$documentSession->isEdit()
-				&& ($allowedMode !== 'edit' || $effectiveAccessLevel !== UnifiedLinkAccessLevel::Edit)
-			)
-		)
-		{
-			return null;
-		}
+					return null;
+				}
 
-		return $fresh;
+				if ($isGuest)
+				{
+					$passwordConfirmed = !$fresh->externalLink->hasPassword()
+						|| ServiceLocator::getInstance()->get(ExternalLinkPasswordService::class)->isConfirmed(
+							$fresh->externalLink,
+						)
+					;
+					if (!$passwordConfirmed)
+					{
+						$onRefusal?->__invoke('link_password_unconfirmed');
+
+						return null;
+					}
+					if ($documentSession->isEdit() && !$fresh->allowsEditBySource())
+					{
+						$onRefusal?->__invoke('link_edit_mode_denied');
+
+						return null;
+					}
+
+					return $fresh;
+				}
+
+				// The check of the source asks the password by the rule of the access factory.
+				$effectiveAccessLevel = $fresh->getEffectiveAccessLevel($userId > 0 ? $userId : self::currentUserId());
+				if ($effectiveAccessLevel === null)
+				{
+					$onRefusal?->__invoke('link_access_unavailable');
+
+					return null;
+				}
+				if ($documentSession->isEdit() && ($allowedMode !== 'edit' || $effectiveAccessLevel !== UnifiedLinkAccessLevel::Edit))
+				{
+					$onRefusal?->__invoke('link_edit_mode_denied');
+
+					return null;
+				}
+
+				return $fresh;
+			},
+		);
 	}
 
 	/**
@@ -217,6 +349,7 @@ final class ShortLinkOpening
 		}
 
 		$accessResult = self::getAccessService()->checkAll($this->file, null, $userId);
+		$refreshUnifiedSources = DocumentStateRepository::shouldBypassRepeatableRead();
 		$ownAccessLevel = UnifiedLinkAccessLevel::Denied;
 		foreach (UnifiedLinkAccessSource::cases() as $source)
 		{
@@ -224,8 +357,23 @@ final class ShortLinkOpening
 			{
 				continue;
 			}
+			if (
+				$refreshUnifiedSources
+				&& in_array($source, [UnifiedLinkAccessSource::UnifiedLink, UnifiedLinkAccessSource::ParentUnifiedLink], true)
+			)
+			{
+				continue;
+			}
 
 			$accessLevel = $accessResult->getAccessLevel($source);
+			if ($accessLevel->value > $ownAccessLevel->value)
+			{
+				$ownAccessLevel = $accessLevel;
+			}
+		}
+		if ($refreshUnifiedSources)
+		{
+			$accessLevel = self::getAccessService()->checkFreshUnifiedLinkSource($this->file, $userId);
 			if ($accessLevel->value > $ownAccessLevel->value)
 			{
 				$ownAccessLevel = $accessLevel;

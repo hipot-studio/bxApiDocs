@@ -1317,6 +1317,11 @@ TODO: what do we should check in case of user's departments change? variant: if 
 		$bRecache = false;
 		if ($arOldFields = $dbRes->Fetch())
 		{
+			if ($arOldFields['EXTERNAL_AUTH_ID'] === 'imconnector')
+			{
+				return true;
+			}
+
 			if (
 				isset($arFields['PERSONAL_BIRTHDAY'])
 				&& $arOldFields['PERSONAL_BIRTHDAY'] != $arFields['PERSONAL_BIRTHDAY']

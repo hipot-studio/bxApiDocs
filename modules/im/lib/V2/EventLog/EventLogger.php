@@ -95,15 +95,20 @@ class EventLogger
 
 	public function logReactionChange(int $botId, string $eventType, array $v2Payload): void
 	{
-		if (!$this->isFetchBot($botId))
-		{
-			return;
-		}
-
-		$this->writeBotEventToLog($botId, $eventType, $v2Payload);
+		$this->logBotEvent($botId, $eventType, $v2Payload);
 	}
 
 	public function logFormSubmit(int $botId, string $eventType, array $v2Payload): void
+	{
+		$this->logBotEvent($botId, $eventType, $v2Payload);
+	}
+
+	public function logBlockButtonClick(int $botId, string $eventType, array $v2Payload): void
+	{
+		$this->logBotEvent($botId, $eventType, $v2Payload);
+	}
+
+	private function logBotEvent(int $botId, string $eventType, array $v2Payload): void
 	{
 		if (!$this->isFetchBot($botId))
 		{

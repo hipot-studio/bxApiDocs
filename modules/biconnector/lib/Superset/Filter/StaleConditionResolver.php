@@ -6,6 +6,7 @@ namespace Bitrix\BIConnector\Superset\Filter;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Table\TableVisibilityService;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
@@ -236,13 +237,14 @@ final class StaleConditionResolver
 	}
 
 	/**
-	 * The axis of the tables answers by groups alone - it carries no filter factory - so the allowed
-	 * ids are asked of the rule itself. An administrator gets every group of the axis back.
+	 * A group counts as allowed when the person sees it: by the own right on the group or by a visible
+	 * table of it. The axis carries no filter factory, so the ids are asked of the visibility of the
+	 * tables. An administrator gets every group of the axis back.
 	 *
-	 * Null is read here as "no group at all", the same way the repository of the groups reads it: the
-	 * axis grants by naming its groups, so an answer that names none grants none. Reading it as "no
-	 * restriction" would keep a condition on a group the person may not see, and the next consumer of
-	 * the allowed groups would have one more example of the permissive reading to copy.
+	 * A null answer of the visibility is read here as "no group at all", the same way the repository of
+	 * the groups reads it: the axis grants by naming its groups, so an answer that names none grants none.
+	 * Reading it as "no restriction" would keep a condition on a group the person may not see, and the next
+	 * consumer of the allowed groups would have one more example of the permissive reading to copy.
 	 *
 	 * Without the axis the groups are shown to everyone, so no group is out of reach and the answer is
 	 * null: only a deleted group is stale then.
@@ -254,7 +256,7 @@ final class StaleConditionResolver
 			return null;
 		}
 
-		$allowedGroupIds = $this->controller()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_TABLE_VIEW);
+		$allowedGroupIds = (new TableVisibilityService($this->userId, $this->controller()))->getVisibleGroupIds();
 
 		return array_fill_keys(array_map('intval', $allowedGroupIds ?? []), true);
 	}

@@ -68,6 +68,11 @@ final class MainRightsSection extends BaseSection
 			$permissionIds[] = PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS;
 		}
 
+		if (Feature::isRowRulesEnabled())
+		{
+			$permissionIds[] = PermissionDictionary::BIC_SETTINGS_EDIT_ROW_RULES;
+		}
+
 		if (!in_array((string)PermissionDictionary::BIC_SHARE_CONTROL, PermissionConfig::getHiddenPermissionIds(), true))
 		{
 			array_splice($permissionIds, 3, 0, [PermissionDictionary::BIC_SHARE_CONTROL]);

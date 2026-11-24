@@ -2,26 +2,30 @@
 
 namespace Bitrix\BizprocDesigner\Internal\Config;
 
+use Bitrix\Bizproc\Public\Feature\Node\NodeErrorHandlingFlag;
 use Bitrix\Bizproc\Public\Feature\Node\PoolNodeFlag;
 use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Internal\Service\ProcessData\ProcessDataFeature;
 use Bitrix\Bizproc\Public\Feature\DataView\DataViewFlag;
+use Bitrix\Bizproc\Public\Feature\Debugger\ProcessDebuggerFlag;
 use Bitrix\Bizproc\Public\Service\AiAgent\RegionAvailabilityService;
 use Bitrix\Bizproc\Public\Service\LastValues\LastValuesService;
 use Bitrix\Bizproc\Public\Service\WorkflowTemplate\PilotEditorStateService;
 use Bitrix\BizprocDesigner\Public\Feature\Ai\AiAssistantFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Ai\ExternalAiAgentFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Editor\DebugBarFlag;
+use Bitrix\BizprocDesigner\Public\Feature\Editor\FieldsFrameworkFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Editor\RulesSummaryFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Editor\TemplateNotesFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Expression\ExpressionBuilderFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Expression\ReadableExpressionsFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Node\ComplexNodeConnectionsFlag;
+use Bitrix\BizprocDesigner\Public\Feature\Node\NodeFilterExternalSourcesFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Node\NodeFilterFlag;
+use Bitrix\BizprocDesigner\Public\Feature\Node\StructurePositionTriggerFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Template\TemplateEditLockFlag;
 use Bitrix\BizprocDesigner\Public\Feature\Template\VersionHistoryUiFlag;
 use Bitrix\BizprocDesigner\Public\Features\ComponentLibrary;
-use Bitrix\BizprocDesigner\Public\Features\TestRunFeature;
 use Bitrix\Main;
 use Bitrix\Main\DI\Exception\CircularDependencyException;
 use Bitrix\Main\DI\Exception\ServiceNotFoundException;
@@ -34,6 +38,14 @@ class Feature
 	use SingletonTrait;
 
 	private const MODULE_NAME = 'bizprocdesigner';
+
+	/**
+	 * Activity classes kept out of every catalog of the editor until their flag is on. Templates that
+	 * already carry such a node still load and run: only offering the node for a new placement is closed.
+	 */
+	private const ACTIVITY_CLASS_FLAGS = [
+		'StructurePositionChangedTrigger' => StructurePositionTriggerFlag::class,
+	];
 
 	public function isAiAssistantAvailable(): bool
 	{
@@ -56,12 +68,12 @@ class Feature
 	}
 
 	/**
-	 * The test run of a template from a trigger node lives inside the debugger of the editor: the run is
-	 * watched by its journal, so it needs the debugger besides its own flag.
+	 * The test run of a template from a trigger node has no flag of its own: it lives inside the debugger
+	 * of the editor and is watched by the journal of the debugger of bizproc, so it follows both switches.
 	 */
 	public function isTestRunAvailable(): bool
 	{
-		return $this->isDebugBarAvailable() && Main\Config\Feature::isEnabled(TestRunFeature::class);
+		return $this->isDebugBarAvailable() && Main\Config\Feature::isEnabled(ProcessDebuggerFlag::class);
 	}
 
 	/**
@@ -86,6 +98,11 @@ class Feature
 	public function isNodeFilterAvailable(): bool
 	{
 		return \Bitrix\Main\Config\Feature::isEnabled(NodeFilterFlag::class);
+	}
+
+	public function areNodeFilterExternalSourcesAvailable(): bool
+	{
+		return Main\Config\Feature::isEnabled(NodeFilterExternalSourcesFlag::class);
 	}
 
 	/**
@@ -138,6 +155,23 @@ class Feature
 		return Main\Config\Feature::isEnabled(PoolNodeFlag::class);
 	}
 
+	public function isNodeErrorHandlingAvailable(): bool
+	{
+		return Main\Config\Feature::isEnabled(NodeErrorHandlingFlag::class);
+	}
+
+	public function isStructurePositionTriggerAvailable(): bool
+	{
+		return Main\Config\Feature::isEnabled(StructurePositionTriggerFlag::class);
+	}
+
+	public function isActivityClassOffered(?string $activityClass): bool
+	{
+		$flag = self::ACTIVITY_CLASS_FLAGS[(string)$activityClass] ?? null;
+
+		return $flag === null || Main\Config\Feature::isEnabled($flag);
+	}
+
 	public function isExpressionBuilderAvailable(): bool
 	{
 		return \Bitrix\Main\Config\Feature::isEnabled(ExpressionBuilderFlag::class);
@@ -155,6 +189,11 @@ class Feature
 	public function isRulesSummaryAvailable(): bool
 	{
 		return \Bitrix\Main\Config\Feature::isEnabled(RulesSummaryFlag::class);
+	}
+
+	public function isFieldsFrameworkAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Feature::isEnabled(FieldsFrameworkFlag::class);
 	}
 
 	/**
@@ -288,6 +327,16 @@ class Feature
 		if ($this->isPoolNodeAvailable())
 		{
 			$featureCodes[] = 'poolNode';
+		}
+
+		if ($this->isNodeErrorHandlingAvailable())
+		{
+			$featureCodes[] = 'nodeErrorHandling';
+		}
+
+		if ($this->isFieldsFrameworkAvailable())
+		{
+			$featureCodes[] = 'fieldsFramework';
 		}
 
 		return $featureCodes;

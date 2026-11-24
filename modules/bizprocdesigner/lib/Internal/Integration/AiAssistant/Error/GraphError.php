@@ -27,15 +27,19 @@ final class GraphError
 	 *        the outputs a block has, the violated constraint, the bounds. Only what DTO-02 publishes leaves the
 	 *        server ({@see \Bitrix\BizprocDesigner\Infrastructure\Rest\Service\GraphValidationErrorMapper}); a
 	 *        value the agent submitted never belongs here.
+	 * @param string|null $blockId the block the problem belongs to, for an address the report cannot recover one
+	 *        from: it reads a block out of an address opening with `blocks.<index>` and out of nothing else, so a
+	 *        problem addressed to a connection names its block here or answers without one.
 	 */
 	public static function at(
 		string $path,
 		string $message,
 		?GraphErrorCode $errorCode = null,
 		?array $details = null,
+		?string $blockId = null,
 	): Error
 	{
-		return new Error($message, $path, self::customData($errorCode, null, $details));
+		return new Error($message, $path, self::customData($errorCode, $blockId, $details));
 	}
 
 	/**

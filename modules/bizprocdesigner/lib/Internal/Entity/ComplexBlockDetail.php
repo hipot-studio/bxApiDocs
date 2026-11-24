@@ -6,7 +6,7 @@ use Bitrix\Main\Type\Contract\Arrayable;
 
 /**
  * Complex-node detail for the AI block catalog (DTO-02): the dictionary of allowed sub-actions,
- * the fixed document type and whether the node filter is supported in the current environment.
+ * the fixed document type and whether the node takes a filter and a condition in the current environment.
  *
  * Emitted additively by {@see BlockTypeDetail::toArray()} under the `complexActions` key; the whole
  * block is `null` for non-complex blocks (simple/trigger/operators), so the catalog JSON is unchanged
@@ -26,8 +26,9 @@ class ComplexBlockDetail implements Arrayable
 	 *        {@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ValidateSingleRuleCommand}
 	 *        judges a condition construction by on save. `true` for a node with no descriptor, which is what
 	 *        {@see \Bitrix\Bizproc\Activity\Dto\Complex\BlockAvailability::legacyDefault()} offers it.
-	 *        Deliberately not published in the catalog, like the skipped settings of a sub-action: it is read
-	 *        to decide what to describe to the agent, not offered to it as a writable surface.
+	 *        Published beside the filter flag (ADR-agent-complex-node-conditions-2026-09-22 revisits the
+	 *        earlier decision to withhold it): the agent has to know where a condition belongs before it
+	 *        writes one, and the described `condition` type says that only by its presence.
 	 */
 	public function __construct(
 		public readonly array $nodeActions,
@@ -45,6 +46,7 @@ class ComplexBlockDetail implements Arrayable
 			),
 			'fixedDocumentType' => $this->fixedDocumentType,
 			'filterSupported' => $this->filterSupported,
+			'conditionSupported' => $this->conditionSupported,
 		];
 	}
 }

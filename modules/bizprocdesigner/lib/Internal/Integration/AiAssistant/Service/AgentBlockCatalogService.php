@@ -10,6 +10,7 @@ use Bitrix\Bizproc\Internal\Entity\Activity\Result\ActivityAiDescriptionResult;
 use Bitrix\Bizproc\Internal\Service\Container as BizprocContainer;
 use Bitrix\Bizproc\Public\Service\Storage\StorageAuthorizationContext;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Activities;
+use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Entity\BlockType;
 use Bitrix\BizprocDesigner\Internal\Entity\BlockTypeCollection;
 use Bitrix\BizprocDesigner\Internal\Entity\BlockTypeDetail;
@@ -536,6 +537,7 @@ final class AgentBlockCatalogService
 	{
 		return !$activityDescription->getExcluded()
 			&& !$activityDescription->getDeprecated()
+			&& Feature::instance()->isActivityClassOffered($activityDescription->getClass())
 			&& $this->isNodeCompatible($activityDescription)
 		;
 	}

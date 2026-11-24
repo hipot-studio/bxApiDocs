@@ -51,13 +51,19 @@ class Document extends Base
 			}
 
 			$folder = $userStorage->getFolderForCreatedFiles();
+			if (!$folder)
+			{
+				$this->addError(new Error('Folder for created files not found.', 'FOLDER_NOT_FOUND'));
+
+				return null;
+			}
 		}
 
 		$res = BoardService::createNewDocument(User::loadById($currentUser->getId()), $folder);
 
 		if (!$res->isSuccess())
 		{
-			$this->addError($res->getError());
+			$this->addErrors($res->getErrors());
 
 			return null;
 		}

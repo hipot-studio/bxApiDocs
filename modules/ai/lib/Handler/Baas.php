@@ -10,7 +10,10 @@ use Bitrix\Main\Type\Date;
 class Baas
 {
 	/**
-	 * Added info package in db
+	 * Stores dates of a purchased package of the Copilot token BaaS service.
+	 *
+	 * @param Event $event
+	 * @return void
 	 */
 	public static function onPackagePurchased(Event $event): void
 	{

@@ -2,10 +2,10 @@
 
 namespace Bitrix\BIConnector\Access\Install;
 
+use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionTable;
 use Bitrix\BIConnector\Access\Role\RoleRelationTable;
 use Bitrix\BIConnector\Access\Role\RoleTable;
-use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupBindingTable;
 use Bitrix\BIConnector\Access\Update\PermissionSections\Migrator;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
@@ -103,9 +103,9 @@ final class AccessInstaller
 		// before the grant of the table axis: a mark left over would leave the groups the installation
 		// creates next closed to everybody.
 		Migrator::forgetGrantedGroupCodes();
-		// The groups are dropped past TableGroupService, so the snapshot of the membership
-		// would keep serving the deleted composition until the end of the hit.
-		TableGroupMembershipService::clearCache();
+		// The groups and the rights are dropped past TableGroupService, so the snapshot of the membership
+		// and the answers of the rules would keep serving the deleted ones until the end of the hit.
+		PermissionDictionary::clearGroupPermissions();
 	}
 
 	private static function installDefaultGroups(): Result

@@ -177,12 +177,13 @@ class EventHandler
 		$connection = Application::getConnection();
 		$connection->query("DELETE FROM b_im_option_user where USER_ID = " . $userId);
 
-		$userGroupId =
+		$userGroup =
 			OptionGroupTable::query()
 				->addSelect('ID')
 				->where('USER_ID', $userId)
-				->fetch()['ID']
+				->fetch()
 		;
+		$userGroupId = $userGroup['ID'] ?? null;
 
 		if (!$userGroupId)
 		{

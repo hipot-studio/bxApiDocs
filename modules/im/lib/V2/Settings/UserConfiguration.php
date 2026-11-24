@@ -95,6 +95,12 @@ class UserConfiguration
 			: null
 		;
 
+		$soundSettingsBeforeUpdate = $this->isSoundWrite($settingsConfiguration['name'])
+			? $this->getGeneralSettings()
+			: null
+		;
+		$presetBeforeUpdateId = $this->generalPreset->getId();
+
 		if (!$this->generalPreset->isPersonal($this->userId))
 		{
 			$personalPreset = Preset::getPersonal($this->userId);
@@ -114,11 +120,24 @@ class UserConfiguration
 			CacheManager::getUserCache($this->userId)->clearCache();
 		}
 
-		$this->generalPreset->general->updateSetting($settingsConfiguration);
-		Manager::sendPullGeneralSettingsUpdate(
-			$this->userId,
-			[$settingsConfiguration['name'] => $settingsConfiguration['value']]
-		);
+		if ($soundSettingsBeforeUpdate === null)
+		{
+			$storedSettings = [$settingsConfiguration['name'] => $settingsConfiguration['value']];
+			$this->generalPreset->general->updateSetting($settingsConfiguration);
+		}
+		else
+		{
+			$storedSettings = $this->prepareSoundSettings(
+				$settingsConfiguration,
+				$soundSettingsBeforeUpdate,
+				$this->generalPreset->getId() === $presetBeforeUpdateId
+			);
+			$this->generalPreset->general->updateSettings($storedSettings);
+		}
+
+		// Other clients get what was actually stored: a write of the legacy sound flag keeps
+		// nothing under that name, only the mute flag and the levels it had to raise.
+		Manager::sendPullGeneralSettingsUpdate($this->userId, $storedSettings);
 		$this->perfomSideEffect($settingsConfiguration, $settingsBeforeUpdate);
 		$this->sendMainReactionAnalytics($settingsConfiguration, $mainReactionBeforeUpdate);
 
@@ -237,6 +256,72 @@ class UserConfiguration
 		}
 
 		(new SettingsAnalytics())->addSetMainReaction((int)$this->userId, (string)$persistedReaction);
+	}
+
+	private function isSoundWrite(string $name): bool
+	{
+		return $name === Entity\General::ENABLE_SOUND || Sound\VolumeLevels::isSoundKey($name);
+	}
+
+	/**
+	 * Sound is stored as a whole set: a write of the legacy flag turns into the mute flag plus the
+	 * levels it has to raise, and the keys a write leaves out are brought along by the rule in
+	 * soundNamesToCarry().
+	 */
+	private function prepareSoundSettings(
+		array $settingsConfiguration,
+		array $currentSettings,
+		bool $keptThePreset
+	): array
+	{
+		$name = $settingsConfiguration['name'];
+
+		$changed = $name === Entity\General::ENABLE_SOUND
+			? Sound\VolumeLevels::fromLegacyWrite(
+				Sound\VolumeLevels::isLegacySoundEnabled($settingsConfiguration['value']),
+				$currentSettings
+			)
+			: [$name => $settingsConfiguration['value']]
+		;
+
+		$soundSettings = Sound\VolumeLevels::fill($currentSettings);
+		$settings = [];
+		foreach ($this->soundNamesToCarry($keptThePreset, $name) as $soundName)
+		{
+			if (!array_key_exists($soundName, $changed))
+			{
+				$settings[$soundName] = $soundSettings[$soundName];
+			}
+		}
+
+		return array_replace($settings, $changed);
+	}
+
+	/**
+	 * The sound keys a write has to bring along so the storage holds the whole state the user had.
+	 * A write that moved him to a preset of his own left the sound behind: the new preset is filled
+	 * with the defaults and knows nothing of what he heard, so all of it goes into it. A preset he
+	 * already had misses only the keys it has no row for. A write of the legacy flag brings nothing:
+	 * it says what it means, and the keys it leaves out are derived from the flag stored next to them.
+	 *
+	 * @return string[]
+	 */
+	private function soundNamesToCarry(bool $keptThePreset, string $writtenName): array
+	{
+		if (!$keptThePreset)
+		{
+			return Sound\VolumeLevels::soundKeys();
+		}
+
+		if ($writtenName === Entity\General::ENABLE_SOUND)
+		{
+			return [];
+		}
+
+		return array_diff(
+			Sound\VolumeLevels::soundKeys(),
+			General::getStoredSettingNames((int)$this->generalPreset->getId())
+		);
 	}
 
 	private function updateUserSearch(array $settingsConfiguration): void

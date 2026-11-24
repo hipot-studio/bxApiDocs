@@ -22,7 +22,9 @@ use Bitrix\Disk\ProxyType;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\ConfigurationException;
+use Bitrix\Main\DB\MysqlCommonConnection;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Messenger\Internals\Exception\Broker\SendFailedException;
@@ -141,9 +143,48 @@ final class IndexManager
 			$textBuilder->addText($content);
 		}
 
-		ObjectSaveIndexTable::update($object->getId(), array(
-			'SEARCH_INDEX' => $textBuilder->getSearchValue(),
-		));
+		try
+		{
+			ObjectSaveIndexTable::update($object->getId(), array(
+				'SEARCH_INDEX' => $textBuilder->getSearchValue(),
+			));
+		}
+		catch (SqlQueryException $exception)
+		{
+			if (!$this->isDroppedLegacyColumnFailure($exception))
+			{
+				throw $exception;
+			}
+		}
+	}
+
+	/**
+	 * The head index migration may drop the legacy column after the caller has found it in the cached metadata.
+	 */
+	private function isDroppedLegacyColumnFailure(SqlQueryException $exception): bool
+	{
+		$connection = Application::getConnection();
+		if (!($connection instanceof MysqlCommonConnection))
+		{
+			return false;
+		}
+
+		$tableName = ObjectTable::getTableName();
+		$helper = $connection->getSqlHelper();
+		$legacyWrite = 'UPDATE ' . $helper->quote($tableName) . ' SET ' . $helper->quote('SEARCH_INDEX') . ' = ';
+		$databaseMessage = (string)$exception->getDatabaseMessage();
+		if (
+			!str_starts_with((string)$exception->getQuery(), $legacyWrite)
+			|| !str_starts_with($databaseMessage, '(1054) ')
+			|| !str_contains($databaseMessage, "'SEARCH_INDEX'")
+		)
+		{
+			return false;
+		}
+
+		$connection->clearCaches($tableName);
+
+		return $connection->getTableField($tableName, 'SEARCH_INDEX') === null;
 	}
 
 	protected function saveFullTextByHead(BaseObject $object)

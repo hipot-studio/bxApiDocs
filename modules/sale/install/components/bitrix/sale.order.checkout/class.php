@@ -793,11 +793,12 @@ class SaleOrderCheckout extends \CBitrixComponent
 			'filter' => [
 				'=DOMAIN' => Sale\BusinessValue::INDIVIDUAL_DOMAIN,
 				'=PERSON_TYPE_REFERENCE.ENTITY_REGISTRY_TYPE' => Sale\Registry::REGISTRY_TYPE_ORDER,
-				'=PERSON_TYPE_REFERENCE.LID' => $siteId,
+				'=PERSON_TYPE_REFERENCE.PERSON_TYPE_SITE.SITE_ID' => $siteId,
 				'=PERSON_TYPE_REFERENCE.ACTIVE' => 'Y',
 			],
 			'order' => [
-				'PERSON_TYPE_REFERENCE.SORT' => 'ASC'
+				'PERSON_TYPE_REFERENCE.SORT' => 'ASC',
+				'PERSON_TYPE_ID' => 'ASC',
 			],
 			'limit' => 1,
 		])->fetch();

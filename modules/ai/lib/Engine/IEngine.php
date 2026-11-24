@@ -14,7 +14,7 @@ interface IEngine
 	public function __construct(Context $context, mixed $data = null);
 
 	/**
-	 * Set id consumption from bass
+	 * Sets id of the limit consumption charged for the request.
 	 *
 	 * @param string $consumptionId
 	 * @return void
@@ -22,7 +22,7 @@ interface IEngine
 	public function setConsumptionId(string $consumptionId): void;
 
 	/**
-	 * Returns id consumption from bass
+	 * Returns id of the limit consumption charged for the request.
 	 *
 	 * @return string
 	 */
@@ -145,7 +145,7 @@ interface IEngine
 	public function writeHistory(Result $result): void;
 
 	/**
-	 * Writes error response in history, must depend on isWriteHistory.
+	 * Writes error response in history, must depend on shouldWriteHistory.
 	 *
 	 * @param Error $error Error instance.
 	 * @return void
@@ -171,6 +171,7 @@ interface IEngine
 	 * Prepares raw data and returns Result instance.
 	 *
 	 * @param mixed $rawResult Raw result.
+	 * @param bool $cached True if the raw result was taken from the result cache.
 	 * @return Result
 	 */
 	public function getResultFromRaw(mixed $rawResult, bool $cached): Result;

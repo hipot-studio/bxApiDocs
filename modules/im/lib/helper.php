@@ -5,14 +5,17 @@ class Helper
 {
 	public static function getOnlineIntranetUsers()
 	{
-		$users = \Bitrix\Main\UserTable::getList([
-            'select' => ['ID'],
-            'filter' => [
-                '=IS_REAL_USER' => 'Y',
-                '=IS_ONLINE' => 'Y',
-              	'!=UF_DEPARTMENT' => false
-            ]
-        ])->fetchAll();
+		$onlineSince = \Bitrix\Main\Application::getConnection()->getSqlHelper()->addSecondsToDateTime(
+			-\Bitrix\Main\UserTable::getSecondsForLimitOnline()
+		);
+
+		$users = \Bitrix\Main\UserTable::query()
+			->setSelect(['ID'])
+			->where('REAL_USER', 'expr', true)
+			->where('LAST_ACTIVITY_DATE', '>', new \Bitrix\Main\DB\SqlExpression($onlineSince))
+			->addFilter('!=UF_DEPARTMENT', false)
+			->fetchAll()
+		;
 
 		return array_map(function($item) { return $item['ID']; }, $users);
 	}

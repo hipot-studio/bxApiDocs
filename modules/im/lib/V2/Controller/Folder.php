@@ -15,6 +15,7 @@ use Bitrix\Im\V2\Folder\FolderCollection;
 use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Folder\FolderService;
+use Bitrix\Im\V2\Folder\Mute\MuteService;
 use Bitrix\Im\V2\Folder\Sort\FolderSortService;
 use Bitrix\Im\V2\Folder\Sort\SaveListFields;
 use Bitrix\Im\V2\Folder\Source\FolderSourceService;
@@ -184,6 +185,26 @@ class Folder extends BaseController
 	}
 
 	/**
+	 * @restMethod im.v2.Folder.readAll
+	 */
+	public function readAllAction(
+		\Bitrix\Im\V2\Folder\Folder $folder,
+		FolderService $folderService,
+		CurrentUser $user,
+	): ?array
+	{
+		$result = $folderService->readAll($folder, (int)$user->getId());
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return ['result' => true];
+	}
+
+	/**
 	 * Reordering alone, and a thin layer over the save of the whole screen: it normalizes the order
 	 * and calls the same implementation with both sets empty, so no second way to store the order
 	 * exists. The answer stays what it was - the released versions of the applications wait for
@@ -268,6 +289,44 @@ class Folder extends BaseController
 		}
 
 		return $this->toFolderListRestFormat($result->getFolders(), $result->getDialogIdMap());
+	}
+
+	/**
+	 * The rule of the folder, and the same answer as an ordinary update: the folder as it is stored
+	 * now (DTO-01). A repeat on a folder already muted writes nothing and sends nothing.
+	 *
+	 * @restMethod im.v2.Folder.mute
+	 */
+	public function muteAction(\Bitrix\Im\V2\Folder\Folder $folder, MuteService $muteService): ?array
+	{
+		return $this->setFolderMuted($folder, $muteService, true);
+	}
+
+	/**
+	 * @restMethod im.v2.Folder.unmute
+	 */
+	public function unmuteAction(\Bitrix\Im\V2\Folder\Folder $folder, MuteService $muteService): ?array
+	{
+		return $this->setFolderMuted($folder, $muteService, false);
+	}
+
+	private function setFolderMuted(
+		\Bitrix\Im\V2\Folder\Folder $folder,
+		MuteService $muteService,
+		bool $isMuted,
+	): ?array
+	{
+		$result = $muteService->setMuted($folder, $isMuted);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$muted = $result->getFolder();
+
+		return $muted !== null ? $this->toRestFormat($muted) : null;
 	}
 
 	/**

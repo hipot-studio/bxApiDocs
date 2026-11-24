@@ -110,7 +110,7 @@ final class ReadyDashboardGuard
 
 		return Refusal::error(
 			FailureCode::Unavailable,
-			Refusal::appendDebugDetail(Refusal::UNAVAILABLE_DASHBOARD_MESSAGE, $detail),
+			Refusal::UNAVAILABLE_DASHBOARD_MESSAGE,
 		);
 	}
 
@@ -157,7 +157,7 @@ final class ReadyDashboardGuard
 
 		return Refusal::error(
 			FailureCode::Unavailable,
-			Refusal::appendDebugDetail('BI is temporarily unavailable. Try again later.', $detail),
+			'BI is temporarily unavailable. Try again later.',
 		);
 	}
 }

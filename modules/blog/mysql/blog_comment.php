@@ -400,41 +400,43 @@ class CBlogComment extends CAllBlogComment
 				"BLOG_POST_MICRO" => array("FIELD" => "BP.MICRO", "TYPE" => "string", "FROM" => "INNER JOIN b_blog_post BP ON (C.POST_ID = BP.ID)"),
 			);
 				
-		if(isset($arFilter["GROUP_CHECK_PERMS"]))
+		if (isset($arFilter["GROUP_CHECK_PERMS"]))
 		{
-			if(is_array($arFilter["GROUP_CHECK_PERMS"]))
+			if (is_array($arFilter["GROUP_CHECK_PERMS"]))
 			{
-				foreach($arFilter["GROUP_CHECK_PERMS"] as $val)
+				foreach ($arFilter["GROUP_CHECK_PERMS"] as $val)
 				{
-					if(intval($val)>0)
+					$val = is_scalar($val) ? (int)$val : 0;
+					if ($val > 0 && !isset($arFields["POST_PERM_" . $val]))
 					{
-						$arFields["POST_PERM_".$val] = Array(
-								"FIELD" => "BUGP".$val.".PERMS", 
-								"TYPE" => "string", 
-								"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP".$val." 
-											ON (C.BLOG_ID = BUGP".$val.".BLOG_ID 
-												AND C.POST_ID = BUGP".$val.".POST_ID 
-												AND BUGP".$val.".USER_GROUP_ID = ".$val." 
-												AND BUGP".$val.".PERMS_TYPE = '".BLOG_PERMS_COMMENT."')"
-							);
-						$arSelectFields[] = "POST_PERM_".$val;
+						$arFields["POST_PERM_" . $val] = Array(
+							"FIELD" => "BUGP" . $val . ".PERMS",
+							"TYPE" => "string",
+							"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP" . $val . "
+									ON (C.BLOG_ID = BUGP" . $val . ".BLOG_ID
+										AND C.POST_ID = BUGP" . $val . ".POST_ID
+										AND BUGP" . $val . ".USER_GROUP_ID = " . $val . "
+										AND BUGP" . $val . ".PERMS_TYPE = '" . BLOG_PERMS_COMMENT . "')"
+						);
+						$arSelectFields[] = "POST_PERM_" . $val;
 					}
 				}
 			}
 			else
 			{
-				if(intval($arFilter["GROUP_CHECK_PERMS"])>0)
+				$groupId = is_scalar($arFilter["GROUP_CHECK_PERMS"]) ? (int)$arFilter["GROUP_CHECK_PERMS"] : 0;
+				if ($groupId > 0)
 				{
-					$arFields["POST_PERM_".$arFilter["GROUP_CHECK_PERMS"]] = Array(
-							"FIELD" => "BUGP.PERMS", 
-							"TYPE" => "string", 
-							"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP 
-										ON (C.BLOG_ID = BUGP.BLOG_ID 
-											AND C.POST_ID = BUGP.POST_ID 
-											AND BUGP.USER_GROUP_ID = ".$arFilter["GROUP_CHECK_PERMS"]." 
-											AND BUGP.PERMS_TYPE = '".BLOG_PERMS_COMMENT."')"
-						);
-					$arSelectFields[] = "POST_PERM_".$arFilter["GROUP_CHECK_PERMS"];
+					$arFields["POST_PERM_" . $groupId] = Array(
+						"FIELD" => "BUGP.PERMS",
+						"TYPE" => "string",
+						"FROM" => "LEFT JOIN b_blog_user_group_perms BUGP
+								ON (C.BLOG_ID = BUGP.BLOG_ID
+									AND C.POST_ID = BUGP.POST_ID
+									AND BUGP.USER_GROUP_ID = " . $groupId . "
+									AND BUGP.PERMS_TYPE = '" . BLOG_PERMS_COMMENT . "')"
+					);
+					$arSelectFields[] = "POST_PERM_" . $groupId;
 				}
 			}
 			unset($arFilter["GROUP_CHECK_PERMS"]);

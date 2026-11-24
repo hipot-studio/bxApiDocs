@@ -37,11 +37,16 @@ final class IntegrationErrorPresenter
 		if ($status === SupersetInitializer::SUPERSET_STATUS_LIMIT_EXCEEDED)
 		{
 			return new UserFacingError(
-				Loc::getMessage('BICONNECTOR_SUPERSET_ERROR_PRESENTER_LIMIT_EXCEEDED'),
+				self::getLimitExceededMessage(),
 				self::ERROR_LIMIT_EXCEEDED,
 			);
 		}
 
 		return new UserFacingError($actionMessage, self::ERROR_INTEGRATION);
+	}
+
+	public static function getLimitExceededMessage(): string
+	{
+		return (string)Loc::getMessage('BICONNECTOR_SUPERSET_ERROR_PRESENTER_LIMIT_EXCEEDED');
 	}
 }

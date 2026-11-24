@@ -1345,17 +1345,69 @@ class Bot
 	}
 
 	/**
+	 * A click on a button of any block of the message - the common channel for bots and applications.
+	 * The Form block additionally keeps its own {@see onFormSubmit}.
+	 *
+	 * The dialog comes with the click, computed once for every channel: a click without it is not the
+	 * form bots are given and is not delivered.
+	 *
+	 * @param array $click click payload, see \Bitrix\Im\V2\Message\BlocksBuilder\Action\ButtonActionService
+	 */
+	public static function onBlockButtonClick(Message $message, array $click): bool
+	{
+		$bot = \Bitrix\Im\V2\Entity\User\User::getInstance($message->getAuthorId());
+
+		if (!$bot->isBot())
+		{
+			return false;
+		}
+
+		if (($click['dialogId'] ?? '') === '')
+		{
+			return false;
+		}
+
+		$botData = BotData::getInstance($bot->getId())->toArray();
+		if (empty($botData))
+		{
+			return false;
+		}
+
+		$v2Payload = (new EventPayload())->blockButtonClick($message, $click);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logBlockButtonClick(
+				(int)$botData['BOT_ID'], 'ONIMBOTV2BLOCKBUTTONCLICK', $v2Payload
+			);
+		}
+		catch (\Throwable $e)
+		{
+			// Log only the exception itself: never the submitted form values.
+			Main\Application::getInstance()->getExceptionHandler()->writeToLog($e);
+		}
+
+		self::fireRestEvent('onImBotV2BlockButtonClick', [$botData, $message->getId(), $click, $v2Payload]);
+
+		return true;
+	}
+
+	/**
 	 * Fires paired V1 + V2 REST event handlers with the same parameters.
 	 */
 	public static function fireRestEvents(string $v1EventName, string $v2EventName, array $eventParams): void
 	{
-		$em = \Bitrix\Main\EventManager::getInstance();
+		self::fireRestEvent($v1EventName, $eventParams);
+		self::fireRestEvent($v2EventName, $eventParams);
+	}
 
-		foreach ($em->findEventHandlers('im', $v1EventName) as $event)
-		{
-			\ExecuteModuleEventEx($event, $eventParams);
-		}
-		foreach ($em->findEventHandlers('im', $v2EventName) as $event)
+	/**
+	 * Fires a single REST event. Events born after the V1 bot protocol have no V1 counterpart and
+	 * are published through this method alone.
+	 */
+	public static function fireRestEvent(string $eventName, array $eventParams): void
+	{
+		foreach (\Bitrix\Main\EventManager::getInstance()->findEventHandlers('im', $eventName) as $event)
 		{
 			\ExecuteModuleEventEx($event, $eventParams);
 		}

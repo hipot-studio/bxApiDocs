@@ -28,6 +28,7 @@ use Bitrix\Main\Text\Emoji;
  * <li> TITLE string(255) optional
  * <li> SORT int mandatory default 0
  * <li> HIDDEN_BY_USER bool mandatory default 'N'
+ * <li> NOTIFY_BLOCK bool mandatory default 'N'
  * </ul>
  *
  * @package Bitrix\Im
@@ -104,6 +105,10 @@ class FolderTable extends DataManager
 			(new BooleanField('HIDDEN_BY_USER'))
 				->configureValues('N', 'Y')
 				->configureDefaultValue('N'),
+
+			(new BooleanField('NOTIFY_BLOCK'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue(false),
 		];
 	}
 }

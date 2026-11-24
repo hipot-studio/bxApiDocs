@@ -9,6 +9,7 @@ use Bitrix\Main\Error;
 use Bitrix\BIConnector\DataSource\Dataset;
 use Bitrix\BIConnector\DataSource\Field\IntegerField;
 use Bitrix\BIConnector\DataSource\Field\StringField;
+use CTaskElapsedItem;
 
 class TaskElapsedTime extends Dataset
 {
@@ -36,7 +37,7 @@ class TaskElapsedTime extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('TASK_ELAPSED_TIME_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
+		return $this->getMessage('TASK_ELAPSED_TIME_TABLE_DESCRIPTION_FULL_MSGVER_2', '');
 	}
 
 	/**
@@ -64,6 +65,18 @@ class TaskElapsedTime extends Dataset
 			"INNER JOIN b_user U ON U.ID = {$this->getAliasFieldName('USER_ID')}",
 			"LEFT JOIN b_user U ON U.ID = {$this->getAliasFieldName('USER_ID')}",
 		);
+
+		$entrySource = (new StringField('ENTRY_SOURCE', null, $this))
+			->setDictionary([
+				CTaskElapsedItem::SOURCE_UNDEFINED
+					=> $this->getMessage('TASK_ELAPSED_TIME_FIELD_ENTRY_SOURCE_VALUE_UNDEFINED'),
+				CTaskElapsedItem::SOURCE_MANUAL
+					=> $this->getMessage('TASK_ELAPSED_TIME_FIELD_ENTRY_SOURCE_VALUE_MANUAL'),
+				CTaskElapsedItem::SOURCE_SYSTEM
+					=> $this->getMessage('TASK_ELAPSED_TIME_FIELD_ENTRY_SOURCE_VALUE_SYSTEM'),
+			])
+		;
+		$entrySource->setName($entrySource->mapDictionaryToSqlCase($this->getAliasFieldName('SOURCE')));
 
 		return [
 			(new IntegerField('ID'))
@@ -98,22 +111,20 @@ class TaskElapsedTime extends Dataset
 			,
 			(new DateTimeField('DATE_START'))
 				->setName($this->getAliasFieldName('CREATED_DATE'))
+				->setDescription($this->getMessage('TASK_ELAPSED_TIME_FIELD_DATE_START_MSGVER_1'))
+				->setDescriptionFull($this->getMessage('TASK_ELAPSED_TIME_FIELD_DATE_START_FULL_MSGVER_1'))
 			,
-			(new StringField('COMMENT_TEXT'))
-				->setCallback(
-					static function($value) {
-						if (empty($value))
-						{
-							return '';
-						}
-
-						return strlen($value) > 100 ? mb_substr($value, 0, 100) . '...' : $value;
-					}
-				)
-			,
+			(new StringField('COMMENT_TEXT')),
 			(new IntegerField('ELAPSED_TIME'))
 				->setName($this->getAliasFieldName('SECONDS'))
 			,
+			(new DateTimeField('WORK_START_DATE'))
+				->setName($this->getAliasFieldName('DATE_START'))
+			,
+			(new DateTimeField('WORK_END_DATE'))
+				->setName($this->getAliasFieldName('DATE_STOP'))
+			,
+			$entrySource,
 		];
 	}
 }

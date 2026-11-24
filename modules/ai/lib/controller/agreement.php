@@ -20,12 +20,12 @@ class Agreement extends Controller
 	}
 
 	/**
-	 * Check agreement accept by code.
+	 * Checks whether the current user has accepted the agreement. Only AI_BOX_AGREEMENT is supported.
 	 *
 	 * @param string $agreementCode
 	 * @param array $parameters
 	 *
-	 * @return bool
+	 * @return array{isAccepted?: bool} Empty array with an error if the agreement is not found.
 	 */
 	public function checkAction(string $agreementCode, array $parameters): array
 	{
@@ -42,12 +42,12 @@ class Agreement extends Controller
 	}
 
 	/**
-	 * Accept agreement by code.
+	 * Accepts the agreement by the current user. Only AI_BOX_AGREEMENT is supported.
 	 *
 	 * @param string $agreementCode
 	 * @param array $parameters
 	 *
-	 * @return bool
+	 * @return array{isAccepted?: bool} Empty array with an error if the agreement is not found.
 	 */
 	public function acceptAction(string $agreementCode, array $parameters): array
 	{

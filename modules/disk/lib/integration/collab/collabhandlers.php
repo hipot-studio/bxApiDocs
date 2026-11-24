@@ -13,13 +13,13 @@ use Bitrix\Disk\Storage;
 use Bitrix\Im\Disk\ProxyType\Im;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
+use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 
 class CollabHandlers
 {
 
 	private CollabService $collabService;
-	private CollabProvider $collabProvider;
 	private int $userId;
 	private bool $isCollaber;
 
@@ -27,7 +27,6 @@ class CollabHandlers
 	{
 		$this->userId = (int)$event->getParameter('userId');
 		$this->collabService = new CollabService();
-		$this->collabProvider = CollabProvider::getInstance();
 		$this->isCollaber = $this->collabService->isCollaberUserById($this->userId);
 	}
 
@@ -47,7 +46,7 @@ class CollabHandlers
 				'select' => ['ID', 'STORAGE_ID', 'CODE'],
 				'filter' => [
 					'=ID' => $objectId,
-				]
+				],
 			])->fetch();
 
 			if ($object !== false)
@@ -116,9 +115,10 @@ class CollabHandlers
 
 		if (!$isStorageForIm && !$this->isSpecialFolder($objectCode, $storage) && !$this->collabService->isCollabStorage($storage))
 		{
-			$rights = array_filter($rights, function (array $operation) {
+			$collabProvider = Loader::includeModule('socialnetwork') ? CollabProvider::getInstance() : null;
+			$rights = array_filter($rights, function (array $operation) use ($collabProvider) {
 				[$sharingType, $entityId] = Sharing::parseEntityValue($operation['ACCESS_CODE']);
-				if ($sharingType === Sharing::TYPE_TO_GROUP && $this->collabProvider->isCollab((int)$entityId))
+				if ($sharingType === Sharing::TYPE_TO_GROUP && $collabProvider?->isCollab((int)$entityId))
 				{
 					return true;
 				}

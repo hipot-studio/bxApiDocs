@@ -72,6 +72,26 @@ class AiAssistantService
 		return Feature::getInstance()->isBitrixGptV2Available($option, 'im');
 	}
 
+	/**
+	 * The scenario library is gated by the assistant module, and the key lives there: the messenger
+	 * only delivers the answer to its clients. Hence a named method instead of a key of our own
+	 * passed to the generic gate above.
+	 */
+	public function isAiRequestTemplatesAvailable(): bool
+	{
+		// The method appeared in aiassistant 26.1900.0; the update of im does not depend on it,
+		// so an older assistant module keeps the library switched off instead of a fatal error.
+		if (
+			!Loader::includeModule('aiassistant')
+			|| !method_exists(Feature::class, 'isAiRequestTemplatesAvailable')
+		)
+		{
+			return false;
+		}
+
+		return Feature::getInstance()->isAiRequestTemplatesAvailable();
+	}
+
 	public function isBitrixGptAgentPromoAllowedByPortalAge(): bool
 	{
 		return PortalAge::isCreatedBeforeCutoffDate('aiassistant', self::BITRIX_GPT_AGENT_PROMO_CUTOFF_DATE_OPTION);

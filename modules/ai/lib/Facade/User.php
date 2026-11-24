@@ -109,8 +109,10 @@ class User
 
 	/**
 	 * Returns last used engine code in category.
+	 * Module 'im' has its own slot, all other modules share the default slot.
 	 *
 	 * @param string $category Engine category code.
+	 * @param string $moduleId Context module id.
 	 * @return string
 	 */
 	public static function getLastUsedEngineCode(string $category, string $moduleId): string
@@ -120,7 +122,8 @@ class User
 	}
 
 	/**
-	 * Drop last used engine by current user - will use default
+	 * Drop last used engine by current user - will use default.
+	 * Clears the key without module postfix, which getLastUsedEngineCode() does not read.
 	 *
 	 * @param string $category Engine category code.
 	 * @return void
@@ -132,9 +135,11 @@ class User
 	}
 
 	/**
-	 * Drop last used engine for all user - will use default
+	 * Drop last used engine for all users - will use default.
+	 * Only the slot of the given module is cleared: 'im' or the shared default slot.
 	 *
 	 * @param string $category Engine category code.
+	 * @param string $moduleId Context module id.
 	 * @return void
 	 */
 	public static function clearLastUsedEngineCodeForAll(string $category, string $moduleId = 'default'): void
@@ -145,8 +150,10 @@ class User
 
 	/**
 	 * Returns last used role code in category.
+	 * Module 'im' has its own slot, all other modules share the default slot.
 	 *
 	 * @param string $category Engine category code.
+	 * @param string $moduleId Context module id.
 	 * @return string
 	 */
 	public static function getLastUsedRoleCode(string $category, string $moduleId): string

@@ -72,6 +72,20 @@ enum GraphErrorCode: string
 	/** The server could not assemble the context a check rests on, so the graph was judged on nothing. */
 	case ContextResolutionFailed = 'ContextResolutionFailed';
 
+	/**
+	 * The conditions of a branch block could have been the rules of the complex node it leads into. The node takes
+	 * conditions in the rules of its inputs, so the branch decides in a block of its own what the node it feeds
+	 * would decide by itself, and the graph carries a block that adds nothing to it.
+	 */
+	case BranchConditionMovable = 'BranchConditionMovable';
+
+	/**
+	 * A connection leaves a complex node without naming its output, so the default `o0` is what it is addressed to
+	 * rather than the rule that declared the output. The outputs of such a node are projected from its own rules,
+	 * and the port is the only thing tying a connection to the rule it answers.
+	 */
+	case ComplexOutputUnnamed = 'ComplexOutputUnnamed';
+
 	/** The storage the node addresses does not belong to the bound template. */
 	case StorageReferenceDenied = 'StorageReferenceDenied';
 

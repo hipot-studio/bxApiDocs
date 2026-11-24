@@ -30,6 +30,11 @@ class Profile extends Folder
 		}
 
 		$currentUser = $this->getCurrentUser();
+		if (!$currentUser)
+		{
+			return null;
+		}
+
 		$childrenDataProvider = new ChildrenDataProvider();
 		$searchScope = (string)$search !== '' ? 'subfolders' : 'currentFolder';
 		$result = $childrenDataProvider->getChildren(

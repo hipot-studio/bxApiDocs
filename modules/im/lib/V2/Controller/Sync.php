@@ -3,6 +3,8 @@
 namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\V2\Error;
+use Bitrix\Im\V2\Sync\LogBoundaryException;
+use Bitrix\Im\V2\Sync\SyncError;
 use Bitrix\Im\V2\Sync\SyncService;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
@@ -32,6 +34,16 @@ class Sync extends BaseController
 			return null;
 		}
 
-		return (new SyncService())->getChangesFromDate($lastDate, $lastId, $limit);
+		try
+		{
+			return (new SyncService())->getChangesFromDate($lastDate, $lastId, $limit);
+		}
+		catch (LogBoundaryException $exception)
+		{
+			\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+			$this->addError(new SyncError(SyncError::LOG_BOUNDARY_UNAVAILABLE));
+
+			return null;
+		}
 	}
 }

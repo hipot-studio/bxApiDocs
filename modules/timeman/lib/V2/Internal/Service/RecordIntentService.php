@@ -46,7 +46,9 @@ class RecordIntentService
 	public const HISTORY_LEAD_SECONDS = 1200;
 	public const DATA_COLLECTION_START = 18000; // 05:00
 	public const FALLBACK_START = 32400; // 09:00
-	public const HISTORY_DAYS = 7;
+	public const HISTORY_DAYS = 14;
+	public const HISTORY_RANGE_PERCENT = 80;
+	public const DATA_COLLECTION_DAYS = 7;
 
 	private const SECONDS_PER_DAY = 86400;
 
@@ -167,19 +169,19 @@ class RecordIntentService
 		$periodKey = 'D' . $this->localDate($nowUtc, $timeZone);
 		$periodEndAt = $this->startOfNextLocalDayUtc($nowUtc, $timeZone);
 
-		$historyMedian = $this->medianLocalStartSeconds($userId, $nowUtc);
+		$historyRangeStart = $this->historyRangeStartSeconds($userId, $nowUtc);
 		$scheduleStartSeconds = $this->scheduleStartSeconds($legacySchedules);
 
 		// Set by the history branch itself: the choice of the target formula below stays bound to that source
 		// whatever the order of the sources.
 		$fromHistory = false;
-		if ($historyMedian !== null)
+		if ($historyRangeStart !== null)
 		{
 			$mode = self::MODE_SMART;
 			$targetStartBasis = self::BASIS_HISTORY;
 			$fromHistory = true;
 			// Not earlier than the start of the current local day.
-			$startSeconds = max(0, $historyMedian - self::HISTORY_LEAD_SECONDS);
+			$startSeconds = max(0, $historyRangeStart - self::HISTORY_LEAD_SECONDS);
 		}
 		elseif ($scheduleStartSeconds !== null)
 		{
@@ -187,7 +189,7 @@ class RecordIntentService
 			$targetStartBasis = self::BASIS_SCHEDULE;
 			$startSeconds = $scheduleStartSeconds;
 		}
-		elseif ($nowUtc < (int)$state['FIRST_USE_AT'] + self::HISTORY_DAYS * self::SECONDS_PER_DAY)
+		elseif ($nowUtc < (int)$state['FIRST_USE_AT'] + self::DATA_COLLECTION_DAYS * self::SECONDS_PER_DAY)
 		{
 			$mode = self::MODE_DATA_COLLECTION;
 			$targetStartBasis = self::BASIS_DATA_COLLECTION;
@@ -427,11 +429,11 @@ class RecordIntentService
 	}
 
 	/**
-	 * Median of local start seconds across the user's closed records over HISTORY_DAYS: the values are
-	 * ordered by the time of day and the middle one is taken, for an even count the earlier of the two
-	 * middle values. Null when there are no closed records in the window.
+	 * Start of the narrowest range of the time of day holding HISTORY_RANGE_PERCENT of the local starts of the
+	 * user's closed records over HISTORY_DAYS, so that rare early and late starts fall outside it. Of the ranges
+	 * of equal width the earlier one is taken. Null when there are no closed records in the window.
 	 */
-	private function medianLocalStartSeconds(int $userId, int $nowUtc): ?int
+	private function historyRangeStartSeconds(int $userId, int $nowUtc): ?int
 	{
 		$fromTs = $nowUtc - self::HISTORY_DAYS * self::SECONDS_PER_DAY;
 		$rows = $this->recordRepository->getClosedStartTimestampsByUserAndRange($userId, $fromTs, $nowUtc);
@@ -459,7 +461,21 @@ class RecordIntentService
 		// The rows come in chronological order, not by the time of day.
 		sort($startSeconds);
 
-		return $startSeconds[intdiv(count($startSeconds) - 1, 2)];
+		$count = count($startSeconds);
+		$rangeSize = (int)ceil($count * self::HISTORY_RANGE_PERCENT / 100);
+		$rangeStart = $startSeconds[0];
+		$rangeWidth = PHP_INT_MAX;
+		for ($first = 0; $first + $rangeSize <= $count; $first++)
+		{
+			$width = $startSeconds[$first + $rangeSize - 1] - $startSeconds[$first];
+			if ($width < $rangeWidth)
+			{
+				$rangeWidth = $width;
+				$rangeStart = $startSeconds[$first];
+			}
+		}
+
+		return $rangeStart;
 	}
 
 	/**

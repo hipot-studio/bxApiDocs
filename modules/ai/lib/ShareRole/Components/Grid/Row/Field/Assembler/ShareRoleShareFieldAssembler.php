@@ -57,27 +57,27 @@ class ShareRoleShareFieldAssembler extends FieldAssembler
 
 	protected function getAvatarWithPhoto(ShareDto $shareDto): string
 	{
-		$photo = $shareDto->getImg();
-		$name = $shareDto->getName();
+		$photo = htmlspecialcharsbx($shareDto->getImg(), ENT_QUOTES);
+		$name = htmlspecialcharsbx($shareDto->getName(), ENT_QUOTES);
 
-		return "
-			<div data-hint='{$name}' data-hint-no-icon class='ai__role-library-grid_shares-item'>
-				<img src='{$photo}' alt='{$name}'>
+		return '
+			<div data-hint="' . $name . '" data-hint-no-icon class="ai__role-library-grid_shares-item">
+				<img src="' . $photo . '" alt="' . $name . '">
 			</div>
-		";
+		';
 	}
 
 	protected function getAvatarWithInitials(ShareDto $shareDto): string
 	{
-		$fullName = $shareDto->getName();
-		$initials = $this->getInitials($fullName);
+		$fullName = htmlspecialcharsbx($shareDto->getName(), ENT_QUOTES);
+		$initials = htmlspecialcharsbx($this->getInitials($shareDto->getName()), ENT_QUOTES);
 
 		return
-			"<div data-hint='{$fullName}' data-hint-no-icon class='ai__role-library-grid_shares-item'>
-				<span class='ai__role-library-grid_share-initials'>
-					{$initials}
+			'<div data-hint="' . $fullName . '" data-hint-no-icon class="ai__role-library-grid_shares-item">
+				<span class="ai__role-library-grid_share-initials">
+					' . $initials . '
 				</span>
-			</div>"
+			</div>'
 			;
 	}
 

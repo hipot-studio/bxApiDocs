@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Public\Command\DockedUpload;
 
+use Bitrix\Disk\Config\Feature\DockedUploaderUnlimitedFileSizeFlag;
 use Bitrix\Disk\Internal\Dto\DockedUpload\QueueDto;
 use Bitrix\Disk\Internal\Entity\DockedUpload\DockedUploadItem;
 use Bitrix\Disk\Internal\Entity\DockedUpload\DockedUploadItemCollection;
@@ -22,6 +23,7 @@ use Bitrix\Disk\Internal\Service\DockedUpload\UnexpectedErrorReporter;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\AbstractCommand;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -832,9 +834,8 @@ class CreateQueueCommand extends AbstractCommand
 	}
 
 	/**
-	 * Effective per-file cap: min of the docked ceiling and the php.ini transfer
-	 * limit. It is NOT the storage quota (Q-3) - this is the docked + php.ini
-	 * source (Q-6).
+	 * Returns zero when the per-file cap is disabled, otherwise the lower of
+	 * the docked ceiling and the php.ini transfer limit.
 	 *
 	 * The ui side contributes the php.ini reading only. A bare
 	 * {@see \Bitrix\UI\FileUploader\Configuration} is the DEFAULT of that module and
@@ -845,6 +846,11 @@ class CreateQueueCommand extends AbstractCommand
 	 */
 	private function effectiveMaxFileSize(): int
 	{
+		if (Feature::isEnabled(DockedUploaderUnlimitedFileSizeFlag::class))
+		{
+			return 0;
+		}
+
 		$configuredMax = $this->configuredMaxFileSize();
 		$phpMax = Loader::includeModule('ui')
 			? \Bitrix\UI\FileUploader\Configuration::getPhpMaxUploadSize()

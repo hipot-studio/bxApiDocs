@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\Vibeoffice\Webhook;
 
 use Bitrix\Disk\Document\Vibeoffice\Filters\WebhookSignatureCheck;
+use Bitrix\Disk\Document\Vibeoffice\SessionRegistry;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
@@ -76,6 +77,30 @@ final class WebhookEventPolicy
 		}
 
 		return $fallbackId;
+	}
+
+	public static function resolveSharedVersionAuthorId(
+		array $payload,
+		SessionRegistry $registry,
+		int $fallbackId,
+	): int
+	{
+		$users = $payload['users'] ?? null;
+		$subject = is_array($users) ? ($users[0] ?? null) : null;
+		if (!is_string($subject))
+		{
+			return $fallbackId;
+		}
+		$classification = (new self())->classify(WebhookProcessor::EVENT_SAVED, $payload);
+		$placement = $classification->getData();
+		if (!$classification->isSuccess() || !$placement['identityKnown'])
+		{
+			return $fallbackId;
+		}
+
+		return $registry->resolveActorForPlacement(
+			$placement['hostDocKey'], $subject, $placement['editorKey'], $placement['rev'],
+		) ?? $fallbackId;
 	}
 
 	public function classify(string $event, array $payload): Result

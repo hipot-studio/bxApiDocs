@@ -8,6 +8,7 @@ use Bitrix\Disk\Document;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
@@ -213,11 +214,23 @@ final class B24Documents extends Engine\Controller
 				{
 					return (new Result())->addError(new Error('', 'vibeoffice_not_connected'));
 				}
-				$configuration->enableOnPortal();
 			}
-			else
+			try
 			{
-				$configuration->disableOnPortal();
+				if ($enabled === 'Y')
+				{
+					$configuration->enableOnPortal();
+				}
+				else
+				{
+					$configuration->disableOnPortal();
+				}
+			}
+			catch (ConfigurationException)
+			{
+				return (new Result())->addError(new Error('', 'vibeoffice_feature_change_failed', [
+					'enabled' => Document\Vibeoffice\Feature::isEnabledOnPortal(),
+				]));
 			}
 
 			return (new Result())->setData(['state' => $service->getState()]);
@@ -255,6 +268,7 @@ final class B24Documents extends Engine\Controller
 			'vibeoffice_box_only', 'vibeoffice_local_override', 'vibeoffice_quiet_required',
 			'vibeoffice_custom_server_selected', 'vibeoffice_domain_confirmation_required',
 			'vibeoffice_not_connected', 'vibeoffice_not_activated', 'vibeoffice_activation_failed',
+			'vibeoffice_feature_change_failed',
 		];
 		foreach ($result->getErrors() as $error)
 		{
@@ -276,7 +290,10 @@ final class B24Documents extends Engine\Controller
 			'vibeoffice_confirm_incomplete' => ['revokePending'],
 			default => [],
 		};
-		if ($code === 'vibeoffice_quiet_required' && is_bool($data['enabled'] ?? null))
+		if (
+			in_array($code, ['vibeoffice_quiet_required', 'vibeoffice_feature_change_failed'], true)
+			&& is_bool($data['enabled'] ?? null)
+		)
 		{
 			$safe['enabled'] = $data['enabled'];
 		}

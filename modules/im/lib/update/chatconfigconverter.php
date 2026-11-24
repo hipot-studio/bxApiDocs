@@ -11,6 +11,7 @@ use Bitrix\Im\Model\OptionGroupTable;
 use Bitrix\Im\Model\OptionStateTable;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Im\Model\StatusTable;
+use Bitrix\Im\V2\Settings\Sound\VolumeLevels;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -75,9 +76,11 @@ class ChatConfigConverter extends Stepper
 				$this->updateDefaultAccessCode($defaultGroupId);
 			}
 
-			$userCount = UserTable::getCount([
-				'=IS_REAL_USER' => 'Y'
-			]);
+			$userCount = (int)UserTable::query()
+				->setSelect(['ID'])
+				->where('REAL_USER', 'expr', true)
+				->queryCountTotal()
+			;
 			$convertedUserCount = OptionUserTable::getCount();
 
 			$unconvertedUserCount = $userCount - $convertedUserCount;
@@ -242,6 +245,11 @@ class ChatConfigConverter extends Stepper
 		{
 			self::$generalDefaultSettings = General::getDefaultSettings();
 		}
+
+		// The old storage keeps the legacy sound flag and no levels, so the flag is translated
+		// before the defaults are merged in: after the merge the default levels of 100 would stand
+		// next to a flag saying the sound is off, and a read would switch the sound back on.
+		$oldUserSettings = VolumeLevels::fill($oldUserSettings);
 
 		return array_replace_recursive(self::$generalDefaultSettings, $oldUserSettings);
 	}

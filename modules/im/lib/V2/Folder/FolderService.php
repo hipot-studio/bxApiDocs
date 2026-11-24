@@ -11,15 +11,20 @@ use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Cache\FolderCache;
 use Bitrix\Im\V2\Folder\Create\CreateResult;
 use Bitrix\Im\V2\Folder\Create\FolderFields;
+use Bitrix\Im\V2\Folder\Definition\SelectionBranch;
 use Bitrix\Im\V2\Folder\Delete\DeleteResult;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Pin\PinService;
 use Bitrix\Im\V2\Folder\Pull\FolderCreate;
 use Bitrix\Im\V2\Folder\Pull\FolderDelete;
 use Bitrix\Im\V2\Folder\Pull\FolderUpdate;
+use Bitrix\Im\V2\Folder\System\SystemFolder;
 use Bitrix\Im\V2\Folder\Update\UpdateFields;
 use Bitrix\Im\V2\Folder\Update\UpdateResult;
 use Bitrix\Im\V2\Folder\Visibility\FolderVisibilityResolver;
+use Bitrix\Im\V2\Reading\Reader;
+use Bitrix\Im\V2\Result;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Validation\ValidationService;
 
 class FolderService
@@ -31,6 +36,7 @@ class FolderService
 		private readonly FolderProvider $folderProvider,
 		private readonly ValidationService $validationService,
 		private readonly FolderVisibilityResolver $visibilityResolver,
+		private readonly Reader $reader,
 	)
 	{
 	}
@@ -283,6 +289,87 @@ class FolderService
 		(new FolderAnalytics($userId))->addDeleteFolder($chatIds);
 
 		return $result->setFolderId($folderId);
+	}
+
+	/**
+	 * Reads the folder branch by branch, each by the read of its recent section. The unread state of the
+	 * user is probed once for the whole folder: with nothing to read no branch is queried, and a store
+	 * that is empty for the user is not queried in any branch. Stops at the first failed branch: the
+	 * branches read before it stay read.
+	 */
+	public function readAll(Folder $folder, int $userId): Result
+	{
+		$result = new Result();
+
+		$accessResult = $folder->checkAccess($userId);
+		if (!$accessResult->isSuccess())
+		{
+			return $result->addErrors($accessResult->getErrors());
+		}
+
+		if (!$folder->canReadAll() || ($folder instanceof SystemFolder && !$folder->isAvailable($userId)))
+		{
+			return $result->addError(new Error(FolderError::FOLDER_OPERATION_NOT_SUPPORTED));
+		}
+
+		$branches = array_filter(
+			$folder->getDefinition()->toSelection()->getBranches(),
+			static fn (SelectionBranch $branch): bool => $branch->typeCondition !== null,
+		);
+		if ($branches === [])
+		{
+			return $result;
+		}
+
+		try
+		{
+			$unreadSources = $this->reader->findUnreadSources($userId);
+		}
+		catch (\Throwable $exception)
+		{
+			$this->logReadAllFailure($folder, null, $exception);
+
+			return $result->addError(new Error(FolderError::FOLDER_READ_ALL_FAILED));
+		}
+
+		if ($unreadSources->isEmpty())
+		{
+			return $result;
+		}
+
+		foreach ($branches as $branch)
+		{
+			try
+			{
+				$this->reader->readAllByRecentSection(
+					$branch->typeCondition,
+					$userId,
+					$branch->parentChatId,
+					$unreadSources,
+				);
+			}
+			catch (\Throwable $exception)
+			{
+				$this->logReadAllFailure($folder, $branch, $exception);
+
+				return $result->addError(new Error(FolderError::FOLDER_READ_ALL_FAILED));
+			}
+		}
+
+		return $result;
+	}
+
+	private function logReadAllFailure(Folder $folder, ?SelectionBranch $branch, \Throwable $exception): void
+	{
+		(new LoggerFactory())->createById('im.FolderReadAll')?->error(
+			$branch === null ? 'Failed to read the folder' : 'Failed to read a branch of the folder',
+			[
+				'folderId' => $folder->getId(),
+				'recentSection' => $branch?->typeCondition,
+				'parentChatId' => $branch?->parentChatId,
+				'exception' => $exception->getMessage(),
+			],
+		);
 	}
 
 	public function deleteAllByUser(int $userId): void

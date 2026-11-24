@@ -628,31 +628,31 @@ class OrderPayment
 										<tbody>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_STATUS').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_STATUS'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_STATUS']).'</td>
 										</tr>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_STATUS_CODE').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_STATUS_CODE'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_STATUS_CODE']).'</td>
 										</tr>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_STATUS_DESCRIPTION').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_STATUS_DESCRIPTION'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_STATUS_DESCRIPTION']).'</td>
 										</tr>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_CURRENCY').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_CURRENCY'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_CURRENCY']).'</td>
 										</tr>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_STATUS_MESSAGE').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_STATUS_MESSAGE'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_STATUS_MESSAGE']).'</td>
 										</tr>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_SUM').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_SUM'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_SUM']).'</td>
 										</tr>
 										<tr>
 											<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PS_DATE').':</td>
-											<td class="adm-detail-content-cell-r tal">'.$data['PS_RESPONSE_DATE'].'</td>
+											<td class="adm-detail-content-cell-r tal">'.htmlspecialcharsbx($data['PS_RESPONSE_DATE']).'</td>
 										</tr>
 										</tbody>
 									</table>

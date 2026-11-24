@@ -2,15 +2,22 @@
 
 namespace Bitrix\BIConnector\Access\Event;
 
+use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Access\Table\PermissionCacheResetNotifier;
+use Bitrix\BIConnector\Access\Table\TableVisibilityService;
 use Bitrix\BIConnector\Access\TableGroup\SystemTableGroupMap;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupBindingTable;
 use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDataset;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
+use Bitrix\BIConnector\Internal\Services\TableCell\TableCellService;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\Crm\Model\Dynamic\Type as SmartProcessType;
 use Bitrix\Crm\Model\Dynamic\TypeTable as SmartProcessTypeTable;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Result;
@@ -346,16 +353,57 @@ final class DynamicTableBindingHandler
 			));
 		}
 
-		$addResult = TableGroupService::addGroupBindings($groupId, $codesToBind);
+		/*
+		 * A code bound nowhere has no live table, so a cell of it is an orphan of a cleanup that failed for
+		 * a former table of the same code. Only a declared system table keeps its cells: the map also carries
+		 * the codes of smart processes and solutions, and the entity being bound is already in it.
+		 */
+		$orphanCodes = array_values(array_filter(
+			$codesToBind,
+			static fn(string $code): bool => !SystemTableGroupMap::isDeclaredSystemCode($code),
+		));
+
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			// the bindings before the cells, in the order of the save of the matrix, so the two do not deadlock
+			$addResult = TableGroupService::addGroupBindings($groupId, $codesToBind);
+			$deletedCellCount = $addResult->isSuccess()
+				? (new TableCellService())->deleteByTableCodes($orphanCodes)
+				: 0;
+		}
+		catch (\Throwable $exception)
+		{
+			self::rollback($connection);
+
+			throw $exception;
+		}
+
 		if (!$addResult->isSuccess())
 		{
+			self::rollback($connection);
+
 			return $result->addErrors($addResult->getErrors());
+		}
+
+		$connection->commitTransaction();
+		self::dropGroupCachesAfterCommit();
+
+		if ($deletedCellCount > 0)
+		{
+			PermissionCacheResetNotifier::notifyChanged();
 		}
 
 		return $result->setData(['boundCodes' => $codesToBind]);
 	}
 
 	/**
+	 * Takes the tables out of every group and deletes the cells of roles for them, together.
+	 *
+	 * The cells go whether the tables were bound or not. Inside a transaction of the caller - the ORM event
+	 * of another module - the transaction opened here is a savepoint, and a failure rolls back to it alone.
+	 *
 	 * @param string[] $codes
 	 *
 	 * @return Result Data: ['unboundCodes' => string[]].
@@ -364,13 +412,81 @@ final class DynamicTableBindingHandler
 	{
 		$result = new Result();
 
-		$deleteResult = TableGroupService::deleteTableBindings($codes);
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			// the bindings before the cells, in the order of the save of the matrix, so the two do not deadlock
+			$deleteResult = TableGroupService::deleteTableBindings($codes);
+			$deletedCellCount = $deleteResult->isSuccess()
+				? (new TableCellService())->deleteByTableCodes($codes)
+				: 0;
+		}
+		catch (\Throwable $exception)
+		{
+			self::rollback($connection);
+
+			throw $exception;
+		}
+
 		if (!$deleteResult->isSuccess())
 		{
+			self::rollback($connection);
+
 			return $result->addErrors($deleteResult->getErrors());
 		}
 
-		return $result->setData(['unboundCodes' => $deleteResult->getData()['deletedCodes'] ?? []]);
+		$connection->commitTransaction();
+
+		$unboundCodes = $deleteResult->getData()['deletedCodes'] ?? [];
+		if ($deletedCellCount > 0 || !empty($unboundCodes))
+		{
+			self::dropGroupCachesAfterCommit();
+			PermissionCacheResetNotifier::notifyChanged();
+		}
+
+		return $result->setData(['unboundCodes' => $unboundCodes]);
+	}
+
+	/**
+	 * The bindings are written inside the transaction, and the services drop their caches right there: a hit
+	 * that reads the bindings before the commit puts the old composition into the shared cache of the bindings
+	 * for its whole lifetime. Inside an ORM event of another module the commit here only releases a savepoint,
+	 * so the caches are dropped once more in a background job, after the outer transaction is over and before
+	 * the job that tells the image to reset its rights.
+	 */
+	private static function dropGroupCachesAfterCommit(): void
+	{
+		self::dropGroupCaches();
+
+		Application::getInstance()->addBackgroundJob(
+			[self::class, 'dropGroupCaches'],
+			[],
+			Application::JOB_PRIORITY_NORMAL + 1,
+		);
+	}
+
+	/**
+	 * @internal Run as a background job by dropGroupCachesAfterCommit().
+	 */
+	public static function dropGroupCaches(): void
+	{
+		PermissionDictionary::clearGroupPermissions();
+		TableVisibilityService::clearCache();
+	}
+
+	/**
+	 * A rollback of a savepoint throws after it is done: the caller that owns the outer transaction decides.
+	 */
+	private static function rollback(Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (TransactionException)
+		{
+		}
 	}
 
 	/**

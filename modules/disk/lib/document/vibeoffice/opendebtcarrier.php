@@ -7,6 +7,7 @@ namespace Bitrix\Disk\Document\Vibeoffice;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use Bitrix\Disk\Document\Vibeoffice\Models\PlatformSessionTable;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Web\Json;
 
 /**
@@ -65,11 +66,21 @@ final class OpenDebtCarrier
 		}
 		foreach (array_chunk($ids, self::CHUNK_SIZE) as $chunk)
 		{
+			$needsCarrier = Query::filter()->logic('or')->where(
+				Query::filter()->where('STATUS', PlatformSessionTable::STATUS_PENDING)->whereNotNull('OPEN_TOKEN'),
+			);
+			if (SharedEditingSchema::hasColumns())
+			{
+				$needsCarrier->where(Query::filter()->whereNotNull('PLATFORM_USER_ID')
+					->where('PLATFORM_USER_ID', '!=', '')
+					->where(Query::filter()->logic('or')->where('ACCESS_REVOKE_STATE', 1)
+						->where(Query::filter()->where('ACCESS_REVOKE_STATE', 0)
+							->whereIn('STATUS', [PlatformSessionTable::STATUS_PENDING, PlatformSessionTable::STATUS_ACTIVE]))));
+			}
 			$pending = PlatformSessionTable::query()
 				->setSelect(['DOCUMENT_SESSION_ID'])
 				->whereIn('DOCUMENT_SESSION_ID', $chunk)
-				->where('STATUS', PlatformSessionTable::STATUS_PENDING)
-				->whereNotNull('OPEN_TOKEN')
+				->where($needsCarrier)
 				->setDistinct()
 				->fetchAll()
 			;

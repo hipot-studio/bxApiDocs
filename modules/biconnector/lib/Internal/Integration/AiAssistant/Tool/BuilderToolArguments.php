@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentContract;
+use Bitrix\BIConnector\Internal\Operation\Builder\Argument\ArgumentViolationFormatter;
 use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentGuard;
 use Bitrix\BIConnector\Internal\Operation\Builder\Argument\BuilderArgumentNormalizer;
 use Bitrix\BIConnector\Internal\Operation\Builder\FailureCode;
@@ -110,7 +111,7 @@ final class BuilderToolArguments
 			{
 				$message = self::FACET_REFUSALS[$tool][$result->getData()['argumentViolation'] ?? ''] ?? null;
 				$message ??= self::previousRuleRefusal($result->getData());
-				$message ??= self::rangeRefusal($method, $args);
+				$message ??= self::rangeRefusal($method, $args, $result->getData());
 				if ($message !== null)
 				{
 					return Refusal::error(FailureCode::InvalidArgument, $message);
@@ -127,11 +128,15 @@ final class BuilderToolArguments
 	/**
 	 * Names the paging argument that is out of its range, so the agent can fix the call.
 	 */
-	private static function rangeRefusal(string $method, array $args): ?string
+	private static function rangeRefusal(string $method, array $args, array $violation): ?string
 	{
 		$properties = BuilderArgumentContract::forMethod($method)['properties'] ?? [];
 		foreach (self::PAGING as $name)
 		{
+			if (!in_array($violation['argumentViolation'] ?? '', [$name . '.minimum', $name . '.maximum'], true))
+			{
+				continue;
+			}
 			$property = $properties[$name] ?? [];
 			$value = $args[$name] ?? null;
 			if (!is_int($value) || ($property['type'] ?? '') !== 'integer')
@@ -159,20 +164,11 @@ final class BuilderToolArguments
 	 */
 	private static function previousRuleRefusal(array $violation): ?string
 	{
-		$column = $violation['column'] ?? '';
-
 		return match ($violation['argumentViolation'] ?? null)
 		{
 			'content.nothing' => 'Nothing to update. Provide at least one of: charts, filters. '
 				. 'For rename use update_dashboard_metadata; for publish/unpublish use '
 				. 'publish_dashboard / unpublish_dashboard.',
-			'content.filters.datasetId' => 'filters[' . $violation['index'] . '].datasetId '
-				. 'is required for filterType=' . $violation['filterType'] . '.',
-			'content.filters.column' => 'filters[' . $violation['index'] . '].column '
-				. 'is required for filterType=' . $violation['filterType'] . '.',
-			'content.filters.period' => 'filters must contain at least one `time_range` filter with a non-empty '
-				. '`defaultValue`. Every dashboard needs a date filter; if the user did '
-				. 'not specify a period, default to "Last quarter".',
 			'chart.update.nothing' => 'Nothing to update. Provide at least one of `name` or `description`. '
 				. 'To modify the chart configuration use `replace_chart_config` instead.',
 			'tableName.blank' => 'tableName is required: provide the table name '
@@ -190,14 +186,7 @@ final class BuilderToolArguments
 			'dimensions.required' => $violation['vizType'] === 'pie'
 				? 'pie chart requires at least one dimension.'
 				: $violation['vizType'] . ' chart requires xAxis (or at least one dimension).',
-			'between.blank' => 'Filter on `' . $column . '` with operator=between requires a non-empty value '
-				. '(e.g. "Last 6 months" or "2024-01-01 : 2024-03-31").',
-			'between.pair' => 'Filter on `' . $column . '` with operator=between requires value to be '
-				. 'a [from, to] array of two strings or a single Superset time expression string.',
-			'between.bounds' => 'Filter on `' . $column . '` with operator=between: '
-				. 'both `from` and `to` must be non-empty.',
-			'between.type' => 'Filter on `' . $column . '` with operator=between requires a string value or '
-				. '[from, to] array.',
+
 			default => null,
 		};
 	}

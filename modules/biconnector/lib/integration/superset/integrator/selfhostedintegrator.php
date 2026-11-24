@@ -215,7 +215,7 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	/**
 	 * @inheritDoc
 	 */
-	public function registerPortal(): IntegratorResponse
+	public function registerPortal(bool $raiseRebindMode = true): IntegratorResponse
 	{
 		return new IntegratorResponse(status: IntegratorResponse::STATUS_OK);
 	}
@@ -296,6 +296,15 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	public function deleteSuperset(): IntegratorResponse
 	{
 		return new IntegratorResponse(status: IntegratorResponse::STATUS_OK);
+	}
+
+	/** @inheritDoc */
+	public function getOperationStatus(string $operationId): IntegratorResponse
+	{
+		return new IntegratorResponse(
+			status: IntegratorResponse::STATUS_NOT_FOUND,
+			errors: [new Error('Operation state is not kept in self-hosted mode')],
+		);
 	}
 
 	/**
@@ -1003,11 +1012,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		bool $arbitrateServiceFailure = true,
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use (
 			$dashboardId,
@@ -1078,11 +1082,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		bool $arbitrateServiceFailure = true,
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use (
 			$dashboardId,
@@ -1214,7 +1213,7 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	/**
 	 * @inheritDoc
 	 */
-	public function getLoginUrl(): IntegratorResponse
+	public function getLoginUrl(bool $allowStartingInstance = false): IntegratorResponse
 	{
 		$handler = function (): IntegratorResponse {
 			$server = $this->getServer();
@@ -1469,11 +1468,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		?SqlExecutionContext $context = null,
 	): IntegratorResponse
 	{
-		if (!($context?->isRest() ?? false) && !self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		// The person is required in either mode: they key the limiter and the audit.
 		$actAs = $context !== null && $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use ($sql, $limit, $actAs): IntegratorResponse {
@@ -1525,11 +1519,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	 */
 	public function listTables(?User $user, ?string $schema = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use ($schema, $actAs): IntegratorResponse {
 			$server = $this->getServer();
@@ -1570,11 +1559,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	 */
 	public function getTableMetadata(?User $user, string $tableName, ?string $schema = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use ($tableName, $schema, $actAs): IntegratorResponse {
 			$server = $this->getServer();
@@ -1765,11 +1749,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		?int $pageSize = null
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use (
 			$ids,
@@ -1867,11 +1846,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		?string $sourceSchema = null,
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use (
 			$datasetName,
@@ -1924,11 +1898,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	 */
 	public function createDatasetFromSql(User $user, string $datasetName, string $sql): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use ($datasetName, $sql, $actAs): IntegratorResponse {
 			$server = $this->getServer();
@@ -2160,11 +2129,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		?int $pageSize = null
 	): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use (
 			$ids,
@@ -2211,11 +2175,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	 */
 	public function getChartById(int $id, ?User $user = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$actAs = $user !== null && $this->isActAsEnabled();
 		$handler = function (IntegratorRequest $request) use ($id, $actAs): IntegratorResponse {
 			$server = $this->getServer();
@@ -2256,21 +2215,24 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	/**
 	 * @inheritDoc
 	 */
-	public function createChart(array $payload): IntegratorResponse
+	public function createChart(array $payload, ?User $user = null): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
-		$handler = function () use ($payload): IntegratorResponse {
+		$handler = function (IntegratorRequest $request) use ($payload): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new CreateChartCommand($server, $payload))->run();
+			$supersetUser = $this->getRequestSupersetUser($server, $request);
+			$externalId = $supersetUser?->getExternalId();
+			if ($externalId === null || $externalId <= 0)
+			{
+				return $this->buildSupersetUserNotFoundResponse();
+			}
+			$payload['owners'] = [$externalId];
+
+			$result = $this->runSupersetCommand(new CreateChartCommand($server, $payload));
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -2283,6 +2245,7 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 
 		return $this
 			->createDefaultRequest('selfhosted/chart/create')
+			->setUser($user)
 			->setHandler($handler)
 			->perform()
 		;
@@ -2293,11 +2256,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	 */
 	public function updateChart(int $id, array $fields): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$handler = function () use ($id, $fields): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
@@ -2328,11 +2286,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	 */
 	public function deleteChart(int $id): IntegratorResponse
 	{
-		if (!self::isAiToolsFeatureEnabled())
-		{
-			return self::aiToolsDisabledResponse();
-		}
-
 		$handler = function () use ($id): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
@@ -2534,9 +2487,14 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 	/**
 	 * @inheritDoc
 	 */
-	public function setExpirationDate(?Date $date): IntegratorResponse
+	public function setExpirationDate(
+		?Date $date,
+		int $socketTimeout = 0,
+		int $streamTimeout = 0,
+		bool $detectFrozenInstance = false,
+	): IntegratorResponse
 	{
-		$handler = function () use ($date): IntegratorResponse
+		$handler = function () use ($date, $socketTimeout, $streamTimeout): IntegratorResponse
 		{
 			$server = $this->getServer();
 			if ($server === null)
@@ -2545,7 +2503,13 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 			}
 
 			$timestamp = $date?->getTimestamp() ?? 0;
-			$result = (new SetSubscriptionExpirationCommand($server, $timestamp))->run();
+			// Positional on purpose: a superset module that takes no timeouts yet drops them silently.
+			$result = (new SetSubscriptionExpirationCommand(
+				$server,
+				$timestamp,
+				$socketTimeout ?: null,
+				$streamTimeout ?: null,
+			))->run();
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -2556,6 +2520,10 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 
 		return $this
 			->createDefaultRequest('selfhosted/subscription/expiration')
+			// The same as in the proxy: one date for the whole portal, and the own requests of these two
+			// would not keep the timeouts of this one.
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
 			->setHandler($handler)
 			->perform()
 		;
@@ -2945,18 +2913,6 @@ class SelfHostedIntegrator implements IntegratorInterface, DashboardSourceReader
 		);
 	}
 
-	private static function isAiToolsFeatureEnabled(): bool
-	{
-		return Feature::isBitrixGptBiConstructorEnabled();
-	}
-
-	private static function aiToolsDisabledResponse(): IntegratorResponse
-	{
-		return new IntegratorResponse(
-			status: IntegratorResponse::STATUS_NO_ACCESS,
-			errors: [new Error('AI tools are disabled.', 'ai_tools_disabled')],
-		);
-	}
 
 	// endregion
 }

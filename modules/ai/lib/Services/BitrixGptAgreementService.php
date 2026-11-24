@@ -13,6 +13,9 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Request;
 use CBitrix24;
 
+/**
+ * BitrixGPT agreement state and popup rules for Belarus cloud portals. State is portal-wide (module options).
+ */
 class BitrixGptAgreementService
 {
 	private const MODULE_AI_ID = 'ai';
@@ -32,6 +35,13 @@ class BitrixGptAgreementService
 		'/bitrix/',
 	];
 
+	/**
+	 * Returns popup data for automatic display on an HTML page, or null if the popup must not be shown:
+	 * not a Belarus cloud portal, iframe or non-HTML request, disallowed page, user is not an admin,
+	 * agreement already accepted, skip period is active or no AI scenario is enabled.
+	 *
+	 * @return array{attempt: int, showLimit: int, showSkip: bool}|null
+	 */
 	public function getPopupDataForAutoShow(): ?array
 	{
 		$request = Context::getCurrent()->getRequest();
@@ -43,6 +53,12 @@ class BitrixGptAgreementService
 		return $this->getPopupData();
 	}
 
+	/**
+	 * Returns popup data after AI settings are saved, or null if the popup must not be shown.
+	 * Unlike getPopupDataForAutoShow() it does not check the request and enabled scenarios.
+	 *
+	 * @return array{attempt: int, showLimit: int, showSkip: bool}|null
+	 */
 	public function onSaveAISettings(): ?array
 	{
 		if (!$this->isBelarusPortal() || !$this->checkNeedToShowPopup())
@@ -70,12 +86,22 @@ class BitrixGptAgreementService
 		Option::set(self::MODULE_AI_ID, self::OPTION_AGREEMENT_ACCEPTED_AT, (string)$acceptedAt);
 	}
 
+	/**
+	 * Stores the decline and turns off all AI scenarios.
+	 *
+	 * @return void
+	 */
 	public function declineAgreement(): void
 	{
 		Option::set(self::MODULE_AI_ID, self::OPTION_AGREEMENT_STATUS, self::AGREEMENT_DECLINED);
 		$this->disableAllScenarios();
 	}
 
+	/**
+	 * Returns false only for a Belarus cloud portal that has not accepted the agreement.
+	 *
+	 * @return bool
+	 */
 	public function isAvailableForExternalRequest(): bool
 	{
 		if (
@@ -90,6 +116,12 @@ class BitrixGptAgreementService
 		return false;
 	}
 
+	/**
+	 * Postpones the popup for POPUP_SKIP_SECONDS and counts the attempt.
+	 * Does nothing for portals younger than PORTAL_AGE_FOR_SKIP or after SHOW_LIMIT attempts.
+	 *
+	 * @return void
+	 */
 	public function skipAgreementPopup(): void
 	{
 		$attempt = $this->getPopupAttemptForDisplay();
@@ -226,6 +258,11 @@ class BitrixGptAgreementService
 		return Portal::hasEnabledAiScenario();
 	}
 
+	/**
+	 * Turns off all non-internal boolean tuning items and aiassistant MCP scenario options.
+	 *
+	 * @return void
+	 */
 	public function disableAllScenarios(): void
 	{
 		Portal::disableAllAiScenarios();

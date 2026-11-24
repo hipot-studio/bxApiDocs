@@ -21,6 +21,7 @@ use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\ProxyType;
+use Bitrix\Disk\Public\Provider\ExternalLinkTariffProvider;
 use Bitrix\Disk\RightsManager;
 use Bitrix\Disk\Search\StorageFileFinder;
 use Bitrix\Disk\Search\StorageFileFinderOptions;
@@ -64,6 +65,7 @@ class DiskMcpService
 	private ?TrashService $trashService;
 	private ?StorageUsageService $storageUsageService;
 	private ?ExternalLinkAccessService $externalLinkAccessService = null;
+	private ?ExternalLinkTariffProvider $externalLinkTariffProvider = null;
 
 	public function __construct(
 		?FolderAccessManager $folderAccessManager = null,
@@ -878,6 +880,11 @@ class DiskMcpService
 			throw $this->buildPublicLinksDisabledOnPortalException($file);
 		}
 
+		if (!$this->getExternalLinkTariffProvider()->isManualLinkCreationAllowed($file))
+		{
+			throw $this->buildPublicLinksDisabledByTariffException($file);
+		}
+
 		try
 		{
 			$externalLink = $file->getRealObject()->addExternalLink([
@@ -1523,6 +1530,13 @@ class DiskMcpService
 		return $this->externalLinkAccessService ??= ServiceLocator::getInstance()->get(ExternalLinkAccessService::class);
 	}
 
+	private function getExternalLinkTariffProvider(): ExternalLinkTariffProvider
+	{
+		return $this->externalLinkTariffProvider ??= ServiceLocator::getInstance()
+			->get(ExternalLinkTariffProvider::class)
+		;
+	}
+
 	/**
 	 * With public links switched off on the portal a new link must not be made; an existing one is still returned.
 	 *
@@ -1550,6 +1564,14 @@ class DiskMcpService
 		return new McpException(
 			"Public links are disabled in the Disk settings of the portal, a public link for file {$file->getId()}"
 			. ' cannot be created. Ask the Bitrix24 administrator to allow public links.'
+		);
+	}
+
+	private function buildPublicLinksDisabledByTariffException(File $file): McpException
+	{
+		return new McpException(
+			"Public links are not available on the current Bitrix24 plan, a public link for file {$file->getId()}"
+			. ' cannot be created.'
 		);
 	}
 

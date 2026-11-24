@@ -22,6 +22,7 @@ use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Disk\Internal\Service\Sync\SyncFeatureOption;
 use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Viewer\Transformation\Document;
 use Bitrix\Main\UI\Viewer\Transformation\Video;
@@ -178,9 +179,80 @@ final class Configuration
 		return 2097152; // 2 MB
 	}
 
+	/**
+	 * Length (in seconds) of the sliding window that limits the preview of a Markdown text being edited.
+	 * The window is shared by the budget of the subject and by the one of a public link.
+	 */
+	public static function getMarkdownPreviewRateWindowSeconds(): int
+	{
+		return self::getPositiveIntOption('disk_markdown_preview_rate_window', 60);
+	}
+
+	/**
+	 * Calls of the Markdown preview a subject (an employee, or a guest of a link from one address) makes in the window.
+	 */
+	public static function getMarkdownPreviewRateLimitCalls(): int
+	{
+		return self::getPositiveIntOption('disk_markdown_preview_rate_calls', 240);
+	}
+
+	/**
+	 * Bytes of Markdown text a subject (an employee, or a guest of a link from one address) previews in the window.
+	 */
+	public static function getMarkdownPreviewRateLimitBytes(): int
+	{
+		return self::getPositiveIntOption('disk_markdown_preview_rate_bytes', 50331648); // 48 MB
+	}
+
+	/**
+	 * Calls of the Markdown preview all guests of one public link make in the window together.
+	 */
+	public static function getMarkdownPreviewLinkRateLimitCalls(): int
+	{
+		return self::getPositiveIntOption('disk_markdown_preview_link_rate_calls', 960);
+	}
+
+	/**
+	 * Bytes of Markdown text all guests of one public link preview in the window together.
+	 */
+	public static function getMarkdownPreviewLinkRateLimitBytes(): int
+	{
+		return self::getPositiveIntOption('disk_markdown_preview_link_rate_bytes', 201326592); // 192 MB
+	}
+
+	/**
+	 * Size threshold (in bytes of UTF-8, a BOM included) of a Markdown text being edited that the preview renders.
+	 * The threshold is never above the render limit {@see getMaxSizeForMarkdownRender()}.
+	 */
+	public static function getMaxSizeForMarkdownPreview(): int
+	{
+		return min(
+			self::getPositiveIntOption('disk_markdown_preview_max_size', 153600), // 150 KB
+			self::getMaxSizeForMarkdownRender(),
+		);
+	}
+
+	/**
+	 * A value that is not a positive integer reads as "not set".
+	 */
+	private static function getPositiveIntOption(string $name, int $default): int
+	{
+		$value = Option::get(Driver::INTERNAL_MODULE_ID, $name, '');
+		if (!is_numeric($value))
+		{
+			return $default;
+		}
+
+		$value = (int)$value;
+
+		return $value > 0 ? $value : $default;
+	}
+
 	public static function isEnabledHtmlEditor(): bool
 	{
-		return Feature::isEnabled(Public\Features\HtmlEditor::class);
+		return Feature::isEnabled(Public\Features\HtmlEditor::class)
+			&& Loader::includeModule('visualeditor')
+		;
 	}
 
 	/**

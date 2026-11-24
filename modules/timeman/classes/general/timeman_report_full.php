@@ -2159,6 +2159,22 @@ class CReportNotifications
 					$languageId
 				) . " ( ".$arTmp["SERVER_NAME"].$arTmp["URLS"]["REPORTS_PAGE"]."#user_id=".$arReport["USER_ID"]."&report=".$arReport["ID"]." )";
 
+				$arMessageFields['PUSH_MESSAGE'] = fn (?string $languageId = null) => Loc::getMessage(
+					'REPORT_FULL_IM_ADD' . $gender_suffix,
+					[
+						'#period#' => self::getFormatDateRange($arReport['DATE_FROM'], $arReport['DATE_TO'], $languageId),
+					],
+					$languageId,
+				);
+				$arMessageFields['PUSH_PARAMS'] = [
+					'ACTION' => 'TIMEMAN_REPORT',
+					'TAG' => $arMessageFields['NOTIFY_TAG'],
+					'reportId' => (int)$arReport['ID'],
+					'userId' => (int)$arReport['USER_ID'],
+					'url' => $arTmp['URLS']['REPORTS_PAGE']
+						. '#user_id=' . $arReport['USER_ID'] . '&report=' . $arReport['ID'],
+				];
+
 				CIMNotify::Add($arMessageFields);
 			}
 		}

@@ -45,6 +45,8 @@ enum Action: string
 	case DeleteHistoryForSelf = 'DELETE_HISTORY_FOR_SELF';
 	case DeleteHistoryForAll = 'DELETE_HISTORY_FOR_ALL';
 	case LinkStructureNode = 'LINK_STRUCTURE_NODE';
+	case CreateThread = 'CREATE_THREAD';
+	case PostInThread = 'POST_IN_THREAD';
 
 	public function getRelatedGlobalAction(): ?GlobalAction
 	{

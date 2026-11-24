@@ -29,6 +29,22 @@ final class SqlLabErrorMapper
 			if ($error instanceof Error && isset(self::MAP[$error->getCode()]))
 			{
 				$mapping = self::MAP[$error->getCode()];
+				if ($error->getCode() === 'SQLLAB_INVALID_QUERY')
+				{
+					// Only queryError carries the reason of the query: an earlier Superset put a text of
+					// another error of the same answer into detail, and has no queryError at all.
+					$customData = $error->getCustomData();
+					$message = is_array($customData) ? ($customData['queryError'] ?? null) : null;
+					if (
+						is_string($message)
+						&& trim($message) !== ''
+						&& mb_strlen($message) <= 500
+						&& strpbrk($message, "<\r\n") === false
+					)
+					{
+						$mapping[1] = $message;
+					}
+				}
 
 				break;
 			}

@@ -335,7 +335,8 @@ class Rest extends \IRestService
 
 		Push::add($users,
 		[
-			'module_id' => 'im',
+			'module_id' => 'rest',
+			'event_type' => 'application_push',
 			'push' =>
 			[
 				'message' => $text,

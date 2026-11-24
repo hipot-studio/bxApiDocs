@@ -102,6 +102,13 @@ final class IntegratorRequest
 		return $this;
 	}
 
+	public function replaceBefore(string $middlewareId, Middleware\Base $middleware): self
+	{
+		$this->beforeRequestMiddlewareQueue->replace($middlewareId, $middleware);
+
+		return $this;
+	}
+
 	public function removeBefore(string $middlewareId): self
 	{
 		$this->beforeRequestMiddlewareQueue->remove($middlewareId);

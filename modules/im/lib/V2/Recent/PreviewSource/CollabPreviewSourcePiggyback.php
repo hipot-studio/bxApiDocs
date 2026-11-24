@@ -8,7 +8,10 @@ use Bitrix\Im\V2\Message;
 /**
  * Carries the preview-source pointer onto the collab recent row inside the {@see \Bitrix\Im\Recent::raiseChat}
  * batch MERGE. The pointer is uniform across all raised recipients because the MERGE update set is shared and
- * cannot hold per-row values dialect-agnostically; per-user refinement is converged later by the read recompute.
+ * cannot hold per-row values dialect-agnostically. Per-user refinement is converged by the recompute of the
+ * recipient's first hit that changes their read state, not by any read of theirs: an idle hit is skipped by
+ * the guard of {@see \Bitrix\Im\V2\Reading\Reader::read()}. So a recipient the shared pointer does not fit -
+ * a thread subscriber who muted the channel a rollup names - keeps it until then.
  *
  * On the direct send shape the carrier may also hold a runtime-only {@see Message} hint so the realtime push can
  * build the preview from the just-sent object without re-reading the pointer. The hint never participates in the

@@ -28,7 +28,7 @@ final class GetDashboardOperation
 {
 	private const CHART_FIELDS = [
 		'id', 'name', 'kind', 'viz_label', 'tab_path', 'description', 'stats', 'stats_omitted', 'column_descriptions',
-		'no_access',
+		'no_access', 'error',
 	];
 
 	private const FILTER_FIELDS = [
@@ -193,9 +193,22 @@ final class GetDashboardOperation
 	{
 		foreach ($charts as $key => $chart)
 		{
-			if (is_array($chart) && ActAsFailure::isChartAccessDenied($chart))
+			if (!is_array($chart))
+			{
+				continue;
+			}
+			unset($charts[$key]['error']);
+			if (ActAsFailure::isChartAccessDenied($chart))
 			{
 				$charts[$key]['no_access'] = true;
+				continue;
+			}
+			$error = Refusal::chartError($chart, [
+				'stage' => 'get_dashboard.chart_error', 'chart_id' => $chart['id'] ?? 0,
+			]);
+			if ($error !== null)
+			{
+				$charts[$key]['error'] = $error;
 			}
 		}
 

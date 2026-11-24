@@ -15,6 +15,7 @@ use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\Restrictions\EditingRestrictionResolver;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\SecurityContext;
+use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\TransactionException;
@@ -69,9 +70,10 @@ final class SessionService
 		File $file,
 		SecurityContext $securityContext,
 		?AttachedObject $attachedObject = null,
+		bool $shouldCheckUnifiedLink = false,
 	): Result
 	{
-		return $this->acquireInternal($file, $securityContext, $attachedObject, false);
+		return $this->acquireInternal($file, $securityContext, $attachedObject, false, $shouldCheckUnifiedLink);
 	}
 
 	public function acquireWithContent(
@@ -165,6 +167,12 @@ final class SessionService
 
 				return $availability;
 			}
+			if ((int)$lockedFile->getSize() > Configuration::getMaxSizeForHtmlViewer())
+			{
+				$this->rollback($connection);
+
+				return $this->error('content_too_large');
+			}
 			if (
 				$withContent
 				&& (
@@ -181,6 +189,7 @@ final class SessionService
 			$expiresAt = $now + self::TTL;
 			$context = DocumentSessionContext::tryBuildByAttachedObject($attachedObject, $lockedFile)
 				->setHtmlEditorState((int)$lockedFile->getGlobalContentVersion(), $expiresAt)
+				->setHtmlUnifiedLinkValidated($shouldCheckUnifiedLink)
 			;
 			$addResult = DocumentSessionTable::add([
 				'SERVICE' => DocumentService::HtmlEditor->value,
@@ -310,6 +319,83 @@ final class SessionService
 		}
 
 		return (new Result())->setData(['state' => $this->makeState($session, $context)]);
+	}
+
+	/** Called only while holding the real file row lock. */
+	public function renewForAiTransfer(int $realFileId, int $userId): Result
+	{
+		$file = File::loadById($realFileId);
+		$session = DocumentSession::load([
+			'=OBJECT_ID' => $realFileId,
+			'=USER_ID' => $userId,
+			'=SERVICE' => DocumentService::HtmlEditor->value,
+			'=TYPE' => DocumentSession::TYPE_EDIT,
+			'=STATUS' => DocumentSession::STATUS_ACTIVE,
+			'VERSION_ID' => null,
+		]);
+		if (!$file || !$session)
+		{
+			return $this->error(self::ERROR_ACCESS_DENIED);
+		}
+		$context = $session->getContext();
+		if ($context === null || $this->isExpired($context))
+		{
+			return $this->error(self::ERROR_SESSION_EXPIRED);
+		}
+		$attachedObjectId = $context->getAttachedObjectId();
+		$attachedObject = $context->getAttachedObject();
+		if (
+			$context->getObjectId() !== $realFileId
+			|| ($attachedObjectId !== null && $attachedObject === null)
+			|| ($attachedObject !== null && (
+				$attachedObject->isSpecificVersion()
+				|| (int)$attachedObject->getFile()->getRealObjectId() !== $realFileId
+			))
+		)
+		{
+			return $this->error(self::ERROR_ACCESS_DENIED);
+		}
+		$securityContext = $file->getStorage()?->getProxyType()->getSecurityContextByUser($userId);
+		if ($securityContext === null)
+		{
+			return $this->error(self::ERROR_ACCESS_DENIED);
+		}
+		if ($securityContext instanceof DiskSecurityContext)
+		{
+			$securityContext->checkUnifiedLink($context->isHtmlUnifiedLinkValidated());
+		}
+		$availability = $this->validateAvailability($file, $securityContext, $attachedObject);
+		if (!$availability->isSuccess())
+		{
+			return $availability;
+		}
+
+		$expiresAt = ($this->clock)() + self::TTL;
+		$context->setHtmlEditorState($context->getHtmlBaselineVersion(), $expiresAt);
+		$result = DocumentSessionTable::update($session->getId(), ['CONTEXT' => $context->toJson()]);
+		if (!$result->isSuccess())
+		{
+			return (new Result())->addErrors($result->getErrors());
+		}
+
+		return (new Result())->setData(['expiresAt' => $expiresAt]);
+	}
+
+	public function getOwnedState(File $file, SecurityContext $securityContext, string $sessionHash): Result
+	{
+		$session = $this->findOwnedSession($file, $securityContext, $sessionHash);
+		$context = $session?->getContext();
+		if ($session === null || $context === null)
+		{
+			return $this->error(self::ERROR_ACCESS_DENIED);
+		}
+
+		return (new Result())->setData(['session' => [
+			'status' => $session->getStatus() === DocumentSession::STATUS_ACTIVE && !$this->isExpired($context)
+				? SessionState::STATUS_ACTIVE
+				: SessionState::STATUS_EXPIRED,
+			'expiresAt' => gmdate('c', (int)$context->getHtmlExpiresAt()),
+		]]);
 	}
 
 	private function validateAvailability(

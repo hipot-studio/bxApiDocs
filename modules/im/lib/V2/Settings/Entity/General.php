@@ -18,6 +18,16 @@ class General extends BaseSettings
 	public const OPEN_DESKTOP_FROM_PANEL = 'openDesktopFromPanel';
 	public const DEFAULT_REACTION = 'defaultReaction';
 
+	public const ENABLE_SOUND = 'enableSound';
+
+	public const SOUND_VOLUME_GENERAL = 'soundVolumeGeneral';
+	public const SOUND_VOLUME_MESSAGES = 'soundVolumeMessages';
+	public const SOUND_VOLUME_NOTIFICATIONS = 'soundVolumeNotifications';
+	public const SOUND_VOLUME_CALLS = 'soundVolumeCalls';
+	public const SOUND_VOLUME_SERVICE = 'soundVolumeService';
+	public const SOUND_MUTED = 'soundMuted';
+
+	public const SOUND_VOLUME_MAX = 100;
 
 	public static function getRestEntityName(): string
 	{
@@ -42,6 +52,25 @@ class General extends BaseSettings
 		$this->settings[$settingConfiguration['name']] = $settingConfiguration['value'];
 
 		\Bitrix\Im\Configuration\General::updateGroupSettings($this->groupId, $updatingSetting);
+	}
+
+	/**
+	 * @param array<string, string|bool|int> $settings
+	 * @throws \Exception
+	 */
+	public function updateSettings(array $settings): void
+	{
+		if ($settings === [])
+		{
+			return;
+		}
+
+		foreach ($settings as $name => $value)
+		{
+			$this->settings[$name] = $value;
+		}
+
+		\Bitrix\Im\Configuration\General::updateGroupSettings($this->groupId, $settings);
 	}
 
 	public function shouldUpdateSimpleNotifySettings(array $settingsConfiguration): bool

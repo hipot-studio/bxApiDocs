@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Controller\DockedUploader;
 
 use Bitrix\Disk;
+use Bitrix\Disk\Config\Feature\DockedUploaderUnlimitedFileSizeFlag;
 use Bitrix\Disk\Internal\Repository\Interface\DockedUploadQueueRepositoryInterface;
 use Bitrix\Disk\Internal\Service\DockedUpload\FolderResolverService;
 use Bitrix\Disk\Internal\Service\DockedUpload\QuotaScenario;
 use Bitrix\Disk\Internal\Service\Logger\LoggerFactory;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
+use Bitrix\UI\FileUploader\CanUploadResult;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\Contracts\CustomFingerprint;
 use Bitrix\UI\FileUploader\FileOwnershipCollection;
@@ -106,7 +109,9 @@ final class Transport extends UploaderController implements CustomFingerprint
 	public function getConfiguration(): Configuration
 	{
 		$configuration = new Configuration();
-		$configuration->setMaxFileSize(self::MAX_FILE_SIZE);
+		$configuration->setMaxFileSize(
+			Feature::isEnabled(DockedUploaderUnlimitedFileSizeFlag::class) ? null : self::MAX_FILE_SIZE,
+		);
 		// Docked uploads carry arbitrary Disk files, not pictures: a large image
 		// must degrade to a plain file instead of failing as an oversize image, and
 		// an unknown image type must not reject the upload.
@@ -124,8 +129,8 @@ final class Transport extends UploaderController implements CustomFingerprint
 	 * time, which FolderResolverService does inside FileCommitService.
 	 *
 	 * What it does narrow is who may spend temp space at all: the user must have an
-	 * unfinished queue. Without it any authorized account could park files up to
-	 * {@see self::MAX_FILE_SIZE} in temp indefinitely, never committing a single one.
+	 * unfinished queue. Without it any authorized account could park files
+	 * in temp indefinitely, never committing a single one.
 	 * Curing that at the root means redesigning ui.fileuploader for all of its
 	 * consumers, which the ADR keeps outside this module - so the surface is narrowed
 	 * here instead, from "any authorized user" to "a user with a live queue".
@@ -140,7 +145,7 @@ final class Transport extends UploaderController implements CustomFingerprint
 	 * Called as call_user_func([$controller, 'canUpload'], $uploadRequest), while
 	 * the base signature takes no parameter - hence the optional argument.
 	 */
-	public function canUpload(?UploadRequest $uploadRequest = null): bool
+	public function canUpload(?UploadRequest $uploadRequest = null): CanUploadResult|bool
 	{
 		$userId = (int)CurrentUser::get()->getId();
 		if ($userId <= 0 || !Disk\Configuration::isEnabledDockedUploader())
